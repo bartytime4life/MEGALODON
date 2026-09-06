@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import logging
 from pathlib import Path
@@ -11,6 +12,7 @@ import sys
 from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
 from .config import load_settings
 from .firewall import FirewallError, NftablesFirewall
+from .models import ActionRecord
 from .service import MegalodonService
 from .storage import Store
 
@@ -110,6 +112,22 @@ def _dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _record_firewall_action(settings, mode: str, operation) -> None:
+    action = "firewall_install" if mode == "install" else "block"
+    with Store(settings.db_path) as store:
+        store.record_action(
+            ActionRecord(
+                created_at=datetime.now(timezone.utc),
+                action=action,
+                target=operation.target,
+                status=operation.status,
+                reason=operation.reason,
+                expires_at=operation.expires_at,
+                details=operation.to_dict(),
+            )
+        )
+
+
 def _firewall(args: argparse.Namespace, mode: str) -> int:
     settings = _load(args.config)
     firewall = NftablesFirewall(
@@ -125,6 +143,7 @@ def _firewall(args: argparse.Namespace, mode: str) -> int:
             operation = firewall.install(apply=args.apply, confirm=args.confirm)
         else:
             operation = firewall.block(args.ip, args.reason, apply=args.apply, confirm=args.confirm)
+        _record_firewall_action(settings, mode, operation)
         print(json.dumps(operation.to_dict(), indent=2, sort_keys=True))
     except (FirewallError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
