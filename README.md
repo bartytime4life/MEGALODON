@@ -130,3 +130,18 @@ isolated test environment before it is considered operational.
 ## Documentation
 
 - [Automation Contract](docs/automation-contract.md) — proposed scheduling, execution, audit, and safety contract for future automation work. It is not an implementation or authorization to enable autonomous response.
+
+## Isolated offline analysis
+
+`python -m megalodon.offline` is a separate, non-root Linux command for bounded
+TShark capture-file replay or versioned Zeek JSON/TSV `conn.log` import. It writes
+local redacted JSONL/CSV, run manifests, deterministic metadata baselines, and
+review-only candidate findings. It does not change the three-source MVP service,
+write its SQLite database, feed its dashboard, or invoke firewall policy.
+
+Read [Offline metadata analysis v1](docs/offline-analysis.md) for exact commands,
+fixed limits, typed schemas, isolated analyst operations, redaction limitations,
+and the proposed read-only dashboard projection. TShark is an optional reviewed
+system executable, not a Python dependency. No SIEM/SOAR exporter exists; external
+sharing remains blocked pending an explicit approved data-sharing/egress policy.
+The new command does not implement or override the proposed automation contract.
