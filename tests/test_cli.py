@@ -69,3 +69,9 @@ class CliTests(unittest.TestCase):
             with Store(Path(directory) / "events.db") as store:
                 with self.assertRaises(ValueError):
                     serve(store, "0.0.0.0", 8787)
+
+    def test_disabled_dashboard_does_not_bind(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with Store(Path(directory) / "events.db") as store:
+                with self.assertRaises(ValueError):
+                    serve(store, "127.0.0.1", 8787, enabled=False)

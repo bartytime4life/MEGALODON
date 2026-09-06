@@ -16,8 +16,26 @@ class CaptureError(RuntimeError):
     """Raised when an event source cannot be opened or decoded."""
 
 
-def iter_jsonl(stream: TextIO) -> Iterator[PacketEvent]:
-    for line_number, line in enumerate(stream, start=1):
+MAX_JSONL_LINE_BYTES = 64 * 1024
+
+
+def iter_jsonl(
+    stream: TextIO,
+    *,
+    max_line_bytes: int = MAX_JSONL_LINE_BYTES,
+) -> Iterator[PacketEvent]:
+    if max_line_bytes < 1:
+        raise ValueError("max_line_bytes must be positive")
+    line_number = 0
+    while True:
+        line = stream.readline(max_line_bytes + 1)
+        if not line:
+            break
+        line_number += 1
+        if len(line) > max_line_bytes or len(line.encode("utf-8")) > max_line_bytes:
+            raise CaptureError(
+                f"JSONL event at line {line_number} exceeds {max_line_bytes} bytes"
+            )
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue

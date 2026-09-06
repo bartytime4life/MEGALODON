@@ -18,6 +18,8 @@ class DetectionSettings:
     port_scan_distinct_ports: int = 20
     dns_query_length: int = 50
     alert_cooldown_seconds: int = 30
+    max_tracked_sources: int = 4096
+    max_events_per_source_window: int = 4096
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,11 @@ def load_settings(path: str | Path) -> Settings:
             port_scan_distinct_ports=_positive(detection.get("port_scan_distinct_ports", 20), "port_scan_distinct_ports"),
             dns_query_length=_positive(detection.get("dns_query_length", 50), "dns_query_length"),
             alert_cooldown_seconds=_positive(detection.get("alert_cooldown_seconds", 30), "alert_cooldown_seconds"),
+            max_tracked_sources=_positive(detection.get("max_tracked_sources", 4096), "max_tracked_sources"),
+            max_events_per_source_window=_positive(
+                detection.get("max_events_per_source_window", 4096),
+                "max_events_per_source_window",
+            ),
         ),
         blocking=BlockingSettings(
             enabled=_boolean(blocking.get("enabled", False), "blocking.enabled"),

@@ -25,7 +25,7 @@ operational contract.
 ## Quick start
 
 ```bash
-cd megalodon_defense
+cd MEGALODON
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -e ".[test]"
@@ -53,6 +53,9 @@ For offline replay, send one JSON object per line:
 python -m megalodon run --source jsonl --input examples/events.jsonl
 cat examples/events.jsonl | python -m megalodon run --source jsonl
 ```
+
+The JSONL adapter rejects records larger than 64 KiB per line. Detector state is
+bounded to 4,096 tracked sources and 4,096 events per source window.
 
 The optional live source uses Scapy and requires the extra dependency plus the
 normal Linux permissions for packet capture:

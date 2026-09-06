@@ -15,6 +15,7 @@ class ValidationError(ValueError):
 
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+_INTEGER_TEXT = re.compile(r"[0-9]+")
 
 
 def parse_ip(value: Any) -> str:
@@ -36,27 +37,29 @@ def parse_network(value: str) -> ipaddress._BaseNetwork:
         raise ValidationError(f"invalid network: {value!r}") from exc
 
 
+def _parse_integer(value: Any, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValidationError(f"{field_name} must be an integer")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        candidate = value.strip()
+        if _INTEGER_TEXT.fullmatch(candidate):
+            return int(candidate)
+    raise ValidationError(f"{field_name} must be an integer")
+
+
 def parse_port(value: Any, *, allow_none: bool = True) -> int | None:
     if value is None and allow_none:
         return None
-    if isinstance(value, bool):
-        raise ValidationError("port must be an integer")
-    try:
-        port = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValidationError(f"invalid port: {value!r}") from exc
+    port = _parse_integer(value, "port")
     if not 0 <= port <= 65535:
         raise ValidationError(f"port outside 0..65535: {port}")
     return port
 
 
 def parse_nonnegative_int(value: Any, field_name: str) -> int:
-    if isinstance(value, bool):
-        raise ValidationError(f"{field_name} must be a non-negative integer")
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValidationError(f"{field_name} must be a non-negative integer") from exc
+    parsed = _parse_integer(value, field_name)
     if parsed < 0:
         raise ValidationError(f"{field_name} must be non-negative")
     return parsed

@@ -14,6 +14,8 @@ port_scan_window_seconds = 5
 port_scan_distinct_ports = 20
 dns_query_length = 50
 alert_cooldown_seconds = 30
+max_tracked_sources = 4096
+max_events_per_source_window = 4096
 
 [blocking]
 # Keep this false until the firewall table has been reviewed and installed manually.
