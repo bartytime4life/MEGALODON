@@ -105,7 +105,13 @@ def _dashboard(args: argparse.Namespace) -> int:
 
     try:
         with Store(settings.db_path) as store:
-            serve(store, host, port, allow_remote=args.allow_remote)
+            serve(
+                store,
+                host,
+                port,
+                enabled=settings.dashboard.enabled,
+                allow_remote=args.allow_remote,
+            )
     except (OSError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2

@@ -13,6 +13,7 @@ from .validation import (
     parse_port,
     parse_timestamp,
     safe_text,
+    ValidationError,
     validate_metadata,
 )
 
@@ -35,7 +36,10 @@ class PacketEvent:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
         object.__setattr__(self, "src_ip", parse_ip(self.src_ip))
         object.__setattr__(self, "dst_ip", parse_ip(self.dst_ip))
-        object.__setattr__(self, "protocol", safe_text(self.protocol, "protocol", 32).strip().upper())
+        protocol = safe_text(self.protocol, "protocol", 32).strip().upper()
+        if not protocol:
+            raise ValidationError("protocol must not be empty")
+        object.__setattr__(self, "protocol", protocol)
         object.__setattr__(self, "src_port", parse_port(self.src_port))
         object.__setattr__(self, "dst_port", parse_port(self.dst_port))
         object.__setattr__(self, "tcp_flags", parse_flags(self.tcp_flags))

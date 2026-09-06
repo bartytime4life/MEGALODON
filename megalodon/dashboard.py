@@ -104,7 +104,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return
 
 
-def serve(store: Store, host: str, port: int, *, allow_remote: bool = False) -> None:
+def serve(
+    store: Store,
+    host: str,
+    port: int,
+    *,
+    enabled: bool = True,
+    allow_remote: bool = False,
+) -> None:
+    if not enabled:
+        raise ValueError("dashboard is disabled by configuration")
     if host not in {"127.0.0.1", "::1", "localhost"} and not allow_remote:
         raise ValueError("dashboard must bind to localhost unless --allow-remote is explicit")
     handler = type("BoundDashboardHandler", (DashboardHandler,), {"store": store})

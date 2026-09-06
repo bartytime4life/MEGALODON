@@ -56,3 +56,23 @@ class DetectorTests(unittest.TestCase):
         )
         result = detector.analyze(event(0))[0]
         self.assertEqual(result.suppressed_reason, "source_allowlisted")
+
+    def test_detector_state_is_bounded(self):
+        detector = Detector(
+            DetectionSettings(
+                max_tracked_sources=2,
+                max_events_per_source_window=2,
+                syn_flood_threshold=100,
+            )
+        )
+        sources = ["8.8.8.1", "8.8.8.2", "8.8.8.3"]
+        for index, source in enumerate(sources):
+            detector.analyze(event(index, src_ip=source))
+        self.assertNotIn("8.8.8.1", detector.syn_windows)
+        self.assertLessEqual(len(detector.syn_windows), 2)
+        self.assertLessEqual(len(detector.port_windows), 2)
+
+        for index in range(3, 7):
+            detector.analyze(event(index, src_ip="8.8.8.3"))
+        self.assertLessEqual(len(detector.syn_windows["8.8.8.3"]), 2)
+        self.assertLessEqual(len(detector.port_windows["8.8.8.3"]), 2)
