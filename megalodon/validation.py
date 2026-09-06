@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import ipaddress
+import json
+import math
 import re
 from typing import Any
 
@@ -102,6 +104,64 @@ def safe_text(value: Any, field_name: str, max_length: int = 512) -> str:
         raise ValidationError(f"{field_name} contains control characters")
     if len(value) > max_length:
         raise ValidationError(f"{field_name} exceeds {max_length} characters")
+    return value
+
+
+def validate_metadata(
+    value: Any,
+    *,
+    max_depth: int = 4,
+    max_items: int = 64,
+    max_text: int = 256,
+    max_bytes: int = 8192,
+) -> dict[str, Any]:
+    """Validate bounded, JSON-safe metadata without retaining packet payloads."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValidationError("metadata must be an object")
+
+    visited = 0
+
+    def walk(item: Any, depth: int) -> None:
+        nonlocal visited
+        visited += 1
+        if visited > max_items:
+            raise ValidationError(f"metadata exceeds {max_items} items")
+        if depth > max_depth:
+            raise ValidationError(f"metadata exceeds depth {max_depth}")
+        if isinstance(item, dict):
+            for key, nested in item.items():
+                if not isinstance(key, str):
+                    raise ValidationError("metadata keys must be text")
+                safe_text(key, "metadata key", max_text)
+                walk(nested, depth + 1)
+        elif isinstance(item, list):
+            for nested in item:
+                walk(nested, depth + 1)
+        elif isinstance(item, str):
+            safe_text(item, "metadata value", max_text)
+        elif isinstance(item, (bool, int)) or item is None:
+            return
+        elif isinstance(item, float):
+            if not math.isfinite(item):
+                raise ValidationError("metadata numbers must be finite")
+        else:
+            raise ValidationError("metadata contains a non-JSON value")
+
+    walk(value, 0)
+    try:
+        serialized = json.dumps(
+            value,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise ValidationError("metadata must be JSON serializable") from exc
+    if len(serialized.encode("utf-8")) > max_bytes:
+        raise ValidationError(f"metadata exceeds {max_bytes} bytes")
     return value
 
 

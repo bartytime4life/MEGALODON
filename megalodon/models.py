@@ -13,6 +13,7 @@ from .validation import (
     parse_port,
     parse_timestamp,
     safe_text,
+    validate_metadata,
 )
 
 
@@ -34,7 +35,7 @@ class PacketEvent:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
         object.__setattr__(self, "src_ip", parse_ip(self.src_ip))
         object.__setattr__(self, "dst_ip", parse_ip(self.dst_ip))
-        object.__setattr__(self, "protocol", str(self.protocol).upper())
+        object.__setattr__(self, "protocol", safe_text(self.protocol, "protocol", 32).strip().upper())
         object.__setattr__(self, "src_port", parse_port(self.src_port))
         object.__setattr__(self, "dst_port", parse_port(self.dst_port))
         object.__setattr__(self, "tcp_flags", parse_flags(self.tcp_flags))
@@ -47,6 +48,7 @@ class PacketEvent:
         object.__setattr__(self, "byte_count", parse_nonnegative_int(self.byte_count, "byte_count"))
         if self.interface is not None:
             object.__setattr__(self, "interface", safe_text(self.interface, "interface", 64))
+        object.__setattr__(self, "metadata", validate_metadata(self.metadata))
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> "PacketEvent":
@@ -61,7 +63,7 @@ class PacketEvent:
             dns_query_length=value.get("dns_query_length"),
             byte_count=value.get("byte_count", 0),
             interface=value.get("interface"),
-            metadata=dict(value.get("metadata") or {}),
+            metadata=value.get("metadata"),
         )
 
     def to_dict(self) -> dict[str, Any]:

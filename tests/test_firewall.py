@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import unittest
+from unittest.mock import patch
 
 from megalodon.firewall import FirewallError, NftablesFirewall
 
@@ -21,6 +22,12 @@ class FirewallTests(unittest.TestCase):
         self.assertEqual(operation.command[0], "nft")
         self.assertIn("8.8.8.8", operation.command)
         self.assertNotIn("test", operation.command)
+
+    def test_block_plan_never_calls_subprocess(self):
+        with patch("megalodon.firewall.subprocess.run") as run:
+            operation = firewall().block("8.8.8.8", "test", apply=False)
+        self.assertEqual(operation.status, "planned")
+        run.assert_not_called()
 
     def test_allowlist_wins(self):
         with self.assertRaises(FirewallError):
