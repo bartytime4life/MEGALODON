@@ -123,3 +123,7 @@ full rule authoring, clustering, distributed collection, authentication,
 retention jobs, and production-grade firewall rollback still require separate
 review and tests. The `nftables` table should be installed and exercised in an
 isolated test environment before it is considered operational.
+
+## Documentation
+
+- [Automation Contract](docs/automation-contract.md) — proposed scheduling, execution, audit, and safety contract for future automation work. It is not an implementation or authorization to enable autonomous response.
