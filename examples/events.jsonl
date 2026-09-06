@@ -1,0 +1,4 @@
+# Metadata-only replay fixture.
+{"observed_at":"2026-09-06T15:00:00Z","src_ip":"192.0.2.10","dst_ip":"198.51.100.20","protocol":"TCP","src_port":50000,"dst_port":443,"tcp_flags":["ACK"],"byte_count":512}
+{"observed_at":"2026-09-06T15:00:01Z","src_ip":"192.0.2.11","dst_ip":"198.51.100.53","protocol":"DNS","src_port":53000,"dst_port":53,"dns_query_length":32,"byte_count":140}
+{"observed_at":"2026-09-06T15:00:02Z","src_ip":"8.8.8.8","dst_ip":"192.0.2.20","protocol":"DNS","src_port":5353,"dst_port":53,"dns_query_length":80,"byte_count":300}

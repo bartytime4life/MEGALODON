@@ -1,0 +1,38 @@
+[app]
+name = "MEGALODON"
+db_path = "data/megalodon.db"
+log_level = "INFO"
+
+[capture]
+source = "sample"
+interface = ""
+
+[detection]
+syn_flood_window_seconds = 10
+syn_flood_threshold = 100
+port_scan_window_seconds = 5
+port_scan_distinct_ports = 20
+dns_query_length = 50
+alert_cooldown_seconds = 30
+
+[blocking]
+# Keep this false until the firewall table has been reviewed and installed manually.
+enabled = false
+dry_run = true
+auto_block = false
+auto_block_min_severity = "CRITICAL"
+timeout_seconds = 900
+public_only = true
+allowlist = [
+  "127.0.0.0/8",
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "::1/128",
+  "fc00::/7",
+]
+
+[dashboard]
+enabled = true
+host = "127.0.0.1"
+port = 8787

@@ -1,0 +1,151 @@
+"""Command-line entry point."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+from pathlib import Path
+import sys
+
+from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
+from .config import load_settings
+from .firewall import FirewallError, NftablesFirewall
+from .service import MegalodonService
+from .storage import Store
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="megalodon", description="Local-first defensive network telemetry")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    run = sub.add_parser("run", help="process metadata events")
+    run.add_argument("--config", default="config/settings.toml")
+    run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
+    run.add_argument("--input", type=Path, help="JSONL input file; stdin is used when omitted")
+    run.add_argument("--interface", help="capture interface for --source scapy")
+    run.add_argument("--demo-threat", action="store_true", help="add synthetic detections to sample data")
+    run.add_argument("--max-events", type=int, default=0, help="stop after N events; 0 means no limit")
+
+    dashboard = sub.add_parser("dashboard", help="serve the read-only local dashboard")
+    dashboard.add_argument("--config", default="config/settings.toml")
+    dashboard.add_argument("--host")
+    dashboard.add_argument("--port", type=int)
+    dashboard.add_argument("--allow-remote", action="store_true", help="allow a non-loopback bind; no authentication is provided")
+
+    plan = sub.add_parser("firewall-plan", help="print a non-mutating nftables plan")
+    plan.add_argument("ip")
+    plan.add_argument("--reason", default="manual review")
+    plan.add_argument("--config", default="config/settings.toml")
+
+    install = sub.add_parser("firewall-install", help="install MEGALODON's isolated nftables table")
+    install.add_argument("--config", default="config/settings.toml")
+    install.add_argument("--apply", action="store_true")
+    install.add_argument("--confirm", help="must be MEGALODON when applying")
+
+    block = sub.add_parser("block", help="plan or explicitly apply one time-limited block")
+    block.add_argument("ip")
+    block.add_argument("--reason", required=True)
+    block.add_argument("--config", default="config/settings.toml")
+    block.add_argument("--apply", action="store_true")
+    block.add_argument("--confirm", help="must exactly match the target IP when applying")
+
+    return parser
+
+
+def _configure_logging(level: str) -> None:
+    logging.basicConfig(level=getattr(logging, level.upper(), logging.INFO), format="%(levelname)s %(message)s")
+
+
+def _load(config: str):
+    settings = load_settings(config)
+    _configure_logging(settings.log_level)
+    return settings
+
+
+def _events_for(args: argparse.Namespace, settings):
+    source = args.source or settings.capture_source
+    if source == "sample":
+        return iter_sample(include_demo_threat=args.demo_threat)
+    if source == "jsonl":
+        if args.input:
+            return iter_jsonl(args.input.open("r", encoding="utf-8"))
+        return iter_jsonl(sys.stdin)
+    if source == "scapy":
+        return iter_scapy(args.interface or settings.interface)
+    raise CaptureError(f"unsupported source: {source}")
+
+
+def _run(args: argparse.Namespace) -> int:
+    settings = _load(args.config)
+    processed = 0
+    detections = 0
+    try:
+        with Store(settings.db_path) as store:
+            service = MegalodonService(settings, store)
+            for event in _events_for(args, settings):
+                detections += len(service.process(event))
+                processed += 1
+                if args.max_events and processed >= args.max_events:
+                    break
+            print(json.dumps({"processed": processed, "detections": detections, **store.summary()}, sort_keys=True))
+    except (CaptureError, OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _dashboard(args: argparse.Namespace) -> int:
+    settings = _load(args.config)
+    host = args.host or settings.dashboard.host
+    port = args.port or settings.dashboard.port
+    from .dashboard import serve
+
+    try:
+        with Store(settings.db_path) as store:
+            serve(store, host, port, allow_remote=args.allow_remote)
+    except (OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _firewall(args: argparse.Namespace, mode: str) -> int:
+    settings = _load(args.config)
+    firewall = NftablesFirewall(
+        allowlist=settings.blocking.allowlist,
+        public_only=settings.blocking.public_only,
+        timeout_seconds=settings.blocking.timeout_seconds,
+        dry_run=not getattr(args, "apply", False),
+    )
+    try:
+        if mode == "plan":
+            operation = firewall.plan_block(args.ip, args.reason)
+        elif mode == "install":
+            operation = firewall.install(apply=args.apply, confirm=args.confirm)
+        else:
+            operation = firewall.block(args.ip, args.reason, apply=args.apply, confirm=args.confirm)
+        print(json.dumps(operation.to_dict(), indent=2, sort_keys=True))
+    except (FirewallError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    if args.command == "run":
+        code = _run(args)
+    elif args.command == "dashboard":
+        code = _dashboard(args)
+    elif args.command == "firewall-plan":
+        args.reason = args.reason
+        code = _firewall(args, "plan")
+    elif args.command == "firewall-install":
+        args.reason = "install isolated table"
+        code = _firewall(args, "install")
+    elif args.command == "block":
+        code = _firewall(args, "block")
+    else:
+        code = 2
+    raise SystemExit(code)

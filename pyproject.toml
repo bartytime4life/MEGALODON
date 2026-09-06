@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "megalodon-defense"
+version = "0.1.0"
+description = "A local-first, observe-only-by-default Linux network defense MVP"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+capture = ["scapy>=2.5,<3"]
+test = ["pytest>=8,<9"]
+
+[project.scripts]
+megalodon = "megalodon.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["megalodon*"]
