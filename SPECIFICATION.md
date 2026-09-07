@@ -112,11 +112,14 @@ process must already be running as root; it never invokes `sudo`. The isolated
 table uses timeout-enabled sets and an accept policy. Existing firewall state is
 not rewritten.
 
-### Automatic response
+### Automatic planning and explicit response
 
-The service supports a future opt-in policy where `enabled=true`, `auto_block=true`,
-and `dry_run=false` are all explicitly configured. This is not recommended until
-the rule quality, firewall ownership, and rollback controls have been reviewed.
+The service may create an auditable, time-limited block plan when `enabled=true`,
+`auto_block=true`, and `dry_run=true`. It never supplies its own confirmation or
+invokes `nft`; `auto_block=true` with `dry_run=false` is rejected as unsafe.
+Application remains a separate operator CLI action requiring `--apply`, exact
+target confirmation, and already-held root. Unattended response is not an MVP
+operation.
 
 ## 6. Dashboard contract
 

@@ -79,6 +79,11 @@ python -m megalodon firewall-install
 python -m megalodon block 8.8.8.8 --reason "manual review"
 ```
 
+Detection-driven policy can record a proposed block, but it never supplies its
+own confirmation or invokes `nft`. Setting `auto_block=true` therefore remains
+plan-only and requires `dry_run=true`; live application is available only through
+the explicit `block --apply` command below after operator review.
+
 The isolated `inet megalodon` table uses timeout-enabled IPv4 and IPv6 sets.
 It has an accept policy and adds only its own set-drop rules. Applying it is an
 explicit root operation and requires confirmation:

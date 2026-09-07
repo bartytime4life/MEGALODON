@@ -96,6 +96,14 @@ def load_settings(path: str | Path) -> Settings:
     severity = str(blocking.get("auto_block_min_severity", "CRITICAL")).upper()
     if severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
         raise ValidationError("auto_block_min_severity must be LOW, MEDIUM, HIGH, or CRITICAL")
+    blocking_enabled = _boolean(blocking.get("enabled", False), "blocking.enabled")
+    blocking_dry_run = _boolean(blocking.get("dry_run", True), "blocking.dry_run")
+    auto_block = _boolean(blocking.get("auto_block", False), "blocking.auto_block")
+    if auto_block and not blocking_dry_run:
+        raise ValidationError(
+            "automatic firewall application is prohibited; keep blocking.dry_run true "
+            "and use the explicit block CLI after review"
+        )
 
     port = _positive(dashboard.get("port", 8787), "dashboard.port")
     if port > 65535:
@@ -121,9 +129,9 @@ def load_settings(path: str | Path) -> Settings:
             ),
         ),
         blocking=BlockingSettings(
-            enabled=_boolean(blocking.get("enabled", False), "blocking.enabled"),
-            dry_run=_boolean(blocking.get("dry_run", True), "blocking.dry_run"),
-            auto_block=_boolean(blocking.get("auto_block", False), "blocking.auto_block"),
+            enabled=blocking_enabled,
+            dry_run=blocking_dry_run,
+            auto_block=auto_block,
             auto_block_min_severity=severity,
             timeout_seconds=_positive(blocking.get("timeout_seconds", 900), "timeout_seconds"),
             public_only=_boolean(blocking.get("public_only", True), "blocking.public_only"),
