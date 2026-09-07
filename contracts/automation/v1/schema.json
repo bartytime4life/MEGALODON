@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/automation/v1/schema.json",
+  "title": "MEGALODON automation contract v1 (draft)",
+  "description": "Data-only contract. Validation does not activate a schedule, execute a prompt, invoke a model, mutate a firewall, or grant shell/network tools.",
+  "$defs": {
+    "canonicalRrule": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 512,
+      "pattern": "^FREQ=(MINUTELY|HOURLY|DAILY|WEEKLY|MONTHLY|YEARLY)(;[A-Z]+=[A-Z0-9,+-]+)*$",
+      "not": {
+        "anyOf": [
+          {"pattern": "^FREQ=SECONDLY"},
+          {"pattern": "(^|;)COUNT=[^;]+(;|$).*?(^|;)UNTIL="},
+          {"pattern": "(^|;)UNTIL=[^;]+(;|$).*?(^|;)COUNT="}
+        ]
+      }
+    },
+    "logicalId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "draftCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "prompt", "rrule"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^(?!\\s*$)(?!\\s)(?!.*\\s$)[^\\u0000-\\u001F\\u007F]+$"
+        },
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 16384},
+        "rrule": {"$ref": "#/$defs/canonicalRrule"},
+        "model_id": {"$ref": "#/$defs/logicalId"},
+        "folder_id": {"$ref": "#/$defs/logicalId"}
+      }
+    },
+    "executionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeout_seconds", "max_output_bytes", "retry_max_attempts", "concurrency_policy", "capabilities", "network_access", "firewall_access"],
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 900},
+        "max_output_bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "retry_max_attempts": {"type": "integer", "minimum": 1, "maximum": 3},
+        "concurrency_policy": {"const": "skip_if_running"},
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["observe_metadata", "read_local_fixture", "write_local_report"]}
+        },
+        "network_access": {"const": false},
+        "firewall_access": {"const": false}
+      }
+    },
+    "activatedDefinition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "prompt", "rrule", "id", "dtstart", "schedule_timezone", "dst_policy", "model_id", "folder_id", "status", "revision", "policy"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "^(?!\\s*$)(?!\\s)(?!.*\\s$)[^\\u0000-\\u001F\\u007F]+$"},
+            "prompt": {"type": "string", "minLength": 1, "maxLength": 16384},
+            "rrule": {"$ref": "#/$defs/canonicalRrule"},
+            "model_id": {"$ref": "#/$defs/logicalId"},
+            "folder_id": {"$ref": "#/$defs/logicalId"},
+            "id": {"$ref": "#/$defs/logicalId"},
+            "dtstart": {"type": "string", "format": "date-time"},
+            "schedule_timezone": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(UTC|[A-Za-z_+-]+/[A-Za-z0-9_+./-]+)$"},
+            "dst_policy": {"enum": ["reject", "skip", "shift_forward", "fold_earlier", "fold_later"]},
+            "status": {"const": "active"},
+            "revision": {"type": "integer", "minimum": 1},
+            "policy": {"$ref": "#/$defs/executionPolicy"}
+          }
+    },
+    "runSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "automation_id", "automation_revision", "occurrence_at", "idempotency_key", "status", "attempt", "prompt", "prompt_sha256", "model_id", "folder_id", "policy_snapshot", "requested_actions", "created_at", "updated_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/logicalId"},
+        "automation_id": {"$ref": "#/$defs/logicalId"},
+        "automation_revision": {"type": "integer", "minimum": 1},
+        "occurrence_at": {"$ref": "#/$defs/utcTimestamp"},
+        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 384},
+        "status": {"enum": ["scheduled", "claimed", "running", "succeeded", "failed", "timed_out", "cancelled", "skipped", "blocked"]},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 3},
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 16384},
+        "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "model_id": {"$ref": "#/$defs/logicalId"},
+        "folder_id": {"$ref": "#/$defs/logicalId"},
+        "policy_snapshot": {"$ref": "#/$defs/executionPolicy"},
+        "requested_actions": {"type": "array", "maxItems": 0},
+        "created_at": {"$ref": "#/$defs/utcTimestamp"},
+        "updated_at": {"$ref": "#/$defs/utcTimestamp"}
+      }
+    }
+  }
+}
