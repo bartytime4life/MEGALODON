@@ -221,6 +221,8 @@ def _manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Limits]:
     if set(value) != _COMPLETE_MANIFEST_FIELDS:
         _fail("INVALID_OFFLINE_MANIFEST")
     source = value.get("source")
+    if not isinstance(source, str):
+        _fail("INVALID_OFFLINE_MANIFEST")
     contract = _SOURCE_CONTRACT.get(source)
     if (
         value.get("schema") != "offline-run-v1"
@@ -320,7 +322,7 @@ def _baseline(value: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(item, dict) or set(item) != {"protocol", "count"}:
             _fail("INVALID_OFFLINE_BASELINE")
         protocol = item.get("protocol")
-        if protocol not in PROTOCOLS or protocol in protocol_names:
+        if not isinstance(protocol, str) or protocol not in PROTOCOLS or protocol in protocol_names:
             _fail("INVALID_OFFLINE_BASELINE")
         try:
             count = uint(item.get("count"), size)
@@ -417,12 +419,18 @@ def _candidate(value: dict[str, Any], kind: str) -> str:
     evidence = value["evidence"]
     try:
         if rule == "NEW_DESTINATION_PORT":
-            if set(evidence) != {"protocol", "port", "records"} or evidence.get("protocol") not in {"TCP", "UDP"}:
+            protocol = evidence.get("protocol")
+            if (
+                set(evidence) != {"protocol", "port", "records"}
+                or not isinstance(protocol, str)
+                or protocol not in {"TCP", "UDP"}
+            ):
                 _fail("INVALID_OFFLINE_CANDIDATE")
             uint(evidence.get("port"), 65535)
             if uint(evidence.get("records"), 10_000) == 0:
                 _fail("INVALID_OFFLINE_CANDIDATE")
         elif rule == "REGULAR_INTERVAL":
+            protocol = evidence.get("protocol")
             expected = {
                 "src",
                 "dst",
@@ -434,7 +442,8 @@ def _candidate(value: dict[str, Any], kind: str) -> str:
             }
             if (
                 set(evidence) != expected
-                or evidence.get("protocol") not in {"TCP", "UDP"}
+                or not isinstance(protocol, str)
+                or protocol not in {"TCP", "UDP"}
                 or any(
                     not isinstance(evidence.get(name), str)
                     or not re.fullmatch(r"host-[0-9]{5}", evidence[name])

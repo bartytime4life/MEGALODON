@@ -137,6 +137,32 @@ def test_projection_rejects_manifest_candidate_and_baseline_tampering(tmp_path):
         load_offline_projection(output)
 
 
+def test_projection_rejects_type_confused_json_with_fixed_diagnostics(tmp_path):
+    output = _run(tmp_path / "manifest")
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["source"] = []
+    manifest_path.write_text(json.dumps(manifest), encoding="ascii")
+    with pytest.raises(OfflineError, match="INVALID_OFFLINE_MANIFEST"):
+        load_offline_projection(output)
+
+    output = _run(tmp_path / "baseline")
+    baseline_path = output / "baseline.json"
+    baseline = json.loads(baseline_path.read_text())
+    baseline["protocols"][0]["protocol"] = []
+    baseline_path.write_text(json.dumps(baseline), encoding="ascii")
+    with pytest.raises(OfflineError, match="INVALID_OFFLINE_BASELINE"):
+        load_offline_projection(output)
+
+    output = _run(tmp_path / "candidate")
+    candidate_path = output / "candidates.jsonl"
+    candidate = json.loads(candidate_path.read_text())
+    candidate["evidence"]["protocol"] = []
+    candidate_path.write_text(json.dumps(candidate) + "\n", encoding="ascii")
+    with pytest.raises(OfflineError, match="INVALID_OFFLINE_CANDIDATE"):
+        load_offline_projection(output)
+
+
 def test_dashboard_parser_and_remote_projection_boundary(tmp_path):
     args = build_parser().parse_args(
         [
