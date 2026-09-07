@@ -51,26 +51,26 @@ class MegalodonService:
             return
 
         minimum = self.settings.blocking.auto_block_min_severity
-        should_block = (
+        should_plan = (
             self.settings.blocking.enabled
             and self.settings.blocking.auto_block
             and self._severity_rank(detection.severity) >= self._severity_rank(minimum)
         )
-        if not should_block:
+        if not should_plan:
             self._record_action(
                 action="block",
                 target=detection.src_ip,
                 status="not_attempted",
-                reason="automatic blocking disabled by policy",
+                reason="automatic block planning disabled by policy",
             )
             return
 
         try:
-            operation = self.firewall.block(
+            # A detection is evidence, not operator authorization.  This path may
+            # prepare an auditable plan, but only the explicit CLI can apply it.
+            operation = self.firewall.plan_block(
                 detection.src_ip,
                 f"{detection.rule_id}: {detection.message}",
-                apply=not self.settings.blocking.dry_run,
-                confirm=detection.src_ip if not self.settings.blocking.dry_run else None,
             )
             self._record_action(
                 action="block",

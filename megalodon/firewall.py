@@ -1,7 +1,7 @@
 """Explicit, validated nftables integration.
 
-No shell is used. The service never mutates the firewall automatically unless
-the caller has deliberately enabled both policy and application mode.
+No shell is used. Detection-driven service calls are plan-only; live mutation
+is available only through an explicit CLI apply request with exact confirmation.
 """
 
 from __future__ import annotations

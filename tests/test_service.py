@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import unittest
+from unittest.mock import Mock
 
 from megalodon.config import BlockingSettings, DetectionSettings, Settings
+from megalodon.firewall import FirewallOperation, NftablesFirewall
 from megalodon.models import PacketEvent
 from megalodon.service import MegalodonService
 from megalodon.storage import Store
@@ -67,3 +69,47 @@ class ServiceTests(unittest.TestCase):
                     "SELECT action, status, target FROM actions ORDER BY id DESC LIMIT 1"
                 ).fetchone()
                 self.assertEqual(tuple(action), ("block", "planned", "8.8.8.8"))
+
+    def test_detection_policy_never_supplies_live_apply_or_confirmation(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Settings(
+                db_path=Path(directory) / "events.db",
+                detection=DetectionSettings(dns_query_length=10),
+                # Direct construction bypasses TOML validation, so the service
+                # must still preserve the operator-only application boundary.
+                blocking=BlockingSettings(
+                    enabled=True,
+                    dry_run=False,
+                    auto_block=True,
+                    auto_block_min_severity="CRITICAL",
+                    public_only=False,
+                ),
+            )
+            event = PacketEvent(
+                observed_at=datetime.now(timezone.utc),
+                src_ip="8.8.8.8",
+                dst_ip="192.0.2.53",
+                protocol="DNS",
+                dst_port=53,
+                dns_query_length=12,
+            )
+            firewall = Mock(spec=NftablesFirewall)
+            firewall.plan_block.return_value = FirewallOperation(
+                "planned",
+                "8.8.8.8",
+                "DNS_TUNNELING: review required",
+                ("nft", "add", "element"),
+                "would add a time-limited set element",
+            )
+            with Store(settings.db_path) as store:
+                MegalodonService(settings, store, firewall=firewall).process(event)
+                action = store.connection.execute(
+                    "SELECT status FROM actions ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+
+            self.assertEqual(action["status"], "planned")
+            firewall.plan_block.assert_called_once()
+            firewall.block.assert_not_called()
