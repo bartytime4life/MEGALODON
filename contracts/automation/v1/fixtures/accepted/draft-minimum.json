@@ -1,0 +1,8 @@
+{
+  "schema": "draftCreate",
+  "value": {
+    "name": "Hourly local health summary",
+    "prompt": "Summarize bounded local metadata counts and state limitations.",
+    "rrule": "FREQ=HOURLY;INTERVAL=1"
+  }
+}

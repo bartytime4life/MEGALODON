@@ -1,0 +1,1 @@
+{"schema":"draftCreate","value":{"name":"Unsafe frequency","prompt":"Read local metadata.","rrule":"FREQ=SECONDLY;INTERVAL=1"}}

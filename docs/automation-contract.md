@@ -7,6 +7,16 @@
 
 > This document turns the attached Pasted markdown.md seed analysis into a reviewable contract for a future scheduling and execution subsystem. It does not claim that a scheduler, model runner, automation API, or automation database table exists today. No firewall action, remote dashboard exposure, or autonomous response is authorized by this document.
 
+## Implemented Stage 0 boundary
+
+The repository now carries a [draft JSON Schema and deterministic fixtures](../contracts/automation/v1/README.md)
+for the create payload, activation prerequisites, bounded policy, and immutable
+run-snapshot shape. This is contract evidence only. It adds no scheduler loop,
+recurrence calculation, persistence, model invocation, CLI/API operation,
+network access, shell access, or firewall authority. The overall design remains
+proposed; later stages require separate review.
+
+
 ## Executive decision
 
 The attached analysis correctly identifies the first three values needed to describe an automation:
