@@ -1,8 +1,13 @@
-# MEGALODON completed specification
+# MEGALODON MVP specification and proposed platform extension
 
 MEGALODON means **Malware Elimination Gateway And Layered Operations Defense
 Online Network**. The name describes the system’s defensive mission; it does
 not change the evidence and safety boundaries below.
+
+The Linux implementation contract and its safety invariants remain in force.
+The Windows extension in section 10 is **PROPOSED**, not an implemented or
+validated port. The canonical installation, application-selection, and platform
+configuration baseline is [docs/platform-baseline.md](docs/platform-baseline.md).
 
 ## 1. Mission and boundary
 
@@ -160,3 +165,64 @@ Before any production rollout, add integration tests against a disposable
 network namespace, verify interaction with the host’s existing nftables owner,
 measure detection false positives on representative replay data, and document
 operator approval and rollback.
+
+## 9. Implemented extensions and separate evidence paths
+
+At `d94b40918908a8a275581f0c2690aef21d09adee`, `python -m megalodon.offline`
+provides a separate Linux-only, non-root, capability-free analysis path. Fixed
+TShark fields produce packet metadata; separately versioned Zeek JSON/TSV
+connection adapters produce flow records. Private local reports, source-qualified
+baselines, review candidates, and a last-written completion manifest follow
+[docs/offline-analysis.md](docs/offline-analysis.md).
+
+This path does not populate the service SQLite database, drive its fixed-rule
+policy, feed the dashboard, or apply firewall actions. Packet, flow, and future
+sensor-alert counts must not be conflated. A candidate is review evidence, not
+an action or malware finding. No packet payload or payload-derived hash is
+admitted by adopting an external analyzer.
+
+[contracts/automation/v1](contracts/automation/v1/README.md) contains an inert
+normative-draft schema and fixtures. It is not scheduler execution, recurrence
+calculation, model access, or permission to use commands, endpoints, or tools.
+Issue #7's offline dashboard and issue #9's Suricata contract are branch work,
+not runtime capabilities at the pinned implementation revision.
+
+## 10. Proposed Windows/Linux platform contract
+
+The [platform baseline](docs/platform-baseline.md) defines L1 (Ubuntu 24.04),
+W1 (native Windows 11 synthetic core evaluation), and W2 (a separately validated
+Linux analysis guest on Windows). A platform is not supported merely because
+Python or an upstream analyzer installs there. The current CI workflow has an
+Ubuntu 24.04/Python 3.11 job; there is no Windows validation lane.
+
+The first native Windows implementation slice is limited to validation,
+sample/JSONL processing, fixed detections, SQLite, and a read-only loopback UI.
+It must preserve the same bounded metadata and action-state contracts. It must
+also provide explicit, tested rejection of unsupported operations without
+raising privilege, choosing a substitute tool, or changing security settings.
+No such portability implementation is included in this documentation change.
+
+Windows offline analysis requires its own reviewed file-handle/identity,
+reparse-point, local-path, ACL, subprocess-tree, timeout, and resource-boundary
+implementation. Removing Linux platform/capability checks or replacing the
+TShark executable string is not acceptance. Guest Linux execution is not native
+Windows support and cannot establish visibility into all host traffic.
+
+Windows firewall response remains unavailable. A future backend needs explicit
+operator authority, target validation, allowlist precedence, non-global
+rejection, exact confirmation, already-held privilege, finite expiry under
+restart/sleep/failure, ownership/conflict checks, rollback, and truthful audit
+states. A best-effort scheduled deletion is not proven expiry. Do not modify
+Windows Firewall, endpoint protection, services, or capture drivers as setup.
+
+Before any Windows support claim, record an exact-head Linux regression result,
+Windows core test result, dependency/install receipt, private-storage ACL
+review, loopback UI/API checks, and unsupported-feature rejection tests.
+Preserve the required Linux `test` check; a Windows lane adds evidence rather
+than renaming, bypassing, or weakening it. Installed-analyzer tests, independent
+review, and operational deployment each remain separate gates.
+
+Optional Suricata, Zeek, ClamAV, and osquery use does not authorize raw log or
+file-content ingestion. Every future integration requires its own versioned,
+bounded schema and privacy review. All profiles remain observe-only by default,
+local-first, metadata-only, and without autonomous response or telemetry egress.

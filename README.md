@@ -29,6 +29,25 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
+## Windows and Linux configuration baseline
+
+Start with [`docs/platform-baseline.md`](docs/platform-baseline.md) for the
+platform feature matrix, open-source application choices, pinned installation
+recipes, safe settings, storage/permission checks, and staged delivery plan.
+
+| Profile | Scope | Status |
+| --- | --- | --- |
+| Linux: Ubuntu 24.04 LTS | Reference metadata runtime and separate isolated offline workflow | Existing Linux implementation; each installed-tool/workstation combination still needs validation |
+| Native Windows 11 x64 | Proposed Python 3.13 sample/JSONL, SQLite, and localhost-dashboard evaluation | UNVERIFIED; this documentation does not port or certify the runtime |
+| Windows with a Linux guest | Proposed reuse of the Linux analysis workflow in a separately validated guest | Not full Windows-host monitoring or Windows firewall enforcement |
+
+The baseline keeps Wireshark/TShark, Suricata, Zeek, and optional ClamAV/osquery
+roles separate from actual MEGALODON integration. It explains the non-open-source
+Npcap exception and selects offline-only Windows analysis without that driver.
+Native Windows capture, offline adapters, firewall application, services, and
+scheduling are not made available by this documentation. The existing Linux
+quick start below is not a Windows installation recipe.
+
 ## What is implemented on `main`
 
 | Area | Current capability |
@@ -38,9 +57,9 @@ production-readiness gaps.
 | Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
 | Dashboard | Read-only summary cards and a recent-detections table served from localhost |
 | Firewall boundary | Non-mutating plans by default; isolated `inet megalodon` nftables table and time-limited sets for explicit application |
-| Offline analysis | Separate, non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
+| Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
-| CI | Python 3.11 install, compilation, pytest, and non-mutating CLI smoke checks on pushes to `main` and pull requests |
+| CI | Ubuntu 24.04 / Python 3.11 install, compilation, pytest, and non-mutating CLI smoke checks on pushes to `main` and pull requests |
 
 ## Requirements and programs used
 
@@ -65,7 +84,7 @@ python -m pip install -e ".[capture]"     # optional Scapy capture
 python -m pip install -e ".[capture,test]" # both optional groups
 ```
 
-## Quick start
+## Linux quick start
 
 ```bash
 git clone https://github.com/bartytime4life/MEGALODON.git
@@ -188,7 +207,7 @@ isolation, and privacy-safe offline-run projection are tracked as branch-only
 work in [Issue #7](https://github.com/bartytime4life/MEGALODON/issues/7); they are
 not current `main` behavior.
 
-## Firewall boundary
+## Linux firewall boundary
 
 Inspect plans without root or mutation:
 
@@ -302,7 +321,7 @@ readiness.
 .github/workflows/           hosted CI
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
-docs/                        proposed automation design and offline analyst guide
+docs/                        platform baseline, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capture, detection, storage, policy, CLI, UI
 megalodon/offline/           isolated TShark/Zeek adapters and private reports
