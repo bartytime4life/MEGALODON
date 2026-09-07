@@ -1,0 +1,28 @@
+{
+  "schema": "runSnapshot",
+  "value": {
+    "id": "run:health-summary:20260907T160000Z",
+    "automation_id": "automation:health-summary",
+    "automation_revision": 1,
+    "occurrence_at": "2026-09-07T16:00:00Z",
+    "idempotency_key": "automation:health-summary:1:2026-09-07T16:00:00Z",
+    "status": "scheduled",
+    "attempt": 1,
+    "prompt": "Summarize bounded local metadata counts and state limitations.",
+    "prompt_sha256": "5f4dcc3b5aa765d61d8327deb882cf992f3b2d7db50a1bc3b4f4c5c7f6f8e9a0",
+    "model_id": "local:qwen-approved-v1",
+    "folder_id": "reports:local-private",
+    "policy_snapshot": {
+      "timeout_seconds": 60,
+      "max_output_bytes": 65536,
+      "retry_max_attempts": 1,
+      "concurrency_policy": "skip_if_running",
+      "capabilities": ["observe_metadata", "write_local_report"],
+      "network_access": false,
+      "firewall_access": false
+    },
+    "requested_actions": [],
+    "created_at": "2026-09-07T16:00:00Z",
+    "updated_at": "2026-09-07T16:00:00Z"
+  }
+}

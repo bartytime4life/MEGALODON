@@ -57,4 +57,44 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 4. The dashboard needs authentication and CSRF protection if it ever exposes
    control operations or binds beyond localhost.
 5. Detections need replay fixtures, false-positive measurements, and an explicit
-   evidence quality label before they can authorize automated response.
+   evidence quality label before operational interpretation. Neither a detection
+   nor a quality label authorizes automated response.
+
+## Windows/Linux extension: proposed controls, not completed validation
+
+The [platform baseline](docs/platform-baseline.md) is the canonical proposed
+configuration and installation guide. The review above concerns the Linux MVP
+and original design findings; it is not independent Windows security approval.
+At the pinned base `d94b40918908a8a275581f0c2690aef21d09adee`, the offline
+implementation depends on Linux privilege/capability checks, descriptor-based
+file access, `/proc`, process groups, and a fixed `/usr/bin/tshark`. The firewall
+apply path is nftables-specific and calls `os.geteuid()`. Native Windows parity
+is unproven; existing Linux checks must not be removed to advertise it.
+
+| Boundary | Required Windows/guest control | Current status |
+| --- | --- | --- |
+| Local storage | Private local NTFS ACLs; reject unsafe shared/redirected locations; review database/WAL/report permissions | Proposed Windows acceptance work; POSIX modes alone are insufficient |
+| Hostile input files | Reviewed handles and identity; reparse-point, device, UNC, alternate-stream and race defenses; finite limits | No native Windows offline adapter is approved |
+| Analyzer execution | Fixed executable/argv, trusted configuration, bounded pipes/runtime/resources, reliable child-tree termination, no egress | A Windows executable path alone does not supply containment |
+| Capture drivers | Verify maintenance, signed provenance, privileges, licensing, and explicit operator capture authority | Native Windows live capture excluded; Npcap is not an open-source baseline dependency |
+| Guest networking | Validate guest/host scope and loopback behavior; no assumption of full host visibility or firewall control | WSL is development-only here, not the hostile-capture isolation baseline |
+| Host response | Preserve existing firewall/endpoint protection; prove expiry/recovery and operator authorization separately | No Windows apply backend; no services or scheduled cleanup installed |
+| Sensor/file tools | Separate packet, flow, alert and file-scan semantics; allowlist fields; never import payloads or payload hashes | Suricata, ClamAV and osquery runtime integrations not implemented at the pinned base |
+
+The core demonstration needs neither root nor Administrator. Windows evaluation
+must use synthetic inputs until native compatibility and privacy gates pass.
+The dashboard remains read-only and loopback-bound; no remote exposure exception
+is created. External application installation is not evidence that MEGALODON
+has gained that application's protection or detection capability.
+
+Software/rule/signature downloads require a deliberate maintenance process,
+not telemetry uploads. Keep raw captures, sensor logs, SQLite data, and personal
+paths out of repository and Drive evidence packets. Redaction does not authorize
+sharing. Upstream licensing/platform sources and exact configuration requirements
+are recorded in the baseline; do not silently bundle restricted components.
+
+Acceptance requires Linux regression evidence, native Windows tests and ACL/UI
+readback, installed-tool compatibility where applicable, and independent human
+review. Issue #3's review-control gate remains separate from green CI. Nothing
+here authorizes a firewall operation, driver installation, scheduled task,
+remote listener, autonomous response, merge, release, or deployment.
