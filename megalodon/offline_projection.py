@@ -405,11 +405,11 @@ def _baseline(value: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _candidate(value: dict[str, Any], kind: str) -> str:
+def _candidate(value: dict[str, Any], run: dict[str, Any]) -> str:
     if (
         set(value) != {"rule", "status", "record_kind", "action_status", "evidence"}
         or value.get("status") != "candidate"
-        or value.get("record_kind") != kind
+        or value.get("record_kind") != run["record_kind"]
         or value.get("action_status") != "not_attempted"
         or value.get("rule") not in _CANDIDATE_RULES
         or not isinstance(value.get("evidence"), dict)
@@ -417,6 +417,7 @@ def _candidate(value: dict[str, Any], kind: str) -> str:
         _fail("INVALID_OFFLINE_CANDIDATE")
     rule = value["rule"]
     evidence = value["evidence"]
+    accepted = run["accepted_records"]
     try:
         if rule == "NEW_DESTINATION_PORT":
             protocol = evidence.get("protocol")
@@ -424,10 +425,11 @@ def _candidate(value: dict[str, Any], kind: str) -> str:
                 set(evidence) != {"protocol", "port", "records"}
                 or not isinstance(protocol, str)
                 or protocol not in {"TCP", "UDP"}
+                or not run["reference_baseline_used"]
             ):
                 _fail("INVALID_OFFLINE_CANDIDATE")
             uint(evidence.get("port"), 65535)
-            if uint(evidence.get("records"), 10_000) == 0:
+            if uint(evidence.get("records"), accepted) == 0:
                 _fail("INVALID_OFFLINE_CANDIDATE")
         elif rule == "REGULAR_INTERVAL":
             protocol = evidence.get("protocol")
@@ -452,7 +454,7 @@ def _candidate(value: dict[str, Any], kind: str) -> str:
             ):
                 _fail("INVALID_OFFLINE_CANDIDATE")
             uint(evidence.get("port"), 65535)
-            if uint(evidence.get("unique_observations"), 10_000) < 5:
+            if uint(evidence.get("unique_observations"), accepted) < 5:
                 _fail("INVALID_OFFLINE_CANDIDATE")
             median = uint(evidence.get("median_interval_us"), 3_600_000_000)
             spread = uint(evidence.get("interval_spread_us"), 3_600_000_000)
@@ -465,7 +467,7 @@ def _candidate(value: dict[str, Any], kind: str) -> str:
             if not isinstance(src, str) or not re.fullmatch(r"host-[0-9]{5}", src):
                 _fail("INVALID_OFFLINE_CANDIDATE")
             uint(evidence.get("relative_minute"), 68_374_080)
-            if uint(evidence.get("records"), 10_000) < 20:
+            if uint(evidence.get("records"), accepted) < 20:
                 _fail("INVALID_OFFLINE_CANDIDATE")
     except OfflineError:
         _fail("INVALID_OFFLINE_CANDIDATE")
@@ -489,7 +491,7 @@ def _candidates(data: bytes, run: dict[str, Any]) -> list[dict[str, int | str]]:
             candidate = json_object(line.decode("ascii"))
         except (UnicodeDecodeError, OfflineError):
             _fail("INVALID_OFFLINE_CANDIDATES")
-        counts[_candidate(candidate, run["record_kind"])] += 1
+        counts[_candidate(candidate, run)] += 1
     return [
         {"rule": rule, "status": "candidate", "count": counts[rule]}
         for rule in _CANDIDATE_RULES

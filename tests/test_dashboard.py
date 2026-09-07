@@ -163,6 +163,54 @@ def test_projection_rejects_type_confused_json_with_fixed_diagnostics(tmp_path):
         load_offline_projection(output)
 
 
+@pytest.mark.parametrize(
+    ("rule", "evidence"),
+    [
+        ("NEW_DESTINATION_PORT", {"protocol": "TCP", "port": 443, "records": 6}),
+        (
+            "REGULAR_INTERVAL",
+            {
+                "src": "host-00001",
+                "dst": "host-00002",
+                "protocol": "TCP",
+                "port": 443,
+                "unique_observations": 6,
+                "median_interval_us": 10_000_000,
+                "interval_spread_us": 0,
+            },
+        ),
+        ("PORT_53_BURST", {"src": "host-00001", "relative_minute": 0, "records": 20}),
+    ],
+)
+def test_projection_rejects_candidate_counts_above_accepted_records(tmp_path, rule, evidence):
+    output = _run(tmp_path)
+    if rule == "NEW_DESTINATION_PORT":
+        manifest_path = output / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["reference_baseline_used"] = True
+        manifest_path.write_text(json.dumps(manifest), encoding="ascii")
+    candidate_path = output / "candidates.jsonl"
+    candidate = json.loads(candidate_path.read_text())
+    candidate["rule"] = rule
+    candidate["evidence"] = evidence
+    candidate_path.write_text(json.dumps(candidate) + "\n", encoding="ascii")
+
+    with pytest.raises(OfflineError, match="INVALID_OFFLINE_CANDIDATE"):
+        load_offline_projection(output)
+
+
+def test_projection_rejects_new_port_candidate_without_reference_baseline(tmp_path):
+    output = _run(tmp_path)
+    candidate_path = output / "candidates.jsonl"
+    candidate = json.loads(candidate_path.read_text())
+    candidate["rule"] = "NEW_DESTINATION_PORT"
+    candidate["evidence"] = {"protocol": "TCP", "port": 443, "records": 5}
+    candidate_path.write_text(json.dumps(candidate) + "\n", encoding="ascii")
+
+    with pytest.raises(OfflineError, match="INVALID_OFFLINE_CANDIDATE"):
+        load_offline_projection(output)
+
+
 def test_dashboard_parser_and_remote_projection_boundary(tmp_path):
     args = build_parser().parse_args(
         [
