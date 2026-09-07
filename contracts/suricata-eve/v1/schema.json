@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:megalodon:contract:suricata-eve-alert:v1",
+  "title": "PROPOSED Suricata EVE alert contract v1 (inert)",
+  "$comment": "Conformance also requires README framing, semantic, and pair rules. No runtime consumer or engine compatibility is implemented.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/inputEnvelope"
+    },
+    {
+      "$ref": "#/$defs/externalAlert"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}(?![\\s\\S])"
+    },
+    "ip": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 45,
+      "pattern": "^[0-9A-Fa-f:.]+(?![\\s\\S])",
+      "oneOf": [
+        {
+          "format": "ipv4"
+        },
+        {
+          "format": "ipv6"
+        }
+      ]
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "ruleInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "eveTime": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 32,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:?[0-9]{2})(?![\\s\\S])"
+    },
+    "utcTime": {
+      "type": "string",
+      "minLength": 27,
+      "maxLength": 27,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z(?![\\s\\S])",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "adapter_profile",
+        "declared_version",
+        "version_basis",
+        "sensor_id",
+        "run_id",
+        "ruleset_id",
+        "ruleset_basis"
+      ],
+      "properties": {
+        "engine": {
+          "const": "suricata"
+        },
+        "adapter_profile": {
+          "const": "suricata-eve-alert-v1"
+        },
+        "declared_version": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 11,
+          "pattern": "^(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})(?![\\s\\S])"
+        },
+        "version_basis": {
+          "const": "operator_declared"
+        },
+        "sensor_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "run_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ruleset_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ruleset_basis": {
+          "const": "operator_declared"
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gid",
+        "signature_id",
+        "rev",
+        "severity"
+      ],
+      "properties": {
+        "gid": {
+          "$ref": "#/$defs/ruleInteger"
+        },
+        "signature_id": {
+          "$ref": "#/$defs/ruleInteger"
+        },
+        "rev": {
+          "$ref": "#/$defs/ruleInteger"
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        }
+      }
+    },
+    "eveRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gid",
+        "signature_id",
+        "rev",
+        "severity",
+        "action"
+      ],
+      "properties": {
+        "gid": {
+          "$ref": "#/$defs/ruleInteger"
+        },
+        "signature_id": {
+          "$ref": "#/$defs/ruleInteger"
+        },
+        "rev": {
+          "$ref": "#/$defs/ruleInteger"
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        },
+        "action": {
+          "enum": [
+            "allowed",
+            "blocked"
+          ]
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[\\x20-\\x7e]+(?![\\s\\S])"
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[\\x20-\\x7e]+(?![\\s\\S])"
+        }
+      }
+    },
+    "eveAlert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timestamp",
+        "event_type",
+        "src_ip",
+        "src_port",
+        "dest_ip",
+        "dest_port",
+        "proto",
+        "alert"
+      ],
+      "properties": {
+        "timestamp": {
+          "$ref": "#/$defs/eveTime"
+        },
+        "event_type": {
+          "const": "alert"
+        },
+        "src_ip": {
+          "$ref": "#/$defs/ip"
+        },
+        "src_port": {
+          "$ref": "#/$defs/port"
+        },
+        "dest_ip": {
+          "$ref": "#/$defs/ip"
+        },
+        "dest_port": {
+          "$ref": "#/$defs/port"
+        },
+        "proto": {
+          "enum": [
+            "TCP",
+            "UDP"
+          ]
+        },
+        "alert": {
+          "$ref": "#/$defs/eveRule"
+        }
+      }
+    },
+    "inputEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source",
+        "source_record_index",
+        "event"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "suricata-eve-alert-input-v1"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "source_record_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "event": {
+          "$ref": "#/$defs/eveAlert"
+        }
+      }
+    },
+    "externalAlert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source",
+        "source_record_index",
+        "observed_at",
+        "src_ip",
+        "src_port",
+        "dst_ip",
+        "dst_port",
+        "protocol",
+        "rule",
+        "producer_reported_action",
+        "evidence_kind",
+        "count_unit",
+        "action_status"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "external-alert-v1"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "source_record_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utcTime"
+        },
+        "src_ip": {
+          "$ref": "#/$defs/ip"
+        },
+        "src_port": {
+          "$ref": "#/$defs/port"
+        },
+        "dst_ip": {
+          "$ref": "#/$defs/ip"
+        },
+        "dst_port": {
+          "$ref": "#/$defs/port"
+        },
+        "protocol": {
+          "enum": [
+            "TCP",
+            "UDP"
+          ]
+        },
+        "rule": {
+          "$ref": "#/$defs/rule"
+        },
+        "producer_reported_action": {
+          "enum": [
+            "allowed",
+            "blocked"
+          ]
+        },
+        "evidence_kind": {
+          "const": "signature_match"
+        },
+        "count_unit": {
+          "const": "alert"
+        },
+        "action_status": {
+          "const": "not_attempted"
+        }
+      }
+    }
+  }
+}
