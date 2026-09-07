@@ -237,19 +237,40 @@ cryptographically authenticated chain of custody.
 
 ## Read-only dashboard summaries
 
-**Implemented:** local report summaries described above. **Unchanged:** the
-existing loopback dashboard reads its existing SQLite counts/detections only;
-it does not ingest offline reports or display these runs. No new HTTP endpoint,
-file browser, report upload, remote bind, or control button is added.
+The existing dashboard can optionally load one completed private offline report
+snapshot at startup:
 
-A later, separately reviewed dashboard integration may project only a validated
-complete manifest, source-qualified counts, relative observation window,
-protocol/port distributions, candidate status, tool provenance, and limitations.
-It must preserve packet/flow units, label candidates rather than malware,
-exclude raw addresses and capture paths, cap every response, remain read-only
-and loopback-bound, and never allow a web request to launch an analyzer or
-firewall operation. That projection and its authorization tests are PROPOSED,
-not delivered by the current command.
+```bash
+python -m megalodon dashboard \
+  --offline-run "$HOME/Analysis/case001/run001"
+```
+
+The loader requires an absolute path with no symlink components, a private
+owner-only directory, the exact completed report set, fixed file permissions,
+bounded file sizes, and internally consistent `offline-run-v1` and
+`offline-baseline-v1` schemas. Candidate rows are validated, then reduced to
+rule counts. The snapshot is loaded once and served as
+`dashboard-offline-summary-v1` from `GET /api/offline-summary`.
+
+`records.jsonl` and `records.csv` receive fixed-name, regular-file, ownership,
+permission, and size checks so a manifest-only or linked set cannot appear
+complete. Their rows are not read, parsed, or served by the dashboard. The
+manifest carries no report hashes, so this projection is not an integrity or
+chain-of-custody proof for the record files.
+
+The projection preserves packet/flow units and exposes only run/source identity,
+counts, tool provenance, relative time coverage, capped protocol/port summaries,
+candidate status counts, and fixed limitations. It excludes raw addresses,
+capture paths, records, packet bytes, and candidate evidence details. Candidate
+items remain review prompts, not malware verdicts or response authorization.
+
+No file browser, upload, watcher, analyzer trigger, firewall endpoint, or egress
+adapter exists. Web requests cannot select or reload report paths. Offline
+summaries are refused on a non-loopback bind even if `--allow-remote` is supplied.
+The SQLite telemetry path remains separate; selecting a report does not ingest
+its records or join packet and flow counts. Startup validation detects ordinary
+file changes but does not create an atomic filesystem snapshot against a
+malicious same-owner writer or compromised kernel.
 
 ## SIEM/SOAR data-sharing and egress gate
 

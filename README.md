@@ -38,6 +38,20 @@ Open <http://127.0.0.1:8787/> after starting the dashboard. The sample source
 is deterministic enough for a smoke test; `--demo-threat` adds synthetic
 SYN-flood and long-DNS-query events so the dashboard has detections to display.
 
+To add one completed offline run to the read-only dashboard, select its absolute
+private report directory when the server starts:
+
+```bash
+python -m megalodon dashboard \
+  --offline-run "$HOME/Analysis/case001/run001"
+```
+
+The dashboard loads and validates the summary inputs once; it does not browse
+directories, watch files, read or serve record rows, launch an analyzer, expose
+candidate evidence details, or add a control endpoint. Offline summaries are
+refused on non-loopback binds, even when `--allow-remote` is present. Restart
+the dashboard to select another run.
+
 The database is created at `data/megalodon.db`. It stores packet metadata,
 detection evidence, and action decisions, but never raw packet payloads.
 
@@ -107,7 +121,8 @@ non-global targets. Review those boundaries before any live use.
 | `run --source sample --demo-threat` | Add synthetic detections |
 | `run --source jsonl` | Replay validated JSONL metadata |
 | `run --source scapy --interface IFACE` | Optional live metadata capture |
-| `dashboard` | Start a read-only localhost dashboard |
+| `dashboard` | Start the responsive read-only localhost dashboard |
+| `dashboard --offline-run ABSOLUTE_PATH` | Add one validated complete offline summary snapshot |
 | `firewall-plan IP` | Print a non-mutating time-limited block plan |
 | `firewall-install` | Print the isolated nftables table plan |
 | `block IP --reason TEXT` | Print a block plan; `--apply` is required to mutate |
@@ -142,11 +157,13 @@ isolated test environment before it is considered operational.
 TShark capture-file replay or versioned Zeek JSON/TSV `conn.log` import. It writes
 local redacted JSONL/CSV, run manifests, deterministic metadata baselines, and
 review-only candidate findings. It does not change the three-source MVP service,
-write its SQLite database, feed its dashboard, or invoke firewall policy.
+write its SQLite database, automatically feed its dashboard, or invoke firewall
+policy. The dashboard can explicitly load one completed private report snapshot
+at startup without ingesting the records into SQLite.
 
 Read [Offline metadata analysis v1](docs/offline-analysis.md) for exact commands,
 fixed limits, typed schemas, isolated analyst operations, redaction limitations,
-and the proposed read-only dashboard projection. TShark is an optional reviewed
+and the read-only dashboard projection. TShark is an optional reviewed
 system executable, not a Python dependency. No SIEM/SOAR exporter exists; external
 sharing remains blocked pending an explicit approved data-sharing/egress policy.
 The new command does not implement or override the proposed automation contract.

@@ -43,6 +43,9 @@ and an explicit nftables plan/application boundary.
    command-line opt-in and remains unauthenticated, so it is not recommended.
 10. **Fail closed for unsafe response.** Invalid targets, unavailable nft, lack
     of root, missing confirmation, and protected networks refuse the action.
+11. **Offline projection stays local.** A selected offline run must be a complete,
+    private, bounded report set. Its dashboard projection is never available on
+    a non-loopback bind.
 
 ## 3. Data contracts
 
@@ -127,11 +130,24 @@ The dashboard exposes only:
 
 - `GET /` — static local dashboard;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
-- `GET /api/events?limit=N` — recent detections, capped at 200.
+- `GET /api/events?limit=N` — recent detections, capped at 200;
+- `GET /api/offline-summary` — either `available: false` or one immutable,
+  validated `dashboard-offline-summary-v1` snapshot selected at startup.
 
-Responses are `no-store` and carry basic content-security and MIME-sniffing
-headers. Data is inserted into the page with DOM text nodes rather than raw
-HTML interpolation.
+`--offline-run ABSOLUTE_PATH` accepts only a complete `offline-run-v1` report
+directory with private ownership and permissions, no symlink components, fixed
+report names, matching source/adapter/unit contracts, and bounded manifest,
+baseline, and candidate files. Record files receive fixed-name, type, ownership,
+permission, and size checks but are neither parsed nor served. The API includes
+run/source identity, counts, tool provenance, relative time coverage, capped
+protocol/port distributions,
+candidate-rule counts, and fixed interpretation limits. It excludes addresses,
+paths, record rows, packet bytes, and candidate evidence. A web request cannot
+select a path, reload a run, launch an analyzer, or invoke firewall policy.
+
+Responses are `no-store` and carry restrictive content-security, framing,
+referrer, permissions, cross-origin-resource, and MIME-sniffing headers. Data is
+inserted into the page with DOM text nodes rather than raw HTML interpolation.
 
 ## 7. Retention and privacy
 
@@ -152,6 +168,8 @@ The MVP is acceptable for local experimentation when:
 - allowlisted and non-global block targets are refused;
 - plan mode produces no firewall subprocess;
 - dashboard binds only to loopback by default;
+- offline summaries reject incomplete, public, linked, mismatched, or tampered
+  report sets and remain unavailable on remote binds;
 - sample replay produces a database and no firewall mutation;
 - `--demo-threat` creates detection and action records;
 - no code path uses `shell=True`.

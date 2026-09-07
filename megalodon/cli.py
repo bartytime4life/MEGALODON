@@ -34,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=int)
     dashboard.add_argument("--allow-remote", action="store_true", help="allow a non-loopback bind; no authentication is provided")
+    dashboard.add_argument(
+        "--offline-run",
+        type=Path,
+        help="absolute path to one complete private offline run; loaded read-only at startup",
+    )
 
     plan = sub.add_parser("firewall-plan", help="print a non-mutating nftables plan")
     plan.add_argument("ip")
@@ -102,8 +107,10 @@ def _dashboard(args: argparse.Namespace) -> int:
     host = args.host or settings.dashboard.host
     port = args.port or settings.dashboard.port
     from .dashboard import serve
+    from .offline_projection import load_offline_projection
 
     try:
+        offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with Store(settings.db_path) as store:
             serve(
                 store,
@@ -111,6 +118,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                 port,
                 enabled=settings.dashboard.enabled,
                 allow_remote=args.allow_remote,
+                offline_summary=offline_summary,
             )
     except (OSError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
