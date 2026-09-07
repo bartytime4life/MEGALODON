@@ -13,6 +13,7 @@ from .storage import Store
 MIN_REFRESH_SECONDS = 2
 MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
+DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
 
 
 INDEX_HTML = """<!doctype html>
@@ -206,7 +207,7 @@ tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: rgba(110, 216, 255, .035); }
 .empty { padding: 34px 20px; color: var(--muted); text-align: center; }
 .severity { display: inline-flex; padding: 4px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: .68rem; font-weight: 850; letter-spacing: .04em; }
-.CRITICAL { color: var(--rose); } .HIGH { color: var(--orange); } .MEDIUM { color: var(--amber); } .LOW { color: var(--cyan); }
+.CRITICAL { color: var(--rose); } .HIGH { color: var(--orange); } .MEDIUM { color: var(--amber); } .LOW { color: var(--cyan); } .UNKNOWN { color: var(--muted); }
 .offline-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); }
 .offline-main, .offline-side { padding: 22px; }
 .offline-side { border-left: 1px solid var(--line); background: rgba(4, 15, 21, .32); }
@@ -264,6 +265,7 @@ const metricSpec = [
   ['high_or_critical', 'High / critical', 'Priority review items'],
   ['actions', 'Actions', 'Planned or explicit records']
 ];
+const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const state = {
   events: [],
   paused: false,
@@ -285,6 +287,10 @@ function timeNode(value) {
   const node = textNode('time', Number.isNaN(parsed.valueOf()) ? String(value) : parsed.toLocaleString());
   if (!Number.isNaN(parsed.valueOf())) node.dateTime = parsed.toISOString();
   return node;
+}
+function severityPresentation(value) {
+  const normalized = String(value || '').toUpperCase();
+  return knownSeverities.has(normalized) ? normalized : 'UNKNOWN';
 }
 async function requestJSON(path) {
   const controller = new AbortController();
@@ -327,7 +333,8 @@ function renderEvents(events) {
   const rows = events.map(event => {
     const row = document.createElement('tr'); row.append(timeNode(event.detected_at));
     const severityCell = document.createElement('td');
-    severityCell.append(textNode('span', event.severity || 'UNKNOWN', `severity ${event.severity || ''}`));
+    const severity = severityPresentation(event.severity);
+    severityCell.append(textNode('span', severity, `severity ${severity}`));
     row.append(severityCell, textNode('td', event.rule_id || ''), textNode('td', event.src_ip || ''), textNode('td', event.message || ''));
     return row;
   });
@@ -499,7 +506,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not 1 <= limit <= MAX_EVENT_LIMIT:
                 self._send_json({"error": f"limit must be between 1 and {MAX_EVENT_LIMIT}"}, status=400)
                 return
-            self._send_json(self.store.recent(limit))
+            self._send_json(_dashboard_events(self.store, limit))
             return
         if route.path == "/api/offline-summary":
             self._send_json(
@@ -536,6 +543,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def log_message(self, *_: object) -> None:
         return
+
+
+def _dashboard_events(store: Store, limit: int) -> list[dict[str, Any]]:
+    """Project stored detections onto the dashboard's minimal read-only contract."""
+    return [
+        {field: detection[field] for field in DASHBOARD_EVENT_FIELDS}
+        for detection in store.recent(limit)
+    ]
 
 
 def _bounded_dashboard_integer(value: int, name: str, minimum: int, maximum: int) -> int:

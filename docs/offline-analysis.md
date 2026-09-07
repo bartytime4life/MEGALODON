@@ -281,6 +281,12 @@ overrides for one launch. Polling stops while the page is hidden, does not
 overlap an in-flight request, and preserves the last rendered rows when a
 refresh fails. No filter state is persisted or exported.
 
+The live detection response is also data-minimized before serialization. It
+contains only detection time, rule ID, severity, source IP, and message—the five
+fields rendered by the table. Destination IP, evidence JSON, recommendation,
+and suppression reason remain available to local audit workflows in SQLite but
+are not exposed through the dashboard API.
+
 ## SIEM/SOAR data-sharing and egress gate
 
 Status: **NOT APPROVED; exporter NOT IMPLEMENTED**. There is no destination,

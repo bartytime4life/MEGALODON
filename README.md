@@ -66,6 +66,9 @@ python -m megalodon dashboard --refresh-seconds 12 --event-limit 125
 `refresh_seconds` accepts 2–300 and `event_limit` accepts 1–200. The dashboard
 serves its CSS and JavaScript from same-origin, no-store asset endpoints so its
 content-security policy does not require inline-script or inline-style access.
+The live events API projects only detection time, rule ID, severity, source IP,
+and message. Destination IP, evidence, recommendation, and suppression details
+remain in the local audit store and are not served to the browser.
 
 The database is created at `data/megalodon.db`. It stores packet metadata,
 detection evidence, and action decisions, but never raw packet payloads.

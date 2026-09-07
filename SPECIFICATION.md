@@ -135,7 +135,10 @@ The dashboard exposes only:
 - `GET /api/summary` — event, detection, action, and high/critical counts;
 - `GET /api/events?limit=N` — recent detections, with one decimal integer from
   1 through 200; malformed, repeated, out-of-range, and unknown query fields
-  fail with `400` rather than being silently coerced;
+  fail with `400` rather than being silently coerced. Each returned detection
+  contains only `detected_at`, `rule_id`, `severity`, `src_ip`, and `message`;
+  stored destination addresses, evidence, recommendations, and suppression
+  reasons are excluded from the browser contract;
 - `GET /api/offline-summary` — either `available: false` or one immutable,
   validated `dashboard-offline-summary-v1` snapshot selected at startup.
 

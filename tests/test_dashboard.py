@@ -14,8 +14,15 @@ from urllib.request import urlopen
 import pytest
 
 from megalodon.cli import build_parser
-from megalodon.dashboard import DASHBOARD_CSS, DASHBOARD_JS, DashboardHandler, INDEX_HTML, serve
-from megalodon.models import PacketEvent
+from megalodon.dashboard import (
+    DASHBOARD_CSS,
+    DASHBOARD_EVENT_FIELDS,
+    DASHBOARD_JS,
+    DashboardHandler,
+    INDEX_HTML,
+    serve,
+)
+from megalodon.models import DetectionResult, PacketEvent
 from megalodon.offline.common import Batch, Limits, OfflineError
 from megalodon.offline import reports, tshark
 from megalodon.offline_projection import MAX_PROJECTED_PORTS, load_offline_projection
@@ -175,6 +182,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "prefers-reduced-motion" in DASHBOARD_CSS
     assert "replaceChildren" in DASHBOARD_JS
     assert "AbortController" in DASHBOARD_JS
+    assert "knownSeverities.has(normalized)" in DASHBOARD_JS
+    assert "`severity ${severity}`" in DASHBOARD_JS
     assert "setInterval" not in DASHBOARD_JS
     assert "innerHTML" not in DASHBOARD_JS
     assert "localStorage" not in DASHBOARD_JS
@@ -251,6 +260,45 @@ def test_dashboard_config_assets_and_query_validation(tmp_path):
                     urlopen(f"{base}/api/events?{query}", timeout=2)
                 assert raised.value.code == 400
                 assert "error" in json.loads(raised.value.read())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+def test_events_api_projects_only_fields_required_by_the_ui(tmp_path):
+    with Store(tmp_path / "events.db") as store:
+        event = _packet(0)
+        event_id = store.record_event(event)
+        store.record_detection(
+            event_id,
+            DetectionResult(
+                detected_at=event.observed_at,
+                rule_id="TEST_RULE",
+                severity="HIGH",
+                src_ip=event.src_ip,
+                dst_ip=event.dst_ip,
+                message="Synthetic dashboard projection test",
+                evidence={"private_detail": "not served"},
+                recommendation="REVIEW_PRIVATE_EVIDENCE",
+                suppressed_reason="synthetic suppression detail",
+            ),
+        )
+        handler = type("TestMinimalEventsHandler", (DashboardHandler,), {"store": store})
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urlopen(f"http://127.0.0.1:{server.server_port}/api/events?limit=1", timeout=2) as response:
+                payload = json.loads(response.read())
+            assert len(payload) == 1
+            assert set(payload[0]) == set(DASHBOARD_EVENT_FIELDS)
+            assert payload[0]["src_ip"] == "192.0.2.10"
+            assert payload[0]["message"] == "Synthetic dashboard projection test"
+            assert "dst_ip" not in payload[0]
+            assert "evidence" not in payload[0]
+            assert "recommendation" not in payload[0]
+            assert "suppressed_reason" not in payload[0]
         finally:
             server.shutdown()
             server.server_close()
