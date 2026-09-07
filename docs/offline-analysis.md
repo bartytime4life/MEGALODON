@@ -272,6 +272,15 @@ its records or join packet and flow counts. Startup validation detects ordinary
 file changes but does not create an atomic filesystem snapshot against a
 malicious same-owner writer or compromised kernel.
 
+The same page provides local-only search and severity filters for the bounded
+recent SQLite detection set, plus manual refresh and pause/resume controls.
+These controls do not operate on offline record rows and cannot reload or
+replace the selected offline snapshot. Configure `dashboard.refresh_seconds`
+(2–300) and `dashboard.event_limit` (1–200), or use the matching command-line
+overrides for one launch. Polling stops while the page is hidden, does not
+overlap an in-flight request, and preserves the last rendered rows when a
+refresh fails. No filter state is persisted or exported.
+
 ## SIEM/SOAR data-sharing and egress gate
 
 Status: **NOT APPROVED; exporter NOT IMPLEMENTED**. There is no destination,

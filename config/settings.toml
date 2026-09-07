@@ -40,3 +40,6 @@ allowlist = [
 enabled = true
 host = "127.0.0.1"
 port = 8787
+# UI-only polling controls. They do not enable writes or network egress.
+refresh_seconds = 5
+event_limit = 50

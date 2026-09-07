@@ -129,10 +129,24 @@ operation.
 The dashboard exposes only:
 
 - `GET /` — static local dashboard;
+- `GET /assets/dashboard.css` and `GET /assets/dashboard.js` — same-origin,
+  no-store presentation assets;
+- `GET /api/config` — a non-sensitive `dashboard-config-v1` view contract;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
-- `GET /api/events?limit=N` — recent detections, capped at 200;
+- `GET /api/events?limit=N` — recent detections, with one decimal integer from
+  1 through 200; malformed, repeated, out-of-range, and unknown query fields
+  fail with `400` rather than being silently coerced;
 - `GET /api/offline-summary` — either `available: false` or one immutable,
   validated `dashboard-offline-summary-v1` snapshot selected at startup.
+
+`dashboard.refresh_seconds` is an integer from 2 through 300 and
+`dashboard.event_limit` is an integer from 1 through 200. The matching
+`--refresh-seconds` and `--event-limit` command options override configuration
+for one launch. The browser uses a single non-overlapping timeout loop, pauses
+polling while hidden or when the operator selects pause, and retains the last
+successfully rendered rows across a refresh failure. Search and severity
+filters operate only on the bounded in-memory recent set; they do not query new
+fields, persist preferences, change SQLite, or create an export.
 
 `--offline-run ABSOLUTE_PATH` accepts only a complete `offline-run-v1` report
 directory with private ownership and permissions, no symlink components, fixed
@@ -145,9 +159,13 @@ candidate-rule counts, and fixed interpretation limits. It excludes addresses,
 paths, record rows, packet bytes, and candidate evidence. A web request cannot
 select a path, reload a run, launch an analyzer, or invoke firewall policy.
 
-Responses are `no-store` and carry restrictive content-security, framing,
-referrer, permissions, cross-origin-resource, and MIME-sniffing headers. Data is
-inserted into the page with DOM text nodes rather than raw HTML interpolation.
+Responses are `no-store` and carry restrictive content-security, opener,
+framing, referrer, permissions, cross-origin-resource, and MIME-sniffing
+headers. CSS and JavaScript are separate same-origin resources; the policy does
+not allow inline scripts or inline styles. Data is inserted into the page with
+DOM text nodes rather than raw HTML interpolation. Search, severity, refresh,
+and pause controls are labeled for keyboard and assistive-technology use, and
+timestamps use semantic `time` elements.
 
 ## 7. Retention and privacy
 

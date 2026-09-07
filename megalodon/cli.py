@@ -35,6 +35,16 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--port", type=int)
     dashboard.add_argument("--allow-remote", action="store_true", help="allow a non-loopback bind; no authentication is provided")
     dashboard.add_argument(
+        "--refresh-seconds",
+        type=int,
+        help="live refresh interval from 2 to 300 seconds; overrides configuration",
+    )
+    dashboard.add_argument(
+        "--event-limit",
+        type=int,
+        help="newest detections loaded per refresh, from 1 to 200; overrides configuration",
+    )
+    dashboard.add_argument(
         "--offline-run",
         type=Path,
         help="absolute path to one complete private offline run; loaded read-only at startup",
@@ -119,6 +129,10 @@ def _dashboard(args: argparse.Namespace) -> int:
                 enabled=settings.dashboard.enabled,
                 allow_remote=args.allow_remote,
                 offline_summary=offline_summary,
+                refresh_seconds=(
+                    args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
+                ),
+                event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
             )
     except (OSError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)

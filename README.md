@@ -52,6 +52,21 @@ candidate evidence details, or add a control endpoint. Offline summaries are
 refused on non-loopback binds, even when `--allow-remote` is present. Restart
 the dashboard to select another run.
 
+The recent-detections view supports local search, severity filtering, manual
+refresh, and pause/resume polling. Filters exist only in browser memory and do
+not alter SQLite, write files, or add an export path. Polling is suspended while
+the page is hidden, requests time out after five seconds, and an in-flight
+refresh is never overlapped. Configure the bounded defaults in
+`config/settings.toml` or override them for one launch:
+
+```bash
+python -m megalodon dashboard --refresh-seconds 12 --event-limit 125
+```
+
+`refresh_seconds` accepts 2–300 and `event_limit` accepts 1–200. The dashboard
+serves its CSS and JavaScript from same-origin, no-store asset endpoints so its
+content-security policy does not require inline-script or inline-style access.
+
 The database is created at `data/megalodon.db`. It stores packet metadata,
 detection evidence, and action decisions, but never raw packet payloads.
 
@@ -123,6 +138,7 @@ non-global targets. Review those boundaries before any live use.
 | `run --source scapy --interface IFACE` | Optional live metadata capture |
 | `dashboard` | Start the responsive read-only localhost dashboard |
 | `dashboard --offline-run ABSOLUTE_PATH` | Add one validated complete offline summary snapshot |
+| `dashboard --refresh-seconds N --event-limit N` | Override bounded polling cadence and recent-row budget |
 | `firewall-plan IP` | Print a non-mutating time-limited block plan |
 | `firewall-install` | Print the isolated nftables table plan |
 | `block IP --reason TEXT` | Print a block plan; `--apply` is required to mutate |

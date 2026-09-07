@@ -8,12 +8,13 @@ import json
 from pathlib import Path
 import re
 from threading import Thread
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 import pytest
 
 from megalodon.cli import build_parser
-from megalodon.dashboard import DashboardHandler, INDEX_HTML, serve
+from megalodon.dashboard import DASHBOARD_CSS, DASHBOARD_JS, DashboardHandler, INDEX_HTML, serve
 from megalodon.models import PacketEvent
 from megalodon.offline.common import Batch, Limits, OfflineError
 from megalodon.offline import reports, tshark
@@ -130,25 +131,58 @@ def test_projection_rejects_manifest_candidate_and_baseline_tampering(tmp_path):
 
 
 def test_dashboard_parser_and_remote_projection_boundary(tmp_path):
-    args = build_parser().parse_args(["dashboard", "--offline-run", str(tmp_path / "run")])
+    args = build_parser().parse_args(
+        [
+            "dashboard",
+            "--offline-run",
+            str(tmp_path / "run"),
+            "--refresh-seconds",
+            "12",
+            "--event-limit",
+            "125",
+        ]
+    )
     assert args.offline_run == tmp_path / "run"
+    assert args.refresh_seconds == 12
+    assert args.event_limit == 125
     with Store(tmp_path / "events.db") as store:
         with pytest.raises(ValueError, match="loopback"):
             serve(store, "0.0.0.0", 8787, allow_remote=True, offline_summary={})
+
+
+def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
+    with Store(tmp_path / "events.db") as store:
+        with pytest.raises(ValueError, match="refresh_seconds"):
+            serve(store, "127.0.0.1", 8787, refresh_seconds=1)
+        with pytest.raises(ValueError, match="event_limit"):
+            serve(store, "127.0.0.1", 8787, event_limit=201)
+        with pytest.raises(ValueError, match="event_limit"):
+            serve(store, "127.0.0.1", 8787, event_limit=True)
 
 
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
     assert 'aria-live="polite"' in INDEX_HTML
     assert 'scope="col"' in INDEX_HTML
-    assert "prefers-reduced-motion" in INDEX_HTML
-    assert "replaceChildren" in INDEX_HTML
-    assert "innerHTML" not in INDEX_HTML
-    assert "<button" not in INDEX_HTML
+    assert 'href="#detections-title"' in INDEX_HTML
+    assert 'type="search"' in INDEX_HTML
+    assert 'aria-pressed="false"' in INDEX_HTML
+    assert "<button" in INDEX_HTML
+    assert "<style" not in INDEX_HTML
+    assert "<script>" not in INDEX_HTML
+    assert 'src="/assets/dashboard.js"' in INDEX_HTML
+    assert 'href="/assets/dashboard.css"' in INDEX_HTML
+    assert "prefers-reduced-motion" in DASHBOARD_CSS
+    assert "replaceChildren" in DASHBOARD_JS
+    assert "AbortController" in DASHBOARD_JS
+    assert "setInterval" not in DASHBOARD_JS
+    assert "innerHTML" not in DASHBOARD_JS
+    assert "localStorage" not in DASHBOARD_JS
+    assert "navigator.clipboard" not in DASHBOARD_JS
     assert 'type="file"' not in INDEX_HTML
-    assert "/api/run" not in INDEX_HTML
+    assert "/api/run" not in INDEX_HTML + DASHBOARD_JS
     ids = re.findall(r'\bid="([^"]+)"', INDEX_HTML)
-    referenced_ids = re.findall(r"getElementById\('([^']+)'\)", INDEX_HTML)
+    referenced_ids = re.findall(r"byId\('([^']+)'\)", DASHBOARD_JS)
     assert len(ids) == len(set(ids))
     assert set(referenced_ids) <= set(ids)
 
@@ -170,10 +204,53 @@ def test_offline_api_is_local_bounded_and_security_hardened(tmp_path):
                 assert response.headers["Cache-Control"] == "no-store"
                 assert response.headers["X-Frame-Options"] == "DENY"
                 assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+                assert "script-src 'self'" in response.headers["Content-Security-Policy"]
+                assert "'unsafe-inline'" not in response.headers["Content-Security-Policy"]
+                assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
             payload = json.loads(body)
             assert payload["available"] is True
             assert payload["snapshot"]["run"]["case_id"] == "case1"
             assert str(tmp_path) not in body
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+def test_dashboard_config_assets_and_query_validation(tmp_path):
+    with Store(tmp_path / "events.db") as store:
+        handler = type(
+            "TestConfiguredDashboardHandler",
+            (DashboardHandler,),
+            {"store": store, "refresh_seconds": 12, "event_limit": 125},
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(f"{base}/api/config", timeout=2) as response:
+                config = json.loads(response.read())
+            assert config == {
+                "schema": "dashboard-config-v1",
+                "read_only": True,
+                "refresh_seconds": 12,
+                "event_limit": 125,
+                "offline_summary_available": False,
+            }
+
+            with urlopen(f"{base}/assets/dashboard.css", timeout=2) as response:
+                assert response.headers["Content-Type"] == "text/css; charset=utf-8"
+                assert response.read().decode() == DASHBOARD_CSS
+            with urlopen(f"{base}/assets/dashboard.js", timeout=2) as response:
+                assert response.headers["Content-Type"] == "text/javascript; charset=utf-8"
+                assert response.read().decode() == DASHBOARD_JS
+
+            for query in ("limit=0", "limit=201", "limit=abc", "limit=1&limit=2", "other=1"):
+                with pytest.raises(HTTPError) as raised:
+                    urlopen(f"{base}/api/events?{query}", timeout=2)
+                assert raised.value.code == 400
+                assert "error" in json.loads(raised.value.read())
         finally:
             server.shutdown()
             server.server_close()
