@@ -263,3 +263,77 @@ def test_duplicate_alerts_are_not_claimed_independent_or_deduplicated():
     _validate_pair(deepcopy(seed["input"]), deepcopy(seed["normalized"]))
     # A record schema cannot establish run-level uniqueness or corroboration.
     assert seed["normalized"]["source_record_index"] == 1
+
+
+# Independent v1 field inventory: deriving this from SCHEMA would let a schema
+# weakening silently shrink the regression cases that are supposed to catch it.
+_CONTRACT_FIELDS = {
+    "inputEnvelope": ("schema_version source source_record_index event", ""),
+    "source": (
+        "engine adapter_profile declared_version version_basis sensor_id run_id "
+        "ruleset_id ruleset_basis", "",
+    ),
+    "eveAlert": (
+        "timestamp event_type src_ip src_port dest_ip dest_port proto alert", "",
+    ),
+    "eveRule": ("gid signature_id rev severity action", "signature category"),
+    "rule": ("gid signature_id rev severity", ""),
+    "externalAlert": (
+        "schema_version source source_record_index observed_at src_ip src_port "
+        "dst_ip dst_port protocol rule producer_reported_action evidence_kind "
+        "count_unit action_status", "",
+    ),
+}
+_OBJECT_SITES = (
+    ("input", (), "inputEnvelope"),
+    ("input", ("source",), "source"),
+    ("input", ("event",), "eveAlert"),
+    ("input", ("event", "alert"), "eveRule"),
+    ("normalized", (), "externalAlert"),
+    ("normalized", ("source",), "source"),
+    ("normalized", ("rule",), "rule"),
+)
+
+
+def _contract_object(value, path):
+    for key in path:
+        value = value[key]
+    return value
+
+
+@pytest.mark.parametrize("name", sorted(_CONTRACT_FIELDS))
+def test_v1_field_allowlists_and_requirements_do_not_drift(name):
+    required, optional = (set(fields.split()) for fields in _CONTRACT_FIELDS[name])
+    definition = SCHEMA["$defs"][name]
+    assert definition["type"] == "object"
+    assert definition["additionalProperties"] is False
+    assert set(definition["properties"]) == required | optional
+    assert set(definition["required"]) == required
+
+
+@pytest.mark.parametrize("target,path,field", [
+    pytest.param(target, path, field, id="-".join((target, *path, field)))
+    for target, path, name in _OBJECT_SITES
+    for field in _CONTRACT_FIELDS[name][0].split()
+])
+def test_every_required_field_is_rejected_when_missing(target, path, field):
+    value = deepcopy(ACCEPTED[0][target])
+    _validate(value, target)
+    del _contract_object(value, path)[field]
+    # Require a shape rejection, not an incidental semantic KeyError afterward.
+    with pytest.raises(ContractError, match="^SCHEMA$"):
+        _validate(value, target, semantic=False)
+
+
+@pytest.mark.parametrize("target,path,name", [
+    pytest.param(target, path, name, id="-".join((target, *path)))
+    for target, path, name in _OBJECT_SITES
+])
+def test_command_field_is_rejected_at_every_object_site(target, path, name):
+    value = deepcopy(ACCEPTED[0][target])
+    _validate(value, target)
+    assert "command" not in SCHEMA["$defs"][name]["properties"]
+    # Inert marker only; no command is constructed or executed by this test.
+    _contract_object(value, path)["command"] = "SYNTHETIC"
+    with pytest.raises(ContractError, match="^SCHEMA$"):
+        _validate(value, target, semantic=False)
