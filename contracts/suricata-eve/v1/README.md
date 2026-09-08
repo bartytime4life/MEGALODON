@@ -13,7 +13,10 @@ remain authoritative. This proposal does not override their safety boundaries.
 
 The first dependency-closed slice defines an input envelope, a separate
 `ExternalAlertRecord` representation, accepted pairs, rejected mutations, and
-byte-framing examples. All fixture addresses and rule labels are synthetic;
+byte-framing examples. The [`reader/`](reader/README.md) subdirectory adds an
+inert bounded-source/run contract, completed-run receipts, synthetic fixture
+mutations, and a test-only in-memory publish oracle; it still implements no
+runtime reader. All fixture addresses and rule labels are synthetic;
 forbidden-content tests use null/empty markers, not packet payloads or hashes.
 
 `schema.json` uses JSON Schema Draft 2020-12 with local-only references:
@@ -127,9 +130,11 @@ target approval. Missing data must never be invented to satisfy these rules.
 
 Schemas cannot enforce run-wide uniqueness, file ownership, permissions,
 symlink safety, immutable snapshots, total input size, bounded streaming, or
-failure atomicity. These remain mandatory separate design/test gates before a
-runtime importer. The ordinal bound does not prove enforcement of a 10,000-record
-run limit. No source file is read or processed by a production path in this slice.
+failure atomicity. The proposed [bounded reader contract](reader/README.md) now
+fixes those as normative requirements and synthetic conformance cases without
+implementing the filesystem boundary. The ordinal bound still does not prove
+enforcement of the independent 10,000-record run limit. No source file is read
+or processed by a production path in either contract slice.
 
 ## 4. Normalization and action separation
 
@@ -179,13 +184,15 @@ upstream rules, captures, malware samples, or production logs are bundled.
 From the repository root, with the existing test extra installed:
 
 ```bash
-python -m pytest -q tests/test_suricata_contract.py tests/test_suricata_formats.py
+python -m pytest -q tests/test_suricata_contract.py tests/test_suricata_formats.py \\
+  tests/test_suricata_reader_contract.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 ```
 
 The focused tests refuse socket creation and subprocess launch, keep schema
-resolution local, assert closed objects, and exercise the conformance examples.
+resolution local, assert closed objects, and exercise the record and reader
+conformance examples.
 Passing them proves these fixtures and guards in the tested environment only.
 It does not prove a production ingestion boundary, sensor detection quality,
 rule authenticity, compatibility, privacy on arbitrary EVE logs, or deployment
@@ -200,8 +207,10 @@ issue #3, and it grants no installation, capture, ruleset, or enforcement
 authority.
 
 A later, separately authorized change may implement a bounded local importer
-after reviewing the source-file/privacy boundary, a pinned supported producer
-profile, resource limits, failure behavior, and replay semantics. Installed-tool
+only after accepting and independently reviewing the reader contract, then
+supplying production Linux descriptor, hostile-input resource, failure-atomicity,
+and replay tests. A pinned supported producer profile and the source-file/privacy
+boundary also remain required. Installed-tool
 compatibility, rule acquisition, local reports, SQLite integration, dashboard
 projection, host context, scheduler execution, and response remain out of scope.
 Existing dashboard work tracked by issue #7 is not a dependency of this contract.

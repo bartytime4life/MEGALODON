@@ -28,7 +28,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `core-metadata` | Python + SQLite | Implemented | Validated metadata to local audit; observe-only default |
 | `offline-packet-metadata` | TShark/Wireshark | Optional implemented adapter | Fixed TShark argv and fields; private reports; no payload or live capture |
 | `offline-flow-metadata` | Zeek | Optional implemented importer | Closed `conn.log` profile; external producer; flow and packet counts stay separate |
-| `alert-metadata` | Suricata | Contract only | Closed synthetic EVE alert envelope; no runtime importer, sensor, or IPS |
+| `alert-metadata` | Suricata | Contract only | Closed synthetic EVE envelope and bounded reader contract; no runtime importer, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
 | `time-limited-response` | nftables | Optional explicit path | Plan first; exact confirmation, existing root, allowlist, and expiry for apply |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
@@ -60,8 +60,9 @@ they do not certify MEGALODON or any installed tool.
   remains non-root, local, bounded, updated, and externally contained.
 - Suricata documents that EVE can emit alerts, anomalies, file information,
   metadata, and protocol-specific records. MEGALODON therefore keeps its
-  Suricata relationship contract-only until a reviewed runtime importer accepts
-  only the smaller repository schema.
+  Suricata relationship contract-only. Its bounded reader contract fixes the
+  future file/run boundary, but no runtime accepts even the smaller repository
+  schema yet.
 - Zeek documents both TSV and JSON logs and their usefulness in pipelines.
   MEGALODON accepts only its versioned connection profile rather than arbitrary
   Zeek log streams.
