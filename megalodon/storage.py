@@ -199,10 +199,27 @@ class Store:
         return result
 
     def purge_before(self, before: datetime) -> dict[str, int]:
-        cutoff = before.astimezone(timezone.utc).isoformat()
+        if not isinstance(before, datetime) or before.tzinfo is None:
+            raise ValueError("retention cutoff must be a timezone-aware datetime")
+        try:
+            offset = before.utcoffset()
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("retention cutoff is outside the supported UTC range") from exc
+        if offset is None:
+            raise ValueError("retention cutoff must be a timezone-aware datetime")
+        try:
+            cutoff = before.astimezone(timezone.utc).isoformat()
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("retention cutoff is outside the supported UTC range") from exc
         with self._lock:
-            detections = self.connection.execute("DELETE FROM detections WHERE detected_at < ?", (cutoff,))
-            events = self.connection.execute("DELETE FROM events WHERE observed_at < ?", (cutoff,))
-            actions = self.connection.execute("DELETE FROM actions WHERE created_at < ?", (cutoff,))
-            self.connection.commit()
-            return {"detections": detections.rowcount, "events": events.rowcount, "actions": actions.rowcount}
+            with self.connection:
+                detections = self.connection.execute(
+                    "DELETE FROM detections WHERE detected_at < ?", (cutoff,)
+                )
+                events = self.connection.execute("DELETE FROM events WHERE observed_at < ?", (cutoff,))
+                actions = self.connection.execute("DELETE FROM actions WHERE created_at < ?", (cutoff,))
+            return {
+                "detections": detections.rowcount,
+                "events": events.rowcount,
+                "actions": actions.rowcount,
+            }
