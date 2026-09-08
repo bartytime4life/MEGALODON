@@ -83,7 +83,7 @@ class Store:
         self.close()
 
     def record_event(self, event: PacketEvent) -> int:
-        with self._lock:
+        with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
                 INSERT INTO events (
@@ -105,11 +105,10 @@ class Store:
                     json.dumps(event.metadata, sort_keys=True),
                 ),
             )
-            self.connection.commit()
             return int(cursor.lastrowid)
 
     def record_detection(self, event_id: int, detection: DetectionResult) -> int:
-        with self._lock:
+        with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
                 INSERT INTO detections (
@@ -130,11 +129,10 @@ class Store:
                     detection.suppressed_reason,
                 ),
             )
-            self.connection.commit()
             return int(cursor.lastrowid)
 
     def record_action(self, action: ActionRecord) -> int:
-        with self._lock:
+        with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
                 INSERT INTO actions (
@@ -151,7 +149,6 @@ class Store:
                     json.dumps(action.details, sort_keys=True),
                 ),
             )
-            self.connection.commit()
             return int(cursor.lastrowid)
 
     def summary(self) -> dict[str, Any]:
