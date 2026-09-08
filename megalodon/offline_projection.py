@@ -10,6 +10,7 @@ import re
 import stat
 from typing import Any
 
+from .capabilities import runtime_platform
 from .offline.analysis import MAX_CANDIDATES, PROTOCOLS
 from .offline.common import Limits, OfflineError, open_directory, uint, version
 from .offline.reports import REPORT_NAMES, case_id
@@ -512,6 +513,8 @@ def _candidates(data: bytes, run: dict[str, Any]) -> list[dict[str, int | str]]:
 
 def load_offline_projection(path: str | Path) -> dict[str, Any]:
     """Load one immutable dashboard snapshot from a complete private report set."""
+    if runtime_platform() != "linux":
+        _fail("LINUX_REQUIRED")
     data, sizes = _read_report_set(path)
     try:
         manifest_value = json_object(data[MANIFEST_NAME].decode("ascii"))

@@ -47,6 +47,7 @@ record delivery state; they do not override the checked-in contracts.
 | Runtime behavior and acceptance boundary | [`SPECIFICATION.md`](SPECIFICATION.md) |
 | Threat model and production controls | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
 | Platform choices and installation evidence | [`docs/platform-baseline.md`](docs/platform-baseline.md) |
+| Native Windows core acceptance matrix | [`docs/windows-core-acceptance.md`](docs/windows-core-acceptance.md) |
 | Offline analyst operation and report semantics | [`docs/offline-analysis.md`](docs/offline-analysis.md) |
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
@@ -486,7 +487,7 @@ Closed design/test gates can still leave runtime and operational work unbuilt.
 | [#24 — bounded Suricata reader](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed contract gate; fixed reader policy, receipt, fixtures, and oracle are on `main`, without filesystem/runtime implementation |
 | [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Open evidence gate for the optional system analyzer |
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
-| [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; Windows remains evaluation-only |
+| [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; machine-readable matrix and Linux-run unsupported-operation controls exist, but native Windows/NTFS/browser receipts remain unperformed |
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Open operator-policy gate; synthetic transaction handling exists, but no retention values or automatic cleanup are selected |
 
 Open issues and branches are coordination/evidence records, not shipped features
