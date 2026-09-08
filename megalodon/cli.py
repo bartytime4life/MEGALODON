@@ -18,6 +18,24 @@ from .service import MegalodonService
 from .storage import Store
 
 
+MAX_RUN_EVENTS = 10_000_000
+
+
+def _bounded_cli_integer(name: str, minimum: int, maximum: int):
+    def parse(value: str) -> int:
+        candidate = value.strip()
+        if not candidate.isascii() or not candidate.isdecimal():
+            raise argparse.ArgumentTypeError(f"{name} must be a decimal integer")
+        parsed = int(candidate)
+        if not minimum <= parsed <= maximum:
+            raise argparse.ArgumentTypeError(
+                f"{name} must be between {minimum} and {maximum}"
+            )
+        return parsed
+
+    return parse
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="megalodon", description="Local-first defensive network telemetry")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -44,21 +62,26 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--input", type=Path, help="JSONL input file; stdin is used when omitted")
     run.add_argument("--interface", help="capture interface for --source scapy")
     run.add_argument("--demo-threat", action="store_true", help="add synthetic detections to sample data")
-    run.add_argument("--max-events", type=int, default=0, help="stop after N events; 0 means no limit")
+    run.add_argument(
+        "--max-events",
+        type=_bounded_cli_integer("max-events", 0, MAX_RUN_EVENTS),
+        default=0,
+        help=f"stop after N events (0 means no limit; maximum {MAX_RUN_EVENTS})",
+    )
 
     dashboard = sub.add_parser("dashboard", help="serve the read-only local dashboard")
     dashboard.add_argument("--config", default="config/settings.toml")
     dashboard.add_argument("--host")
-    dashboard.add_argument("--port", type=int)
+    dashboard.add_argument("--port", type=_bounded_cli_integer("port", 1, 65535))
     dashboard.add_argument("--allow-remote", action="store_true", help="removed unsafe option; supplying it refuses startup")
     dashboard.add_argument(
         "--refresh-seconds",
-        type=int,
+        type=_bounded_cli_integer("refresh-seconds", 2, 300),
         help="live refresh interval from 2 to 300 seconds; overrides configuration",
     )
     dashboard.add_argument(
         "--event-limit",
-        type=int,
+        type=_bounded_cli_integer("event-limit", 1, 200),
         help="newest detections loaded per refresh, from 1 to 200; overrides configuration",
     )
     dashboard.add_argument(
@@ -144,7 +167,7 @@ def _run(args: argparse.Namespace) -> int:
 def _dashboard(args: argparse.Namespace) -> int:
     settings = _load(args.config)
     host = args.host if args.host is not None else settings.dashboard.host
-    port = args.port or settings.dashboard.port
+    port = args.port if args.port is not None else settings.dashboard.port
     from .dashboard import loopback_host, serve
     from .offline_projection import load_offline_projection
 

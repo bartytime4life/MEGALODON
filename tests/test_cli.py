@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import io
 from pathlib import Path
 import tempfile
@@ -28,6 +28,22 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(args.refresh_seconds, 12)
         self.assertEqual(args.event_limit, 125)
+
+    def test_cli_integer_options_reject_coercion_and_out_of_range_values(self):
+        invalid_argv = (
+            ["run", "--max-events", "-1"],
+            ["run", "--max-events", "1.9"],
+            ["run", "--max-events", "10000001"],
+            ["dashboard", "--port", "0"],
+            ["dashboard", "--port", "65536"],
+            ["dashboard", "--refresh-seconds", "1"],
+            ["dashboard", "--event-limit", "201"],
+        )
+        for argv in invalid_argv:
+            with self.subTest(argv=argv), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    build_parser().parse_args(argv)
+                self.assertEqual(raised.exception.code, 2)
 
     def test_firewall_plan_is_logged_without_subprocess(self):
         with tempfile.TemporaryDirectory() as directory:

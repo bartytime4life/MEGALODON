@@ -272,7 +272,8 @@ remain in the local audit store and are not served to the browser.
 
 The operational main CLI subcommands accept `--config PATH`; the static
 `capabilities` and `hub-plan` commands do not read configuration.
-`run --max-events N` provides an operator stop limit. Use `python -m megalodon --help` and
+`run --max-events N` provides an operator stop limit from 1 through 10,000,000;
+zero retains the explicit no-limit mode. Use `python -m megalodon --help` and
 `python -m megalodon.offline --help` for the complete argument surface.
 
 ## Event input
@@ -346,8 +347,8 @@ a separately reviewed change requires otherwise.
 | --- | --- | --- |
 | `[app]` | `db_path = "data/megalodon.db"`, `log_level = "INFO"` | Database parent directories are created locally as needed |
 | `[capture]` | `source = "sample"`, empty `interface` | The CLI can override the source and interface per run |
-| `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | All numeric values must be positive; state ceilings default to 4,096 |
-| `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
+| `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | TOML integers only; windows max at 3,600s, cooldown at 86,400s, DNS length at 65,535, and both state ceilings at 65,536. Thresholds cannot exceed the per-source event ceiling |
+| `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | Timeout is a TOML integer from 1–604,800s; `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
 | `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8787`, `refresh_seconds = 5`, `event_limit = 50` | Polling accepts 2–300 seconds; recent rows accept 1–200; only numeric IPv4 loopback or the literal `localhost` alias is accepted; `--allow-remote` refuses startup |
 
 The dashboard accepts dotted-decimal IPv4 addresses in `127.0.0.0/8`. The

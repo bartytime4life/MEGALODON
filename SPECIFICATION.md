@@ -175,6 +175,13 @@ successfully rendered rows across a refresh failure. Search and severity
 filters operate only on the bounded in-memory recent set; they do not query new
 fields, persist preferences, change SQLite, or create an export.
 
+All configuration counters are native TOML integers; booleans, floats, and
+numeric strings are rejected instead of coerced. Detector windows are capped at
+3,600 seconds, cooldown at 86,400 seconds, DNS metadata length at 65,535, and
+tracked-source/per-source-event state at 65,536 each. Firewall timeout is capped
+at 604,800 seconds. CLI ports, polling controls, and event limits enforce their
+documented bounds during argument parsing.
+
 `--offline-run ABSOLUTE_PATH` accepts only a complete `offline-run-v1` report
 directory with private ownership and permissions, no symlink components, fixed
 report names, matching source/adapter/unit contracts, and bounded manifest,
