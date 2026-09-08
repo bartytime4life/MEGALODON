@@ -33,3 +33,30 @@ jobs:
           python -m megalodon run --source sample --max-events 13
           python -m megalodon run --source sample --demo-threat --max-events 114
           python -m megalodon firewall-plan 8.8.8.8 --reason "CI smoke"
+
+  wheel-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Build and install wheel
+        run: |
+          set -euo pipefail
+          python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/wheels" .
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          wheels=("$RUNNER_TEMP"/wheels/megalodon_defense-*.whl)
+          [ "${#wheels[@]}" -eq 1 ]
+          "$RUNNER_TEMP/wheel-venv/bin/python" -m pip install --no-deps "${wheels[0]}"
+      - name: Run installed default outside checkout
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/wheel-run"
+          cd "$RUNNER_TEMP/wheel-run"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon run --source sample --max-events 1

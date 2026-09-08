@@ -241,8 +241,8 @@ The recent-detections view supports local search, severity filtering, manual
 refresh, and pause/resume polling. Filters exist only in browser memory and do
 not alter SQLite, write files, or add an export path. Polling is suspended while
 the page is hidden, requests time out after five seconds, and an in-flight
-refresh is never overlapped. Configure the bounded defaults in
-`config/settings.toml` or override them for one launch:
+refresh is never overlapped. The safe built-in defaults can be replaced by an
+explicit `--config` file or overridden for one launch:
 
 ```bash
 python -m megalodon dashboard --refresh-seconds 12 --event-limit 125
@@ -270,7 +270,9 @@ remain in the local audit store and are not served to the browser.
 | `block IP --reason TEXT` | Print one block plan; `--apply` plus exact target confirmation is required to execute it |
 | `python -m megalodon.offline ...` | Run the separate Linux-only private offline-analysis workflow |
 
-The operational main CLI subcommands accept `--config PATH`; the static
+The operational main CLI subcommands accept optional `--config PATH`; omitting
+it uses the complete safe built-in settings and works from an installed wheel.
+The static
 `capabilities` and `hub-plan` commands do not read configuration.
 `run --max-events N` provides an operator stop limit from 1 through 10,000,000;
 zero retains the explicit no-limit mode. Use `python -m megalodon --help` and
@@ -316,13 +318,15 @@ is authorized to observe.
 
 [`config/rules.toml`](config/rules.toml) documents these fixed rules. It is a
 reference, not an arbitrary rule-expression engine. Runtime thresholds and
-bounds are loaded from [`config/settings.toml`](config/settings.toml).
+bounds use safe built-in defaults or an explicitly selected
+[`config/settings.toml`](config/settings.toml).
 
 ## Settings and configuration composition
 
-Start with a private copy of the complete [`config/settings.toml`](config/settings.toml)
-and change only the settings needed for the chosen workflow. These are ordinary
-TOML files, not a profile inheritance/merge system. Pass `--config PATH` **after**
+To customize a workflow, start with a private copy of the complete
+[`config/settings.toml`](config/settings.toml) and change only the settings
+needed. These are ordinary TOML files, not a profile inheritance/merge system.
+Pass `--config PATH` **after**
 the operational subcommand; use the same configuration for `run` and `dashboard`
 when they should share an audit database. CLI source/interface and dashboard
 view options override the corresponding settings for that invocation.

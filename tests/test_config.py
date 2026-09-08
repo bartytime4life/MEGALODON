@@ -9,6 +9,25 @@ from megalodon.validation import ValidationError
 
 
 class ConfigTests(unittest.TestCase):
+    def test_omitted_path_uses_complete_safe_defaults(self):
+        settings = load_settings()
+        self.assertEqual(settings.capture_source, "sample")
+        self.assertEqual(settings.dashboard.host, "127.0.0.1")
+        self.assertFalse(settings.blocking.enabled)
+        self.assertTrue(settings.blocking.dry_run)
+        self.assertFalse(settings.blocking.auto_block)
+        self.assertEqual(
+            tuple(str(network) for network in settings.blocking.allowlist),
+            (
+                "127.0.0.0/8",
+                "10.0.0.0/8",
+                "172.16.0.0/12",
+                "192.168.0.0/16",
+                "::1/128",
+                "fc00::/7",
+            ),
+        )
+
     def test_automatic_live_firewall_configuration_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "settings.toml"
