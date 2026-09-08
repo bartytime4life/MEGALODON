@@ -1,9 +1,9 @@
 # MEGALODON Automation Contract
 
-**Status:** Proposed design; not implemented on main  
-**Date:** 2026-09-06  
+**Status:** Stage 0 data contract implemented; scheduler and execution design proposed  
+**Date:** 2026-09-08  
 **Audience:** MEGALODON maintainers, reviewers, operators, and future scheduler implementers  
-**Repository baseline:** [bartytime4life/MEGALODON](https://github.com/bartytime4life/MEGALODON) at 72a4dd82adb78c3c6fe7ae47606a21e73a9573f6
+**Repository baseline:** [bartytime4life/MEGALODON](https://github.com/bartytime4life/MEGALODON) at ec53f5968e498b1ebee00b11119b216ba1812699
 
 > This document turns the attached Pasted markdown.md seed analysis into a reviewable contract for a future scheduling and execution subsystem. It does not claim that a scheduler, model runner, automation API, or automation database table exists today. No firewall action, remote dashboard exposure, or autonomous response is authorized by this document.
 
@@ -15,6 +15,13 @@ run-snapshot shape. This is contract evidence only. It adds no scheduler loop,
 recurrence calculation, persistence, model invocation, CLI/API operation,
 network access, shell access, or firewall authority. The overall design remains
 proposed; later stages require separate review.
+
+| Layer | Current state | What that state proves |
+| --- | --- | --- |
+| Stage 0 schema, fixtures, and tests | Implemented on `main` | Closed structural shapes and fixed no-network/no-firewall authority |
+| Recurrence semantics and parser | Proposed | Design requirements only; no occurrence calculation |
+| Ledger, scheduler, and jobs | Proposed | No tables, claims, worker loop, retries, or execution |
+| Model/output adapters and actions | Proposed and separately gated | No model call, publication, external side effect, or response authority |
 
 
 ## Executive decision
@@ -516,7 +523,7 @@ No implementation should be accepted until the following cases are covered by de
 
 | Stage | Deliverable | Exit condition |
 | --- | --- | --- |
-| 0. Contract | JSON fixtures, enums, validation errors, and this document | Reviewers agree on fields, states, and non-goals |
+| 0. Contract | JSON fixtures, enums, validation errors, and this document | **Implemented:** deterministic Stage 0 schema tests pass; semantics beyond the structural contract remain future gates |
 | 1. Parser | RRULE/DTSTART/time-zone normalization and occurrence fixtures | Exact fixture expectations pass, including DST policy |
 | 2. Ledger | SQLite migrations for definitions/runs and idempotent claim transaction | Restart/concurrency tests pass without model execution |
 | 3. Read-only scheduler | Health, replay, retention-plan, and report jobs | Hosted tests prove no firewall, shell, or remote side effect |
@@ -546,9 +553,9 @@ Until those decisions have authoritative answers, the safe status is **proposed,
 ### Project sources
 
 - Attached input: Pasted markdown.md, supplied with the documentation request on 2026-09-06.
-- [MEGALODON README](https://github.com/bartytime4life/MEGALODON/blob/72a4dd82adb78c3c6fe7ae47606a21e73a9573f6/README.md)
-- [MEGALODON completed specification](https://github.com/bartytime4life/MEGALODON/blob/72a4dd82adb78c3c6fe7ae47606a21e73a9573f6/SPECIFICATION.md)
-- [MEGALODON architecture security review](https://github.com/bartytime4life/MEGALODON/blob/72a4dd82adb78c3c6fe7ae47606a21e73a9573f6/SECURITY_REVIEW.md)
+- [MEGALODON README](https://github.com/bartytime4life/MEGALODON/blob/ec53f5968e498b1ebee00b11119b216ba1812699/README.md)
+- [MEGALODON completed specification](https://github.com/bartytime4life/MEGALODON/blob/ec53f5968e498b1ebee00b11119b216ba1812699/SPECIFICATION.md)
+- [MEGALODON architecture security review](https://github.com/bartytime4life/MEGALODON/blob/ec53f5968e498b1ebee00b11119b216ba1812699/SECURITY_REVIEW.md)
 
 ### External authoritative sources
 
