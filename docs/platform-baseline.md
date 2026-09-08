@@ -1,9 +1,10 @@
 # Windows and Linux platform baseline
 
 **Baseline v1 — PROPOSED configuration and delivery plan.** Refreshed 2026-09-08
-against `main@58a06873fd42347192d26ab7ba9226165c54fda7`. This document is the
-canonical platform configuration entry point. It does not install software,
-activate sensors, certify Windows support, or authorize firewall changes.
+against `fc2d42f9d67e36a159a9235960ef3a67066d07ec` on the task branch. This
+document is the canonical platform configuration entry point. It does not
+install software, activate sensors, certify Windows support, or authorize
+firewall changes.
 Google Drive carries coordination and historical evidence, not another runtime
 configuration authority. Recheck the exact repository revision before use.
 
@@ -170,7 +171,7 @@ cd "$HOME/Projects"
 [ ! -e MEGALODON-platform-baseline ] || { echo 'Target already exists; stop.'; exit 1; }
 git clone --no-checkout https://github.com/bartytime4life/MEGALODON.git MEGALODON-platform-baseline
 cd MEGALODON-platform-baseline
-BASE=58a06873fd42347192d26ab7ba9226165c54fda7
+BASE=fc2d42f9d67e36a159a9235960ef3a67066d07ec
 git checkout --detach "$BASE"
 [ "$(git rev-parse HEAD)" = "$BASE" ]
 /usr/bin/python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
@@ -223,7 +224,7 @@ $Target = Join-Path $env:LOCALAPPDATA 'MEGALODON-platform-baseline'
 if (Test-Path -LiteralPath $Target) { throw 'Target already exists; stop.' }
 Invoke-Checked -Program 'git' -Arguments @('clone', '--no-checkout', 'https://github.com/bartytime4life/MEGALODON.git', $Target)
 Set-Location -LiteralPath $Target
-$Base = '58a06873fd42347192d26ab7ba9226165c54fda7'
+$Base = 'fc2d42f9d67e36a159a9235960ef3a67066d07ec'
 Invoke-Checked -Program 'git' -Arguments @('checkout', '--detach', $Base)
 $Actual = & git rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $Actual -ne $Base) { throw 'Revision mismatch.' }
