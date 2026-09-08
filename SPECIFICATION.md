@@ -207,8 +207,8 @@ operator approval and rollback.
 
 ## 9. Implemented extensions and separate evidence paths
 
-At `d94b40918908a8a275581f0c2690aef21d09adee`, `python -m megalodon.offline`
-provides a separate Linux-only, non-root, capability-free analysis path. Fixed
+`python -m megalodon.offline` provides a separate Linux-only, non-root,
+capability-free analysis path. Fixed
 TShark fields produce packet metadata; separately versioned Zeek JSON/TSV
 connection adapters produce flow records. Private local reports, source-qualified
 baselines, review candidates, and a last-written completion manifest follow
@@ -223,8 +223,16 @@ admitted by adopting an external analyzer.
 [contracts/automation/v1](contracts/automation/v1/README.md) contains an inert
 normative-draft schema and fixtures. It is not scheduler execution, recurrence
 calculation, model access, or permission to use commands, endpoints, or tools.
-Issue #7's offline dashboard and issue #9's Suricata contract are branch work,
-not runtime capabilities at the pinned implementation revision.
+[contracts/suricata-eve/v1](contracts/suricata-eve/v1/README.md) contains an
+inert EVE-alert schema, synthetic fixtures, and conformance tests. It remains
+contract-only: there is no runtime importer, sensor operation, ruleset manager,
+or IPS path. The offline dashboard projection is implemented independently and
+does not accept or display Suricata alert records.
+
+`megalodon capabilities` returns a deterministic static catalog of these
+boundaries for Linux, Windows, or another platform family. It performs no host
+probe, installation, process launch, network access, capture, or configuration
+change. A catalog status is not installed-tool or platform compatibility proof.
 
 ## 10. Proposed Windows/Linux platform contract
 
@@ -239,7 +247,8 @@ sample/JSONL processing, fixed detections, SQLite, and a read-only loopback UI.
 It must preserve the same bounded metadata and action-state contracts. It must
 also provide explicit, tested rejection of unsupported operations without
 raising privilege, choosing a substitute tool, or changing security settings.
-No such portability implementation is included in this documentation change.
+The static capability catalog makes unsupported and evaluation-only states
+explicit, but it does not implement or certify native Windows portability.
 
 Windows offline analysis requires its own reviewed file-handle/identity,
 reparse-point, local-path, ACL, subprocess-tree, timeout, and resource-boundary

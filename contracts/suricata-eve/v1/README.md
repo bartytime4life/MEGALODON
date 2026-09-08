@@ -164,11 +164,12 @@ rule authenticity, compatibility, privacy on arbitrary EVE logs, or deployment
 safety. The existing full suite and safe CI smoke checks remain required and
 unchanged; green tests are not independent human review.
 
-## 6. Next gate, not enabled by this proposal
+## 6. Next gate, not enabled by this contract
 
-Hold feature PR delivery behind the independently verified review floor in
-issue #3. This slice can be reviewed on its `agent/*` branch; it grants no merge,
-protection-change, installation, capture, or enforcement authority.
+The schema, fixtures, and tests are present on `main`. Their merge does not
+supply the independent review or repository-control evidence still tracked in
+issue #3, and it grants no installation, capture, ruleset, or enforcement
+authority.
 
 A later, separately authorized change may implement a bounded local importer
 after reviewing the source-file/privacy boundary, a pinned supported producer

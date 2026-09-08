@@ -1,7 +1,7 @@
 # Windows and Linux platform baseline
 
-**Baseline v1 — PROPOSED configuration and delivery plan.** Prepared 2026-09-07
-against `main@d94b40918908a8a275581f0c2690aef21d09adee`. This document is the
+**Baseline v1 — PROPOSED configuration and delivery plan.** Refreshed 2026-09-08
+against `main@58a06873fd42347192d26ab7ba9226165c54fda7`. This document is the
 canonical platform configuration entry point. It does not install software,
 activate sensors, certify Windows support, or authorize firewall changes.
 Google Drive carries coordination and historical evidence, not another runtime
@@ -31,12 +31,13 @@ and other Python versions need their own evidence before inclusion. [S1, S2]
 | Scapy live metadata capture | Optional `capture` extra; separate capture permission/authority | Not selected; driver, privilege, and adapter compatibility remain unreviewed |
 | Offline TShark packet metadata and Zeek connection-log import | Separate Linux-only command and private reports | Unsupported by the current offline implementation; use a validated L1 guest instead |
 | Firewall plans and explicit application | nftables-specific; application needs separate operator action | No Windows firewall backend; an nftables plan is not a Windows rule |
-| Offline-run dashboard projection | Branch work tracked in issue #7, not pinned main | Not shipped |
-| Suricata EVE integration | Branch-only inert contract/tests in issue #9; no runtime importer | No importer; native Suricata availability does not change this |
+| Offline-run dashboard projection | Implemented for one complete private report set on loopback | Native core evaluation target; remote projection is refused |
+| Suricata EVE integration | Inert contract/tests on main; no runtime importer | Contract only; native Suricata availability does not change this |
 | Scheduling and automated response | Automation schema exists; no scheduler/executor | Not implemented; no Task Scheduler installation or automatic blocking |
 
 Implementation evidence: [package metadata](../pyproject.toml),
 [CI](../.github/workflows/ci.yml), [CLI](../megalodon/cli.py),
+[static capability catalog](../megalodon/capabilities.py),
 [Linux file boundary](../megalodon/offline/common.py),
 [fixed TShark runner](../megalodon/offline/tshark.py), and
 [nftables backend](../megalodon/firewall.py).
@@ -56,7 +57,7 @@ required by this baseline.
 | Python, Git, SQLite | Distribution Python/venv and Git; Python `sqlite3` | Official CPython and Git for Windows; Python `sqlite3` | Core development/runtime tools; no separate `pip install sqlite3` [S2, S3] |
 | Wireshark / TShark | Reviewed distribution packages; adapter requires `/usr/bin/tshark` | Official signed x64 installer; desktop/TShark offline use | Open-source analyzer; Windows desktop use is separate from the Linux-only MEGALODON adapter [S4] |
 | Scapy | Repository `capture` extra only when capture is approved | Omit from W1 | Open-source Python tool; upstream Windows support does not validate MEGALODON capture [S5] |
-| Suricata | Maintained upstream-supported Linux package | Official x64 Windows installer for separately reviewed offline analysis | Open-source signature IDS; optional future metadata source, not currently ingested [S6] |
+| Suricata | Maintained upstream-supported Linux package | Official x64 Windows installer for separately reviewed offline analysis | Open-source signature IDS; EVE alert contract/tests are present, but runtime import is not implemented [S6] |
 | Zeek | Linux producer of separately scoped `conn.log` | Use the Linux guest for this baseline | Open-source network metadata producer; this is a baseline choice, not a claim that no Windows build exists [S7] |
 | ClamAV | Optional separate manual file scanner | Optional separate manual file scanner | Open-source supplementary file scanning; no MEGALODON file-content intake, quarantine, or antivirus replacement claim [S8] |
 | osquery | Later optional local host-inventory evaluation | Later optional local host-inventory evaluation | Open-source endpoint metadata tool; no importer, daemon, scheduled query pack, or remote enrollment in this slice [S9] |
@@ -82,6 +83,16 @@ At this source check, Suricata's download page lists stable **8.0.6** and marks
 versions for MEGALODON. Do not turn the older 8.0.1 documentary field baseline
 in issue #9 into an installation pin. Record and review the actual package,
 rule-set version/license, and advisories before deployment. [S6]
+
+The repository exposes these distinctions without probing the host:
+
+```bash
+python -m megalodon capabilities --platform linux
+python -m megalodon capabilities --platform windows
+```
+
+This is a static catalog. It does not detect an installation, start a process,
+access the network, approve a platform, or change configuration.
 
 ## 3. Shared configuration and data boundary
 
@@ -159,7 +170,7 @@ cd "$HOME/Projects"
 [ ! -e MEGALODON-platform-baseline ] || { echo 'Target already exists; stop.'; exit 1; }
 git clone --no-checkout https://github.com/bartytime4life/MEGALODON.git MEGALODON-platform-baseline
 cd MEGALODON-platform-baseline
-BASE=d94b40918908a8a275581f0c2690aef21d09adee
+BASE=58a06873fd42347192d26ab7ba9226165c54fda7
 git checkout --detach "$BASE"
 [ "$(git rev-parse HEAD)" = "$BASE" ]
 /usr/bin/python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
@@ -212,7 +223,7 @@ $Target = Join-Path $env:LOCALAPPDATA 'MEGALODON-platform-baseline'
 if (Test-Path -LiteralPath $Target) { throw 'Target already exists; stop.' }
 Invoke-Checked -Program 'git' -Arguments @('clone', '--no-checkout', 'https://github.com/bartytime4life/MEGALODON.git', $Target)
 Set-Location -LiteralPath $Target
-$Base = 'd94b40918908a8a275581f0c2690aef21d09adee'
+$Base = '58a06873fd42347192d26ab7ba9226165c54fda7'
 Invoke-Checked -Program 'git' -Arguments @('checkout', '--detach', $Base)
 $Actual = & git rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $Actual -ne $Base) { throw 'Revision mismatch.' }
@@ -279,7 +290,7 @@ Keep their producer configuration, rule updates, retention, and raw logs in the
 separate analyst environment. Select passive/offline operation only; do not
 install IPS, diversion, or packet-modification paths. Zeek import accepts only
 the documented connection mapping, not arbitrary protocol logs. Stock Suricata
-`eve.json` is not the branch contract's input envelope: do not pipe it into the
+`eve.json` is not the repository contract's input envelope: do not pipe it into the
 core JSONL command. Before a producer is connected, review explicit field
 allowlists and prohibit payload/file extraction, payload hashes, unrestricted
 labels, and unintended DNS/HTTP/TLS identifiers. [S6, S7]
@@ -314,7 +325,7 @@ All entries below are **PROPOSED**, not changes made by this documentation.
 | Stage | Smallest deliverable | Required exit evidence |
 | --- | --- | --- |
 | P0: review and baseline | Review this document and reconcile issue #3's independent-review control | Current ruleset and independent review evidence; retain strict required `test` gate and historical lifecycle receipts |
-| P1: Windows core | Bounded platform capability/error handling and synthetic core tests; retain Linux behavior | Exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
+| P1: Windows core | Bounded platform capability/error handling and synthetic core tests; retain Linux behavior | Static catalog is prerequisite evidence only; exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
 | P2: analyzer compatibility | Validate maintained Linux tool versions; separately review Windows offline design | Installed-tool synthetic fixtures; Windows design covers handle identity, reparse points, UNC/device/alternate-stream rejection, private ACLs, process-tree termination, pipe/resource bounds, no-egress containment; never remove Linux guards as a shortcut |
 | P3: optional sensor intake | Review issue #9 contract, then one bounded Suricata importer; handle #7 UI independently | Source/version/framing/size/field/semantic rejection tests, transactional persistence and privacy review; packet/flow/alert counts stay distinct |
 | P4: Windows response decision | Separate design only if explicitly requested | Tested allowlist/global-target policy, already-held authority, exact confirmation, finite expiry across restart/sleep/failure, conflict detection and rollback; no implementation until these are resolved |

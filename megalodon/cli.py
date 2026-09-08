@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 import sys
 
+from .capabilities import catalog
 from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
 from .config import load_settings
 from .firewall import FirewallError, NftablesFirewall
@@ -20,6 +21,13 @@ from .storage import Store
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="megalodon", description="Local-first defensive network telemetry")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    capabilities = sub.add_parser("capabilities", help="print the static platform and free-software catalog")
+    capabilities.add_argument(
+        "--platform",
+        choices=("linux", "windows", "other"),
+        help="show one documented profile; defaults to the current runtime family",
+    )
 
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", default="config/settings.toml")
@@ -72,6 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _configure_logging(level: str) -> None:
     logging.basicConfig(level=getattr(logging, level.upper(), logging.INFO), format="%(levelname)s %(message)s")
+
+
+def _capabilities(args: argparse.Namespace) -> int:
+    print(json.dumps(catalog(args.platform), sort_keys=True))
+    return 0
 
 
 def _load(config: str):
@@ -181,7 +194,9 @@ def _firewall(args: argparse.Namespace, mode: str) -> int:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    if args.command == "run":
+    if args.command == "capabilities":
+        code = _capabilities(args)
+    elif args.command == "run":
         code = _run(args)
     elif args.command == "dashboard":
         code = _dashboard(args)
