@@ -12,8 +12,12 @@
       "not": {
         "anyOf": [
           {"pattern": "^FREQ=SECONDLY"},
-          {"pattern": "(^|;)COUNT=[^;]+(;|$).*?(^|;)UNTIL="},
-          {"pattern": "(^|;)UNTIL=[^;]+(;|$).*?(^|;)COUNT="}
+          {
+            "allOf": [
+              {"pattern": "(^|;)COUNT="},
+              {"pattern": "(^|;)UNTIL="}
+            ]
+          }
         ]
       }
     },
