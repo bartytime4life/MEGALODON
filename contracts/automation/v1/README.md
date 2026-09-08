@@ -111,12 +111,11 @@ The current structural pattern permits an uppercase `FREQ` of `MINUTELY`,
 `HOURLY`, `DAILY`, `WEEKLY`, `MONTHLY`, or `YEARLY`, followed by bounded
 uppercase rule parts. `SECONDLY` is rejected.
 
-**Known Stage 0 gap:** although `schema.json` contains a `not` expression meant
-to reject a rule containing both `COUNT` and `UNTIL`, direct validation currently
-accepts both orderings. The focused fixture suite has no negative case for this
-combination. Consumers must not rely on the schema for that RFC 5545 constraint;
-the Stage 1 parser must reject it, and a future schema correction should add
-independent negative fixtures before changing this claim.
+The structural schema rejects a rule that contains both `COUNT` and `UNTIL`,
+regardless of their order. Accepted fixtures preserve the neighboring
+`COUNT`-only and `UNTIL`-only cases, while rejected fixtures cover both mixed
+orderings. This is only a closed structural exclusion; the Stage 1 parser must
+still validate the individual values and the full RFC 5545 semantics.
 
 This regex boundary is not an RFC 5545 recurrence engine. It does not establish:
 
@@ -154,6 +153,8 @@ Current accepted fixtures cover:
 | Fixture | Boundary demonstrated |
 | --- | --- |
 | `draft-minimum.json` | Minimum inert create request |
+| `draft-count-bounded.json` | A `COUNT`-only recurrence remains structurally valid |
+| `draft-until-bounded.json` | An `UNTIL`-only recurrence remains structurally valid |
 | `activated-utc.json` | Resolved UTC definition with bounded read/report capabilities |
 | `run-snapshot.json` | Scheduled snapshot with an empty action request |
 
@@ -163,10 +164,12 @@ Current rejected fixtures cover:
 | --- | --- |
 | `activation-missing-zone.json` | Activation requires an explicit schedule zone |
 | `blank-name.json` | Blank names fail |
+| `count-before-until.json` | `COUNT` and `UNTIL` cannot appear together |
 | `firewall-access.json` | Firewall access cannot be enabled |
 | `requested-action.json` | A run snapshot cannot request an action |
 | `secondly-rule.json` | Sub-minute frequency is outside the contract |
 | `shell-capability.json` | Shell capability is outside the allowlist |
+| `until-before-count.json` | The `COUNT`/`UNTIL` exclusion is order-independent |
 
 Rejected fixtures contain inert synthetic values. They are negative tests, not
 executable requests, sensor data, firewall instructions, or examples to replay.
