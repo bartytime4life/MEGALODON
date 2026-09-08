@@ -63,7 +63,7 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
    control operations or binds beyond localhost.
 5. The repository has bounded synthetic detector and service-to-ledger fixtures,
    but still needs representative privacy-reviewed replay, false-positive
-   measurement, reordered-time policy, and an explicit evidence-quality label
+   measurement and an explicit evidence-quality label
    before operational interpretation. Neither a detection nor a quality label
    authorizes automated response.
 
