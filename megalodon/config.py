@@ -38,6 +38,8 @@ class DashboardSettings:
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = 8787
+    refresh_seconds: int = 5
+    event_limit: int = 50
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,14 @@ def _positive(value: object, name: str, minimum: int = 1) -> int:
 def _boolean(value: object, name: str) -> bool:
     if not isinstance(value, bool):
         raise ValidationError(f"{name} must be a TOML boolean")
+    return value
+
+
+def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValidationError(f"{name} must be an integer")
+    if not minimum <= value <= maximum:
+        raise ValidationError(f"{name} must be between {minimum} and {maximum}")
     return value
 
 
@@ -141,5 +151,9 @@ def load_settings(path: str | Path) -> Settings:
             enabled=_boolean(dashboard.get("enabled", True), "dashboard.enabled"),
             host=str(dashboard.get("host", "127.0.0.1")),
             port=port,
+            refresh_seconds=_bounded_integer(
+                dashboard.get("refresh_seconds", 5), "dashboard.refresh_seconds", 2, 300
+            ),
+            event_limit=_bounded_integer(dashboard.get("event_limit", 50), "dashboard.event_limit", 1, 200),
         ),
     )

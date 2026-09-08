@@ -48,6 +48,9 @@ and an explicit nftables plan/application boundary.
    command-line opt-in and remains unauthenticated, so it is not recommended.
 10. **Fail closed for unsafe response.** Invalid targets, unavailable nft, lack
     of root, missing confirmation, and protected networks refuse the action.
+11. **Offline projection stays local.** A selected offline run must be a complete,
+    private, bounded report set. Its dashboard projection is never available on
+    a non-loopback bind.
 
 ## 3. Data contracts
 
@@ -131,12 +134,46 @@ operation.
 The dashboard exposes only:
 
 - `GET /` — static local dashboard;
+- `GET /assets/dashboard.css` and `GET /assets/dashboard.js` — same-origin,
+  no-store presentation assets;
+- `GET /api/config` — a non-sensitive `dashboard-config-v1` view contract;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
-- `GET /api/events?limit=N` — recent detections, capped at 200.
+- `GET /api/events?limit=N` — recent detections, with one decimal integer from
+  1 through 200; malformed, repeated, out-of-range, and unknown query fields
+  fail with `400` rather than being silently coerced. Each returned detection
+  contains only `detected_at`, `rule_id`, `severity`, `src_ip`, and `message`;
+  stored destination addresses, evidence, recommendations, and suppression
+  reasons are excluded from the browser contract;
+- `GET /api/offline-summary` — either `available: false` or one immutable,
+  validated `dashboard-offline-summary-v1` snapshot selected at startup.
 
-Responses are `no-store` and carry basic content-security and MIME-sniffing
-headers. Data is inserted into the page with DOM text nodes rather than raw
-HTML interpolation.
+`dashboard.refresh_seconds` is an integer from 2 through 300 and
+`dashboard.event_limit` is an integer from 1 through 200. The matching
+`--refresh-seconds` and `--event-limit` command options override configuration
+for one launch. The browser uses a single non-overlapping timeout loop, pauses
+polling while hidden or when the operator selects pause, and retains the last
+successfully rendered rows across a refresh failure. Search and severity
+filters operate only on the bounded in-memory recent set; they do not query new
+fields, persist preferences, change SQLite, or create an export.
+
+`--offline-run ABSOLUTE_PATH` accepts only a complete `offline-run-v1` report
+directory with private ownership and permissions, no symlink components, fixed
+report names, matching source/adapter/unit contracts, and bounded manifest,
+baseline, and candidate files. Record files receive fixed-name, type, ownership,
+permission, and size checks but are neither parsed nor served. The API includes
+run/source identity, counts, tool provenance, relative time coverage, capped
+protocol/port distributions,
+candidate-rule counts, and fixed interpretation limits. It excludes addresses,
+paths, record rows, packet bytes, and candidate evidence. A web request cannot
+select a path, reload a run, launch an analyzer, or invoke firewall policy.
+
+Responses are `no-store` and carry restrictive content-security, opener,
+framing, referrer, permissions, cross-origin-resource, and MIME-sniffing
+headers. CSS and JavaScript are separate same-origin resources; the policy does
+not allow inline scripts or inline styles. Data is inserted into the page with
+DOM text nodes rather than raw HTML interpolation. Search, severity, refresh,
+and pause controls are labeled for keyboard and assistive-technology use, and
+timestamps use semantic `time` elements.
 
 ## 7. Retention and privacy
 
@@ -157,6 +194,8 @@ The MVP is acceptable for local experimentation when:
 - allowlisted and non-global block targets are refused;
 - plan mode produces no firewall subprocess;
 - dashboard binds only to loopback by default;
+- offline summaries reject incomplete, public, linked, mismatched, or tampered
+  report sets and remain unavailable on remote binds;
 - sample replay produces a database and no firewall mutation;
 - `--demo-threat` creates detection and action records;
 - no code path uses `shell=True`.

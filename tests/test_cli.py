@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from megalodon.cli import main
+from megalodon.cli import build_parser, main
 from megalodon.dashboard import serve
 from megalodon.firewall import NftablesFirewall
 from megalodon.storage import Store
@@ -22,6 +22,13 @@ def write_config(directory: str) -> tuple[Path, Path]:
 
 
 class CliTests(unittest.TestCase):
+    def test_dashboard_parser_accepts_bounded_view_overrides(self):
+        args = build_parser().parse_args(
+            ["dashboard", "--refresh-seconds", "12", "--event-limit", "125"]
+        )
+        self.assertEqual(args.refresh_seconds, 12)
+        self.assertEqual(args.event_limit, 125)
+
     def test_firewall_plan_is_logged_without_subprocess(self):
         with tempfile.TemporaryDirectory() as directory:
             config, database = write_config(directory)
