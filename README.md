@@ -41,9 +41,10 @@ recipes, safe settings, storage/permission checks, and staged delivery plan.
 | Native Windows 11 x64 | Proposed Python 3.13 sample/JSONL, SQLite, and localhost-dashboard evaluation | UNVERIFIED; this documentation does not port or certify the runtime |
 | Windows with a Linux guest | Proposed reuse of the Linux analysis workflow in a separately validated guest | Not full Windows-host monitoring or Windows firewall enforcement |
 
-The baseline keeps Wireshark/TShark, Suricata, Zeek, and optional ClamAV/osquery
-roles separate from actual MEGALODON integration. It explains the non-open-source
-Npcap exception and selects offline-only Windows analysis without that driver.
+The baseline and the static `megalodon capabilities` catalog keep implemented,
+optional, contract-only, manual, guest-only, proposed, and unsupported roles
+separate. They explain the non-open-source Npcap exception and select
+offline-only Windows analysis without that driver.
 Native Windows capture, offline adapters, firewall application, services, and
 scheduling are not made available by this documentation. The existing Linux
 quick start below is not a Windows installation recipe.
@@ -58,6 +59,8 @@ quick start below is not a Windows installation recipe.
 | Dashboard | Read-only loopback UI with bounded recent-detection controls and an optional privacy-safe summary of one completed offline run |
 | Firewall boundary | Non-mutating plans by default; isolated `inet megalodon` nftables table and time-limited sets for explicit application |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
+| Capability catalog | Static, read-only Linux/Windows status for selected free/open-source tools; performs no host probe or installation |
+| Suricata contract | Closed EVE-alert schema, synthetic fixtures, and deterministic contract tests; no runtime importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | CI | Ubuntu 24.04 / Python 3.11 install, compilation, pytest, and non-mutating CLI smoke checks on pushes to `main` and pull requests |
 
@@ -71,6 +74,9 @@ quick start below is not a Windows installation recipe.
 | Scapy `>=2.5,<3` | Optional live metadata capture | Install with the `capture` extra |
 | TShark/Wireshark at `/usr/bin/tshark` | Optional offline `.pcap`/`.pcapng` parsing | Reviewed system package; not a Python dependency |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
+| Suricata | Optional future EVE alert source | Contract and synthetic fixtures only; not invoked, imported, or required |
+| ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
+| osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
 | nftables and an already-root process | Explicit firewall table/block application | Optional; never needed for observe, dashboard, or plan mode |
 | pytest `>=8,<9` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
@@ -95,6 +101,7 @@ python -m pip install -e ".[test]"
 
 python -m megalodon run --source sample
 python -m megalodon run --source sample --demo-threat
+python -m megalodon capabilities --platform linux
 python -m megalodon dashboard
 ```
 
@@ -143,6 +150,7 @@ remain in the local audit store and are not served to the browser.
 
 | Command | Effect |
 | --- | --- |
+| `capabilities [--platform linux|windows|other]` | Print a static support/free-software catalog without probing or changing the host |
 | `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
 | `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
 | `run --source scapy --interface IFACE` | Perform optional live metadata capture |
@@ -328,7 +336,7 @@ staged design.
 | --- | --- |
 | [#3 — independent-review enforcement](https://github.com/bartytime4life/MEGALODON/issues/3) | Open governance gate; do not treat green CI or a merge as independent approval |
 | [#7 — offline dashboard and operator controls](https://github.com/bartytime4life/MEGALODON/issues/7) | Tracks this implementation and its remaining review and compatibility evidence |
-| [#9 — Suricata EVE contract and fixtures](https://github.com/bartytime4life/MEGALODON/issues/9) | Proposed branch-only contract/tests; no runtime Suricata importer on `main` |
+| [#9 — Suricata EVE contract and fixtures](https://github.com/bartytime4life/MEGALODON/issues/9) | Contract/tests are present on `main`; runtime import, installed-tool compatibility, and independent review remain open |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because
@@ -341,6 +349,8 @@ Repository-native checks are:
 ```bash
 python -m compileall -q megalodon tests
 python -m pytest
+python -m megalodon capabilities --platform linux
+python -m megalodon capabilities --platform windows
 python -m megalodon run --source sample --max-events 13
 python -m megalodon run --source sample --demo-threat --max-events 114
 python -m megalodon firewall-plan 8.8.8.8 --reason "CLI smoke"
@@ -357,9 +367,10 @@ readiness.
 .github/workflows/           hosted CI
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
+contracts/suricata-eve/v1/   inert alert schema, fixtures, and contract tests
 docs/                        platform baseline, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
-megalodon/                   validation, capture, detection, storage, policy, CLI, UI
+megalodon/                   validation, capability catalog, capture, detection, storage, policy, CLI, UI
 megalodon/offline/           isolated TShark/Zeek adapters and private reports
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls

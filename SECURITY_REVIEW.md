@@ -65,9 +65,9 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 The [platform baseline](docs/platform-baseline.md) is the canonical proposed
 configuration and installation guide. The review above concerns the Linux MVP
 and original design findings; it is not independent Windows security approval.
-At the pinned base `d94b40918908a8a275581f0c2690aef21d09adee`, the offline
-implementation depends on Linux privilege/capability checks, descriptor-based
-file access, `/proc`, process groups, and a fixed `/usr/bin/tshark`. The firewall
+The offline implementation depends on Linux privilege/capability checks,
+descriptor-based file access, `/proc`, process groups, and a fixed
+`/usr/bin/tshark`. The firewall
 apply path is nftables-specific and calls `os.geteuid()`. Native Windows parity
 is unproven; existing Linux checks must not be removed to advertise it.
 
@@ -79,7 +79,13 @@ is unproven; existing Linux checks must not be removed to advertise it.
 | Capture drivers | Verify maintenance, signed provenance, privileges, licensing, and explicit operator capture authority | Native Windows live capture excluded; Npcap is not an open-source baseline dependency |
 | Guest networking | Validate guest/host scope and loopback behavior; no assumption of full host visibility or firewall control | WSL is development-only here, not the hostile-capture isolation baseline |
 | Host response | Preserve existing firewall/endpoint protection; prove expiry/recovery and operator authorization separately | No Windows apply backend; no services or scheduled cleanup installed |
-| Sensor/file tools | Separate packet, flow, alert and file-scan semantics; allowlist fields; never import payloads or payload hashes | Suricata, ClamAV and osquery runtime integrations not implemented at the pinned base |
+| Sensor/file tools | Separate packet, flow, alert and file-scan semantics; allowlist fields; never import payloads or payload hashes | Suricata contract/tests only; ClamAV and osquery runtime integrations not implemented |
+
+The read-only `megalodon capabilities` command reports fixed support states from
+repository data. It deliberately does not inspect executables, versions,
+drivers, services, configuration, privileges, sockets, or network reachability.
+Its output cannot establish installation, provenance, compatibility, isolation,
+or authorization to run an external tool.
 
 The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.
