@@ -17,7 +17,7 @@ The parent [record contract](../README.md) remains authoritative for each
 `suricata-eve-alert-input-v1` envelope and its `external-alert-v1` normalized
 form. Ordinary Suricata EVE JSON is not this input contract. An operator must
 prepare the deliberately narrow, closed envelope before any future reader may
-accept it; this proposal does not add a producer, scrubber, capture path, or
+accept it; this contract does not add a producer, scrubber, capture path, or
 compatibility claim.
 
 `schema.json` closes the policy and completed-receipt shapes. The fixture and
