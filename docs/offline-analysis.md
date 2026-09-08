@@ -1,14 +1,20 @@
 # Offline metadata analysis v1
 
+Status: implemented optional Linux analysis path with synthetic regression
+coverage. Installed-system TShark compatibility remains a separate evidence
+gate in [issue #25](https://github.com/bartytime4life/MEGALODON/issues/25).
+
 This optional command is an isolated analysis path, not an ingestion change to
 `megalodon run`. It produces private local reports. It does **not** write to the
 existing SQLite store, change fixed MVP rules, serve HTTP, capture live traffic,
 replay packets onto a network, plan/apply a firewall action, or export to a SIEM.
 The proposed automation contract is not implemented by this command.
 
-Implementation is not deployment approval. Keep the delivery PR draft and do
-not merge until the independent-review control tracked in issue #3 is repaired
-and verified, and the exact change has independent review.
+Implementation is not deployment approval. The delivery history is already on
+`main`; the independent-review control tracked in
+[issue #3](https://github.com/bartytime4life/MEGALODON/issues/3) remains a
+repository governance gate for later changes and operational acceptance. This
+document does not grant retrospective approval or authority to analyze data.
 
 ## Isolated analyst operations
 
@@ -332,6 +338,10 @@ result when running that lane. It is a minimal header-only compatibility probe,
 not proof of safe behavior on arbitrary captures. The ordinary CI job must not
 install or implicitly trust an unpinned analyzer. No test uses a live firewall,
 sudo, real network capture, external endpoint, or production traffic.
+Track the pinned installed-tool receipt in
+[issue #25](https://github.com/bartytime4life/MEGALODON/issues/25); a normal CI
+skip is expected and must not be restated as either a pass or a failure of that
+optional compatibility lane.
 
 ## Official format and tool references
 
