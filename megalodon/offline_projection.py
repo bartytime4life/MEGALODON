@@ -53,9 +53,19 @@ _COMPLETE_MANIFEST_FIELDS = {
     "reference_baseline_used",
 }
 _SOURCE_CONTRACT = {
-    "tshark": ("tshark-fields-v1", "packet", "frame_length"),
-    "zeek-json": ("zeek-conn-json-v1", "flow", "orig_plus_resp_ip_bytes"),
-    "zeek-tsv": ("zeek-conn-tsv-v1", "flow", "orig_plus_resp_ip_bytes"),
+    "tshark": ("tshark-fields-v1", "packet", "frame_length", "subprocess_version"),
+    "zeek-json": (
+        "zeek-conn-json-v1",
+        "flow",
+        "orig_plus_resp_ip_bytes",
+        "operator_declared_unverified",
+    ),
+    "zeek-tsv": (
+        "zeek-conn-tsv-v1",
+        "flow",
+        "orig_plus_resp_ip_bytes",
+        "operator_declared_unverified",
+    ),
 }
 _CANDIDATE_RULES = (
     "NEW_DESTINATION_PORT",
@@ -228,7 +238,11 @@ def _manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Limits]:
         value.get("schema") != "offline-run-v1"
         or value.get("status") != "complete"
         or contract is None
-        or tuple(value.get(key) for key in ("adapter", "record_kind", "byte_count_basis")) != contract
+        or tuple(
+            value.get(key)
+            for key in ("adapter", "record_kind", "byte_count_basis", "tool_version_basis")
+        )
+        != contract
         or value.get("action_status") != "not_attempted"
         or value.get("egress") != "not_implemented_policy_required"
         or value.get("capture_hash") != "not_computed"
@@ -245,9 +259,6 @@ def _manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Limits]:
         case_id(value.get("case_id"))
         tool_version = version(value.get("tool_version"))
     except OfflineError:
-        _fail("INVALID_OFFLINE_MANIFEST")
-    basis = value.get("tool_version_basis")
-    if not isinstance(basis, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", basis):
         _fail("INVALID_OFFLINE_MANIFEST")
     limits_value = value.get("limits")
     if not isinstance(limits_value, dict) or set(limits_value) != set(Limits.__dataclass_fields__):
@@ -282,7 +293,7 @@ def _manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Limits]:
         "record_kind": contract[1],
         "byte_count_basis": contract[2],
         "tool_version": tool_version,
-        "tool_version_basis": basis,
+        "tool_version_basis": contract[3],
         "started_at": value["started_at"],
         "ended_at": value["ended_at"],
         "accepted_records": accepted,
