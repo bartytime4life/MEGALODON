@@ -1,11 +1,17 @@
 # Bounded Suricata EVE reader contract v1
 
-**Status: PROPOSED / INERT CONTRACT, SYNTHETIC FIXTURES, AND TEST ORACLE ONLY.**
+**Status: ADOPTED / INERT CONTRACT, SYNTHETIC FIXTURES, AND TEST ORACLE ONLY.**
+
+The design gate tracked in issue #24 is closed on `main`. That closure adopts
+these requirements for future work; it does not claim the runtime behavior
+exists. Capability and hub output must therefore remain `contract_only` and
+`no_runtime_importer`.
 
 This directory closes the design gate for a future local reader. It does not add
 a runtime importer, open a source file, run or configure Suricata, launch a
 process, use the network, write SQLite, update the dashboard, schedule work, or
-request or execute an action. Nothing under `megalodon/` is changed.
+request or execute an action. Delivery of this contract did not change anything
+under `megalodon/`.
 
 The parent [record contract](../README.md) remains authoritative for each
 `suricata-eve-alert-input-v1` envelope and its `external-alert-v1` normalized

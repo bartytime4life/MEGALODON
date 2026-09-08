@@ -4,6 +4,10 @@
 adapter, persistence layer, model invocation, or execution authority is
 implemented here.
 
+Delivery state: the Stage 0 schema, fixtures, and deterministic tests are on
+`main`. “Draft” describes the compatibility/versioning status of the contract,
+not an unmerged branch. The next stage remains unimplemented.
+
 This directory is the first dependency-closed slice of the proposed
 [MEGALODON automation design](../../../docs/automation-contract.md). It defines
 bounded JSON shapes and deterministic conformance fixtures without changing the

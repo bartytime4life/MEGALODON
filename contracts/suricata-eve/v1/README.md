@@ -1,13 +1,15 @@
 # Suricata EVE alert contract v1
 
-**Status: PROPOSED / NORMATIVE DRAFT / SCHEMA AND SYNTHETIC FIXTURES ONLY.**
-This directory does not implement an importer, install or run Suricata, download
-rules, capture packets, start a scheduler, persist telemetry, modify the dashboard,
-or authorize a firewall action. Nothing under `megalodon/` is changed.
+**Status: ADOPTED NORMATIVE CONTRACT / SYNTHETIC FIXTURES AND TEST ORACLES ONLY.**
+The record gate (#9) and bounded-reader design gate (#24) are closed on `main`.
+This directory does not implement a reader/importer, install or run Suricata,
+download rules, capture packets, start a scheduler, persist telemetry, modify
+the dashboard, or authorize a firewall action.
 
-Authoring base: `dc35854a4bb9a4d353b3832cb18d5dee780d244c` in
-`bartytime4life/MEGALODON`. The current MVP specification and security review
-remain authoritative. This proposal does not override their safety boundaries.
+The historical authoring base was `dc35854a4bb9a4d353b3832cb18d5dee780d244c`
+in `bartytime4life/MEGALODON`; the checked-in schemas, fixtures, tests, and this
+README at the revision under review are the current contract evidence. The MVP
+specification and security review remain authoritative for runtime safety.
 
 ## 1. Scope and compatibility
 
@@ -201,16 +203,17 @@ unchanged; green tests are not independent human review.
 
 ## 6. Next gate, not enabled by this contract
 
-The schema, fixtures, and tests are present on `main`. Their merge does not
+The schema, fixtures, and tests are present on `main`; issues #9 and #24 are
+closed as contract gates. Their merge does not
 supply the independent review or repository-control evidence still tracked in
 issue #3, and it grants no installation, capture, ruleset, or enforcement
 authority.
 
-A later, separately authorized change may implement a bounded local importer
-only after accepting and independently reviewing the reader contract, then
-supplying production Linux descriptor, hostile-input resource, failure-atomicity,
-and replay tests. A pinned supported producer profile and the source-file/privacy
-boundary also remain required. Installed-tool
+A later, separately authorized change may implement a bounded local reader and
+consumer only by conforming to the adopted reader contract and supplying
+production Linux descriptor, hostile-input resource, failure-atomicity, replay,
+and durable-transaction tests. A pinned supported producer profile and the
+source-file/privacy boundary also remain required. Installed-tool
 compatibility, rule acquisition, local reports, SQLite integration, dashboard
 projection, host context, scheduler execution, and response remain out of scope.
 Existing dashboard work tracked by issue #7 is not a dependency of this contract.
