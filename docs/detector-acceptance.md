@@ -5,7 +5,7 @@ No detector, threshold, configuration, response policy or runtime reporting
 feature changes. This confirms specified rule behavior, not malware accuracy,
 prevention effectiveness, representative false-positive rates or approval.
 
-## Source and fixture identity
+## Detector-only source and fixture identity
 
 Inspection base: `a177c13ade3b4a727a0514afac21575fd0f10e08`.
 The exact tested detector blob is `452906e830c509bc428ea7603308dee4f892a50a`;
@@ -65,9 +65,9 @@ are interpretation limits, not evidence that an attack stopped or was blocked.
 
 UNASSESSED: reordered timestamps. Deque trimming assumes chronological input;
 this test-only slice does not establish correct out-of-order window semantics,
-reject or sort reordered input, or change cooldown policy. Whole-service
-not_attempted/suppressed/planned receipts and representative privacy-reviewed
-evaluation remain distinct acceptance work. No completed #26 closure is claimed.
+reject or sort reordered input, or change cooldown policy. Finite synthetic
+service-to-ledger coverage is recorded below; representative privacy-reviewed
+evaluation remains separate. No completed #26 closure is claimed.
 
 ## Reproduction and discriminating controls
 
@@ -91,3 +91,80 @@ outside the repository's unchanged pytest constraint. Full supported-environment
 CI, exact-head independent review and representative operational interpretation
 must be recorded separately. Preserve the required Linux test gate. No capture,
 analyzer installation, scheduler, telemetry sharing or firewall apply is added.
+
+## Service-to-ledger receipt: service-acceptance-v1
+
+Inspection base: `16dc49b82aff43a29480f858b80ba4b703128f21`, after #34/#35.
+The detector-only inspection and execution receipts above retain their original
+scope. This extension adds [tests/test_service_acceptance.py](../tests/test_service_acceptance.py)
+without changing runtime code, thresholds, configuration, dependencies or CI.
+Tested service blob: `4a9665117c0f3ed8b388e1e9eac74bce5e637ced`;
+firewall blob: `8f40f8783af9b937c8ffbf5c495a5c47b2dcd8c3`;
+storage blob: `d15a7122a6877fa6ada720e9f006a1fb0a81a635`.
+The PR receipt separately pins the delivered test/documentation head and checks.
+
+The 48 policy scenarios cross three fixed rules, IPv4/IPv6 and eight named
+policy configurations. Each starts a fresh service and temporary SQLite store.
+Real typed events, detector, service, target validation, planner and audit writes
+are used. A spy observes planner calls without replacing its return values.
+After closing the store, a separate read-only connection checks exact detection
+and action rows, numeric evidence, event linkage, reasons and expiry.
+Every scenario adds one repeated event inside cooldown: it is stored as an
+input event, but adds no second detection, plan or action row.
+
+| Named policy fixtures | Scenarios | Expected and observed action status | Real planner calls per scenario |
+| --- | --- | --- | --- |
+| observe / disabled-auto / enabled-no-auto | 18 | not_attempted | 0 |
+| plan / direct-live-flags | 12 | planned | 1 |
+| allowlisted / allowlisted-non-global | 12 | suppressed | 0 |
+| non-global | 6 | failed | 1 (refused validation) |
+
+Those scenarios contain 1,984 input metadata events, 48 detections and 48
+persisted action rows. The fixture counts are not packet, flow or external-alert
+counts, and are not a production accuracy measure. `failed` here means a refused
+plan for a non-global source, not an attempted live block. Allowlisting takes
+precedence even for non-global sources. `direct-live-flags` bypasses TOML via
+programmatic settings only to prove the service still cannot apply; it does not
+make that configuration supported or recommend enabling it.
+
+Three further below-threshold cases produce no detection, action or plan. Three
+minimum-severity cases retain all detections but plan only the CRITICAL DNS
+case under the default minimum. Three synthetic SQLite stage failures propagate
+without a normal service return or successful action receipt. Their surviving
+(event, detection, action) row counts are (0,0,0), (1,0,0), and (1,1,0).
+These 57 cases distinguish stage-local rollback from whole-service atomicity:
+earlier committed stages can remain, and detector state is not rolled back.
+They do not prove disk-full, ACL, interruption or power-loss recovery; see
+[the storage failure policy](storage-failure-policy.md).
+
+Event time and audit time are distinct fixed UTC clocks. Every plan must contain
+the exact IPv4/IPv6 set argv, a 900-second timeout and matching finite expiry in
+both the action row and details JSON. No configuration values are changed.
+Global address literals are generated synthetic metadata, not observed hosts,
+contacted endpoints or threat claims. No query names, captures, payloads,
+payload-derived hashes or real telemetry are used. Test guards fail on block,
+install, apply-requirement, executor, executable probe, process or socket calls.
+This guards the exercised Python entry points; it is not an OS containment proof.
+
+From the repository root in the supported test environment:
+
+```bash
+python -m compileall -q megalodon tests
+python -m pytest tests/test_service.py tests/test_service_acceptance.py
+```
+
+Local focused execution passed 60 cases (57 new, three existing). Five isolated
+negative controls were detected: invoking block instead of plan caused 20
+failures; skipping allowlist suppression 12; ignoring enabled policy 6; recording
+applied for a plan 13; omitting the detection audit 53. The block-entry guard
+stopped the first mutation before any operation. All experiments used disposable
+copies; no weakened source was committed. No new runtime defect is claimed.
+Local evidence used identity-checked partial sources, Python 3.13.5, SQLite
+3.46.1 and pytest 9.0.2 with plugin autoload disabled; pytest 9 is outside the
+unchanged supported constraint. Full supported-environment hosted results belong
+in the exact-head PR receipt, not in an inferred pass here.
+
+Remaining gates: designated human review, GitHub approval/control handling under
+#3, reordered-time semantics and representative provenance/privacy-reviewed
+interpretation. These tests neither close #26 nor authorize apply, scheduling,
+external data sharing, host changes or deployment.
