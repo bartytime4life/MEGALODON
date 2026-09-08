@@ -16,6 +16,7 @@ class ValidationError(ValueError):
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _INTEGER_TEXT = re.compile(r"[0-9]+")
+SQLITE_INTEGER_MAX = (1 << 63) - 1
 
 
 def parse_ip(value: Any) -> str:
@@ -58,10 +59,17 @@ def parse_port(value: Any, *, allow_none: bool = True) -> int | None:
     return port
 
 
-def parse_nonnegative_int(value: Any, field_name: str) -> int:
+def parse_nonnegative_int(
+    value: Any,
+    field_name: str,
+    *,
+    maximum: int | None = None,
+) -> int:
     parsed = _parse_integer(value, field_name)
     if parsed < 0:
         raise ValidationError(f"{field_name} must be non-negative")
+    if maximum is not None and parsed > maximum:
+        raise ValidationError(f"{field_name} must be <= {maximum}")
     return parsed
 
 

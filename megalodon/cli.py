@@ -16,6 +16,7 @@ from .firewall import FirewallError, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
 from .storage import Store
+from .validation import safe_text, ValidationError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -172,6 +173,11 @@ def _dashboard(args: argparse.Namespace) -> int:
 
 def _record_firewall_action(settings, mode: str, operation) -> None:
     action = "firewall_install" if mode == "install" else "block"
+    details = operation.to_dict()
+    try:
+        safe_text(details["message"], "operation message", 256)
+    except ValidationError:
+        details["message"] = "multiline or oversized operation plan omitted from audit details"
     with Store(settings.db_path) as store:
         store.record_action(
             ActionRecord(
@@ -181,7 +187,7 @@ def _record_firewall_action(settings, mode: str, operation) -> None:
                 status=operation.status,
                 reason=operation.reason,
                 expires_at=operation.expires_at,
-                details=operation.to_dict(),
+                details=details,
             )
         )
 
