@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from ipaddress import AddressValueError, IPv4Address
 import json
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -561,6 +562,27 @@ def _bounded_dashboard_integer(value: int, name: str, minimum: int, maximum: int
     return value
 
 
+def loopback_host(host: str, *, allow_remote: bool = False) -> str:
+    """Return a numeric IPv4 loopback bind; never resolve a hostname.
+
+    The legacy override is a refusal, not a way to weaken this boundary.
+    IPv6 is intentionally refused by this IPv4 HTTP server.
+    """
+    if allow_remote is not False:
+        raise ValueError("dashboard requires loopback; --allow-remote is no longer supported")
+    if not isinstance(host, str) or not 1 <= len(host) <= 15:
+        raise ValueError("dashboard requires a numeric IPv4 loopback address or localhost")
+    if host == "localhost":
+        return "127.0.0.1"
+    try:
+        address = IPv4Address(host)
+    except AddressValueError:
+        raise ValueError("dashboard requires a numeric IPv4 loopback address or localhost") from None
+    if not address.is_loopback:
+        raise ValueError("dashboard requires a numeric IPv4 loopback address or localhost")
+    return str(address)
+
+
 def serve(
     store: Store,
     host: str,
@@ -578,11 +600,7 @@ def serve(
         refresh_seconds, "dashboard refresh_seconds", MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS
     )
     event_limit = _bounded_dashboard_integer(event_limit, "dashboard event_limit", 1, MAX_EVENT_LIMIT)
-    loopback = host in {"127.0.0.1", "::1", "localhost"}
-    if not loopback and not allow_remote:
-        raise ValueError("dashboard must bind to localhost unless --allow-remote is explicit")
-    if not loopback and offline_summary is not None:
-        raise ValueError("offline summaries require a loopback dashboard bind")
+    host = loopback_host(host, allow_remote=allow_remote)
     handler = type(
         "BoundDashboardHandler",
         (DashboardHandler,),

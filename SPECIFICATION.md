@@ -44,8 +44,8 @@ and an explicit nftables plan/application boundary.
 7. **Audit every decision.** Alert, suppression, non-attempt, planned, applied,
    and failed actions are written to the action ledger.
 8. **Dashboard is read-only.** The HTTP surface has no mutation endpoint.
-9. **Local bind by default.** A non-loopback dashboard bind requires an explicit
-   command-line opt-in and remains unauthenticated, so it is not recommended.
+9. **Loopback binds only.** The dashboard refuses non-loopback addresses and
+   the legacy remote opt-in. It does not provide remote authentication.
 10. **Fail closed for unsafe response.** Invalid targets, unavailable nft, lack
     of root, missing confirmation, and protected networks refuse the action.
 11. **Offline projection stays local.** A selected offline run must be a complete,
@@ -131,6 +131,15 @@ operation.
 
 ## 6. Dashboard contract
 
+The IPv4 server accepts only dotted-decimal addresses in `127.0.0.0/8` or the
+literal `localhost`, mapped directly to `127.0.0.1` without DNS. IPv6, mapped or
+scoped addresses, other hostnames, wildcards and non-loopback addresses are
+refused before socket creation. `--allow-remote` (and programmatic
+`allow_remote=True`) is retained only for a bounded startup refusal, even with
+a loopback address. The CLI checks the bind before opening the audit store or
+loading an offline report; `serve()` independently enforces the same boundary.
+This does not authorize a proxy, tunnel or port-forwarding workaround.
+
 The dashboard exposes only:
 
 - `GET /` — static local dashboard;
@@ -193,7 +202,7 @@ The MVP is acceptable for local experimentation when:
 - malformed IPs and ports are rejected;
 - allowlisted and non-global block targets are refused;
 - plan mode produces no firewall subprocess;
-- dashboard binds only to loopback by default;
+- dashboard rejects unsafe binds and legacy overrides before socket creation;
 - offline summaries reject incomplete, public, linked, mismatched, or tampered
   report sets and remain unavailable on remote binds;
 - sample replay produces a database and no firewall mutation;
@@ -215,8 +224,10 @@ baselines, review candidates, and a last-written completion manifest follow
 [docs/offline-analysis.md](docs/offline-analysis.md).
 
 This path does not populate the service SQLite database, drive its fixed-rule
-policy, feed the dashboard, or apply firewall actions. Packet, flow, and future
-sensor-alert counts must not be conflated. A candidate is review evidence, not
+policy, drive live dashboard polling, or apply firewall actions. An explicitly
+selected completed report may separately supply the startup-only dashboard
+summary described in section 6; its record rows are neither ingested nor served.
+Packet, flow, and future sensor-alert counts must not be conflated. A candidate is review evidence, not
 an action or malware finding. No packet payload or payload-derived hash is
 admitted by adopting an external analyzer.
 
