@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--config", default="config/settings.toml")
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=int)
-    dashboard.add_argument("--allow-remote", action="store_true", help="allow a non-loopback bind; no authentication is provided")
+    dashboard.add_argument("--allow-remote", action="store_true", help="removed unsafe option; supplying it refuses startup")
     dashboard.add_argument(
         "--refresh-seconds",
         type=int,
@@ -143,12 +143,13 @@ def _run(args: argparse.Namespace) -> int:
 
 def _dashboard(args: argparse.Namespace) -> int:
     settings = _load(args.config)
-    host = args.host or settings.dashboard.host
+    host = args.host if args.host is not None else settings.dashboard.host
     port = args.port or settings.dashboard.port
-    from .dashboard import serve
+    from .dashboard import loopback_host, serve
     from .offline_projection import load_offline_projection
 
     try:
+        host = loopback_host(host, allow_remote=args.allow_remote)
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with Store(settings.db_path) as store:
             serve(

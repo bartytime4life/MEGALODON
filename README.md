@@ -126,8 +126,8 @@ python -m megalodon dashboard \
 
 The dashboard loads and validates the summary inputs once; it does not browse
 directories, watch files, read or serve record rows, launch an analyzer, expose
-candidate evidence details, or add a control endpoint. Offline summaries are
-refused on non-loopback binds, even when `--allow-remote` is present. Restart
+candidate evidence details, or add a control endpoint. All dashboard binds are
+loopback-only; the legacy `--allow-remote` flag now refuses startup. Restart
 the dashboard to select another run.
 
 The recent-detections view supports local search, severity filtering, manual
@@ -163,8 +163,9 @@ remain in the local audit store and are not served to the browser.
 | `block IP --reason TEXT` | Print one block plan; `--apply` plus exact target confirmation is required to execute it |
 | `python -m megalodon.offline ...` | Run the separate private offline-analysis workflow |
 
-All main CLI subcommands accept `--config PATH`. `run --max-events N` provides an
-operator stop limit. Use `python -m megalodon --help` and
+The operational main CLI subcommands accept `--config PATH`; the static
+`capabilities` and `hub-plan` commands do not read configuration.
+`run --max-events N` provides an operator stop limit. Use `python -m megalodon --help` and
 `python -m megalodon.offline --help` for the complete argument surface.
 
 ## Event input
@@ -217,12 +218,16 @@ bounds are loaded from [`config/settings.toml`](config/settings.toml).
 | `[capture]` | `source = "sample"`, empty `interface` | The CLI can override the source and interface per run |
 | `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | All numeric values must be positive; state ceilings default to 4,096 |
 | `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
-| `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8787`, `refresh_seconds = 5`, `event_limit = 50` | Polling accepts 2–300 seconds; recent rows accept 1–200; non-loopback binding additionally requires `--allow-remote` and excludes offline summaries |
+| `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8787`, `refresh_seconds = 5`, `event_limit = 50` | Polling accepts 2–300 seconds; recent rows accept 1–200; only numeric IPv4 loopback or the literal `localhost` alias is accepted; `--allow-remote` refuses startup |
 
-Do not treat `--allow-remote` as production exposure support. The current server
-has no authentication, authorization, or CSRF control, so remote binding is not
-recommended. Firewall allowlist changes, public-target policy changes, and live
-application should receive separate operator review and isolated testing.
+The dashboard accepts dotted-decimal IPv4 addresses in `127.0.0.0/8`. The
+literal `localhost` is mapped directly to `127.0.0.1`, without DNS resolution.
+Other hostnames, wildcard/LAN/public addresses, and IPv6 (including mapped and
+scoped forms) are refused by this IPv4 server. The legacy `--allow-remote` flag
+is retained only to give a fixed startup refusal, even with a loopback host.
+Remove it and use `--host 127.0.0.1`; do not expose the unauthenticated server
+through proxies, tunnels or port forwarding. Firewall allowlist changes,
+public-target policy changes, and live application require separate review.
 
 ## Dashboard UI and API
 
@@ -241,7 +246,7 @@ The server exposes only these read routes:
 | Route | Response |
 | --- | --- |
 | `GET /` | Static dashboard HTML |
-| `GET /dashboard.css`, `GET /dashboard.js` | Same-origin no-store assets |
+| `GET /assets/dashboard.css`, `GET /assets/dashboard.js` | Same-origin no-store assets |
 | `GET /api/config` | Immutable polling, row-budget, and offline-summary availability metadata |
 | `GET /api/summary` | SQLite event, detection, action, and severity counts |
 | `GET /api/events?limit=N` | Five-field recent-detection projections with strict query validation and a 200-row ceiling |
@@ -284,7 +289,9 @@ in a disposable network namespace before operational use.
 
 The offline command is separate from `megalodon run` and must run on Linux as a
 non-root, capability-free account. It neither writes the SQLite service database
-nor feeds the dashboard or firewall policy.
+nor drives live dashboard polling or firewall policy. A completed report can
+separately supply the startup-only, operator-selected dashboard summary; record
+rows are not ingested or served.
 
 ```bash
 python -m megalodon.offline \
