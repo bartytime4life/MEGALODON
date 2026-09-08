@@ -60,6 +60,7 @@ quick start below is not a Windows installation recipe.
 | Firewall boundary | Non-mutating plans by default; isolated `inet megalodon` nftables table and time-limited sets for explicit application |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows status for selected free/open-source tools; performs no host probe or installation |
+| Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema, synthetic fixtures, and deterministic contract tests; no runtime importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | CI | Ubuntu 24.04 / Python 3.11 install, compilation, pytest, and non-mutating CLI smoke checks on pushes to `main` and pull requests |
@@ -102,6 +103,7 @@ python -m pip install -e ".[test]"
 python -m megalodon run --source sample
 python -m megalodon run --source sample --demo-threat
 python -m megalodon capabilities --platform linux
+python -m megalodon hub-plan --platform linux
 python -m megalodon dashboard
 ```
 
@@ -151,6 +153,7 @@ remain in the local audit store and are not served to the browser.
 | Command | Effect |
 | --- | --- |
 | `capabilities [--platform linux|windows|other]` | Print a static support/free-software catalog without probing or changing the host |
+| `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
 | `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
 | `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
 | `run --source scapy --interface IFACE` | Perform optional live metadata capture |
@@ -351,6 +354,7 @@ python -m compileall -q megalodon tests
 python -m pytest
 python -m megalodon capabilities --platform linux
 python -m megalodon capabilities --platform windows
+python -m megalodon hub-plan --platform linux
 python -m megalodon run --source sample --max-events 13
 python -m megalodon run --source sample --demo-threat --max-events 114
 python -m megalodon firewall-plan 8.8.8.8 --reason "CLI smoke"
@@ -368,9 +372,9 @@ readiness.
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
 contracts/suricata-eve/v1/   inert alert schema, fixtures, and contract tests
-docs/                        platform baseline, automation design, offline analyst guide
+docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
-megalodon/                   validation, capability catalog, capture, detection, storage, policy, CLI, UI
+megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI
 megalodon/offline/           isolated TShark/Zeek adapters and private reports
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls

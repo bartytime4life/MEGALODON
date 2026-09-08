@@ -87,6 +87,15 @@ drivers, services, configuration, privileges, sockets, or network reachability.
 Its output cannot establish installation, provenance, compatibility, isolation,
 or authorization to run an external tool.
 
+The companion `megalodon hub-plan` command is also static and non-executing. It
+maps each catalog component exactly once to a closed source kind, owner,
+input/output contract, entry point, launch policy, data boundary, action
+boundary, and next gate. It accepts no executable, argv, endpoint, SQL, path,
+credential, or action field and performs no probe, process launch, network
+request, persistence, capture, or host change. See
+[the integration hub contract](docs/integration-hub.md). Runtime orchestration
+remains a separate review boundary.
+
 The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.
 The dashboard remains read-only and loopback-bound; no remote exposure exception

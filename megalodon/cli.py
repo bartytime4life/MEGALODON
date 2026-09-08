@@ -29,6 +29,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="show one documented profile; defaults to the current runtime family",
     )
 
+    hub = sub.add_parser("hub-plan", help="print the static, non-executing integration workflow plan")
+    hub.add_argument(
+        "--platform",
+        choices=("linux", "windows", "other"),
+        help="show one documented profile; defaults to the current runtime family",
+    )
+    from .hub import WORKFLOW_IDS
+    hub.add_argument("--workflow", choices=WORKFLOW_IDS, help="show one closed workflow")
+
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", default="config/settings.toml")
     run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
@@ -84,6 +93,13 @@ def _configure_logging(level: str) -> None:
 
 def _capabilities(args: argparse.Namespace) -> int:
     print(json.dumps(catalog(args.platform), sort_keys=True))
+    return 0
+
+
+def _hub_plan(args: argparse.Namespace) -> int:
+    from .hub import integration_plan
+
+    print(json.dumps(integration_plan(args.platform, args.workflow), sort_keys=True))
     return 0
 
 
@@ -196,6 +212,8 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     if args.command == "capabilities":
         code = _capabilities(args)
+    elif args.command == "hub-plan":
+        code = _hub_plan(args)
     elif args.command == "run":
         code = _run(args)
     elif args.command == "dashboard":

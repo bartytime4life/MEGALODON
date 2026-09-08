@@ -234,6 +234,14 @@ boundaries for Linux, Windows, or another platform family. It performs no host
 probe, installation, process launch, network access, capture, or configuration
 change. A catalog status is not installed-tool or platform compatibility proof.
 
+`megalodon hub-plan` composes that catalog into the closed workflow map defined
+in [docs/integration-hub.md](docs/integration-hub.md). It is implemented as a
+static, non-executing plan: entry points identify existing owners but are not
+commands selected from input or authorization to run them. The plan reads no
+input, configuration, evidence, executable, or host-state files and performs no
+probe, subprocess, network request, persistence, capture, or host mutation. It
+cannot upgrade a component's platform status.
+
 ## 10. Proposed Windows/Linux platform contract
 
 The [platform baseline](docs/platform-baseline.md) defines L1 (Ubuntu 24.04),
