@@ -76,6 +76,15 @@ def test_workflow_filter_returns_one_fresh_plan():
     assert integration_plan("linux", "alert-metadata")["workflows"][0]["selected_status"] == "contract_only"
 
 
+def test_workflow_contracts_match_their_owned_entry_points():
+    alert = integration_plan("linux", "alert-metadata")["workflows"][0]
+    assert alert["input_contract"] == "suricata-eve-alert-input-v1 envelope"
+
+    response = integration_plan("linux", "time-limited-response")["workflows"][0]
+    assert response["entry_point"] == "megalodon firewall-plan or block"
+    assert "firewall-install" not in response["entry_point"]
+
+
 def test_unknown_workflow_is_rejected():
     with pytest.raises(ValueError, match="unknown integration workflow"):
         integration_plan("linux", "arbitrary-command")
