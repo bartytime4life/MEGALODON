@@ -331,11 +331,13 @@ function renderEvents(events) {
     cell.colSpan = 5; row.append(cell); body.replaceChildren(row); return;
   }
   const rows = events.map(event => {
-    const row = document.createElement('tr'); row.append(timeNode(event.detected_at));
+    const row = document.createElement('tr');
+    const timeCell = document.createElement('td');
+    timeCell.append(timeNode(event.detected_at));
     const severityCell = document.createElement('td');
     const severity = severityPresentation(event.severity);
     severityCell.append(textNode('span', severity, `severity ${severity}`));
-    row.append(severityCell, textNode('td', event.rule_id || ''), textNode('td', event.src_ip || ''), textNode('td', event.message || ''));
+    row.append(timeCell, severityCell, textNode('td', event.rule_id || ''), textNode('td', event.src_ip || ''), textNode('td', event.message || ''));
     return row;
   });
   body.replaceChildren(...rows);

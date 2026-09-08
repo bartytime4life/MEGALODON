@@ -164,6 +164,53 @@ def test_projection_rejects_type_confused_json_with_fixed_diagnostics(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("source", "adapter", "kind", "valid_basis", "invalid_basis"),
+    [
+        ("tshark", "tshark-fields-v1", "packet", "subprocess_version", "operator_declared_unverified"),
+        (
+            "zeek-json",
+            "zeek-conn-json-v1",
+            "flow",
+            "operator_declared_unverified",
+            "subprocess_version",
+        ),
+        (
+            "zeek-tsv",
+            "zeek-conn-tsv-v1",
+            "flow",
+            "operator_declared_unverified",
+            "subprocess_version",
+        ),
+    ],
+)
+def test_projection_rejects_source_inconsistent_tool_version_basis(
+    tmp_path, source, adapter, kind, valid_basis, invalid_basis
+):
+    batch = Batch(
+        adapter=adapter,
+        kind=kind,
+        records=(),
+        scanned=0,
+        skipped=0,
+        input_bytes=128,
+        tool_version="4.6.0",
+        version_basis=valid_basis,
+    )
+    output = tmp_path / "run"
+    with reports.output_directory(str(output)) as directory:
+        reports.finish(directory, reports.manifest("case1", source, Limits()), Limits(), batch=batch)
+    assert load_offline_projection(output)["run"]["tool_version_basis"] == valid_basis
+
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["tool_version_basis"] = invalid_basis
+    manifest_path.write_text(json.dumps(manifest), encoding="ascii")
+
+    with pytest.raises(OfflineError, match="INVALID_OFFLINE_MANIFEST"):
+        load_offline_projection(output)
+
+
+@pytest.mark.parametrize(
     ("rule", "evidence"),
     [
         ("NEW_DESTINATION_PORT", {"protocol": "TCP", "port": 443, "records": 6}),
@@ -258,6 +305,9 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "AbortController" in DASHBOARD_JS
     assert "knownSeverities.has(normalized)" in DASHBOARD_JS
     assert "`severity ${severity}`" in DASHBOARD_JS
+    assert "row.append(timeNode(event.detected_at))" not in DASHBOARD_JS
+    assert "const timeCell = document.createElement('td');" in DASHBOARD_JS
+    assert "timeCell.append(timeNode(event.detected_at));" in DASHBOARD_JS
     assert "setInterval" not in DASHBOARD_JS
     assert "innerHTML" not in DASHBOARD_JS
     assert "localStorage" not in DASHBOARD_JS
