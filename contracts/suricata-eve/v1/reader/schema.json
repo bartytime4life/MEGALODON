@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:megalodon:contract:suricata-eve-reader:v1",
+  "title": "PROPOSED bounded Suricata EVE reader contract v1 (inert)",
+  "$comment": "Conformance also requires the adjacent README and the parent record contract. This schema does not implement a reader or authorize durable writes, processes, network access, or actions.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/readerPolicy"
+    },
+    {
+      "$ref": "#/$defs/completedRunReceipt"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}(?![\\s\\S])"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 11,
+      "pattern": "^(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})(?![\\s\\S])"
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_bytes",
+        "max_records",
+        "max_record_bytes",
+        "max_nesting_depth",
+        "max_integer_digits",
+        "max_buffered_input_bytes",
+        "max_normalized_batch_bytes",
+        "max_elapsed_ms",
+        "max_diagnostic_bytes"
+      ],
+      "properties": {
+        "max_total_bytes": {
+          "const": 67108864
+        },
+        "max_records": {
+          "const": 10000
+        },
+        "max_record_bytes": {
+          "const": 65536
+        },
+        "max_nesting_depth": {
+          "const": 4
+        },
+        "max_integer_digits": {
+          "const": 10
+        },
+        "max_buffered_input_bytes": {
+          "const": 65536
+        },
+        "max_normalized_batch_bytes": {
+          "const": 16777216
+        },
+        "max_elapsed_ms": {
+          "const": 30000
+        },
+        "max_diagnostic_bytes": {
+          "const": 64
+        }
+      }
+    },
+    "sourceFilePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "explicit_single_path",
+        "require_absolute_path",
+        "require_regular_file",
+        "require_effective_uid_owner",
+        "forbid_group_other_permissions",
+        "reject_symlink_components",
+        "open_read_only",
+        "verify_descriptor_identity",
+        "verify_post_read_metadata",
+        "atomic_snapshot_guaranteed"
+      ],
+      "properties": {
+        "explicit_single_path": {
+          "const": true
+        },
+        "require_absolute_path": {
+          "const": true
+        },
+        "require_regular_file": {
+          "const": true
+        },
+        "require_effective_uid_owner": {
+          "const": true
+        },
+        "forbid_group_other_permissions": {
+          "const": true
+        },
+        "reject_symlink_components": {
+          "const": true
+        },
+        "open_read_only": {
+          "const": true
+        },
+        "verify_descriptor_identity": {
+          "const": true
+        },
+        "verify_post_read_metadata": {
+          "const": true
+        },
+        "atomic_snapshot_guaranteed": {
+          "const": false
+        }
+      }
+    },
+    "streamPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "framing",
+        "allow_final_unterminated_record",
+        "require_nonempty",
+        "require_first_index_one",
+        "require_contiguous_indexes",
+        "require_single_run_identity",
+        "reject_bom",
+        "reject_duplicate_keys",
+        "reject_float_tokens",
+        "retain_original_json"
+      ],
+      "properties": {
+        "framing": {
+          "const": "one-json-value-per-record-lf-or-crlf-v1"
+        },
+        "allow_final_unterminated_record": {
+          "const": true
+        },
+        "require_nonempty": {
+          "const": true
+        },
+        "require_first_index_one": {
+          "const": true
+        },
+        "require_contiguous_indexes": {
+          "const": true
+        },
+        "require_single_run_identity": {
+          "const": true
+        },
+        "reject_bom": {
+          "const": true
+        },
+        "reject_duplicate_keys": {
+          "const": true
+        },
+        "reject_float_tokens": {
+          "const": true
+        },
+        "retain_original_json": {
+          "const": false
+        }
+      }
+    },
+    "sideEffectPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durable_writes",
+        "network_access",
+        "process_launch",
+        "action_execution",
+        "firewall_mutation"
+      ],
+      "properties": {
+        "durable_writes": {
+          "const": false
+        },
+        "network_access": {
+          "const": false
+        },
+        "process_launch": {
+          "const": false
+        },
+        "action_execution": {
+          "const": false
+        },
+        "firewall_mutation": {
+          "const": false
+        }
+      }
+    },
+    "readerPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "platform",
+        "record_contract",
+        "output_contract",
+        "limits",
+        "source_file",
+        "stream",
+        "side_effects"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "suricata-eve-reader-policy-v1"
+        },
+        "platform": {
+          "const": "linux"
+        },
+        "record_contract": {
+          "const": "suricata-eve-alert-input-v1"
+        },
+        "output_contract": {
+          "const": "external-alert-v1"
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        },
+        "source_file": {
+          "$ref": "#/$defs/sourceFilePolicy"
+        },
+        "stream": {
+          "$ref": "#/$defs/streamPolicy"
+        },
+        "side_effects": {
+          "$ref": "#/$defs/sideEffectPolicy"
+        }
+      }
+    },
+    "runIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "adapter_profile",
+        "declared_version",
+        "version_basis",
+        "sensor_id",
+        "run_id",
+        "ruleset_id",
+        "ruleset_basis"
+      ],
+      "properties": {
+        "engine": {
+          "const": "suricata"
+        },
+        "adapter_profile": {
+          "const": "suricata-eve-alert-v1"
+        },
+        "declared_version": {
+          "$ref": "#/$defs/version"
+        },
+        "version_basis": {
+          "const": "operator_declared"
+        },
+        "sensor_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "run_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ruleset_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ruleset_basis": {
+          "const": "operator_declared"
+        }
+      }
+    },
+    "completedRunReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "reader_policy_version",
+        "status",
+        "run_identity",
+        "record_count",
+        "normalized_alert_count",
+        "producer_blocked_count",
+        "normalized_batch_bytes",
+        "count_unit",
+        "action_status",
+        "durable_write_status",
+        "source_snapshot_status",
+        "replay_status"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "suricata-eve-reader-receipt-v1"
+        },
+        "reader_policy_version": {
+          "const": "suricata-eve-reader-policy-v1"
+        },
+        "status": {
+          "const": "complete"
+        },
+        "run_identity": {
+          "$ref": "#/$defs/runIdentity"
+        },
+        "record_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "normalized_alert_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "producer_blocked_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "normalized_batch_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "count_unit": {
+          "const": "alert"
+        },
+        "action_status": {
+          "const": "not_attempted"
+        },
+        "durable_write_status": {
+          "const": "not_attempted"
+        },
+        "source_snapshot_status": {
+          "const": "metadata_unchanged_not_atomic"
+        },
+        "replay_status": {
+          "const": "fresh"
+        }
+      }
+    },
+    "errorCode": {
+      "enum": [
+        "SOURCE_PATH",
+        "SOURCE_SYMLINK",
+        "SOURCE_TYPE",
+        "SOURCE_OWNER",
+        "SOURCE_MODE",
+        "SOURCE_CHANGED",
+        "TOTAL_BYTES",
+        "RECORD_LIMIT",
+        "RECORD_BYTES",
+        "EMPTY_INPUT",
+        "EMPTY_RECORD",
+        "FRAMING",
+        "UTF8",
+        "DUPLICATE_KEY",
+        "DEPTH",
+        "JSON_NUMBER",
+        "JSON",
+        "SCHEMA",
+        "SEMANTIC",
+        "RUN_IDENTITY",
+        "RECORD_SEQUENCE",
+        "REPLAY",
+        "COUNT_MISMATCH",
+        "OUTPUT_LIMIT",
+        "TIME_LIMIT"
+      ]
+    }
+  }
+}
