@@ -36,6 +36,23 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
+## Documentation map
+
+Use one document as the authority for each kind of decision. Issue and PR pages
+record delivery state; they do not override the checked-in contracts.
+
+| Need | Canonical document |
+| --- | --- |
+| Product boundary, commands, and first run | This README |
+| Runtime behavior and acceptance boundary | [`SPECIFICATION.md`](SPECIFICATION.md) |
+| Threat model and production controls | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
+| Platform choices and installation evidence | [`docs/platform-baseline.md`](docs/platform-baseline.md) |
+| Offline analyst operation and report semantics | [`docs/offline-analysis.md`](docs/offline-analysis.md) |
+| Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
+| Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
+| Suricata record and bounded-reader gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md) and [`reader`](contracts/suricata-eve/v1/reader/README.md) |
+| Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
+
 ## Choose a configuration
 
 Start with the work you need, rather than installing every listed utility.
@@ -104,7 +121,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for selected free/open-source tools; performs no host probe or installation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
-| Suricata contract | Closed EVE-alert schema, synthetic fixtures, and deterministic contract tests; no runtime importer or sensor operation |
+| Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | CI | Ubuntu 24.04 / Python 3.11 install, compilation, pytest, and non-mutating CLI smoke checks on pushes to `main` and pull requests |
 
@@ -453,11 +470,19 @@ staged design.
 
 ## Development status and open issues
 
-| Issue | Status represented in this README |
+This table is a repository checkpoint, not a substitute for the live issue.
+Closed design/test gates can still leave runtime and operational work unbuilt.
+
+| Issue | Current repository meaning |
 | --- | --- |
 | [#3 — independent-review enforcement](https://github.com/bartytime4life/MEGALODON/issues/3) | Open governance gate; do not treat green CI or a merge as independent approval |
 | [#7 — offline dashboard and operator controls](https://github.com/bartytime4life/MEGALODON/issues/7) | Tracks this implementation and its remaining review and compatibility evidence |
-| [#9 — Suricata EVE contract and fixtures](https://github.com/bartytime4life/MEGALODON/issues/9) | Contract/tests are present on `main`; runtime import, installed-tool compatibility, and independent review remain open |
+| [#9 — Suricata EVE contract and fixtures](https://github.com/bartytime4life/MEGALODON/issues/9) | Closed contract gate; record schema/tests are on `main`, without a runtime importer |
+| [#24 — bounded Suricata reader](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed contract gate; fixed reader policy, receipt, fixtures, and oracle are on `main`, without filesystem/runtime implementation |
+| [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Open evidence gate for the optional system analyzer |
+| [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
+| [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; Windows remains evaluation-only |
+| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Open operator-policy gate; synthetic transaction handling exists, but no retention values or automatic cleanup are selected |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because
@@ -494,7 +519,7 @@ versions, selected extras, passed checks, and skips for every configuration clai
 .github/workflows/           hosted CI
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
-contracts/suricata-eve/v1/   inert alert schema, fixtures, and contract tests
+contracts/suricata-eve/v1/   inert alert and bounded-reader contracts, fixtures, and tests
 docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI

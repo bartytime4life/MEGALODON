@@ -6,6 +6,13 @@ This is a bounded slice of [issue #28](https://github.com/bartytime4life/MEGALOD
 not production approval. The [specification](../SPECIFICATION.md) and
 [security review](../SECURITY_REVIEW.md) remain authoritative.
 
+Current repository interpretation: the write methods close or roll back their
+own transaction before returning or propagating an error, and service acceptance
+tests preserve detector cooldown across the exercised detection/action audit
+failures. Neither property makes the three service stages one transaction or
+selects a retention policy. Issue #28 therefore remains the live operator-policy
+and operational-failure gate.
+
 ## What a successful write means
 
 `Store.record_event()`, `record_detection()` and `record_action()` each hold the

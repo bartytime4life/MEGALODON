@@ -1,7 +1,7 @@
 # Windows and Linux platform baseline
 
 **Baseline v1 — PROPOSED configuration and delivery plan.** Refreshed 2026-09-08
-against `fc2d42f9d67e36a159a9235960ef3a67066d07ec` on the task branch. This
+against `ec53f5968e498b1ebee00b11119b216ba1812699` on `main`. This
 document is the canonical platform configuration entry point. It does not
 install software, activate sensors, certify Windows support, or authorize
 firewall changes.
@@ -33,7 +33,7 @@ and other Python versions need their own evidence before inclusion. [S1, S2]
 | Offline TShark packet metadata and Zeek connection-log import | Separate Linux-only command and private reports | Unsupported by the current offline implementation; use a validated L1 guest instead |
 | Firewall plans and explicit application | nftables-specific; application needs separate operator action | No Windows firewall backend; an nftables plan is not a Windows rule |
 | Offline-run dashboard projection | Implemented for one complete private report set on loopback | Native core evaluation target; remote projection is refused |
-| Suricata EVE integration | Inert contract/tests on main; no runtime importer | Contract only; native Suricata availability does not change this |
+| Suricata EVE integration | Inert record and bounded-reader contracts/tests on main; no runtime reader/importer | Contract only; native Suricata availability does not change this |
 | Scheduling and automated response | Automation schema exists; no scheduler/executor | Not implemented; no Task Scheduler installation or automatic blocking |
 
 Implementation evidence: [package metadata](../pyproject.toml),
@@ -82,8 +82,9 @@ redistribution rights for it or bundled third-party components.
 At this source check, Suricata's download page lists stable **8.0.6** and marks
 **7.0.17** end-of-life. Those are upstream observations, not tested producer
 versions for MEGALODON. Do not turn the older 8.0.1 documentary field baseline
-in issue #9 into an installation pin. Record and review the actual package,
-rule-set version/license, and advisories before deployment. [S6]
+from the now-closed issue #9 contract gate into an installation pin. Record and
+review the actual package, rule-set version/license, and advisories before
+deployment. [S6]
 
 The repository exposes these distinctions without probing the host:
 
@@ -326,9 +327,9 @@ All entries below are **PROPOSED**, not changes made by this documentation.
 | Stage | Smallest deliverable | Required exit evidence |
 | --- | --- | --- |
 | P0: review and baseline | Review this document and reconcile issue #3's independent-review control | Current ruleset and independent review evidence; retain strict required `test` gate and historical lifecycle receipts |
-| P1: Windows core | Bounded platform capability/error handling and synthetic core tests; retain Linux behavior | Static catalog is prerequisite evidence only; exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
-| P2: analyzer compatibility | Validate maintained Linux tool versions; separately review Windows offline design | Installed-tool synthetic fixtures; Windows design covers handle identity, reparse points, UNC/device/alternate-stream rejection, private ACLs, process-tree termination, pipe/resource bounds, no-egress containment; never remove Linux guards as a shortcut |
-| P3: optional sensor intake | Review issue #9 contract, then one bounded Suricata importer; handle #7 UI independently | Source/version/framing/size/field/semantic rejection tests, transactional persistence and privacy review; packet/flow/alert counts stay distinct |
+| P1: Windows core | Complete #27 bounded platform capability/error handling and synthetic core tests; retain Linux behavior | Static catalog is prerequisite evidence only; exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
+| P2: analyzer compatibility | Complete #25 for a maintained Linux TShark package; separately review Windows offline design | Installed-tool synthetic fixtures; Windows design covers handle identity, reparse points, UNC/device/alternate-stream rejection, private ACLs, process-tree termination, pipe/resource bounds, no-egress containment; never remove Linux guards as a shortcut |
+| P3: optional sensor intake | Treat closed #9 record and #24 reader contracts as prerequisites, then propose one bounded runtime Suricata slice; handle #7 UI independently | Production descriptor/resource/replay tests, source/version/framing/field rejection, transactional persistence and privacy review; packet/flow/alert counts stay distinct |
 | P4: Windows response decision | Separate design only if explicitly requested | Tested allowlist/global-target policy, already-held authority, exact confirmation, finite expiry across restart/sleep/failure, conflict detection and rollback; no implementation until these are resolved |
 | P5: packaging/operations | Optional service/installer work after supported-platform evidence | Least-privilege account, update/retention/uninstall contracts and reproducible artifacts; no silent firewall/driver changes |
 
@@ -356,6 +357,11 @@ OBSERVED upstream statements, not reproduced MEGALODON compatibility results.
 - S11: [Microsoft WSL networking](https://learn.microsoft.com/en-us/windows/wsl/networking).
 
 Repository follow-ups: [#3](https://github.com/bartytime4life/MEGALODON/issues/3),
-[#7](https://github.com/bartytime4life/MEGALODON/issues/7), and
-[#9](https://github.com/bartytime4life/MEGALODON/issues/9). Read their live state;
-this baseline does not freeze branch heads or turn proposals into shipped work.
+[#7](https://github.com/bartytime4life/MEGALODON/issues/7),
+[#25](https://github.com/bartytime4life/MEGALODON/issues/25),
+[#27](https://github.com/bartytime4life/MEGALODON/issues/27), and
+[#28](https://github.com/bartytime4life/MEGALODON/issues/28) remain open at this
+refresh. [#9](https://github.com/bartytime4life/MEGALODON/issues/9) and
+[#24](https://github.com/bartytime4life/MEGALODON/issues/24) are closed contract
+prerequisites, not runtime capability. Read live state before acting; this
+baseline does not freeze branch heads or turn proposals into shipped work.
