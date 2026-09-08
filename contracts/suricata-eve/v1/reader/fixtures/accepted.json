@@ -1,0 +1,106 @@
+{
+  "policy": {
+    "schema_version": "suricata-eve-reader-policy-v1",
+    "platform": "linux",
+    "record_contract": "suricata-eve-alert-input-v1",
+    "output_contract": "external-alert-v1",
+    "limits": {
+      "max_total_bytes": 67108864,
+      "max_records": 10000,
+      "max_record_bytes": 65536,
+      "max_nesting_depth": 4,
+      "max_integer_digits": 10,
+      "max_buffered_input_bytes": 65536,
+      "max_normalized_batch_bytes": 16777216,
+      "max_elapsed_ms": 30000,
+      "max_diagnostic_bytes": 64
+    },
+    "source_file": {
+      "explicit_single_path": true,
+      "require_absolute_path": true,
+      "require_regular_file": true,
+      "require_effective_uid_owner": true,
+      "forbid_group_other_permissions": true,
+      "reject_symlink_components": true,
+      "open_read_only": true,
+      "verify_descriptor_identity": true,
+      "verify_post_read_metadata": true,
+      "atomic_snapshot_guaranteed": false
+    },
+    "stream": {
+      "framing": "one-json-value-per-record-lf-or-crlf-v1",
+      "allow_final_unterminated_record": true,
+      "require_nonempty": true,
+      "require_first_index_one": true,
+      "require_contiguous_indexes": true,
+      "require_single_run_identity": true,
+      "reject_bom": true,
+      "reject_duplicate_keys": true,
+      "reject_float_tokens": true,
+      "retain_original_json": false
+    },
+    "side_effects": {
+      "durable_writes": false,
+      "network_access": false,
+      "process_launch": false,
+      "action_execution": false,
+      "firewall_mutation": false
+    }
+  },
+  "receipts": [
+    {
+      "id": "two-record-complete",
+      "receipt": {
+        "schema_version": "suricata-eve-reader-receipt-v1",
+        "reader_policy_version": "suricata-eve-reader-policy-v1",
+        "status": "complete",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "8.0.1",
+          "version_basis": "operator_declared",
+          "sensor_id": "fixture-sensor",
+          "run_id": "fixture-run-a",
+          "ruleset_id": "synthetic-rules-v1",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 2,
+        "normalized_alert_count": 2,
+        "producer_blocked_count": 1,
+        "normalized_batch_bytes": 1048,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "not_attempted",
+        "source_snapshot_status": "metadata_unchanged_not_atomic",
+        "replay_status": "fresh"
+      }
+    },
+    {
+      "id": "maximum-count-complete",
+      "receipt": {
+        "schema_version": "suricata-eve-reader-receipt-v1",
+        "reader_policy_version": "suricata-eve-reader-policy-v1",
+        "status": "complete",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "999.999.999",
+          "version_basis": "operator_declared",
+          "sensor_id": "sensor_boundary",
+          "run_id": "run_boundary",
+          "ruleset_id": "rules_boundary",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 10000,
+        "normalized_alert_count": 10000,
+        "producer_blocked_count": 10000,
+        "normalized_batch_bytes": 16777216,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "not_attempted",
+        "source_snapshot_status": "metadata_unchanged_not_atomic",
+        "replay_status": "fresh"
+      }
+    }
+  ]
+}
