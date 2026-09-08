@@ -198,8 +198,11 @@ timestamps use semantic `time` elements.
 ## 7. Retention and privacy
 
 The store keeps normalized metadata and evidence JSON. It must be assigned a
-retention period before production use. The `Store.purge_before()` hook exists
-for a scheduled retention job but no scheduler is enabled automatically.
+retention period and finite capacity/stop budget before production use. The
+internal `Store.purge_before()` hook can atomically delete matching audit rows,
+but no CLI, preview receipt, scheduler, default cleanup, or automatic caller is
+provided. SQLite audit data and standalone offline report sets have independent
+operator-owned retention decisions; authority over one never covers the other.
 
 External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
 future integration must document what identifiers leave the host and require
