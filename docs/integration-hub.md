@@ -3,6 +3,11 @@
 Status: **implemented static plan; no general runner, scheduler, installer, or
 external-tool activation**.
 
+Document role: this file owns the closed workflow vocabulary and its execution
+boundary. The platform baseline owns installation choices; the offline and
+versioned contract documents own their input details. A capability status is
+copied from code at command time, never upgraded by this prose.
+
 `megalodon hub-plan` is the machine-readable coordination surface for the
 separate applications and utilities used around MEGALODON. It joins the static
 capability catalog to closed workflow definitions so documentation, UI work,
@@ -33,6 +38,12 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `time-limited-response` | nftables | Optional explicit path | Plan first; exact confirmation, existing root, allowlist, and expiry for apply |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
 | `endpoint-inventory` | osquery | Proposed | No arbitrary SQL, daemon, scheduler, remote enrollment, or importer |
+
+The Suricata record and reader contract gates are closed as documentation/test
+prerequisites ([#9](https://github.com/bartytime4life/MEGALODON/issues/9) and
+[#24](https://github.com/bartytime4life/MEGALODON/issues/24)). Their hub status
+remains `contract_only` with `no_runtime_importer`; issue closure is not a status
+promotion.
 
 Each capability appears exactly once. Platform support status is derived from
 `megalodon.capabilities` instead of being copied into this registry. That
@@ -96,3 +107,21 @@ A new utility does not enter the hub until one bounded change supplies:
 No prompt, event, document, model output, sensor field, or future configuration
 may choose an executable, argv, endpoint, credential, SQL query, firewall
 target, or action. Runtime orchestration is a later, separately reviewed slice.
+
+## Verification
+
+From an installed checkout, compare the two static surfaces without probing or
+launching any external tool:
+
+```bash
+python -m megalodon capabilities --platform linux
+python -m megalodon capabilities --platform windows
+python -m megalodon capabilities --platform other
+python -m megalodon hub-plan --platform linux
+python -m megalodon hub-plan --platform windows
+```
+
+The catalog and plan tests must continue to prove unique component/workflow
+coverage, closed fields, exact status derivation, `action_status=not_attempted`,
+and false performed flags. Output is descriptive evidence, not a compatibility
+receipt or execution authorization.
