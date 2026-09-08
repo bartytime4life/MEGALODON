@@ -3,10 +3,17 @@
 **MEGALODON** = **M**alware **E**limination **G**ateway **A**nd **L**ayered
 **O**perations **D**efense **O**nline **N**etwork.
 
-MEGALODON is a local-first, Linux-oriented defensive network telemetry MVP. It
-validates bounded network metadata, applies three fixed detection heuristics,
-stores an SQLite audit trail, and exposes a read-only localhost dashboard.
-Firewall planning and application are separate, operator-controlled paths.
+MEGALODON is a local-first defensive network telemetry MVP with a Python
+metadata core and separately scoped tool integrations. It validates bounded
+network metadata, applies three fixed detection heuristics, stores an SQLite
+audit trail, and offers a read-only localhost dashboard. Live capture, offline
+analysis, and firewall planning/application are separate choices, not mandatory
+parts of every configuration.
+
+Linux is the current implementation and CI reference, not a claim that every
+workflow requires Ubuntu or every platform has equal support. Native Windows
+core use is an unverified evaluation target; Linux-specific adapters remain
+Linux-specific. Choose a workflow and then check its platform boundary below.
 
 MEGALODON is not an autonomous antivirus, malware-attribution engine,
 threat-intelligence service, packet-forensics suite, or authorization to change
@@ -29,37 +36,73 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
-## Windows and Linux configuration baseline
+## Choose a configuration
 
-Start with [`docs/platform-baseline.md`](docs/platform-baseline.md) for the
-platform feature matrix, open-source application choices, pinned installation
-recipes, safe settings, storage/permission checks, and staged delivery plan.
+Start with the work you need, rather than installing every listed utility.
+These are combinations of existing commands and documented evaluation targets,
+not new named profiles, automatic installers, or a universal security suite.
 
-| Profile | Scope | Status |
+| Workflow | Components and output | Availability and boundary |
 | --- | --- | --- |
-| Linux: Ubuntu 24.04 LTS | Reference metadata runtime and separate isolated offline workflow | Existing Linux implementation; each installed-tool/workstation combination still needs validation |
-| Native Windows 11 x64 | Proposed Python 3.13 sample/JSONL, SQLite, and localhost-dashboard evaluation | UNVERIFIED; this documentation does not port or certify the runtime |
-| Windows with a Linux guest | Proposed reuse of the Linux analysis workflow in a separately validated guest | Not full Windows-host monitoring or Windows firewall enforcement |
+| Learn or develop with synthetic data | Core Python package; sample/JSONL metadata, fixed detections, SQLite; optional local UI | Implemented on Linux; native Windows core evaluation only. No capture tool, driver, firewall privilege, GPU, or cloud account required |
+| Replay authorized metadata, without live capture | `run --source jsonl`; audit database; optional local UI | Existing Linux core path. Windows evaluation uses synthetic fixtures only until native acceptance; arbitrary sensor logs are not this input contract |
+| Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
+| Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
+| Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
+| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; application is a separate operator gate |
 
-The baseline and the static `megalodon capabilities` catalog keep implemented,
-optional, contract-only, manual, guest-only, proposed, and unsupported roles
-separate. They explain the non-open-source Npcap exception and select
-offline-only Windows analysis without that driver.
-Native Windows capture, offline adapters, firewall application, services, and
-scheduling are not made available by this documentation. The existing Linux
-quick start below is not a Windows installation recipe.
+The core can run **headless**: `run` does not start `dashboard`. A local desktop
+can use both commands, and the dashboard can be started later against the same
+configured SQLite database. Offline reports remain a separate data path; only
+one explicitly selected completed run can supply a startup-only UI summary.
+Installing an upstream tool does not create a MEGALODON importer or orchestrator.
+
+## Platform and environment choices
+
+[`docs/platform-baseline.md`](docs/platform-baseline.md) remains the canonical
+installation and configuration guide: feature matrix, software/license choices,
+pinned recipes, storage permissions, and acceptance gates. This README is the
+entry point, not a replacement platform contract.
+
+| Environment | What can be considered | Evidence / support boundary |
+| --- | --- | --- |
+| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, optional nftables response | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host |
+| Other Linux distributions or architectures | Evaluate the same bounded workflows where prerequisites and safety checks hold | Not certified by the Ubuntu CI lane. Validate Python, filesystem/privilege behavior, tool paths, and each selected integration; do not remove guards to make a recipe run |
+| Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **UNVERIFIED / evaluation only.** No native MEGALODON capture, offline adapter, or Windows firewall backend. Windows acceptance is tracked separately |
+| A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
+| WSL2 | Development evaluation under the documented W2 limits | Not the hostile-capture isolation baseline or proof of Windows-host monitoring/enforcement |
+| macOS, BSD, and other native systems | Read the `other` catalog and identify future port/acceptance work | Core runtime and network adapters are **unsupported in the current catalog**; Python or upstream-tool availability alone does not establish support |
+| Containers or unattended services | Possible future packaging/operations work | No supported deployment profile is established here. Container privilege, mounts, networking, lifecycle, and isolation need separate review; no service or scheduler is installed by these instructions |
+
+The catalog distinguishes `implemented`, `optional`, `evaluation_only`,
+`contract_only`, `manual_only`, `guest_only`, `proposed`, and `unsupported`.
+Inspect alternative profiles from an already working runtime:
+
+```text
+python -m megalodon capabilities --platform linux
+python -m megalodon capabilities --platform windows
+python -m megalodon capabilities --platform other
+python -m megalodon hub-plan --platform windows
+```
+
+`--platform` selects a **static description**, not a runtime backend, host probe,
+portability test, or permission to execute a tool. The default follows the Python
+runtime's platform family, so a Linux guest describes Linux, not its host.
+See [`docs/integration-hub.md`](docs/integration-hub.md) for the closed workflow map.
+The baseline excludes Npcap from its open-source dependencies and omits native
+Windows live capture; manual saved-capture analysis is a different workflow.
 
 ## What is implemented on `main`
 
 | Area | Current capability |
 | --- | --- |
-| Inputs | Built-in sample metadata, bounded JSONL replay, and optional interface-specific Scapy capture |
+| Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
 | Dashboard | Read-only loopback UI with bounded recent-detection controls and an optional privacy-safe summary of one completed offline run |
 | Firewall boundary | Non-mutating plans by default; isolated `inet megalodon` nftables table and time-limited sets for explicit application |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
-| Capability catalog | Static, read-only Linux/Windows status for selected free/open-source tools; performs no host probe or installation |
+| Capability catalog | Static, read-only Linux/Windows/other status for selected free/open-source tools; performs no host probe or installation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema, synthetic fixtures, and deterministic contract tests; no runtime importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
@@ -69,20 +112,23 @@ quick start below is not a Windows installation recipe.
 
 | Requirement | Purpose | Status |
 | --- | --- | --- |
-| Python 3.11 or newer | CLI, validation, detectors, SQLite store, dashboard, and offline adapters | Required |
+| Python 3.11 or newer | CLI, validation, detectors, SQLite store, dashboard, and offline adapters | Package minimum, not proof of every Python/OS combination |
 | Python `venv` and `pip` | Isolated editable installation | Recommended |
 | SQLite (`sqlite3`) | Local audit database | Included in the Python standard library; no separate pip package |
-| Scapy `>=2.5,<3` | Optional live metadata capture | Install with the `capture` extra |
-| TShark/Wireshark at `/usr/bin/tshark` | Optional offline `.pcap`/`.pcapng` parsing | Reviewed system package; not a Python dependency |
+| Scapy `>=2.5,<3` | Optional Linux live metadata capture | Install with the `capture` extra only for that workflow |
+| TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
 | Suricata | Optional future EVE alert source | Contract and synthetic fixtures only; not invoked, imported, or required |
 | ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
 | osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
-| nftables and an already-root process | Explicit firewall table/block application | Optional; never needed for observe, dashboard, or plan mode |
+| nftables and an already-root process | Explicit Linux firewall table/block application | Optional; never needed for sample/JSONL, dashboard, or plan mode |
 | pytest `>=8,<9` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
-The core Python package currently has no third-party runtime dependency. Install
-only the extras needed for the intended task:
+The core Python package currently has no third-party runtime dependency. Git is
+needed for a source checkout; no analyzer, antivirus, capture driver, or firewall
+package is required for the synthetic core demonstration. The list above is a
+menu of roles, not an install-all bundle. Install only the extras needed for the
+selected, reviewed workflow, using that environment's Python:
 
 ```bash
 python -m pip install -e .                 # core MVP
@@ -91,21 +137,65 @@ python -m pip install -e ".[capture]"     # optional Scapy capture
 python -m pip install -e ".[capture,test]" # both optional groups
 ```
 
-## Linux quick start
+## Installation and first run
+
+For a **new checkout**, use the pinned, failure-checked
+[Linux recipe](docs/platform-baseline.md#4-l1-linux-installation-and-validation)
+or [Windows evaluation recipe](docs/platform-baseline.md#5-w1-windows-installation-and-evaluation).
+Check the recipe's recorded revision before use; it is not a floating-current-main
+installation claim. Do not overwrite an existing checkout or virtual environment.
+
+The following are shorter **synthetic core** examples from the root of an
+already reviewed checkout, with a suitable Python installed and no existing
+`.venv`. Record `git rev-parse HEAD`. Run as an ordinary user in private local
+storage, not as root/Administrator or in a cloud-synced/shared folder. Follow the
+baseline's POSIX permission or Windows NTFS ACL checks first.
+
+### Linux reference — Bash
 
 ```bash
-git clone https://github.com/bartytime4life/MEGALODON.git
-cd MEGALODON
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e ".[test]"
-
-python -m megalodon run --source sample
-python -m megalodon run --source sample --demo-threat
-python -m megalodon capabilities --platform linux
-python -m megalodon hub-plan --platform linux
-python -m megalodon dashboard
+(
+  set -euo pipefail
+  umask 077
+  [ "$(id -u)" -ne 0 ] || { echo 'Use a non-root account.'; exit 1; }
+  [ ! -e .venv ] && [ ! -L .venv ] || { echo '.venv already exists; stop.'; exit 1; }
+  python3 -m venv .venv
+  .venv/bin/python -m pip install -e .
+  .venv/bin/python -m megalodon run --source sample --max-events 13
+  .venv/bin/python -m megalodon run --source sample --demo-threat --max-events 114
+  .venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8787
+)
 ```
+
+### Native Windows evaluation — PowerShell
+
+**UNVERIFIED W1 recipe, synthetic data only.** Use the baseline's standard
+CPython 3.13 and `py` launcher. Stop on failure; do not change execution policy,
+install a capture driver, disable protection, or elevate to make it work.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+if (Test-Path -LiteralPath '.venv') { throw '.venv already exists; stop.' }
+py -3.13 -m venv .venv
+if ($LASTEXITCODE -ne 0) { throw 'Virtual environment creation failed.' }
+& .\.venv\Scripts\python.exe -m pip install -e .
+if ($LASTEXITCODE -ne 0) { throw 'Package installation failed.' }
+& .\.venv\Scripts\python.exe -m megalodon run --source sample --max-events 13
+if ($LASTEXITCODE -ne 0) { throw 'Synthetic sample failed.' }
+& .\.venv\Scripts\python.exe -m megalodon run --source sample --demo-threat --max-events 114
+if ($LASTEXITCODE -ne 0) { throw 'Synthetic detection sample failed.' }
+& .\.venv\Scripts\python.exe -m megalodon dashboard --host 127.0.0.1 --port 8787
+if ($LASTEXITCODE -ne 0) { throw 'Dashboard failed.' }
+```
+
+Skip the final dashboard command for headless use. When started, it remains in
+the foreground; stop it with Ctrl+C. In later generic examples, `python` means
+the selected virtual environment's interpreter: `.venv/bin/python` on Linux or
+`& .\.venv\Scripts\python.exe` in Windows PowerShell. A virtual environment can
+be used without activation; see the [Python venv documentation](https://docs.python.org/3/library/venv.html).
+Bash pipelines and Linux-only adapter/firewall examples are not Windows recipes.
+
+### Local dashboard and storage
 
 Open <http://127.0.0.1:8787/> after starting the dashboard. The first sample run
 is benign. `--demo-threat` adds synthetic SYN-flood and long-DNS-query metadata
@@ -116,8 +206,8 @@ The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
 applies a reviewed retention procedure.
 
-To add one completed offline run to the read-only dashboard, select its absolute
-private report directory when the server starts:
+On the Linux analysis profile, add one completed offline run to the read-only
+dashboard by selecting its absolute private report directory when the server starts:
 
 ```bash
 python -m megalodon dashboard \
@@ -152,16 +242,16 @@ remain in the local audit store and are not served to the browser.
 
 | Command | Effect |
 | --- | --- |
-| `capabilities [--platform linux|windows|other]` | Print a static support/free-software catalog without probing or changing the host |
+| `capabilities [--platform linux\|windows\|other]` | Print a static support/free-software catalog without probing or changing the host |
 | `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
 | `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
 | `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
-| `run --source scapy --interface IFACE` | Perform optional live metadata capture |
+| `run --source scapy --interface IFACE` | Perform optional Linux live metadata capture |
 | `dashboard` | Serve the read-only dashboard using configured host and port |
 | `firewall-plan IP` | Validate a target and print a non-mutating, time-limited block plan |
 | `firewall-install` | Print the isolated nftables table plan; `--apply` is required to execute it |
 | `block IP --reason TEXT` | Print one block plan; `--apply` plus exact target confirmation is required to execute it |
-| `python -m megalodon.offline ...` | Run the separate private offline-analysis workflow |
+| `python -m megalodon.offline ...` | Run the separate Linux-only private offline-analysis workflow |
 
 The operational main CLI subcommands accept `--config PATH`; the static
 `capabilities` and `hub-plan` commands do not read configuration.
@@ -186,7 +276,7 @@ flags, text, byte counts, and metadata are typed and bounded before persistence.
 Detector state is capped at 4,096 tracked sources and 4,096 events per source
 window by default.
 
-For optional live capture:
+For optional Linux live capture (`eth0` is an example, not an assumed interface):
 
 ```bash
 python -m pip install -e ".[capture]"
@@ -210,7 +300,30 @@ is authorized to observe.
 reference, not an arbitrary rule-expression engine. Runtime thresholds and
 bounds are loaded from [`config/settings.toml`](config/settings.toml).
 
-## Settings
+## Settings and configuration composition
+
+Start with a private copy of the complete [`config/settings.toml`](config/settings.toml)
+and change only the settings needed for the chosen workflow. These are ordinary
+TOML files, not a profile inheritance/merge system. Pass `--config PATH` **after**
+the operational subcommand; use the same configuration for `run` and `dashboard`
+when they should share an audit database. CLI source/interface and dashboard
+view options override the corresponding settings for that invocation.
+
+| Choice | Configuration mechanism | Boundary |
+| --- | --- | --- |
+| Synthetic demo or JSONL replay | `[capture].source` or `run --source`; JSONL file via `--input`, otherwise stdin | `--max-events N` is a CLI stop limit; it is not a total disk quota |
+| Headless or local UI | Run only the processing command; start `dashboard` separately when needed | `[dashboard].enabled` controls serving, not automatic startup; retain loopback-only binding |
+| Separate lab/case audit stores | A complete private TOML per context with a distinct `[app].db_path` | Repeated runs append; retention is operator-owned, not an automatic purge |
+| Offline packet/flow reports | Separate offline command with explicit input root and new output directory | Not configured by the service TOML, not SQLite ingestion, and not input to automatic response |
+| Observe or review a response plan | Preserve conservative `[blocking]` defaults; use the separate Linux planner for manual review | A plan is not application. Firewall CLI plan commands can write SQLite audit records without changing firewall state |
+
+Default configuration and database paths are relative to the **working directory**,
+not the TOML file's directory. Use a deliberate working directory or literal
+absolute paths; TOML does not expand `~`, `$HOME`, or `%LOCALAPPDATA%`. On Windows,
+use forward slashes or TOML literal strings for paths. Do not add imaginary
+`platform`, `suricata`, or `windows_firewall` keys: changing text settings cannot
+supply a missing backend. Keep the existing allowlist and bounded defaults unless
+a separately reviewed change requires otherwise.
 
 | Section | Important defaults | Notes |
 | --- | --- | --- |
@@ -261,7 +374,8 @@ preserves the implementation and validation handoff.
 
 ## Linux firewall boundary
 
-Inspect plans without root or mutation:
+This optional backend is not a prerequisite for metadata analysis. Inspect plans
+without root or firewall mutation; these CLI commands still record local audit rows:
 
 ```bash
 python -m megalodon firewall-plan 8.8.8.8 --reason "manual review"
@@ -270,20 +384,17 @@ python -m megalodon block 8.8.8.8 --reason "manual review"
 ```
 
 Detection-driven policy can record a proposed block only when configured. It
-never supplies confirmation or invokes `nft`. Live application remains a
-separate operator action after review:
+never supplies confirmation or invokes `nft`. Application is not a setup step:
+`firewall-install --apply` requires exact confirmation `MEGALODON`, and
+`block IP --apply` requires confirmation matching the validated target. Both
+require separately authorized, already-held root privilege; MEGALODON never
+invokes `sudo`. Targets must be global, outside the allowlist, and time-limited.
 
-```bash
-sudo -E .venv/bin/python -m megalodon firewall-install --apply --confirm MEGALODON
-sudo -E .venv/bin/python -m megalodon block 8.8.8.8 \
-  --reason "approved incident response" --apply --confirm 8.8.8.8
-```
-
-These examples do not authorize applying them. MEGALODON requires an
-already-root process, exact confirmation, a valid global target outside the
-allowlist, and a finite timeout. It never invokes `sudo`, edits another firewall
-table, or creates permanent automatic blocks. Test the nftables path and rollback
-in a disposable network namespace before operational use.
+Preserve the host's existing firewall manager and endpoint protection on every
+platform. An nftables plan is not a Windows Firewall or macOS/BSD firewall rule.
+Validate interaction and rollback in a disposable Linux network namespace before
+any separately approved operational use. No live application command is part of
+the quick starts above.
 
 ## Isolated offline analysis
 
@@ -354,7 +465,10 @@ heads, validation evidence, and governance state can change after this document.
 
 ## Validation
 
-Repository-native checks are:
+Repository-native checks for the existing **Linux reference lane** are below.
+Install the `test` extra in that environment first. Windows requires its separate
+core/ACL/UI/unsupported-operation acceptance work; do not treat this full suite
+as a portable Windows recipe or suppress Linux-specific failures to claim parity.
 
 ```bash
 python -m compileall -q megalodon tests
@@ -370,7 +484,9 @@ python -m megalodon firewall-plan 8.8.8.8 --reason "CLI smoke"
 The smoke commands use synthetic data and a non-mutating firewall plan. They do
 not prove live-capture compatibility, installed-TShark behavior, firewall safety
 on a specific host, detection accuracy, independent review, or production
-readiness.
+readiness. Printing a Windows/other catalog on Linux is not execution on those
+platforms. Record the exact revision, OS/architecture, Python and dependency
+versions, selected extras, passed checks, and skips for every configuration claim.
 
 ## Project layout
 
