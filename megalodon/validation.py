@@ -67,7 +67,7 @@ def parse_nonnegative_int(value: Any, field_name: str) -> int:
 
 def parse_timestamp(value: Any) -> datetime:
     if value is None or value == "":
-        return datetime.now(timezone.utc)
+        raise ValidationError("timestamp must be present and timezone-aware")
     if isinstance(value, datetime):
         result = value
     elif isinstance(value, str):
@@ -78,9 +78,12 @@ def parse_timestamp(value: Any) -> datetime:
             raise ValidationError(f"invalid ISO timestamp: {value!r}") from exc
     else:
         raise ValidationError("timestamp must be an ISO string")
-    if result.tzinfo is None:
-        result = result.replace(tzinfo=timezone.utc)
-    return result.astimezone(timezone.utc)
+    if result.tzinfo is None or result.utcoffset() is None:
+        raise ValidationError("timestamp must include an explicit UTC offset")
+    try:
+        return result.astimezone(timezone.utc)
+    except (OverflowError, ValueError) as exc:
+        raise ValidationError("timestamp is outside the supported UTC range") from exc
 
 
 def parse_flags(value: Any) -> frozenset[str]:
