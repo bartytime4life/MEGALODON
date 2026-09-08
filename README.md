@@ -55,7 +55,7 @@ quick start below is not a Windows installation recipe.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
-| Dashboard | Read-only summary cards and a recent-detections table served from localhost |
+| Dashboard | Read-only loopback UI with bounded recent-detection controls and an optional privacy-safe summary of one completed offline run |
 | Firewall boundary | Non-mutating plans by default; isolated `inet megalodon` nftables table and time-limited sets for explicit application |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
@@ -106,6 +106,38 @@ host network.
 The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
 applies a reviewed retention procedure.
+
+To add one completed offline run to the read-only dashboard, select its absolute
+private report directory when the server starts:
+
+```bash
+python -m megalodon dashboard \
+  --offline-run "$HOME/Analysis/case001/run001"
+```
+
+The dashboard loads and validates the summary inputs once; it does not browse
+directories, watch files, read or serve record rows, launch an analyzer, expose
+candidate evidence details, or add a control endpoint. Offline summaries are
+refused on non-loopback binds, even when `--allow-remote` is present. Restart
+the dashboard to select another run.
+
+The recent-detections view supports local search, severity filtering, manual
+refresh, and pause/resume polling. Filters exist only in browser memory and do
+not alter SQLite, write files, or add an export path. Polling is suspended while
+the page is hidden, requests time out after five seconds, and an in-flight
+refresh is never overlapped. Configure the bounded defaults in
+`config/settings.toml` or override them for one launch:
+
+```bash
+python -m megalodon dashboard --refresh-seconds 12 --event-limit 125
+```
+
+`refresh_seconds` accepts 2–300 and `event_limit` accepts 1–200. The dashboard
+serves its CSS and JavaScript from same-origin, no-store asset endpoints so its
+content-security policy does not require inline-script or inline-style access.
+The live events API projects only detection time, rule ID, severity, source IP,
+and message. Destination IP, evidence, recommendation, and suppression details
+remain in the local audit store and are not served to the browser.
 
 ## Commands
 
@@ -174,7 +206,7 @@ bounds are loaded from [`config/settings.toml`](config/settings.toml).
 | `[capture]` | `source = "sample"`, empty `interface` | The CLI can override the source and interface per run |
 | `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | All numeric values must be positive; state ceilings default to 4,096 |
 | `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
-| `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8787` | Port must be 1–65535; non-loopback binding additionally requires `--allow-remote` |
+| `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8787`, `refresh_seconds = 5`, `event_limit = 50` | Polling accepts 2–300 seconds; recent rows accept 1–200; non-loopback binding additionally requires `--allow-remote` and excludes offline summaries |
 
 Do not treat `--allow-remote` as production exposure support. The current server
 has no authentication, authorization, or CSRF control, so remote binding is not
@@ -183,29 +215,33 @@ application should receive separate operator review and isolated testing.
 
 ## Dashboard UI and API
 
-The current UI is a small dark-theme status view with:
+The current UI is a responsive dark-theme status view with:
 
 - summary cards for stored events, detections, actions, and high/critical counts;
 - a five-column recent-detections table: time, severity, rule, source, and message;
-- automatic refresh every three seconds;
+- local text search and severity filtering, manual refresh, and pause/resume;
+- bounded five-second polling by default, suspended while the page is hidden;
+- an optional privacy-bounded summary of one explicitly selected completed
+  offline run; and
 - DOM text-node rendering rather than raw HTML insertion.
 
 The server exposes only these read routes:
 
 | Route | Response |
 | --- | --- |
-| `GET /` | Static dashboard HTML/CSS/JavaScript |
+| `GET /` | Static dashboard HTML |
+| `GET /dashboard.css`, `GET /dashboard.js` | Same-origin no-store assets |
+| `GET /api/config` | Immutable polling, row-budget, and offline-summary availability metadata |
 | `GET /api/summary` | SQLite event, detection, action, and severity counts |
-| `GET /api/events?limit=N` | Recent detection records, capped by storage at 200 |
+| `GET /api/events?limit=N` | Five-field recent-detection projections with strict query validation and a 200-row ceiling |
+| `GET /api/offline-summary` | Availability plus one startup-validated, capped offline summary; never record rows or capture paths |
 
-Responses use `Cache-Control: no-store`, a Content Security Policy, and
-`X-Content-Type-Options: nosniff`. The UI cannot start capture, run analysis,
-apply firewall actions, edit settings, or browse local files.
-
-Expanded filtering, refresh controls, configuration metadata, stricter asset
-isolation, and privacy-safe offline-run projection are tracked as branch-only
-work in [Issue #7](https://github.com/bartytime4life/MEGALODON/issues/7); they are
-not current `main` behavior.
+Responses use `Cache-Control: no-store`, a self-only Content Security Policy
+without `unsafe-inline`, opener/resource isolation headers,
+`X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`. The UI cannot
+start capture, run analysis, apply firewall actions, edit settings, choose a
+filesystem path, or browse local files. [Issue #7](https://github.com/bartytime4life/MEGALODON/issues/7)
+preserves the implementation and validation handoff.
 
 ## Linux firewall boundary
 
@@ -291,7 +327,7 @@ staged design.
 | Issue | Status represented in this README |
 | --- | --- |
 | [#3 — independent-review enforcement](https://github.com/bartytime4life/MEGALODON/issues/3) | Open governance gate; do not treat green CI or a merge as independent approval |
-| [#7 — offline dashboard and operator controls](https://github.com/bartytime4life/MEGALODON/issues/7) | Validated branch-only work; not implemented on `main` |
+| [#7 — offline dashboard and operator controls](https://github.com/bartytime4life/MEGALODON/issues/7) | Tracks this implementation and its remaining review and compatibility evidence |
 | [#9 — Suricata EVE contract and fixtures](https://github.com/bartytime4life/MEGALODON/issues/9) | Proposed branch-only contract/tests; no runtime Suricata importer on `main` |
 
 Open issues and branches are coordination/evidence records, not shipped features
