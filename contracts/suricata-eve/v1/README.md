@@ -21,6 +21,34 @@ forbidden-content tests use null/empty markers, not packet payloads or hashes.
 are closed at every level. Conformance requires the schema **and** the framing,
 semantic, and pair rules below. A schema-only pass is not full conformance.
 
+### Mandatory consumer format assertions
+
+A conforming consumer MUST explicitly enable working `ipv4`, `ipv6` and
+`date-time` format assertions before claiming v1 conformance. Missing, disabled
+or no-op format checkers are a consumer-configuration failure, not a successful
+validation or evidence that all source addresses are invalid. This requirement
+applies to both entry points and to direct use of their definitions.
+
+The default Draft 2020-12 dialect treats `format` as annotation [4]. Without
+assertions, both format-only branches of `$defs/ip.oneOf` succeed and `oneOf`
+rejects valid IPv4 and IPv6 addresses. Do not repair that symptom by replacing
+`oneOf` with `anyOf`, removing formats, or accepting unchecked addresses. The
+schema is unchanged; this is an explicit consumer requirement, not a claim that
+its `$schema` URI forces every implementation to enable assertion behavior.
+
+The repository's test-only `_validator()` in `tests/test_suricata_contract.py`
+passes an explicit checker with IPv4/IPv6 validation and a calendar checker for
+the already shape-constrained UTC timestamps. That checker is not a standalone
+RFC 3339 validator: the timestamp shape and additional section 3 semantics remain
+mandatory. Runtime code MUST NOT import test helpers. A future runtime consumer
+must independently implement and review its configuration and failure boundary.
+
+`tests/test_suricata_formats.py` checks required checker presence and behavior,
+positive/negative IPv4/IPv6 and calendar values, both complete positive-envelope
+entry points, annotation-only behavior, and deterministic missing/no-op checker
+negative controls. Run it alongside the existing conformance suite. Passing
+these tests neither implements a production consumer nor validates a sensor.
+
 The documentary field baseline is the Suricata **8.0.1** EVE documentation [1,2],
 read September 7, 2026. This is not an installation recommendation or a claim
 that 8.0.1 is current, secure, installed, or tested. `declared_version` accepts
@@ -151,7 +179,7 @@ upstream rules, captures, malware samples, or production logs are bundled.
 From the repository root, with the existing test extra installed:
 
 ```bash
-python -m pytest -q tests/test_suricata_contract.py
+python -m pytest -q tests/test_suricata_contract.py tests/test_suricata_formats.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 ```
@@ -188,6 +216,9 @@ https://docs.suricata.io/en/suricata-8.0.1/output/eve/eve-json-output.html
 
 [3] JSON Schema, numeric types and integer semantics:
 https://json-schema.org/understanding-json-schema/reference/numeric
+
+[4] JSON Schema Draft 2020-12 validation, section 7.2, format annotation and assertion:
+https://json-schema.org/draft/2020-12/json-schema-validation
 
 Repository authority: [SPECIFICATION.md](../../../SPECIFICATION.md) and
 [SECURITY_REVIEW.md](../../../SECURITY_REVIEW.md); existing offline implementation
