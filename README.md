@@ -302,8 +302,10 @@ python -m megalodon run --source scapy --interface eth0
 
 Live capture requires the normal Linux permissions for the selected interface.
 The adapter extracts addresses, ports, protocol, TCP flags, sizes, and DNS-name
-length; it does not persist or print payloads. Use only on traffic the operator
-is authorized to observe.
+length; it does not persist or print payloads. Scapy's compact TCP flag value is
+decoded from its numeric bitmask into the closed FIN/SYN/RST/PSH/ACK/URG/ECE/CWR
+event vocabulary; unsupported bits discard that malformed packet. Use only on
+traffic the operator is authorized to observe.
 
 ## Detection rules
 

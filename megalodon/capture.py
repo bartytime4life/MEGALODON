@@ -17,6 +17,30 @@ class CaptureError(RuntimeError):
 
 
 MAX_JSONL_LINE_BYTES = 64 * 1024
+_SCAPY_TCP_FLAG_BITS = (
+    (0x01, "FIN"),
+    (0x02, "SYN"),
+    (0x04, "RST"),
+    (0x08, "PSH"),
+    (0x10, "ACK"),
+    (0x20, "URG"),
+    (0x40, "ECE"),
+    (0x80, "CWR"),
+)
+_SCAPY_TCP_FLAG_MASK = sum(bit for bit, _ in _SCAPY_TCP_FLAG_BITS)
+
+
+def _normalize_scapy_tcp_flags(value: object) -> frozenset[str]:
+    """Translate Scapy's FlagValue bitmask into PacketEvent flag names."""
+    if isinstance(value, bool):
+        raise ValidationError("invalid Scapy TCP flag bitmask")
+    try:
+        bitmask = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValidationError("invalid Scapy TCP flag bitmask") from exc
+    if bitmask < 0 or bitmask & ~_SCAPY_TCP_FLAG_MASK:
+        raise ValidationError("unsupported Scapy TCP flag bitmask")
+    return frozenset(name for bit, name in _SCAPY_TCP_FLAG_BITS if bitmask & bit)
 
 
 def iter_jsonl(
@@ -127,7 +151,7 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                 protocol = "TCP"
                 layer = packet[TCP]
                 src_port, dst_port = int(layer.sport), int(layer.dport)
-                flags = frozenset(str(layer.flags).replace(" ", ""))
+                flags = _normalize_scapy_tcp_flags(layer.flags)
             elif UDP in packet:
                 protocol = "UDP"
                 layer = packet[UDP]
