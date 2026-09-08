@@ -9,6 +9,11 @@ an unauthenticated remote-capable dashboard. The MVP in this folder retains the
 capture → analysis → policy → audit → dashboard shape while making observation
 the default and putting every enforcement action behind explicit validation.
 
+This review separates three evidence levels: implemented safeguards in the
+current code, adopted but inert contracts, and controls still required before
+operational use. Passing CI or closing a contract/test issue does not promote a
+proposal into a runtime capability or satisfy independent review.
+
 ## Findings and corrections
 
 | Severity | Original design issue | Consequence | MVP correction |
@@ -56,9 +61,26 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
    the host’s existing firewall manager, and an operator approval workflow.
 4. The dashboard needs authentication and CSRF protection if it ever exposes
    control operations or binds beyond localhost.
-5. Detections need replay fixtures, false-positive measurements, and an explicit
-   evidence quality label before operational interpretation. Neither a detection
-   nor a quality label authorizes automated response.
+5. The repository has bounded synthetic detector and service-to-ledger fixtures,
+   but still needs representative privacy-reviewed replay, false-positive
+   measurement, reordered-time policy, and an explicit evidence-quality label
+   before operational interpretation. Neither a detection nor a quality label
+   authorizes automated response.
+
+## Open control register
+
+| Gate | Repository evidence | Remaining control |
+| --- | --- | --- |
+| Independent review ([#3](https://github.com/bartytime4life/MEGALODON/issues/3)) | CI and merge history exist | Enforce and evidence an independent approval path |
+| Dashboard acceptance ([#7](https://github.com/bartytime4life/MEGALODON/issues/7)) | Loopback, read-only, bounded implementation exists | Complete privacy, browser, and operator acceptance evidence |
+| TShark compatibility ([#25](https://github.com/bartytime4life/MEGALODON/issues/25)) | Optional header-only probe exists | Pin and record a reviewed installed-tool receipt |
+| Native Windows ([#27](https://github.com/bartytime4life/MEGALODON/issues/27)) | Static evaluation profile exists | Native core, ACL, loopback UI, and unsupported-operation evidence |
+| Retention/storage ([#28](https://github.com/bartytime4life/MEGALODON/issues/28)) | Per-write rollback regression coverage exists | Select finite policy values and validate operational failure/recovery and deletion controls |
+
+Suricata issues [#9](https://github.com/bartytime4life/MEGALODON/issues/9)
+and [#24](https://github.com/bartytime4life/MEGALODON/issues/24) closed their
+record and reader **contract** gates. No runtime reader, durable importer,
+installed-sensor compatibility, or response path follows from those closures.
 
 ## Windows/Linux extension: proposed controls, not completed validation
 

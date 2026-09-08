@@ -1,9 +1,12 @@
 # Fixed-detector synthetic acceptance receipt
 
-Status: bounded test/evidence slice of [issue #26](https://github.com/bartytime4life/MEGALODON/issues/26).
-No detector, threshold, configuration, response policy or runtime reporting
-feature changes. This confirms specified rule behavior, not malware accuracy,
-prevention effectiveness, representative false-positive rates or approval.
+Status: adopted bounded synthetic acceptance receipt. Its delivery gate,
+[issue #26](https://github.com/bartytime4life/MEGALODON/issues/26), is closed.
+That closure records the specified detector and service-to-ledger evidence; it
+does not claim malware accuracy, prevention effectiveness, representative
+false-positive rates, independent approval, or production acceptance. No
+detector, threshold, configuration, response policy, or runtime reporting
+feature was introduced by this receipt.
 
 ## Detector-only source and fixture identity
 
@@ -67,7 +70,8 @@ UNASSESSED: reordered timestamps. Deque trimming assumes chronological input;
 this test-only slice does not establish correct out-of-order window semantics,
 reject or sort reordered input, or change cooldown policy. Finite synthetic
 service-to-ledger coverage is recorded below; representative privacy-reviewed
-evaluation remains separate. No completed #26 closure is claimed.
+evaluation remains separate. The closed #26 scope is exactly the bounded
+synthetic behavior and interpretation evidence recorded here.
 
 ## Reproduction and discriminating controls
 
@@ -166,5 +170,6 @@ in the exact-head PR receipt, not in an inferred pass here.
 
 Remaining gates: designated human review, GitHub approval/control handling under
 #3, reordered-time semantics and representative provenance/privacy-reviewed
-interpretation. These tests neither close #26 nor authorize apply, scheduling,
-external data sharing, host changes or deployment.
+interpretation. Closing #26 does not authorize apply, scheduling, external data
+sharing, host changes, or deployment, and it does not turn the fixture counts
+into an effectiveness measurement.
