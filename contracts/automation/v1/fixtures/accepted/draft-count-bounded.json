@@ -1,0 +1,1 @@
+{"schema":"draftCreate","value":{"name":"Bounded local summary","prompt":"Summarize bounded local metadata counts.","rrule":"FREQ=HOURLY;COUNT=24"}}
