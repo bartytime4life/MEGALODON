@@ -240,4 +240,17 @@ def test_failed_stage_propagates_without_a_success_receipt(
         # Earlier independently committed stages remain; no whole-service rollback.
         ledger = _read_ledger(settings.db_path)
         assert tuple(len(ledger[name]) for name in TABLES) == expected_counts
+        if table != "events":
+            # The detector emitted before the later audit stage failed. Removing
+            # the synthetic fault must not erase that already-consumed cooldown.
+            store.connection.execute("DROP TRIGGER fail_stage")
+            store.connection.commit()
+            assert service.process(event) == []
+            assert planner.call_count == plan_calls
+            assert store.connection.in_transaction is False
+            resumed = _read_ledger(settings.db_path)
+            assert len(resumed["events"]) == expected_counts[0] + 1
+            assert resumed["detections"] == ledger["detections"]
+            assert resumed["actions"] == ledger["actions"]
+            ledger = resumed
     assert _read_ledger(settings.db_path) == ledger
