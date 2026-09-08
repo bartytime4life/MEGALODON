@@ -9,6 +9,16 @@ The Windows extension in section 10 is **PROPOSED**, not an implemented or
 validated port. The canonical installation, application-selection, and platform
 configuration baseline is [docs/platform-baseline.md](docs/platform-baseline.md).
 
+## Document status and authority
+
+This specification describes behavior present in the repository unless a
+section is explicitly labeled proposed, contract-only, optional, or a future
+production gate. The README is the operator entry point; the security review
+owns the threat/control analysis; specialized documents own their versioned
+offline, automation, platform, and Suricata boundaries. A merged contract or a
+green test run does not by itself create a runtime integration or deployment
+approval.
+
 ## 1. Mission and boundary
 
 MEGALODON provides local defensive network telemetry and bounded response for
@@ -235,10 +245,13 @@ admitted by adopting an external analyzer.
 normative-draft schema and fixtures. It is not scheduler execution, recurrence
 calculation, model access, or permission to use commands, endpoints, or tools.
 [contracts/suricata-eve/v1](contracts/suricata-eve/v1/README.md) contains an
-inert EVE-alert schema, synthetic fixtures, and conformance tests. It remains
-contract-only: there is no runtime importer, sensor operation, ruleset manager,
-or IPS path. The offline dashboard projection is implemented independently and
-does not accept or display Suricata alert records.
+inert EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
+[bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). These
+closed contract gates specify record, filesystem, quota, replay, and completion
+requirements for later work. They remain contract-only: there is no production
+reader/importer, sensor operation, ruleset manager, durable consumer, or IPS
+path. The offline dashboard projection is implemented independently and does
+not accept or display Suricata alert records.
 
 `megalodon capabilities` returns a deterministic static catalog of these
 boundaries for Linux, Windows, or another platform family. It performs no host
