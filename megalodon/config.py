@@ -7,7 +7,7 @@ from pathlib import Path
 import ipaddress
 import tomllib
 
-from .validation import ValidationError, parse_network
+from .validation import ValidationError, parse_network, safe_text
 
 
 @dataclass(frozen=True)
@@ -63,16 +63,31 @@ DEFAULT_ALLOWLIST = (
     "fc00::/7",
 )
 
+MAX_DETECTION_WINDOW_SECONDS = 3600
+MAX_DETECTION_THRESHOLD = 65536
+MAX_DNS_QUERY_LENGTH = 65535
+MAX_ALERT_COOLDOWN_SECONDS = 86400
+MAX_TRACKED_SOURCES = 65536
+MAX_EVENTS_PER_SOURCE_WINDOW = 65536
+MAX_BLOCK_TIMEOUT_SECONDS = 604800
 
-def _positive(value: object, name: str, minimum: int = 1) -> int:
-    if isinstance(value, bool):
-        raise ValidationError(f"{name} must be an integer")
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValidationError(f"{name} must be an integer") from exc
-    if parsed < minimum:
-        raise ValidationError(f"{name} must be >= {minimum}")
+
+def _table(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValidationError(f"{name} must be a TOML table")
+    return value
+
+
+def _text(
+    value: object,
+    name: str,
+    maximum: int,
+    *,
+    allow_empty: bool = False,
+) -> str:
+    parsed = safe_text(value, name, maximum).strip()
+    if not parsed and not allow_empty:
+        raise ValidationError(f"{name} must not be empty")
     return parsed
 
 
@@ -90,20 +105,31 @@ def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> in
     return value
 
 
-def load_settings(path: str | Path) -> Settings:
-    config_path = Path(path)
-    with config_path.open("rb") as handle:
-        raw = tomllib.load(handle)
+def load_settings(path: str | Path | None = None) -> Settings:
+    if path is None:
+        raw: dict[str, object] = {}
+    else:
+        config_path = Path(path)
+        with config_path.open("rb") as handle:
+            raw = tomllib.load(handle)
 
-    app = raw.get("app", {})
-    capture = raw.get("capture", {})
-    detection = raw.get("detection", {})
-    blocking = raw.get("blocking", {})
-    dashboard = raw.get("dashboard", {})
+    app = _table(raw.get("app", {}), "app")
+    capture = _table(raw.get("capture", {}), "capture")
+    detection = _table(raw.get("detection", {}), "detection")
+    blocking = _table(raw.get("blocking", {}), "blocking")
+    dashboard = _table(raw.get("dashboard", {}), "dashboard")
 
     allowlist_values = blocking.get("allowlist", list(DEFAULT_ALLOWLIST))
-    allowlist = tuple(parse_network(str(item)) for item in allowlist_values)
-    severity = str(blocking.get("auto_block_min_severity", "CRITICAL")).upper()
+    if not isinstance(allowlist_values, list) or not all(
+        isinstance(item, str) for item in allowlist_values
+    ):
+        raise ValidationError("blocking.allowlist must be an array of network strings")
+    allowlist = tuple(parse_network(item) for item in allowlist_values)
+    severity = _text(
+        blocking.get("auto_block_min_severity", "CRITICAL"),
+        "blocking.auto_block_min_severity",
+        16,
+    ).upper()
     if severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
         raise ValidationError("auto_block_min_severity must be LOW, MEDIUM, HIGH, or CRITICAL")
     blocking_enabled = _boolean(blocking.get("enabled", False), "blocking.enabled")
@@ -115,41 +141,103 @@ def load_settings(path: str | Path) -> Settings:
             "and use the explicit block CLI after review"
         )
 
-    port = _positive(dashboard.get("port", 8787), "dashboard.port")
-    if port > 65535:
-        raise ValidationError("dashboard.port must be <= 65535")
+    port = _bounded_integer(dashboard.get("port", 8787), "dashboard.port", 1, 65535)
+    max_events_per_source_window = _bounded_integer(
+        detection.get("max_events_per_source_window", 4096),
+        "detection.max_events_per_source_window",
+        1,
+        MAX_EVENTS_PER_SOURCE_WINDOW,
+    )
+    syn_flood_threshold = _bounded_integer(
+        detection.get("syn_flood_threshold", 100),
+        "detection.syn_flood_threshold",
+        1,
+        MAX_DETECTION_THRESHOLD,
+    )
+    port_scan_distinct_ports = _bounded_integer(
+        detection.get("port_scan_distinct_ports", 20),
+        "detection.port_scan_distinct_ports",
+        1,
+        MAX_DETECTION_THRESHOLD,
+    )
+    if syn_flood_threshold > max_events_per_source_window:
+        raise ValidationError(
+            "detection.syn_flood_threshold must not exceed "
+            "detection.max_events_per_source_window"
+        )
+    if port_scan_distinct_ports > max_events_per_source_window:
+        raise ValidationError(
+            "detection.port_scan_distinct_ports must not exceed "
+            "detection.max_events_per_source_window"
+        )
+
+    name = _text(app.get("name", "MEGALODON"), "app.name", 64)
+    db_path = _text(app.get("db_path", "data/megalodon.db"), "app.db_path", 1024)
+    log_level = _text(app.get("log_level", "INFO"), "app.log_level", 16).upper()
+    if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+        raise ValidationError("app.log_level must be DEBUG, INFO, WARNING, ERROR, or CRITICAL")
+    capture_source = _text(capture.get("source", "sample"), "capture.source", 16).lower()
+    if capture_source not in {"sample", "jsonl", "scapy"}:
+        raise ValidationError("capture.source must be sample, jsonl, or scapy")
 
     return Settings(
-        name=str(app.get("name", "MEGALODON")),
-        db_path=Path(app.get("db_path", "data/megalodon.db")),
-        log_level=str(app.get("log_level", "INFO")).upper(),
-        capture_source=str(capture.get("source", "sample")).lower(),
-        interface=str(capture.get("interface", "")),
+        name=name,
+        db_path=Path(db_path),
+        log_level=log_level,
+        capture_source=capture_source,
+        interface=_text(capture.get("interface", ""), "capture.interface", 64, allow_empty=True),
         detection=DetectionSettings(
-            syn_flood_window_seconds=_positive(detection.get("syn_flood_window_seconds", 10), "syn_flood_window_seconds"),
-            syn_flood_threshold=_positive(detection.get("syn_flood_threshold", 100), "syn_flood_threshold"),
-            port_scan_window_seconds=_positive(detection.get("port_scan_window_seconds", 5), "port_scan_window_seconds"),
-            port_scan_distinct_ports=_positive(detection.get("port_scan_distinct_ports", 20), "port_scan_distinct_ports"),
-            dns_query_length=_positive(detection.get("dns_query_length", 50), "dns_query_length"),
-            alert_cooldown_seconds=_positive(detection.get("alert_cooldown_seconds", 30), "alert_cooldown_seconds"),
-            max_tracked_sources=_positive(detection.get("max_tracked_sources", 4096), "max_tracked_sources"),
-            max_events_per_source_window=_positive(
-                detection.get("max_events_per_source_window", 4096),
-                "max_events_per_source_window",
+            syn_flood_window_seconds=_bounded_integer(
+                detection.get("syn_flood_window_seconds", 10),
+                "detection.syn_flood_window_seconds",
+                1,
+                MAX_DETECTION_WINDOW_SECONDS,
             ),
+            syn_flood_threshold=syn_flood_threshold,
+            port_scan_window_seconds=_bounded_integer(
+                detection.get("port_scan_window_seconds", 5),
+                "detection.port_scan_window_seconds",
+                1,
+                MAX_DETECTION_WINDOW_SECONDS,
+            ),
+            port_scan_distinct_ports=port_scan_distinct_ports,
+            dns_query_length=_bounded_integer(
+                detection.get("dns_query_length", 50),
+                "detection.dns_query_length",
+                1,
+                MAX_DNS_QUERY_LENGTH,
+            ),
+            alert_cooldown_seconds=_bounded_integer(
+                detection.get("alert_cooldown_seconds", 30),
+                "detection.alert_cooldown_seconds",
+                1,
+                MAX_ALERT_COOLDOWN_SECONDS,
+            ),
+            max_tracked_sources=_bounded_integer(
+                detection.get("max_tracked_sources", 4096),
+                "detection.max_tracked_sources",
+                1,
+                MAX_TRACKED_SOURCES,
+            ),
+            max_events_per_source_window=max_events_per_source_window,
         ),
         blocking=BlockingSettings(
             enabled=blocking_enabled,
             dry_run=blocking_dry_run,
             auto_block=auto_block,
             auto_block_min_severity=severity,
-            timeout_seconds=_positive(blocking.get("timeout_seconds", 900), "timeout_seconds"),
+            timeout_seconds=_bounded_integer(
+                blocking.get("timeout_seconds", 900),
+                "blocking.timeout_seconds",
+                1,
+                MAX_BLOCK_TIMEOUT_SECONDS,
+            ),
             public_only=_boolean(blocking.get("public_only", True), "blocking.public_only"),
             allowlist=allowlist,
         ),
         dashboard=DashboardSettings(
             enabled=_boolean(dashboard.get("enabled", True), "dashboard.enabled"),
-            host=str(dashboard.get("host", "127.0.0.1")),
+            host=_text(dashboard.get("host", "127.0.0.1"), "dashboard.host", 253),
             port=port,
             refresh_seconds=_bounded_integer(
                 dashboard.get("refresh_seconds", 5), "dashboard.refresh_seconds", 2, 300

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from contextlib import chdir
 import io
 from pathlib import Path
 import tempfile
@@ -22,12 +23,46 @@ def write_config(directory: str) -> tuple[Path, Path]:
 
 
 class CliTests(unittest.TestCase):
+    def test_default_run_works_outside_the_source_checkout(self):
+        with tempfile.TemporaryDirectory() as directory, chdir(directory):
+            output = io.StringIO()
+            with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+                main(["run", "--source", "sample", "--max-events", "1"])
+            self.assertEqual(raised.exception.code, 0)
+            self.assertTrue((Path(directory) / "data" / "megalodon.db").is_file())
+            self.assertIn('"processed": 1', output.getvalue())
+
+    def test_explicit_missing_config_fails_without_echoing_the_path(self):
+        missing = "/private/SECRET/settings.toml"
+        error = io.StringIO()
+        with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
+            main(["run", "--config", missing, "--source", "sample", "--max-events", "1"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("configuration file could not be read", error.getvalue())
+        self.assertNotIn(missing, error.getvalue())
+
     def test_dashboard_parser_accepts_bounded_view_overrides(self):
         args = build_parser().parse_args(
             ["dashboard", "--refresh-seconds", "12", "--event-limit", "125"]
         )
         self.assertEqual(args.refresh_seconds, 12)
         self.assertEqual(args.event_limit, 125)
+
+    def test_cli_integer_options_reject_coercion_and_out_of_range_values(self):
+        invalid_argv = (
+            ["run", "--max-events", "-1"],
+            ["run", "--max-events", "1.9"],
+            ["run", "--max-events", "10000001"],
+            ["dashboard", "--port", "0"],
+            ["dashboard", "--port", "65536"],
+            ["dashboard", "--refresh-seconds", "1"],
+            ["dashboard", "--event-limit", "201"],
+        )
+        for argv in invalid_argv:
+            with self.subTest(argv=argv), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    build_parser().parse_args(argv)
+                self.assertEqual(raised.exception.code, 2)
 
     def test_firewall_plan_is_logged_without_subprocess(self):
         with tempfile.TemporaryDirectory() as directory:
