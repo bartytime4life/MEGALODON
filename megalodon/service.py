@@ -71,7 +71,7 @@ class MegalodonService:
 
         try:
             # A detection is evidence, not operator authorization.  This path may
-            # prepare an auditable plan, but only the explicit CLI can apply it.
+            # prepare an auditable plan; the evaluation candidate cannot apply it.
             operation = self.firewall.plan_block(
                 detection.src_ip,
                 f"{detection.rule_id}: {detection.message}",

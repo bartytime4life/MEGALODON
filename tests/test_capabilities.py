@@ -58,6 +58,10 @@ def test_critical_boundaries_are_explicit():
     assert items["suricata"]["selected_status"] == "contract_only"
     assert items["scapy"]["selected_status"] == "unsupported"
     assert items["nftables"]["selected_status"] == "unsupported"
+    assert items["nftables"]["integration"] == "plan_only_time_limited_response"
+    assert items["nftables"]["boundary"] == (
+        "Plans are inert review evidence; live application is unsupported and refused."
+    )
     assert value["excluded"] == [
         {
             "id": "npcap",

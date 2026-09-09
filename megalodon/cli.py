@@ -13,7 +13,7 @@ import sys
 from .capabilities import catalog
 from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
 from .config import load_settings
-from .firewall import FirewallError, NftablesFirewall
+from .firewall import FirewallError, LIVE_APPLY_UNSUPPORTED, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
 from .storage import migrate_database, Store
@@ -106,17 +106,25 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--reason", default="manual review")
     plan.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
 
-    install = sub.add_parser("firewall-install", help="install MEGALODON's isolated nftables table")
+    install = sub.add_parser("firewall-install", help="print MEGALODON's isolated nftables table plan")
     install.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
-    install.add_argument("--apply", action="store_true")
-    install.add_argument("--confirm", help="must be MEGALODON when applying")
+    install.add_argument(
+        "--apply",
+        action="store_true",
+        help="unsupported compatibility flag; always fails closed without changing the host",
+    )
+    install.add_argument("--confirm", help="retained for compatibility; live application is unsupported")
 
-    block = sub.add_parser("block", help="plan or explicitly apply one time-limited block")
+    block = sub.add_parser("block", help="print one non-mutating, time-limited block plan")
     block.add_argument("ip")
     block.add_argument("--reason", required=True)
     block.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
-    block.add_argument("--apply", action="store_true")
-    block.add_argument("--confirm", help="must exactly match the target IP when applying")
+    block.add_argument(
+        "--apply",
+        action="store_true",
+        help="unsupported compatibility flag; always fails closed without changing the host",
+    )
+    block.add_argument("--confirm", help="retained for compatibility; live application is unsupported")
 
     return parser
 
@@ -277,13 +285,16 @@ def _record_firewall_action(settings, mode: str, operation) -> None:
 
 
 def _firewall(args: argparse.Namespace, mode: str) -> int:
+    if getattr(args, "apply", False):
+        print(f"megalodon: {LIVE_APPLY_UNSUPPORTED}", file=sys.stderr)
+        return 2
     try:
         settings = _load(args.config)
         firewall = NftablesFirewall(
             allowlist=settings.blocking.allowlist,
             public_only=settings.blocking.public_only,
             timeout_seconds=settings.blocking.timeout_seconds,
-            dry_run=not getattr(args, "apply", False),
+            dry_run=True,
         )
         if mode == "plan":
             operation = firewall.plan_block(args.ip, args.reason)

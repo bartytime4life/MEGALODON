@@ -83,6 +83,16 @@ def test_workflow_contracts_match_their_owned_entry_points():
     response = integration_plan("linux", "time-limited-response")["workflows"][0]
     assert response["entry_point"] == "megalodon firewall-plan or block"
     assert "firewall-install" not in response["entry_point"]
+    assert response["output_contract"] == "planned ActionRecord only"
+    assert response["launch_policy"] == "plan_only_apply_refused"
+    assert response["data_boundary"] == "validated target and inert nftables plan only"
+    assert response["action_boundary"] == (
+        "live application is unsupported; no firewall subprocess is reachable"
+    )
+    assert response["next_gate"] == (
+        "durable intent, terminal outcome, reconciliation, recovery, and "
+        "disposable-namespace safety tests"
+    )
 
 
 def test_unknown_workflow_is_rejected():

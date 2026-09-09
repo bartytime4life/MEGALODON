@@ -18,10 +18,10 @@ max_tracked_sources = 4096
 max_events_per_source_window = 4096
 
 [blocking]
-# Keep this false until the firewall table has been reviewed and installed manually.
+# Keep this false; this evaluation-release candidate produces firewall plans only.
 enabled = false
 # Detection-driven policy is plan-only. Keep dry_run true when auto_block is
-# enabled; live application requires the explicit block CLI and confirmation.
+# enabled; every live-apply route is explicitly refused.
 dry_run = true
 auto_block = false
 auto_block_min_severity = "CRITICAL"

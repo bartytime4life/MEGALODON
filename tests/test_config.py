@@ -39,7 +39,10 @@ class ConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaisesRegex(ValidationError, "automatic firewall application is prohibited"):
+            with self.assertRaisesRegex(
+                ValidationError,
+                "live firewall application is unsupported in this evaluation release",
+            ):
                 load_settings(config)
 
     def test_dashboard_polling_settings_are_bounded_integers(self):

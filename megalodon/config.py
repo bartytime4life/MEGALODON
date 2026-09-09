@@ -137,8 +137,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
     auto_block = _boolean(blocking.get("auto_block", False), "blocking.auto_block")
     if auto_block and not blocking_dry_run:
         raise ValidationError(
-            "automatic firewall application is prohibited; keep blocking.dry_run true "
-            "and use the explicit block CLI after review"
+            "live firewall application is unsupported in this evaluation release; "
+            "keep blocking.dry_run true"
         )
 
     port = _bounded_integer(dashboard.get("port", 8787), "dashboard.port", 1, 65535)
