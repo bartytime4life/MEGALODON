@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+from types import MappingProxyType
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
@@ -248,13 +249,33 @@ def _validate_receipt(value):
 
 def _logical_records(raw: bytes):
     records, start = [], 0
+    quoted = escaped = False
     for index, byte in enumerate(raw):
+        if quoted:
+            if escaped:
+                escaped = False
+            elif byte == 92:
+                escaped = True
+            elif byte == 34:
+                quoted = False
+        elif byte == 34:
+            quoted = True
         if byte == 10:
+            if quoted:
+                _fail("FRAMING")
             records.append(raw[start:index + 1])
             start = index + 1
     if start < len(raw):
         records.append(raw[start:])
     return records
+
+
+def _freeze(value):
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze(item) for item in value)
+    return value
 
 
 def _read_in_memory(raw: bytes, *, completed_run_keys=frozenset(),
@@ -310,7 +331,7 @@ def _read_in_memory(raw: bytes, *, completed_run_keys=frozenset(),
         "replay_status": "fresh",
     }
     _validate_receipt(receipt)
-    publication = (tuple(normalized), receipt)
+    publication = (tuple(_freeze(item) for item in normalized), _freeze(receipt))
     if publish is not None:
         publish(publication)
     return publication
@@ -417,6 +438,27 @@ def test_two_record_batch_is_published_once_after_complete_validation():
     assert set(batch[0]["rule"]) == {"gid", "signature_id", "rev", "severity"}
 
 
+def test_accepted_receipts_are_derived_from_oracle_outputs():
+    raw = b"\n".join(json.dumps(case["input"]).encode("utf-8") for case in RECORD_CASES[:2])
+    _, receipt = _read_in_memory(raw)
+    assert receipt == ACCEPTED["receipts"][0]["receipt"]
+
+    value = _largest_closed_record()
+    encoded = json.dumps(_normalize(value), sort_keys=True, separators=(",", ":")).encode()
+    expected = ACCEPTED["receipts"][1]["receipt"]
+    assert expected["run_identity"] == value["source"]
+    assert expected["normalized_batch_bytes"] == len(encoded) * MAX_RECORDS
+
+
+def test_published_batch_and_receipt_are_deeply_immutable():
+    raw = json.dumps(RECORD_CASES[0]["input"]).encode("utf-8")
+    batch, receipt = _read_in_memory(raw)
+    with pytest.raises(TypeError):
+        batch[0]["rule"]["severity"] = 1
+    with pytest.raises(TypeError):
+        receipt["run_identity"]["run_id"] = "changed"
+
+
 def test_late_failure_never_publishes_a_partial_batch():
     first = RECORD_CASES[0]["input"]
     second = deepcopy(RECORD_CASES[1]["input"])
@@ -479,6 +521,7 @@ def test_numeric_resource_boundaries_fail_closed(check, value, code):
     (b'{"x":12345678901}', "JSON_NUMBER"),
     (b'{"x":1.0}', "JSON_NUMBER"),
     (b'{"x":"line\rbreak"}', "FRAMING"),
+    (b'{"x":"line\nbreak"}', "FRAMING"),
     (b"\xff", "UTF8"),
 ])
 def test_stream_failures_use_fixed_codes(raw, code):
@@ -493,7 +536,7 @@ def test_logical_record_byte_boundary_includes_terminator():
         _decode(b" " * (MAX_RECORD_BYTES - 1) + b"{}")
 
 
-def test_output_budget_can_hold_ten_thousand_largest_closed_records():
+def _largest_closed_record():
     value = deepcopy(RECORD_CASES[0]["input"])
     value["source"] |= {
         "declared_version": "999.999.999",
@@ -516,6 +559,11 @@ def test_output_budget_can_hold_ten_thousand_largest_closed_records():
         "severity": 255,
     }
     _validate_input(value)
+    return value
+
+
+def test_output_budget_can_hold_ten_thousand_largest_closed_records():
+    value = _largest_closed_record()
     encoded = json.dumps(_normalize(value), sort_keys=True, separators=(",", ":")).encode()
     assert len(encoded) * MAX_RECORDS <= MAX_OUTPUT_BYTES
 
