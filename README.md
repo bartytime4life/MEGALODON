@@ -269,6 +269,13 @@ candidate evidence details, or add a control endpoint. All dashboard binds are
 loopback-only; the legacy `--allow-remote` flag now refuses startup. Restart
 the dashboard to select another run.
 
+Every dashboard `GET` request also requires one `Host` header that names the
+exact numeric loopback listener, optionally with its actual port. `localhost` is
+accepted only for a `127.0.0.1` listener. Missing, duplicate, foreign,
+non-canonical, and wrong-port values are rejected before routing or audit-store
+reads, limiting DNS-rebinding exposure. This check does not turn a proxy,
+tunnel, or port forward into a supported remote-access path.
+
 The recent-detections view supports local search, severity filtering, manual
 refresh, and pause/resume polling. Filters exist only in browser memory and do
 not alter SQLite, write files, or add an export path. Polling is suspended while

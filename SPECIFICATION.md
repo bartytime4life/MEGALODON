@@ -160,6 +160,13 @@ a loopback address. The CLI checks the bind before opening the audit store or
 loading an offline report; `serve()` independently enforces the same boundary.
 This does not authorize a proxy, tunnel or port-forwarding workaround.
 
+Every `GET` request must carry exactly one `Host` header matching the numeric
+loopback address on which the server is listening, with either no port or the
+actual listening port. The literal `localhost` forms are also accepted when the
+server is bound to `127.0.0.1`. Missing, repeated, foreign, non-canonical, and
+wrong-port values fail with a fixed `400` response before route handling or
+SQLite access. This is a DNS-rebinding defense, not remote authentication.
+
 The dashboard exposes only:
 
 - `GET /` — static local dashboard;
