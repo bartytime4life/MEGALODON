@@ -1,6 +1,7 @@
 {
   "schema": "windows-core-acceptance-v1",
   "repository_baseline": "7435eee1503f76b6b07ccbc45278f4ad71aec4cf",
+  "candidate_revision_source": "external exact-head PR or handoff receipt",
   "profile": "W1-native-windows-11-x64-evaluation",
   "native_execution_status": "not_performed",
   "required_linux_job": {
@@ -18,7 +19,11 @@
     {
       "id": "sample-jsonl-processing",
       "status": "synthetic_reusable",
-      "tests": ["tests/test_capture.py", "tests/test_cli.py"]
+      "tests": [
+        "tests/test_capture.py",
+        "tests/test_cli.py::CliTests::test_default_run_works_outside_the_source_checkout",
+        "tests/test_cli.py::CliTests::test_explicit_missing_config_fails_without_echoing_the_path"
+      ]
     },
     {
       "id": "fixed-detections",

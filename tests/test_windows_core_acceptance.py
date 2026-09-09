@@ -22,10 +22,23 @@ def _forbidden(*_args, **_kwargs):
     raise AssertionError("unsupported Windows operation crossed a forbidden boundary")
 
 
+def _workflow_job(workflow: str, name: str) -> str:
+    marker = f"  {name}:\n"
+    assert workflow.count(marker) == 1
+    remainder = workflow.split(marker, 1)[1]
+    lines = []
+    for line in remainder.splitlines():
+        if line.startswith("  ") and not line.startswith("    "):
+            break
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def test_acceptance_matrix_is_closed_truthful_and_points_to_tests():
     assert set(MATRIX) == {
         "schema",
         "repository_baseline",
+        "candidate_revision_source",
         "profile",
         "native_execution_status",
         "required_linux_job",
@@ -35,6 +48,9 @@ def test_acceptance_matrix_is_closed_truthful_and_points_to_tests():
     }
     assert MATRIX["schema"] == "windows-core-acceptance-v1"
     assert MATRIX["repository_baseline"] == "7435eee1503f76b6b07ccbc45278f4ad71aec4cf"
+    assert MATRIX["candidate_revision_source"] == (
+        "external exact-head PR or handoff receipt"
+    )
     assert MATRIX["native_execution_status"] == "not_performed"
     assert MATRIX["required_linux_job"] == {
         "name": "test",
@@ -52,7 +68,13 @@ def test_acceptance_matrix_is_closed_truthful_and_points_to_tests():
         assert set(feature) == {"id", "status", "tests"}
         for relative in feature["tests"]:
             assert relative.startswith("tests/")
-            assert (ROOT / relative).is_file()
+            assert (ROOT / relative.split("::", 1)[0]).is_file()
+    selected = {
+        test
+        for feature in MATRIX["features"]
+        for test in feature["tests"]
+    }
+    assert "tests/test_cli.py" not in selected
 
     unsupported = MATRIX["unsupported_operations"]
     assert len({item["id"] for item in unsupported}) == len(unsupported)
@@ -62,9 +84,9 @@ def test_acceptance_matrix_is_closed_truthful_and_points_to_tests():
 
 def test_required_linux_ci_job_is_still_present():
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "\n  test:\n" in workflow
-    assert "runs-on: ubuntu-24.04" in workflow
-    assert 'python-version: "3.11"' in workflow
+    test_job = _workflow_job(workflow, "test")
+    assert "    runs-on: ubuntu-24.04" in test_job
+    assert '          python-version: "3.11"' in test_job
 
 
 def test_windows_scapy_refuses_before_optional_import_or_interface_use(monkeypatch):

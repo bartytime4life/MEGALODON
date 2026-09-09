@@ -8,7 +8,11 @@ analyzer, firewall backend, service, installer, privilege, or support claim.
 
 The machine-readable matrix is
 [`contracts/platform/windows-core-v1/acceptance.json`](../contracts/platform/windows-core-v1/acceptance.json).
-Its inspection basis is `7435eee1503f76b6b07ccbc45278f4ad71aec4cf`.
+Its historical inspection basis is
+`7435eee1503f76b6b07ccbc45278f4ad71aec4cf`; that baseline is not an execution
+target. Because a file cannot embed the SHA of a commit that contains itself,
+the exact candidate commit and tree must come from the current PR or operator
+handoff receipt and must be recorded with the native result.
 `synthetic_reusable` means a test is a candidate for native execution; it does
 not mean that test has run on Windows. `native_receipt_required` identifies a
 boundary that Linux execution or platform monkeypatching cannot settle.
@@ -28,9 +32,12 @@ boundary that Linux execution or platform monkeypatching cannot settle.
 
 ## Native execution handoff
 
-Run from a fresh detached checkout of the matrix SHA in a non-elevated, local,
-non-synced directory. Record Windows edition/build, x64 architecture, the exact
-standard CPython 3.13 version, dependency resolution, commit/tree, and every
+Obtain the exact candidate commit and tree from the current PR or reviewed
+operator handoff, verify both after a fresh detached checkout, and confirm that
+the checkout contains this matrix. Do not substitute `repository_baseline` or a
+branch name. Run the matrix's exact selected paths and node IDs in a non-elevated,
+local, non-synced directory. Record Windows edition/build, x64 architecture, the
+exact standard CPython 3.13 version, dependency resolution, commit/tree, and every
 selected test's pass/fail/skip count. Exercise sample and bounded synthetic JSONL
 only. Do not use a live interface, real telemetry, offline analyzer, firewall
 command, service, scheduled task, Administrator session, or security exception.
