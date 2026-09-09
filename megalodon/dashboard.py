@@ -469,6 +469,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
     event_limit: int = 50
 
     def do_GET(self) -> None:  # noqa: N802
+        if not self._has_expected_host():
+            self._send_json({"error": "invalid request host"}, status=400)
+            return
         route = urlparse(self.path)
         if route.path == "/":
             self._send(200, "text/html; charset=utf-8", INDEX_HTML.encode())
@@ -519,6 +522,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
         self._send(404, "text/plain; charset=utf-8", b"not found")
+
+    def _has_expected_host(self) -> bool:
+        """Reject DNS-rebound and ambiguous requests before routing or store access."""
+        values = self.headers.get_all("Host", [])
+        if len(values) != 1:
+            return False
+        supplied = values[0]
+        if not isinstance(supplied, str) or not 1 <= len(supplied) <= 64:
+            return False
+        if supplied != supplied.strip():
+            return False
+
+        bound_host, bound_port = self.server.server_address[:2]
+        expected = {str(bound_host), f"{bound_host}:{bound_port}"}
+        if bound_host == "127.0.0.1":
+            expected.update({"localhost", f"localhost:{bound_port}"})
+        return supplied in expected
 
     def _send_json(self, value: object, *, status: int = 200) -> None:
         payload = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()

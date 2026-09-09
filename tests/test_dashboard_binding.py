@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import argparse
+from http.client import HTTPConnection
+from http.server import ThreadingHTTPServer
+import json
+from threading import Thread
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -91,3 +95,83 @@ def test_cli_refuses_before_store_report_or_server(monkeypatch, capsys, host, ov
 def test_parser_preserves_legacy_flag_for_explicit_refusal():
     args = cli.build_parser().parse_args(["dashboard", "--allow-remote"])
     assert args.allow_remote is True
+
+
+def _host_request(server, values):
+    connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+    connection.putrequest(
+        "GET", "/api/summary", skip_host=True, skip_accept_encoding=True
+    )
+    for value in values:
+        connection.putheader("Host", value)
+    connection.endheaders()
+    response = connection.getresponse()
+    body = json.loads(response.read())
+    headers = dict(response.getheaders())
+    connection.close()
+    return response.status, body, headers
+
+
+def test_dashboard_rejects_untrusted_host_before_store_access():
+    store = Mock()
+    handler = type(
+        "HostBoundDashboardHandler", (dashboard.DashboardHandler,), {"store": store}
+    )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    try:
+        invalid = (
+            (),
+            ("attacker.example",),
+            (f"attacker.example:{port}",),
+            ("localhost.",),
+            ("127.00.0.1",),
+            ("127.0.0.2",),
+            (f"127.0.0.1:{port + 1}",),
+            ("127.0.0.1", "attacker.example"),
+        )
+        for values in invalid:
+            status, body, headers = _host_request(server, values)
+            assert status == 400
+            assert body == {"error": "invalid request host"}
+            assert headers["Cache-Control"] == "no-store"
+        store.summary.assert_not_called()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_dashboard_accepts_only_bound_loopback_host_forms():
+    store = Mock()
+    store.summary.return_value = {
+        "events": 0,
+        "detections": 0,
+        "actions": 0,
+        "high_or_critical": 0,
+    }
+    handler = type(
+        "ExpectedHostDashboardHandler", (dashboard.DashboardHandler,), {"store": store}
+    )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_port
+    try:
+        expected = (
+            "127.0.0.1",
+            f"127.0.0.1:{port}",
+            "localhost",
+            f"localhost:{port}",
+        )
+        for value in expected:
+            status, body, _ = _host_request(server, (value,))
+            assert status == 200
+            assert body == store.summary.return_value
+        assert store.summary.call_count == len(expected)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
