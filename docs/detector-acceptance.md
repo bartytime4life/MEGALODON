@@ -66,12 +66,13 @@ packets. Evicting a source discards its cooldown history. A configured event
 cap below the threshold can prevent that threshold ever being reached. These
 are interpretation limits, not evidence that an attack stopped or was blocked.
 
-UNASSESSED: reordered timestamps. Deque trimming assumes chronological input;
-this test-only slice does not establish correct out-of-order window semantics,
-reject or sort reordered input, or change cooldown policy. Finite synthetic
-service-to-ledger coverage is recorded below; representative privacy-reviewed
-evaluation remains separate. The closed #26 scope is exactly the bounded
-synthetic behavior and interpretation evidence recorded here.
+The core now requires nondecreasing timestamps per normalized source and rejects
+records more than 60 seconds ahead of the detector's aware UTC clock. Rejection
+happens before service persistence and detector mutation; equal timestamps remain
+valid. This is a fail-closed online/core policy, not a claim that arbitrary late
+data has been reordered or that offline source chronology is trustworthy. Finite
+synthetic service-to-ledger coverage is recorded below; representative
+privacy-reviewed evaluation remains separate.
 
 ## Reproduction and discriminating controls
 
