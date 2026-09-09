@@ -55,8 +55,9 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 
 1. Threat-feed adapters need a written data-sharing policy, cache freshness,
    feed signature verification, API-key isolation, and failure behavior.
-2. Live capture needs a privilege model, service account, systemd sandboxing,
-   resource limits, and a packet-volume backpressure policy.
+2. Live capture has a fixed fail-closed 1,024-event application queue, but still
+   needs a privilege model, service account, systemd sandboxing, kernel-buffer
+   loss telemetry, and production resource/load acceptance.
 3. Firewall application needs a tested rollback command, conflict detection with
    the host’s existing firewall manager, and an operator approval workflow.
 4. The dashboard needs authentication and CSRF protection if it ever exposes
