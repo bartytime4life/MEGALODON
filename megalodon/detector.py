@@ -3,24 +3,35 @@
 from __future__ import annotations
 
 from collections import OrderedDict, defaultdict, deque
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timezone
 import ipaddress
 from typing import Deque
 
 from .config import DetectionSettings
 from .models import DetectionResult, PacketEvent
+from .validation import ValidationError
 
 
 SEVERITY_RANK = {"LOW": 10, "MEDIUM": 20, "HIGH": 30, "CRITICAL": 40}
+MAX_FUTURE_SKEW_SECONDS = 60
 
 
 class Detector:
-    def __init__(self, settings: DetectionSettings, allowlist: tuple[ipaddress._BaseNetwork, ...] = ()):
+    def __init__(
+        self,
+        settings: DetectionSettings,
+        allowlist: tuple[ipaddress._BaseNetwork, ...] = (),
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ):
         self.settings = settings
         self.allowlist = allowlist
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.syn_windows: dict[str, Deque[tuple[float, str]]] = defaultdict(deque)
         self.port_windows: dict[str, Deque[tuple[float, int]]] = defaultdict(deque)
         self.last_emitted: dict[tuple[str, str], float] = {}
+        self.source_high_watermarks: dict[str, float] = {}
         self.source_order: OrderedDict[str, None] = OrderedDict()
         if settings.max_tracked_sources < 1:
             raise ValueError("max_tracked_sources must be positive")
@@ -28,8 +39,10 @@ class Detector:
             raise ValueError("max_events_per_source_window must be positive")
 
     def analyze(self, event: PacketEvent) -> list[DetectionResult]:
+        self.validate_event_time(event)
         self._touch_source(event.src_ip)
         now = event.observed_at.timestamp()
+        self.source_high_watermarks[event.src_ip] = now
         results: list[DetectionResult] = []
 
         if event.protocol == "TCP" and "SYN" in event.tcp_flags and "ACK" not in event.tcp_flags:
@@ -92,6 +105,18 @@ class Detector:
 
         return results
 
+    def validate_event_time(self, event: PacketEvent) -> None:
+        """Reject future and per-source reordered records before state changes."""
+        observed = event.observed_at.timestamp()
+        current = self.clock()
+        if current.tzinfo is None or current.utcoffset() is None:
+            raise RuntimeError("detector clock must be timezone-aware")
+        if observed > current.astimezone(timezone.utc).timestamp() + MAX_FUTURE_SKEW_SECONDS:
+            raise ValidationError("event timestamp exceeds allowed future skew")
+        previous = self.source_high_watermarks.get(event.src_ip)
+        if previous is not None and observed < previous:
+            raise ValidationError("event timestamp precedes source high watermark")
+
     def _result(
         self,
         event: PacketEvent,
@@ -124,6 +149,7 @@ class Detector:
             evicted, _ = self.source_order.popitem(last=False)
             self.syn_windows.pop(evicted, None)
             self.port_windows.pop(evicted, None)
+            self.source_high_watermarks.pop(evicted, None)
             for key in tuple(self.last_emitted):
                 if key[1] == evicted:
                     del self.last_emitted[key]

@@ -159,6 +159,7 @@ def test_source_eviction_discards_cooldown_without_unbounded_history(rule):
         assert _rules(detector, [_event(rule, source=source)]) == [rule]
         assert len(detector.source_order) == 1
         assert len(detector.last_emitted) == 1
+        assert set(detector.source_high_watermarks) == {source}
         assert set(detector.syn_windows) <= {source}
         assert set(detector.port_windows) <= {source}
 

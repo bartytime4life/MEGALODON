@@ -67,6 +67,9 @@ operation under production load.
 11. **Offline projection stays local.** A selected offline run must be a complete,
     private, bounded report set. Its dashboard projection is never available on
     a non-loopback bind.
+12. **Event time fails closed.** Core records are nondecreasing per normalized
+    source and no more than 60 seconds ahead of the detector's aware UTC clock.
+    Rejected chronology does not mutate detector state or enter the event ledger.
 
 ## 3. Data contracts
 
