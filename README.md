@@ -223,7 +223,10 @@ host network.
 
 The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
-applies a reviewed retention procedure. The store marks its current layout with
+applies a reviewed retention procedure. The
+[`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audit and
+standalone offline-report retention separate and defines fail-closed outcomes;
+it selects no deletion value or automatic job. The store marks its current layout with
 SQLite `user_version = 1`. It adopts an exact unversioned legacy layout in place,
 but refuses partial, altered, or newer application schemas instead of attempting
 an implicit repair or downgrade. Back up operational databases before a future
@@ -501,7 +504,7 @@ Closed design/test gates can still leave runtime and operational work unbuilt.
 | [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Open evidence gate for the optional system analyzer |
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
 | [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; Windows remains evaluation-only |
-| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Open operator-policy gate; synthetic transaction handling exists, but no retention values or automatic cleanup are selected |
+| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because
