@@ -13,8 +13,10 @@ from .models import ActionRecord, DetectionResult, PacketEvent
 from .validation import parse_nonnegative_int, SQLITE_INTEGER_MAX, validate_metadata
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS events (
+SCHEMA_VERSION = 1
+
+SCHEMA_STATEMENTS = (
+    """CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     observed_at TEXT NOT NULL,
     src_ip TEXT NOT NULL,
@@ -27,11 +29,10 @@ CREATE TABLE IF NOT EXISTS events (
     byte_count INTEGER NOT NULL,
     interface TEXT,
     metadata_json TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_events_observed_at ON events(observed_at);
-CREATE INDEX IF NOT EXISTS idx_events_src_ip ON events(src_ip);
-
-CREATE TABLE IF NOT EXISTS detections (
+)""",
+    "CREATE INDEX idx_events_observed_at ON events(observed_at)",
+    "CREATE INDEX idx_events_src_ip ON events(src_ip)",
+    """CREATE TABLE detections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL REFERENCES events(id),
     detected_at TEXT NOT NULL,
@@ -43,10 +44,9 @@ CREATE TABLE IF NOT EXISTS detections (
     evidence_json TEXT NOT NULL,
     recommendation TEXT NOT NULL,
     suppressed_reason TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_detections_detected_at ON detections(detected_at);
-
-CREATE TABLE IF NOT EXISTS actions (
+)""",
+    "CREATE INDEX idx_detections_detected_at ON detections(detected_at)",
+    """CREATE TABLE actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -55,9 +55,60 @@ CREATE TABLE IF NOT EXISTS actions (
     reason TEXT NOT NULL,
     expires_at TEXT,
     details_json TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_actions_created_at ON actions(created_at);
-"""
+)""",
+    "CREATE INDEX idx_actions_created_at ON actions(created_at)",
+)
+
+_TABLE_COLUMNS = {
+    "events": (
+        ("id", "INTEGER", 0, 1),
+        ("observed_at", "TEXT", 1, 0),
+        ("src_ip", "TEXT", 1, 0),
+        ("dst_ip", "TEXT", 1, 0),
+        ("protocol", "TEXT", 1, 0),
+        ("src_port", "INTEGER", 0, 0),
+        ("dst_port", "INTEGER", 0, 0),
+        ("tcp_flags", "TEXT", 1, 0),
+        ("dns_query_length", "INTEGER", 0, 0),
+        ("byte_count", "INTEGER", 1, 0),
+        ("interface", "TEXT", 0, 0),
+        ("metadata_json", "TEXT", 1, 0),
+    ),
+    "detections": (
+        ("id", "INTEGER", 0, 1),
+        ("event_id", "INTEGER", 1, 0),
+        ("detected_at", "TEXT", 1, 0),
+        ("rule_id", "TEXT", 1, 0),
+        ("severity", "TEXT", 1, 0),
+        ("src_ip", "TEXT", 1, 0),
+        ("dst_ip", "TEXT", 1, 0),
+        ("message", "TEXT", 1, 0),
+        ("evidence_json", "TEXT", 1, 0),
+        ("recommendation", "TEXT", 1, 0),
+        ("suppressed_reason", "TEXT", 0, 0),
+    ),
+    "actions": (
+        ("id", "INTEGER", 0, 1),
+        ("created_at", "TEXT", 1, 0),
+        ("action", "TEXT", 1, 0),
+        ("target", "TEXT", 1, 0),
+        ("status", "TEXT", 1, 0),
+        ("reason", "TEXT", 1, 0),
+        ("expires_at", "TEXT", 0, 0),
+        ("details_json", "TEXT", 1, 0),
+    ),
+}
+
+_INDEX_COLUMNS = {
+    "idx_events_observed_at": ("events", ("observed_at",)),
+    "idx_events_src_ip": ("events", ("src_ip",)),
+    "idx_detections_detected_at": ("detections", ("detected_at",)),
+    "idx_actions_created_at": ("actions", ("created_at",)),
+}
+
+
+class StorageSchemaError(ValueError):
+    """The selected database cannot safely satisfy this storage schema."""
 
 
 class Store:
@@ -67,11 +118,96 @@ class Store:
         self._lock = RLock()
         self.connection = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
-        with self._lock:
-            self.connection.execute("PRAGMA journal_mode=WAL")
-            self.connection.execute("PRAGMA foreign_keys=ON")
-            self.connection.executescript(SCHEMA)
+        try:
+            with self._lock:
+                self.connection.execute("PRAGMA foreign_keys=ON")
+                self._initialize_schema()
+                self.connection.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            self.connection.close()
+            raise
+
+    def _initialize_schema(self) -> None:
+        try:
+            version = int(self.connection.execute("PRAGMA user_version").fetchone()[0])
+            if version > SCHEMA_VERSION:
+                raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
+            if version not in (0, SCHEMA_VERSION):
+                raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
+
+            present = {
+                str(row[0])
+                for row in self.connection.execute(
+                    "SELECT name FROM sqlite_schema WHERE type = 'table'"
+                )
+                if row[0] in _TABLE_COLUMNS
+            }
+            expected = set(_TABLE_COLUMNS)
+            if version == 0 and not present:
+                self._create_schema()
+                return
+            if present != expected:
+                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+            self.connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._validate_schema()
+                if version == 0:
+                    self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                self.connection.commit()
+            except Exception:
+                self.connection.rollback()
+                raise
+        except StorageSchemaError:
+            raise
+        except sqlite3.Error as exc:
+            if self.connection.in_transaction:
+                self.connection.rollback()
+            raise StorageSchemaError("STORAGE_SCHEMA:INSPECTION_FAILED") from exc
+
+    def _create_schema(self) -> None:
+        self.connection.execute("BEGIN IMMEDIATE")
+        try:
+            for statement in SCHEMA_STATEMENTS:
+                self.connection.execute(statement)
+            self._validate_schema()
+            self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.connection.commit()
+        except Exception as exc:
+            self.connection.rollback()
+            if isinstance(exc, StorageSchemaError):
+                raise
+            raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_FAILED") from exc
+
+    def _validate_schema(self) -> None:
+        for table, expected in _TABLE_COLUMNS.items():
+            actual = tuple(
+                (str(row[1]), str(row[2]).upper(), int(row[3]), int(row[5]))
+                for row in self.connection.execute(f'PRAGMA table_info("{table}")')
+            )
+            if actual != expected:
+                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+        foreign_keys = tuple(
+            (str(row[2]), str(row[3]), str(row[4]))
+            for row in self.connection.execute('PRAGMA foreign_key_list("detections")')
+        )
+        if foreign_keys != (("events", "event_id", "id"),):
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+        for index, (table, expected_columns) in _INDEX_COLUMNS.items():
+            indexes = {
+                str(row[1]): (int(row[2]), str(row[3]))
+                for row in self.connection.execute(f'PRAGMA index_list("{table}")')
+            }
+            if indexes.get(index) != (0, "c"):
+                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+            columns = tuple(
+                str(row[2])
+                for row in self.connection.execute(f'PRAGMA index_info("{index}")')
+            )
+            if columns != expected_columns:
+                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
 
     def close(self) -> None:
         with self._lock:

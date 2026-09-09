@@ -221,7 +221,11 @@ host network.
 
 The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
-applies a reviewed retention procedure.
+applies a reviewed retention procedure. The store marks its current layout with
+SQLite `user_version = 1`. It adopts an exact unversioned legacy layout in place,
+but refuses partial, altered, or newer application schemas instead of attempting
+an implicit repair or downgrade. Back up operational databases before a future
+versioned migration; no backup or restore mechanism is supplied by the MVP.
 
 On the Linux analysis profile, add one completed offline run to the read-only
 dashboard by selecting its absolute private report directory when the server starts:

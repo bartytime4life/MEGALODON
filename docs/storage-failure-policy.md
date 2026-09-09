@@ -13,6 +13,14 @@ failures. Neither property makes the three service stages one transaction or
 selects a retention policy. Issue #28 therefore remains the live operator-policy
 and operational-failure gate.
 
+The application schema is explicitly marked as SQLite `user_version = 1`.
+Startup validates the exact application table, foreign-key, and required-index
+shape before enabling WAL. A fresh database is created atomically; an exact
+unversioned legacy database is adopted by setting the version in one transaction.
+Partial, altered, unsupported, and future application layouts fail closed with a
+fixed schema error. The store does not repair or downgrade them, and this marker
+does not provide the backup/restore procedure required before a future migration.
+
 ## What a successful write means
 
 `Store.record_event()`, `record_detection()` and `record_action()` each hold the
@@ -36,16 +44,19 @@ From the repository root in its supported test environment:
 
 ```bash
 python -m compileall -q megalodon tests
-python -m pytest tests/test_storage.py tests/test_storage_failures.py
+python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py
 ```
 
-The new nine cases cover each of the three write methods with a statement
+The nine write-failure cases cover each of the three write methods with a statement
 failure, a deferred-constraint commit failure, and SQLite query-only refusal.
 The first six verify transaction closure, prior-row preservation, visibility
 from a separate connection, successful recovery writes and reopened-database
 counts. They prevent tentative failed rows being committed by the next call.
 Existing aware-cutoff and all-table purge rollback tests are retained unchanged.
 Only synthetic temporary databases and fixed test triggers are used.
+The six schema-lifecycle cases separately cover fresh creation, exact legacy
+adoption, partial and altered schema refusal, future-version non-mutation, and
+atomic rollback when initial creation cannot complete.
 
 The inspected baseline was `a177c13ade3b4a727a0514afac21575fd0f10e08`, with
 storage blob `c6b45bea5bf61462dbbeb0f71a281fb49db3e3ca`. All nine new cases
