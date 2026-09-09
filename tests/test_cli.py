@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from contextlib import chdir
 import io
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -11,7 +12,7 @@ from unittest.mock import patch
 from megalodon.cli import build_parser, main
 from megalodon.dashboard import serve
 from megalodon.firewall import NftablesFirewall
-from megalodon.storage import Store
+from megalodon.storage import SCHEMA_VERSION, Store
 
 
 def write_config(directory: str) -> tuple[Path, Path]:
@@ -40,6 +41,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("configuration file could not be read", error.getvalue())
         self.assertNotIn(missing, error.getvalue())
+
+    def test_future_database_schema_fails_with_a_fixed_cli_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            with sqlite3.connect(database) as connection:
+                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
+
+            error = io.StringIO()
+            with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
+                main(["run", "--config", str(config), "--source", "sample"])
+
+            self.assertEqual(raised.exception.code, 2)
+            self.assertEqual(error.getvalue(), "megalodon: STORAGE_SCHEMA:FUTURE_VERSION\n")
 
     def test_dashboard_parser_accepts_bounded_view_overrides(self):
         args = build_parser().parse_args(
