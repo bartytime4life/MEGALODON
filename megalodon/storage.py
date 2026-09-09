@@ -11,7 +11,12 @@ from threading import RLock
 from typing import Any
 
 from .models import ActionRecord, DetectionResult, PacketEvent
-from .validation import parse_nonnegative_int, SQLITE_INTEGER_MAX, validate_metadata
+from .validation import (
+    parse_nonnegative_int,
+    SQLITE_INTEGER_MAX,
+    validate_metadata,
+    validate_packet_metadata,
+)
 
 
 SCHEMA_VERSION = 2
@@ -449,7 +454,7 @@ class Store:
                 maximum=SQLITE_INTEGER_MAX,
             )
         )
-        metadata = validate_metadata(event.metadata)
+        metadata = validate_packet_metadata(event.metadata)
         with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
