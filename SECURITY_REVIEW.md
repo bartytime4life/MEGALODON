@@ -75,7 +75,7 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 | Independent review ([#3](https://github.com/bartytime4life/MEGALODON/issues/3)) | CI and merge history exist | Enforce and evidence an independent approval path |
 | Dashboard acceptance ([#7](https://github.com/bartytime4life/MEGALODON/issues/7)) | Loopback, read-only, bounded implementation exists | Complete privacy, browser, and operator acceptance evidence |
 | TShark compatibility ([#25](https://github.com/bartytime4life/MEGALODON/issues/25)) | Optional header-only probe exists | Pin and record a reviewed installed-tool receipt |
-| Native Windows ([#27](https://github.com/bartytime4life/MEGALODON/issues/27)) | Static evaluation profile exists | Native core, ACL, loopback UI, and unsupported-operation evidence |
+| Native Windows ([#27](https://github.com/bartytime4life/MEGALODON/issues/27)) | Static acceptance matrix and Linux-run unsupported-operation controls exist | Native core, NTFS ACL, loopback UI/browser, and exact-platform execution receipts |
 | Retention/storage ([#28](https://github.com/bartytime4life/MEGALODON/issues/28)) | Per-write rollback regression coverage exists | Select finite policy values and validate operational failure/recovery and deletion controls |
 
 Suricata issues [#9](https://github.com/bartytime4life/MEGALODON/issues/9)

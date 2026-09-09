@@ -9,6 +9,7 @@ import queue
 from threading import Event
 from typing import Iterable, Iterator, TextIO
 
+from .capabilities import runtime_platform
 from .models import PacketEvent
 from .validation import ValidationError
 
@@ -165,6 +166,8 @@ def iter_sample(*, include_demo_threat: bool = False) -> Iterator[PacketEvent]:
 
 
 def iter_scapy(interface: str) -> Iterator[PacketEvent]:
+    if runtime_platform() != "linux":
+        raise CaptureError("live Scapy capture is supported only on Linux")
     if not interface:
         raise CaptureError("a capture interface is required for the scapy source")
     try:

@@ -13,7 +13,8 @@ import os
 import shutil
 import subprocess
 
-from .validation import ValidationError, is_global_unicast, parse_ip, safe_text
+from .capabilities import runtime_platform
+from .validation import is_global_unicast, parse_ip, safe_text
 
 
 class FirewallError(RuntimeError):
@@ -79,7 +80,7 @@ class NftablesFirewall:
 
     @staticmethod
     def available() -> bool:
-        return shutil.which("nft") is not None
+        return runtime_platform() == "linux" and shutil.which("nft") is not None
 
     def validate_target(self, value: str) -> str:
         target = parse_ip(value)
@@ -91,6 +92,7 @@ class NftablesFirewall:
         return target
 
     def install(self, *, apply: bool = False, confirm: str | None = None) -> FirewallOperation:
+        self._require_linux()
         if apply and confirm != "MEGALODON":
             raise FirewallError("installation requires --confirm MEGALODON")
         command = ("nft", "-f", "-")
@@ -101,6 +103,7 @@ class NftablesFirewall:
         return FirewallOperation("applied", "table:megalodon", "install isolated table", command, "nftables table installed")
 
     def plan_block(self, value: str, reason: str) -> FirewallOperation:
+        self._require_linux()
         target = self.validate_target(value)
         clean_reason = safe_text(reason, "reason", 200)
         set_name = "blocked_v6" if ":" in target else "blocked_v4"
@@ -139,10 +142,16 @@ class NftablesFirewall:
 
     @staticmethod
     def _require_apply() -> None:
+        NftablesFirewall._require_linux()
         if os.geteuid() != 0:
             raise FirewallError("live nftables changes require root; no sudo prompt is attempted")
         if shutil.which("nft") is None:
             raise FirewallError("nft executable not found")
+
+    @staticmethod
+    def _require_linux() -> None:
+        if runtime_platform() != "linux":
+            raise FirewallError("nftables operations are supported only on Linux")
 
     @staticmethod
     def _run(command: tuple[str, ...], stdin: str | None = None) -> None:

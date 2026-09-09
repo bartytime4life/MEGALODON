@@ -1,0 +1,74 @@
+{
+  "schema": "windows-core-acceptance-v1",
+  "repository_baseline": "4102bc1e4b094d3f384cf2dfce5bee6e40d20b23",
+  "profile": "W1-native-windows-11-x64-evaluation",
+  "native_execution_status": "not_performed",
+  "required_linux_job": {
+    "name": "test",
+    "runner": "ubuntu-24.04",
+    "python": "3.11",
+    "disposition": "preserve"
+  },
+  "features": [
+    {
+      "id": "metadata-validation",
+      "status": "synthetic_reusable",
+      "tests": ["tests/test_validation.py"]
+    },
+    {
+      "id": "sample-jsonl-processing",
+      "status": "synthetic_reusable",
+      "tests": ["tests/test_capture.py", "tests/test_cli.py"]
+    },
+    {
+      "id": "fixed-detections",
+      "status": "synthetic_reusable",
+      "tests": ["tests/test_detector.py", "tests/test_detector_acceptance.py"]
+    },
+    {
+      "id": "sqlite-audit",
+      "status": "native_receipt_required",
+      "tests": ["tests/test_storage.py", "tests/test_storage_failures.py"]
+    },
+    {
+      "id": "loopback-dashboard",
+      "status": "native_receipt_required",
+      "tests": ["tests/test_dashboard.py", "tests/test_dashboard_binding.py"]
+    },
+    {
+      "id": "private-ntfs-storage",
+      "status": "native_receipt_required",
+      "tests": []
+    }
+  ],
+  "unsupported_operations": [
+    {
+      "id": "offline-analysis",
+      "status": "rejected",
+      "diagnostic": "LINUX_REQUIRED"
+    },
+    {
+      "id": "offline-dashboard-projection",
+      "status": "rejected",
+      "diagnostic": "LINUX_REQUIRED"
+    },
+    {
+      "id": "live-scapy-capture",
+      "status": "rejected",
+      "diagnostic": "live Scapy capture is supported only on Linux"
+    },
+    {
+      "id": "nftables",
+      "status": "rejected",
+      "diagnostic": "nftables operations are supported only on Linux"
+    }
+  ],
+  "native_receipts_required": [
+    "windows-edition-build-architecture-and-cpython",
+    "selected-core-tests-with-pass-fail-skip-counts",
+    "database-wal-shm-ntfs-acl-review",
+    "loopback-listener-and-real-browser-ui-api-checks",
+    "unsupported-operation-negative-controls",
+    "same-head-linux-test-job"
+  ]
+}
