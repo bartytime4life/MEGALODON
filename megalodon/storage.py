@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import stat
 from threading import RLock
 from typing import Any
 
@@ -16,6 +17,7 @@ from .validation import (
     parse_timestamp,
     SQLITE_INTEGER_MAX,
     validate_metadata,
+    validate_packet_metadata,
 )
 
 
@@ -155,6 +157,17 @@ _INDEX_COLUMNS_V2 = {
     "idx_ingestion_runs_started_at": ("ingestion_runs", ("started_at",)),
 }
 
+_UNIQUE_INDEXES_V1 = {table: set() for table in _TABLE_COLUMNS_V1}
+
+_UNIQUE_INDEXES_V2 = {
+    **_UNIQUE_INDEXES_V1,
+    "ingestion_runs": set(),
+    "ingestion_run_events": {
+        ("pk", ("run_id", "event_id")),
+        ("u", ("event_id",)),
+    },
+}
+
 _FOREIGN_KEYS_V1 = {
     "events": set(),
     "detections": {("events", "event_id", "id", "NO ACTION")},
@@ -184,7 +197,23 @@ class IngestionRunError(ValueError):
     """An ingestion run transition or association is invalid."""
 
 
-def _validate_schema(connection, tables, indexes, foreign_keys) -> None:
+def _validate_schema(
+    connection, tables, indexes, foreign_keys, unique_indexes
+) -> None:
+    expected_objects = {
+        *(("table", table, table) for table in tables),
+        *(("index", index, table) for index, (table, _) in indexes.items()),
+    }
+    actual_objects = {
+        (str(row[0]), str(row[1]), str(row[2]))
+        for row in connection.execute(
+            "SELECT type, name, tbl_name FROM sqlite_schema"
+        )
+        if not str(row[1]).startswith("sqlite_")
+    }
+    if actual_objects != expected_objects:
+        raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
     for table, expected in tables.items():
         actual = tuple(
             (str(row[1]), str(row[2]).upper(), int(row[3]), int(row[5]))
@@ -215,15 +244,76 @@ def _validate_schema(connection, tables, indexes, foreign_keys) -> None:
         if columns != expected_columns:
             raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
 
+    for table, expected in unique_indexes.items():
+        actual = set()
+        for row in connection.execute(f'PRAGMA index_list("{table}")'):
+            if int(row[2]) != 1:
+                continue
+            columns = tuple(
+                str(column[2])
+                for column in connection.execute(
+                    f'PRAGMA index_info("{str(row[1])}")'
+                )
+            )
+            actual.add((str(row[3]), columns))
+        if actual != expected:
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
 
-def _application_tables(connection) -> set[str]:
+
+def _schema_objects(connection) -> set[tuple[str, str, str]]:
     return {
-        str(row[0])
+        (str(row[0]), str(row[1]), str(row[2]))
         for row in connection.execute(
-            "SELECT name FROM sqlite_schema WHERE type = 'table'"
+            "SELECT type, name, tbl_name FROM sqlite_schema"
         )
-        if row[0] in _TABLE_COLUMNS_V2
+        if not str(row[1]).startswith("sqlite_")
     }
+
+
+def _descriptor_database_path(descriptor: int, fallback: Path) -> str:
+    if os.name == "posix":
+        for directory in ("/proc/self/fd", "/dev/fd"):
+            candidate = Path(directory) / str(descriptor)
+            if candidate.exists():
+                return str(candidate)
+    return str(fallback)
+
+
+def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
+    try:
+        return os.path.samestat(
+            path.stat(follow_symlinks=False), os.fstat(descriptor)
+        )
+    except OSError:
+        return False
+
+
+def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = (
+        os.open(path, flags, mode) if mode is not None else os.open(path, flags)
+    )
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise StorageSchemaError("STORAGE_MIGRATION:SYMLINK_REFUSED")
+    return descriptor
+
+
+def _validate_migration_directory(path: Path) -> None:
+    if os.name != "posix":
+        return
+    parent = path.parent
+    try:
+        parent_stat = parent.lstat()
+    except OSError as exc:
+        raise StorageSchemaError("STORAGE_MIGRATION:UNSAFE_DIRECTORY") from exc
+    if (
+        not stat.S_ISDIR(parent_stat.st_mode)
+        or parent_stat.st_uid != os.geteuid()
+        or parent_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+    ):
+        raise StorageSchemaError("STORAGE_MIGRATION:UNSAFE_DIRECTORY")
 
 
 def migrate_database(path: str | Path) -> dict[str, object]:
@@ -234,20 +324,31 @@ def migrate_database(path: str | Path) -> dict[str, object]:
         raise StorageSchemaError("STORAGE_MIGRATION:SYMLINK_REFUSED")
     if not source_path.is_file():
         raise StorageSchemaError("STORAGE_MIGRATION:NO_DATABASE")
+    _validate_migration_directory(source_path)
 
     backup_path = source_path.with_name(source_path.name + MIGRATION_BACKUP_SUFFIX)
-    source = sqlite3.connect(source_path, timeout=10)
+    source_descriptor: int | None = None
+    backup_descriptor: int | None = None
+    source: sqlite3.Connection | None = None
     backup: sqlite3.Connection | None = None
     backup_created = False
     migration_started = False
     try:
+        source_descriptor = _open_regular_file(source_path, os.O_RDWR)
+        source = sqlite3.connect(
+            _descriptor_database_path(source_descriptor, source_path), timeout=10
+        )
+        if not _path_matches_descriptor(source_path, source_descriptor):
+            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
         source.execute("PRAGMA foreign_keys=ON")
         version = int(source.execute("PRAGMA user_version").fetchone()[0])
         if version == SCHEMA_VERSION:
-            if _application_tables(source) != set(_TABLE_COLUMNS_V2):
-                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
             _validate_schema(
-                source, _TABLE_COLUMNS_V2, _INDEX_COLUMNS_V2, _FOREIGN_KEYS_V2
+                source,
+                _TABLE_COLUMNS_V2,
+                _INDEX_COLUMNS_V2,
+                _FOREIGN_KEYS_V2,
+                _UNIQUE_INDEXES_V2,
             )
             return {
                 "status": "already_current",
@@ -259,22 +360,24 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
         if version not in (0, 1):
             raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
-        if _application_tables(source) != set(_TABLE_COLUMNS_V1):
-            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
         _validate_schema(
-            source, _TABLE_COLUMNS_V1, _INDEX_COLUMNS_V1, _FOREIGN_KEYS_V1
+            source,
+            _TABLE_COLUMNS_V1,
+            _INDEX_COLUMNS_V1,
+            _FOREIGN_KEYS_V1,
+            _UNIQUE_INDEXES_V1,
         )
         if os.path.lexists(backup_path):
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_EXISTS")
 
         data_version = int(source.execute("PRAGMA data_version").fetchone()[0])
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        descriptor = os.open(backup_path, flags, 0o600)
-        os.close(descriptor)
+        backup_descriptor = _open_regular_file(
+            backup_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
+        )
         backup_created = True
-        backup = sqlite3.connect(backup_path)
+        backup = sqlite3.connect(
+            _descriptor_database_path(backup_descriptor, backup_path)
+        )
         source.backup(backup)
         backup.commit()
         if backup.execute("PRAGMA quick_check").fetchone()[0] != "ok":
@@ -282,15 +385,17 @@ def migrate_database(path: str | Path) -> dict[str, object]:
         if int(backup.execute("PRAGMA user_version").fetchone()[0]) != version:
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_INVALID")
         _validate_schema(
-            backup, _TABLE_COLUMNS_V1, _INDEX_COLUMNS_V1, _FOREIGN_KEYS_V1
+            backup,
+            _TABLE_COLUMNS_V1,
+            _INDEX_COLUMNS_V1,
+            _FOREIGN_KEYS_V1,
+            _UNIQUE_INDEXES_V1,
         )
+        if not _path_matches_descriptor(backup_path, backup_descriptor):
+            raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_CHANGED")
         backup.close()
         backup = None
-        descriptor = os.open(backup_path, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+        os.fsync(backup_descriptor)
         if os.name == "posix":
             descriptor = os.open(
                 backup_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
@@ -301,30 +406,36 @@ def migrate_database(path: str | Path) -> dict[str, object]:
                 os.close(descriptor)
 
         source.execute("BEGIN EXCLUSIVE")
+        if not _path_matches_descriptor(source_path, source_descriptor):
+            source.rollback()
+            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
         if int(source.execute("PRAGMA data_version").fetchone()[0]) != data_version:
             source.rollback()
-            backup_path.unlink()
-            backup_created = False
             raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
         if int(source.execute("PRAGMA user_version").fetchone()[0]) != version:
             source.rollback()
-            backup_path.unlink()
-            backup_created = False
             raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
-        if _application_tables(source) != set(_TABLE_COLUMNS_V1):
+        try:
+            _validate_schema(
+                source,
+                _TABLE_COLUMNS_V1,
+                _INDEX_COLUMNS_V1,
+                _FOREIGN_KEYS_V1,
+                _UNIQUE_INDEXES_V1,
+            )
+        except StorageSchemaError as exc:
             source.rollback()
-            backup_path.unlink()
-            backup_created = False
-            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
-        _validate_schema(
-            source, _TABLE_COLUMNS_V1, _INDEX_COLUMNS_V1, _FOREIGN_KEYS_V1
-        )
+            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED") from exc
 
         migration_started = True
         for statement in SCHEMA_V2_STATEMENTS:
             source.execute(statement)
         _validate_schema(
-            source, _TABLE_COLUMNS_V2, _INDEX_COLUMNS_V2, _FOREIGN_KEYS_V2
+            source,
+            _TABLE_COLUMNS_V2,
+            _INDEX_COLUMNS_V2,
+            _FOREIGN_KEYS_V2,
+            _UNIQUE_INDEXES_V2,
         )
         source.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         source.commit()
@@ -335,15 +446,31 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             "backup": str(backup_path),
         }
     except StorageSchemaError:
-        if source.in_transaction:
+        if source is not None and source.in_transaction:
             source.rollback()
-        if backup_created and not migration_started:
+        if backup is not None:
+            backup.close()
+            backup = None
+        if (
+            backup_created
+            and not migration_started
+            and backup_descriptor is not None
+            and _path_matches_descriptor(backup_path, backup_descriptor)
+        ):
             backup_path.unlink(missing_ok=True)
         raise
     except (OSError, sqlite3.Error) as exc:
-        if source.in_transaction:
+        if source is not None and source.in_transaction:
             source.rollback()
-        if backup_created and not migration_started:
+        if backup is not None:
+            backup.close()
+            backup = None
+        if (
+            backup_created
+            and not migration_started
+            and backup_descriptor is not None
+            and _path_matches_descriptor(backup_path, backup_descriptor)
+        ):
             backup_path.unlink(missing_ok=True)
         code = (
             "STORAGE_MIGRATION:MIGRATION_FAILED"
@@ -354,7 +481,12 @@ def migrate_database(path: str | Path) -> dict[str, object]:
     finally:
         if backup is not None:
             backup.close()
-        source.close()
+        if source is not None:
+            source.close()
+        if backup_descriptor is not None:
+            os.close(backup_descriptor)
+        if source_descriptor is not None:
+            os.close(source_descriptor)
 
 
 class Store:
@@ -381,13 +513,11 @@ class Store:
             if version not in (0, 1, SCHEMA_VERSION):
                 raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
 
-            present = _application_tables(self.connection)
+            present = _schema_objects(self.connection)
             if version == 0 and not present:
                 self._create_schema()
                 return
             if version in (0, 1):
-                if present != set(_TABLE_COLUMNS_V1):
-                    raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
                 self.connection.execute("BEGIN IMMEDIATE")
                 try:
                     _validate_schema(
@@ -395,13 +525,11 @@ class Store:
                         _TABLE_COLUMNS_V1,
                         _INDEX_COLUMNS_V1,
                         _FOREIGN_KEYS_V1,
+                        _UNIQUE_INDEXES_V1,
                     )
                 finally:
                     self.connection.rollback()
                 raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_REQUIRED")
-            if present != set(_TABLE_COLUMNS_V2):
-                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
-
             self.connection.execute("BEGIN IMMEDIATE")
             try:
                 _validate_schema(
@@ -409,6 +537,7 @@ class Store:
                     _TABLE_COLUMNS_V2,
                     _INDEX_COLUMNS_V2,
                     _FOREIGN_KEYS_V2,
+                    _UNIQUE_INDEXES_V2,
                 )
                 self.connection.commit()
             except Exception:
@@ -431,6 +560,7 @@ class Store:
                 _TABLE_COLUMNS_V2,
                 _INDEX_COLUMNS_V2,
                 _FOREIGN_KEYS_V2,
+                _UNIQUE_INDEXES_V2,
             )
             self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.connection.commit()
@@ -580,7 +710,7 @@ class Store:
                 maximum=SQLITE_INTEGER_MAX,
             )
         )
-        metadata = validate_metadata(event.metadata)
+        metadata = validate_packet_metadata(event.metadata)
         safe_run_id = None if run_id is None else self._run_id(run_id)
         with self._lock, self.connection:
             cursor = self.connection.execute(

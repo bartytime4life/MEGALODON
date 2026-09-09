@@ -96,3 +96,64 @@ def test_read_only_audit_failure_propagates_without_success_or_rows(tmp_path, ta
         finally:
             store.connection.execute("PRAGMA query_only=OFF")
         assert isinstance(_write(store, table, event_id), int)
+
+
+def test_synthetic_database_full_stops_without_a_phantom_success(tmp_path):
+    path = tmp_path / "synthetic.db"
+    with Store(path) as store:
+        page_count = store.connection.execute("PRAGMA page_count").fetchone()[0]
+        assert store.connection.execute(
+            f"PRAGMA max_page_count={page_count}"
+        ).fetchone()[0] == page_count
+        event = PacketEvent(
+            STAMP,
+            "192.0.2.1",
+            "198.51.100.2",
+            "TCP",
+            interface="synthetic-page-budget",
+        )
+
+        committed = 0
+        for _ in range(1000):
+            try:
+                store.record_event(event)
+            except sqlite3.OperationalError as exc:
+                assert "full" in str(exc).lower()
+                break
+            committed += 1
+        else:
+            pytest.fail("synthetic database did not reach its fixed page budget")
+
+        assert store.connection.in_transaction is False
+        assert store.summary()["events"] == committed
+        with sqlite3.connect(path) as observer:
+            assert observer.execute("SELECT COUNT(*) FROM events").fetchone()[0] == committed
+
+
+def test_injected_connect_permission_denial_propagates_without_database(tmp_path, monkeypatch):
+    path = tmp_path / "private" / "synthetic.db"
+
+    def denied(*_args, **_kwargs):
+        raise PermissionError("synthetic permission denial")
+
+    monkeypatch.setattr(sqlite3, "connect", denied)
+    with pytest.raises(PermissionError, match="synthetic permission denial"):
+        Store(path)
+    assert not path.exists()
+
+
+def test_sqlite_interruption_rolls_back_the_active_write(tmp_path):
+    path = tmp_path / "synthetic.db"
+    with Store(path) as store:
+        before = store.summary()
+        store.connection.set_progress_handler(lambda: 1, 1)
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="interrupted"):
+                _write(store, "events", None)
+        finally:
+            store.connection.set_progress_handler(None, 0)
+
+        assert store.connection.in_transaction is False
+        assert store.summary() == before
+    with sqlite3.connect(path) as observer:
+        assert _counts(observer) == {table: 0 for table in TABLES}

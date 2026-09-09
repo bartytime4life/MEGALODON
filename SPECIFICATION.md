@@ -84,7 +84,7 @@ tcp_flags: subset of FIN/SYN/RST/PSH/ACK/URG/ECE/CWR
 dns_query_length: optional non-negative metadata length, at most 2^63 - 1
 byte_count: non-negative integer, at most 2^63 - 1
 interface: optional bounded label
-metadata: JSON object with non-payload metadata only
+metadata: immutable, closed adapter provenance; empty or source_adapter=tshark-fields-v1
 ```
 
 ### DetectionResult
@@ -214,8 +214,11 @@ timestamps use semantic `time` elements.
 ## 7. Retention and privacy
 
 The store keeps normalized metadata and evidence JSON. It must be assigned a
-retention period before production use. The `Store.purge_before()` hook exists
-for a scheduled retention job but no scheduler is enabled automatically.
+retention period and finite capacity/stop budget before production use. The
+internal `Store.purge_before()` hook can atomically delete matching audit rows,
+but no CLI, preview receipt, scheduler, default cleanup, or automatic caller is
+provided. SQLite audit data and standalone offline report sets have independent
+operator-owned retention decisions; authority over one never covers the other.
 
 External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
 future integration must document what identifiers leave the host and require

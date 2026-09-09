@@ -193,13 +193,24 @@ def _run(args: argparse.Namespace) -> int:
                 print("megalodon: ingestion interrupted", file=sys.stderr)
                 return 130
             except (CaptureError, OSError, ValueError, sqlite3.Error) as exc:
+                failure_code = _run_failure_code(exc)
                 store.finish_ingestion_run(
-                    run_id, "failed", failure_code=_run_failure_code(exc)
+                    run_id, "failed", failure_code=failure_code
                 )
-                raise
+                print(
+                    f"megalodon: ingestion failed ({failure_code})",
+                    file=sys.stderr,
+                )
+                return 2
             receipt = store.finish_ingestion_run(run_id, "completed")
             print(json.dumps({**receipt, "totals": store.summary()}, sort_keys=True))
-    except (CaptureError, OSError, ValueError, sqlite3.Error) as exc:
+    except sqlite3.Error:
+        print("megalodon: storage operation failed", file=sys.stderr)
+        return 2
+    except OSError:
+        print("megalodon: I/O operation failed", file=sys.stderr)
+        return 2
+    except (CaptureError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     return 0

@@ -24,6 +24,8 @@ malicious activity.
 
 - observe only: a fresh configuration does not mutate the firewall;
 - metadata only: packet payloads and payload-derived hashes are not represented;
+- closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
+  provenance and cannot carry arbitrary payload-like fields;
 - local only: the dashboard defaults to `127.0.0.1:8787` and has no write API;
 - no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
 - no shell interpolation: untrusted event values never become shell code;
@@ -229,9 +231,15 @@ first creates and verifies a sibling backup ending in `.pre-v2.bak`, never
 overwrites an existing backup, and then applies the additive migration in one
 transaction. The backup is created mode 0600 on POSIX; Windows confidentiality
 still depends on the private-directory/NTFS ACL acceptance tracked separately.
-Stop other MEGALODON processes before migrating and retain the backup until the
-new database has been operationally verified. Partial, altered, or newer
-application schemas are refused rather than repaired or downgraded.
+POSIX migration also requires an operator-owned parent directory that is not
+group- or world-writable and keeps no-follow source/backup descriptors bound
+through backup verification. Stop other MEGALODON processes before migrating and
+retain the backup until the new database has been operationally verified.
+Partial, altered, extended, or newer application schemas are refused rather than
+repaired or downgraded.
+The [`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audit
+and standalone offline-report retention separate and defines fail-closed
+outcomes; it selects no deletion value or automatic job.
 
 Each `run` command writes a closed lifecycle receipt before consuming input and
 marks it `completed` or `failed` at a terminal boundary. The receipt stores only
@@ -239,8 +247,9 @@ the closed source name, UTC timestamps, derived event/detection counts, and an
 optional fixed failure code. A join table associates each durably written event
 with exactly one CLI run; a malformed JSONL suffix is therefore distinguishable
 from a complete replay. Raw exceptions, input paths, command lines, packet
-contents, and credentials are not stored in the run ledger. A row left `running`
-means completion was not recorded, not that the run succeeded.
+contents, and credentials are not stored in the run ledger or echoed by the run
+failure diagnostic. A row left `running` means completion was not recorded, not
+that the run succeeded.
 
 On the Linux analysis profile, add one completed offline run to the read-only
 dashboard by selecting its absolute private report directory when the server starts:
@@ -516,7 +525,7 @@ Closed design/test gates can still leave runtime and operational work unbuilt.
 | [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Open evidence gate for the optional system analyzer |
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
 | [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; Windows remains evaluation-only |
-| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Open operator-policy gate; synthetic transaction handling exists, but no retention values or automatic cleanup are selected |
+| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because

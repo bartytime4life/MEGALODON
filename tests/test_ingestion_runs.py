@@ -198,7 +198,7 @@ def test_cli_records_a_bounded_failure_after_a_valid_jsonl_prefix(tmp_path):
         )
 
     assert raised.value.code == 2
-    assert "invalid JSONL event" in error.getvalue()
+    assert error.getvalue() == "megalodon: ingestion failed (CAPTURE_ERROR)\n"
     with sqlite3.connect(database) as connection:
         row = connection.execute(
             "SELECT status, processed_count, detection_count, failure_code "
@@ -210,14 +210,13 @@ def test_cli_records_a_bounded_failure_after_a_valid_jsonl_prefix(tmp_path):
         ).fetchone()[0] == 1
 
 
-def test_cli_records_storage_failure_without_a_phantom_event(tmp_path):
+def test_cli_records_storage_failure_without_a_phantom_event(tmp_path, monkeypatch):
     config, database = _config(tmp_path)
-    with Store(database) as store:
-        store.connection.execute(
-            "CREATE TRIGGER fail_event AFTER INSERT ON events "
-            "BEGIN SELECT RAISE(FAIL, 'synthetic storage failure'); END"
-        )
-        store.connection.commit()
+
+    def fail_event_write(self, event, *, run_id=None):
+        raise sqlite3.OperationalError("sensitive synthetic storage detail")
+
+    monkeypatch.setattr(Store, "record_event", fail_event_write)
 
     error = io.StringIO()
     with redirect_stderr(error), pytest.raises(SystemExit) as raised:
@@ -231,10 +230,11 @@ def test_cli_records_storage_failure_without_a_phantom_event(tmp_path):
                 "--max-events",
                 "1",
             ]
-        )
+    )
 
     assert raised.value.code == 2
-    assert "synthetic storage failure" in error.getvalue()
+    assert error.getvalue() == "megalodon: ingestion failed (STORAGE_ERROR)\n"
+    assert "sensitive synthetic storage detail" not in error.getvalue()
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
         assert connection.execute(
