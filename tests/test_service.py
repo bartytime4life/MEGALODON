@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import unittest
 from unittest.mock import Mock
 
@@ -9,9 +9,31 @@ from megalodon.firewall import FirewallOperation, NftablesFirewall
 from megalodon.models import PacketEvent
 from megalodon.service import MegalodonService
 from megalodon.storage import Store
+from megalodon.validation import ValidationError
 
 
 class ServiceTests(unittest.TestCase):
+    def test_reordered_event_is_rejected_before_persistence(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Settings(db_path=Path(directory) / "events.db")
+            now = datetime.now(timezone.utc)
+            first = PacketEvent(now, "8.8.8.8", "192.0.2.53", "TCP")
+            reordered = PacketEvent(
+                now - timedelta(seconds=1),
+                "8.8.8.8",
+                "192.0.2.53",
+                "TCP",
+            )
+            with Store(settings.db_path) as store:
+                service = MegalodonService(settings, store)
+                self.assertEqual(service.process(first), [])
+                with self.assertRaisesRegex(ValidationError, "source high watermark"):
+                    service.process(reordered)
+                self.assertEqual(store.summary()["events"], 1)
+
     def test_observe_mode_records_detection_without_firewall_change(self):
         import tempfile
         from pathlib import Path

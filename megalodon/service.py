@@ -26,6 +26,8 @@ class MegalodonService:
         self.logger = logging.getLogger("megalodon.service")
 
     def process(self, event: PacketEvent) -> list[DetectionResult]:
+        # Admission must fail before the append-only event row is written.
+        self.detector.validate_event_time(event)
         event_id = self.store.record_event(event)
         detections = self.detector.analyze(event)
         for detection in detections:

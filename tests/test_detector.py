@@ -5,8 +5,9 @@ import ipaddress
 import unittest
 
 from megalodon.config import DetectionSettings
-from megalodon.detector import Detector
+from megalodon.detector import Detector, MAX_FUTURE_SKEW_SECONDS
 from megalodon.models import PacketEvent
+from megalodon.validation import ValidationError
 
 
 BASE = datetime(2026, 9, 6, tzinfo=timezone.utc)
@@ -76,3 +77,38 @@ class DetectorTests(unittest.TestCase):
             detector.analyze(event(index, src_ip="8.8.8.3"))
         self.assertLessEqual(len(detector.syn_windows["8.8.8.3"]), 2)
         self.assertLessEqual(len(detector.port_windows["8.8.8.3"]), 2)
+
+    def test_out_of_order_event_is_rejected_without_poisoning_state(self):
+        detector = Detector(
+            DetectionSettings(syn_flood_threshold=3),
+            clock=lambda: BASE + timedelta(days=1),
+        )
+        self.assertEqual(detector.analyze(event(100)), [])
+        with self.assertRaisesRegex(ValidationError, "source high watermark"):
+            detector.analyze(event(0))
+        self.assertEqual(detector.analyze(event(101)), [])
+        result = detector.analyze(event(102))
+        self.assertEqual([item.rule_id for item in result], ["SYN_FLOOD"])
+        self.assertEqual(len(detector.syn_windows["8.8.8.8"]), 3)
+
+    def test_future_skew_boundary_is_explicit(self):
+        detector = Detector(
+            DetectionSettings(syn_flood_threshold=100),
+            clock=lambda: BASE,
+        )
+        self.assertEqual(
+            detector.analyze(
+                event(0, observed_at=BASE + timedelta(seconds=MAX_FUTURE_SKEW_SECONDS))
+            ),
+            [],
+        )
+        other_source = "8.8.4.4"
+        with self.assertRaisesRegex(ValidationError, "future skew"):
+            detector.analyze(
+                event(
+                    0,
+                    src_ip=other_source,
+                    observed_at=BASE + timedelta(seconds=MAX_FUTURE_SKEW_SECONDS + 0.001),
+                )
+            )
+        self.assertNotIn(other_source, detector.source_high_watermarks)
