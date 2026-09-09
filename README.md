@@ -289,7 +289,10 @@ cat examples/events.jsonl | python -m megalodon run --source jsonl
 ```
 
 The adapter caps each JSONL record at 64 KiB. IP addresses, ports, timestamps,
-flags, text, byte counts, and metadata are typed and bounded before persistence.
+flags, text, byte counts, detector evidence, action details, severities, and action
+statuses are typed and bounded before persistence. SQLite-facing counts cannot
+exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
+at the storage boundary.
 Detector state is capped at 4,096 tracked sources and 4,096 events per source
 window by default.
 
@@ -302,8 +305,13 @@ python -m megalodon run --source scapy --interface eth0
 
 Live capture requires the normal Linux permissions for the selected interface.
 The adapter extracts addresses, ports, protocol, TCP flags, sizes, and DNS-name
-length; it does not persist or print payloads. Use only on traffic the operator
-is authorized to observe.
+length; it does not persist or print payloads. Scapy's compact TCP flag value is
+decoded from its numeric bitmask into the closed FIN/SYN/RST/PSH/ACK/URG/ECE/CWR
+event vocabulary; unsupported bits discard that malformed packet. The callback
+queue holds at most 1,024 metadata events. Its first overflow stops publication
+with a fixed error instead of blocking the capture callback, growing memory, or
+silently continuing after loss. Use only on traffic the operator is authorized
+to observe.
 
 ## Detection rules
 

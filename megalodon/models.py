@@ -13,6 +13,7 @@ from .validation import (
     parse_port,
     parse_timestamp,
     safe_text,
+    SQLITE_INTEGER_MAX,
     ValidationError,
     validate_metadata,
 )
@@ -47,9 +48,21 @@ class PacketEvent:
             object.__setattr__(
                 self,
                 "dns_query_length",
-                parse_nonnegative_int(self.dns_query_length, "dns_query_length"),
+                parse_nonnegative_int(
+                    self.dns_query_length,
+                    "dns_query_length",
+                    maximum=SQLITE_INTEGER_MAX,
+                ),
             )
-        object.__setattr__(self, "byte_count", parse_nonnegative_int(self.byte_count, "byte_count"))
+        object.__setattr__(
+            self,
+            "byte_count",
+            parse_nonnegative_int(
+                self.byte_count,
+                "byte_count",
+                maximum=SQLITE_INTEGER_MAX,
+            ),
+        )
         if self.interface is not None:
             object.__setattr__(self, "interface", safe_text(self.interface, "interface", 64))
         object.__setattr__(self, "metadata", validate_metadata(self.metadata))
@@ -102,9 +115,29 @@ class DetectionResult:
         object.__setattr__(self, "detected_at", parse_timestamp(self.detected_at))
         object.__setattr__(self, "src_ip", parse_ip(self.src_ip))
         object.__setattr__(self, "dst_ip", parse_ip(self.dst_ip))
-        object.__setattr__(self, "severity", str(self.severity).upper())
-        object.__setattr__(self, "rule_id", safe_text(self.rule_id, "rule_id", 64))
-        object.__setattr__(self, "message", safe_text(self.message, "message", 512))
+        severity = safe_text(self.severity, "severity", 16).strip().upper()
+        if severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+            raise ValidationError("severity must be LOW, MEDIUM, HIGH, or CRITICAL")
+        rule_id = safe_text(self.rule_id, "rule_id", 64).strip()
+        message = safe_text(self.message, "message", 512).strip()
+        recommendation = safe_text(self.recommendation, "recommendation", 64).strip().upper()
+        if not rule_id:
+            raise ValidationError("rule_id must not be empty")
+        if not message:
+            raise ValidationError("message must not be empty")
+        if not recommendation:
+            raise ValidationError("recommendation must not be empty")
+        object.__setattr__(self, "severity", severity)
+        object.__setattr__(self, "rule_id", rule_id)
+        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "evidence", validate_metadata(self.evidence))
+        object.__setattr__(self, "recommendation", recommendation)
+        if self.suppressed_reason is not None:
+            object.__setattr__(
+                self,
+                "suppressed_reason",
+                safe_text(self.suppressed_reason, "suppressed_reason", 256).strip(),
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -129,6 +162,30 @@ class ActionRecord:
     reason: str
     expires_at: datetime | None = None
     details: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "created_at", parse_timestamp(self.created_at))
+        action = safe_text(self.action, "action", 64).strip()
+        target = safe_text(self.target, "target", 128).strip()
+        status = safe_text(self.status, "status", 32).strip().lower()
+        reason = safe_text(self.reason, "reason", 512).strip()
+        if not action:
+            raise ValidationError("action must not be empty")
+        if not target:
+            raise ValidationError("target must not be empty")
+        if status not in {"not_attempted", "suppressed", "planned", "applied", "failed"}:
+            raise ValidationError(
+                "status must be not_attempted, suppressed, planned, applied, or failed"
+            )
+        if not reason:
+            raise ValidationError("reason must not be empty")
+        object.__setattr__(self, "action", action)
+        object.__setattr__(self, "target", target)
+        object.__setattr__(self, "status", status)
+        object.__setattr__(self, "reason", reason)
+        if self.expires_at is not None:
+            object.__setattr__(self, "expires_at", parse_timestamp(self.expires_at))
+        object.__setattr__(self, "details", validate_metadata(self.details))
 
     def to_dict(self) -> dict[str, Any]:
         return {
