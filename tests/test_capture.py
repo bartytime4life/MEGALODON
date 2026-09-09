@@ -67,3 +67,8 @@ class CaptureTests(unittest.TestCase):
     def test_jsonl_rejects_oversized_lines(self):
         with self.assertRaises(CaptureError):
             list(iter_jsonl(StringIO("x" * 33 + "\n"), max_line_bytes=32))
+
+    def test_jsonl_normalizes_parser_recursion_without_echoing_the_record(self):
+        hostile = "[" * 1100 + "]" * 1100
+        with self.assertRaisesRegex(CaptureError, "^invalid JSONL event at line 1$"):
+            list(iter_jsonl(StringIO(hostile + "\n")))
