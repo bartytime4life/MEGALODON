@@ -29,6 +29,12 @@ The MVP supports three sources (sample, JSONL replay, and optional Scapy),
 three fixed detection rules, SQLite audit storage, a local read-only dashboard,
 and an explicit nftables plan/application boundary.
 
+Optional Scapy intake uses a fixed 1,024-event metadata queue. The callback does
+not block; the first overflow makes the consumer stop with a bounded error and
+does not publish queued events after the loss boundary. This is application
+backpressure behavior, not proof of kernel capture-buffer sizing or loss-free
+operation under production load.
+
 ### Non-goals for the MVP
 
 - deep-packet inspection or payload retention;
