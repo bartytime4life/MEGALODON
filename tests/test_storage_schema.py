@@ -12,6 +12,7 @@ import pytest
 from megalodon.storage import (
     MIGRATION_BACKUP_SUFFIX,
     SCHEMA_V1_STATEMENTS,
+    SCHEMA_V2_STATEMENTS,
     SCHEMA_VERSION,
     migrate_database,
     StorageSchemaError,
@@ -185,27 +186,102 @@ def test_migration_refuses_missing_and_symlink_sources(tmp_path):
     assert not alias.with_name(alias.name + MIGRATION_BACKUP_SUFFIX).exists()
 
 
-def test_failed_v2_migration_rolls_back_and_retains_verified_backup(tmp_path):
+@pytest.mark.parametrize(
+    "extra_sql",
+    (
+        "CREATE TABLE extension_data (value TEXT)",
+        "CREATE INDEX extension_events_protocol ON events(protocol)",
+        "CREATE TRIGGER extension_event_insert AFTER INSERT ON events BEGIN SELECT 1; END",
+        "CREATE VIEW extension_events AS SELECT id FROM events",
+        "CREATE TABLE ingestion_runs (id INTEGER PRIMARY KEY)",
+    ),
+)
+def test_migration_refuses_unexpected_schema_objects_before_backup(
+    tmp_path, extra_sql
+):
     path = tmp_path / "audit.db"
     backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
     _create_v1(path)
     with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TABLE sentinel (started_at TEXT)")
-        connection.execute(
-            "CREATE INDEX idx_ingestion_runs_started_at ON sentinel(started_at)"
-        )
+        connection.execute(extra_sql)
 
-    with pytest.raises(StorageSchemaError, match="^STORAGE_MIGRATION:MIGRATION_FAILED$"):
+    with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
         migrate_database(path)
 
-    assert backup_path.is_file()
-    assert _application_tables(path) == APPLICATION_TABLES_V1
+    assert not backup_path.exists()
     with sqlite3.connect(path) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
         assert connection.execute("SELECT reason FROM actions").fetchone()[0] == "legacy"
-    with sqlite3.connect(backup_path) as backup:
-        assert backup.execute("PRAGMA quick_check").fetchone()[0] == "ok"
-        assert backup.execute("SELECT reason FROM actions").fetchone()[0] == "legacy"
+
+
+def test_v2_schema_without_event_id_uniqueness_is_refused(tmp_path):
+    path = tmp_path / "audit.db"
+    with sqlite3.connect(path) as connection:
+        for statement in SCHEMA_V1_STATEMENTS:
+            connection.execute(statement)
+        for statement in SCHEMA_V2_STATEMENTS:
+            connection.execute(
+                statement.replace(
+                    "event_id INTEGER NOT NULL UNIQUE", "event_id INTEGER NOT NULL"
+                )
+            )
+        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
+        Store(path)
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not os.path.exists("/proc/self/fd"),
+    reason="stable descriptor database paths require procfs",
+)
+def test_replaced_backup_path_cannot_redirect_sqlite_backup(tmp_path, monkeypatch):
+    path = tmp_path / "audit.db"
+    backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
+    victim = tmp_path / "victim.db"
+    _create_v1(path)
+    victim.write_bytes(b"operator-owned")
+    original_connect = sqlite3.connect
+    calls = 0
+
+    def replace_before_backup_connect(database, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            backup_path.unlink()
+            backup_path.symlink_to(victim)
+        return original_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", replace_before_backup_connect)
+
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_MIGRATION:BACKUP_CHANGED$"
+    ):
+        migrate_database(path)
+
+    assert victim.read_bytes() == b"operator-owned"
+    assert backup_path.is_symlink()
+    with original_connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+
+
+def test_migration_refuses_non_private_posix_directory(tmp_path):
+    if os.name != "posix":
+        pytest.skip("POSIX directory permissions are unavailable")
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o777)
+    shared.chmod(0o777)
+    path = shared / "audit.db"
+    _create_v1(path)
+
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_MIGRATION:UNSAFE_DIRECTORY$"
+    ):
+        migrate_database(path)
+
+    assert not path.with_name(path.name + MIGRATION_BACKUP_SUFFIX).exists()
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
 
 
 def test_partial_unversioned_schema_is_refused_without_completion(tmp_path):
@@ -256,7 +332,7 @@ def test_future_schema_is_refused_before_journal_or_table_mutation(tmp_path):
         assert connection.execute("SELECT COUNT(*) FROM future_marker").fetchone()[0] == 0
 
 
-def test_failed_initial_migration_rolls_back_all_application_objects(tmp_path):
+def test_nonempty_unversioned_schema_is_refused_without_mutation(tmp_path):
     path = tmp_path / "audit.db"
     with sqlite3.connect(path) as connection:
         connection.execute("CREATE TABLE sentinel (observed_at TEXT)")
@@ -264,7 +340,7 @@ def test_failed_initial_migration_rolls_back_all_application_objects(tmp_path):
             "CREATE INDEX idx_events_observed_at ON sentinel(observed_at)"
         )
 
-    with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:MIGRATION_FAILED$"):
+    with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
         Store(path)
 
     assert _application_tables(path) == set()
