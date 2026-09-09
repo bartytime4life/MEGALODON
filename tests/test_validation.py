@@ -10,6 +10,7 @@ from megalodon.validation import (
     parse_port,
     parse_timestamp,
     validate_metadata,
+    validate_packet_metadata,
 )
 
 
@@ -52,6 +53,49 @@ class ValidationTests(unittest.TestCase):
             validate_metadata({"a": {"b": {"c": {"d": {"e": "too deep"}}}}})
         with self.assertRaises(ValidationError):
             validate_metadata({"sensor": "line\nbreak"})
+
+    def test_packet_metadata_is_a_closed_adapter_record(self):
+        self.assertEqual(
+            validate_packet_metadata({"source_adapter": "tshark-fields-v1"}),
+            {"source_adapter": "tshark-fields-v1"},
+        )
+        for value in (
+            {"payload": "SECRET"},
+            {"payload_sha256": "deadbeef"},
+            {"sensor": "lab"},
+            {"source_adapter": "operator-controlled"},
+        ):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                validate_packet_metadata(value)
+
+    def test_packet_metadata_is_immutable_after_validation(self):
+        event = PacketEvent(
+            datetime.now(timezone.utc),
+            "192.0.2.1",
+            "198.51.100.2",
+            "TCP",
+            metadata={"source_adapter": "tshark-fields-v1"},
+        )
+        with self.assertRaises(TypeError):
+            event.metadata["source_adapter"] = "changed"
+        self.assertEqual(event.to_dict()["metadata"], {"source_adapter": "tshark-fields-v1"})
+
+    def test_validation_diagnostics_do_not_echo_hostile_values(self):
+        secret = "SECRET-PAYLOAD"
+        for operation in (
+            lambda: parse_ip(secret),
+            lambda: parse_timestamp(secret),
+            lambda: PacketEvent(
+                datetime.now(timezone.utc),
+                "192.0.2.1",
+                "198.51.100.2",
+                "TCP",
+                tcp_flags=[secret],
+            ),
+        ):
+            with self.subTest(operation=operation), self.assertRaises(ValidationError) as caught:
+                operation()
+            self.assertNotIn(secret, str(caught.exception))
 
     def test_packet_event_bounds_protocol_and_metadata(self):
         now = datetime.now(timezone.utc)
