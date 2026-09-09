@@ -188,7 +188,12 @@ class StorageSchemaError(ValueError):
 
 
 def _validate_schema(
-    connection, tables, indexes, foreign_keys, unique_indexes
+    connection,
+    tables,
+    indexes,
+    foreign_keys,
+    unique_indexes,
+    schema_statements,
 ) -> None:
     expected_objects = {
         *(("table", table, table) for table in tables),
@@ -202,6 +207,20 @@ def _validate_schema(
         if not str(row[1]).startswith("sqlite_")
     }
     if actual_objects != expected_objects:
+        raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+    expected_sql = {
+        statement.split()[2]: " ".join(statement.split())
+        for statement in schema_statements
+    }
+    actual_sql = {
+        str(row[0]): " ".join(str(row[1]).split())
+        for row in connection.execute(
+            "SELECT name, sql FROM sqlite_schema WHERE sql IS NOT NULL"
+        )
+        if not str(row[0]).startswith("sqlite_")
+    }
+    if actual_sql != expected_sql:
         raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
 
     for table, expected in tables.items():
@@ -321,13 +340,44 @@ def migrate_database(path: str | Path) -> dict[str, object]:
     backup_descriptor: int | None = None
     source: sqlite3.Connection | None = None
     backup: sqlite3.Connection | None = None
+    backup_attempted = False
     backup_created = False
     migration_started = False
-    try:
-        source_descriptor = _open_regular_file(source_path, os.O_RDWR)
-        source = sqlite3.connect(
-            _descriptor_database_path(source_descriptor, source_path), timeout=10
+
+    def discard_unverified_backup() -> None:
+        nonlocal backup, backup_descriptor
+        if backup is not None:
+            try:
+                backup.close()
+            except sqlite3.Error:
+                pass
+            backup = None
+        matches_created_file = (
+            backup_descriptor is not None
+            and _path_matches_descriptor(backup_path, backup_descriptor)
         )
+        if backup_descriptor is not None:
+            try:
+                os.close(backup_descriptor)
+            except OSError:
+                matches_created_file = False
+            backup_descriptor = None
+        if matches_created_file:
+            try:
+                backup_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    try:
+        try:
+            source_descriptor = _open_regular_file(source_path, os.O_RDWR)
+            source = sqlite3.connect(
+                _descriptor_database_path(source_descriptor, source_path), timeout=10
+            )
+        except (OSError, sqlite3.Error) as exc:
+            raise StorageSchemaError(
+                "STORAGE_MIGRATION:SOURCE_OPEN_FAILED"
+            ) from exc
         if not _path_matches_descriptor(source_path, source_descriptor):
             raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
         source.execute("PRAGMA foreign_keys=ON")
@@ -339,6 +389,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
                 _INDEX_COLUMNS_V2,
                 _FOREIGN_KEYS_V2,
                 _UNIQUE_INDEXES_V2,
+                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
             )
             return {
                 "status": "already_current",
@@ -356,11 +407,13 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             _INDEX_COLUMNS_V1,
             _FOREIGN_KEYS_V1,
             _UNIQUE_INDEXES_V1,
+            SCHEMA_V1_STATEMENTS,
         )
         if os.path.lexists(backup_path):
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_EXISTS")
 
         data_version = int(source.execute("PRAGMA data_version").fetchone()[0])
+        backup_attempted = True
         backup_descriptor = _open_regular_file(
             backup_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
         )
@@ -380,6 +433,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             _INDEX_COLUMNS_V1,
             _FOREIGN_KEYS_V1,
             _UNIQUE_INDEXES_V1,
+            SCHEMA_V1_STATEMENTS,
         )
         if not _path_matches_descriptor(backup_path, backup_descriptor):
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_CHANGED")
@@ -412,6 +466,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
                 _INDEX_COLUMNS_V1,
                 _FOREIGN_KEYS_V1,
                 _UNIQUE_INDEXES_V1,
+                SCHEMA_V1_STATEMENTS,
             )
         except StorageSchemaError as exc:
             source.rollback()
@@ -426,6 +481,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             _INDEX_COLUMNS_V2,
             _FOREIGN_KEYS_V2,
             _UNIQUE_INDEXES_V2,
+            (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
         )
         source.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         source.commit()
@@ -433,39 +489,27 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             "status": "migrated",
             "from_version": version,
             "to_version": SCHEMA_VERSION,
-            "backup": str(backup_path),
+            "backup": "created",
         }
     except StorageSchemaError:
         if source is not None and source.in_transaction:
             source.rollback()
-        if backup is not None:
-            backup.close()
-            backup = None
-        if (
-            backup_created
-            and not migration_started
-            and backup_descriptor is not None
-            and _path_matches_descriptor(backup_path, backup_descriptor)
-        ):
-            backup_path.unlink(missing_ok=True)
+        if backup_created and not migration_started:
+            discard_unverified_backup()
         raise
     except (OSError, sqlite3.Error) as exc:
         if source is not None and source.in_transaction:
             source.rollback()
-        if backup is not None:
-            backup.close()
-            backup = None
-        if (
-            backup_created
-            and not migration_started
-            and backup_descriptor is not None
-            and _path_matches_descriptor(backup_path, backup_descriptor)
-        ):
-            backup_path.unlink(missing_ok=True)
+        if backup_created and not migration_started:
+            discard_unverified_backup()
         code = (
             "STORAGE_MIGRATION:MIGRATION_FAILED"
             if migration_started
-            else "STORAGE_MIGRATION:BACKUP_FAILED"
+            else (
+                "STORAGE_MIGRATION:BACKUP_FAILED"
+                if backup_attempted
+                else "STORAGE_MIGRATION:SOURCE_FAILED"
+            )
         )
         raise StorageSchemaError(code) from exc
     finally:
@@ -516,6 +560,7 @@ class Store:
                         _INDEX_COLUMNS_V1,
                         _FOREIGN_KEYS_V1,
                         _UNIQUE_INDEXES_V1,
+                        SCHEMA_V1_STATEMENTS,
                     )
                 finally:
                     self.connection.rollback()
@@ -528,6 +573,7 @@ class Store:
                     _INDEX_COLUMNS_V2,
                     _FOREIGN_KEYS_V2,
                     _UNIQUE_INDEXES_V2,
+                    (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
                 )
                 self.connection.commit()
             except Exception:
@@ -551,6 +597,7 @@ class Store:
                 _INDEX_COLUMNS_V2,
                 _FOREIGN_KEYS_V2,
                 _UNIQUE_INDEXES_V2,
+                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
             )
             self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.connection.commit()

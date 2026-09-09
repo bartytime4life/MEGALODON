@@ -14,7 +14,6 @@ from megalodon.cli import build_parser, main
 from megalodon.dashboard import serve
 from megalodon.firewall import NftablesFirewall
 from megalodon.storage import (
-    MIGRATION_BACKUP_SUFFIX,
     SCHEMA_V1_STATEMENTS,
     SCHEMA_VERSION,
     Store,
@@ -78,9 +77,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "migrated")
             self.assertEqual(receipt["from_version"], 1)
             self.assertEqual(receipt["to_version"], SCHEMA_VERSION)
-            self.assertEqual(
-                receipt["backup"], str(database) + MIGRATION_BACKUP_SUFFIX
-            )
+            self.assertEqual(receipt["backup"], "created")
+            self.assertNotIn(str(database), output.getvalue())
+            self.assertNotIn(directory, output.getvalue())
             with Store(database):
                 pass
 
