@@ -230,7 +230,8 @@ ledger. Existing exact v1 or unversioned-v1 databases require the explicit
 `database-migrate` command; ordinary startup does not migrate them. The command
 first creates and verifies a sibling backup ending in `.pre-v2.bak`, never
 overwrites an existing backup, and then applies the additive migration in one
-transaction. The backup is created mode 0600 on POSIX; Windows confidentiality
+transaction. Its JSON receipt reports only `backup: created`, not the configured
+filesystem path. The backup is created mode 0600 on POSIX; Windows confidentiality
 still depends on the private-directory/NTFS ACL acceptance tracked separately.
 POSIX migration also requires an operator-owned parent directory that is not
 group- or world-writable and keeps no-follow source/backup descriptors bound

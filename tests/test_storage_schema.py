@@ -8,6 +8,7 @@ import sqlite3
 import stat
 
 import pytest
+import megalodon.storage as storage_module
 
 from megalodon.storage import (
     MIGRATION_BACKUP_SUFFIX,
@@ -90,8 +91,9 @@ def test_explicit_migration_backs_up_and_preserves_the_v1_database(tmp_path, ver
         "status": "migrated",
         "from_version": version,
         "to_version": SCHEMA_VERSION,
-        "backup": str(backup_path),
+        "backup": "created",
     }
+    assert str(tmp_path) not in str(receipt)
     if os.name == "posix":
         assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
     with Store(path) as migrated:
@@ -229,6 +231,88 @@ def test_v2_schema_without_event_id_uniqueness_is_refused(tmp_path):
 
     with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
         Store(path)
+
+
+def test_v1_schema_with_added_check_constraint_is_refused_before_backup(tmp_path):
+    path = tmp_path / "audit.db"
+    backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
+    with sqlite3.connect(path) as connection:
+        for statement in SCHEMA_V1_STATEMENTS:
+            connection.execute(
+                statement.replace(
+                    "byte_count INTEGER NOT NULL,",
+                    "byte_count INTEGER NOT NULL CHECK(byte_count = 0),",
+                )
+            )
+        connection.execute("PRAGMA user_version = 1")
+
+    with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
+        migrate_database(path)
+
+    assert not backup_path.exists()
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+
+
+def test_failed_backup_validation_closes_descriptor_before_cleanup(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "audit.db"
+    backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
+    _create_v1(path)
+    original_open = storage_module._open_regular_file
+    original_validate = storage_module._validate_schema
+    original_unlink = type(backup_path).unlink
+    backup_descriptors = []
+    validations = 0
+
+    def tracked_open(candidate, flags, mode=None):
+        descriptor = original_open(candidate, flags, mode)
+        if candidate == backup_path:
+            backup_descriptors.append(descriptor)
+        return descriptor
+
+    def fail_backup_validation(*args, **kwargs):
+        nonlocal validations
+        validations += 1
+        if validations == 2:
+            raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_INVALID")
+        return original_validate(*args, **kwargs)
+
+    def assert_closed_before_unlink(candidate, *args, **kwargs):
+        with pytest.raises(OSError):
+            os.fstat(backup_descriptors[-1])
+        return original_unlink(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(storage_module, "_open_regular_file", tracked_open)
+    monkeypatch.setattr(storage_module, "_validate_schema", fail_backup_validation)
+    monkeypatch.setattr(type(backup_path), "unlink", assert_closed_before_unlink)
+
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_MIGRATION:BACKUP_INVALID$"
+    ):
+        migrate_database(path)
+
+    assert backup_descriptors
+    assert not backup_path.exists()
+
+
+def test_source_open_error_is_translated_to_fixed_migration_error(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "audit.db"
+    _create_v1(path)
+
+    def fail_connect(*_args, **_kwargs):
+        raise sqlite3.OperationalError("sensitive source path detail")
+
+    monkeypatch.setattr(sqlite3, "connect", fail_connect)
+
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_MIGRATION:SOURCE_OPEN_FAILED$"
+    ) as raised:
+        migrate_database(path)
+    assert "sensitive source path detail" not in str(raised.value)
 
 
 @pytest.mark.skipif(

@@ -16,8 +16,9 @@ decisions are not closed by issue lifecycle state.
 The application schema is explicitly marked as SQLite `user_version = 2`.
 Startup validates the closed set of application tables and indexes, rejects
 additional non-internal tables, indexes, triggers, and views, and checks the
-column, foreign-key, required-index, primary-key, and uniqueness shape before
-enabling WAL. A fresh database is created atomically. Exact v1 and unversioned-v1
+normalized declared DDL, column, foreign-key, required-index, primary-key, and
+uniqueness shape before enabling WAL. A fresh database is created atomically.
+Exact v1 and unversioned-v1
 layouts fail with `STORAGE_SCHEMA:MIGRATION_REQUIRED`; they are not changed by
 ordinary startup. Partial, altered, extended, unsupported, and future layouts
 also fail closed with fixed schema errors instead of being repaired or downgraded.
@@ -39,6 +40,11 @@ SQLite path still require an operator-controlled private directory and path
 identity checks; Windows confidentiality and replacement resistance remain part
 of the separately unverified private-directory/NTFS ACL control. Re-running
 against v2 is an idempotent no-op.
+
+The success receipt reports only the fixed backup state `created`, not the
+configured filesystem path. The operator can derive the local sibling name from
+the reviewed configuration and fixed `.pre-v2.bak` suffix without copying a
+personal or case directory into shared logs.
 
 Retain the backup until operational verification. To recover, stop all MEGALODON
 processes, preserve the failed database and its `-wal`/`-shm` sidecars for
