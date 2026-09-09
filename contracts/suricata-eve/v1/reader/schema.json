@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:megalodon:contract:suricata-eve-reader:v1",
-  "title": "PROPOSED bounded Suricata EVE reader contract v1 (inert)",
+  "title": "ADOPTED bounded Suricata EVE reader contract v1 (inert)",
   "$comment": "Conformance also requires the adjacent README and the parent record contract. This schema does not implement a reader or authorize durable writes, processes, network access, or actions.",
   "oneOf": [
     {
