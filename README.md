@@ -241,6 +241,16 @@ The [`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audi
 and standalone offline-report retention separate and defines fail-closed
 outcomes; it selects no deletion value or automatic job.
 
+Each `run` command writes a closed lifecycle receipt before consuming input and
+marks it `completed` or `failed` at a terminal boundary. The receipt stores only
+the closed source name, UTC timestamps, derived event/detection counts, and an
+optional fixed failure code. A join table associates each durably written event
+with exactly one CLI run; a malformed JSONL suffix is therefore distinguishable
+from a complete replay. Raw exceptions, input paths, command lines, packet
+contents, and credentials are not stored in the run ledger or echoed by the run
+failure diagnostic. A row left `running` means completion was not recorded, not
+that the run succeeded.
+
 On the Linux analysis profile, add one completed offline run to the read-only
 dashboard by selecting its absolute private report directory when the server starts:
 
@@ -314,7 +324,8 @@ The adapter caps each JSONL record at 64 KiB. IP addresses, ports, timestamps,
 flags, text, byte counts, detector evidence, action details, severities, and action
 statuses are typed and bounded before persistence. SQLite-facing counts cannot
 exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
-at the storage boundary.
+at the storage boundary. Successful CLI output reports run-scoped `processed`
+and `detections` counts plus a separate `totals` object for the whole database.
 Detector state is capped at 4,096 tracked sources and 4,096 events per source
 window by default.
 

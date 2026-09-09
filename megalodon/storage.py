@@ -14,6 +14,7 @@ from typing import Any
 from .models import ActionRecord, DetectionResult, PacketEvent
 from .validation import (
     parse_nonnegative_int,
+    parse_timestamp,
     SQLITE_INTEGER_MAX,
     validate_metadata,
     validate_packet_metadata,
@@ -182,9 +183,18 @@ _FOREIGN_KEYS_V2 = {
     },
 }
 
+INGESTION_SOURCES = frozenset({"sample", "jsonl", "scapy"})
+INGESTION_FAILURE_CODES = frozenset(
+    {"CAPTURE_ERROR", "INTERRUPTED", "IO_ERROR", "STORAGE_ERROR", "VALIDATION_ERROR"}
+)
+
 
 class StorageSchemaError(ValueError):
     """The selected database cannot safely satisfy this storage schema."""
+
+
+class IngestionRunError(ValueError):
+    """An ingestion run transition or association is invalid."""
 
 
 def _validate_schema(
@@ -570,7 +580,124 @@ class Store:
     def __exit__(self, *_: object) -> None:
         self.close()
 
-    def record_event(self, event: PacketEvent) -> int:
+    @staticmethod
+    def _run_id(value: int) -> int:
+        try:
+            parsed = parse_nonnegative_int(
+                value, "run_id", maximum=SQLITE_INTEGER_MAX
+            )
+        except ValueError as exc:
+            raise IngestionRunError("INGESTION_RUN:INVALID_ID") from exc
+        if parsed == 0:
+            raise IngestionRunError("INGESTION_RUN:INVALID_ID")
+        return parsed
+
+    @staticmethod
+    def _run_timestamp(value: datetime | None) -> datetime:
+        try:
+            candidate = datetime.now(timezone.utc) if value is None else value
+            return parse_timestamp(candidate)
+        except ValueError as exc:
+            raise IngestionRunError("INGESTION_RUN:INVALID_TIMESTAMP") from exc
+
+    def start_ingestion_run(
+        self, source: str, *, started_at: datetime | None = None
+    ) -> int:
+        if not isinstance(source, str) or source not in INGESTION_SOURCES:
+            raise IngestionRunError("INGESTION_RUN:INVALID_SOURCE")
+        started = self._run_timestamp(started_at)
+        with self._lock, self.connection:
+            cursor = self.connection.execute(
+                """
+                INSERT INTO ingestion_runs (
+                    started_at, finished_at, source, status,
+                    processed_count, detection_count, failure_code
+                ) VALUES (?, NULL, ?, 'running', 0, 0, NULL)
+                """,
+                (started.isoformat(), source),
+            )
+            return int(cursor.lastrowid)
+
+    def finish_ingestion_run(
+        self,
+        run_id: int,
+        status: str,
+        *,
+        failure_code: str | None = None,
+        finished_at: datetime | None = None,
+    ) -> dict[str, object]:
+        safe_run_id = self._run_id(run_id)
+        if not isinstance(status, str) or status not in {"completed", "failed"}:
+            raise IngestionRunError("INGESTION_RUN:INVALID_STATUS")
+        if status == "completed" and failure_code is not None:
+            raise IngestionRunError("INGESTION_RUN:INVALID_FAILURE")
+        if status == "failed" and (
+            not isinstance(failure_code, str)
+            or failure_code not in INGESTION_FAILURE_CODES
+        ):
+            raise IngestionRunError("INGESTION_RUN:INVALID_FAILURE")
+        finished = self._run_timestamp(finished_at)
+
+        with self._lock:
+            self.connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = self.connection.execute(
+                    "SELECT started_at, source, status FROM ingestion_runs WHERE id = ?",
+                    (safe_run_id,),
+                ).fetchone()
+                if row is None or row["status"] != "running":
+                    raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+                if finished < parse_timestamp(row["started_at"]):
+                    raise IngestionRunError("INGESTION_RUN:INVALID_TIMESTAMP")
+                processed_count = int(
+                    self.connection.execute(
+                        "SELECT COUNT(*) FROM ingestion_run_events WHERE run_id = ?",
+                        (safe_run_id,),
+                    ).fetchone()[0]
+                )
+                detection_count = int(
+                    self.connection.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM detections AS d
+                        JOIN ingestion_run_events AS r ON r.event_id = d.event_id
+                        WHERE r.run_id = ?
+                        """,
+                        (safe_run_id,),
+                    ).fetchone()[0]
+                )
+                cursor = self.connection.execute(
+                    """
+                    UPDATE ingestion_runs
+                    SET finished_at = ?, status = ?, processed_count = ?,
+                        detection_count = ?, failure_code = ?
+                    WHERE id = ? AND status = 'running'
+                    """,
+                    (
+                        finished.isoformat(),
+                        status,
+                        processed_count,
+                        detection_count,
+                        failure_code,
+                        safe_run_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+                self.connection.commit()
+            except Exception:
+                self.connection.rollback()
+                raise
+        return {
+            "run_id": safe_run_id,
+            "source": str(row["source"]),
+            "status": status,
+            "processed": processed_count,
+            "detections": detection_count,
+            "failure_code": failure_code,
+        }
+
+    def record_event(self, event: PacketEvent, *, run_id: int | None = None) -> int:
         byte_count = parse_nonnegative_int(
             event.byte_count, "byte_count", maximum=SQLITE_INTEGER_MAX
         )
@@ -584,6 +711,7 @@ class Store:
             )
         )
         metadata = validate_packet_metadata(event.metadata)
+        safe_run_id = None if run_id is None else self._run_id(run_id)
         with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
@@ -606,7 +734,22 @@ class Store:
                     json.dumps(metadata, sort_keys=True, allow_nan=False),
                 ),
             )
-            return int(cursor.lastrowid)
+            event_id = int(cursor.lastrowid)
+            if safe_run_id is not None:
+                association = self.connection.execute(
+                    """
+                    INSERT INTO ingestion_run_events (run_id, event_id)
+                    SELECT ?, ?
+                    WHERE EXISTS (
+                        SELECT 1 FROM ingestion_runs
+                        WHERE id = ? AND status = 'running'
+                    )
+                    """,
+                    (safe_run_id, event_id, safe_run_id),
+                )
+                if association.rowcount != 1:
+                    raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+            return event_id
 
     def record_detection(self, event_id: int, detection: DetectionResult) -> int:
         evidence = validate_metadata(detection.evidence)
