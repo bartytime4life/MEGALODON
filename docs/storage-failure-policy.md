@@ -13,13 +13,40 @@ failures. Neither property makes the three service stages one transaction or
 selects a retention policy. The remaining operator-policy and operational-failure
 decisions are not closed by issue lifecycle state.
 
-The application schema is explicitly marked as SQLite `user_version = 1`.
-Startup validates the exact application table, foreign-key, and required-index
-shape before enabling WAL. A fresh database is created atomically; an exact
-unversioned legacy database is adopted by setting the version in one transaction.
-Partial, altered, unsupported, and future application layouts fail closed with a
-fixed schema error. The store does not repair or downgrade them, and this marker
-does not provide the backup/restore procedure required before a future migration.
+The application schema is explicitly marked as SQLite `user_version = 2`.
+Startup validates the closed set of application tables and indexes, rejects
+additional non-internal tables, indexes, triggers, and views, and checks the
+column, foreign-key, required-index, primary-key, and uniqueness shape before
+enabling WAL. A fresh database is created atomically. Exact v1 and unversioned-v1
+layouts fail with `STORAGE_SCHEMA:MIGRATION_REQUIRED`; they are not changed by
+ordinary startup. Partial, altered, extended, unsupported, and future layouts
+also fail closed with fixed schema errors instead of being repaired or downgraded.
+
+The explicit `database-migrate` command is the only v1-to-v2 path. Run it with all
+other MEGALODON processes stopped. On POSIX, the database must be in an
+operator-owned directory that is not group- or world-writable. The migration
+refuses symlink sources and missing files, opens the source and newly created
+backup with no-follow descriptors, and keeps those descriptors bound through
+SQLite backup and validation. It fails if either pathname stops identifying its
+opened file. The command creates a sibling `<database>.pre-v2.bak` without
+overwriting any existing path, verifies it with SQLite `quick_check` and the v1
+structural contract, checks that the source did not change, and applies the
+additive table migration and version marker in one transaction. A pre-migration
+failure removes only the backup path that still identifies the file it created;
+a migration-stage failure rolls back the source and retains the verified backup.
+POSIX creation uses mode 0600. Platforms without a stable descriptor-backed
+SQLite path still require an operator-controlled private directory and path
+identity checks; Windows confidentiality and replacement resistance remain part
+of the separately unverified private-directory/NTFS ACL control. Re-running
+against v2 is an idempotent no-op.
+
+Retain the backup until operational verification. To recover, stop all MEGALODON
+processes, preserve the failed database and its `-wal`/`-shm` sidecars for
+investigation, copy the backup to a new private path, and point a reviewed config
+at that copy. Run `database-migrate` on the copy if it is v1, then point the
+reviewed runtime config at the migrated copy. Do not overwrite either database in
+place. This repository does not automatically restore, delete, rotate, upload, or
+claim secure erasure of backups.
 
 ## What a successful write means
 
@@ -88,9 +115,10 @@ separate connection, successful recovery writes and reopened-database counts.
 They prevent tentative failed rows being committed by the next call.
 Existing aware-cutoff and all-table purge rollback tests are retained unchanged.
 Only synthetic temporary databases and fixed test triggers are used.
-The six schema-lifecycle cases separately cover fresh creation, exact legacy
-adoption, partial and altered schema refusal, future-version non-mutation, and
-atomic rollback when initial creation cannot complete.
+The schema-lifecycle cases separately cover fresh creation, explicit legacy
+migration, required-migration refusal, backup preservation/non-overwrite,
+idempotence, partial and altered schema refusal, future-version non-mutation, and
+atomic rollback for both initial creation and v2 migration.
 
 The inspected baseline was `a177c13ade3b4a727a0514afac21575fd0f10e08`, with
 storage blob `c6b45bea5bf61462dbbeb0f71a281fb49db3e3ca`. All nine new cases
