@@ -90,13 +90,13 @@ def test_action_text_and_details_are_bounded():
         )
 
 
-def test_store_revalidates_mutable_json_before_each_write(tmp_path):
+def test_store_revalidates_mutable_detection_and_action_json_before_each_write(tmp_path):
     event = PacketEvent(
         STAMP,
         "192.0.2.1",
         "198.51.100.2",
         "TCP",
-        metadata={"stage": "valid"},
+        metadata={"source_adapter": "tshark-fields-v1"},
     )
     detection = _detection(evidence={"stage": "valid"})
     action = ActionRecord(
@@ -109,14 +109,9 @@ def test_store_revalidates_mutable_json_before_each_write(tmp_path):
     )
 
     with Store(tmp_path / "audit.db") as store:
-        event.metadata["value"] = "x" * 9000
-        with pytest.raises(ValidationError, match="metadata .*exceeds"):
-            store.record_event(event)
-        assert store.summary()["events"] == 0
-
-        valid_event_id = store.record_event(
-            PacketEvent(STAMP, "192.0.2.1", "198.51.100.2", "TCP")
-        )
+        with pytest.raises(TypeError):
+            event.metadata["value"] = "x" * 9000
+        valid_event_id = store.record_event(event)
         detection.evidence["value"] = "x" * 9000
         with pytest.raises(ValidationError, match="metadata .*exceeds"):
             store.record_detection(valid_event_id, detection)

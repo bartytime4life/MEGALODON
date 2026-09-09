@@ -24,6 +24,8 @@ malicious activity.
 
 - observe only: a fresh configuration does not mutate the firewall;
 - metadata only: packet payloads and payload-derived hashes are not represented;
+- closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
+  provenance and cannot carry arbitrary payload-like fields;
 - local only: the dashboard defaults to `127.0.0.1:8787` and has no write API;
 - no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
 - no shell interpolation: untrusted event values never become shell code;
