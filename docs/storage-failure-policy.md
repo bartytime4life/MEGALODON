@@ -13,13 +13,31 @@ failures. Neither property makes the three service stages one transaction or
 selects a retention policy. Issue #28 therefore remains the live operator-policy
 and operational-failure gate.
 
-The application schema is explicitly marked as SQLite `user_version = 1`.
+The application schema is explicitly marked as SQLite `user_version = 2`.
 Startup validates the exact application table, foreign-key, and required-index
-shape before enabling WAL. A fresh database is created atomically; an exact
-unversioned legacy database is adopted by setting the version in one transaction.
-Partial, altered, unsupported, and future application layouts fail closed with a
-fixed schema error. The store does not repair or downgrade them, and this marker
-does not provide the backup/restore procedure required before a future migration.
+shape before enabling WAL. A fresh database is created atomically. Exact v1 and
+unversioned-v1 layouts fail with `STORAGE_SCHEMA:MIGRATION_REQUIRED`; they are not
+changed by ordinary startup. Partial, altered, unsupported, and future layouts
+also fail closed with fixed schema errors instead of being repaired or downgraded.
+
+The explicit `database-migrate` command is the only v1-to-v2 path. Run it with all
+other MEGALODON processes stopped. It refuses symlink sources and missing files,
+creates a new sibling `<database>.pre-v2.bak` without overwriting any existing
+path, verifies that backup with SQLite `quick_check` and the v1 structural
+contract, checks that the source did not change, and applies the additive table
+migration and version marker in one transaction. A pre-migration failure removes
+the backup it created; a migration-stage failure rolls back the source and retains
+the verified backup. POSIX creation uses mode 0600; Windows confidentiality still
+requires the separately unverified private-directory/NTFS ACL control. Re-running
+against v2 is an idempotent no-op.
+
+Retain the backup until operational verification. To recover, stop all MEGALODON
+processes, preserve the failed database and its `-wal`/`-shm` sidecars for
+investigation, copy the backup to a new private path, and point a reviewed config
+at that copy. Run `database-migrate` on the copy if it is v1, then point the
+reviewed runtime config at the migrated copy. Do not overwrite either database in
+place. This repository does not automatically restore, delete, rotate, upload, or
+claim secure erasure of backups.
 
 ## What a successful write means
 
@@ -54,9 +72,10 @@ from a separate connection, successful recovery writes and reopened-database
 counts. They prevent tentative failed rows being committed by the next call.
 Existing aware-cutoff and all-table purge rollback tests are retained unchanged.
 Only synthetic temporary databases and fixed test triggers are used.
-The six schema-lifecycle cases separately cover fresh creation, exact legacy
-adoption, partial and altered schema refusal, future-version non-mutation, and
-atomic rollback when initial creation cannot complete.
+The schema-lifecycle cases separately cover fresh creation, explicit legacy
+migration, required-migration refusal, backup preservation/non-overwrite,
+idempotence, partial and altered schema refusal, future-version non-mutation, and
+atomic rollback for both initial creation and v2 migration.
 
 The inspected baseline was `a177c13ade3b4a727a0514afac21575fd0f10e08`, with
 storage blob `c6b45bea5bf61462dbbeb0f71a281fb49db3e3ca`. All nine new cases

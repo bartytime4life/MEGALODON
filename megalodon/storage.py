@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sqlite3
 from threading import RLock
@@ -13,9 +14,10 @@ from .models import ActionRecord, DetectionResult, PacketEvent
 from .validation import parse_nonnegative_int, SQLITE_INTEGER_MAX, validate_metadata
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+MIGRATION_BACKUP_SUFFIX = ".pre-v2.bak"
 
-SCHEMA_STATEMENTS = (
+SCHEMA_V1_STATEMENTS = (
     """CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     observed_at TEXT NOT NULL,
@@ -59,7 +61,26 @@ SCHEMA_STATEMENTS = (
     "CREATE INDEX idx_actions_created_at ON actions(created_at)",
 )
 
-_TABLE_COLUMNS = {
+SCHEMA_V2_STATEMENTS = (
+    """CREATE TABLE ingestion_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL,
+    processed_count INTEGER NOT NULL,
+    detection_count INTEGER NOT NULL,
+    failure_code TEXT
+)""",
+    "CREATE INDEX idx_ingestion_runs_started_at ON ingestion_runs(started_at)",
+    """CREATE TABLE ingestion_run_events (
+    run_id INTEGER NOT NULL REFERENCES ingestion_runs(id),
+    event_id INTEGER NOT NULL UNIQUE REFERENCES events(id),
+    PRIMARY KEY (run_id, event_id)
+)""",
+)
+
+_TABLE_COLUMNS_V1 = {
     "events": (
         ("id", "INTEGER", 0, 1),
         ("observed_at", "TEXT", 1, 0),
@@ -99,16 +120,227 @@ _TABLE_COLUMNS = {
     ),
 }
 
-_INDEX_COLUMNS = {
+_TABLE_COLUMNS_V2 = {
+    **_TABLE_COLUMNS_V1,
+    "ingestion_runs": (
+        ("id", "INTEGER", 0, 1),
+        ("started_at", "TEXT", 1, 0),
+        ("finished_at", "TEXT", 0, 0),
+        ("source", "TEXT", 1, 0),
+        ("status", "TEXT", 1, 0),
+        ("processed_count", "INTEGER", 1, 0),
+        ("detection_count", "INTEGER", 1, 0),
+        ("failure_code", "TEXT", 0, 0),
+    ),
+    "ingestion_run_events": (
+        ("run_id", "INTEGER", 1, 1),
+        ("event_id", "INTEGER", 1, 2),
+    ),
+}
+
+_INDEX_COLUMNS_V1 = {
     "idx_events_observed_at": ("events", ("observed_at",)),
     "idx_events_src_ip": ("events", ("src_ip",)),
     "idx_detections_detected_at": ("detections", ("detected_at",)),
     "idx_actions_created_at": ("actions", ("created_at",)),
 }
 
+_INDEX_COLUMNS_V2 = {
+    **_INDEX_COLUMNS_V1,
+    "idx_ingestion_runs_started_at": ("ingestion_runs", ("started_at",)),
+}
+
+_FOREIGN_KEYS_V1 = {
+    "events": set(),
+    "detections": {("events", "event_id", "id")},
+    "actions": set(),
+}
+
+_FOREIGN_KEYS_V2 = {
+    **_FOREIGN_KEYS_V1,
+    "ingestion_runs": set(),
+    "ingestion_run_events": {
+        ("ingestion_runs", "run_id", "id"),
+        ("events", "event_id", "id"),
+    },
+}
+
 
 class StorageSchemaError(ValueError):
     """The selected database cannot safely satisfy this storage schema."""
+
+
+def _validate_schema(connection, tables, indexes, foreign_keys) -> None:
+    for table, expected in tables.items():
+        actual = tuple(
+            (str(row[1]), str(row[2]).upper(), int(row[3]), int(row[5]))
+            for row in connection.execute(f'PRAGMA table_info("{table}")')
+        )
+        if actual != expected:
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+    for table, expected in foreign_keys.items():
+        actual = {
+            (str(row[2]), str(row[3]), str(row[4]))
+            for row in connection.execute(f'PRAGMA foreign_key_list("{table}")')
+        }
+        if actual != expected:
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+    for index, (table, expected_columns) in indexes.items():
+        actual_indexes = {
+            str(row[1]): (int(row[2]), str(row[3]))
+            for row in connection.execute(f'PRAGMA index_list("{table}")')
+        }
+        if actual_indexes.get(index) != (0, "c"):
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+        columns = tuple(
+            str(row[2])
+            for row in connection.execute(f'PRAGMA index_info("{index}")')
+        )
+        if columns != expected_columns:
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+
+
+def _application_tables(connection) -> set[str]:
+    return {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_schema WHERE type = 'table'"
+        )
+        if row[0] in _TABLE_COLUMNS_V2
+    }
+
+
+def migrate_database(path: str | Path) -> dict[str, object]:
+    """Explicitly migrate an exact v1 database after a verified local backup."""
+
+    source_path = Path(path)
+    if source_path.is_symlink():
+        raise StorageSchemaError("STORAGE_MIGRATION:SYMLINK_REFUSED")
+    if not source_path.is_file():
+        raise StorageSchemaError("STORAGE_MIGRATION:NO_DATABASE")
+
+    backup_path = source_path.with_name(source_path.name + MIGRATION_BACKUP_SUFFIX)
+    source = sqlite3.connect(source_path, timeout=10)
+    backup: sqlite3.Connection | None = None
+    backup_created = False
+    migration_started = False
+    try:
+        source.execute("PRAGMA foreign_keys=ON")
+        version = int(source.execute("PRAGMA user_version").fetchone()[0])
+        if version == SCHEMA_VERSION:
+            if _application_tables(source) != set(_TABLE_COLUMNS_V2):
+                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+            _validate_schema(
+                source, _TABLE_COLUMNS_V2, _INDEX_COLUMNS_V2, _FOREIGN_KEYS_V2
+            )
+            return {
+                "status": "already_current",
+                "from_version": SCHEMA_VERSION,
+                "to_version": SCHEMA_VERSION,
+                "backup": None,
+            }
+        if version > SCHEMA_VERSION:
+            raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
+        if version not in (0, 1):
+            raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
+        if _application_tables(source) != set(_TABLE_COLUMNS_V1):
+            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+        _validate_schema(
+            source, _TABLE_COLUMNS_V1, _INDEX_COLUMNS_V1, _FOREIGN_KEYS_V1
+        )
+        if os.path.lexists(backup_path):
+            raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_EXISTS")
+
+        data_version = int(source.execute("PRAGMA data_version").fetchone()[0])
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(backup_path, flags, 0o600)
+        os.close(descriptor)
+        backup_created = True
+        backup = sqlite3.connect(backup_path)
+        source.backup(backup)
+        backup.commit()
+        if backup.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+            raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_INVALID")
+        if int(backup.execute("PRAGMA user_version").fetchone()[0]) != version:
+            raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_INVALID")
+        _validate_schema(
+            backup, _TABLE_COLUMNS_V1, _INDEX_COLUMNS_V1, _FOREIGN_KEYS_V1
+        )
+        backup.close()
+        backup = None
+        descriptor = os.open(backup_path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        if os.name == "posix":
+            descriptor = os.open(
+                backup_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            )
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+
+        source.execute("BEGIN EXCLUSIVE")
+        if int(source.execute("PRAGMA data_version").fetchone()[0]) != data_version:
+            source.rollback()
+            backup_path.unlink()
+            backup_created = False
+            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
+        if int(source.execute("PRAGMA user_version").fetchone()[0]) != version:
+            source.rollback()
+            backup_path.unlink()
+            backup_created = False
+            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
+        if _application_tables(source) != set(_TABLE_COLUMNS_V1):
+            source.rollback()
+            backup_path.unlink()
+            backup_created = False
+            raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
+        _validate_schema(
+            source, _TABLE_COLUMNS_V1, _INDEX_COLUMNS_V1, _FOREIGN_KEYS_V1
+        )
+
+        migration_started = True
+        for statement in SCHEMA_V2_STATEMENTS:
+            source.execute(statement)
+        _validate_schema(
+            source, _TABLE_COLUMNS_V2, _INDEX_COLUMNS_V2, _FOREIGN_KEYS_V2
+        )
+        source.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        source.commit()
+        return {
+            "status": "migrated",
+            "from_version": version,
+            "to_version": SCHEMA_VERSION,
+            "backup": str(backup_path),
+        }
+    except StorageSchemaError:
+        if source.in_transaction:
+            source.rollback()
+        if backup_created and not migration_started:
+            backup_path.unlink(missing_ok=True)
+        raise
+    except (OSError, sqlite3.Error) as exc:
+        if source.in_transaction:
+            source.rollback()
+        if backup_created and not migration_started:
+            backup_path.unlink(missing_ok=True)
+        code = (
+            "STORAGE_MIGRATION:MIGRATION_FAILED"
+            if migration_started
+            else "STORAGE_MIGRATION:BACKUP_FAILED"
+        )
+        raise StorageSchemaError(code) from exc
+    finally:
+        if backup is not None:
+            backup.close()
+        source.close()
 
 
 class Store:
@@ -132,28 +364,38 @@ class Store:
             version = int(self.connection.execute("PRAGMA user_version").fetchone()[0])
             if version > SCHEMA_VERSION:
                 raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
-            if version not in (0, SCHEMA_VERSION):
+            if version not in (0, 1, SCHEMA_VERSION):
                 raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
 
-            present = {
-                str(row[0])
-                for row in self.connection.execute(
-                    "SELECT name FROM sqlite_schema WHERE type = 'table'"
-                )
-                if row[0] in _TABLE_COLUMNS
-            }
-            expected = set(_TABLE_COLUMNS)
+            present = _application_tables(self.connection)
             if version == 0 and not present:
                 self._create_schema()
                 return
-            if present != expected:
+            if version in (0, 1):
+                if present != set(_TABLE_COLUMNS_V1):
+                    raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+                self.connection.execute("BEGIN IMMEDIATE")
+                try:
+                    _validate_schema(
+                        self.connection,
+                        _TABLE_COLUMNS_V1,
+                        _INDEX_COLUMNS_V1,
+                        _FOREIGN_KEYS_V1,
+                    )
+                finally:
+                    self.connection.rollback()
+                raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_REQUIRED")
+            if present != set(_TABLE_COLUMNS_V2):
                 raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
 
             self.connection.execute("BEGIN IMMEDIATE")
             try:
-                self._validate_schema()
-                if version == 0:
-                    self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                _validate_schema(
+                    self.connection,
+                    _TABLE_COLUMNS_V2,
+                    _INDEX_COLUMNS_V2,
+                    _FOREIGN_KEYS_V2,
+                )
                 self.connection.commit()
             except Exception:
                 self.connection.rollback()
@@ -168,9 +410,14 @@ class Store:
     def _create_schema(self) -> None:
         self.connection.execute("BEGIN IMMEDIATE")
         try:
-            for statement in SCHEMA_STATEMENTS:
+            for statement in (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS):
                 self.connection.execute(statement)
-            self._validate_schema()
+            _validate_schema(
+                self.connection,
+                _TABLE_COLUMNS_V2,
+                _INDEX_COLUMNS_V2,
+                _FOREIGN_KEYS_V2,
+            )
             self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.connection.commit()
         except Exception as exc:
@@ -178,36 +425,6 @@ class Store:
             if isinstance(exc, StorageSchemaError):
                 raise
             raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_FAILED") from exc
-
-    def _validate_schema(self) -> None:
-        for table, expected in _TABLE_COLUMNS.items():
-            actual = tuple(
-                (str(row[1]), str(row[2]).upper(), int(row[3]), int(row[5]))
-                for row in self.connection.execute(f'PRAGMA table_info("{table}")')
-            )
-            if actual != expected:
-                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
-
-        foreign_keys = tuple(
-            (str(row[2]), str(row[3]), str(row[4]))
-            for row in self.connection.execute('PRAGMA foreign_key_list("detections")')
-        )
-        if foreign_keys != (("events", "event_id", "id"),):
-            raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
-
-        for index, (table, expected_columns) in _INDEX_COLUMNS.items():
-            indexes = {
-                str(row[1]): (int(row[2]), str(row[3]))
-                for row in self.connection.execute(f'PRAGMA index_list("{table}")')
-            }
-            if indexes.get(index) != (0, "c"):
-                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
-            columns = tuple(
-                str(row[2])
-                for row in self.connection.execute(f'PRAGMA index_info("{index}")')
-            )
-            if columns != expected_columns:
-                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
 
     def close(self) -> None:
         with self._lock:

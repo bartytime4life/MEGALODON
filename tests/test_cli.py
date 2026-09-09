@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import redirect_stderr, redirect_stdout
 from contextlib import chdir
 import io
+import json
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -12,7 +13,12 @@ from unittest.mock import patch
 from megalodon.cli import build_parser, main
 from megalodon.dashboard import serve
 from megalodon.firewall import NftablesFirewall
-from megalodon.storage import SCHEMA_VERSION, Store
+from megalodon.storage import (
+    MIGRATION_BACKUP_SUFFIX,
+    SCHEMA_V1_STATEMENTS,
+    SCHEMA_VERSION,
+    Store,
+)
 
 
 def write_config(directory: str) -> tuple[Path, Path]:
@@ -54,6 +60,35 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(raised.exception.code, 2)
             self.assertEqual(error.getvalue(), "megalodon: STORAGE_SCHEMA:FUTURE_VERSION\n")
+
+    def test_database_migration_is_explicit_backed_up_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            with sqlite3.connect(database) as connection:
+                for statement in SCHEMA_V1_STATEMENTS:
+                    connection.execute(statement)
+                connection.execute("PRAGMA user_version = 1")
+
+            output = io.StringIO()
+            with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+                main(["database-migrate", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 0)
+            receipt = json.loads(output.getvalue())
+            self.assertEqual(receipt["status"], "migrated")
+            self.assertEqual(receipt["from_version"], 1)
+            self.assertEqual(receipt["to_version"], SCHEMA_VERSION)
+            self.assertEqual(
+                receipt["backup"], str(database) + MIGRATION_BACKUP_SUFFIX
+            )
+            with Store(database):
+                pass
+
+            output = io.StringIO()
+            with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+                main(["database-migrate", "--config", str(config)])
+            self.assertEqual(raised.exception.code, 0)
+            self.assertEqual(json.loads(output.getvalue())["status"], "already_current")
 
     def test_dashboard_parser_accepts_bounded_view_overrides(self):
         args = build_parser().parse_args(

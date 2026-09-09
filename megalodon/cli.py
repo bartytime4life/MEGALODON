@@ -15,7 +15,7 @@ from .config import load_settings
 from .firewall import FirewallError, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
-from .storage import Store
+from .storage import migrate_database, Store
 from .validation import safe_text, ValidationError
 
 
@@ -68,6 +68,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=_bounded_cli_integer("max-events", 0, MAX_RUN_EVENTS),
         default=0,
         help=f"stop after N events (0 means no limit; maximum {MAX_RUN_EVENTS})",
+    )
+
+    migrate = sub.add_parser(
+        "database-migrate",
+        help="explicitly back up and migrate the configured audit database",
+    )
+    migrate.add_argument(
+        "--config",
+        help="explicit TOML settings file; safe built-in defaults are used when omitted",
     )
 
     dashboard = sub.add_parser("dashboard", help="serve the read-only local dashboard")
@@ -197,6 +206,16 @@ def _dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _database_migrate(args: argparse.Namespace) -> int:
+    try:
+        settings = _load(args.config)
+        print(json.dumps(migrate_database(settings.db_path), sort_keys=True))
+    except (OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _record_firewall_action(settings, mode: str, operation) -> None:
     action = "firewall_install" if mode == "install" else "block"
     details = operation.to_dict()
@@ -251,6 +270,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _run(args)
     elif args.command == "dashboard":
         code = _dashboard(args)
+    elif args.command == "database-migrate":
+        code = _database_migrate(args)
     elif args.command == "firewall-plan":
         args.reason = args.reason
         code = _firewall(args, "plan")

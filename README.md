@@ -222,10 +222,16 @@ host network.
 The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
 applies a reviewed retention procedure. The store marks its current layout with
-SQLite `user_version = 1`. It adopts an exact unversioned legacy layout in place,
-but refuses partial, altered, or newer application schemas instead of attempting
-an implicit repair or downgrade. Back up operational databases before a future
-versioned migration; no backup or restore mechanism is supplied by the MVP.
+SQLite `user_version = 2`. New databases include the reserved ingestion-run
+ledger. Existing exact v1 or unversioned-v1 databases require the explicit
+`database-migrate` command; ordinary startup does not migrate them. The command
+first creates and verifies a sibling backup ending in `.pre-v2.bak`, never
+overwrites an existing backup, and then applies the additive migration in one
+transaction. The backup is created mode 0600 on POSIX; Windows confidentiality
+still depends on the private-directory/NTFS ACL acceptance tracked separately.
+Stop other MEGALODON processes before migrating and retain the backup until the
+new database has been operationally verified. Partial, altered, or newer
+application schemas are refused rather than repaired or downgraded.
 
 On the Linux analysis profile, add one completed offline run to the read-only
 dashboard by selecting its absolute private report directory when the server starts:
@@ -268,6 +274,7 @@ remain in the local audit store and are not served to the browser.
 | `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
 | `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
 | `run --source scapy --interface IFACE` | Perform optional Linux live metadata capture |
+| `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 audit database to v2; never overwrites its backup |
 | `dashboard` | Serve the read-only dashboard using configured host and port |
 | `firewall-plan IP` | Validate a target and print a non-mutating, time-limited block plan |
 | `firewall-install` | Print the isolated nftables table plan; `--apply` is required to execute it |
