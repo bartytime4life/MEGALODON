@@ -1,0 +1,86 @@
+{
+  "schema": "windows-core-acceptance-v1",
+  "repository_baseline": "7435eee1503f76b6b07ccbc45278f4ad71aec4cf",
+  "candidate_revision_source": "external exact-head PR or handoff receipt",
+  "profile": "W1-native-windows-11-x64-evaluation",
+  "native_execution_status": "not_performed",
+  "required_linux_job": {
+    "name": "test",
+    "runner": "ubuntu-24.04",
+    "python": "3.11",
+    "disposition": "preserve"
+  },
+  "features": [
+    {
+      "id": "metadata-validation",
+      "status": "synthetic_reusable",
+      "tests": ["tests/test_validation.py"]
+    },
+    {
+      "id": "sample-jsonl-processing",
+      "status": "synthetic_reusable",
+      "tests": [
+        "tests/test_capture.py",
+        "tests/test_cli.py::CliTests::test_default_run_works_outside_the_source_checkout",
+        "tests/test_cli.py::CliTests::test_explicit_missing_config_fails_without_echoing_the_path"
+      ]
+    },
+    {
+      "id": "fixed-detections",
+      "status": "synthetic_reusable",
+      "tests": ["tests/test_detector.py", "tests/test_detector_acceptance.py"]
+    },
+    {
+      "id": "sqlite-audit",
+      "status": "native_receipt_required",
+      "tests": ["tests/test_storage.py", "tests/test_storage_failures.py"]
+    },
+    {
+      "id": "loopback-dashboard",
+      "status": "native_receipt_required",
+      "tests": [
+        "tests/test_dashboard.py::test_dashboard_parser_and_remote_projection_boundary",
+        "tests/test_dashboard.py::test_dashboard_rejects_invalid_programmatic_polling_controls",
+        "tests/test_dashboard.py::test_dashboard_ui_has_accessible_read_only_states",
+        "tests/test_dashboard.py::test_dashboard_config_assets_and_query_validation",
+        "tests/test_dashboard.py::test_events_api_projects_only_fields_required_by_the_ui",
+        "tests/test_dashboard_binding.py"
+      ]
+    },
+    {
+      "id": "private-ntfs-storage",
+      "status": "native_receipt_required",
+      "tests": []
+    }
+  ],
+  "unsupported_operations": [
+    {
+      "id": "offline-analysis",
+      "status": "rejected",
+      "diagnostic": "LINUX_REQUIRED"
+    },
+    {
+      "id": "offline-dashboard-projection",
+      "status": "rejected",
+      "diagnostic": "LINUX_REQUIRED"
+    },
+    {
+      "id": "live-scapy-capture",
+      "status": "rejected",
+      "diagnostic": "live Scapy capture is supported only on Linux"
+    },
+    {
+      "id": "nftables",
+      "status": "rejected",
+      "diagnostic": "nftables operations are supported only on Linux"
+    }
+  ],
+  "native_receipts_required": [
+    "windows-edition-build-architecture-and-cpython",
+    "selected-core-tests-with-pass-fail-skip-counts",
+    "database-wal-shm-ntfs-acl-review",
+    "loopback-listener-and-real-browser-ui-api-checks",
+    "unsupported-operation-negative-controls",
+    "same-head-linux-test-job"
+  ]
+}

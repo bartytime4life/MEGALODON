@@ -302,6 +302,13 @@ raising privilege, choosing a substitute tool, or changing security settings.
 The static capability catalog makes unsupported and evaluation-only states
 explicit, but it does not implement or certify native Windows portability.
 
+The [Windows core acceptance matrix](docs/windows-core-acceptance.md) identifies
+the reusable test set and required native receipts. Windows attempts to select
+Scapy capture, nftables, offline analysis, or offline dashboard projection now
+fail before optional imports, executable/privilege checks, subprocesses, or
+POSIX file access. These Linux-run negative controls do not promote the Windows
+core beyond evaluation-only status.
+
 Windows offline analysis requires its own reviewed file-handle/identity,
 reparse-point, local-path, ACL, subprocess-tree, timeout, and resource-boundary
 implementation. Removing Linux platform/capability checks or replacing the
