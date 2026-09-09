@@ -126,7 +126,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
-| CI | Ubuntu 24.04 / Python 3.11 install, compilation, pytest, and non-mutating CLI smoke checks on pushes to `main` and pull requests |
+| CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel build and installed-package smokes, on pushes to `main` and pull requests |
 
 ## Requirements and programs used
 
