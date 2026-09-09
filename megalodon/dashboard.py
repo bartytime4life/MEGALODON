@@ -412,9 +412,14 @@ async function refresh(announce = true) {
   state.refreshing = true;
   const button = byId('refresh-button'); button.disabled = true; button.textContent = 'Refreshing…';
   try {
-    const [summary, events] = await Promise.all([
+    const [summaryResult, eventsResult] = await Promise.allSettled([
       requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`)
     ]);
+    if (summaryResult.status !== 'fulfilled' || eventsResult.status !== 'fulfilled') {
+      throw new Error('dashboard refresh failed');
+    }
+    const summary = summaryResult.value;
+    const events = eventsResult.value;
     if (!Array.isArray(events)) throw new Error('invalid events response');
     state.events = events;
     renderMetrics(summary); applyFilters(); setUpdatedTime(new Date());
