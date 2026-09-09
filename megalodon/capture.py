@@ -110,8 +110,15 @@ def iter_jsonl(
             if not isinstance(value, dict):
                 raise ValidationError("JSONL record must be an object")
             yield PacketEvent.from_mapping(value)
-        except (json.JSONDecodeError, KeyError, TypeError, ValidationError) as exc:
-            raise CaptureError(f"invalid JSONL event at line {line_number}: {exc}") from exc
+        except (
+            json.JSONDecodeError,
+            KeyError,
+            OverflowError,
+            RecursionError,
+            TypeError,
+            ValidationError,
+        ) as exc:
+            raise CaptureError(f"invalid JSONL event at line {line_number}") from exc
 
 
 def iter_sample(*, include_demo_threat: bool = False) -> Iterator[PacketEvent]:
