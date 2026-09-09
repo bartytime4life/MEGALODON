@@ -7,6 +7,8 @@ from http.server import ThreadingHTTPServer
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
 from threading import Thread
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -318,6 +320,65 @@ def test_dashboard_ui_has_accessible_read_only_states():
     referenced_ids = re.findall(r"byId\('([^']+)'\)", DASHBOARD_JS)
     assert len(ids) == len(set(ids))
     assert set(referenced_ids) <= set(ids)
+
+
+def test_refresh_guard_covers_both_peer_requests_after_partial_failure():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for dashboard JavaScript behavior")
+
+    harness = r"""
+const vm = require('vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { code += chunk; });
+process.stdin.on('end', async () => {
+  try {
+    const withoutBootstrap = code.replace(/\nbootstrap\(\);\s*$/, '\n');
+    if (withoutBootstrap === code) throw new Error('dashboard bootstrap marker was not found');
+    code = withoutBootstrap;
+    const nodes = new Map();
+    function fakeNode(id = '') {
+      return {id, value: id === 'filter-severity' ? 'ALL' : '', textContent: '',
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0,
+        append() {}, replaceChildren() {}, setAttribute() {}, addEventListener() {}};
+    }
+    const document = {hidden: false,
+      getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
+      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+    class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
+    const calls = []; let finishEvents;
+    const response = value => ({ok: true, json: async () => value});
+    function fetch(path) {
+      calls.push(path);
+      if (path === '/api/summary') return Promise.reject(new Error('summary failed'));
+      if (path.startsWith('/api/events?')) {
+        return new Promise(resolve => { finishEvents = () => resolve(response([])); });
+      }
+      return Promise.reject(new Error(`unexpected path: ${path}`));
+    }
+    const context = {document, fetch, AbortController: FakeAbortController,
+      Intl, Date, Number, String, Math, Set,
+      Promise, Error, Array, window: {setTimeout() { return 1; }, clearTimeout() {}}};
+    vm.createContext(context); vm.runInContext(code, context);
+    const first = vm.runInContext('refresh(false)', context);
+    await new Promise(resolve => setImmediate(resolve));
+    await vm.runInContext('refresh(false)', context);
+    if (calls.length !== 2) throw new Error(`overlap: ${JSON.stringify(calls)}`);
+    finishEvents(); await first; process.stdout.write('no-overlap\n');
+  } catch (error) { console.error(error.message); process.exitCode = 1; }
+});
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=DASHBOARD_JS,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "no-overlap\n"
 
 
 def test_offline_api_is_local_bounded_and_security_hardened(tmp_path):
