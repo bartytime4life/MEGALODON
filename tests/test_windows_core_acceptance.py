@@ -75,6 +75,7 @@ def test_acceptance_matrix_is_closed_truthful_and_points_to_tests():
         for test in feature["tests"]
     }
     assert "tests/test_cli.py" not in selected
+    assert "tests/test_dashboard.py" not in selected
 
     unsupported = MATRIX["unsupported_operations"]
     assert len({item["id"] for item in unsupported}) == len(unsupported)

@@ -38,7 +38,14 @@
     {
       "id": "loopback-dashboard",
       "status": "native_receipt_required",
-      "tests": ["tests/test_dashboard.py", "tests/test_dashboard_binding.py"]
+      "tests": [
+        "tests/test_dashboard.py::test_dashboard_parser_and_remote_projection_boundary",
+        "tests/test_dashboard.py::test_dashboard_rejects_invalid_programmatic_polling_controls",
+        "tests/test_dashboard.py::test_dashboard_ui_has_accessible_read_only_states",
+        "tests/test_dashboard.py::test_dashboard_config_assets_and_query_validation",
+        "tests/test_dashboard.py::test_events_api_projects_only_fields_required_by_the_ui",
+        "tests/test_dashboard_binding.py"
+      ]
     },
     {
       "id": "private-ntfs-storage",
