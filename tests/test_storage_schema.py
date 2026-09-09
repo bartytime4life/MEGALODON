@@ -297,6 +297,30 @@ def test_failed_backup_validation_closes_descriptor_before_cleanup(
     assert not backup_path.exists()
 
 
+def test_backup_creation_error_is_classified_as_backup_failure(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "audit.db"
+    backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
+    _create_v1(path)
+    original_open = storage_module._open_regular_file
+
+    def fail_backup_open(candidate, flags, mode=None):
+        if candidate == backup_path:
+            raise OSError("sensitive backup path detail")
+        return original_open(candidate, flags, mode)
+
+    monkeypatch.setattr(storage_module, "_open_regular_file", fail_backup_open)
+
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_MIGRATION:BACKUP_FAILED$"
+    ) as raised:
+        migrate_database(path)
+
+    assert "sensitive backup path detail" not in str(raised.value)
+    assert not backup_path.exists()
+
+
 def test_source_open_error_is_translated_to_fixed_migration_error(
     tmp_path, monkeypatch
 ):

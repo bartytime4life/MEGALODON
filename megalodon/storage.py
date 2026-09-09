@@ -340,6 +340,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
     backup_descriptor: int | None = None
     source: sqlite3.Connection | None = None
     backup: sqlite3.Connection | None = None
+    backup_attempted = False
     backup_created = False
     migration_started = False
 
@@ -412,6 +413,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_EXISTS")
 
         data_version = int(source.execute("PRAGMA data_version").fetchone()[0])
+        backup_attempted = True
         backup_descriptor = _open_regular_file(
             backup_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
         )
@@ -505,7 +507,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             if migration_started
             else (
                 "STORAGE_MIGRATION:BACKUP_FAILED"
-                if backup_created
+                if backup_attempted
                 else "STORAGE_MIGRATION:SOURCE_FAILED"
             )
         )
