@@ -73,6 +73,11 @@
       "id": "nftables",
       "status": "rejected",
       "diagnostic": "nftables operations are supported only on Linux"
+    },
+    {
+      "id": "nftables-live-apply",
+      "status": "rejected",
+      "diagnostic": "live firewall application is unsupported in this evaluation release"
     }
   ],
   "native_receipts_required": [

@@ -1,8 +1,10 @@
 """Synthetic Windows contract checks; these are not native execution evidence."""
 
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 
 import pytest
 
@@ -56,6 +58,7 @@ EXPECTED_UNSUPPORTED_DIAGNOSTICS = {
     "offline-dashboard-projection": "LINUX_REQUIRED",
     "live-scapy-capture": "live Scapy capture is supported only on Linux",
     "nftables": "nftables operations are supported only on Linux",
+    "nftables-live-apply": "live firewall application is unsupported in this evaluation release",
 }
 EXPECTED_NATIVE_RECEIPTS = {
     "windows-edition-build-architecture-and-cpython",
@@ -174,8 +177,10 @@ def test_windows_scapy_refuses_before_optional_import_or_interface_use(monkeypat
 def test_windows_nftables_refuses_before_probe_privilege_or_process(monkeypatch):
     monkeypatch.setattr(firewall, "runtime_platform", lambda: "windows")
     monkeypatch.setattr(firewall.shutil, "which", _forbidden)
-    monkeypatch.setattr(firewall.subprocess, "run", _forbidden)
-    monkeypatch.setattr(firewall.os, "geteuid", _forbidden, raising=False)
+    monkeypatch.setattr(os, "geteuid", _forbidden, raising=False)
+    monkeypatch.setattr(os, "system", _forbidden)
+    monkeypatch.setattr(subprocess, "run", _forbidden)
+    monkeypatch.setattr(subprocess, "Popen", _forbidden)
     backend = firewall.NftablesFirewall(public_only=False)
 
     assert backend.available() is False
@@ -184,6 +189,13 @@ def test_windows_nftables_refuses_before_probe_privilege_or_process(monkeypatch)
         backend.plan_block("8.8.8.8", "synthetic")
     with pytest.raises(firewall.FirewallError, match=diagnostic):
         backend.install()
+    apply_diagnostic = _matrix_diagnostic_pattern("nftables-live-apply")
+    with pytest.raises(firewall.FirewallError, match=apply_diagnostic):
+        backend.install(apply=True, confirm="WRONG")
+    with pytest.raises(firewall.FirewallError, match=apply_diagnostic):
+        backend.block("not-an-ip", "", apply=True)
+    assert not hasattr(firewall.NftablesFirewall, "_require_apply")
+    assert not hasattr(firewall.NftablesFirewall, "_run")
 
 
 def test_windows_offline_paths_refuse_before_posix_file_access(monkeypatch):

@@ -25,15 +25,19 @@ MEGALODON provides local defensive network telemetry and bounded response for
 a Linux host. It is an evidence-producing assistant, not an autonomous
 authority to change the host’s network policy.
 
-The MVP supports three sources (sample, JSONL replay, and optional Scapy),
-three fixed detection rules, SQLite audit storage, a local read-only dashboard,
-and an explicit nftables plan/application boundary.
+The bounded 0.2 evaluation target is limited to sample and explicitly
+authorized JSONL metadata, three fixed detection rules, private local SQLite,
+and a genuinely read-only loopback dashboard. That accepted artifact remains
+gated by the open integrity, resource, browser, installed-tool, and release
+controls. The current repository also exposes an explicit, non-executing
+nftables plan boundary; firewall application is unsupported.
 
-Optional Scapy intake uses a fixed 1,024-event metadata queue. The callback does
-not block; the first overflow makes the consumer stop with a bounded error and
-does not publish queued events after the loss boundary. This is application
-backpressure behavior, not proof of kernel capture-buffer sizing or loss-free
-operation under production load.
+Optional Scapy code exists outside the accepted 0.2 evaluation artifact pending
+the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
+metadata queue. The callback does not block; the first overflow makes the
+consumer stop with a bounded error and does not publish queued events after the
+loss boundary. This is application backpressure behavior, not proof of kernel
+capture-buffer sizing or loss-free operation under production load.
 
 ### Non-goals for the MVP
 
@@ -47,7 +51,8 @@ operation under production load.
 
 ## 2. Safety invariants
 
-1. **Observe by default.** A fresh configuration cannot mutate the firewall.
+1. **Observe and plan only.** The evaluation-release candidate cannot mutate the
+   firewall.
 2. **Validate before action.** IP addresses, ports, flags, timestamps, and
    reasons are parsed before persistence or command construction.
 3. **No shell interpolation.** Network-derived values never become shell code.
@@ -57,13 +62,18 @@ operation under production load.
    are not an MVP operation.
 6. **Evidence is metadata-only.** Payloads and payload hashes are outside the
    event model.
-7. **Audit every decision.** Alert, suppression, non-attempt, planned, applied,
-   and failed actions are written to the action ledger.
+7. **Audit every supported decision.** Detections are stored in the detection
+   ledger. Supported action decisions with `not_attempted`, `suppressed`,
+   `planned`, or `failed` status are stored in the action ledger. `applied`
+   remains a closed compatibility value, but the evaluation-release candidate
+   has no firewall path that produces it.
 8. **Dashboard is read-only.** The HTTP surface has no mutation endpoint.
 9. **Loopback binds only.** The dashboard refuses non-loopback addresses and
    the legacy remote opt-in. It does not provide remote authentication.
-10. **Fail closed for unsafe response.** Invalid targets, unavailable nft, lack
-    of root, missing confirmation, and protected networks refuse the action.
+10. **Fail closed for live response.** Every CLI and direct-backend apply
+    request receives a fixed unsupported-operation refusal before process
+    creation or host mutation, regardless of target, executable availability,
+    privilege, or confirmation.
 11. **Offline projection stays local.** A selected offline run must be a complete,
     private, bounded report set. Its dashboard projection is never available on
     a non-loopback bind.
@@ -105,8 +115,10 @@ status in not_attempted/suppressed/planned/applied/failed
 ```
 
 Statuses include `not_attempted`, `suppressed`, `planned`, `applied`, and
-`failed`. The ledger is the authoritative record of what MEGALODON did and
-did not do.
+`failed`. The ledger is the authoritative record of supported MEGALODON
+decisions. The `applied` value is reserved for schema compatibility and a
+future separately reviewed implementation. A refused evaluation-candidate apply
+request must not create an `applied` receipt.
 
 ## 4. Fixed MVP rules
 
@@ -131,23 +143,43 @@ sample or JSONL input.
 ### Plan
 
 The CLI prints a fully validated nftables command or isolated-table script but
-does not execute it. This is the required review step before live enforcement.
+does not execute it. The result is a review artifact, not authorization or a
+staging step for live enforcement.
 
-### Apply
+### Apply (unsupported in the evaluation-release candidate)
 
-An operator explicitly invokes `--apply` and an exact confirmation value. The
-process must already be running as root; it never invokes `sudo`. The isolated
-table uses timeout-enabled sets and an accept policy. Existing firewall state is
-not rewritten.
+`--apply` and the corresponding direct-backend request are retained only as
+explicit fail-closed compatibility surfaces. They return a fixed unsupported
+diagnostic before creating a subprocess or mutating host firewall state. Root,
+an exact confirmation value, and an installed `nft` executable do not bypass
+this refusal. The request emits no `applied` action receipt.
 
 ### Automatic planning and explicit response
 
 The service may create an auditable, time-limited block plan when `enabled=true`,
 `auto_block=true`, and `dry_run=true`. It never supplies its own confirmation or
 invokes `nft`; `auto_block=true` with `dry_run=false` is rejected as unsafe.
-Application remains a separate operator CLI action requiring `--apply`, exact
-target confirmation, and already-held root. Unattended response is not an MVP
-operation.
+Application is not a supported operator CLI or service action in the evaluation
+release. Unattended response is not an MVP operation.
+
+### Gate for restoring firewall application
+
+No live mutation path may be restored until a separately reviewed design and
+implementation provide all of the following:
+
+- a durable, bounded intent committed before process execution, followed by one
+  terminal `applied`, `failed`, or `reconciliation_required` result;
+- deterministic startup reconciliation for every interrupted or nonterminal
+  intent without rewriting valid history;
+- finite-expiry guarantees plus documented operator recovery and rollback for
+  crash, restart, sleep, timeout, partial failure, and retry outcomes;
+- a validated absolute `nft` executable that is a root-owned regular file, is
+  not a symlink, and is not writable by group, other, or an unprivileged
+  operator, with a fixed environment and working directory;
+- conflict, expiry, retry, failure, rollback, and executable-substitution
+  negative controls in a disposable Linux network namespace; and
+- exact-head hosted validation and independent security/operations review,
+  recorded separately from authorization to use the restored path.
 
 ## 6. Dashboard contract
 
@@ -239,6 +271,8 @@ The MVP is acceptable for local experimentation when:
 - malformed IPs and ports are rejected;
 - allowlisted and non-global block targets are refused;
 - plan mode produces no firewall subprocess;
+- every CLI and direct-backend apply request returns the fixed refusal before a
+  subprocess or host mutation and produces no `applied` receipt;
 - dashboard rejects unsafe binds and legacy overrides before socket creation;
 - offline summaries reject incomplete, public, linked, mismatched, or tampered
   report sets and remain unavailable on remote binds;
@@ -246,10 +280,11 @@ The MVP is acceptable for local experimentation when:
 - `--demo-threat` creates detection and action records;
 - no code path uses `shell=True`.
 
-Before any production rollout, add integration tests against a disposable
-network namespace, verify interaction with the host’s existing nftables owner,
-measure detection false positives on representative replay data, and document
-operator approval and rollback.
+Before any production rollout, satisfy the firewall restoration gate above if
+live response is in scope, verify interaction with the host's existing firewall
+owner, measure detection false positives on representative replay data, and
+document operator approval and recovery. Plan-only evaluation does not require
+or authorize a live firewall test.
 
 ## 9. Implemented extensions and separate evidence paths
 

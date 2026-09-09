@@ -1,7 +1,7 @@
-"""Explicit, validated nftables integration.
+"""Explicit, validated, non-mutating nftables planning.
 
-No shell is used. Detection-driven service calls are plan-only; live mutation
-is available only through an explicit CLI apply request with exact confirmation.
+Detection-driven service calls and operator CLI calls are plan-only. Live
+firewall application is unsupported in this evaluation-release candidate.
 """
 
 from __future__ import annotations
@@ -9,9 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import ipaddress
-import os
 import shutil
-import subprocess
 
 from .capabilities import runtime_platform
 from .validation import is_global_unicast, parse_ip, safe_text
@@ -19,6 +17,9 @@ from .validation import is_global_unicast, parse_ip, safe_text
 
 class FirewallError(RuntimeError):
     """Raised when a firewall operation cannot be safely completed."""
+
+
+LIVE_APPLY_UNSUPPORTED = "live firewall application is unsupported in this evaluation release"
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,7 @@ class NftablesFirewall:
 
     @staticmethod
     def available() -> bool:
+        """Report tool discoverability only; this never authorizes live apply."""
         return runtime_platform() == "linux" and shutil.which("nft") is not None
 
     def validate_target(self, value: str) -> str:
@@ -92,15 +94,11 @@ class NftablesFirewall:
         return target
 
     def install(self, *, apply: bool = False, confirm: str | None = None) -> FirewallOperation:
+        if apply:
+            raise FirewallError(LIVE_APPLY_UNSUPPORTED)
         self._require_linux()
-        if apply and confirm != "MEGALODON":
-            raise FirewallError("installation requires --confirm MEGALODON")
         command = ("nft", "-f", "-")
-        if not apply:
-            return FirewallOperation("planned", "table:megalodon", "install isolated table", command, NFTABLES_TABLE)
-        self._require_apply()
-        self._run(command, NFTABLES_TABLE)
-        return FirewallOperation("applied", "table:megalodon", "install isolated table", command, "nftables table installed")
+        return FirewallOperation("planned", "table:megalodon", "install isolated table", command, NFTABLES_TABLE)
 
     def plan_block(self, value: str, reason: str) -> FirewallOperation:
         self._require_linux()
@@ -124,45 +122,11 @@ class NftablesFirewall:
         return FirewallOperation("planned", target, clean_reason, command, "would add a time-limited set element", expiry)
 
     def block(self, value: str, reason: str, *, apply: bool = False, confirm: str | None = None) -> FirewallOperation:
-        operation = self.plan_block(value, reason)
-        if not apply:
-            return operation
-        if confirm != operation.target:
-            raise FirewallError(f"application requires --confirm {operation.target}")
-        self._require_apply()
-        self._run(operation.command)
-        return FirewallOperation(
-            "applied",
-            operation.target,
-            operation.reason,
-            operation.command,
-            "time-limited nftables block applied",
-            operation.expires_at,
-        )
-
-    @staticmethod
-    def _require_apply() -> None:
-        NftablesFirewall._require_linux()
-        if os.geteuid() != 0:
-            raise FirewallError("live nftables changes require root; no sudo prompt is attempted")
-        if shutil.which("nft") is None:
-            raise FirewallError("nft executable not found")
+        if apply:
+            raise FirewallError(LIVE_APPLY_UNSUPPORTED)
+        return self.plan_block(value, reason)
 
     @staticmethod
     def _require_linux() -> None:
         if runtime_platform() != "linux":
             raise FirewallError("nftables operations are supported only on Linux")
-
-    @staticmethod
-    def _run(command: tuple[str, ...], stdin: str | None = None) -> None:
-        try:
-            subprocess.run(
-                list(command),
-                input=stdin,
-                text=True,
-                check=True,
-                capture_output=True,
-                timeout=15,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise FirewallError(f"nftables operation failed: {exc}") from exc

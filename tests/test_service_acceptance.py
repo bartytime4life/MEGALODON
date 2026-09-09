@@ -66,7 +66,7 @@ def no_host_operations(monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("service evaluation must not apply, probe, launch or connect")
 
-    for name in ("block", "install", "_run", "_require_apply", "available"):
+    for name in ("block", "install", "available"):
         monkeypatch.setattr(NftablesFirewall, name, forbidden)
     for owner, name in ((subprocess, "run"), (subprocess, "Popen"), (os, "system"),
                         (shutil, "which"), (socket, "socket"),

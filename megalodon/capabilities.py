@@ -80,13 +80,13 @@ _COMPONENTS = (
     {
         "id": "nftables",
         "software": "nftables",
-        "integration": "explicit_time_limited_response",
+        "integration": "plan_only_time_limited_response",
         "platforms": {
             "linux": "optional",
             "windows": "unsupported",
             "other": "unsupported",
         },
-        "boundary": "Plans are non-mutating by default; application needs exact confirmation and already-held root.",
+        "boundary": "Plans are inert review evidence; live application is unsupported and refused.",
     },
     {
         "id": "clamav",

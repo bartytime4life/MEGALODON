@@ -28,7 +28,7 @@ boundary that Linux execution or platform monkeypatching cannot settle.
 | Private storage | Documentation only | Reviewed owner/access entries for checkout, database, WAL/SHM and any receipts; reject redirected/shared locations | Displaying an ACL is not remediation or approval |
 | Offline analysis/projection | Linux-only implementation | Deterministic `LINUX_REQUIRED`; use a separately validated Linux guest for supported analysis | Installing Windows Wireshark/TShark does not enable the adapter |
 | Live Scapy capture | Unsupported | Bounded Linux-only refusal before Scapy import or interface access | No Npcap/driver installation or substitution |
-| nftables planning/application | Unsupported | Bounded Linux-only refusal before executable/root/subprocess checks | No Windows Firewall translation or host change |
+| nftables planning | Unsupported | Bounded Linux-only plan refusal before executable discovery; live apply is always refused first | No Windows Firewall translation or host change |
 
 ## Native execution handoff
 
@@ -56,12 +56,14 @@ Windows 11 browser receipt.
 
 ## Unsupported-operation controls
 
-The runtime refuses Windows Scapy capture and every nftables plan/apply path
-before optional imports, executable discovery, privilege checks, or subprocess
-launch. The existing offline command and the offline-dashboard projection return
-`LINUX_REQUIRED` before POSIX descriptor or ownership operations. Tests use only
-platform substitution and forbidden-boundary sentinels; they do not emulate a
-Windows kernel, NTFS, Winsock, browser, or process model.
+The runtime refuses Windows Scapy capture and nftables planning before optional
+imports or executable discovery. Every live-apply route, on every platform,
+returns its fixed evaluation-release diagnostic before configuration, platform,
+executable, privilege, or subprocess work. The existing offline command and the
+offline-dashboard projection return `LINUX_REQUIRED` before POSIX descriptor or
+ownership operations. Tests use only platform substitution and forbidden-boundary
+sentinels; they do not emulate a Windows kernel, NTFS, Winsock, browser, or
+process model.
 
 ## Evidence and lifecycle rules
 

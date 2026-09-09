@@ -7,8 +7,9 @@ MEGALODON is a local-first defensive network telemetry MVP with a Python
 metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
 audit trail, and offers a read-only localhost dashboard. Live capture, offline
-analysis, and firewall planning/application are separate choices, not mandatory
-parts of every configuration.
+analysis, and firewall planning are separate choices, not mandatory parts of
+every configuration. The evaluation-release candidate is plan-only and does
+not support live firewall application.
 
 Linux is the current implementation and CI reference, not a claim that every
 workflow requires Ubuntu or every platform has equal support. Native Windows
@@ -30,7 +31,8 @@ malicious activity.
 - no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
 - no shell interpolation: untrusted event values never become shell code;
 - finite response: block plans require validated global targets and an expiry;
-- explicit application: MEGALODON never invokes `sudo` or supplies confirmation;
+- contained application: retained firewall `--apply` options explicitly refuse
+  before configuration, host, executable, privilege, or process handling;
 - allowlist first: loopback, private IPv4, and unique-local IPv6 are protected by
   default.
 
@@ -69,7 +71,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
 | Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
-| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; application is a separate operator gate |
+| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
 can use both commands, and the dashboard can be started later against the same
@@ -86,7 +88,7 @@ entry point, not a replacement platform contract.
 
 | Environment | What can be considered | Evidence / support boundary |
 | --- | --- | --- |
-| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, optional nftables response | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host |
+| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and plan-only nftables response | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; live firewall application is unsupported |
 | Other Linux distributions or architectures | Evaluate the same bounded workflows where prerequisites and safety checks hold | Not certified by the Ubuntu CI lane. Validate Python, filesystem/privilege behavior, tool paths, and each selected integration; do not remove guards to make a recipe run |
 | Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **UNVERIFIED / evaluation only.** No native MEGALODON capture, offline adapter, or Windows firewall backend. Windows acceptance is tracked separately |
 | A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
@@ -112,15 +114,15 @@ See [`docs/integration-hub.md`](docs/integration-hub.md) for the closed workflow
 The baseline excludes Npcap from its open-source dependencies and omits native
 Windows live capture; manual saved-capture analysis is a different workflow.
 
-## What is implemented on `main`
+## Implemented capabilities
 
-| Area | Current capability |
+| Area | Capability in this revision |
 | --- | --- |
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
 | Dashboard | Read-only loopback UI with bounded recent-detection controls and an optional privacy-safe summary of one completed offline run |
-| Firewall boundary | Non-mutating plans by default; isolated `inet megalodon` nftables table and time-limited sets for explicit application |
+| Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for selected free/open-source tools; performs no host probe or installation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
@@ -141,7 +143,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata | Optional future EVE alert source | Contract and synthetic fixtures only; not invoked, imported, or required |
 | ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
 | osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
-| nftables and an already-root process | Explicit Linux firewall table/block application | Optional; never needed for sample/JSONL, dashboard, or plan mode |
+| nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
 | pytest `>=8,<9` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
 The core Python package currently has no third-party runtime dependency. Git is
@@ -306,8 +308,8 @@ remain in the local audit store and are not served to the browser.
 | `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 audit database to v2; never overwrites its backup |
 | `dashboard` | Serve the read-only dashboard using configured host and port |
 | `firewall-plan IP` | Validate a target and print a non-mutating, time-limited block plan |
-| `firewall-install` | Print the isolated nftables table plan; `--apply` is required to execute it |
-| `block IP --reason TEXT` | Print one block plan; `--apply` plus exact target confirmation is required to execute it |
+| `firewall-install` | Print the isolated nftables table plan; the retained `--apply` option explicitly refuses and executes nothing |
+| `block IP --reason TEXT` | Print one block plan; the retained `--apply` option explicitly refuses and executes nothing |
 | `python -m megalodon.offline ...` | Run the separate Linux-only private offline-analysis workflow |
 
 The operational main CLI subcommands accept optional `--config PATH`; omitting
@@ -411,7 +413,8 @@ scoped forms) are refused by this IPv4 server. The legacy `--allow-remote` flag
 is retained only to give a fixed startup refusal, even with a loopback host.
 Remove it and use `--host 127.0.0.1`; do not expose the unauthenticated server
 through proxies, tunnels or port forwarding. Firewall allowlist changes,
-public-target policy changes, and live application require separate review.
+and public-target policy changes require separate review. Live application is
+unsupported; any future restoration must satisfy the gate below.
 
 ## Dashboard UI and API
 
@@ -455,17 +458,22 @@ python -m megalodon block 8.8.8.8 --reason "manual review"
 ```
 
 Detection-driven policy can record a proposed block only when configured. It
-never supplies confirmation or invokes `nft`. Application is not a setup step:
-`firewall-install --apply` requires exact confirmation `MEGALODON`, and
-`block IP --apply` requires confirmation matching the validated target. Both
-require separately authorized, already-held root privilege; MEGALODON never
-invokes `sudo`. Targets must be global, outside the allowlist, and time-limited.
+never supplies confirmation or invokes `nft`. The retained
+`firewall-install --apply` and `block IP --apply` options explicitly refuse
+before reading configuration, probing the host, resolving an executable,
+checking privilege, or creating a process. No host mutation is attempted and no
+`applied` receipt is written; plan and audit receipts remain the only supported
+firewall outcomes in the evaluation-release candidate.
 
 Preserve the host's existing firewall manager and endpoint protection on every
 platform. An nftables plan is not a Windows Firewall or macOS/BSD firewall rule.
-Validate interaction and rollback in a disposable Linux network namespace before
-any separately approved operational use. No live application command is part of
-the quick starts above.
+Live application may be restored only through a separately reviewed change that
+adds durable intent before mutation, terminal outcome and reconciliation states,
+finite expiry, and operator recovery. It must also bind process construction to
+a reviewed absolute executable and fixed environment, then pass disposable
+Linux network-namespace tests for failure handling, PATH hijacking, expiry,
+readback, rollback, and recovery. Plan-mode success alone does not satisfy this
+restoration gate.
 
 ## Isolated offline analysis
 
@@ -524,8 +532,9 @@ staged design.
 
 ## Development status and open issues
 
-This table is a repository checkpoint, not a substitute for the live issue.
-Closed design/test gates can still leave runtime and operational work unbuilt.
+This selected, non-exhaustive table is a repository checkpoint, not a substitute
+for the live issue. Closed design/test gates can still leave runtime and
+operational work unbuilt.
 
 | Issue | Current repository meaning |
 | --- | --- |
@@ -537,6 +546,7 @@ Closed design/test gates can still leave runtime and operational work unbuilt.
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
 | [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; machine-readable matrix and Linux-run unsupported-operation controls exist, but native Windows/NTFS/browser receipts remain unperformed |
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
+| [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; this candidate removes the executor and makes every retained apply route refuse before configuration or host/process work; exact-head CI and independent review remain required |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because
@@ -593,5 +603,6 @@ active scheduler, or Suricata runtime importer on `main`.
 
 Before operational deployment, use representative authorized replay data to
 measure false positives; validate live capture and TShark separately; define
-retention and data-sharing policies; test firewall interaction and rollback in
-an isolated environment; and obtain independent security/operations review.
+retention and data-sharing policies; keep firewall operation plan-only unless
+the restoration gate above is implemented and independently reviewed; and
+obtain independent security/operations review.

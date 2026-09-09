@@ -101,7 +101,7 @@ class ServiceTests(unittest.TestCase):
                 db_path=Path(directory) / "events.db",
                 detection=DetectionSettings(dns_query_length=10),
                 # Direct construction bypasses TOML validation, so the service
-                # must still preserve the operator-only application boundary.
+                # must still preserve the plan-only evaluation boundary.
                 blocking=BlockingSettings(
                     enabled=True,
                     dry_run=False,

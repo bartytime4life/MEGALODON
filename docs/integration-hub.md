@@ -35,7 +35,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `offline-flow-metadata` | Zeek | Optional implemented importer | Closed `conn.log` profile; external producer; flow and packet counts stay separate |
 | `alert-metadata` | Suricata | Contract only | Closed synthetic EVE envelope and bounded reader contract; no runtime importer, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
-| `time-limited-response` | nftables | Optional explicit path | Plan first; exact confirmation, existing root, allowlist, and expiry for apply |
+| `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
 | `endpoint-inventory` | osquery | Proposed | No arbitrary SQL, daemon, scheduler, remote enrollment, or importer |
 

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from contextlib import redirect_stderr, redirect_stdout
-from contextlib import chdir
+from contextlib import chdir, ExitStack, redirect_stderr, redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
+import shutil
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from megalodon.cli import build_parser, main
 from megalodon.dashboard import serve
-from megalodon.firewall import NftablesFirewall
+from megalodon.firewall import LIVE_APPLY_UNSUPPORTED
 from megalodon.storage import (
     SCHEMA_V1_STATEMENTS,
     SCHEMA_VERSION,
@@ -115,7 +117,7 @@ class CliTests(unittest.TestCase):
     def test_firewall_plan_is_logged_without_subprocess(self):
         with tempfile.TemporaryDirectory() as directory:
             config, database = write_config(directory)
-            with patch("megalodon.firewall.subprocess.run") as run:
+            with patch.object(subprocess, "run") as run:
                 with redirect_stdout(io.StringIO()):
                     with self.assertRaises(SystemExit) as raised:
                         main(["firewall-plan", "8.8.8.8", "--reason", "review", "--config", str(config)])
@@ -127,32 +129,72 @@ class CliTests(unittest.TestCase):
                 ).fetchone()
                 self.assertEqual(tuple(action), ("block", "planned", "8.8.8.8"))
 
-    def test_applied_block_is_logged(self):
+    def test_live_apply_cli_routes_refuse_before_config_host_or_process_work(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("live apply must refuse before config, host, or process work")
+
+        commands = (
+            [
+                "block",
+                "not-an-ip",
+                "--reason",
+                "",
+                "--apply",
+                "--confirm",
+                "WRONG",
+                "--config",
+                "/private/SECRET/settings.toml",
+            ],
+            [
+                "firewall-install",
+                "--apply",
+                "--confirm",
+                "WRONG",
+                "--config",
+                "/private/SECRET/settings.toml",
+            ],
+        )
+        patches = (
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.NftablesFirewall", side_effect=forbidden),
+            patch.object(os, "geteuid", side_effect=forbidden, create=True),
+            patch.object(os, "system", side_effect=forbidden),
+            patch.object(shutil, "which", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            for command in commands:
+                output = io.StringIO()
+                error = io.StringIO()
+                with self.subTest(command=command), redirect_stdout(output), redirect_stderr(error):
+                    with self.assertRaises(SystemExit) as raised:
+                        main(command)
+                self.assertEqual(raised.exception.code, 2)
+                self.assertEqual(output.getvalue(), "")
+                self.assertEqual(error.getvalue(), f"megalodon: {LIVE_APPLY_UNSUPPORTED}\n")
+                self.assertNotIn("/private/SECRET", error.getvalue())
+
+    def test_live_apply_refusal_creates_no_store_or_action_row(self):
+        with tempfile.TemporaryDirectory() as directory, chdir(directory):
+            error = io.StringIO()
+            with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
+                main(["block", "not-an-ip", "--reason", "", "--apply"])
+            self.assertEqual(raised.exception.code, 2)
+            self.assertFalse((Path(directory) / "data").exists())
+
         with tempfile.TemporaryDirectory() as directory:
             config, database = write_config(directory)
-            with patch.object(NftablesFirewall, "_require_apply"), patch.object(NftablesFirewall, "_run") as run:
-                with redirect_stdout(io.StringIO()):
-                    with self.assertRaises(SystemExit) as raised:
-                        main(
-                            [
-                                "block",
-                                "8.8.8.8",
-                                "--reason",
-                                "approved",
-                                "--apply",
-                                "--confirm",
-                                "8.8.8.8",
-                                "--config",
-                                str(config),
-                            ]
-                        )
-            self.assertEqual(raised.exception.code, 0)
-            run.assert_called_once()
             with Store(database) as store:
-                action = store.connection.execute(
-                    "SELECT action, status, target FROM actions ORDER BY id DESC LIMIT 1"
-                ).fetchone()
-                self.assertEqual(tuple(action), ("block", "applied", "8.8.8.8"))
+                before = store.connection.execute("SELECT COUNT(*) FROM actions").fetchone()[0]
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                main(["firewall-install", "--apply", "--config", str(config)])
+            self.assertEqual(raised.exception.code, 2)
+            with Store(database) as store:
+                after = store.connection.execute("SELECT COUNT(*) FROM actions").fetchone()[0]
+            self.assertEqual((before, after), (0, 0))
 
     def test_multiline_install_plan_is_safely_summarized_in_audit_details(self):
         with tempfile.TemporaryDirectory() as directory:
