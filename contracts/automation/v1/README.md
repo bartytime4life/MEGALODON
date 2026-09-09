@@ -26,6 +26,7 @@ or authorize any host or network action.
 | [`fixtures/accepted/`](fixtures/accepted/) | Small values expected to pass the named definition |
 | [`fixtures/rejected/`](fixtures/rejected/) | Negative boundary examples expected to fail |
 | [`../../../tests/test_automation_contract.py`](../../../tests/test_automation_contract.py) | Schema, fixture, and closed-authority regression tests |
+| [`../../../tests/test_automation_rrule_boundaries.py`](../../../tests/test_automation_rrule_boundaries.py) | Exhaustive RRULE bound-order, weakening, and inertness regression tests |
 
 The schema contains three externally useful data shapes:
 
@@ -184,7 +185,9 @@ Install the repository test extra and run the focused contract suite:
 
 ```bash
 python -m pip install -e ".[test]"
-python -m pytest -q tests/test_automation_contract.py
+python -m pytest -q \
+  tests/test_automation_contract.py \
+  tests/test_automation_rrule_boundaries.py
 ```
 
 The tests:
@@ -194,7 +197,17 @@ The tests:
 - require every rejected fixture to fail through `jsonschema`;
 - assert the fixed-false network and firewall fields;
 - assert the exact capability allowlist and empty action boundary; and
-- require both fixture sets to remain nonempty.
+- require both fixture sets to remain nonempty;
+- exercise each of the six allowed `FREQ` values through both the
+  `canonicalRrule` and `draftCreate` entry points with representative
+  `COUNT`-only and `UNTIL`-only values;
+- reject every ordering of `COUNT`, `UNTIL`, and a neighboring `INTERVAL` part
+  for every allowed frequency and both entry points;
+- remove the mixed-bound exclusion only from an in-memory schema copy and prove
+  those generated cases and named negative fixtures would otherwise pass, so an
+  unrelated invalid field cannot masquerade as coverage; and
+- install socket-construction and `subprocess.Popen` sentinels for the
+  exhaustive RRULE suite so those standard boundary paths fail closed.
 
 The suite uses `jsonschema.FormatChecker`. Consumers that omit equivalent format
 checking may not enforce `date-time` formats in the same way. Passing the suite
