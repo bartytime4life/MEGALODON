@@ -310,8 +310,24 @@ def _firewall(args: argparse.Namespace, mode: str) -> int:
     return 0
 
 
+def _live_apply_requested(argv: list[str]) -> bool:
+    """Detect the retained apply flag before argparse validates route arguments."""
+    if not argv or argv[0] not in {"block", "firewall-install"}:
+        return False
+    for argument in argv[1:]:
+        if argument == "--":
+            break
+        if argument.startswith("--a") and "--apply".startswith(argument):
+            return True
+    return False
+
+
 def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if _live_apply_requested(raw_argv):
+        print(f"megalodon: {LIVE_APPLY_UNSUPPORTED}", file=sys.stderr)
+        raise SystemExit(2)
+    args = build_parser().parse_args(raw_argv)
     if args.command == "capabilities":
         code = _capabilities(args)
     elif args.command == "hub-plan":

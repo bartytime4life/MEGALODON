@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -176,6 +177,50 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(output.getvalue(), "")
                 self.assertEqual(error.getvalue(), f"megalodon: {LIVE_APPLY_UNSUPPORTED}\n")
                 self.assertNotIn("/private/SECRET", error.getvalue())
+
+    def test_live_apply_refuses_before_required_block_argument_validation(self):
+        commands = (
+            ["block", "--apply"],
+            ["block", "--app"],
+            ["block", "8.8.8.8", "--apply"],
+            ["block", "--reason", "review", "--apply"],
+        )
+        for command in commands:
+            output = io.StringIO()
+            error = io.StringIO()
+            with self.subTest(command=command), redirect_stdout(output), redirect_stderr(error):
+                with self.assertRaises(SystemExit) as raised:
+                    main(command)
+            self.assertEqual(raised.exception.code, 2)
+            self.assertEqual(output.getvalue(), "")
+            self.assertEqual(error.getvalue(), f"megalodon: {LIVE_APPLY_UNSUPPORTED}\n")
+
+    def test_live_apply_preflight_uses_process_arguments(self):
+        error = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["megalodon", "block", "--apply"]),
+            redirect_stderr(error),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            main()
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(error.getvalue(), f"megalodon: {LIVE_APPLY_UNSUPPORTED}\n")
+
+    def test_non_apply_block_still_uses_normal_argument_validation(self):
+        error = io.StringIO()
+        with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
+            main(["block", "8.8.8.8"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("the following arguments are required: --reason", error.getvalue())
+        self.assertNotIn(LIVE_APPLY_UNSUPPORTED, error.getvalue())
+
+    def test_apply_text_after_option_terminator_is_not_preflighted(self):
+        error = io.StringIO()
+        with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
+            main(["block", "--", "--apply"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("the following arguments are required: --reason", error.getvalue())
+        self.assertNotIn(LIVE_APPLY_UNSUPPORTED, error.getvalue())
 
     def test_live_apply_refusal_creates_no_store_or_action_row(self):
         with tempfile.TemporaryDirectory() as directory, chdir(directory):
