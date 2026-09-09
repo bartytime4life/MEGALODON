@@ -233,6 +233,15 @@ Stop other MEGALODON processes before migrating and retain the backup until the
 new database has been operationally verified. Partial, altered, or newer
 application schemas are refused rather than repaired or downgraded.
 
+Each `run` command writes a closed lifecycle receipt before consuming input and
+marks it `completed` or `failed` at a terminal boundary. The receipt stores only
+the closed source name, UTC timestamps, derived event/detection counts, and an
+optional fixed failure code. A join table associates each durably written event
+with exactly one CLI run; a malformed JSONL suffix is therefore distinguishable
+from a complete replay. Raw exceptions, input paths, command lines, packet
+contents, and credentials are not stored in the run ledger. A row left `running`
+means completion was not recorded, not that the run succeeded.
+
 On the Linux analysis profile, add one completed offline run to the read-only
 dashboard by selecting its absolute private report directory when the server starts:
 
@@ -306,7 +315,8 @@ The adapter caps each JSONL record at 64 KiB. IP addresses, ports, timestamps,
 flags, text, byte counts, detector evidence, action details, severities, and action
 statuses are typed and bounded before persistence. SQLite-facing counts cannot
 exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
-at the storage boundary.
+at the storage boundary. Successful CLI output reports run-scoped `processed`
+and `detections` counts plus a separate `totals` object for the whole database.
 Detector state is capped at 4,096 tracked sources and 4,096 events per source
 window by default.
 

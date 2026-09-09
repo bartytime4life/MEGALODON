@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 import logging
 from pathlib import Path
+import sqlite3
 import sys
 
 from .capabilities import catalog
@@ -146,7 +147,7 @@ def _load(config: str | None):
 
 
 def _events_for(args: argparse.Namespace, settings):
-    source = args.source or settings.capture_source
+    source = _source_for(args, settings)
     if source == "sample":
         return iter_sample(include_demo_threat=args.demo_threat)
     if source == "jsonl":
@@ -158,20 +159,47 @@ def _events_for(args: argparse.Namespace, settings):
     raise CaptureError(f"unsupported source: {source}")
 
 
+def _source_for(args: argparse.Namespace, settings) -> str:
+    return args.source or settings.capture_source
+
+
+def _run_failure_code(exc: Exception) -> str:
+    if isinstance(exc, CaptureError):
+        return "CAPTURE_ERROR"
+    if isinstance(exc, sqlite3.Error):
+        return "STORAGE_ERROR"
+    if isinstance(exc, OSError):
+        return "IO_ERROR"
+    return "VALIDATION_ERROR"
+
+
 def _run(args: argparse.Namespace) -> int:
-    processed = 0
-    detections = 0
     try:
         settings = _load(args.config)
         with Store(settings.db_path) as store:
             service = MegalodonService(settings, store)
-            for event in _events_for(args, settings):
-                detections += len(service.process(event))
-                processed += 1
-                if args.max_events and processed >= args.max_events:
-                    break
-            print(json.dumps({"processed": processed, "detections": detections, **store.summary()}, sort_keys=True))
-    except (CaptureError, OSError, ValueError) as exc:
+            run_id = store.start_ingestion_run(_source_for(args, settings))
+            processed = 0
+            try:
+                for event in _events_for(args, settings):
+                    service.process(event, run_id=run_id)
+                    processed += 1
+                    if args.max_events and processed >= args.max_events:
+                        break
+            except KeyboardInterrupt:
+                store.finish_ingestion_run(
+                    run_id, "failed", failure_code="INTERRUPTED"
+                )
+                print("megalodon: ingestion interrupted", file=sys.stderr)
+                return 130
+            except (CaptureError, OSError, ValueError, sqlite3.Error) as exc:
+                store.finish_ingestion_run(
+                    run_id, "failed", failure_code=_run_failure_code(exc)
+                )
+                raise
+            receipt = store.finish_ingestion_run(run_id, "completed")
+            print(json.dumps({**receipt, "totals": store.summary()}, sort_keys=True))
+    except (CaptureError, OSError, ValueError, sqlite3.Error) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     return 0
