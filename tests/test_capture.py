@@ -3,7 +3,12 @@ from __future__ import annotations
 from io import StringIO
 import unittest
 
-from megalodon.capture import CaptureError, _normalize_scapy_tcp_flags, iter_jsonl
+from megalodon.capture import (
+    CaptureError,
+    _BoundedCaptureQueue,
+    _normalize_scapy_tcp_flags,
+    iter_jsonl,
+)
 from megalodon.validation import ValidationError
 
 
@@ -22,6 +27,22 @@ class FakeScapyFlagValue:
 
 
 class CaptureTests(unittest.TestCase):
+    def test_capture_queue_fails_closed_after_first_overflow(self):
+        events = _BoundedCaptureQueue(maximum=2)
+        self.assertTrue(events.offer(object()))
+        self.assertTrue(events.offer(object()))
+        self.assertFalse(events.offer(object()))
+        self.assertFalse(events.offer(object()))
+
+        with self.assertRaisesRegex(CaptureError, "exceeded 2 events; capture stopped"):
+            events.take()
+        self.assertEqual(events._events.qsize(), 2)
+
+    def test_capture_queue_capacity_is_a_strict_positive_integer(self):
+        for value in (0, -1, True, 1.5):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                _BoundedCaptureQueue(value)
+
     def test_scapy_flagvalue_bitmask_maps_to_packet_event_names(self):
         cases = (
             (FakeScapyFlagValue(0x02, "S"), {"SYN"}),

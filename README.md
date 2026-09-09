@@ -307,8 +307,11 @@ Live capture requires the normal Linux permissions for the selected interface.
 The adapter extracts addresses, ports, protocol, TCP flags, sizes, and DNS-name
 length; it does not persist or print payloads. Scapy's compact TCP flag value is
 decoded from its numeric bitmask into the closed FIN/SYN/RST/PSH/ACK/URG/ECE/CWR
-event vocabulary; unsupported bits discard that malformed packet. Use only on
-traffic the operator is authorized to observe.
+event vocabulary; unsupported bits discard that malformed packet. The callback
+queue holds at most 1,024 metadata events. Its first overflow stops publication
+with a fixed error instead of blocking the capture callback, growing memory, or
+silently continuing after loss. Use only on traffic the operator is authorized
+to observe.
 
 ## Detection rules
 
