@@ -84,7 +84,7 @@ tcp_flags: subset of FIN/SYN/RST/PSH/ACK/URG/ECE/CWR
 dns_query_length: optional non-negative metadata length, at most 2^63 - 1
 byte_count: non-negative integer, at most 2^63 - 1
 interface: optional bounded label
-metadata: JSON object with non-payload metadata only
+metadata: immutable, closed adapter provenance; empty or source_adapter=tshark-fields-v1
 ```
 
 ### DetectionResult

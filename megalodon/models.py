@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 
 from .validation import (
     parse_flags,
@@ -16,6 +17,7 @@ from .validation import (
     SQLITE_INTEGER_MAX,
     ValidationError,
     validate_metadata,
+    validate_packet_metadata,
 )
 
 
@@ -31,7 +33,7 @@ class PacketEvent:
     dns_query_length: int | None = None
     byte_count: int = 0
     interface: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
@@ -65,7 +67,11 @@ class PacketEvent:
         )
         if self.interface is not None:
             object.__setattr__(self, "interface", safe_text(self.interface, "interface", 64))
-        object.__setattr__(self, "metadata", validate_metadata(self.metadata))
+        object.__setattr__(
+            self,
+            "metadata",
+            MappingProxyType(validate_packet_metadata(self.metadata)),
+        )
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> "PacketEvent":
@@ -95,7 +101,7 @@ class PacketEvent:
             "dns_query_length": self.dns_query_length,
             "byte_count": self.byte_count,
             "interface": self.interface,
-            "metadata": self.metadata,
+            "metadata": dict(self.metadata),
         }
 
 
