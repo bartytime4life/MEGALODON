@@ -290,7 +290,10 @@ cat examples/events.jsonl | python -m megalodon run --source jsonl
 ```
 
 The adapter caps each JSONL record at 64 KiB. IP addresses, ports, timestamps,
-flags, text, byte counts, and metadata are typed and bounded before persistence.
+flags, text, byte counts, detector evidence, action details, severities, and action
+statuses are typed and bounded before persistence. SQLite-facing counts cannot
+exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
+at the storage boundary.
 Detector state is capped at 4,096 tracked sources and 4,096 events per source
 window by default.
 

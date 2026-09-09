@@ -72,8 +72,8 @@ src_ip, dst_ip: normalized IPv4 or IPv6 address
 protocol: uppercase protocol label
 src_port, dst_port: optional integer 0..65535
 tcp_flags: subset of FIN/SYN/RST/PSH/ACK/URG/ECE/CWR
-dns_query_length: optional non-negative metadata length
-byte_count: non-negative integer
+dns_query_length: optional non-negative metadata length, at most 2^63 - 1
+byte_count: non-negative integer, at most 2^63 - 1
 interface: optional bounded label
 metadata: JSON object with non-payload metadata only
 ```
@@ -81,8 +81,8 @@ metadata: JSON object with non-payload metadata only
 ### DetectionResult
 
 ```text
-rule_id, severity, source/destination, message,
-evidence, recommendation, suppressed_reason
+bounded rule_id; severity in LOW/MEDIUM/HIGH/CRITICAL; source/destination;
+bounded message and recommendation; bounded JSON evidence; optional bounded suppressed_reason
 ```
 
 Detection is evidence, not proof of malicious intent. In particular, a long DNS
@@ -91,7 +91,8 @@ name can be legitimate and a high SYN count can be a load test.
 ### ActionRecord
 
 ```text
-created_at, action, target, status, reason, expires_at, details
+UTC created_at; bounded action, target, reason and details; optional UTC expires_at;
+status in not_attempted/suppressed/planned/applied/failed
 ```
 
 Statuses include `not_attempted`, `suppressed`, `planned`, `applied`, and

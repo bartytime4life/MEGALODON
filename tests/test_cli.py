@@ -87,6 +87,19 @@ class CliTests(unittest.TestCase):
                 ).fetchone()
                 self.assertEqual(tuple(action), ("block", "applied", "8.8.8.8"))
 
+    def test_multiline_install_plan_is_safely_summarized_in_audit_details(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            with redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    main(["firewall-install", "--config", str(config)])
+            self.assertEqual(raised.exception.code, 0)
+            with Store(database) as store:
+                details = store.connection.execute(
+                    "SELECT details_json FROM actions ORDER BY id DESC LIMIT 1"
+                ).fetchone()[0]
+            self.assertIn("operation plan omitted from audit details", details)
+
     def test_remote_dashboard_requires_explicit_opt_in(self):
         with tempfile.TemporaryDirectory() as directory:
             with Store(Path(directory) / "events.db") as store:

@@ -10,6 +10,7 @@ from threading import RLock
 from typing import Any
 
 from .models import ActionRecord, DetectionResult, PacketEvent
+from .validation import parse_nonnegative_int, SQLITE_INTEGER_MAX, validate_metadata
 
 
 SCHEMA = """
@@ -83,6 +84,19 @@ class Store:
         self.close()
 
     def record_event(self, event: PacketEvent) -> int:
+        byte_count = parse_nonnegative_int(
+            event.byte_count, "byte_count", maximum=SQLITE_INTEGER_MAX
+        )
+        dns_query_length = (
+            None
+            if event.dns_query_length is None
+            else parse_nonnegative_int(
+                event.dns_query_length,
+                "dns_query_length",
+                maximum=SQLITE_INTEGER_MAX,
+            )
+        )
+        metadata = validate_metadata(event.metadata)
         with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
@@ -99,15 +113,16 @@ class Store:
                     event.src_port,
                     event.dst_port,
                     json.dumps(sorted(event.tcp_flags)),
-                    event.dns_query_length,
-                    event.byte_count,
+                    dns_query_length,
+                    byte_count,
                     event.interface,
-                    json.dumps(event.metadata, sort_keys=True),
+                    json.dumps(metadata, sort_keys=True, allow_nan=False),
                 ),
             )
             return int(cursor.lastrowid)
 
     def record_detection(self, event_id: int, detection: DetectionResult) -> int:
+        evidence = validate_metadata(detection.evidence)
         with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
@@ -124,7 +139,7 @@ class Store:
                     detection.src_ip,
                     detection.dst_ip,
                     detection.message,
-                    json.dumps(detection.evidence, sort_keys=True),
+                    json.dumps(evidence, sort_keys=True, allow_nan=False),
                     detection.recommendation,
                     detection.suppressed_reason,
                 ),
@@ -132,6 +147,7 @@ class Store:
             return int(cursor.lastrowid)
 
     def record_action(self, action: ActionRecord) -> int:
+        details = validate_metadata(action.details)
         with self._lock, self.connection:
             cursor = self.connection.execute(
                 """
@@ -146,7 +162,7 @@ class Store:
                     action.status,
                     action.reason,
                     action.expires_at.isoformat() if action.expires_at else None,
-                    json.dumps(action.details, sort_keys=True),
+                    json.dumps(details, sort_keys=True, allow_nan=False),
                 ),
             )
             return int(cursor.lastrowid)
