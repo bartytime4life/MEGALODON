@@ -66,7 +66,13 @@ Do not convert an exception into an audited-success receipt or retry blindly.
 A failure at one stage of `MegalodonService.process()` can leave earlier,
 separately committed event or detection rows. These three methods do not form
 one all-or-nothing service transaction, and detector state is not rolled back.
-There is no new retry, duplicate suppression, recovery service or error ledger.
+The CLI run ledger records a bounded terminal failure code. Processed counts are
+derived from committed run/event associations; detection counts are incremented
+in the same SQLite transaction that commits each associated detection and read
+from that persisted run counter at finalization. This avoids scanning unrelated
+historical detections while the terminal write transaction is held. It does not
+make the service stages atomic or prove the failed input was safe to retry. There
+is no new retry, duplicate suppression, or recovery service.
 If SQLite cannot perform rollback, recovery is unproved: stop using the affected
 connection and require operator investigation rather than claim clean state.
 No software receipt here guarantees survival of power loss or faulty storage.
@@ -109,7 +115,7 @@ From the repository root in its supported test environment:
 
 ```bash
 python -m compileall -q megalodon tests
-python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py
+python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py tests/test_ingestion_runs.py
 ```
 
 The failure suite covers each of the three write methods with a statement
@@ -125,6 +131,12 @@ The schema-lifecycle cases separately cover fresh creation, explicit legacy
 migration, required-migration refusal, backup preservation/non-overwrite,
 idempotence, partial and altered schema refusal, future-version non-mutation, and
 atomic rollback for both initial creation and v2 migration.
+The ingestion-run cases cover completed and failed terminal transitions,
+run-to-event provenance, derived counts, closed sources/failure codes, invalid or
+terminal run refusal, malformed JSONL after a valid prefix, storage-write failure,
+deep-parser recursion, counter rollback, finalization without historical
+detection reads, and interruption without a traceback. They use only synthetic
+metadata and temporary databases.
 
 The inspected baseline was `a177c13ade3b4a727a0514afac21575fd0f10e08`, with
 storage blob `c6b45bea5bf61462dbbeb0f71a281fb49db3e3ca`. All nine new cases
