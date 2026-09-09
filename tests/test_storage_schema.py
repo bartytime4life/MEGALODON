@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 import sqlite3
 import stat
@@ -121,6 +122,36 @@ def test_current_database_migration_is_an_idempotent_no_op(tmp_path):
         "backup": None,
     }
     assert not path.with_name(path.name + MIGRATION_BACKUP_SUFFIX).exists()
+
+
+def test_v2_run_event_link_preserves_retention_deletion(tmp_path):
+    path = tmp_path / "audit.db"
+    with Store(path) as store:
+        store.connection.execute(
+            "INSERT INTO ingestion_runs VALUES "
+            "(1, '2026-01-01T00:00:00+00:00', '2026-01-01T00:01:00+00:00', "
+            "'sample', 'completed', 1, 0, NULL)"
+        )
+        store.connection.execute(
+            "INSERT INTO events (observed_at, src_ip, dst_ip, protocol, tcp_flags, "
+            "byte_count, metadata_json) VALUES "
+            "('2026-01-01T00:00:00+00:00', '192.0.2.1', '198.51.100.2', "
+            "'TCP', '[]', 0, '{}')"
+        )
+        store.connection.execute(
+            "INSERT INTO ingestion_run_events VALUES (1, 1)"
+        )
+        store.connection.commit()
+
+        deleted = store.purge_before(datetime(2027, 1, 1, tzinfo=timezone.utc))
+
+        assert deleted["events"] == 1
+        assert store.connection.execute(
+            "SELECT COUNT(*) FROM ingestion_run_events"
+        ).fetchone()[0] == 0
+        assert store.connection.execute(
+            "SELECT processed_count FROM ingestion_runs"
+        ).fetchone()[0] == 1
 
 
 def test_existing_backup_is_never_overwritten(tmp_path):

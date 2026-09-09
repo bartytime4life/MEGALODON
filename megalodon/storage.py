@@ -75,7 +75,7 @@ SCHEMA_V2_STATEMENTS = (
     "CREATE INDEX idx_ingestion_runs_started_at ON ingestion_runs(started_at)",
     """CREATE TABLE ingestion_run_events (
     run_id INTEGER NOT NULL REFERENCES ingestion_runs(id),
-    event_id INTEGER NOT NULL UNIQUE REFERENCES events(id),
+    event_id INTEGER NOT NULL UNIQUE REFERENCES events(id) ON DELETE CASCADE,
     PRIMARY KEY (run_id, event_id)
 )""",
 )
@@ -152,7 +152,7 @@ _INDEX_COLUMNS_V2 = {
 
 _FOREIGN_KEYS_V1 = {
     "events": set(),
-    "detections": {("events", "event_id", "id")},
+    "detections": {("events", "event_id", "id", "NO ACTION")},
     "actions": set(),
 }
 
@@ -160,8 +160,8 @@ _FOREIGN_KEYS_V2 = {
     **_FOREIGN_KEYS_V1,
     "ingestion_runs": set(),
     "ingestion_run_events": {
-        ("ingestion_runs", "run_id", "id"),
-        ("events", "event_id", "id"),
+        ("ingestion_runs", "run_id", "id", "NO ACTION"),
+        ("events", "event_id", "id", "CASCADE"),
     },
 }
 
@@ -181,7 +181,7 @@ def _validate_schema(connection, tables, indexes, foreign_keys) -> None:
 
     for table, expected in foreign_keys.items():
         actual = {
-            (str(row[2]), str(row[3]), str(row[4]))
+            (str(row[2]), str(row[3]), str(row[4]), str(row[6]))
             for row in connection.execute(f'PRAGMA foreign_key_list("{table}")')
         }
         if actual != expected:
