@@ -58,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     hub.add_argument("--workflow", choices=WORKFLOW_IDS, help="show one closed workflow")
 
     run = sub.add_parser("run", help="process metadata events")
-    run.add_argument("--config", default="config/settings.toml")
+    run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
     run.add_argument("--input", type=Path, help="JSONL input file; stdin is used when omitted")
     run.add_argument("--interface", help="capture interface for --source scapy")
@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     dashboard = sub.add_parser("dashboard", help="serve the read-only local dashboard")
-    dashboard.add_argument("--config", default="config/settings.toml")
+    dashboard.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=_bounded_cli_integer("port", 1, 65535))
     dashboard.add_argument("--allow-remote", action="store_true", help="removed unsafe option; supplying it refuses startup")
@@ -94,17 +94,17 @@ def build_parser() -> argparse.ArgumentParser:
     plan = sub.add_parser("firewall-plan", help="print a non-mutating nftables plan")
     plan.add_argument("ip")
     plan.add_argument("--reason", default="manual review")
-    plan.add_argument("--config", default="config/settings.toml")
+    plan.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
 
     install = sub.add_parser("firewall-install", help="install MEGALODON's isolated nftables table")
-    install.add_argument("--config", default="config/settings.toml")
+    install.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     install.add_argument("--apply", action="store_true")
     install.add_argument("--confirm", help="must be MEGALODON when applying")
 
     block = sub.add_parser("block", help="plan or explicitly apply one time-limited block")
     block.add_argument("ip")
     block.add_argument("--reason", required=True)
-    block.add_argument("--config", default="config/settings.toml")
+    block.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     block.add_argument("--apply", action="store_true")
     block.add_argument("--confirm", help="must exactly match the target IP when applying")
 
@@ -127,8 +127,11 @@ def _hub_plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _load(config: str):
-    settings = load_settings(config)
+def _load(config: str | None):
+    try:
+        settings = load_settings(config)
+    except OSError as exc:
+        raise ValueError("configuration file could not be read") from exc
     _configure_logging(settings.log_level)
     return settings
 
@@ -147,10 +150,10 @@ def _events_for(args: argparse.Namespace, settings):
 
 
 def _run(args: argparse.Namespace) -> int:
-    settings = _load(args.config)
     processed = 0
     detections = 0
     try:
+        settings = _load(args.config)
         with Store(settings.db_path) as store:
             service = MegalodonService(settings, store)
             for event in _events_for(args, settings):
@@ -166,13 +169,13 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _dashboard(args: argparse.Namespace) -> int:
-    settings = _load(args.config)
-    host = args.host if args.host is not None else settings.dashboard.host
-    port = args.port if args.port is not None else settings.dashboard.port
     from .dashboard import loopback_host, serve
     from .offline_projection import load_offline_projection
 
     try:
+        settings = _load(args.config)
+        host = args.host if args.host is not None else settings.dashboard.host
+        port = args.port if args.port is not None else settings.dashboard.port
         host = loopback_host(host, allow_remote=args.allow_remote)
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with Store(settings.db_path) as store:
@@ -216,14 +219,14 @@ def _record_firewall_action(settings, mode: str, operation) -> None:
 
 
 def _firewall(args: argparse.Namespace, mode: str) -> int:
-    settings = _load(args.config)
-    firewall = NftablesFirewall(
-        allowlist=settings.blocking.allowlist,
-        public_only=settings.blocking.public_only,
-        timeout_seconds=settings.blocking.timeout_seconds,
-        dry_run=not getattr(args, "apply", False),
-    )
     try:
+        settings = _load(args.config)
+        firewall = NftablesFirewall(
+            allowlist=settings.blocking.allowlist,
+            public_only=settings.blocking.public_only,
+            timeout_seconds=settings.blocking.timeout_seconds,
+            dry_run=not getattr(args, "apply", False),
+        )
         if mode == "plan":
             operation = firewall.plan_block(args.ip, args.reason)
         elif mode == "install":

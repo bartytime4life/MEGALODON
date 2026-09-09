@@ -105,10 +105,13 @@ def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> in
     return value
 
 
-def load_settings(path: str | Path) -> Settings:
-    config_path = Path(path)
-    with config_path.open("rb") as handle:
-        raw = tomllib.load(handle)
+def load_settings(path: str | Path | None = None) -> Settings:
+    if path is None:
+        raw: dict[str, object] = {}
+    else:
+        config_path = Path(path)
+        with config_path.open("rb") as handle:
+            raw = tomllib.load(handle)
 
     app = _table(raw.get("app", {}), "app")
     capture = _table(raw.get("capture", {}), "capture")
