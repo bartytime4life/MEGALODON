@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import queue
+from threading import Event
 from typing import Iterable, Iterator, TextIO
 
 from .models import PacketEvent
@@ -17,6 +18,70 @@ class CaptureError(RuntimeError):
 
 
 MAX_JSONL_LINE_BYTES = 64 * 1024
+MAX_SCAPY_QUEUE_EVENTS = 1024
+SCAPY_QUEUE_POLL_SECONDS = 0.25
+_SCAPY_TCP_FLAG_BITS = (
+    (0x01, "FIN"),
+    (0x02, "SYN"),
+    (0x04, "RST"),
+    (0x08, "PSH"),
+    (0x10, "ACK"),
+    (0x20, "URG"),
+    (0x40, "ECE"),
+    (0x80, "CWR"),
+)
+_SCAPY_TCP_FLAG_MASK = sum(bit for bit, _ in _SCAPY_TCP_FLAG_BITS)
+
+
+class _BoundedCaptureQueue:
+    """Non-blocking callback queue that fails the stream after first overflow."""
+
+    def __init__(self, maximum: int = MAX_SCAPY_QUEUE_EVENTS):
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 1:
+            raise ValueError("capture queue maximum must be a positive integer")
+        self._events: queue.Queue[PacketEvent] = queue.Queue(maxsize=maximum)
+        self._overflowed = Event()
+
+    def offer(self, event: PacketEvent) -> bool:
+        if self._overflowed.is_set():
+            return False
+        try:
+            self._events.put_nowait(event)
+        except queue.Full:
+            self._overflowed.set()
+            return False
+        return True
+
+    def take(self) -> PacketEvent | None:
+        if self._overflowed.is_set():
+            raise self._overflow_error()
+        try:
+            event = self._events.get(timeout=SCAPY_QUEUE_POLL_SECONDS)
+        except queue.Empty:
+            if self._overflowed.is_set():
+                raise self._overflow_error()
+            return None
+        if self._overflowed.is_set():
+            raise self._overflow_error()
+        return event
+
+    def _overflow_error(self) -> CaptureError:
+        return CaptureError(
+            f"live capture queue exceeded {self._events.maxsize} events; capture stopped"
+        )
+
+
+def _normalize_scapy_tcp_flags(value: object) -> frozenset[str]:
+    """Translate Scapy's FlagValue bitmask into PacketEvent flag names."""
+    if isinstance(value, bool):
+        raise ValidationError("invalid Scapy TCP flag bitmask")
+    try:
+        bitmask = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValidationError("invalid Scapy TCP flag bitmask") from exc
+    if bitmask < 0 or bitmask & ~_SCAPY_TCP_FLAG_MASK:
+        raise ValidationError("unsupported Scapy TCP flag bitmask")
+    return frozenset(name for bit, name in _SCAPY_TCP_FLAG_BITS if bitmask & bit)
 
 
 def iter_jsonl(
@@ -107,7 +172,7 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
     except ImportError as exc:
         raise CaptureError("install the optional capture extra: pip install -e '.[capture]'") from exc
 
-    events: queue.Queue[PacketEvent] = queue.Queue()
+    events = _BoundedCaptureQueue()
 
     def callback(packet: object) -> None:
         try:
@@ -127,7 +192,7 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                 protocol = "TCP"
                 layer = packet[TCP]
                 src_port, dst_port = int(layer.sport), int(layer.dport)
-                flags = frozenset(str(layer.flags).replace(" ", ""))
+                flags = _normalize_scapy_tcp_flags(layer.flags)
             elif UDP in packet:
                 protocol = "UDP"
                 layer = packet[UDP]
@@ -139,7 +204,7 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                 query = packet[DNSQR].qname
                 query_length = len(query) if query is not None else None
 
-            events.put(
+            events.offer(
                 PacketEvent(
                     observed_at=datetime.now(timezone.utc),
                     src_ip=src_ip,
@@ -164,6 +229,8 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
         raise CaptureError(f"unable to start capture on {interface!r}: {exc}") from exc
     try:
         while True:
-            yield events.get()
+            event = events.take()
+            if event is not None:
+                yield event
     finally:
         sniffer.stop()
