@@ -297,6 +297,12 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert 'href="#detections-title"' in INDEX_HTML
     assert 'type="search"' in INDEX_HTML
     assert 'aria-pressed="false"' in INDEX_HTML
+    assert 'id="connection" role="status"' not in INDEX_HTML
+    assert 'id="snapshot-status" role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
+    assert 'class="table-scroll" role="region" aria-labelledby="detections-title"' in INDEX_HTML
+    assert 'aria-describedby="table-scroll-help" tabindex="0"' in INDEX_HTML
+    assert "Dashboard API reachability does not measure capture or ingestion health." in INDEX_HTML
+    assert "Action records" in INDEX_HTML
     assert "<button" in INDEX_HTML
     assert "<style" not in INDEX_HTML
     assert "<script>" not in INDEX_HTML
@@ -306,6 +312,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "replaceChildren" in DASHBOARD_JS
     assert "AbortController" in DASHBOARD_JS
     assert "knownSeverities.has(normalized)" in DASHBOARD_JS
+    assert "Audit decisions; no live application" in DASHBOARD_JS
+    assert "Schema-checked startup snapshot" in DASHBOARD_JS
+    assert "Showing preserved stale dashboard data" in DASHBOARD_JS
+    assert "No successful dashboard data fetch is available" in DASHBOARD_JS
     assert "`severity ${severity}`" in DASHBOARD_JS
     assert "row.append(timeNode(event.detected_at))" not in DASHBOARD_JS
     assert "const timeCell = document.createElement('td');" in DASHBOARD_JS
@@ -341,7 +351,7 @@ process.stdin.on('end', async () => {
     function fakeNode(id = '') {
       return {id, value: id === 'filter-severity' ? 'ALL' : '', textContent: '',
         className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0,
-        append() {}, replaceChildren() {}, setAttribute() {}, addEventListener() {}};
+        append() {}, replaceChildren() {}, setAttribute() {}, removeAttribute() {}, addEventListener() {}};
     }
     const document = {hidden: false,
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
@@ -379,6 +389,121 @@ process.stdin.on('end', async () => {
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "no-overlap\n"
+
+
+def test_dashboard_trust_status_distinguishes_api_freshness_pause_and_stale_data():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for dashboard JavaScript behavior")
+
+    harness = r"""
+const vm = require('vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { code += chunk; });
+process.stdin.on('end', async () => {
+  try {
+    const withoutBootstrap = code.replace(/\nbootstrap\(\);\s*$/, '\n');
+    if (withoutBootstrap === code) throw new Error('dashboard bootstrap marker was not found');
+    code = withoutBootstrap;
+    const nodes = new Map(), textWrites = new Map();
+    function fakeNode(id = '') {
+      let text = '';
+      return {id, value: id === 'filter-severity' ? 'ALL' : '',
+        get textContent() { return text; },
+        set textContent(value) { text = value; textWrites.set(id, (textWrites.get(id) || 0) + 1); },
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0,
+        append() {}, replaceChildren() {}, setAttribute() {}, removeAttribute() {}, addEventListener() {}};
+    }
+    const document = {hidden: false,
+      getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
+      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+    class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
+    let failRequests = false;
+    const response = value => ({ok: true, json: async () => value});
+    function fetch(path) {
+      if (failRequests) return Promise.reject(new Error('synthetic refresh failure'));
+      if (path === '/api/summary') {
+        return Promise.resolve(response({events: 3, detections: 1, high_or_critical: 1, actions: 2}));
+      }
+      if (path === '/api/events?limit=25') {
+        return Promise.resolve(response([{detected_at: '2026-09-10T00:00:00Z', rule_id: 'TEST_RULE',
+          severity: 'HIGH', src_ip: '192.0.2.10', message: 'Synthetic status test'}]));
+      }
+      return Promise.reject(new Error(`unexpected path: ${path}`));
+    }
+    const context = {document, fetch, AbortController: FakeAbortController,
+      Intl, Date, Number, String, Math, Set,
+      Promise, Error, Array, window: {setTimeout() { return 1; }, clearTimeout() {}}};
+    vm.createContext(context); vm.runInContext(code, context);
+    vm.runInContext("applyConfig({schema: 'dashboard-config-v1', read_only: true, event_limit: 25, refresh_seconds: 7})", context);
+    if (nodes.get('scope-status').textContent !== 'Newest 25 detections maximum') throw new Error('bounded scope is unclear');
+
+    vm.runInContext('togglePause()', context);
+    const pausedBeforeSuccess = nodes.get('snapshot-status').textContent;
+    if (!pausedBeforeSuccess.includes('No successful dashboard data fetch is available')) throw new Error(`early pause overclaims freshness: ${pausedBeforeSuccess}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · refresh paused before first snapshot') throw new Error('early pause overclaims API reachability');
+    vm.runInContext('state.paused = false', context);
+
+    await vm.runInContext('refresh(false)', context);
+    const current = nodes.get('snapshot-status').textContent;
+    if (!current.includes('Dashboard data fetched successfully')) throw new Error(`missing successful-fetch state: ${current}`);
+    if (!current.includes('does not measure capture or ingestion health')) throw new Error(`health overclaim: ${current}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · reachable') throw new Error('API state is unclear');
+    if (nodes.get('trust-strip').className !== 'trust-strip current') throw new Error('current state class is missing');
+    const currentStatusWrites = textWrites.get('snapshot-status');
+    await vm.runInContext('refresh(false)', context);
+    if (textWrites.get('snapshot-status') !== currentStatusWrites) throw new Error('routine refresh rewrote the live status region');
+
+    vm.runInContext('togglePause()', context);
+    const paused = nodes.get('snapshot-status').textContent;
+    if (!paused.includes('Automatic refresh paused.')) throw new Error(`pause is unclear: ${paused}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · reachable, refresh paused') throw new Error('paused API state is unclear');
+    if (nodes.get('trust-strip').className !== 'trust-strip paused') throw new Error('paused state class is missing');
+
+    failRequests = true;
+    await vm.runInContext('refresh(false)', context);
+    const pausedFailure = nodes.get('snapshot-status').textContent;
+    if (!pausedFailure.includes('Automatic refresh remains paused.')) throw new Error(`paused failure is unclear: ${pausedFailure}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · unavailable, refresh paused') throw new Error('paused failure API state is unclear');
+
+    vm.runInContext('togglePause()', context);
+    if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('resume briefly overclaimed stale data as current');
+    await new Promise(resolve => setImmediate(resolve));
+    const stale = nodes.get('snapshot-status').textContent;
+    if (!stale.includes('Showing preserved stale dashboard data')) throw new Error(`stale state is unclear: ${stale}`);
+    if (!nodes.get('updated').textContent.startsWith('Stale · last success')) throw new Error('stale timestamp is unclear');
+    if (nodes.get('connection').textContent !== 'Dashboard API · unavailable') throw new Error('failed API state is unclear');
+    if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('stale state class is missing');
+    if (vm.runInContext('state.events.length', context) !== 1) throw new Error('existing rows were not preserved');
+    const staleStatusWrites = textWrites.get('snapshot-status');
+    await vm.runInContext('refresh(false)', context);
+    if (textWrites.get('snapshot-status') !== staleStatusWrites) throw new Error('repeated outage rewrote the live status region');
+
+    vm.runInContext('togglePause()', context);
+    if (nodes.get('connection').textContent !== 'Dashboard API · unavailable, refresh paused') throw new Error('pause after failure overclaims API reachability');
+    if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('pause after failure hides stale state');
+    if (!nodes.get('snapshot-status').textContent.includes('Automatic refresh remains paused.')) throw new Error('pause after failure loses pause context');
+    vm.runInContext('state.paused = false', context);
+
+    vm.runInContext('state.lastSuccessfulRefresh = null', context);
+    await vm.runInContext('refresh(false)', context);
+    const emptyFailure = nodes.get('snapshot-status').textContent;
+    if (!emptyFailure.includes('No successful dashboard data fetch is available')) throw new Error(`no-success state is unclear: ${emptyFailure}`);
+    process.stdout.write('truthful-trust-states\n');
+  } catch (error) { console.error(error.message); process.exitCode = 1; }
+});
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=DASHBOARD_JS,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "truthful-trust-states\n"
 
 
 def test_offline_api_is_local_bounded_and_security_hardened(tmp_path):

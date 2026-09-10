@@ -447,12 +447,15 @@ unsupported; any future restoration must satisfy the gate below.
 
 The current UI is a responsive dark-theme status view with:
 
-- summary cards for stored events, detections, actions, and high/critical counts;
+- summary cards for stored events, detections, action records, and high/critical
+  counts, with action records explicitly distinguished from live application;
 - a five-column recent-detections table: time, severity, rule, source, and message;
 - local text search and severity filtering, manual refresh, and pause/resume;
 - bounded five-second polling by default, suspended while the page is hidden;
-- an optional privacy-bounded summary of one explicitly selected completed
-  offline run; and
+- an optional schema-checked, privacy-bounded summary of one explicitly selected
+  completed offline run;
+- a truthful operator-status strip that separates dashboard API reachability
+  from unmeasured capture/ingestion health and marks preserved data stale; and
 - DOM text-node rendering rather than raw HTML insertion.
 
 The server exposes only these read routes:

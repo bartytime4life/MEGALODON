@@ -44,7 +44,7 @@ INDEX_HTML = """<!doctype html>
       <div class="mark" aria-hidden="true">M</div>
       <div><p class="brand-name">MEGALODON</p><p class="brand-subtitle">Local defense telemetry</p></div>
     </div>
-    <div class="connection" id="connection" role="status" aria-live="polite">Connecting</div>
+    <div class="connection" id="connection">Dashboard API · connecting</div>
   </header>
 
   <section class="hero" aria-labelledby="page-title">
@@ -53,14 +53,25 @@ INDEX_HTML = """<!doctype html>
       <h1 id="page-title">Signal without surrendering control.</h1>
       <p class="lede">Review local metadata detections and one explicitly selected offline analysis snapshot. This surface cannot start analysis or apply a response.</p>
     </div>
-    <div class="read-only">Read only · local first</div>
+    <div class="read-only">HTTP read only · loopback only</div>
+  </section>
+
+  <section class="trust-strip waiting" id="trust-strip" aria-labelledby="trust-title">
+    <div class="trust-summary">
+      <p class="eyebrow" id="trust-title">Operator trust status</p>
+      <p class="trust-message" id="snapshot-status" role="status" aria-live="polite" aria-atomic="true">No successful dashboard data fetch yet. Dashboard API reachability does not measure capture or ingestion health.</p>
+    </div>
+    <dl class="trust-facts">
+      <div><dt>Detection scope</dt><dd id="scope-status">Newest 50 detections maximum</dd></div>
+      <div><dt>Response boundary</dt><dd>Review only · no live application</dd></div>
+    </dl>
   </section>
 
   <section class="metrics" id="live-metrics" aria-label="Live telemetry summary">
     <article class="metric"><div class="metric-label">Events</div><div class="metric-value">—</div></article>
     <article class="metric"><div class="metric-label">Detections</div><div class="metric-value">—</div></article>
     <article class="metric"><div class="metric-label">High / critical</div><div class="metric-value">—</div></article>
-    <article class="metric"><div class="metric-label">Actions</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">Action records</div><div class="metric-value">—</div></article>
   </section>
 
   <section class="panel" aria-labelledby="detections-title">
@@ -89,7 +100,8 @@ INDEX_HTML = """<!doctype html>
       </div>
       <p class="filter-status" id="filter-status" role="status" aria-live="polite">Waiting for recent detections.</p>
     </div>
-    <div class="table-scroll">
+    <p class="sr-only" id="table-scroll-help">The recent detections table may scroll horizontally on narrow screens.</p>
+    <div class="table-scroll" role="region" aria-labelledby="detections-title" aria-describedby="table-scroll-help" tabindex="0">
       <table aria-describedby="filter-status">
         <caption>Recent MEGALODON detections</caption>
         <thead><tr><th scope="col">Time</th><th scope="col">Severity</th><th scope="col">Rule</th><th scope="col">Source</th><th scope="col">Message</th></tr></thead>
@@ -180,7 +192,22 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
   border-radius: 14px; background: rgba(81, 230, 207, .07); color: #b7fff2;
   font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
 }
-.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 28px 0; }
+.trust-strip {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .65fr); gap: 18px;
+  align-items: center; margin: 24px 0 12px; padding: 16px 18px; border: 1px solid var(--line);
+  border-left: 4px solid var(--muted); border-radius: 15px; background: rgba(5, 18, 25, .62);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .18);
+}
+.trust-strip.current { border-left-color: var(--aqua); }
+.trust-strip.paused { border-left-color: var(--amber); background: rgba(255, 209, 102, .035); }
+.trust-strip.stale { border-left-color: var(--rose); background: rgba(255, 117, 143, .04); }
+.trust-summary .eyebrow { margin-bottom: 6px; }
+.trust-message { margin: 0; color: var(--text); font-size: .82rem; line-height: 1.55; }
+.trust-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0; }
+.trust-facts div { padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .42); }
+.trust-facts dt { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.trust-facts dd { margin: 5px 0 0; color: #d8ebee; font-size: .78rem; font-weight: 750; line-height: 1.35; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 12px 0 28px; }
 .metric, .panel {
   border: 1px solid var(--line); background: linear-gradient(145deg, rgba(18, 45, 59, .92), rgba(8, 24, 33, .9));
   box-shadow: var(--shadow);
@@ -208,7 +235,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .button-secondary[aria-pressed="true"] { border-color: rgba(255, 209, 102, .4); background: rgba(255, 209, 102, .09); color: var(--amber); }
 .toolbar-actions { display: flex; gap: 8px; }
 .filter-status { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .75rem; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; scrollbar-color: var(--muted) rgba(3, 13, 19, .42); }
+.table-scroll:focus-visible { outline-offset: -3px; }
 table { width: 100%; border-collapse: collapse; }
 caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 th, td { padding: 13px 16px; border-bottom: 1px solid rgba(148, 188, 202, .12); text-align: left; font-size: .82rem; vertical-align: top; }
@@ -246,6 +274,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
 [hidden] { display: none !important; }
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; } .read-only { justify-self: start; }
+  .trust-strip { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolbar { grid-template-columns: minmax(0, 1fr) minmax(150px, .45fr); }
   .toolbar-actions { grid-column: 1 / -1; }
@@ -255,6 +284,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
 @media (max-width: 560px) {
   .shell { width: min(100% - 20px, 1240px); padding-top: 18px; }
   .topbar { align-items: flex-start; } .brand-subtitle { display: none; } .connection { max-width: 145px; }
+  .trust-strip { padding: 14px; } .trust-facts { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: 1fr 1fr; } .metric { min-height: 108px; padding: 14px; }
   .panel-head { display: block; } .timestamp { display: block; margin-top: 7px; }
   .toolbar { grid-template-columns: 1fr; padding: 14px; }
@@ -273,7 +303,7 @@ const metricSpec = [
   ['events', 'Events', 'Validated metadata records'],
   ['detections', 'Detections', 'Fixed-rule findings'],
   ['high_or_critical', 'High / critical', 'Priority review items'],
-  ['actions', 'Actions', 'Planned or explicit records']
+  ['actions', 'Action records', 'Audit decisions; no live application']
 ];
 const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const state = {
@@ -281,6 +311,9 @@ const state = {
   paused: false,
   refreshing: false,
   timer: null,
+  lastSuccessfulRefresh: null,
+  lastRefreshFailed: false,
+  configDegraded: false,
   config: {event_limit: 50, refresh_seconds: 5}
 };
 
@@ -368,7 +401,7 @@ function renderOffline(payload) {
   const status = byId('offline-status');
   if (!payload.available) { empty.hidden = false; content.hidden = true; status.textContent = 'Not selected'; return; }
   const data = payload.snapshot, run = data.run, summary = data.summary;
-  empty.hidden = true; content.hidden = false; status.textContent = 'Validated summary snapshot';
+  empty.hidden = true; content.hidden = false; status.textContent = 'Schema-checked startup snapshot';
   byId('offline-case').textContent = `${run.case_id} · ${run.record_kind} summary`;
   byId('offline-run-id').textContent = `Run ${run.run_id}`;
   byId('offline-facts').replaceChildren(
@@ -402,10 +435,52 @@ function renderOfflineError() {
   byId('offline-status').textContent = 'Unavailable';
 }
 function setConnection(label, className) {
-  const connection = byId('connection'); connection.textContent = label; connection.className = `connection ${className}`;
+  const connection = byId('connection');
+  const nextClass = className ? `connection ${className}` : 'connection';
+  if (connection.textContent !== label) connection.textContent = label;
+  if (connection.className !== nextClass) connection.className = nextClass;
 }
-function setUpdatedTime(value) {
-  const updated = byId('updated'); updated.textContent = `Updated ${value.toLocaleTimeString()}`; updated.dateTime = value.toISOString();
+function formatRefreshTime(value) { return value.toLocaleString(); }
+function setUpdatedTime(label, value = null) {
+  const updated = byId('updated'); updated.textContent = label;
+  if (value) updated.dateTime = value.toISOString();
+  else updated.removeAttribute('datetime');
+}
+function renderScope() {
+  byId('scope-status').textContent = `Newest ${formatNumber(state.config.event_limit)} detections maximum${state.configDegraded ? ' · safe defaults' : ''}`;
+}
+function setSnapshotStatus(mode) {
+  const strip = byId('trust-strip');
+  const status = byId('snapshot-status');
+  const nextClass = `trust-strip ${mode}`;
+  if (strip.className !== nextClass) strip.className = nextClass;
+  const healthLimit = 'Dashboard API reachability does not measure capture or ingestion health.';
+  let message;
+  if (mode === 'current') {
+    message = `Dashboard data fetched successfully. Last-success time is shown below. ${healthLimit}`;
+    setUpdatedTime(`Data fetched ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
+  } else if (mode === 'paused') {
+    if (state.lastSuccessfulRefresh) {
+      message = `Automatic refresh paused. Showing preserved dashboard data from the last successful fetch. ${healthLimit}`;
+      setUpdatedTime(`Paused · last success ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
+    } else {
+      message = `Automatic refresh paused. No successful dashboard data fetch is available. ${healthLimit}`;
+      setUpdatedTime('Paused · no dashboard data available');
+    }
+  } else if (mode === 'stale') {
+    const pauseContext = state.paused ? ' Automatic refresh remains paused.' : '';
+    if (state.lastSuccessfulRefresh) {
+      message = `Refresh failed.${pauseContext} Showing preserved stale dashboard data from the last successful fetch. ${healthLimit}`;
+      setUpdatedTime(`Stale · last success ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
+    } else {
+      message = `Refresh failed.${pauseContext} No successful dashboard data fetch is available. ${healthLimit}`;
+      setUpdatedTime('No successful dashboard data available');
+    }
+  } else {
+    message = `No successful dashboard data fetch yet. ${healthLimit}`;
+    setUpdatedTime('No successful dashboard data yet');
+  }
+  if (status.textContent !== message) status.textContent = message;
 }
 function scheduleNext() {
   if (state.timer !== null) window.clearTimeout(state.timer);
@@ -431,12 +506,17 @@ async function refresh(announce = true) {
     const events = eventsResult.value;
     if (!Array.isArray(events)) throw new Error('invalid events response');
     state.events = events;
-    renderMetrics(summary); applyFilters(); setUpdatedTime(new Date());
-    setConnection(state.paused ? 'Auto-refresh paused' : `Local data · ${state.config.refresh_seconds}s`, 'ok');
+    state.lastSuccessfulRefresh = new Date();
+    state.lastRefreshFailed = false;
+    renderMetrics(summary); applyFilters(); renderScope();
+    setSnapshotStatus(state.paused ? 'paused' : 'current');
+    setConnection(state.paused ? 'Dashboard API · reachable, refresh paused' : 'Dashboard API · reachable', 'ok');
     if (announce) byId('refresh-announcement').textContent = 'Dashboard data refreshed.';
   } catch (_) {
-    setConnection('Refresh unavailable', 'error');
-    byId('refresh-announcement').textContent = 'Dashboard refresh failed. Existing rows were preserved.';
+    state.lastRefreshFailed = true;
+    setConnection(state.paused ? 'Dashboard API · unavailable, refresh paused' : 'Dashboard API · unavailable', 'error');
+    setSnapshotStatus('stale');
+    if (announce) byId('refresh-announcement').textContent = 'Dashboard refresh failed. Existing rows were preserved.';
   } finally {
     state.refreshing = false; button.disabled = false; button.textContent = 'Refresh now';
   }
@@ -445,8 +525,21 @@ function togglePause() {
   state.paused = !state.paused;
   const button = byId('pause-button'); button.setAttribute('aria-pressed', String(state.paused));
   button.textContent = state.paused ? 'Resume refresh' : 'Pause refresh';
-  setConnection(state.paused ? 'Auto-refresh paused' : `Local data · ${state.config.refresh_seconds}s`, 'ok');
-  byId('refresh-announcement').textContent = state.paused ? 'Automatic refresh paused.' : 'Automatic refresh resumed.';
+  if (state.paused) {
+    if (state.lastRefreshFailed) {
+      setConnection('Dashboard API · unavailable, refresh paused', 'error');
+      setSnapshotStatus('stale');
+    } else {
+      const pausedLabel = state.lastSuccessfulRefresh
+        ? 'Dashboard API · reachable, refresh paused'
+        : 'Dashboard API · refresh paused before first snapshot';
+      setConnection(pausedLabel, state.lastSuccessfulRefresh ? 'ok' : '');
+      setSnapshotStatus('paused');
+    }
+  } else {
+    setConnection('Dashboard API · checking', '');
+    setSnapshotStatus(state.lastRefreshFailed ? 'stale' : (state.lastSuccessfulRefresh ? 'current' : 'waiting'));
+  }
   if (state.paused) scheduleNext();
   else { refresh(false); scheduleNext(); }
 }
@@ -456,10 +549,14 @@ function applyConfig(payload) {
   if (!Number.isInteger(eventLimit) || eventLimit < 1 || eventLimit > 200) throw new Error('invalid event limit');
   if (!Number.isInteger(refreshSeconds) || refreshSeconds < 2 || refreshSeconds > 300) throw new Error('invalid refresh interval');
   state.config = {event_limit: eventLimit, refresh_seconds: refreshSeconds};
+  renderScope();
 }
 async function bootstrap() {
   try { applyConfig(await requestJSON('/api/config')); }
-  catch (_) { setConnection('Using safe refresh defaults', 'error'); }
+  catch (_) {
+    state.configDegraded = true; renderScope();
+    setConnection('Dashboard API · using safe defaults', 'error');
+  }
   try { renderOffline(await requestJSON('/api/offline-summary')); }
   catch (_) { renderOfflineError(); }
   await refresh(false); scheduleNext();
