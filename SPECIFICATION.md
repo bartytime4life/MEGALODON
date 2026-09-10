@@ -257,9 +257,26 @@ The dashboard exposes only:
 `--refresh-seconds` and `--event-limit` command options override configuration
 for one launch. The browser uses a single non-overlapping timeout loop, pauses
 polling while hidden or when the operator selects pause, and retains the last
-successfully rendered rows across a refresh failure. Search and severity
-filters operate only on the bounded in-memory recent set; they do not query new
-fields, persist preferences, change SQLite, or create an export.
+successfully rendered rows across a refresh failure. Before replacing the
+rendered state, the browser requires an exact four-counter summary shape and an
+array no larger than the configured event limit whose objects contain exactly
+the five public string fields and a closed severity.
+
+Search, grouped/exact severity, and exact-rule filters operate only on the
+bounded in-memory recent set. A local timeline uses at most 12 chronological
+bins from valid timestamps after the non-time filters; invalid timestamps remain
+in the unfiltered table and are disclosed as excluded from the timeline. These
+controls do not query new fields, persist preferences, change SQLite, or create
+an export.
+
+The UI may compare `high_or_critical` only with the value from the preceding
+successful summary fetch and describe the result as a stored-count baseline,
+increase, decrease, or no change. It must not infer new or unique alerts,
+deduplication, acknowledgement, assignment, resolution, incident state, or
+capture/ingestion health. `/api/summary` and `/api/events` are separate reads and
+must not be presented as one transactionally coherent snapshot. Any failed or
+invalid peer response preserves the prior data, active controls, last-success
+time, and priority-count baseline while changing freshness to stale.
 
 All configuration counters are native TOML integers; booleans, floats, and
 numeric strings are rejected instead of coerced. Detector windows are capped at

@@ -292,20 +292,45 @@ def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
 
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
+    assert "Recent detection triage" in INDEX_HTML
     assert 'aria-live="polite"' in INDEX_HTML
     assert 'scope="col"' in INDEX_HTML
     assert 'href="#detections-title"' in INDEX_HTML
     assert 'type="search"' in INDEX_HTML
     assert 'aria-pressed="false"' in INDEX_HTML
+    assert '<fieldset class="toolbar" id="triage-controls" disabled>' in INDEX_HTML
+    assert '<legend class="sr-only">Detection triage filters and refresh controls</legend>' in INDEX_HTML
+    assert '<select id="filter-rule"><option value="">All rules</option></select>' in INDEX_HTML
+    assert '<option value="PRIORITY">High + critical</option>' in INDEX_HTML
+    assert '<button id="clear-filters" type="button"' in INDEX_HTML
+    assert '<button id="clear-time-filter" type="button"' in INDEX_HTML
+    assert 'id="priority-announcement" aria-live="polite" aria-atomic="true"' in INDEX_HTML
+    assert 'id="timeline" role="group" aria-label="Filter detections by returned timestamp range"' in INDEX_HTML
+    assert 'id="connection" role="status"' not in INDEX_HTML
+    assert 'id="snapshot-status" role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
+    assert 'class="table-scroll" role="region" aria-label="Scrollable recent detections table"' in INDEX_HTML
+    assert 'aria-describedby="table-scroll-help" tabindex="0"' in INDEX_HTML
+    assert "Dashboard API reachability does not measure capture or ingestion health." in INDEX_HTML
+    assert "Sequential count-change signal only" in INDEX_HTML
+    assert "High / critical stored" in INDEX_HTML
+    assert "Action records" in INDEX_HTML
     assert "<button" in INDEX_HTML
     assert "<style" not in INDEX_HTML
     assert "<script>" not in INDEX_HTML
     assert 'src="/assets/dashboard.js"' in INDEX_HTML
     assert 'href="/assets/dashboard.css"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
+    assert "forced-colors: active" in DASHBOARD_CSS
+    assert ".timeline-bar.level-0 { height: 0; }" in DASHBOARD_CSS
     assert "replaceChildren" in DASHBOARD_JS
     assert "AbortController" in DASHBOARD_JS
     assert "knownSeverities.has(normalized)" in DASHBOARD_JS
+    assert "Audit decisions; no live application" in DASHBOARD_JS
+    assert "Schema-checked startup snapshot" in DASHBOARD_JS
+    assert "Showing preserved stale dashboard data" in DASHBOARD_JS
+    assert "No successful dashboard data fetch is available" in DASHBOARD_JS
+    assert "Recent SQLite telemetry is checked separately" in DASHBOARD_JS
+    assert "Live telemetry remains available" not in DASHBOARD_JS
     assert "`severity ${severity}`" in DASHBOARD_JS
     assert "row.append(timeNode(event.detected_at))" not in DASHBOARD_JS
     assert "const timeCell = document.createElement('td');" in DASHBOARD_JS
@@ -314,12 +339,239 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "innerHTML" not in DASHBOARD_JS
     assert "localStorage" not in DASHBOARD_JS
     assert "navigator.clipboard" not in DASHBOARD_JS
+    for forbidden in ("Notification", "Audio(", "WebSocket", "EventSource"):
+        assert forbidden not in INDEX_HTML + DASHBOARD_JS
+    for private_field in ("dst_ip", "evidence", "recommendation", "suppressed_reason"):
+        assert private_field not in INDEX_HTML + DASHBOARD_JS
+    assert "method: 'POST'" not in DASHBOARD_JS
+    assert 'method: "POST"' not in DASHBOARD_JS
+    assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
     assert 'type="file"' not in INDEX_HTML
     assert "/api/run" not in INDEX_HTML + DASHBOARD_JS
     ids = re.findall(r'\bid="([^"]+)"', INDEX_HTML)
     referenced_ids = re.findall(r"byId\('([^']+)'\)", DASHBOARD_JS)
     assert len(ids) == len(set(ids))
     assert set(referenced_ids) <= set(ids)
+
+
+def test_dashboard_triage_filter_timeline_priority_and_response_contracts():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for dashboard JavaScript behavior")
+
+    harness = r"""
+const vm = require('vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { code += chunk; });
+process.stdin.on('end', () => {
+  try {
+    const withoutBootstrap = code.replace(/\nbootstrap\(\);\s*$/, '\n');
+    if (withoutBootstrap === code) throw new Error('dashboard bootstrap marker was not found');
+    code = withoutBootstrap;
+    const nodes = new Map();
+    function fakeNode(id = '') {
+      let text = '';
+      return {
+        id,
+        value: id === 'filter-severity' ? 'ALL' : '',
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0,
+        children: [], attributes: new Map(), listeners: new Map(), textWrites: 0,
+        get textContent() { return text; },
+        set textContent(value) { text = String(value); this.textWrites += 1; },
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+        setAttribute(name, value) { this.attributes.set(name, String(value)); },
+        getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null; },
+        removeAttribute(name) { this.attributes.delete(name); },
+        addEventListener(name, listener) { this.listeners.set(name, listener); },
+        click() { const listener = this.listeners.get('click'); if (listener) listener(); }
+      };
+    }
+    const document = {
+      hidden: false,
+      getElementById(id) {
+        if (!nodes.has(id)) nodes.set(id, fakeNode(id));
+        return nodes.get(id);
+      },
+      createElement(tag) { return fakeNode(tag); },
+      addEventListener() {}
+    };
+    class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
+    const context = {
+      document, AbortController: FakeAbortController,
+      Intl, Date, Number, String, Math, Set, Promise, Error, Array,
+      window: {setTimeout() { return 1; }, clearTimeout() {}}
+    };
+    vm.createContext(context);
+    vm.runInContext(code, context);
+    vm.runInContext(`
+      state.config.event_limit = 20;
+      state.lastSuccessfulRefresh = new Date('2026-09-10T02:00:00Z');
+      state.events = [
+        {detected_at: '2026-09-10T00:00:00Z', message: 'Alpha needle', rule_id: 'RULE_A', severity: 'HIGH', src_ip: '192.0.2.1'},
+        {detected_at: '2026-09-10T00:10:00Z', message: 'Alpha needle', rule_id: 'RULE_A_EXTRA', severity: 'CRITICAL', src_ip: '192.0.2.2'},
+        {detected_at: '2026-09-10T00:20:00Z', message: 'Alpha needle', rule_id: 'RULE_A', severity: 'MEDIUM', src_ip: '192.0.2.3'},
+        {detected_at: 'not-a-timestamp', message: 'Other', rule_id: 'ALL', severity: 'LOW', src_ip: '192.0.2.4'},
+        {detected_at: '2026-09-10T00:30:00Z', message: 'Other', rule_id: 'RULE_A', severity: 'CRITICAL', src_ip: '192.0.2.5'}
+      ];
+      renderRuleOptions();
+    `, context);
+
+    const ruleValues = nodes.get('filter-rule').children.map(option => option.value);
+    if (JSON.stringify(ruleValues) !== JSON.stringify(['', 'ALL', 'RULE_A', 'RULE_A_EXTRA'])) {
+      throw new Error(`rule options are not unique and deterministic: ${JSON.stringify(ruleValues)}`);
+    }
+
+    vm.runInContext(`
+      byId('filter-severity').value = 'PRIORITY';
+      byId('filter-rule').value = '';
+      byId('filter-query').value = '';
+    `, context);
+    let filtered = vm.runInContext('baseFilteredEvents().map(event => event.severity).join(",")', context);
+    if (filtered !== 'HIGH,CRITICAL,CRITICAL') throw new Error(`priority grouping failed: ${filtered}`);
+
+    vm.runInContext("byId('filter-rule').value = 'RULE_A'", context);
+    filtered = vm.runInContext('baseFilteredEvents().map(event => event.src_ip).join(",")', context);
+    if (filtered !== '192.0.2.1,192.0.2.5') throw new Error(`rule matching was not exact: ${filtered}`);
+    vm.runInContext("byId('filter-query').value = 'alpha'", context);
+    filtered = vm.runInContext('baseFilteredEvents().map(event => event.src_ip).join(",")', context);
+    if (filtered !== '192.0.2.1') throw new Error(`combined query filter failed: ${filtered}`);
+    vm.runInContext(`
+      byId('filter-severity').value = 'ALL';
+      byId('filter-rule').value = 'ALL';
+      byId('filter-query').value = '';
+    `, context);
+    filtered = vm.runInContext('baseFilteredEvents().map(event => event.src_ip).join(",")', context);
+    if (filtered !== '192.0.2.4') throw new Error(`literal ALL rule was not selectable: ${filtered}`);
+
+    vm.runInContext(`
+      byId('filter-severity').value = 'ALL';
+      byId('filter-rule').value = '';
+      byId('filter-query').value = '';
+      state.activeBin = null;
+      applyFilters();
+    `, context);
+    if (nodes.get('events').children.length !== 5) throw new Error('invalid-time row left the unfiltered table');
+    if (!nodes.get('timeline-status').textContent.includes('excluded from the timeline only')) {
+      throw new Error('invalid-time timeline boundary is not disclosed');
+    }
+    const firstTimelineButton = nodes.get('timeline').children[0];
+    if (firstTimelineButton.getAttribute('aria-pressed') !== 'false') throw new Error('timeline starts selected');
+    firstTimelineButton.click();
+    if (vm.runInContext('state.activeBin', context) !== 0) throw new Error('timeline click did not select a bin');
+    if (nodes.get('timeline').children[0].getAttribute('aria-pressed') !== 'true') throw new Error('selected bin state is not exposed');
+    nodes.get('timeline').children[0].click();
+    if (vm.runInContext('state.activeBin', context) !== null) throw new Error('selected timeline bin did not toggle off');
+
+    vm.runInContext(`
+      {
+        const timelineEvents = Array.from({length: 13}, (_, index) => ({
+          detected_at: new Date(Date.UTC(2026, 8, 10, 0, index)).toISOString()
+        })).concat([{detected_at: 'not-a-timestamp'}]);
+        const model = buildTimeline(timelineEvents);
+        if (model.bins.length !== 12) throw new Error('timeline is not capped at 12 bins');
+        if (model.bins.reduce((total, bin) => total + bin.members.length, 0) !== 13) throw new Error('timeline lost or duplicated valid rows');
+        if (model.invalidCount !== 1) throw new Error('timeline invalid count is wrong');
+        if (!model.bins[0].members.includes(0) || !model.bins[11].members.includes(12)) throw new Error('timeline endpoints were not assigned once');
+        const equal = buildTimeline([{detected_at: '2026-09-10T01:00:00Z'}, {detected_at: '2026-09-10T01:00:00Z'}]);
+        if (equal.bins.length !== 1 || equal.bins[0].members.length !== 2) throw new Error('equal timestamps did not form one bin');
+        const sparse = buildTimeline([
+          {detected_at: '1970-01-01T00:00:00.000Z'},
+          {detected_at: '1970-01-01T00:00:00.001Z'},
+          {detected_at: '1970-01-01T00:00:10.000Z'}
+        ]);
+        for (let index = 1; index < sparse.bins.length; index += 1) {
+          if (sparse.bins[index - 1].end >= sparse.bins[index].start) throw new Error('timeline ranges overlap');
+          if (displayTime(new Date(sparse.bins[index - 1].end)) === displayTime(new Date(sparse.bins[index].start))) {
+            throw new Error('adjacent timeline labels lose their millisecond boundary');
+          }
+        }
+        renderTimeline(sparse);
+        const emptyButton = byId('timeline').children.find(button => button.getAttribute('aria-label').startsWith('0 returned'));
+        if (!emptyButton || emptyButton.children[0].className !== 'timeline-bar level-0') throw new Error('zero-count bin rendered a positive bar');
+      }
+    `, context);
+
+    vm.runInContext(`
+      byId('filter-query').value = 'alpha';
+      byId('filter-severity').value = 'PRIORITY';
+      byId('filter-rule').value = 'RULE_A';
+      state.activeBin = 0;
+      clearFilters();
+      if (byId('filter-query').value !== '' || byId('filter-severity').value !== 'ALL' || byId('filter-rule').value !== '' || state.activeBin !== null) {
+        throw new Error('clear filters did not reset every local dimension');
+      }
+      if (state.events.length !== 5) throw new Error('clear filters mutated returned data');
+    `, context);
+
+    vm.runInContext(`
+      updatePriorityChange({high_or_critical: 2});
+      if (byId('priority-change').textContent !== 'Priority baseline established: 2 stored.') throw new Error('priority baseline is unclear');
+      updatePriorityChange({high_or_critical: 2});
+      if (byId('priority-change').textContent !== 'No stored high/critical count change · 2 stored.') throw new Error('priority no-change state is unclear');
+    `, context);
+    const noChangeWrites = nodes.get('priority-change').textWrites;
+    vm.runInContext('updatePriorityChange({high_or_critical: 2})', context);
+    if (nodes.get('priority-change').textWrites !== noChangeWrites) throw new Error('unchanged priority state rewrote its status');
+    vm.runInContext(`
+      updatePriorityChange({high_or_critical: 5});
+      if (byId('priority-change').textContent !== 'Stored high/critical count increased by 3 to 5.') throw new Error('priority increase is unclear');
+      updatePriorityChange({high_or_critical: 1});
+      if (byId('priority-change').textContent !== 'Stored high/critical count decreased by 4 to 1.') throw new Error('priority decrease is unclear');
+      if (!byId('priority-announcement').textContent.includes('decreased by 4')) throw new Error('priority decrease was not announced');
+      updatePriorityChange({high_or_critical: 1});
+      if (byId('priority-announcement').textContent !== '') throw new Error('no-change state retained an obsolete priority announcement');
+      if (state.lastPriorityTotal !== 1) throw new Error('priority baseline did not advance sequentially');
+    `, context);
+
+    vm.runInContext(`
+      {
+        const validSummary = {actions: 0, detections: 1, events: 1, high_or_critical: 1};
+        const validEvent = {detected_at: 'not-a-timestamp', message: 'bounded', rule_id: 'RULE_A', severity: 'HIGH', src_ip: '192.0.2.1'};
+        validatedSummary(validSummary);
+        validatedEvents([validEvent]);
+        const mustReject = [
+          () => validatedSummary(null),
+          () => validatedSummary({...validSummary, extra: 1}),
+          () => validatedSummary({actions: 0, detections: 1, events: 1}),
+          () => validatedSummary({...validSummary, actions: -1}),
+          () => validatedSummary({...validSummary, detections: 1.5}),
+          () => validatedSummary({...validSummary, high_or_critical: 2}),
+          () => validatedEvents({}),
+          () => validatedEvents(Array.from({length: 21}, () => validEvent)),
+          () => validatedEvents([{...validEvent, extra: ''}]),
+          () => validatedEvents([{detected_at: validEvent.detected_at, message: validEvent.message, rule_id: validEvent.rule_id, severity: validEvent.severity}]),
+          () => validatedEvents([{...validEvent, message: 1}]),
+          () => validatedEvents([{...validEvent, severity: 'UNKNOWN'}])
+        ];
+        mustReject.forEach((operation, index) => {
+          let rejected = false;
+          try { operation(); } catch (_) { rejected = true; }
+          if (!rejected) throw new Error('closed response validation accepted case ' + index);
+        });
+      }
+    `, context);
+    vm.runInContext("state.lastSuccessfulRefresh = null; renderInitialUnavailable(); byId('filter-query').value = 'x'; applyFilters()", context);
+    if (!nodes.get('events').children[0].children[0].textContent.includes('unavailable')) throw new Error('initial failure left a loading table');
+    if (!nodes.get('priority-change').textContent.includes('baseline unavailable')) throw new Error('initial failure left a waiting priority state');
+    process.stdout.write('triage-contracts\n');
+  } catch (error) {
+    console.error(error.stack || error.message);
+    process.exitCode = 1;
+  }
+});
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=DASHBOARD_JS,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "triage-contracts\n"
 
 
 def test_refresh_guard_covers_both_peer_requests_after_partial_failure():
@@ -340,8 +592,11 @@ process.stdin.on('end', async () => {
     const nodes = new Map();
     function fakeNode(id = '') {
       return {id, value: id === 'filter-severity' ? 'ALL' : '', textContent: '',
-        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0,
-        append() {}, replaceChildren() {}, setAttribute() {}, addEventListener() {}};
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0, children: [], attributes: new Map(),
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+        setAttribute(name, value) { this.attributes.set(name, String(value)); },
+        removeAttribute(name) { this.attributes.delete(name); }, addEventListener() {}};
     }
     const document = {hidden: false,
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
@@ -361,11 +616,18 @@ process.stdin.on('end', async () => {
       Intl, Date, Number, String, Math, Set,
       Promise, Error, Array, window: {setTimeout() { return 1; }, clearTimeout() {}}};
     vm.createContext(context); vm.runInContext(code, context);
-    const first = vm.runInContext('refresh(false)', context);
+    const first = vm.runInContext('refresh(true)', context);
     await new Promise(resolve => setImmediate(resolve));
     await vm.runInContext('refresh(false)', context);
     if (calls.length !== 2) throw new Error(`overlap: ${JSON.stringify(calls)}`);
-    finishEvents(); await first; process.stdout.write('no-overlap\n');
+    finishEvents(); await first;
+    if (!nodes.get('events').children[0].children[0].textContent.includes('unavailable')) throw new Error('first failure left the loading row');
+    if (nodes.get('triage-controls').disabled) throw new Error('first failure left retry controls disabled');
+    if (nodes.get('triage-panel').attributes.get('aria-busy') !== 'false') throw new Error('first failure left the triage panel busy');
+    if (nodes.get('refresh-announcement').textContent !== 'Dashboard refresh failed. No prior dashboard data is available.') {
+      throw new Error('first failure falsely claimed existing rows were preserved');
+    }
+    process.stdout.write('no-overlap\n');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 });
 """
@@ -379,6 +641,152 @@ process.stdin.on('end', async () => {
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "no-overlap\n"
+
+
+def test_dashboard_trust_status_distinguishes_api_freshness_pause_and_stale_data():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for dashboard JavaScript behavior")
+
+    harness = r"""
+const vm = require('vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { code += chunk; });
+process.stdin.on('end', async () => {
+  try {
+    const withoutBootstrap = code.replace(/\nbootstrap\(\);\s*$/, '\n');
+    if (withoutBootstrap === code) throw new Error('dashboard bootstrap marker was not found');
+    code = withoutBootstrap;
+    const nodes = new Map(), textWrites = new Map();
+    function fakeNode(id = '') {
+      let text = '';
+      return {id, value: id === 'filter-severity' ? 'ALL' : '',
+        get textContent() { return text; },
+        set textContent(value) { text = value; textWrites.set(id, (textWrites.get(id) || 0) + 1); },
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0,
+        append() {}, replaceChildren() {}, setAttribute() {}, removeAttribute() {}, addEventListener() {}};
+    }
+    const document = {hidden: false,
+      getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
+      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+    class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
+    let failRequests = false, eventTime = '2026-09-10T00:00:00Z', eventRule = 'TEST_RULE';
+    const response = value => ({ok: true, json: async () => value});
+    function fetch(path) {
+      if (failRequests) return Promise.reject(new Error('synthetic refresh failure'));
+      if (path === '/api/summary') {
+        return Promise.resolve(response({events: 3, detections: 1, high_or_critical: 1, actions: 2}));
+      }
+      if (path === '/api/events?limit=25') {
+        return Promise.resolve(response([{detected_at: eventTime, rule_id: eventRule,
+          severity: 'HIGH', src_ip: '192.0.2.10', message: 'Synthetic status test'}]));
+      }
+      return Promise.reject(new Error(`unexpected path: ${path}`));
+    }
+    const context = {document, fetch, AbortController: FakeAbortController,
+      Intl, Date, Number, String, Math, Set,
+      Promise, Error, Array, window: {setTimeout() { return 1; }, clearTimeout() {}}};
+    vm.createContext(context); vm.runInContext(code, context);
+    vm.runInContext("applyConfig({schema: 'dashboard-config-v1', read_only: true, event_limit: 25, refresh_seconds: 7})", context);
+    if (nodes.get('scope-status').textContent !== 'Newest 25 detections maximum') throw new Error('bounded scope is unclear');
+
+    vm.runInContext('togglePause()', context);
+    const pausedBeforeSuccess = nodes.get('snapshot-status').textContent;
+    if (!pausedBeforeSuccess.includes('No successful dashboard data fetch is available')) throw new Error(`early pause overclaims freshness: ${pausedBeforeSuccess}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · refresh paused before first snapshot') throw new Error('early pause overclaims API reachability');
+    vm.runInContext('state.paused = false', context);
+
+    await vm.runInContext('refresh(false)', context);
+    const current = nodes.get('snapshot-status').textContent;
+    if (!current.includes('Dashboard data fetched successfully')) throw new Error(`missing successful-fetch state: ${current}`);
+    if (!current.includes('does not measure capture or ingestion health')) throw new Error(`health overclaim: ${current}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · reachable') throw new Error('API state is unclear');
+    if (nodes.get('trust-strip').className !== 'trust-strip current') throw new Error('current state class is missing');
+    const currentStatusWrites = textWrites.get('snapshot-status');
+    await vm.runInContext('refresh(false)', context);
+    if (textWrites.get('snapshot-status') !== currentStatusWrites) throw new Error('routine refresh rewrote the live status region');
+    vm.runInContext("state.activeBin = 0; byId('filter-rule').value = 'TEST_RULE'", context);
+    eventTime = '2026-09-10T01:00:00Z';
+    eventRule = 'NEW_RULE';
+    await vm.runInContext('refresh(false)', context);
+    if (vm.runInContext('state.activeBin', context) !== null) throw new Error('changed rows silently reinterpreted the time filter');
+    if (!nodes.get('timeline-status').textContent.includes('prior time filter was cleared')) throw new Error('time-filter reset was not disclosed');
+    if (nodes.get('filter-rule').value !== 'TEST_RULE') throw new Error('changed rows silently broadened an absent rule filter');
+    if (!nodes.get('filter-status').textContent.startsWith('0 of 1')) throw new Error('absent rule filter did not remain visibly narrow');
+
+    vm.runInContext('togglePause()', context);
+    const paused = nodes.get('snapshot-status').textContent;
+    if (!paused.includes('Automatic refresh paused.')) throw new Error(`pause is unclear: ${paused}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · reachable, refresh paused') throw new Error('paused API state is unclear');
+    if (nodes.get('trust-strip').className !== 'trust-strip paused') throw new Error('paused state class is missing');
+
+    vm.runInContext('togglePause()', context);
+    if (nodes.get('connection').textContent !== 'Dashboard API · checking') throw new Error('resume does not expose the pending API check');
+    if (nodes.get('trust-strip').className !== 'trust-strip checking') throw new Error('resume briefly overclaims preserved data as current');
+    if (!nodes.get('snapshot-status').textContent.includes('not treated as current until a refresh succeeds')) throw new Error('resume does not bound preserved data freshness');
+    await new Promise(resolve => setImmediate(resolve));
+    if (nodes.get('trust-strip').className !== 'trust-strip current') throw new Error('successful resumed refresh did not restore current state');
+    vm.runInContext('togglePause()', context);
+
+    vm.runInContext(`
+      byId('filter-query').value = 'status';
+      byId('filter-severity').value = 'PRIORITY';
+      byId('filter-rule').value = 'TEST_RULE';
+      state.activeBin = 0;
+    `, context);
+    const preservedDateTime = nodes.get('updated').dateTime;
+
+    failRequests = true;
+    await vm.runInContext('refresh(false)', context);
+    const pausedFailure = nodes.get('snapshot-status').textContent;
+    if (!pausedFailure.includes('Automatic refresh remains paused.')) throw new Error(`paused failure is unclear: ${pausedFailure}`);
+    if (nodes.get('connection').textContent !== 'Dashboard API · unavailable, refresh paused') throw new Error('paused failure API state is unclear');
+
+    vm.runInContext('togglePause()', context);
+    if (nodes.get('trust-strip').className !== 'trust-strip checking') throw new Error('resume does not expose the pending stale-data recheck');
+    if (!nodes.get('snapshot-status').textContent.includes('remains stale until a refresh succeeds')) throw new Error('resume loses the preserved stale-data boundary');
+    await new Promise(resolve => setImmediate(resolve));
+    const stale = nodes.get('snapshot-status').textContent;
+    if (!stale.includes('Showing preserved stale dashboard data')) throw new Error(`stale state is unclear: ${stale}`);
+    if (!nodes.get('updated').textContent.startsWith('Stale · last success')) throw new Error('stale timestamp is unclear');
+    if (nodes.get('connection').textContent !== 'Dashboard API · unavailable') throw new Error('failed API state is unclear');
+    if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('stale state class is missing');
+    if (vm.runInContext('state.events.length', context) !== 1) throw new Error('existing rows were not preserved');
+    if (nodes.get('filter-query').value !== 'status' || nodes.get('filter-severity').value !== 'PRIORITY' || nodes.get('filter-rule').value !== 'TEST_RULE') {
+      throw new Error('failed refresh did not preserve triage filters');
+    }
+    if (vm.runInContext('state.activeBin', context) !== 0) throw new Error('failed refresh did not preserve the time filter');
+    if (vm.runInContext('state.lastPriorityTotal', context) !== 1) throw new Error('failed refresh advanced the priority baseline');
+    if (nodes.get('updated').dateTime !== preservedDateTime) throw new Error('failed refresh replaced the last-success timestamp');
+    const staleStatusWrites = textWrites.get('snapshot-status');
+    await vm.runInContext('refresh(false)', context);
+    if (textWrites.get('snapshot-status') !== staleStatusWrites) throw new Error('repeated outage rewrote the live status region');
+
+    vm.runInContext('togglePause()', context);
+    if (nodes.get('connection').textContent !== 'Dashboard API · unavailable, refresh paused') throw new Error('pause after failure overclaims API reachability');
+    if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('pause after failure hides stale state');
+    if (!nodes.get('snapshot-status').textContent.includes('Automatic refresh remains paused.')) throw new Error('pause after failure loses pause context');
+    vm.runInContext('state.paused = false', context);
+
+    vm.runInContext('state.lastSuccessfulRefresh = null', context);
+    await vm.runInContext('refresh(false)', context);
+    const emptyFailure = nodes.get('snapshot-status').textContent;
+    if (!emptyFailure.includes('No successful dashboard data fetch is available')) throw new Error(`no-success state is unclear: ${emptyFailure}`);
+    process.stdout.write('truthful-trust-states\n');
+  } catch (error) { console.error(error.message); process.exitCode = 1; }
+});
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=DASHBOARD_JS,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "truthful-trust-states\n"
 
 
 def test_offline_api_is_local_bounded_and_security_hardened(tmp_path):
