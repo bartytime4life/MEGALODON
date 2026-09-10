@@ -75,6 +75,59 @@ rejects wrong types, including unhashable lists/dictionaries, with the fixed
 lookup error rather than leaking a TypeError. Lookup output-bound failures return
 a fixed 503 response instead of escaping the request handler.
 
+## Reference load failure disposition
+
+A reference library is either fully loaded or unavailable for lookup. The
+failure classification must explain why it was refused without returning
+partial registry rows or internal diagnostics. `ReferenceLibrary.load()` uses
+an exact exception-code decision, not a substring guess:
+
+| Loader result | Public status | Fixed public error | HTTP result for a valid status or lookup request |
+| --- | --- | --- | --- |
+| Exact `REFERENCE_DATA:RESOURCE_IO` | `unavailable` | `reference bundle unavailable` | 503, no matches |
+| Any other `ReferenceDataError` | `integrity_failure` | `reference bundle integrity failure` | 503, no matches |
+| Valid complete bundle | Existing successful contract | None | Existing 200 response |
+
+Integrity failure includes oversized resources, invalid resource names/sets,
+malformed JSON/numbers, encoding/framing errors, duplicate keys, invalid records,
+manifest/digest errors, and count/order failures. Unknown future validation
+codes also fail closed as integrity failures. A code containing `RESOURCE_IO`
+as only a prefix or substring is not ordinary resource-access unavailability.
+Only the loader's declared `ReferenceDataError` is classified here; unrelated
+programming exceptions are not silently hidden as a bundle-status result.
+
+Both failure categories have the same closed seven-field status envelope:
+`schema`, `available`, `status`, `error`, `network_access_performed`,
+`persistence_status`, and `action_status`. Availability is false, outbound
+network access is false, and persistence/action remain `not_attempted`.
+Failure responses do not carry a bundle identity, provenance, match rows, a
+filesystem path, or a raw loader exception. The lookup cache remains empty.
+The existing Host, no-store and CSP controls still apply to the 503 response.
+
+This corrects diagnostic truthfulness, not a previously permitted partial load:
+both categories already refused lookup. An integrity failure is not proof of
+malicious tampering; a damaged package or invalid resource can produce it too.
+Likewise, a resource-access failure does not prove that the data would pass
+validation once readable.
+
+The default library caches its startup disposition within the process. Reading
+status or attempting another lookup does not reload resources, redownload a
+bundle, or repair an installation. Diagnose the local package/access problem,
+restore reviewed resources through the existing maintenance process, and restart
+the service only under ordinary operator authority. Do not edit expected digests,
+accept partial shards, increase size limits, or bypass privacy checks to make
+the status green. A healthy Integration Map or SQLite response does not repair
+a failed reference bundle; these are separate read paths.
+
+`tests/test_reference_failure_disposition.py` supplies positive resource-access
+and negative validation-code cases, fixed-response/no-cache checks, real
+loopback HTTP tests with an injected failing loader and a reader that refuses
+any telemetry access, default-cache behavior, and preservation of unrelated
+programming exceptions. These tests do not substitute for the existing real
+reference-bundle tamper, distribution, browser, or platform acceptance suites.
+No UI control, retry loop, dataset, cache-reset API or source integration is
+added by this disposition correction.
+
 ## Integration projection contract
 
 The route calls [hub.integration_plan](../megalodon/hub.py); it does not create a

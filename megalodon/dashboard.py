@@ -70,14 +70,14 @@ class ReferenceLibrary:
         try:
             return cls(load_iana())
         except ReferenceDataError as exc:
-            detail = str(exc)
-            category = "integrity_failure" if any(
-                token in detail
-                for token in (
-                    "INTEGRITY", "MANIFEST", "ARTIFACT", "RESOURCE_SET",
-                    "ROW_COUNT", "ORDER_OR_DUPLICATE",
-                )
-            ) else "unavailable"
+            # Only the fixed resource-access code is ordinary unavailability.
+            # All validation failures, including future codes, fail closed as
+            # integrity failures without exposing loader detail or partial rows.
+            category = (
+                "unavailable"
+                if str(exc) == "REFERENCE_DATA:RESOURCE_IO"
+                else "integrity_failure"
+            )
             return cls(failure=category)
 
     @property
