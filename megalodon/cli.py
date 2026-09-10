@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import logging
 from pathlib import Path
+import signal
 import sqlite3
 import sys
 
@@ -16,8 +18,14 @@ from .config import load_settings
 from .firewall import FirewallError, LIVE_APPLY_UNSUPPORTED, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
-from .storage import DashboardStore, migrate_database, Store
-from .validation import safe_text, ValidationError
+from .storage import (
+    DashboardStore,
+    IngestionRunError,
+    migrate_database,
+    RECONCILIATION_REQUIRED,
+    Store,
+)
+from .validation import parse_timestamp, safe_text, ValidationError
 
 
 MAX_RUN_EVENTS = 10_000_000
@@ -79,6 +87,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         help="explicit TOML settings file; safe built-in defaults are used when omitted",
     )
+
+    reconciliation_status = sub.add_parser(
+        "database-reconciliation-status",
+        help="list bounded run receipts that require operator reconciliation",
+    )
+    reconciliation_status.add_argument("--config")
+
+    reconcile = sub.add_parser(
+        "database-reconcile",
+        help="mark one pinned orphaned run as requiring reconciliation",
+    )
+    reconcile.add_argument("run_id", type=_bounded_cli_integer("run-id", 1, 2**63 - 1))
+    reconcile.add_argument(
+        "--started-at",
+        required=True,
+        help="exact started_at value shown by database-reconciliation-status",
+    )
+    reconcile.add_argument("--config")
 
     dashboard = sub.add_parser("dashboard", help="serve the read-only local dashboard")
     dashboard.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
@@ -181,6 +207,40 @@ def _run_failure_code(exc: Exception) -> str:
     return "VALIDATION_ERROR"
 
 
+class _RunInterrupted(KeyboardInterrupt):
+    def __init__(self, signum: int):
+        super().__init__()
+        self.signum = signum
+
+
+@contextmanager
+def _scoped_sigterm_interrupt():
+    """Turn SIGTERM into a bounded run receipt while this command is active."""
+
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def interrupt(signum, _frame):
+        raise _RunInterrupted(signum)
+
+    try:
+        signal.signal(signal.SIGTERM, interrupt)
+    except ValueError:
+        # Signal handlers can only be installed by the interpreter's main thread.
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _reconciliation_message() -> str:
+    return (
+        "megalodon: ingestion reconciliation required; stop all ingestion, "
+        "then inspect database-reconciliation-status"
+    )
+
+
 def _run(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
@@ -188,35 +248,66 @@ def _run(args: argparse.Namespace) -> int:
             service = MegalodonService(settings, store)
             run_id = store.start_ingestion_run(_source_for(args, settings))
             processed = 0
+            termination_reason = "source_exhausted"
             try:
-                for event in _events_for(args, settings):
-                    service.process(event, run_id=run_id)
-                    processed += 1
-                    if args.max_events and processed >= args.max_events:
-                        break
-            except KeyboardInterrupt:
-                store.finish_ingestion_run(
-                    run_id, "failed", failure_code="INTERRUPTED"
-                )
+                with _scoped_sigterm_interrupt():
+                    for event in _events_for(args, settings):
+                        service.process(event, run_id=run_id)
+                        processed += 1
+                        if args.max_events and processed >= args.max_events:
+                            termination_reason = "event_limit_reached"
+                            break
+            except KeyboardInterrupt as exc:
+                try:
+                    receipt = store.finish_ingestion_run(run_id, "interrupted")
+                except IngestionRunError as finish_error:
+                    if str(finish_error) == RECONCILIATION_REQUIRED:
+                        print(_reconciliation_message(), file=sys.stderr)
+                        return 2
+                    raise
+                if receipt["status"] == "reconciliation_required":
+                    print(_reconciliation_message(), file=sys.stderr)
+                    return 2
                 print("megalodon: ingestion interrupted", file=sys.stderr)
-                return 130
+                return 143 if isinstance(exc, _RunInterrupted) else 130
             except (CaptureError, OSError, ValueError, sqlite3.Error) as exc:
+                if isinstance(exc, IngestionRunError) and str(exc) == RECONCILIATION_REQUIRED:
+                    print(_reconciliation_message(), file=sys.stderr)
+                    return 2
                 failure_code = _run_failure_code(exc)
-                store.finish_ingestion_run(
-                    run_id, "failed", failure_code=failure_code
-                )
+                try:
+                    receipt = store.finish_ingestion_run(
+                        run_id, "failed", failure_code=failure_code
+                    )
+                except IngestionRunError as finish_error:
+                    if str(finish_error) == RECONCILIATION_REQUIRED:
+                        print(_reconciliation_message(), file=sys.stderr)
+                        return 2
+                    raise
+                if receipt["status"] == "reconciliation_required":
+                    print(_reconciliation_message(), file=sys.stderr)
+                    return 2
                 print(
                     f"megalodon: ingestion failed ({failure_code})",
                     file=sys.stderr,
                 )
                 return 2
-            receipt = store.finish_ingestion_run(run_id, "completed")
+            receipt = store.finish_ingestion_run(run_id, termination_reason)
+            if receipt["status"] == "reconciliation_required":
+                print(_reconciliation_message(), file=sys.stderr)
+                return 2
             print(json.dumps({**receipt, "totals": store.summary()}, sort_keys=True))
     except sqlite3.Error:
         print("megalodon: storage operation failed", file=sys.stderr)
         return 2
     except OSError:
         print("megalodon: I/O operation failed", file=sys.stderr)
+        return 2
+    except IngestionRunError as exc:
+        if str(exc) == RECONCILIATION_REQUIRED:
+            print(_reconciliation_message(), file=sys.stderr)
+        else:
+            print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     except (CaptureError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
@@ -260,6 +351,33 @@ def _database_migrate(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
         print(json.dumps(migrate_database(settings.db_path), sort_keys=True))
+    except (OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _database_reconciliation_status(args: argparse.Namespace) -> int:
+    try:
+        settings = _load(args.config)
+        with Store(settings.db_path, create=False) as store:
+            pending = store.pending_ingestion_reconciliation()
+        print(json.dumps({"pending": pending}, sort_keys=True))
+    except (OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _database_reconcile(args: argparse.Namespace) -> int:
+    try:
+        settings = _load(args.config)
+        started_at = parse_timestamp(args.started_at)
+        with Store(settings.db_path, create=False) as store:
+            receipt = store.mark_ingestion_run_reconciliation_required(
+                args.run_id, expected_started_at=started_at
+            )
+        print(json.dumps(receipt, sort_keys=True))
     except (OSError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
@@ -347,6 +465,10 @@ def main(argv: list[str] | None = None) -> None:
         code = _dashboard(args)
     elif args.command == "database-migrate":
         code = _database_migrate(args)
+    elif args.command == "database-reconciliation-status":
+        code = _database_reconciliation_status(args)
+    elif args.command == "database-reconcile":
+        code = _database_reconcile(args)
     elif args.command == "firewall-plan":
         args.reason = args.reason
         code = _firewall(args, "plan")

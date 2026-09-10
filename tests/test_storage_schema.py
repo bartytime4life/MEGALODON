@@ -14,6 +14,7 @@ from megalodon.storage import (
     MIGRATION_BACKUP_SUFFIX,
     SCHEMA_V1_STATEMENTS,
     SCHEMA_V2_STATEMENTS,
+    SCHEMA_V3_STATEMENTS,
     SCHEMA_VERSION,
     migrate_database,
     StorageSchemaError,
@@ -26,6 +27,7 @@ APPLICATION_TABLES = {
     *APPLICATION_TABLES_V1,
     "ingestion_runs",
     "ingestion_run_events",
+    "detection_actions",
 }
 
 
@@ -50,6 +52,15 @@ def _create_v1(path, *, version: int = 1) -> None:
             "'not_attempted', 'legacy', '{}')"
         )
         connection.execute(f"PRAGMA user_version = {version}")
+    if os.name == "posix":
+        path.chmod(0o600)
+
+
+def _create_v2(path) -> None:
+    with sqlite3.connect(path) as connection:
+        for statement in (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS):
+            connection.execute(statement)
+        connection.execute("PRAGMA user_version = 2")
     if os.name == "posix":
         path.chmod(0o600)
 
@@ -99,7 +110,7 @@ def test_explicit_migration_backs_up_and_preserves_the_v1_database(tmp_path, ver
     if os.name == "posix":
         assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
     with Store(path) as migrated:
-        assert migrated.connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert migrated.connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert migrated.connection.execute("SELECT reason FROM actions").fetchone()[0] == "legacy"
         assert migrated.connection.execute("SELECT COUNT(*) FROM ingestion_runs").fetchone()[0] == 0
         assert migrated.connection.execute(
@@ -129,13 +140,133 @@ def test_current_database_migration_is_an_idempotent_no_op(tmp_path):
     assert not path.with_name(path.name + MIGRATION_BACKUP_SUFFIX).exists()
 
 
-def test_v2_run_event_link_preserves_retention_deletion(tmp_path):
+def test_v2_migration_preserves_legacy_receipts_without_inventing_a_reason(tmp_path):
+    path = tmp_path / "audit.db"
+    backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
+    _create_v2(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO ingestion_runs VALUES "
+            "(1, '2026-01-01T00:00:00+00:00', '2026-01-01T00:01:00+00:00', "
+            "'sample', 'completed', 0, 0, NULL)"
+        )
+        connection.execute(
+            "INSERT INTO ingestion_runs VALUES "
+            "(2, '2026-01-02T00:00:00+00:00', NULL, "
+            "'jsonl', 'running', 0, 0, NULL)"
+        )
+
+    assert migrate_database(path) == {
+        "status": "migrated",
+        "from_version": 2,
+        "to_version": 3,
+        "backup": "created",
+    }
+
+    with Store(path) as store:
+        rows = store.connection.execute(
+            "SELECT id, status, receipt_version, termination_reason, action_count "
+            "FROM ingestion_runs ORDER BY id"
+        ).fetchall()
+        assert [tuple(row) for row in rows] == [
+            (1, "completed", 2, None, 0),
+            (2, "running", 2, None, 0),
+        ]
+        pending = store.pending_ingestion_reconciliation()
+        assert [item["run_id"] for item in pending] == [2]
+        assert pending[0]["receipt_version"] == 2
+    with sqlite3.connect(backup_path) as backup:
+        assert backup.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert backup.execute(
+            "SELECT status FROM ingestion_runs ORDER BY id"
+        ).fetchall() == [("completed",), ("running",)]
+
+
+def test_invalid_v2_receipt_rolls_back_v3_migration_and_keeps_backup(tmp_path):
+    path = tmp_path / "audit.db"
+    backup_path = path.with_name(path.name + MIGRATION_BACKUP_SUFFIX)
+    _create_v2(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO ingestion_runs VALUES "
+            "(1, '2026-01-01T00:00:00+00:00', NULL, "
+            "'sample', 'completed', 0, 0, NULL)"
+        )
+
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_MIGRATION:MIGRATION_FAILED$"
+    ):
+        migrate_database(path)
+
+    assert backup_path.exists()
+    with sqlite3.connect(path) as source:
+        assert source.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert source.execute(
+            "SELECT status, finished_at FROM ingestion_runs"
+        ).fetchone() == ("completed", None)
+
+
+def test_v3_schema_with_weakened_status_constraint_is_refused(tmp_path):
+    path = tmp_path / "audit.db"
+    with sqlite3.connect(path) as connection:
+        for statement in (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS):
+            connection.execute(
+                statement.replace(
+                    "'running', 'completed', 'incomplete', 'failed',",
+                    "'running', 'completed', 'incomplete', 'failed', 'unknown',",
+                )
+            )
+        connection.execute("PRAGMA user_version = 3")
+
+    with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
+        Store(path)
+
+
+@pytest.mark.parametrize(
+    "status,failure_code,reason",
+    (
+        ("completed", None, None),
+        ("incomplete", None, None),
+        ("failed", None, "interrupted"),
+        ("failed", "INTERRUPTED", None),
+        ("reconciliation_required", None, None),
+    ),
+)
+def test_v3_receipt_matrix_rejects_missing_terminal_evidence(
+    tmp_path, status, failure_code, reason
+):
+    with Store(tmp_path / "audit.db") as store:
+        with pytest.raises(sqlite3.IntegrityError):
+            store.connection.execute(
+                """
+                INSERT INTO ingestion_runs (
+                    started_at, finished_at, source, status,
+                    processed_count, detection_count, action_count,
+                    receipt_version, failure_code, termination_reason
+                ) VALUES (?, ?, 'sample', ?, 0, 0, 0, 3, ?, ?)
+                """,
+                (
+                    "2026-01-01T00:00:00+00:00",
+                    None
+                    if status == "reconciliation_required"
+                    else "2026-01-01T00:01:00+00:00",
+                    status,
+                    failure_code,
+                    reason,
+                ),
+            )
+
+
+def test_v3_run_event_link_preserves_retention_deletion(tmp_path):
     path = tmp_path / "audit.db"
     with Store(path) as store:
         store.connection.execute(
-            "INSERT INTO ingestion_runs VALUES "
+            "INSERT INTO ingestion_runs ("
+            "id, started_at, finished_at, source, status, processed_count, "
+            "detection_count, action_count, receipt_version, failure_code, "
+            "termination_reason) VALUES "
             "(1, '2026-01-01T00:00:00+00:00', '2026-01-01T00:01:00+00:00', "
-            "'sample', 'completed', 1, 0, NULL)"
+            "'sample', 'completed', 1, 0, 0, 3, NULL, 'source_exhausted')"
         )
         store.connection.execute(
             "INSERT INTO events (observed_at, src_ip, dst_ip, protocol, tcp_flags, "
@@ -229,7 +360,7 @@ def test_v2_schema_without_event_id_uniqueness_is_refused(tmp_path):
                     "event_id INTEGER NOT NULL UNIQUE", "event_id INTEGER NOT NULL"
                 )
             )
-        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        connection.execute("PRAGMA user_version = 2")
 
     with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
         Store(path)

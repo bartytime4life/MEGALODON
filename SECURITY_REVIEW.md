@@ -37,7 +37,7 @@ model runtime, tool authority, or firewall authorization.
 | Medium | External feeds are called synchronously with no privacy contract | IP/domain disclosure, rate-limit failures, stale reputation, and API-key leakage | Feeds are out of MVP scope; later adapters must be cached, signed, rate-limited, and opt-in |
 | Medium | YAML rules imply arbitrary field/operator expansion | Unvalidated rules can create denial-of-service or unsafe actions | MVP rules are fixed and typed; a future rule schema must be allowlisted and versioned |
 | Medium | No IPv6 handling in the firewall examples | Incomplete protection and accidental IPv4-only assumptions | Plan generation uses separate validated IPv4/IPv6 nftables sets; this does not imply live enforcement |
-| Medium | No database schema, retention, or transaction policy | Unbounded growth and incomplete evidence | Exact SQLite schema, parameterized WAL writes, private POSIX writer/migration paths, a separately constrained dashboard reader, and a retention hook; finite capacity and operational retention values remain open |
+| Medium | No database schema, retention, or transaction policy | Unbounded growth and incomplete evidence | Exact SQLite schema, atomic per-event event/detection/action/link/counter WAL transactions, staged detector state, explicit run outcomes and orphan reconciliation, private POSIX writer/migration paths, a separately constrained dashboard reader, and a retention hook; finite capacity and operational retention values remain open |
 | Medium | GUI threat map can create a false precision problem | IP geolocation can expose or misrepresent people and locations | No map in MVP; future map must show uncertainty and avoid precise residential claims |
 | Low | `sqlite3` is listed as a pip requirement | It is part of Python’s standard library; install instructions are misleading | No runtime dependency for SQLite |
 | Low | `tshark>=1.4.0` is treated as a normal Python package | System Wireshark availability and bindings are different concerns | Scapy is an optional Python extra; tshark is not required by the MVP |
@@ -74,7 +74,10 @@ may receive malformed or adversarial network metadata. It protects against:
 - accidental host-firewall mutation, including through retained apply routes;
 - stale, repeated, or noisy detections overwhelming the action path;
 - dashboard exposure caused by a careless bind address;
-- loss of an audit trail for supported planning and suppression decisions.
+- loss of an audit trail for supported planning and suppression decisions;
+- partial run evidence or consumed detector cooldown after a rejected event-bundle
+  write; and
+- ambiguous exhaustion/event-limit receipts or silently ignored orphaned runs.
 
 It does not yet protect against a compromised kernel, a malicious root user,
 kernel-level packet forgery, an attacker who can write directly to the database,
@@ -111,7 +114,7 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 | Firewall containment ([#65](https://github.com/bartytime4life/MEGALODON/issues/65)) | Evaluation apply routes fail with one fixed diagnostic before configuration, host, executable, privilege, or process work; plan-only receipts remain | Complete exact-head validation and independent review; design durable intent, outcome readback, expiry, rollback, and reconciliation before any separate restoration proposal |
 | Dashboard acceptance ([#7](https://github.com/bartytime4life/MEGALODON/issues/7)) | Loopback, read-only, bounded implementation exists | Complete privacy, browser, and operator acceptance evidence |
 | Dashboard storage isolation ([#66](https://github.com/bartytime4life/MEGALODON/issues/66)) | Separate least-data reader requires an existing compatible private POSIX store with rename-resistant trusted ancestry; pins the database inode; requires SQLite to resolve the configured private path; holds a stable parent-entry generation; revalidates sidecars; uses `mode=ro` plus `query_only`; and denies non-dashboard SQL | Obtain independent review and native Windows ACL evidence; keep successful WAL coordination confined to a dedicated verified private directory |
-| Ingestion atomicity ([#67](https://github.com/bartytime4life/MEGALODON/issues/67)) | Bounded run receipts and per-write rollback tests exist | Make event/detection/action/run accounting atomic and reconcile interrupted or ambiguous runs before adding durable alert lifecycle state |
+| Ingestion atomicity ([#67](https://github.com/bartytime4life/MEGALODON/issues/67)) | Per-event event/detection/action/link/counter atomicity, post-commit detector state, explicit terminal reasons, uncertain-commit poisoning, concurrent-start refusal, bounded orphan readback, pinned reconciliation, and v1/v2 backup migration are implemented with synthetic tests | Complete exact-head CI and independent review; do not infer exactly-once intake, power-loss recovery, alert lifecycle, or production approval |
 | Whole-service resource bounds ([#68](https://github.com/bartytime4life/MEGALODON/issues/68)) | Detector windows, API result sets, offline inputs, and subprocess output have component limits | Prove finite long-running storage, overload, retention, and any future delivery queue behavior before claiming continuous monitoring |
 | TShark compatibility ([#25](https://github.com/bartytime4life/MEGALODON/issues/25)) | Optional header-only probe exists | Pin and record a reviewed installed-tool receipt |
 | Native Windows ([#27](https://github.com/bartytime4life/MEGALODON/issues/27)) | Static acceptance matrix and Linux-run unsupported-operation controls exist | Native core, NTFS ACL, loopback UI/browser, and exact-platform execution receipts |

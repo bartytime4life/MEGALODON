@@ -237,7 +237,7 @@ def test_migration_requires_private_source_and_repairs_nothing_implicitly(tmp_pa
         migrate_database(path)
 
     assert stat.S_IMODE(path.stat().st_mode) & 0o077
-    assert not path.with_name(path.name + ".pre-v2.bak").exists()
+    assert not path.with_name(path.name + ".pre-v3.bak").exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ownership required")

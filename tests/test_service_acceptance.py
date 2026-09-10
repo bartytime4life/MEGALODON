@@ -1,23 +1,28 @@
 """Synthetic service-to-ledger receipts, never live firewall acceptance."""
 
+from collections import Counter, deque
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import ipaddress
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import sqlite3
 import subprocess
+from threading import Event
 from unittest.mock import Mock
 
 import pytest
 
 import megalodon.firewall as firewall_module
 import megalodon.service as service_module
-from megalodon.config import BlockingSettings, Settings
+from megalodon.config import BlockingSettings, DetectionSettings, Settings
 from megalodon.firewall import NftablesFirewall
 from megalodon.models import PacketEvent
 from megalodon.service import MegalodonService
@@ -52,6 +57,7 @@ ADDRESSES = (
     ("2001:4860:4860::8888", "2001:db8::1", "2001:db8::2", "blocked_v6"),
 )
 TABLES = ("events", "detections", "actions")
+ATOMIC_TABLES = (*TABLES, "detection_actions")
 
 
 class AuditClock(datetime):
@@ -214,19 +220,15 @@ def test_minimum_severity_does_not_turn_every_detection_into_a_plan(
     _assert_action(ledger["actions"][0], status, "8.8.8.8", rule, message, "blocked_v4")
 
 
-@pytest.mark.parametrize("table,expected_counts,plan_calls", (
-    ("events", (0, 0, 0), 0),
-    ("detections", (1, 0, 0), 0),
-    ("actions", (1, 1, 0), 1),
-))
+@pytest.mark.parametrize("table", ATOMIC_TABLES)
 def test_failed_stage_propagates_without_a_success_receipt(
-    tmp_path, monkeypatch, table, expected_counts, plan_calls,
+    tmp_path, monkeypatch, table,
 ):
     settings = Settings(db_path=tmp_path / "synthetic.db", blocking=_policy("plan", "8.8.8.8"))
     with Store(settings.db_path) as store:
         service, planner = _service(settings, store, monkeypatch)
-        # Fixed temporary fixture: FAIL does not itself undo the tentative row.
-        assert table in TABLES
+        run_id = store.start_ingestion_run("sample", started_at=OBSERVED_AT)
+        assert table in ATOMIC_TABLES
         store.connection.execute(
             f"CREATE TRIGGER fail_stage AFTER INSERT ON {table} "
             "BEGIN SELECT RAISE(FAIL, 'synthetic audit failure'); END"
@@ -234,23 +236,397 @@ def test_failed_stage_propagates_without_a_success_receipt(
         store.connection.commit()
         event = next(_events("DNS_TUNNELING", 1, "8.8.8.8", "198.51.100.2"))
         with pytest.raises(sqlite3.IntegrityError, match="synthetic audit failure"):
-            service.process(event)
+            service.process(event, run_id=run_id)
         assert store.connection.in_transaction is False
-        assert planner.call_count == plan_calls
-        # Earlier independently committed stages remain; no whole-service rollback.
+        # Planning is side-effect-free and happens before the single ledger write.
+        assert planner.call_count == 1
         ledger = _read_ledger(settings.db_path)
-        assert tuple(len(ledger[name]) for name in TABLES) == expected_counts
-        if table != "events":
-            # The detector emitted before the later audit stage failed. Removing
-            # the synthetic fault must not erase that already-consumed cooldown.
-            store.connection.execute("DROP TRIGGER fail_stage")
-            store.connection.commit()
-            assert service.process(event) == []
-            assert planner.call_count == plan_calls
-            assert store.connection.in_transaction is False
-            resumed = _read_ledger(settings.db_path)
-            assert len(resumed["events"]) == expected_counts[0] + 1
-            assert resumed["detections"] == ledger["detections"]
-            assert resumed["actions"] == ledger["actions"]
-            ledger = resumed
+        assert tuple(len(ledger[name]) for name in TABLES) == (0, 0, 0)
+        assert tuple(
+            store.connection.execute(
+                "SELECT processed_count, detection_count, action_count "
+                "FROM ingestion_runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
+        ) == (0, 0, 0)
+
+        # Removing the fault and retrying the same event must emit again: the
+        # failed commit consumed neither the cooldown nor source high-water mark.
+        store.connection.execute("DROP TRIGGER fail_stage")
+        store.connection.commit()
+        assert [item.rule_id for item in service.process(event, run_id=run_id)] == [
+            "DNS_TUNNELING"
+        ]
+        assert planner.call_count == 2
+        assert store.connection.in_transaction is False
+        resumed = _read_ledger(settings.db_path)
+        assert tuple(len(resumed[name]) for name in TABLES) == (1, 1, 1)
+        assert tuple(
+            store.connection.execute(
+                "SELECT processed_count, detection_count, action_count "
+                "FROM ingestion_runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
+        ) == (1, 1, 1)
+        store.finish_ingestion_run(
+            run_id, "source_exhausted", finished_at=OBSERVED_AT + timedelta(seconds=1)
+        )
+        ledger = resumed
     assert _read_ledger(settings.db_path) == ledger
+
+
+def test_planner_refusal_log_waits_for_atomic_ledger_commit(
+    tmp_path, monkeypatch, caplog
+):
+    source = "192.0.2.1"
+    settings = Settings(
+        db_path=tmp_path / "synthetic.db",
+        blocking=_policy("non-global", source),
+    )
+    event = next(_events("DNS_TUNNELING", 1, source, "198.51.100.2"))
+    with Store(settings.db_path) as store:
+        service, planner = _service(settings, store, monkeypatch)
+        store.connection.execute(
+            "CREATE TRIGGER fail_stage AFTER INSERT ON actions "
+            "BEGIN SELECT RAISE(FAIL, 'synthetic audit failure'); END"
+        )
+        store.connection.commit()
+
+        with caplog.at_level(logging.ERROR, logger="megalodon.service"):
+            with pytest.raises(sqlite3.IntegrityError, match="synthetic audit failure"):
+                service.process(event)
+        assert planner.call_count == 1
+        assert caplog.records == []
+
+        store.connection.execute("DROP TRIGGER fail_stage")
+        store.connection.commit()
+        with caplog.at_level(logging.ERROR, logger="megalodon.service"):
+            service.process(event)
+        assert planner.call_count == 2
+        assert [record.getMessage() for record in caplog.records] == [
+            "firewall action refused: refusing to block non-global address "
+            f"{source} under public_only policy"
+        ]
+
+
+@pytest.mark.parametrize("failure_stage", ("planner", "storage"))
+@pytest.mark.parametrize(
+    "scenario,prior,observed,port,window_seconds,capacity,expected",
+    (
+        ("new-source", (), 0.0, 21, 5, 3, ((0.0, 21),)),
+        (
+            "time-expiry-with-duplicates",
+            ((0.0, 21), (0.25, 21), (0.5, 22)),
+            2.0,
+            23,
+            1,
+            10,
+            ((2.0, 23),),
+        ),
+        (
+            "capacity-with-duplicates",
+            ((0.0, 21), (0.25, 21), (0.5, 22)),
+            0.75,
+            21,
+            100,
+            3,
+            ((0.25, 21), (0.5, 22), (0.75, 21)),
+        ),
+    ),
+)
+def test_port_counter_journal_restores_failed_service_bundle_then_retries(
+    tmp_path,
+    monkeypatch,
+    caplog,
+    failure_stage,
+    scenario,
+    prior,
+    observed,
+    port,
+    window_seconds,
+    capacity,
+    expected,
+):
+    source = "8.8.8.8"
+    settings = Settings(
+        db_path=tmp_path / f"{scenario}-{failure_stage}.db",
+        detection=DetectionSettings(
+            syn_flood_threshold=capacity,
+            port_scan_window_seconds=window_seconds,
+            port_scan_distinct_ports=1,
+            max_events_per_source_window=capacity,
+        ),
+        blocking=_policy("plan", source),
+    )
+    candidate = PacketEvent.from_mapping(
+        {
+            "observed_at": OBSERVED_AT + timedelta(seconds=observed),
+            "src_ip": source,
+            "dst_ip": "198.51.100.2",
+            "protocol": "TCP",
+            "dst_port": port,
+            "tcp_flags": ["ACK"],
+        }
+    )
+
+    with Store(settings.db_path) as store:
+        service, planner = _service(settings, store, monkeypatch)
+        detector = service.detector
+        if prior:
+            window = deque(
+                (OBSERVED_AT.timestamp() + seconds, prior_port)
+                for seconds, prior_port in prior
+            )
+            counts = Counter(prior_port for _, prior_port in prior)
+            detector.port_windows[source] = window
+            detector.port_counts[source] = counts
+            detector.source_high_watermarks[source] = window[-1][0]
+            detector.source_order[source] = None
+        else:
+            window = counts = None
+
+        before_window = tuple(detector.port_windows.get(source, ()))
+        before_counts = dict(detector.port_counts.get(source, ()))
+        before_order = tuple(detector.source_order)
+        before_watermarks = dict(detector.source_high_watermarks)
+        before_emitted = dict(detector.last_emitted)
+        if failure_stage == "planner":
+            planner.side_effect = RuntimeError("synthetic planner failure")
+            expected_error = RuntimeError
+        else:
+            store.connection.execute(
+                "CREATE TRIGGER fail_bundle AFTER INSERT ON events "
+                "BEGIN SELECT RAISE(FAIL, 'synthetic bundle failure'); END"
+            )
+            store.connection.commit()
+            expected_error = sqlite3.IntegrityError
+
+        with caplog.at_level(logging.INFO, logger="megalodon.service"):
+            with pytest.raises(expected_error, match="synthetic .* failure"):
+                service.process(candidate)
+
+        assert tuple(detector.port_windows.get(source, ())) == before_window
+        assert dict(detector.port_counts.get(source, ())) == before_counts
+        assert tuple(detector.source_order) == before_order
+        assert detector.source_high_watermarks == before_watermarks
+        assert detector.last_emitted == before_emitted
+        assert detector._pending_token is None
+        if prior:
+            assert detector.port_windows[source] is window
+            assert detector.port_counts[source] is counts
+        else:
+            assert source not in detector.port_windows
+            assert source not in detector.port_counts
+        assert store.summary() == {
+            "events": 0,
+            "detections": 0,
+            "high_or_critical": 0,
+            "actions": 0,
+        }
+        assert caplog.records == []
+
+        if failure_stage == "planner":
+            planner.side_effect = None
+        else:
+            store.connection.execute("DROP TRIGGER fail_bundle")
+            store.connection.commit()
+        assert [item.rule_id for item in service.process(candidate)] == ["PORT_SCAN"]
+
+        expected_window = tuple(
+            (OBSERVED_AT.timestamp() + seconds, expected_port)
+            for seconds, expected_port in expected
+        )
+        assert tuple(detector.port_windows[source]) == expected_window
+        expected_counts = Counter(
+            expected_port for _, expected_port in expected
+        )
+        assert dict(detector.port_counts[source]) == dict(expected_counts)
+        assert all(value > 0 for value in detector.port_counts[source].values())
+        assert sum(detector.port_counts[source].values()) == len(
+            detector.port_windows[source]
+        )
+        assert detector.source_high_watermarks[source] == candidate.observed_at.timestamp()
+        assert tuple(detector.source_order) == (source,)
+        assert detector._pending_token is None
+        assert store.summary() == {
+            "events": 1,
+            "detections": 1,
+            "high_or_critical": 0,
+            "actions": 1,
+        }
+
+
+def test_reentrant_planner_process_is_refused_and_outer_state_rolls_back(
+    tmp_path, monkeypatch, caplog
+):
+    source = "8.8.8.8"
+    settings = Settings(
+        db_path=tmp_path / "reentrant.db",
+        detection=DetectionSettings(
+            syn_flood_threshold=100,
+            port_scan_distinct_ports=1,
+        ),
+        blocking=_policy("plan", source),
+    )
+    outer = next(_events("PORT_SCAN", 1, source, "198.51.100.2"))
+    nested = replace(
+        outer,
+        observed_at=outer.observed_at + timedelta(milliseconds=1),
+        src_ip="8.8.4.4",
+        dst_port=2000,
+    )
+
+    with Store(settings.db_path) as store:
+        service, planner = _service(settings, store, monkeypatch)
+        planner.side_effect = lambda *_args, **_kwargs: service.process(nested)
+
+        with caplog.at_level(logging.INFO, logger="megalodon.service"):
+            with pytest.raises(RuntimeError, match="preparation already pending"):
+                service.process(outer)
+
+        assert store.summary() == {
+            "events": 0,
+            "detections": 0,
+            "high_or_critical": 0,
+            "actions": 0,
+        }
+        assert source not in service.detector.port_windows
+        assert source not in service.detector.port_counts
+        assert nested.src_ip not in service.detector.port_windows
+        assert service.detector.source_high_watermarks == {}
+        assert service.detector.last_emitted == {}
+        assert service.detector._pending_token is None
+        assert caplog.records == []
+
+        planner.side_effect = None
+        assert [item.rule_id for item in service.process(outer)] == ["PORT_SCAN"]
+        assert service.detector.port_counts[source] == Counter({1000: 1})
+        assert store.summary() == {
+            "events": 1,
+            "detections": 1,
+            "high_or_critical": 0,
+            "actions": 1,
+        }
+
+
+def test_signal_after_prepare_return_uses_detector_owned_rollback_handle(
+    tmp_path, monkeypatch, caplog
+):
+    settings = Settings(
+        db_path=tmp_path / "prepare-signal.db",
+        detection=DetectionSettings(
+            syn_flood_threshold=100,
+            port_scan_distinct_ports=1,
+        ),
+    )
+    event = next(_events("PORT_SCAN", 1, "8.8.8.8", "198.51.100.2"))
+
+    with Store(settings.db_path) as store:
+        service, _ = _service(settings, store, monkeypatch)
+        original_prepare = service.detector.prepare
+
+        def interrupt_after_prepare(candidate):
+            prepared = original_prepare(candidate)
+            signal.raise_signal(signal.SIGTERM)
+            return prepared
+
+        def interrupt(_signum, _frame):
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(service.detector, "prepare", interrupt_after_prepare)
+        previous = signal.signal(signal.SIGTERM, interrupt)
+        try:
+            with caplog.at_level(logging.INFO, logger="megalodon.service"):
+                with pytest.raises(KeyboardInterrupt):
+                    service.process(event)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+
+        assert store.summary() == {
+            "events": 0,
+            "detections": 0,
+            "high_or_critical": 0,
+            "actions": 0,
+        }
+        assert event.src_ip not in service.detector.port_windows
+        assert event.src_ip not in service.detector.port_counts
+        assert service.detector.source_high_watermarks == {}
+        assert service.detector.last_emitted == {}
+        assert service.detector._pending_token is None
+        assert caplog.records == []
+
+
+def test_interleaved_service_calls_serialize_prepare_through_resolution(tmp_path):
+    first_entered = Event()
+    release_first = Event()
+    second_attempted = Event()
+    second_entered = Event()
+
+    class BlockingStore:
+        def __init__(self):
+            self.committed = []
+
+        def record_event_bundle(self, event, detections, actions, *, run_id=None):
+            assert detections == []
+            assert actions == []
+            assert run_id is None
+            if event.dst_port == 21:
+                first_entered.set()
+                if not release_first.wait(timeout=2):
+                    raise AssertionError("test did not release the first storage call")
+                raise sqlite3.OperationalError("synthetic first-call failure")
+            second_entered.set()
+            self.committed.append(event)
+            return len(self.committed)
+
+    settings = Settings(
+        db_path=tmp_path / "unused.db",
+        detection=DetectionSettings(
+            syn_flood_threshold=100,
+            port_scan_distinct_ports=100,
+        ),
+    )
+    store = BlockingStore()
+    service = MegalodonService(settings, store)
+    first = PacketEvent.from_mapping(
+        {
+            "observed_at": OBSERVED_AT,
+            "src_ip": "8.8.8.8",
+            "dst_ip": "198.51.100.2",
+            "protocol": "TCP",
+            "dst_port": 21,
+            "tcp_flags": ["ACK"],
+        }
+    )
+    second = replace(
+        first,
+        observed_at=first.observed_at + timedelta(milliseconds=1),
+        dst_port=22,
+    )
+
+    def process_second():
+        second_attempted.set()
+        return service.process(second)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(service.process, first)
+        assert first_entered.wait(timeout=2)
+        second_future = executor.submit(process_second)
+        assert second_attempted.wait(timeout=2)
+        try:
+            assert not second_entered.wait(timeout=0.05)
+        finally:
+            release_first.set()
+        with pytest.raises(sqlite3.OperationalError, match="first-call failure"):
+            first_future.result(timeout=2)
+        assert second_future.result(timeout=2) == []
+
+    assert store.committed == [second]
+    assert tuple(service.detector.port_windows["8.8.8.8"]) == (
+        (second.observed_at.timestamp(), 22),
+    )
+    assert service.detector.port_counts["8.8.8.8"] == Counter({22: 1})
+    assert service.detector.source_high_watermarks["8.8.8.8"] == (
+        second.observed_at.timestamp()
+    )
+    assert service.detector._pending_token is None

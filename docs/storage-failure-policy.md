@@ -1,29 +1,31 @@
 # Audit-write failure and retention boundaries
 
-Status: implemented per-write transaction handling with synthetic regression
-coverage. [Issue #28](https://github.com/bartytime4life/MEGALODON/issues/28) is
+Status: implemented per-event ingestion transaction handling plus standalone
+write regression coverage. [Issue #28](https://github.com/bartytime4life/MEGALODON/issues/28) is
 closed as a documentation/test gate; operator retention choices and operational
 acceptance remain OPEN. This is not production approval. The [specification](../SPECIFICATION.md) and
 [security review](../SECURITY_REVIEW.md) remain authoritative.
 
-Current repository interpretation: the write methods close or roll back their
-own transaction before returning or propagating an error, and service acceptance
-tests preserve detector cooldown across the exercised detection/action audit
-failures. Neither property makes the three service stages one transaction or
-selects a retention policy. The remaining operator-policy and operational-failure
-decisions are not closed by issue lifecycle state.
+Current repository interpretation: one service event, all of its detections,
+one policy-plan action per detection, their links, and run counters commit or
+roll back in one transaction. Detector state is staged and advances only after
+that commit succeeds. Standalone low-level writes retain their narrower
+transaction boundary. These properties do not select a retention policy or
+prove exactly-once ingestion, power-loss durability, or continuous operation.
+The remaining operator-policy and operational-failure decisions are not closed
+by issue lifecycle state.
 
-The application schema is explicitly marked as SQLite `user_version = 2`.
+The application schema is explicitly marked as SQLite `user_version = 3`.
 Startup validates the closed set of application tables and indexes, rejects
 additional non-internal tables, indexes, triggers, and views, and checks the
 normalized declared DDL, column, foreign-key, required-index, primary-key, and
 uniqueness shape before enabling WAL. A fresh database is created atomically.
-Exact v1 and unversioned-v1
+Exact v1, unversioned-v1, and v2
 layouts fail with `STORAGE_SCHEMA:MIGRATION_REQUIRED`; they are not changed by
 ordinary startup. Partial, altered, extended, unsupported, and future layouts
 also fail closed with fixed schema errors instead of being repaired or downgraded.
 
-The explicit `database-migrate` command is the only v1-to-v2 path. Run it with all
+The explicit `database-migrate` command is the only v1/v2-to-v3 path. Run it with all
 other MEGALODON processes stopped. On POSIX, the database must be in an
 operator-owned mode-`0700` directory, and the source must be an owner-private,
 regular, single-link database (normally mode `0600`). The migration refuses
@@ -31,10 +33,10 @@ symlink sources, hardlinks, public modes, unsafe sidecars, and missing files,
 opens the source and newly created
 backup with no-follow descriptors, and keeps those descriptors bound through
 SQLite backup and validation. It fails if either pathname stops identifying its
-opened file. The command creates a sibling `<database>.pre-v2.bak` without
-overwriting any existing path, verifies it with SQLite `quick_check` and the v1
-structural contract, checks that the source did not change, and applies the
-additive table migration and version marker in one transaction. A pre-migration
+opened file. The command creates a sibling `<database>.pre-v3.bak` without
+overwriting any existing path, verifies it with SQLite `quick_check` and the
+matching v1 or v2 structural contract, checks that the source did not change,
+and applies the schema migration and version marker in one transaction. A pre-migration
 failure removes only the backup path that still identifies the file it created;
 a migration-stage failure rolls back the source and retains the verified backup.
 POSIX creation uses mode 0600. Writer and reader startup require a stable
@@ -43,12 +45,14 @@ fixed refusal. Path ancestors must be owned by root or the runtime user and must
 not be group/world-writable unless a trusted sticky directory prevents another
 user from renaming the next entry. Windows confidentiality and replacement
 resistance remain part of the separately unverified private-directory/NTFS ACL
-control. Re-running against v2 is an idempotent no-op.
+control. Re-running against v3 is an idempotent no-op. Version-2 run receipts
+retain their original state with `receipt_version = 2` and a null reason; the
+migration does not invent source exhaustion for an ambiguous legacy completion.
 
 ## Dashboard read isolation
 
 `DashboardStore` is separate from the writer `Store`. It requires an existing
-schema-v2 database and never creates a directory/database, initializes or
+schema-v3 database and never creates a directory/database, initializes or
 migrates schema, changes `user_version`/journal mode, or exposes a write method.
 On POSIX it anchors and rechecks the private parent and regular single-link
 database descriptors, and validates any WAL/SHM coordination files before and
@@ -97,46 +101,64 @@ diagnostic cause or configured path to the browser.
 `/api/summary` and `/api/events` are separate reads, not a shared SQLite
 snapshot. A browser comparison of successive `high_or_critical` summary totals
 is not an ingestion receipt, unique-alert count, or terminal alert lifecycle;
-[#67](https://github.com/bartytime4life/MEGALODON/issues/67) remains the
-run-integrity gate. The 200-row API ceiling and 12-bin browser timeline bound
+[#67](https://github.com/bartytime4life/MEGALODON/issues/67) now has this
+per-event integrity slice, but exact-head review remains a gate and no durable
+alert lifecycle follows. The 200-row API ceiling and 12-bin browser timeline bound
 only this projection and do not close the detector/capture/storage resource gate
 in [#68](https://github.com/bartytime4life/MEGALODON/issues/68).
 
 The success receipt reports only the fixed backup state `created`, not the
 configured filesystem path. The operator can derive the local sibling name from
-the reviewed configuration and fixed `.pre-v2.bak` suffix without copying a
+the reviewed configuration and fixed `.pre-v3.bak` suffix without copying a
 personal or case directory into shared logs.
 
 Retain the backup until operational verification. To recover, stop all MEGALODON
 processes, preserve the failed database and its `-wal`/`-shm` sidecars for
 investigation, copy the backup to a new private path, and point a reviewed config
-at that copy. Run `database-migrate` on the copy if it is v1, then point the
+at that copy. Run `database-migrate` on the copy if it is v1 or v2, then point the
 reviewed runtime config at the migrated copy. Do not overwrite either database in
 place. This repository does not automatically restore, delete, rotate, upload, or
 claim secure erasure of backups.
 
 ## What a successful write means
 
-`Store.record_event()`, `record_detection()` and `record_action()` each hold the
-store lock through their SQLite transaction. A method returns its row ID only
-after its transaction commits. A statement or commit exception propagates;
-the connection context attempts rollback instead of leaving a failed method's
-tentative rows available for a later successful call to commit.
+`Store.record_event_bundle()` holds the store lock from `BEGIN IMMEDIATE` through
+one explicit commit. The transaction inserts one event, its run association, all
+detections, one action decision for each detection, each detection/action link,
+and increments processed/detection/action counters. Any exception before commit,
+including an interruption, rolls the transaction back. A success row ID is
+returned only after commit.
+
+`MegalodonService.process()` serializes detector evaluation and uses a bounded
+undo journal for provisional window, exact port-frequency, and cooldown
+changes; it does not copy or traverse a whole source port window per event.
+Only one unresolved preparation is allowed, and reentrant preparation is
+refused. High-water and source-LRU changes wait for commit. Removing a synthetic
+storage fault and retrying the same event therefore produces the same decision;
+the failed attempt did not consume state.
+Policy planning remains non-executing and may run before persistence, but no host
+action is authorized or applied.
 
 Do not convert an exception into an audited-success receipt or retry blindly.
-A failure at one stage of `MegalodonService.process()` can leave earlier,
-separately committed event or detection rows. These three methods do not form
-one all-or-nothing service transaction, and detector state is not rolled back.
-The CLI run ledger records a bounded terminal failure code. Processed counts are
-derived from committed run/event associations; detection counts are incremented
-in the same SQLite transaction that commits each associated detection and read
-from that persisted run counter at finalization. This avoids scanning unrelated
-historical detections while the terminal write transaction is held. It does not
-make the service stages atomic or prove the failed input was safe to retry. There
-is no new retry, duplicate suppression, or recovery service.
-If SQLite cannot perform rollback, recovery is unproved: stop using the affected
-connection and require operator investigation rather than claim clean state.
-No software receipt here guarantees survival of power loss or faulty storage.
+If commit outcome is uncertain, the writer is poisoned and returns the fixed
+`INGESTION_RUN:RECONCILIATION_REQUIRED` result. No later write is accepted on
+that connection. After reopen, bounded readback exposes `running` and already
+classified receipts; an exact run-ID/started-at operation can preserve its rows,
+re-derive counts, and mark it `reconciliation_required`. It cannot label the run
+complete or decide whether an upstream event should be replayed.
+
+Run finalization re-derives all three counters from run, detection, and action
+links. A mismatch becomes `reconciliation_required`, never the requested
+terminal success. Once terminal, those counters are historical ingestion
+receipts and are not decremented by later use of the internal retention hook.
+Natural source exhaustion, operator event limit, interruption,
+and failure have distinct closed reasons. These guarantees are per event, not
+one transaction for a whole run. There is no upstream ID, automatic retry,
+duplicate suppression, or exactly-once recovery. A crash after database commit
+but before detector-state commit can lose in-memory continuity on restart. No
+software receipt here guarantees survival of power loss or faulty storage. See
+[ingestion integrity and reconciliation](ingestion-integrity.md) for the exact
+state matrix and operator sequence.
 
 ## Retention decision matrix
 
@@ -161,9 +183,10 @@ operation and confirmation protocol remain a separately authorized code slice.
 | --- | --- | --- |
 | SQLite page budget / storage exhaustion | The failing write raises; no row ID or success receipt is returned; prior committed rows remain truthful | Stop intake, preserve the store, free or provision reviewed local capacity, then reopen/verify before resuming |
 | Database open/create permission denial | Initialization raises and no usable `Store` is returned | Correct the selected private location/permissions outside MEGALODON; no fallback directory or upload |
-| Statement or commit failure | The active method rolls back and cannot leak a tentative row into the next commit | Investigate the cause; a later write may proceed only after connection/state checks pass |
-| SQLite interruption | The active write raises and rolls back | Treat external cancellation, shutdown and physical interruption as distinct; this synthetic case is not power-loss durability proof |
-| Rollback or connection integrity unknown | No clean-state claim and no automatic retry | Stop using the connection and require operator recovery/integrity review |
+| Bundle statement failure | The event, detections, actions, links, and counters all roll back; detector state does not advance | Investigate the fixed failure class; do not retry until input identity and policy permit it |
+| Commit outcome uncertain | No clean-state claim; the writer is poisoned and the run remains discoverable | Stop intake, reopen for bounded readback, and explicitly reconcile the pinned run without replay |
+| Handled interruption | The active bundle rolls back and finalization records `failed/interrupted` when possible | SIGINT/SIGTERM handling is not power-loss or kill-proof durability evidence |
+| Hard kill, rollback failure, or terminal-write uncertainty | No automatic completion or retry; a `running` receipt blocks a new run | Preserve database and sidecars, stop every writer, then perform exact operator reconciliation |
 
 Diagnostics and shared receipts must remain bounded and metadata-only. They may
 name a fixed failure class, counts, UTC cutoff and synthetic test identity, but
@@ -179,8 +202,8 @@ python -m compileall -q megalodon tests
 python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py tests/test_dashboard_store.py tests/test_dashboard_binding.py tests/test_cli.py tests/test_ingestion_runs.py
 ```
 
-The failure suite covers each of the three write methods with a statement
-failure, a deferred-constraint commit failure, and SQLite query-only refusal.
+The failure suite covers standalone writes plus every event-bundle stage with a
+statement failure, an uncertain commit, and SQLite query-only refusal.
 It also exercises a real fixed SQLite page budget until `SQLITE_FULL`, an
 injected connection permission denial, and SQLite progress interruption. The
 transaction cases verify closure, prior-row preservation, visibility from a
@@ -191,7 +214,7 @@ Only synthetic temporary databases and fixed test triggers are used.
 The schema-lifecycle cases separately cover fresh creation, explicit legacy
 migration, required-migration refusal, backup preservation/non-overwrite,
 idempotence, partial and altered schema refusal, future-version non-mutation, and
-atomic rollback for both initial creation and v2 migration.
+atomic rollback for initial creation and the v1/v2-to-v3 migration.
 The dashboard-store cases cover no-create refusal, private path/object identity,
 URI encoding, query-only/authorizer enforcement, incompatible no-sidecar refusal,
 exact-field indexed SQL, one-statement summary snapshots, coherent returned
@@ -199,18 +222,15 @@ counts when a WAL commit overlaps execution, committed-versus-uncommitted WAL
 visibility, a writer starting during immutable preflight, transient public-path
 replacement, between-request
 sidecar ABA replacement, and fixed browser-facing read failure.
-The ingestion-run cases cover completed and failed terminal transitions,
-run-to-event provenance, derived counts, closed sources/failure codes, invalid or
-terminal run refusal, malformed JSONL after a valid prefix, storage-write failure,
-deep-parser recursion, counter rollback, finalization without historical
-detection reads, and interruption without a traceback. They use only synthetic
-metadata and temporary databases.
+The ingestion-run cases cover source exhaustion, event-limit, interruption, and
+failed terminal reasons; event/detection/action provenance; derived counters;
+malformed reached and deliberately unread suffixes; stage rollback; detector
+retry state; uncertain-commit poisoning; concurrent-start refusal; bounded orphan
+readback; target-pinned idempotent reconciliation; and legacy v2 preservation.
+They use only synthetic metadata and temporary databases.
 
-The inspected baseline was `a177c13ade3b4a727a0514afac21575fd0f10e08`, with
-storage blob `c6b45bea5bf61462dbbeb0f71a281fb49db3e3ca`. All nine new cases
-failed on that baseline because a transaction remained open. The corrected
-source passes those cases. The PR execution receipt must separately record its
-exact head/base, environment, full-suite result and independent review state.
+The PR execution receipt must separately record its exact head/base, environment,
+full-suite result, and independent review state.
 Injected permission denial is not an operating-system ACL test; SQLite's page
 budget is not a physical disk-full test; progress interruption is not a process
 crash or power-loss test. Those native environments remain unproved.

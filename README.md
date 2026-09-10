@@ -61,6 +61,7 @@ record delivery state; they do not override the checked-in contracts.
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
 | Suricata record and bounded-reader gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md) and [`reader`](contracts/suricata-eve/v1/reader/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
+| Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 
 ## Choose a configuration
 
@@ -124,7 +125,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | --- | --- |
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
-| Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
+| Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
 | Dashboard | Read-only loopback UI backed by a separate read-only SQLite projection, bounded recent-detection triage controls, and an optional privacy-safe summary of one completed offline run |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
@@ -231,18 +232,18 @@ host network.
 The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
 applies a reviewed retention procedure. The store marks its current layout with
-SQLite `user_version = 2`. New databases include the reserved ingestion-run
-ledger. On POSIX, the writer creates a missing leaf directory with mode `0700`
+SQLite `user_version = 3`. New databases include a versioned ingestion-run
+ledger and detection/action links. On POSIX, the writer creates a missing leaf directory with mode `0700`
 and database with mode `0600`; it refuses symlinked ancestors, hard-linked or
 foreign-owned databases, and an immediate database directory with group/other
 access. Every ancestor must be owned by root or the runtime user and must not be
 group/world-writable unless it is a trusted sticky directory. Both writer and
 reader require a stable `/proc/self/fd` or `/dev/fd` SQLite path on POSIX so the
-opened inode cannot drift from SQLite's journal path. Existing exact v1 or
-unversioned-v1 databases require the explicit
+opened inode cannot drift from SQLite's journal path. Existing exact v1,
+unversioned-v1, or v2 databases require the explicit
 `database-migrate` command; ordinary startup does not migrate them. The command
-first creates and verifies a sibling backup ending in `.pre-v2.bak`, never
-overwrites an existing backup, and then applies the additive migration in one
+first creates and verifies a sibling backup ending in `.pre-v3.bak`, never
+overwrites an existing backup, and then applies the schema migration in one
 transaction. Its JSON receipt reports only `backup: created`, not the configured
 filesystem path. The backup is created mode `0600` on POSIX; Windows confidentiality
 still depends on the private-directory/NTFS ACL acceptance tracked separately.
@@ -289,17 +290,18 @@ The [`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audi
 and standalone offline-report retention separate and defines fail-closed
 outcomes; it selects no deletion value or automatic job.
 
-Each `run` command writes a closed lifecycle receipt before consuming input and
-marks it `completed` or `failed` at a terminal boundary. The receipt stores only
-the closed source name, UTC timestamps, derived event/detection counts, and an
-optional fixed failure code. A join table associates each durably written event
-with exactly one CLI run; a malformed JSONL suffix is therefore distinguishable
-from a complete replay. Raw exceptions, input paths, command lines, packet
-contents, and credentials are not stored in the run ledger or echoed by the run
-failure diagnostic. A row left `running` means completion was not recorded, not
-that the run succeeded. Detection counts are maintained in the same transaction
-as each associated detection, so finalization does not scan unrelated historical
-detections.
+Each `run` command writes a closed lifecycle receipt before consuming input.
+Natural exhaustion records `completed/source_exhausted`; an operator event limit
+records `incomplete/event_limit_reached`; handled interruption and bounded
+failures have distinct reasons. Every accepted event, all detections, one
+non-executing action decision per detection, their links, and the event/detection/
+action counters commit in one transaction. Detector windows and cooldowns advance
+only after that transaction succeeds. Raw exceptions, input paths, command lines,
+packet contents, and credentials are not stored in the run ledger or echoed by
+the run failure diagnostic. A row left `running` means completion is unknown and
+blocks another run until explicit, target-pinned reconciliation. See
+[`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) for the exact state,
+migration, ambiguous-commit, and recovery boundaries.
 
 On the Linux analysis profile, add one completed offline run to the read-only
 dashboard by selecting its absolute private report directory when the server starts:
@@ -363,7 +365,9 @@ last-success timestamp, and count baseline while marking the display stale.
 | `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
 | `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
 | `run --source scapy --interface IFACE` | Perform optional Linux live metadata capture |
-| `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 audit database to v2; never overwrites its backup |
+| `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 or v2 audit database to v3; never overwrites its backup |
+| `database-reconciliation-status [--config PATH]` | Read bounded metadata for `running` or reconciliation-required run receipts; does not mutate them |
+| `database-reconcile RUN_ID --started-at UTC [--config PATH]` | After stopping ingestion, mark one exactly pinned running receipt as reconciliation-required while preserving evidence |
 | `dashboard` | Serve the loopback dashboard from an existing compatible database through the separate read-only projection |
 | `firewall-plan IP` | Validate a target and print a non-mutating, time-limited block plan |
 | `firewall-install` | Print the isolated nftables table plan; the retained `--apply` option explicitly refuses and executes nothing |
@@ -617,7 +621,7 @@ operational work unbuilt.
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
 | [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; executor removal and fail-closed apply refusal are on `main`; independent review and any separately designed restoration gate remain required |
 | [#66 — isolate dashboard reads](https://github.com/bartytime4life/MEGALODON/issues/66) | This revision separates dashboard reads from the writer, validates private database identity/schema, and constrains SQL to the five-field projection; independent review and native Windows ACL evidence remain open |
-| [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Open integrity gate; runtime alert persistence, acknowledgement, or delivery must not be layered over potentially partial event/detection/action commits or ambiguous terminal receipts |
+| [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Per-event atomic event/detection/action/link/counter commits, explicit terminal reasons, detector rollback behavior, and pinned orphan reconciliation are implemented in this slice; exact-head review and issue disposition remain separate, and no alert lifecycle or delivery follows |
 | [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; incremental bounded port accounting removes one detector hot-path rescan, but capture liveness, long-running storage, overload, retention, and notifier behavior remain unresolved |
 
 Open issues and branches are coordination/evidence records, not shipped features
