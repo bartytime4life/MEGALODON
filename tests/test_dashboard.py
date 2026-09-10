@@ -299,7 +299,7 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert 'aria-pressed="false"' in INDEX_HTML
     assert 'id="connection" role="status"' not in INDEX_HTML
     assert 'id="snapshot-status" role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
-    assert 'class="table-scroll" role="region" aria-labelledby="detections-title"' in INDEX_HTML
+    assert 'class="table-scroll" role="region" aria-label="Scrollable recent detections table"' in INDEX_HTML
     assert 'aria-describedby="table-scroll-help" tabindex="0"' in INDEX_HTML
     assert "Dashboard API reachability does not measure capture or ingestion health." in INDEX_HTML
     assert "Action records" in INDEX_HTML

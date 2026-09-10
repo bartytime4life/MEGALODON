@@ -101,7 +101,7 @@ INDEX_HTML = """<!doctype html>
       <p class="filter-status" id="filter-status" role="status" aria-live="polite">Waiting for recent detections.</p>
     </div>
     <p class="sr-only" id="table-scroll-help">The recent detections table may scroll horizontally on narrow screens.</p>
-    <div class="table-scroll" role="region" aria-labelledby="detections-title" aria-describedby="table-scroll-help" tabindex="0">
+    <div class="table-scroll" role="region" aria-label="Scrollable recent detections table" aria-describedby="table-scroll-help" tabindex="0">
       <table aria-describedby="filter-status">
         <caption>Recent MEGALODON detections</caption>
         <thead><tr><th scope="col">Time</th><th scope="col">Severity</th><th scope="col">Rule</th><th scope="col">Source</th><th scope="col">Message</th></tr></thead>
