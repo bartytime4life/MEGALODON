@@ -162,6 +162,7 @@ def test_source_eviction_discards_cooldown_without_unbounded_history(rule):
         assert set(detector.source_high_watermarks) == {source}
         assert set(detector.syn_windows) <= {source}
         assert set(detector.port_windows) <= {source}
+        assert set(detector.port_counts) <= {source}
 
 
 @pytest.mark.parametrize("rule", ("SYN_FLOOD", "PORT_SCAN"))
@@ -171,6 +172,9 @@ def test_window_cap_below_threshold_is_a_detection_limit(rule):
     assert _rules(detector, [_event(rule, index) for index in range(10)]) == []
     window = (detector.syn_windows if rule == "SYN_FLOOD" else detector.port_windows)[SOURCE_A]
     assert len(window) == 2
+    if rule == "PORT_SCAN":
+        assert sum(detector.port_counts[SOURCE_A].values()) == len(window)
+        assert len(detector.port_counts[SOURCE_A]) <= len(window)
 
 
 def test_shipped_configuration_matches_evaluated_defaults_and_stays_observe_only():
