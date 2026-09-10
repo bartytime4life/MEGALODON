@@ -34,6 +34,11 @@ from megalodon.offline_projection import MAX_PROJECTED_PORTS, load_offline_proje
 from megalodon.storage import Store
 
 
+# Keep the browserless dashboard harness bounded while allowing hosted sdist
+# runners enough headroom to parse and execute the larger UI contract.
+NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS = 10
+
+
 def _packet(index: int, port: int = 443) -> PacketEvent:
     return PacketEvent(
         observed_at=datetime(2026, 9, 7, tzinfo=timezone.utc) + timedelta(seconds=index * 10),
@@ -719,7 +724,7 @@ process.stdin.on('end', () => {
         input=DASHBOARD_JS,
         text=True,
         capture_output=True,
-        timeout=5,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -788,7 +793,7 @@ process.stdin.on('end', async () => {
         input=DASHBOARD_JS,
         text=True,
         capture_output=True,
-        timeout=5,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -934,7 +939,7 @@ process.stdin.on('end', async () => {
         input=DASHBOARD_JS,
         text=True,
         capture_output=True,
-        timeout=5,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stderr
