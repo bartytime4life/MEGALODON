@@ -1,0 +1,101 @@
+# Contributing to MEGALODON
+
+MEGALODON is a local metadata-analysis application, not a remote administration
+console. A contribution must improve useful evidence without silently increasing
+execution authority. Start with the [README](README.md), the
+[integration contract](docs/integration-hub.md), and the
+[dashboard HTTP contract](docs/dashboard-http-contract.md).
+
+## Establish the exact baseline
+
+Record the current main commit, the working branch head, relevant open issues,
+and overlapping pull requests before changing code. A Drive plan is design input;
+GitHub source, checks, and submitted reviews determine implementation state.
+Retain historical checkpoints rather than rewriting them as current evidence.
+
+Keep one coherent review surface per PR. Describe the defect or operator task,
+what changes, the negative controls, and what remains unproved. Mark proposed work
+as draft. A merged commit, green workflow, automated comment, or author statement
+is not independently attributable approval. The outstanding review-control problem
+is tracked in [issue #3](https://github.com/bartytime4life/MEGALODON/issues/3);
+this guide does not claim that GitHub settings enforce the intended policy.
+Do not close that issue or change rulesets as a side effect of a code cleanup.
+
+## Development environment
+
+Use the Python versions exercised by `.github/workflows/ci.yml`; do not silently
+raise the runtime floor. In a trusted checkout on Linux, create an isolated
+virtual environment and install development dependencies explicitly:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[test]"
+.venv/bin/python -m pip check
+.venv/bin/python -m compileall -q megalodon tests
+.venv/bin/python -m pytest -q
+```
+
+This installation can access package indexes. That setup action is distinct from
+normal application operation, which must not acquire a required vendor account,
+secret, subscription, cloud service, or outbound integration connection.
+Do not install the capture extra or launch an analyzer merely to run unit tests.
+
+For native Windows development, use an isolated environment without changing
+PowerShell execution policy or enabling unsupported capture:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+These commands are a developer setup, **not a native Windows acceptance receipt**.
+Linux/guest execution does not prove Windows ACL, SQLite locking, process cleanup,
+or browser behavior. Preserve that distinction in reports.
+
+## Contribution boundaries
+
+The browser is loopback-only and read-only. Do not add a command box, arbitrary
+URL connector, upload-to-vendor action, tool installer, acknowledgement write,
+firewall application, scanner launch, scheduler, or hidden notifier. Optional
+capabilities must remain visibly optional; contract-only or proposed software
+must not look installed or connected.
+
+Use versioned, bounded inputs and fixed diagnostic categories. Preserve units,
+source kind, accepted/rejected counts, completeness, redaction, and terminal
+status. Flow counts are not packet counts; registrations are not observations;
+detection counters are not incident identities; API reachability is not sensor
+health. Never turn a display label into an authorization decision.
+
+Synthetic fixtures and redistributable public reference material belong in the
+repository only with their existing schema, provenance, integrity, size, and
+packaging rules. Real captures, private paths, credentials, personal telemetry,
+working databases, generated reports, and installed-tool receipts with sensitive
+content do not belong in a public test fixture. Do not alter the project license
+or third-party distribution posture without the separate owner decision.
+
+## Validation and review evidence
+
+For dashboard changes, run both existing and new behavior tests:
+
+```bash
+python -m pytest -q tests/test_dashboard.py tests/test_dashboard_boundaries.py
+```
+
+Node must be available for browserless JavaScript behavior checks. A skipped Node
+harness is missing coverage, not a pass. The full repository suite and the current
+wheel/sdist jobs remain necessary: moving an asset into a Python module must work
+from an installed distribution, not only from a checkout.
+
+Test success, empty results, malformed types, bounds, duplicate arguments,
+unavailable dependencies, stale preservation, timeout, retry, and refusal before
+side effects. Prefer tests against stable public behavior to matching source text.
+Keep one final dashboard bootstrap call so behavior harnesses can disable startup
+without altering the code under test.
+
+The [operator runbook](docs/dashboard-operations.md) defines rendered-browser
+checks. Node mocks do not measure layout, contrast, screen-reader output, platform
+privacy, or installed-tool containment. Report those evidence classes separately.
+A PR receipt should identify exact commit, commands, environment, outcomes,
+skips, hosted run IDs, and remaining acceptance gates. Never upgrade local or
+partial-checkout evidence into full-repository or native-platform proof.
