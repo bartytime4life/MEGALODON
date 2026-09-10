@@ -16,6 +16,7 @@ test = ["pytest>=8,<9", "jsonschema>=4.23,<5"]
 
 [project.scripts]
 megalodon = "megalodon.cli:main"
+megalodon-evaluate = "megalodon.evaluation:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -23,3 +24,11 @@ addopts = "-q"
 
 [tool.setuptools.packages.find]
 include = ["megalodon*"]
+
+[tool.setuptools.package-data]
+"megalodon.reference" = [
+  "iana-v1/*.json",
+  "iana-v1/*.jsonl",
+  "corpus-v1/*.json",
+  "corpus-v1/*.jsonl",
+]

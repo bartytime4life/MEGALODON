@@ -31,7 +31,10 @@ authorized JSONL metadata, three fixed detection rules, private local SQLite,
 and an application/SQL-read-only loopback dashboard projection. Acceptance remains
 gated by the open integrity, resource, browser, installed-tool, and release
 controls. The current repository also exposes an explicit, non-executing
-nftables plan boundary; firewall application is unsupported.
+nftables plan boundary; firewall application is unsupported. A separate offline
+reference and evaluation subsystem supplies pinned registration context and
+deterministic synthetic detector exercises. It does not join the service
+ingestion, audit, dashboard, or response paths.
 
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
@@ -89,6 +92,14 @@ capture-buffer sizing or loss-free operation under production load.
     together. Detector windows and cooldowns advance only after that commit.
     An uncertain commit poisons the writer and requires explicit reconciliation;
     it is never retried or reported as success.
+14. **Reference context is not observation.** An IANA service/port or protocol
+    registration is an analyst hint only. It does not prove what service was
+    observed, endorse an endpoint, establish safety or malicious intent, or
+    supply a detector verdict.
+15. **Evaluation is offline and side-effect free.** The reference/evaluation
+    command validates the manifest, complete declared shard set, counts,
+    digests, and records before lookup or in-memory detector execution. It has
+    no runtime network/update, `Store`, persistence, action, or subprocess path.
 
 ## 3. Data contracts
 
@@ -148,6 +159,23 @@ are stopped, bounded readback plus a run-ID/started-at-pinned operation may mark
 that receipt reconciliation-required without deleting evidence or authorizing
 replay. These are per-event guarantees, not whole-run or exactly-once delivery.
 
+### Offline reference and evaluation data
+
+The bundled `iana-v1` snapshot contains 12,577 normalized service/port records
+and 152 protocol-number records. Privacy-minimized derived records retain only
+bounded registration context needed for lookup; deterministic data shards are
+no larger than 76 KiB and are pinned by a versioned manifest. Service/port
+registrations are not observed-service classifications, and protocol-number
+registrations are not flow inspection.
+
+The bundled `corpus-v1` data contains 6,492 exact `PacketEvent`-shaped records
+in 12 deterministic scenarios. It uses fixed UTC timestamps, empty metadata,
+and only RFC 5737 IPv4 and RFC 3849 IPv6 documentation addresses. Its evidence
+quality labels are `synthetic-only` and `uncalibrated`; no payload, DNS query
+name, real telemetry, or operational incident evidence is included. The
+authoritative provenance, schema, update, and interpretation contract is
+[docs/reference-data.md](docs/reference-data.md).
+
 ## 4. Fixed MVP rules
 
 | ID | Trigger | Severity | Evidence | Default response |
@@ -173,6 +201,15 @@ availability gate.
 The default mode. Events are validated, detections are stored, and action
 decisions are recorded as `not_attempted`. No root permission is needed for
 sample or JSONL input.
+
+### Offline reference inspection and synthetic evaluation
+
+`megalodon-evaluate reference verify|port|protocol` validates and inspects the
+bundled IANA snapshot. `megalodon-evaluate corpus [--scenario]` validates the
+entire corpus before passing events to the fixed detector in memory. Selecting
+one scenario narrows the report, not the prerequisite validation. These commands
+do not read runtime configuration, open the audit database, persist a result,
+start ingestion or the dashboard, trigger policy, or authorize response.
 
 ### Plan
 
@@ -345,7 +382,9 @@ operator-owned retention decisions; authority over one never covers the other.
 
 External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
 future integration must document what identifiers leave the host and require
-an explicit configuration switch.
+an explicit configuration switch. Bundled IANA registration context and the
+synthetic corpus are offline package data, not telemetry uploads or a runtime
+threat-feed/update mechanism.
 
 ## 8. Validation and acceptance
 
@@ -373,6 +412,12 @@ The MVP is acceptable for local experimentation when:
   terminal history;
 - sample replay produces a database and no firewall mutation;
 - `--demo-threat` creates detection and action records;
+- every reference shard is declared, bounded, count-checked, and digest-checked
+  before any reference lookup;
+- every synthetic corpus shard and record validates before any scenario is
+  evaluated, and expected detector counts match for all 12 scenarios;
+- reference inspection and corpus evaluation use no network, audit store,
+  persistence, action, or subprocess path;
 - no code path uses `shell=True`.
 
 Before any production rollout, satisfy the firewall restoration gate above if
@@ -422,6 +467,15 @@ commands selected from input or authorization to run them. The plan reads no
 input, configuration, evidence, executable, or host-state files and performs no
 probe, subprocess, network request, persistence, capture, or host mutation. It
 cannot upgrade a component's platform status.
+
+The separately installed `megalodon-evaluate` entry point implements the offline
+reference and corpus boundary in [docs/reference-data.md](docs/reference-data.md).
+Its IANA data is registry context, not a threat-intelligence assertion or an
+observed-service label. Its 12-scenario, 6,492-event corpus verifies deterministic
+rule and resource-boundary behavior only; `synthetic-only` and `uncalibrated`
+results do not measure representativeness, false-positive rates, operational
+accuracy, readiness, or product efficacy. Neither path modifies the Stage 0
+automation schema, service SQLite schema, dashboard surface, or firewall boundary.
 
 ## 10. Proposed Windows/Linux platform contract
 

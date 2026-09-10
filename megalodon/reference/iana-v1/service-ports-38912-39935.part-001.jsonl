@@ -1,0 +1,4 @@
+{"description":"Children's hearing test/Telemedicine","modification_date":null,"port_end":39063,"port_start":39063,"record_kind":"named","registration_date":"2021-12-23","service_name":"vroa","source_row":13255,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":39063,"port_start":39063,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":13256,"transport":"udp"}
+{"description":"TurboNote Default Port","modification_date":null,"port_end":39681,"port_start":39681,"record_kind":"named","registration_date":null,"service_name":"turbonote-1","source_row":13258,"transport":"tcp"}
+{"description":"TurboNote Default Port","modification_date":null,"port_end":39681,"port_start":39681,"record_kind":"named","registration_date":null,"service_name":"turbonote-1","source_row":13259,"transport":"udp"}

@@ -20,6 +20,10 @@ See the [red, blue, and purple security practice](docs/red-blue-security-guide.m
 for authorized adversarial validation and future-AI gates. That guide adds no
 model runtime, tool authority, or firewall authorization.
 
+The offline reference and synthetic evaluation subsystem is documented in
+[docs/reference-data.md](docs/reference-data.md). It adds bounded evidence for
+review without joining the ingestion, audit, dashboard, or response paths.
+
 ## Findings and corrections
 
 | Severity | Original design issue | Consequence | MVP correction |
@@ -35,6 +39,9 @@ model runtime, tool authority, or firewall authorization.
 | High | Raw payload hash/contents are part of the capture concept | Payload-derived identifiers can still disclose sensitive data; storage creates a forensic liability | Metadata-only event model; payloads are not represented or stored |
 | Medium | Promiscuous capture is treated as a convenience | Requires privilege and may capture traffic outside the operator’s authority | Optional live capture is explicit, interface-specific, and documented as privileged |
 | Medium | External feeds are called synchronously with no privacy contract | IP/domain disclosure, rate-limit failures, stale reputation, and API-key leakage | Feeds are out of MVP scope; later adapters must be cached, signed, rate-limited, and opt-in |
+| Medium | Registry assignments can be mistaken for observed services or threat verdicts | Analysts may overstate what a port implies and create false confidence or false positives | Bundled IANA service/port and protocol records are explicitly context hints only; they never establish observation, endorsement, safety, malicious intent, or a verdict |
+| Medium | Reference or evaluation assets can be truncated, substituted, or partially loaded | Lookup and detector receipts could silently describe different evidence | Versioned manifests pin every deterministic shard, count, byte length, and digest; all declared data and closed records validate before lookup or evaluation |
+| Medium | A synthetic detector suite can be presented as operational accuracy evidence | Deterministic expected counts may be confused with representative false-positive or efficacy measurement | The 12-scenario, 6,492-event corpus is metadata-only, documentation-address-only, and labeled `synthetic-only` / `uncalibrated`; its evaluator has no network, store, persistence, action, or subprocess path |
 | Medium | YAML rules imply arbitrary field/operator expansion | Unvalidated rules can create denial-of-service or unsafe actions | MVP rules are fixed and typed; a future rule schema must be allowlisted and versioned |
 | Medium | No IPv6 handling in the firewall examples | Incomplete protection and accidental IPv4-only assumptions | Plan generation uses separate validated IPv4/IPv6 nftables sets; this does not imply live enforcement |
 | Medium | No database schema, retention, or transaction policy | Unbounded growth and incomplete evidence | Exact SQLite schema, atomic per-event event/detection/action/link/counter WAL transactions, staged detector state, explicit run outcomes and orphan reconciliation, private POSIX writer/migration paths, a separately constrained dashboard reader, and a retention hook; finite capacity and operational retention values remain open |
@@ -73,6 +80,8 @@ may receive malformed or adversarial network metadata. It protects against:
 - accidental command execution through event fields;
 - accidental host-firewall mutation, including through retained apply routes;
 - stale, repeated, or noisy detections overwhelming the action path;
+- malformed, incomplete, or tampered bundled reference/evaluation data being
+  used without validation;
 - dashboard exposure caused by a careless bind address;
 - loss of an audit trail for supported planning and suppression decisions;
 - partial run evidence or consumed detector cooldown after a rejected event-bundle
@@ -101,10 +110,11 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 4. The dashboard needs authentication and CSRF protection if it ever exposes
    control operations or binds beyond localhost.
 5. The repository has bounded synthetic detector and service-to-ledger fixtures,
-   but still needs representative privacy-reviewed replay, false-positive
-   measurement and an explicit evidence-quality label
-   before operational interpretation. Neither a detection nor a quality label
-   authorizes automated response.
+   including a manifest-pinned corpus explicitly labeled `synthetic-only` and
+   `uncalibrated`, but still needs representative privacy-reviewed replay and
+   false-positive measurement before operational interpretation. Neither a
+   passing corpus result, a detection, nor a quality label authorizes automated
+   response.
 
 ## Open control register
 
@@ -119,6 +129,7 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 | TShark compatibility ([#25](https://github.com/bartytime4life/MEGALODON/issues/25)) | Optional header-only probe exists | Pin and record a reviewed installed-tool receipt |
 | Native Windows ([#27](https://github.com/bartytime4life/MEGALODON/issues/27)) | Static acceptance matrix and Linux-run unsupported-operation controls exist | Native core, NTFS ACL, loopback UI/browser, and exact-platform execution receipts |
 | Retention/storage ([#28](https://github.com/bartytime4life/MEGALODON/issues/28)) | Per-write rollback regression coverage exists | Select finite policy values and validate operational failure/recovery and deletion controls |
+| Reference/evaluation integrity | Privacy-minimized IANA data is manifest-pinned in deterministic shards no larger than 76 KiB; the complete 12-scenario synthetic corpus validates before an in-memory detector run | Establish a reviewed maintenance cadence and provenance receipt for each future snapshot; use representative authorized replay before any accuracy or operational-efficacy claim |
 
 Suricata issues [#9](https://github.com/bartytime4life/MEGALODON/issues/9)
 and [#24](https://github.com/bartytime4life/MEGALODON/issues/24) closed their
@@ -170,7 +181,9 @@ is created. External application installation is not evidence that MEGALODON
 has gained that application's protection or detection capability.
 
 Software/rule/signature downloads require a deliberate maintenance process,
-not telemetry uploads. Keep raw captures, sensor logs, SQLite data, and personal
+not telemetry uploads. The bundled IANA snapshot has no runtime network or
+automatic update path; replacing it is a separate reviewed repository change,
+not a service lookup. Keep raw captures, sensor logs, SQLite data, and personal
 paths out of repository and Drive evidence packets. Redaction does not authorize
 sharing. Upstream licensing/platform sources and exact configuration requirements
 are recorded in the baseline; do not silently bundle restricted components.

@@ -32,6 +32,8 @@ malicious activity.
   database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
   authorizer; it cannot create or migrate the audit database;
 - no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
+  bundled reference verification and synthetic evaluation perform no runtime
+  download or update;
 - no shell interpolation: untrusted event values never become shell code;
 - finite response: block plans require validated global targets and an expiry;
 - contained application: retained firewall `--apply` options explicitly refuse
@@ -58,6 +60,7 @@ record delivery state; they do not override the checked-in contracts.
 | Native Windows core acceptance matrix | [`docs/windows-core-acceptance.md`](docs/windows-core-acceptance.md) |
 | Offline analyst operation and report semantics | [`docs/offline-analysis.md`](docs/offline-analysis.md) |
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
+| Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
 | Suricata record and bounded-reader gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md) and [`reader`](contracts/suricata-eve/v1/reader/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
@@ -72,6 +75,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Workflow | Components and output | Availability and boundary |
 | --- | --- | --- |
 | Learn or develop with synthetic data | Core Python package; sample/JSONL metadata, fixed detections, SQLite; optional local UI | Implemented on Linux; native Windows core evaluation only. No capture tool, driver, firewall privilege, GPU, or cloud account required |
+| Verify bundled reference data or exercise detector boundaries | Separate `megalodon-evaluate` command; pinned IANA context and deterministic synthetic corpus | Read-only, offline, in-memory evaluation. It does not use the service store, alter Stage 0 ingestion, or establish operational detection accuracy |
 | Replay authorized metadata, without live capture | `run --source jsonl`; audit database; optional local UI | Existing Linux core path. Windows evaluation uses synthetic fixtures only until native acceptance; arbitrary sensor logs are not this input contract |
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
@@ -133,7 +137,8 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
-| CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel build and installed-package smokes, on pushes to `main` and pull requests |
+| Reference and evaluation | Manifest-pinned, privacy-minimized IANA service/port and protocol context plus a bounded synthetic detector corpus; separate read-only CLI with no network, store, persistence, action, or subprocess path |
+| CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel builds, an extracted-sdist full test, and installed-package smokes, on pushes to `main` and pull requests |
 
 ## Requirements and programs used
 
@@ -373,6 +378,10 @@ last-success timestamp, and count baseline while marking the display stale.
 | `firewall-install` | Print the isolated nftables table plan; the retained `--apply` option explicitly refuses and executes nothing |
 | `block IP --reason TEXT` | Print one block plan; the retained `--apply` option explicitly refuses and executes nothing |
 | `python -m megalodon.offline ...` | Run the separate Linux-only private offline-analysis workflow |
+| `megalodon-evaluate reference verify` | Validate every declared bundled IANA shard, count, digest, and record before reporting the snapshot summary |
+| `megalodon-evaluate reference port TRANSPORT PORT` | Return bounded registration context for one validated service/port key |
+| `megalodon-evaluate reference protocol NUMBER` | Return bounded registration context for one validated IP protocol number |
+| `megalodon-evaluate corpus [--scenario ID]` | Validate the complete bundled synthetic corpus and run the fixed detector in memory, optionally reporting one scenario |
 
 The operational main CLI subcommands accept optional `--config PATH`; omitting
 it uses the complete safe built-in settings and works from an installed wheel.
@@ -380,7 +389,18 @@ The static
 `capabilities` and `hub-plan` commands do not read configuration.
 `run --max-events N` provides an operator stop limit from 1 through 10,000,000;
 zero retains the explicit no-limit mode. Use `python -m megalodon --help` and
-`python -m megalodon.offline --help` for the complete argument surface.
+`python -m megalodon.offline --help` for the complete operational argument
+surface, and `megalodon-evaluate --help` for the separate evaluation surface.
+
+The bundled reference snapshot contains 12,577 normalized IANA service/port
+records and 152 protocol-number records in deterministic data shards no larger
+than 76 KiB. Registrations are analyst context hints: they do not establish the
+service observed on a port, endorsement, safety, malicious intent, or a detector
+verdict. The separate corpus contains 6,492 metadata-only events across 12
+scenarios, uses only RFC 5737 IPv4 and RFC 3849 IPv6 documentation addresses,
+and is labeled `synthetic-only` and `uncalibrated`. Manifests, the complete
+declared shard set, counts, digests, and records are validated before lookup or
+detector execution. See [`docs/reference-data.md`](docs/reference-data.md).
 
 ## Event input
 
@@ -644,14 +664,22 @@ python -m megalodon hub-plan --platform linux
 python -m megalodon run --source sample --max-events 13
 python -m megalodon run --source sample --demo-threat --max-events 114
 python -m megalodon firewall-plan 8.8.8.8 --reason "CLI smoke"
+megalodon-evaluate reference verify
+megalodon-evaluate reference port tcp 443
+megalodon-evaluate reference protocol 6
+megalodon-evaluate corpus
 ```
 
-The smoke commands use synthetic data and a non-mutating firewall plan. They do
+The evaluation commands validate all bundled data before performing bounded
+lookups or an in-memory detector run. They do not fetch updates, use SQLite,
+persist output, invoke a response action, or start a subprocess. The smoke
+commands use synthetic data and a non-mutating firewall plan. They do
 not prove live-capture compatibility, installed-TShark behavior, firewall safety
-on a specific host, detection accuracy, independent review, or production
-readiness. Printing a Windows/other catalog on Linux is not execution on those
-platforms. Record the exact revision, OS/architecture, Python and dependency
-versions, selected extras, passed checks, and skips for every configuration claim.
+on a specific host, corpus representativeness, calibrated detection accuracy,
+independent review, or production readiness. Printing a Windows/other catalog
+on Linux is not execution on those platforms. Record the exact revision,
+OS/architecture, Python and dependency versions, selected extras, passed
+checks, and skips for every configuration claim.
 
 ## Project layout
 
@@ -664,6 +692,7 @@ docs/                        platform baseline, integration hub, automation desi
 examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI
 megalodon/offline/           isolated TShark/Zeek adapters and private reports
+megalodon/reference/         pinned offline IANA context and synthetic evaluation corpus
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls
 SPECIFICATION.md             implemented MVP contract and acceptance boundary
@@ -678,6 +707,11 @@ automatic retention job, production rollback orchestration, model execution,
 active scheduler, Suricata runtime importer, alert acknowledgement/resolution/
 escalation lifecycle, notification dispatcher, or continuous capture-health
 monitor on `main`.
+
+The bundled IANA snapshot is not runtime service discovery or a vulnerability
+feed, and it has no automatic update path. The synthetic corpus tests deterministic
+boundary behavior; it is not representative traffic, a benchmark against named
+products, an accuracy claim, or evidence that an alert is malicious.
 
 Before operational deployment, use representative authorized replay data to
 measure false positives; validate live capture and TShark separately; define
