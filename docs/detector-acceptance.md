@@ -134,12 +134,24 @@ make that configuration supported or recommend enabling it.
 
 Three further below-threshold cases produce no detection, action or plan. Three
 minimum-severity cases retain all detections but plan only the CRITICAL DNS
-case under the default minimum. Three synthetic SQLite stage failures propagate
-without a normal service return or successful action receipt. Their surviving
-(event, detection, action) row counts are (0,0,0), (1,0,0), and (1,1,0).
-These 57 cases distinguish stage-local rollback from whole-service atomicity:
-earlier committed stages can remain, and detector state is not rolled back.
-They do not prove disk-full, ACL, interruption or power-loss recovery; see
+case under the default minimum. Four synthetic SQLite stage failures propagate
+without a normal service return or successful action receipt. Every failing
+event/detection/action/link insertion leaves surviving row counts (0,0,0) and
+zero run counters. After the fault is removed, the identical event detects again,
+proving the failed bundle consumed neither cooldown nor source high-water state.
+These 58 cases exercise per-event service atomicity; they do not make the whole
+run one transaction or establish exactly-once replay.
+A separate refusal-logging case proves operator-visible error output is emitted
+only after the corresponding event, detection and action evidence commits.
+Six Counter-journal cases inject planner or SQLite failure after new-source,
+duplicate-expiry, and capacity mutations, then require exact deque/Counter
+restoration and a successful identical retry. Reentrant processing is refused
+while an outer preparation is unresolved, and a two-thread case proves the
+service lock carries one preparation through rollback before the next begins.
+An actual handled SIGTERM raised after `Detector.prepare()` returns proves the
+detector-owned pending handle closes the service handoff gap before persistence.
+They do not prove disk-full, native ACL, arbitrary interruption timing, or
+power-loss recovery; see
 [the storage failure policy](storage-failure-policy.md).
 
 Event time and audit time are distinct fixed UTC clocks. Every plan must contain
@@ -158,16 +170,18 @@ python -m compileall -q megalodon tests
 python -m pytest tests/test_service.py tests/test_service_acceptance.py
 ```
 
-Local focused execution passed 60 cases (57 new, three existing). Five isolated
-negative controls were detected: invoking block instead of plan caused 20
+Current integrated-tree focused execution passed 72 cases (68 acceptance cases
+and four service unit cases) with Python 3.12.14, SQLite 3.53.1, and supported
+pytest 8.4.2. Five earlier isolated negative controls were detected: invoking
+block instead of plan caused 20
 failures; skipping allowlist suppression 12; ignoring enabled policy 6; recording
 applied for a plan 13; omitting the detection audit 53. The block-entry guard
 stopped the first mutation before any operation. All experiments used disposable
 copies; no weakened source was committed. No new runtime defect is claimed.
-Local evidence used identity-checked partial sources, Python 3.13.5, SQLite
-3.46.1 and pytest 9.0.2 with plugin autoload disabled; pytest 9 is outside the
-unchanged supported constraint. Full supported-environment hosted results belong
-in the exact-head PR receipt, not in an inferred pass here.
+Those earlier mutation experiments used identity-checked partial sources,
+Python 3.13.5, SQLite 3.46.1 and pytest 9.0.2 with plugin autoload disabled;
+pytest 9 was outside the unchanged supported constraint. Full hosted results
+belong in the exact-head PR receipt, not in an inferred pass here.
 
 Remaining gates: designated human review, GitHub approval/control handling under
 #3, reordered-time semantics and representative provenance/privacy-reviewed
@@ -188,10 +202,13 @@ event expires or is evicted.
 Regression controls replace the deque with a variant that fails if Python asks
 to iterate it, exercise duplicate expiry across the inclusive window boundary,
 and assert exact queue/index agreement after capacity and source eviction. The
-existing below/at/above, cooldown, timestamp, multi-source, and configuration
-acceptance cases remain unchanged. This is a detector hot-path improvement, not
-a throughput service-level objective and not closure of #68's capture, storage,
-retention, notifier, or sustained-overload work.
+integrated atomic-ingestion tests additionally inject interruption at deque
+append/removal bookkeeping and Counter increment/decrement boundaries, restore
+duplicate/time/cap mutations after planner or storage failure, and cover failed
+LRU changes. The existing below/at/above, cooldown, timestamp, multi-source, and
+configuration acceptance cases remain unchanged. This is a detector hot-path
+improvement, not a throughput service-level objective and not closure of #68's
+capture, storage, retention, notifier, or sustained-overload work.
 
 One local, single-process diagnostic on 2026-09-10 used Python 3.12.14 on
 Linux x86_64. It preconstructed fixed-time typed TCP metadata, disabled rule
@@ -199,15 +216,17 @@ emission by setting the threshold above the workload, retained every event, and
 reported the median of three detector-only runs. No sockets, files, database,
 capture, action adapter, or payloads were involved.
 
-| Retained events | `origin/main` median | Incremental-index median | Observed ratio |
-| ---: | ---: | ---: | ---: |
-| 4,096 | 0.300 s | 0.0129 s | 23x |
-| 8,192 | 1.523 s | 0.0269 s | 57x |
-| 16,384 | 5.786 s | 0.0621 s | 93x |
+| Retained events | Baseline `a517a4b` | Counter-only `09c7fca` | Integrated journal | Baseline / integrated |
+| ---: | ---: | ---: | ---: | ---: |
+| 4,096 | 0.451 s | 0.0153 s | 0.0274 s | 16x |
+| 8,192 | 1.671 s | 0.0318 s | 0.0697 s | 24x |
+| 16,384 | 5.605 s | 0.0667 s | 0.1152 s | 49x |
 
-The baseline was the tree at merge commit
-`a517a4bbb838263d7b8e882e44b67450fdabfa9f`. These timings are comparative
-diagnostic evidence from one shared host, not portable capacity claims. Exact
-results depend on interpreter, hardware, load, configuration, protocol mix, and
-other service work. The source and acceptance tests, rather than those timings,
-define the maintained behavior.
+The baseline was `a517a4bbb838263d7b8e882e44b67450fdabfa9f`; the
+Counter-only comparison was `09c7fcad682b9b1ec22771ed095f429ada548f83`;
+the third column measures this integrated Counter-plus-journal implementation.
+Earlier 23x/57x/93x observations measured the pre-journal Counter slice and are
+not evidence for this tree. These timings are comparative diagnostics from one
+shared host, not portable capacity claims. Exact results depend on interpreter,
+hardware, load, configuration, protocol mix, and other service work. The source
+and acceptance tests, rather than those timings, define maintained behavior.

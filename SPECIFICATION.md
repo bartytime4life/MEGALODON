@@ -84,6 +84,11 @@ capture-buffer sizing or loss-free operation under production load.
 12. **Event time fails closed.** Core records are nondecreasing per normalized
     source and no more than 60 seconds ahead of the detector's aware UTC clock.
     Rejected chronology does not mutate detector state or enter the event ledger.
+13. **One event decision is atomic.** An accepted event, its detections, one
+    policy-plan action per detection, provenance links, and run counters commit
+    together. Detector windows and cooldowns advance only after that commit.
+    An uncertain commit poisons the writer and requires explicit reconciliation;
+    it is never retried or reported as success.
 
 ## 3. Data contracts
 
@@ -123,6 +128,25 @@ Statuses include `not_attempted`, `suppressed`, `planned`, `applied`, and
 decisions. The `applied` value is reserved for schema compatibility and a
 future separately reviewed implementation. A refused evaluation-candidate apply
 request must not create an `applied` receipt.
+
+### IngestionRun receipt
+
+Version-3 run receipts contain a closed source, UTC start/finish boundaries,
+processed/detection/action counters, a fixed optional failure code, and one
+explicit terminal reason. The valid terminal pairs are
+`completed/source_exhausted`, `incomplete/event_limit_reached`,
+`failed/interrupted`, `failed/failed`, and
+`reconciliation_required/reconciliation_required`. A live receipt is
+`running` with no terminal reason.
+
+Run counters advance in the same transaction as their linked rows and are
+re-derived before finalization. A mismatch becomes reconciliation-required.
+An exact v2 receipt migrated to v3 retains `receipt_version = 2`, its old values,
+and a null reason because legacy `completed` did not distinguish exhaustion from
+an event limit. A running receipt blocks a concurrent/new run. After all writers
+are stopped, bounded readback plus a run-ID/started-at-pinned operation may mark
+that receipt reconciliation-required without deleting evidence or authorizing
+replay. These are per-event guarantees, not whole-run or exactly-once delivery.
 
 ## 4. Fixed MVP rules
 
@@ -339,6 +363,14 @@ The MVP is acceptable for local experimentation when:
   snapshot and recent rows select only the five public fields;
 - offline summaries reject incomplete, public, linked, mismatched, or tampered
   report sets and remain unavailable on remote binds;
+- each accepted service event either commits its full event/detection/action/link/
+  counter bundle or leaves none of that bundle, and a failed write leaves detector
+  state unchanged;
+- run receipts distinguish natural exhaustion, operator limit, handled
+  interruption, bounded failure, and reconciliation-required state;
+- v1/v2 migration requires a verified non-overwritten `.pre-v3.bak`, while
+  orphan reconciliation requires exact target freshness and never rewrites valid
+  terminal history;
 - sample replay produces a database and no firewall mutation;
 - `--demo-threat` creates detection and action records;
 - no code path uses `shell=True`.

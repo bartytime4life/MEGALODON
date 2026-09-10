@@ -22,8 +22,8 @@ from .validation import (
 )
 
 
-SCHEMA_VERSION = 2
-MIGRATION_BACKUP_SUFFIX = ".pre-v2.bak"
+SCHEMA_VERSION = 3
+MIGRATION_BACKUP_SUFFIX = ".pre-v3.bak"
 MINIMUM_READ_ONLY_WAL_SQLITE = (3, 22, 0)
 
 SCHEMA_V1_STATEMENTS = (
@@ -89,6 +89,74 @@ SCHEMA_V2_STATEMENTS = (
 )""",
 )
 
+SCHEMA_V3_STATEMENTS = (
+    "CREATE INDEX idx_detections_event_id ON detections(event_id)",
+    """CREATE TABLE ingestion_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL,
+    processed_count INTEGER NOT NULL,
+    detection_count INTEGER NOT NULL,
+    action_count INTEGER NOT NULL DEFAULT 0 CHECK(action_count >= 0),
+    receipt_version INTEGER NOT NULL DEFAULT 3 CHECK(receipt_version IN (2, 3)),
+    failure_code TEXT,
+    termination_reason TEXT CHECK(
+        termination_reason IS NULL OR termination_reason IN (
+            'source_exhausted', 'event_limit_reached', 'interrupted',
+            'failed', 'reconciliation_required'
+        )
+    ),
+    CHECK(source IN ('sample', 'jsonl', 'scapy')),
+    CHECK(status IN (
+        'running', 'completed', 'incomplete', 'failed',
+        'reconciliation_required'
+    )),
+    CHECK(processed_count >= 0),
+    CHECK(detection_count >= 0),
+    CHECK(
+        failure_code IS NULL OR failure_code IN (
+            'CAPTURE_ERROR', 'INTERRUPTED', 'IO_ERROR', 'STORAGE_ERROR',
+            'VALIDATION_ERROR'
+        )
+    ),
+    CHECK(
+        (
+            receipt_version = 2 AND termination_reason IS NULL AND
+            (
+                (status = 'running' AND finished_at IS NULL AND failure_code IS NULL) OR
+                (status = 'completed' AND finished_at IS NOT NULL AND failure_code IS NULL) OR
+                (status = 'failed' AND finished_at IS NOT NULL AND failure_code IS NOT NULL)
+            )
+        ) OR
+        (
+            receipt_version = 3 AND
+            (
+                (status = 'running' AND finished_at IS NULL AND failure_code IS NULL AND termination_reason IS NULL) OR
+                (status = 'completed' AND finished_at IS NOT NULL AND failure_code IS NULL AND termination_reason IS 'source_exhausted') OR
+                (status = 'incomplete' AND finished_at IS NOT NULL AND failure_code IS NULL AND termination_reason IS 'event_limit_reached') OR
+                (status = 'failed' AND finished_at IS NOT NULL AND failure_code IS 'INTERRUPTED' AND termination_reason IS 'interrupted') OR
+                (status = 'failed' AND finished_at IS NOT NULL AND failure_code IS NOT NULL AND failure_code IN ('CAPTURE_ERROR', 'IO_ERROR', 'STORAGE_ERROR', 'VALIDATION_ERROR') AND termination_reason IS 'failed') OR
+                (status = 'reconciliation_required' AND finished_at IS NULL AND failure_code IS NULL AND termination_reason IS 'reconciliation_required')
+            )
+        )
+    )
+)""",
+    "CREATE INDEX idx_ingestion_runs_started_at ON ingestion_runs(started_at)",
+    "CREATE INDEX idx_ingestion_runs_status ON ingestion_runs(status)",
+    """CREATE TABLE ingestion_run_events (
+    run_id INTEGER NOT NULL REFERENCES ingestion_runs(id),
+    event_id INTEGER NOT NULL UNIQUE REFERENCES events(id) ON DELETE CASCADE,
+    PRIMARY KEY (run_id, event_id)
+)""",
+    """CREATE TABLE detection_actions (
+    detection_id INTEGER NOT NULL UNIQUE REFERENCES detections(id) ON DELETE CASCADE,
+    action_id INTEGER NOT NULL UNIQUE REFERENCES actions(id) ON DELETE CASCADE,
+    PRIMARY KEY (detection_id, action_id)
+)""",
+)
+
 _TABLE_COLUMNS_V1 = {
     "events": (
         ("id", "INTEGER", 0, 1),
@@ -147,6 +215,31 @@ _TABLE_COLUMNS_V2 = {
     ),
 }
 
+_TABLE_COLUMNS_V3 = {
+    **_TABLE_COLUMNS_V1,
+    "ingestion_runs": (
+        ("id", "INTEGER", 0, 1),
+        ("started_at", "TEXT", 1, 0),
+        ("finished_at", "TEXT", 0, 0),
+        ("source", "TEXT", 1, 0),
+        ("status", "TEXT", 1, 0),
+        ("processed_count", "INTEGER", 1, 0),
+        ("detection_count", "INTEGER", 1, 0),
+        ("action_count", "INTEGER", 1, 0),
+        ("receipt_version", "INTEGER", 1, 0),
+        ("failure_code", "TEXT", 0, 0),
+        ("termination_reason", "TEXT", 0, 0),
+    ),
+    "ingestion_run_events": (
+        ("run_id", "INTEGER", 1, 1),
+        ("event_id", "INTEGER", 1, 2),
+    ),
+    "detection_actions": (
+        ("detection_id", "INTEGER", 1, 1),
+        ("action_id", "INTEGER", 1, 2),
+    ),
+}
+
 _INDEX_COLUMNS_V1 = {
     "idx_events_observed_at": ("events", ("observed_at",)),
     "idx_events_src_ip": ("events", ("src_ip",)),
@@ -159,6 +252,13 @@ _INDEX_COLUMNS_V2 = {
     "idx_ingestion_runs_started_at": ("ingestion_runs", ("started_at",)),
 }
 
+_INDEX_COLUMNS_V3 = {
+    **_INDEX_COLUMNS_V1,
+    "idx_detections_event_id": ("detections", ("event_id",)),
+    "idx_ingestion_runs_started_at": ("ingestion_runs", ("started_at",)),
+    "idx_ingestion_runs_status": ("ingestion_runs", ("status",)),
+}
+
 _UNIQUE_INDEXES_V1 = {table: set() for table in _TABLE_COLUMNS_V1}
 
 _UNIQUE_INDEXES_V2 = {
@@ -167,6 +267,20 @@ _UNIQUE_INDEXES_V2 = {
     "ingestion_run_events": {
         ("pk", ("run_id", "event_id")),
         ("u", ("event_id",)),
+    },
+}
+
+_UNIQUE_INDEXES_V3 = {
+    **_UNIQUE_INDEXES_V1,
+    "ingestion_runs": set(),
+    "ingestion_run_events": {
+        ("pk", ("run_id", "event_id")),
+        ("u", ("event_id",)),
+    },
+    "detection_actions": {
+        ("pk", ("detection_id", "action_id")),
+        ("u", ("detection_id",)),
+        ("u", ("action_id",)),
     },
 }
 
@@ -185,10 +299,34 @@ _FOREIGN_KEYS_V2 = {
     },
 }
 
+_FOREIGN_KEYS_V3 = {
+    **_FOREIGN_KEYS_V1,
+    "ingestion_runs": set(),
+    "ingestion_run_events": {
+        ("ingestion_runs", "run_id", "id", "NO ACTION"),
+        ("events", "event_id", "id", "CASCADE"),
+    },
+    "detection_actions": {
+        ("detections", "detection_id", "id", "CASCADE"),
+        ("actions", "action_id", "id", "CASCADE"),
+    },
+}
+
 INGESTION_SOURCES = frozenset({"sample", "jsonl", "scapy"})
 INGESTION_FAILURE_CODES = frozenset(
     {"CAPTURE_ERROR", "INTERRUPTED", "IO_ERROR", "STORAGE_ERROR", "VALIDATION_ERROR"}
 )
+INGESTION_TERMINATION_REASONS = frozenset(
+    {
+        "source_exhausted",
+        "event_limit_reached",
+        "interrupted",
+        "failed",
+        "reconciliation_required",
+    }
+)
+MAX_DETECTIONS_PER_EVENT = 3
+RECONCILIATION_REQUIRED = "INGESTION_RUN:RECONCILIATION_REQUIRED"
 
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_DATABASE_MODE = 0o600
@@ -593,8 +731,36 @@ def _validate_migration_directory(path: Path) -> None:
     _validate_private_directory_stat(parent_stat, "STORAGE_MIGRATION")
 
 
+def _schema_contract(version: int):
+    if version in (0, 1):
+        return (
+            _TABLE_COLUMNS_V1,
+            _INDEX_COLUMNS_V1,
+            _FOREIGN_KEYS_V1,
+            _UNIQUE_INDEXES_V1,
+            SCHEMA_V1_STATEMENTS,
+        )
+    if version == 2:
+        return (
+            _TABLE_COLUMNS_V2,
+            _INDEX_COLUMNS_V2,
+            _FOREIGN_KEYS_V2,
+            _UNIQUE_INDEXES_V2,
+            (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+        )
+    if version == SCHEMA_VERSION:
+        return (
+            _TABLE_COLUMNS_V3,
+            _INDEX_COLUMNS_V3,
+            _FOREIGN_KEYS_V3,
+            _UNIQUE_INDEXES_V3,
+            (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS),
+        )
+    raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
+
+
 def migrate_database(path: str | Path) -> dict[str, object]:
-    """Explicitly migrate an exact v1 database after a verified local backup."""
+    """Explicitly migrate an exact v1/v2 database after a verified backup."""
 
     source_path = _absolute_database_path(path, "STORAGE_MIGRATION")
     if source_path.is_symlink():
@@ -667,14 +833,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
         source.execute("PRAGMA foreign_keys=ON")
         version = int(source.execute("PRAGMA user_version").fetchone()[0])
         if version == SCHEMA_VERSION:
-            _validate_schema(
-                source,
-                _TABLE_COLUMNS_V2,
-                _INDEX_COLUMNS_V2,
-                _FOREIGN_KEYS_V2,
-                _UNIQUE_INDEXES_V2,
-                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
-            )
+            _validate_schema(source, *_schema_contract(version))
             return {
                 "status": "already_current",
                 "from_version": SCHEMA_VERSION,
@@ -683,16 +842,9 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             }
         if version > SCHEMA_VERSION:
             raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
-        _validate_schema(
-            source,
-            _TABLE_COLUMNS_V1,
-            _INDEX_COLUMNS_V1,
-            _FOREIGN_KEYS_V1,
-            _UNIQUE_INDEXES_V1,
-            SCHEMA_V1_STATEMENTS,
-        )
+        _validate_schema(source, *_schema_contract(version))
         if os.path.lexists(backup_path):
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_EXISTS")
 
@@ -711,14 +863,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_INVALID")
         if int(backup.execute("PRAGMA user_version").fetchone()[0]) != version:
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_INVALID")
-        _validate_schema(
-            backup,
-            _TABLE_COLUMNS_V1,
-            _INDEX_COLUMNS_V1,
-            _FOREIGN_KEYS_V1,
-            _UNIQUE_INDEXES_V1,
-            SCHEMA_V1_STATEMENTS,
-        )
+        _validate_schema(backup, *_schema_contract(version))
         if not _path_matches_descriptor(backup_path, backup_descriptor):
             raise StorageSchemaError("STORAGE_MIGRATION:BACKUP_CHANGED")
         backup.close()
@@ -744,28 +889,65 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             source.rollback()
             raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED")
         try:
-            _validate_schema(
-                source,
-                _TABLE_COLUMNS_V1,
-                _INDEX_COLUMNS_V1,
-                _FOREIGN_KEYS_V1,
-                _UNIQUE_INDEXES_V1,
-                SCHEMA_V1_STATEMENTS,
-            )
+            _validate_schema(source, *_schema_contract(version))
         except StorageSchemaError as exc:
             source.rollback()
             raise StorageSchemaError("STORAGE_MIGRATION:SOURCE_CHANGED") from exc
 
         migration_started = True
-        for statement in SCHEMA_V2_STATEMENTS:
+        if version == 2:
+            source.execute(
+                "CREATE TEMP TABLE migration_ingestion_runs AS "
+                "SELECT * FROM ingestion_runs"
+            )
+            source.execute(
+                "CREATE TEMP TABLE migration_ingestion_run_events AS "
+                "SELECT * FROM ingestion_run_events"
+            )
+            source.execute("DROP TABLE ingestion_run_events")
+            source.execute("DROP TABLE ingestion_runs")
+        for statement in SCHEMA_V3_STATEMENTS:
             source.execute(statement)
+        if version == 2:
+            source.execute(
+                """
+                INSERT INTO ingestion_runs (
+                    id, started_at, finished_at, source, status,
+                    processed_count, detection_count, action_count,
+                    receipt_version, failure_code, termination_reason
+                )
+                SELECT
+                    id,
+                    started_at,
+                    finished_at,
+                    source,
+                    status,
+                    processed_count,
+                    detection_count,
+                    0,
+                    2,
+                    failure_code,
+                    NULL
+                FROM migration_ingestion_runs
+                """
+            )
+            source.execute(
+                """
+                INSERT INTO ingestion_run_events (run_id, event_id)
+                SELECT run_id, event_id FROM migration_ingestion_run_events
+                """
+            )
+            source.execute("DROP TABLE migration_ingestion_run_events")
+            source.execute("DROP TABLE migration_ingestion_runs")
+        if source.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise StorageSchemaError("STORAGE_MIGRATION:INCOMPATIBLE_DATA")
         _validate_schema(
             source,
-            _TABLE_COLUMNS_V2,
-            _INDEX_COLUMNS_V2,
-            _FOREIGN_KEYS_V2,
-            _UNIQUE_INDEXES_V2,
-            (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+            _TABLE_COLUMNS_V3,
+            _INDEX_COLUMNS_V3,
+            _FOREIGN_KEYS_V3,
+            _UNIQUE_INDEXES_V3,
+            (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS),
         )
         source.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         source.commit()
@@ -808,23 +990,24 @@ def migrate_database(path: str | Path) -> dict[str, object]:
 
 
 class Store:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, *, create: bool = True):
         self.path = _absolute_database_path(path, "STORAGE_PATH")
         self._lock = RLock()
         self._closed = False
+        self._write_poisoned = False
         self._directory_descriptor: int | None = None
         self._database_descriptor: int | None = None
         database_created = False
         connection: sqlite3.Connection | None = None
         try:
             self._directory_descriptor = _open_private_directory(
-                self.path.parent, create=True, prefix="STORAGE_PATH"
+                self.path.parent, create=create, prefix="STORAGE_PATH"
             )
             self._database_descriptor, database_created = _open_private_database(
                 self.path,
                 self._directory_descriptor,
                 writable=True,
-                create=True,
+                create=create,
                 prefix="STORAGE_PATH",
             )
             sqlite_path = _anchored_database_path(
@@ -920,24 +1103,17 @@ class Store:
             version = int(self.connection.execute("PRAGMA user_version").fetchone()[0])
             if version > SCHEMA_VERSION:
                 raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
-            if version not in (0, 1, SCHEMA_VERSION):
+            if version not in (0, 1, 2, SCHEMA_VERSION):
                 raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
 
             present = _schema_objects(self.connection)
             if version == 0 and not present:
                 self._create_schema()
                 return
-            if version in (0, 1):
+            if version in (0, 1, 2):
                 self.connection.execute("BEGIN IMMEDIATE")
                 try:
-                    _validate_schema(
-                        self.connection,
-                        _TABLE_COLUMNS_V1,
-                        _INDEX_COLUMNS_V1,
-                        _FOREIGN_KEYS_V1,
-                        _UNIQUE_INDEXES_V1,
-                        SCHEMA_V1_STATEMENTS,
-                    )
+                    _validate_schema(self.connection, *_schema_contract(version))
                 finally:
                     self.connection.rollback()
                 raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_REQUIRED")
@@ -945,11 +1121,11 @@ class Store:
             try:
                 _validate_schema(
                     self.connection,
-                    _TABLE_COLUMNS_V2,
-                    _INDEX_COLUMNS_V2,
-                    _FOREIGN_KEYS_V2,
-                    _UNIQUE_INDEXES_V2,
-                    (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+                    _TABLE_COLUMNS_V3,
+                    _INDEX_COLUMNS_V3,
+                    _FOREIGN_KEYS_V3,
+                    _UNIQUE_INDEXES_V3,
+                    (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS),
                 )
                 self.connection.commit()
             except Exception:
@@ -965,15 +1141,15 @@ class Store:
     def _create_schema(self) -> None:
         self.connection.execute("BEGIN IMMEDIATE")
         try:
-            for statement in (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS):
+            for statement in (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS):
                 self.connection.execute(statement)
             _validate_schema(
                 self.connection,
-                _TABLE_COLUMNS_V2,
-                _INDEX_COLUMNS_V2,
-                _FOREIGN_KEYS_V2,
-                _UNIQUE_INDEXES_V2,
-                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+                _TABLE_COLUMNS_V3,
+                _INDEX_COLUMNS_V3,
+                _FOREIGN_KEYS_V3,
+                _UNIQUE_INDEXES_V3,
+                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS),
             )
             self.connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.connection.commit()
@@ -1019,95 +1195,320 @@ class Store:
         except ValueError as exc:
             raise IngestionRunError("INGESTION_RUN:INVALID_TIMESTAMP") from exc
 
+    def _assert_write_trusted(self) -> None:
+        if self._write_poisoned:
+            raise IngestionRunError(RECONCILIATION_REQUIRED)
+
+    def _connection_commit(self) -> None:
+        self.connection.commit()
+
+    def _connection_rollback(self) -> None:
+        self.connection.rollback()
+
+    def _rollback_run_write(self) -> None:
+        try:
+            self._connection_rollback()
+        except BaseException as exc:
+            self._write_poisoned = True
+            raise IngestionRunError(RECONCILIATION_REQUIRED) from exc
+
+    def _commit_run_write(self) -> None:
+        try:
+            self._connection_commit()
+        except BaseException as exc:
+            self._write_poisoned = True
+            try:
+                self.connection.rollback()
+            except sqlite3.Error:
+                pass
+            raise IngestionRunError(RECONCILIATION_REQUIRED) from exc
+
+    def _actual_run_counts(self, run_id: int) -> tuple[int, int, int]:
+        processed = int(
+            self.connection.execute(
+                "SELECT COUNT(*) FROM ingestion_run_events WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+        )
+        detections = int(
+            self.connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM detections AS detection
+                JOIN ingestion_run_events AS run_event
+                  ON run_event.event_id = detection.event_id
+                WHERE run_event.run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()[0]
+        )
+        actions = int(
+            self.connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM detection_actions AS link
+                JOIN detections AS detection ON detection.id = link.detection_id
+                JOIN ingestion_run_events AS run_event
+                  ON run_event.event_id = detection.event_id
+                WHERE run_event.run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()[0]
+        )
+        return processed, detections, actions
+
     def start_ingestion_run(
         self, source: str, *, started_at: datetime | None = None
     ) -> int:
         if not isinstance(source, str) or source not in INGESTION_SOURCES:
             raise IngestionRunError("INGESTION_RUN:INVALID_SOURCE")
         started = self._run_timestamp(started_at)
-        with self._lock, self.connection:
-            cursor = self.connection.execute(
-                """
-                INSERT INTO ingestion_runs (
-                    started_at, finished_at, source, status,
-                    processed_count, detection_count, failure_code
-                ) VALUES (?, NULL, ?, 'running', 0, 0, NULL)
-                """,
-                (started.isoformat(), source),
-            )
+        with self._lock:
+            self._assert_write_trusted()
+            try:
+                self.connection.execute("BEGIN IMMEDIATE")
+                if self.connection.execute(
+                    "SELECT 1 FROM ingestion_runs WHERE status = 'running' LIMIT 1"
+                ).fetchone() is not None:
+                    raise IngestionRunError(RECONCILIATION_REQUIRED)
+                cursor = self.connection.execute(
+                    """
+                    INSERT INTO ingestion_runs (
+                        started_at, finished_at, source, status,
+                        processed_count, detection_count, action_count,
+                        receipt_version, failure_code, termination_reason
+                    ) VALUES (?, NULL, ?, 'running', 0, 0, 0, 3, NULL, NULL)
+                    """,
+                    (started.isoformat(), source),
+                )
+            except BaseException:
+                self._rollback_run_write()
+                raise
+            self._commit_run_write()
             return int(cursor.lastrowid)
 
     def finish_ingestion_run(
         self,
         run_id: int,
-        status: str,
+        termination_reason: str,
         *,
         failure_code: str | None = None,
         finished_at: datetime | None = None,
     ) -> dict[str, object]:
         safe_run_id = self._run_id(run_id)
-        if not isinstance(status, str) or status not in {"completed", "failed"}:
-            raise IngestionRunError("INGESTION_RUN:INVALID_STATUS")
-        if status == "completed" and failure_code is not None:
+        if (
+            not isinstance(termination_reason, str)
+            or termination_reason
+            not in INGESTION_TERMINATION_REASONS - {"reconciliation_required"}
+        ):
+            raise IngestionRunError("INGESTION_RUN:INVALID_TERMINATION")
+        if termination_reason in {"source_exhausted", "event_limit_reached"} and failure_code is not None:
             raise IngestionRunError("INGESTION_RUN:INVALID_FAILURE")
-        if status == "failed" and (
+        if termination_reason == "interrupted":
+            if failure_code not in (None, "INTERRUPTED"):
+                raise IngestionRunError("INGESTION_RUN:INVALID_FAILURE")
+            failure_code = "INTERRUPTED"
+        if termination_reason == "failed" and (
             not isinstance(failure_code, str)
-            or failure_code not in INGESTION_FAILURE_CODES
+            or failure_code not in INGESTION_FAILURE_CODES - {"INTERRUPTED"}
         ):
             raise IngestionRunError("INGESTION_RUN:INVALID_FAILURE")
+        status = {
+            "source_exhausted": "completed",
+            "event_limit_reached": "incomplete",
+            "interrupted": "failed",
+            "failed": "failed",
+        }[termination_reason]
         finished = self._run_timestamp(finished_at)
 
         with self._lock:
-            self.connection.execute("BEGIN IMMEDIATE")
+            self._assert_write_trusted()
             try:
+                self.connection.execute("BEGIN IMMEDIATE")
                 row = self.connection.execute(
-                    "SELECT started_at, source, status, detection_count "
+                    "SELECT started_at, source, status, processed_count, "
+                    "detection_count, action_count, receipt_version "
                     "FROM ingestion_runs WHERE id = ?",
                     (safe_run_id,),
                 ).fetchone()
-                if row is None or row["status"] != "running":
+                if (
+                    row is None
+                    or row["status"] != "running"
+                    or int(row["receipt_version"]) != 3
+                ):
                     raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
                 if finished < parse_timestamp(row["started_at"]):
                     raise IngestionRunError("INGESTION_RUN:INVALID_TIMESTAMP")
-                processed_count = int(
-                    self.connection.execute(
-                        "SELECT COUNT(*) FROM ingestion_run_events WHERE run_id = ?",
-                        (safe_run_id,),
-                    ).fetchone()[0]
+                processed_count, detection_count, action_count = (
+                    self._actual_run_counts(safe_run_id)
                 )
-                detection_count = int(row["detection_count"])
+                stored_counts = (
+                    int(row["processed_count"]),
+                    int(row["detection_count"]),
+                    int(row["action_count"]),
+                )
+                if (
+                    stored_counts != (processed_count, detection_count, action_count)
+                    or action_count != detection_count
+                ):
+                    self.connection.execute(
+                        """
+                        UPDATE ingestion_runs
+                        SET status = 'reconciliation_required',
+                            processed_count = ?, detection_count = ?, action_count = ?,
+                            failure_code = NULL,
+                            termination_reason = 'reconciliation_required'
+                        WHERE id = ? AND status = 'running' AND receipt_version = 3
+                        """,
+                        (
+                            processed_count,
+                            detection_count,
+                            action_count,
+                            safe_run_id,
+                        ),
+                    )
+                    self._commit_run_write()
+                    return {
+                        "run_id": safe_run_id,
+                        "source": str(row["source"]),
+                        "status": "reconciliation_required",
+                        "termination_reason": "reconciliation_required",
+                        "processed": processed_count,
+                        "detections": detection_count,
+                        "actions": action_count,
+                        "failure_code": None,
+                    }
                 cursor = self.connection.execute(
                     """
                     UPDATE ingestion_runs
-                    SET finished_at = ?, status = ?, processed_count = ?,
-                        detection_count = ?, failure_code = ?
-                    WHERE id = ? AND status = 'running'
+                    SET finished_at = ?, status = ?, failure_code = ?,
+                        termination_reason = ?
+                    WHERE id = ? AND status = 'running' AND receipt_version = 3
                     """,
                     (
                         finished.isoformat(),
                         status,
-                        processed_count,
-                        detection_count,
                         failure_code,
+                        termination_reason,
                         safe_run_id,
                     ),
                 )
                 if cursor.rowcount != 1:
                     raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
-                self.connection.commit()
-            except Exception:
-                self.connection.rollback()
+            except BaseException:
+                self._rollback_run_write()
                 raise
+            self._commit_run_write()
         return {
             "run_id": safe_run_id,
             "source": str(row["source"]),
             "status": status,
+            "termination_reason": termination_reason,
             "processed": processed_count,
             "detections": detection_count,
+            "actions": action_count,
             "failure_code": failure_code,
         }
 
-    def record_event(self, event: PacketEvent, *, run_id: int | None = None) -> int:
+    def pending_ingestion_reconciliation(
+        self, limit: int = 100
+    ) -> list[dict[str, object]]:
+        try:
+            safe_limit = parse_nonnegative_int(limit, "limit", maximum=100)
+        except ValueError as exc:
+            raise IngestionRunError("INGESTION_RUN:INVALID_LIMIT") from exc
+        if safe_limit == 0:
+            raise IngestionRunError("INGESTION_RUN:INVALID_LIMIT")
+        with self._lock:
+            rows = self.connection.execute(
+                """
+                SELECT id, started_at, source, status, processed_count,
+                       detection_count, action_count, receipt_version,
+                       termination_reason
+                FROM ingestion_runs
+                WHERE status IN ('running', 'reconciliation_required')
+                ORDER BY status DESC, id DESC LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        return [
+            {
+                "run_id": int(row["id"]),
+                "started_at": str(row["started_at"]),
+                "source": str(row["source"]),
+                "status": str(row["status"]),
+                "processed": int(row["processed_count"]),
+                "detections": int(row["detection_count"]),
+                "actions": int(row["action_count"]),
+                "receipt_version": int(row["receipt_version"]),
+                "termination_reason": row["termination_reason"],
+            }
+            for row in rows
+        ]
+
+    def mark_ingestion_run_reconciliation_required(
+        self, run_id: int, *, expected_started_at: datetime
+    ) -> dict[str, object]:
+        safe_run_id = self._run_id(run_id)
+        expected = self._run_timestamp(expected_started_at).isoformat()
+        with self._lock:
+            self._assert_write_trusted()
+            try:
+                self.connection.execute("BEGIN IMMEDIATE")
+                row = self.connection.execute(
+                    """
+                    SELECT started_at, source, status, processed_count,
+                           detection_count, action_count, receipt_version,
+                           termination_reason
+                    FROM ingestion_runs WHERE id = ?
+                    """,
+                    (safe_run_id,),
+                ).fetchone()
+                if row is None or str(row["started_at"]) != expected:
+                    raise IngestionRunError("INGESTION_RUN:STALE_RECONCILIATION")
+                if row["status"] == "reconciliation_required":
+                    self._rollback_run_write()
+                    return {
+                        "run_id": safe_run_id,
+                        "source": str(row["source"]),
+                        "status": "reconciliation_required",
+                        "termination_reason": "reconciliation_required",
+                        "processed": int(row["processed_count"]),
+                        "detections": int(row["detection_count"]),
+                        "actions": int(row["action_count"]),
+                    }
+                if row["status"] != "running":
+                    raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+                processed, detections, actions = self._actual_run_counts(safe_run_id)
+                cursor = self.connection.execute(
+                    """
+                    UPDATE ingestion_runs
+                    SET status = 'reconciliation_required',
+                        processed_count = ?, detection_count = ?, action_count = ?,
+                        receipt_version = 3, failure_code = NULL,
+                        termination_reason = 'reconciliation_required'
+                    WHERE id = ? AND started_at = ? AND status = 'running'
+                    """,
+                    (processed, detections, actions, safe_run_id, expected),
+                )
+                if cursor.rowcount != 1:
+                    raise IngestionRunError("INGESTION_RUN:STALE_RECONCILIATION")
+            except BaseException:
+                self._rollback_run_write()
+                raise
+            self._commit_run_write()
+        return {
+            "run_id": safe_run_id,
+            "source": str(row["source"]),
+            "status": "reconciliation_required",
+            "termination_reason": "reconciliation_required",
+            "processed": processed,
+            "detections": detections,
+            "actions": actions,
+        }
+
+    @staticmethod
+    def _event_values(event: PacketEvent) -> tuple[object, ...]:
         byte_count = parse_nonnegative_int(
             event.byte_count, "byte_count", maximum=SQLITE_INTEGER_MAX
         )
@@ -1121,49 +1522,188 @@ class Store:
             )
         )
         metadata = validate_packet_metadata(event.metadata)
+        return (
+            event.observed_at.isoformat(),
+            event.src_ip,
+            event.dst_ip,
+            event.protocol,
+            event.src_port,
+            event.dst_port,
+            json.dumps(sorted(event.tcp_flags)),
+            dns_query_length,
+            byte_count,
+            event.interface,
+            json.dumps(metadata, sort_keys=True, allow_nan=False),
+        )
+
+    @staticmethod
+    def _detection_values(detection: DetectionResult) -> tuple[object, ...]:
+        evidence = validate_metadata(detection.evidence)
+        return (
+            detection.detected_at.isoformat(),
+            detection.rule_id,
+            detection.severity,
+            detection.src_ip,
+            detection.dst_ip,
+            detection.message,
+            json.dumps(evidence, sort_keys=True, allow_nan=False),
+            detection.recommendation,
+            detection.suppressed_reason,
+        )
+
+    @staticmethod
+    def _action_values(action: ActionRecord) -> tuple[object, ...]:
+        details = validate_metadata(action.details)
+        return (
+            action.created_at.isoformat(),
+            action.action,
+            action.target,
+            action.status,
+            action.reason,
+            action.expires_at.isoformat() if action.expires_at else None,
+            json.dumps(details, sort_keys=True, allow_nan=False),
+        )
+
+    def _insert_event(self, values: tuple[object, ...]) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO events (
+                observed_at, src_ip, dst_ip, protocol, src_port, dst_port,
+                tcp_flags, dns_query_length, byte_count, interface, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            values,
+        )
+        return int(cursor.lastrowid)
+
+    def record_event_bundle(
+        self,
+        event: PacketEvent,
+        detections: list[DetectionResult] | tuple[DetectionResult, ...],
+        actions: list[ActionRecord] | tuple[ActionRecord, ...],
+        *,
+        run_id: int | None = None,
+    ) -> int:
+        """Commit one event and its complete Stage 0 decision ledger atomically."""
+
         safe_run_id = None if run_id is None else self._run_id(run_id)
-        with self._lock, self.connection:
-            cursor = self.connection.execute(
-                """
-                INSERT INTO events (
-                    observed_at, src_ip, dst_ip, protocol, src_port, dst_port,
-                    tcp_flags, dns_query_length, byte_count, interface, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event.observed_at.isoformat(),
-                    event.src_ip,
-                    event.dst_ip,
-                    event.protocol,
-                    event.src_port,
-                    event.dst_port,
-                    json.dumps(sorted(event.tcp_flags)),
-                    dns_query_length,
-                    byte_count,
-                    event.interface,
-                    json.dumps(metadata, sort_keys=True, allow_nan=False),
-                ),
-            )
-            event_id = int(cursor.lastrowid)
-            if safe_run_id is not None:
-                association = self.connection.execute(
-                    """
-                    INSERT INTO ingestion_run_events (run_id, event_id)
-                    SELECT ?, ?
-                    WHERE EXISTS (
-                        SELECT 1 FROM ingestion_runs
-                        WHERE id = ? AND status = 'running'
+        event_values = self._event_values(event)
+        if type(detections) not in (list, tuple) or type(actions) not in (list, tuple):
+            raise IngestionRunError("INGESTION_RUN:INVALID_BUNDLE")
+        if (
+            len(detections) != len(actions)
+            or len(detections) > MAX_DETECTIONS_PER_EVENT
+        ):
+            raise IngestionRunError("INGESTION_RUN:INVALID_BUNDLE")
+        if not all(isinstance(item, DetectionResult) for item in detections) or not all(
+            isinstance(item, ActionRecord) for item in actions
+        ):
+            raise IngestionRunError("INGESTION_RUN:INVALID_BUNDLE")
+        detection_items = tuple(detections)
+        action_items = tuple(actions)
+        detection_values = tuple(self._detection_values(item) for item in detection_items)
+        action_values = tuple(self._action_values(item) for item in action_items)
+        for detection in detection_items:
+            if (
+                detection.detected_at != event.observed_at
+                or detection.src_ip != event.src_ip
+                or detection.dst_ip != event.dst_ip
+            ):
+                raise IngestionRunError("INGESTION_RUN:INVALID_BUNDLE")
+
+        with self._lock:
+            self._assert_write_trusted()
+            try:
+                self.connection.execute("BEGIN IMMEDIATE")
+                event_id = self._insert_event(event_values)
+                if safe_run_id is not None:
+                    association = self.connection.execute(
+                        """
+                        INSERT INTO ingestion_run_events (run_id, event_id)
+                        SELECT ?, ?
+                        WHERE EXISTS (
+                            SELECT 1 FROM ingestion_runs
+                            WHERE id = ? AND status = 'running'
+                              AND receipt_version = 3
+                        )
+                        """,
+                        (safe_run_id, event_id, safe_run_id),
                     )
-                    """,
-                    (safe_run_id, event_id, safe_run_id),
-                )
-                if association.rowcount != 1:
-                    raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+                    if association.rowcount != 1:
+                        raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+                for detection_row, action_row in zip(
+                    detection_values, action_values, strict=True
+                ):
+                    detection_cursor = self.connection.execute(
+                        """
+                        INSERT INTO detections (
+                            event_id, detected_at, rule_id, severity, src_ip, dst_ip,
+                            message, evidence_json, recommendation, suppressed_reason
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (event_id, *detection_row),
+                    )
+                    action_cursor = self.connection.execute(
+                        """
+                        INSERT INTO actions (
+                            created_at, action, target, status, reason, expires_at,
+                            details_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        action_row,
+                    )
+                    self.connection.execute(
+                        """
+                        INSERT INTO detection_actions (detection_id, action_id)
+                        VALUES (?, ?)
+                        """,
+                        (
+                            int(detection_cursor.lastrowid),
+                            int(action_cursor.lastrowid),
+                        ),
+                    )
+                if safe_run_id is not None:
+                    counter = self.connection.execute(
+                        """
+                        UPDATE ingestion_runs
+                        SET processed_count = processed_count + 1,
+                            detection_count = detection_count + ?,
+                            action_count = action_count + ?
+                        WHERE id = ? AND status = 'running'
+                          AND receipt_version = 3
+                        """,
+                        (
+                            len(detection_items),
+                            len(action_items),
+                            safe_run_id,
+                        ),
+                    )
+                    if counter.rowcount != 1:
+                        raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
+            except BaseException:
+                self._rollback_run_write()
+                raise
+            self._commit_run_write()
             return event_id
 
-    def record_detection(self, event_id: int, detection: DetectionResult) -> int:
-        evidence = validate_metadata(detection.evidence)
+    def record_event(self, event: PacketEvent, *, run_id: int | None = None) -> int:
+        if run_id is not None:
+            self._run_id(run_id)
+            raise IngestionRunError("INGESTION_RUN:ATOMIC_WRITE_REQUIRED")
+        values = self._event_values(event)
         with self._lock, self.connection:
+            self._assert_write_trusted()
+            return self._insert_event(values)
+
+    def record_detection(self, event_id: int, detection: DetectionResult) -> int:
+        values = self._detection_values(detection)
+        with self._lock, self.connection:
+            self._assert_write_trusted()
+            if self.connection.execute(
+                "SELECT 1 FROM ingestion_run_events WHERE event_id = ?",
+                (event_id,),
+            ).fetchone() is not None:
+                raise IngestionRunError("INGESTION_RUN:ATOMIC_WRITE_REQUIRED")
             cursor = self.connection.execute(
                 """
                 INSERT INTO detections (
@@ -1173,52 +1713,22 @@ class Store:
                 """,
                 (
                     event_id,
-                    detection.detected_at.isoformat(),
-                    detection.rule_id,
-                    detection.severity,
-                    detection.src_ip,
-                    detection.dst_ip,
-                    detection.message,
-                    json.dumps(evidence, sort_keys=True, allow_nan=False),
-                    detection.recommendation,
-                    detection.suppressed_reason,
+                    *values,
                 ),
             )
-            run = self.connection.execute(
-                "SELECT run_id FROM ingestion_run_events WHERE event_id = ?",
-                (event_id,),
-            ).fetchone()
-            if run is not None:
-                counter = self.connection.execute(
-                    """
-                    UPDATE ingestion_runs
-                    SET detection_count = detection_count + 1
-                    WHERE id = ? AND status = 'running'
-                    """,
-                    (int(run["run_id"]),),
-                )
-                if counter.rowcount != 1:
-                    raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
             return int(cursor.lastrowid)
 
     def record_action(self, action: ActionRecord) -> int:
-        details = validate_metadata(action.details)
+        values = self._action_values(action)
         with self._lock, self.connection:
+            self._assert_write_trusted()
             cursor = self.connection.execute(
                 """
                 INSERT INTO actions (
                     created_at, action, target, status, reason, expires_at, details_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    action.created_at.isoformat(),
-                    action.action,
-                    action.target,
-                    action.status,
-                    action.reason,
-                    action.expires_at.isoformat() if action.expires_at else None,
-                    json.dumps(details, sort_keys=True, allow_nan=False),
-                ),
+                values,
             )
             return int(cursor.lastrowid)
 
@@ -1280,6 +1790,7 @@ class Store:
         except (OverflowError, ValueError) as exc:
             raise ValueError("retention cutoff is outside the supported UTC range") from exc
         with self._lock:
+            self._assert_write_trusted()
             with self.connection:
                 detections = self.connection.execute(
                     "DELETE FROM detections WHERE detected_at < ?", (cutoff,)
@@ -1458,11 +1969,11 @@ class DashboardStore:
                 raise StorageSchemaError("DASHBOARD_STORE:INCOMPATIBLE_SCHEMA")
             _validate_schema(
                 connection,
-                _TABLE_COLUMNS_V2,
-                _INDEX_COLUMNS_V2,
-                _FOREIGN_KEYS_V2,
-                _UNIQUE_INDEXES_V2,
-                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+                _TABLE_COLUMNS_V3,
+                _INDEX_COLUMNS_V3,
+                _FOREIGN_KEYS_V3,
+                _UNIQUE_INDEXES_V3,
+                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS),
             )
         except StorageSchemaError as exc:
             raise StorageSchemaError(

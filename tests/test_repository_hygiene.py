@@ -67,7 +67,7 @@ def test_sensitive_runtime_and_build_artifacts_are_ignored():
         "data/megalodon.db",
         "case/megalodon.db-wal",
         "case/megalodon.db-shm",
-        "case/megalodon.db.pre-v2.bak",
+        "case/megalodon.db.pre-v3.bak",
         "capture.pcap",
         "capture.pcapng.gz",
         "conn.log",
