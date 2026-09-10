@@ -16,6 +16,10 @@ current code, adopted but inert contracts, and controls still required before
 operational use. Passing CI or closing a contract/test issue does not promote a
 proposal into a runtime capability or satisfy independent review.
 
+See the [red, blue, and purple security practice](docs/red-blue-security-guide.md)
+for authorized adversarial validation and future-AI gates. That guide adds no
+model runtime, tool authority, or firewall authorization.
+
 ## Findings and corrections
 
 | Severity | Original design issue | Consequence | MVP correction |
