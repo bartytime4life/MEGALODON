@@ -199,7 +199,7 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
   box-shadow: 0 16px 42px rgba(0, 0, 0, .18);
 }
 .trust-strip.current { border-left-color: var(--aqua); }
-.trust-strip.paused { border-left-color: var(--amber); background: rgba(255, 209, 102, .035); }
+.trust-strip.paused, .trust-strip.checking { border-left-color: var(--amber); background: rgba(255, 209, 102, .035); }
 .trust-strip.stale { border-left-color: var(--rose); background: rgba(255, 117, 143, .04); }
 .trust-summary .eyebrow { margin-bottom: 6px; }
 .trust-message { margin: 0; color: var(--text); font-size: .82rem; line-height: 1.55; }
@@ -467,6 +467,17 @@ function setSnapshotStatus(mode) {
       message = `Automatic refresh paused. No successful dashboard data fetch is available. ${healthLimit}`;
       setUpdatedTime('Paused · no dashboard data available');
     }
+  } else if (mode === 'checking') {
+    if (state.lastSuccessfulRefresh) {
+      const priorState = state.lastRefreshFailed
+        ? 'Preserved dashboard data remains stale until a refresh succeeds.'
+        : 'Preserved dashboard data is not treated as current until a refresh succeeds.';
+      message = `Refresh resumed. Checking the dashboard API. ${priorState} ${healthLimit}`;
+      setUpdatedTime(`Checking · last success ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
+    } else {
+      message = `Refresh resumed. Checking the dashboard API. No successful dashboard data fetch is available. ${healthLimit}`;
+      setUpdatedTime('Checking · no successful dashboard data yet');
+    }
   } else if (mode === 'stale') {
     const pauseContext = state.paused ? ' Automatic refresh remains paused.' : '';
     if (state.lastSuccessfulRefresh) {
@@ -538,7 +549,7 @@ function togglePause() {
     }
   } else {
     setConnection('Dashboard API · checking', '');
-    setSnapshotStatus(state.lastRefreshFailed ? 'stale' : (state.lastSuccessfulRefresh ? 'current' : 'waiting'));
+    setSnapshotStatus('checking');
   }
   if (state.paused) scheduleNext();
   else { refresh(false); scheduleNext(); }

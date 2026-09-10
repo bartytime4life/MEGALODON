@@ -461,6 +461,14 @@ process.stdin.on('end', async () => {
     if (nodes.get('connection').textContent !== 'Dashboard API · reachable, refresh paused') throw new Error('paused API state is unclear');
     if (nodes.get('trust-strip').className !== 'trust-strip paused') throw new Error('paused state class is missing');
 
+    vm.runInContext('togglePause()', context);
+    if (nodes.get('connection').textContent !== 'Dashboard API · checking') throw new Error('resume does not expose the pending API check');
+    if (nodes.get('trust-strip').className !== 'trust-strip checking') throw new Error('resume briefly overclaims preserved data as current');
+    if (!nodes.get('snapshot-status').textContent.includes('not treated as current until a refresh succeeds')) throw new Error('resume does not bound preserved data freshness');
+    await new Promise(resolve => setImmediate(resolve));
+    if (nodes.get('trust-strip').className !== 'trust-strip current') throw new Error('successful resumed refresh did not restore current state');
+    vm.runInContext('togglePause()', context);
+
     failRequests = true;
     await vm.runInContext('refresh(false)', context);
     const pausedFailure = nodes.get('snapshot-status').textContent;
@@ -468,7 +476,8 @@ process.stdin.on('end', async () => {
     if (nodes.get('connection').textContent !== 'Dashboard API · unavailable, refresh paused') throw new Error('paused failure API state is unclear');
 
     vm.runInContext('togglePause()', context);
-    if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('resume briefly overclaimed stale data as current');
+    if (nodes.get('trust-strip').className !== 'trust-strip checking') throw new Error('resume does not expose the pending stale-data recheck');
+    if (!nodes.get('snapshot-status').textContent.includes('remains stale until a refresh succeeds')) throw new Error('resume loses the preserved stale-data boundary');
     await new Promise(resolve => setImmediate(resolve));
     const stale = nodes.get('snapshot-status').textContent;
     if (!stale.includes('Showing preserved stale dashboard data')) throw new Error(`stale state is unclear: ${stale}`);
