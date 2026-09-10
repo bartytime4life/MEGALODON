@@ -1,0 +1,14 @@
+{"description":"SafetyNET p","modification_date":"2022-12-15","port_end":40000,"port_start":40000,"record_kind":"named","registration_date":"2006-11","service_name":"safetynetp","source_row":13261,"transport":"tcp"}
+{"description":"SafetyNET p","modification_date":"2022-12-15","port_end":40000,"port_start":40000,"record_kind":"named","registration_date":"2006-11","service_name":"safetynetp","source_row":13262,"transport":"udp"}
+{"description":"Reserved","modification_date":null,"port_end":40023,"port_start":40023,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":13264,"transport":"tcp"}
+{"description":"K-PatentsSensorInformation","modification_date":"2021-02-02","port_end":40023,"port_start":40023,"record_kind":"named","registration_date":"2015-12-02","service_name":"k-patentssensor","source_row":13265,"transport":"udp"}
+{"description":"Simplify Printing TX","modification_date":null,"port_end":40404,"port_start":40404,"record_kind":"named","registration_date":"2013-12-09","service_name":"sptx","source_row":13267,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":40404,"port_start":40404,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":13268,"transport":"udp"}
+{"description":"CSCP","modification_date":null,"port_end":40841,"port_start":40841,"record_kind":"named","registration_date":null,"service_name":"cscp","source_row":13270,"transport":"tcp"}
+{"description":"CSCP","modification_date":null,"port_end":40841,"port_start":40841,"record_kind":"named","registration_date":null,"service_name":"cscp","source_row":13271,"transport":"udp"}
+{"description":"CSCCREDIR","modification_date":null,"port_end":40842,"port_start":40842,"record_kind":"named","registration_date":null,"service_name":"csccredir","source_row":13272,"transport":"tcp"}
+{"description":"CSCCREDIR","modification_date":null,"port_end":40842,"port_start":40842,"record_kind":"named","registration_date":null,"service_name":"csccredir","source_row":13273,"transport":"udp"}
+{"description":"CSCCFIREWALL","modification_date":null,"port_end":40843,"port_start":40843,"record_kind":"named","registration_date":null,"service_name":"csccfirewall","source_row":13274,"transport":"tcp"}
+{"description":"CSCCFIREWALL","modification_date":null,"port_end":40843,"port_start":40843,"record_kind":"named","registration_date":null,"service_name":"csccfirewall","source_row":13275,"transport":"udp"}
+{"description":"Reserved","modification_date":null,"port_end":40853,"port_start":40853,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":13277,"transport":"tcp"}
+{"description":"ORTEC Service Discovery","modification_date":null,"port_end":40853,"port_start":40853,"record_kind":"named","registration_date":"2010-11-22","service_name":"ortec-disc","source_row":13278,"transport":"udp"}

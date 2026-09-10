@@ -1,0 +1,185 @@
+{"description":"CA Administration Daemon","modification_date":null,"port_end":1958,"port_start":1958,"record_kind":"named","registration_date":null,"service_name":"dxadmind","source_row":3445,"transport":"tcp"}
+{"description":"CA Administration Daemon","modification_date":null,"port_end":1958,"port_start":1958,"record_kind":"named","registration_date":null,"service_name":"dxadmind","source_row":3446,"transport":"udp"}
+{"description":"SIMP Channel","modification_date":null,"port_end":1959,"port_start":1959,"record_kind":"named","registration_date":null,"service_name":"simp-all","source_row":3447,"transport":"tcp"}
+{"description":"SIMP Channel","modification_date":null,"port_end":1959,"port_start":1959,"record_kind":"named","registration_date":null,"service_name":"simp-all","source_row":3448,"transport":"udp"}
+{"description":"Merit DAC NASmanager","modification_date":null,"port_end":1960,"port_start":1960,"record_kind":"named","registration_date":null,"service_name":"nasmanager","source_row":3449,"transport":"tcp"}
+{"description":"Merit DAC NASmanager","modification_date":null,"port_end":1960,"port_start":1960,"record_kind":"named","registration_date":null,"service_name":"nasmanager","source_row":3450,"transport":"udp"}
+{"description":"BTS APPSERVER","modification_date":null,"port_end":1961,"port_start":1961,"record_kind":"named","registration_date":null,"service_name":"bts-appserver","source_row":3451,"transport":"tcp"}
+{"description":"BTS APPSERVER","modification_date":null,"port_end":1961,"port_start":1961,"record_kind":"named","registration_date":null,"service_name":"bts-appserver","source_row":3452,"transport":"udp"}
+{"description":"BIAP-MP","modification_date":null,"port_end":1962,"port_start":1962,"record_kind":"named","registration_date":null,"service_name":"biap-mp","source_row":3453,"transport":"tcp"}
+{"description":"BIAP-MP","modification_date":null,"port_end":1962,"port_start":1962,"record_kind":"named","registration_date":null,"service_name":"biap-mp","source_row":3454,"transport":"udp"}
+{"description":"WebMachine","modification_date":null,"port_end":1963,"port_start":1963,"record_kind":"named","registration_date":null,"service_name":"webmachine","source_row":3455,"transport":"tcp"}
+{"description":"WebMachine","modification_date":null,"port_end":1963,"port_start":1963,"record_kind":"named","registration_date":null,"service_name":"webmachine","source_row":3456,"transport":"udp"}
+{"description":"SOLID E ENGINE","modification_date":null,"port_end":1964,"port_start":1964,"record_kind":"named","registration_date":null,"service_name":"solid-e-engine","source_row":3457,"transport":"tcp"}
+{"description":"SOLID E ENGINE","modification_date":null,"port_end":1964,"port_start":1964,"record_kind":"named","registration_date":null,"service_name":"solid-e-engine","source_row":3458,"transport":"udp"}
+{"description":"Tivoli NPM","modification_date":null,"port_end":1965,"port_start":1965,"record_kind":"named","registration_date":null,"service_name":"tivoli-npm","source_row":3459,"transport":"tcp"}
+{"description":"Tivoli NPM","modification_date":null,"port_end":1965,"port_start":1965,"record_kind":"named","registration_date":null,"service_name":"tivoli-npm","source_row":3460,"transport":"udp"}
+{"description":"Slush","modification_date":null,"port_end":1966,"port_start":1966,"record_kind":"named","registration_date":null,"service_name":"slush","source_row":3461,"transport":"tcp"}
+{"description":"Slush","modification_date":null,"port_end":1966,"port_start":1966,"record_kind":"named","registration_date":null,"service_name":"slush","source_row":3462,"transport":"udp"}
+{"description":"SNS Quote","modification_date":null,"port_end":1967,"port_start":1967,"record_kind":"named","registration_date":null,"service_name":"sns-quote","source_row":3463,"transport":"tcp"}
+{"description":"SNS Quote","modification_date":null,"port_end":1967,"port_start":1967,"record_kind":"named","registration_date":null,"service_name":"sns-quote","source_row":3464,"transport":"udp"}
+{"description":"LIPSinc","modification_date":null,"port_end":1968,"port_start":1968,"record_kind":"named","registration_date":null,"service_name":"lipsinc","source_row":3465,"transport":"tcp"}
+{"description":"LIPSinc","modification_date":null,"port_end":1968,"port_start":1968,"record_kind":"named","registration_date":null,"service_name":"lipsinc","source_row":3466,"transport":"udp"}
+{"description":"LIPSinc 1","modification_date":null,"port_end":1969,"port_start":1969,"record_kind":"named","registration_date":null,"service_name":"lipsinc1","source_row":3467,"transport":"tcp"}
+{"description":"LIPSinc 1","modification_date":null,"port_end":1969,"port_start":1969,"record_kind":"named","registration_date":null,"service_name":"lipsinc1","source_row":3468,"transport":"udp"}
+{"description":"NetOp Remote Control","modification_date":null,"port_end":1970,"port_start":1970,"record_kind":"named","registration_date":null,"service_name":"netop-rc","source_row":3469,"transport":"tcp"}
+{"description":"NetOp Remote Control","modification_date":null,"port_end":1970,"port_start":1970,"record_kind":"named","registration_date":null,"service_name":"netop-rc","source_row":3470,"transport":"udp"}
+{"description":"NetOp School","modification_date":null,"port_end":1971,"port_start":1971,"record_kind":"named","registration_date":null,"service_name":"netop-school","source_row":3471,"transport":"tcp"}
+{"description":"NetOp School","modification_date":null,"port_end":1971,"port_start":1971,"record_kind":"named","registration_date":null,"service_name":"netop-school","source_row":3472,"transport":"udp"}
+{"description":"Cache","modification_date":null,"port_end":1972,"port_start":1972,"record_kind":"named","registration_date":null,"service_name":"intersys-cache","source_row":3473,"transport":"tcp"}
+{"description":"Cache","modification_date":null,"port_end":1972,"port_start":1972,"record_kind":"named","registration_date":null,"service_name":"intersys-cache","source_row":3474,"transport":"udp"}
+{"description":"Data Link Switching Remote Access Protocol","modification_date":null,"port_end":1973,"port_start":1973,"record_kind":"named","registration_date":null,"service_name":"dlsrap","source_row":3475,"transport":"tcp"}
+{"description":"Data Link Switching Remote Access Protocol","modification_date":null,"port_end":1973,"port_start":1973,"record_kind":"named","registration_date":null,"service_name":"dlsrap","source_row":3476,"transport":"udp"}
+{"description":"DRP","modification_date":null,"port_end":1974,"port_start":1974,"record_kind":"named","registration_date":null,"service_name":"drp","source_row":3477,"transport":"tcp"}
+{"description":"DRP","modification_date":null,"port_end":1974,"port_start":1974,"record_kind":"named","registration_date":null,"service_name":"drp","source_row":3478,"transport":"udp"}
+{"description":"TCO Flash Agent","modification_date":null,"port_end":1975,"port_start":1975,"record_kind":"named","registration_date":null,"service_name":"tcoflashagent","source_row":3479,"transport":"tcp"}
+{"description":"TCO Flash Agent","modification_date":null,"port_end":1975,"port_start":1975,"record_kind":"named","registration_date":null,"service_name":"tcoflashagent","source_row":3480,"transport":"udp"}
+{"description":"TCO Reg Agent","modification_date":null,"port_end":1976,"port_start":1976,"record_kind":"named","registration_date":null,"service_name":"tcoregagent","source_row":3481,"transport":"tcp"}
+{"description":"TCO Reg Agent","modification_date":null,"port_end":1976,"port_start":1976,"record_kind":"named","registration_date":null,"service_name":"tcoregagent","source_row":3482,"transport":"udp"}
+{"description":"TCO Address Book","modification_date":null,"port_end":1977,"port_start":1977,"record_kind":"named","registration_date":null,"service_name":"tcoaddressbook","source_row":3483,"transport":"tcp"}
+{"description":"TCO Address Book","modification_date":null,"port_end":1977,"port_start":1977,"record_kind":"named","registration_date":null,"service_name":"tcoaddressbook","source_row":3484,"transport":"udp"}
+{"description":"UniSQL","modification_date":null,"port_end":1978,"port_start":1978,"record_kind":"named","registration_date":null,"service_name":"unisql","source_row":3485,"transport":"tcp"}
+{"description":"UniSQL","modification_date":null,"port_end":1978,"port_start":1978,"record_kind":"named","registration_date":null,"service_name":"unisql","source_row":3486,"transport":"udp"}
+{"description":"UniSQL Java","modification_date":null,"port_end":1979,"port_start":1979,"record_kind":"named","registration_date":null,"service_name":"unisql-java","source_row":3487,"transport":"tcp"}
+{"description":"UniSQL Java","modification_date":null,"port_end":1979,"port_start":1979,"record_kind":"named","registration_date":null,"service_name":"unisql-java","source_row":3488,"transport":"udp"}
+{"description":"PanQuest XACT","modification_date":"2025-11-20","port_end":1980,"port_start":1980,"record_kind":"named","registration_date":null,"service_name":"panquest-xact","source_row":3489,"transport":"tcp"}
+{"description":"PanQuest XACT","modification_date":"2025-11-20","port_end":1980,"port_start":1980,"record_kind":"named","registration_date":null,"service_name":"panquest-xact","source_row":3490,"transport":"udp"}
+{"description":"p2pQ","modification_date":null,"port_end":1981,"port_start":1981,"record_kind":"named","registration_date":null,"service_name":"p2pq","source_row":3491,"transport":"tcp"}
+{"description":"p2pQ","modification_date":null,"port_end":1981,"port_start":1981,"record_kind":"named","registration_date":null,"service_name":"p2pq","source_row":3492,"transport":"udp"}
+{"description":"Evidentiary Timestamp","modification_date":null,"port_end":1982,"port_start":1982,"record_kind":"named","registration_date":null,"service_name":"estamp","source_row":3493,"transport":"tcp"}
+{"description":"Evidentiary Timestamp","modification_date":null,"port_end":1982,"port_start":1982,"record_kind":"named","registration_date":null,"service_name":"estamp","source_row":3494,"transport":"udp"}
+{"description":"Loophole Test Protocol","modification_date":null,"port_end":1983,"port_start":1983,"record_kind":"named","registration_date":null,"service_name":"lhtp","source_row":3495,"transport":"tcp"}
+{"description":"Loophole Test Protocol","modification_date":null,"port_end":1983,"port_start":1983,"record_kind":"named","registration_date":null,"service_name":"lhtp","source_row":3496,"transport":"udp"}
+{"description":"BB","modification_date":null,"port_end":1984,"port_start":1984,"record_kind":"named","registration_date":null,"service_name":"bb","source_row":3497,"transport":"tcp"}
+{"description":"BB","modification_date":null,"port_end":1984,"port_start":1984,"record_kind":"named","registration_date":null,"service_name":"bb","source_row":3498,"transport":"udp"}
+{"description":"Hot Standby Router Protocol","modification_date":null,"port_end":1985,"port_start":1985,"record_kind":"named","registration_date":null,"service_name":"hsrp","source_row":3499,"transport":"tcp"}
+{"description":"Hot Standby Router Protocol","modification_date":null,"port_end":1985,"port_start":1985,"record_kind":"named","registration_date":null,"service_name":"hsrp","source_row":3500,"transport":"udp"}
+{"description":"cisco license management","modification_date":null,"port_end":1986,"port_start":1986,"record_kind":"named","registration_date":null,"service_name":"licensedaemon","source_row":3501,"transport":"tcp"}
+{"description":"cisco license management","modification_date":null,"port_end":1986,"port_start":1986,"record_kind":"named","registration_date":null,"service_name":"licensedaemon","source_row":3502,"transport":"udp"}
+{"description":"cisco RSRB Priority 1 port","modification_date":null,"port_end":1987,"port_start":1987,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-p1","source_row":3503,"transport":"tcp"}
+{"description":"cisco RSRB Priority 1 port","modification_date":null,"port_end":1987,"port_start":1987,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-p1","source_row":3504,"transport":"udp"}
+{"description":"cisco RSRB Priority 2 port","modification_date":null,"port_end":1988,"port_start":1988,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-p2","source_row":3505,"transport":"tcp"}
+{"description":"cisco RSRB Priority 2 port","modification_date":null,"port_end":1988,"port_start":1988,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-p2","source_row":3506,"transport":"udp"}
+{"description":"MHSnet system","modification_date":null,"port_end":1989,"port_start":1989,"record_kind":"named","registration_date":null,"service_name":"mshnet","source_row":3509,"transport":"tcp"}
+{"description":"cisco RSRB Priority 3 port","modification_date":null,"port_end":1989,"port_start":1989,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-p3","source_row":3507,"transport":"tcp"}
+{"description":"MHSnet system","modification_date":null,"port_end":1989,"port_start":1989,"record_kind":"named","registration_date":null,"service_name":"mshnet","source_row":3510,"transport":"udp"}
+{"description":"cisco RSRB Priority 3 port","modification_date":null,"port_end":1989,"port_start":1989,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-p3","source_row":3508,"transport":"udp"}
+{"description":"cisco STUN Priority 1 port","modification_date":null,"port_end":1990,"port_start":1990,"record_kind":"named","registration_date":null,"service_name":"stun-p1","source_row":3511,"transport":"tcp"}
+{"description":"cisco STUN Priority 1 port","modification_date":null,"port_end":1990,"port_start":1990,"record_kind":"named","registration_date":null,"service_name":"stun-p1","source_row":3512,"transport":"udp"}
+{"description":"cisco STUN Priority 2 port","modification_date":null,"port_end":1991,"port_start":1991,"record_kind":"named","registration_date":null,"service_name":"stun-p2","source_row":3513,"transport":"tcp"}
+{"description":"cisco STUN Priority 2 port","modification_date":null,"port_end":1991,"port_start":1991,"record_kind":"named","registration_date":null,"service_name":"stun-p2","source_row":3514,"transport":"udp"}
+{"description":"IPsendmsg","modification_date":null,"port_end":1992,"port_start":1992,"record_kind":"named","registration_date":null,"service_name":"ipsendmsg","source_row":3517,"transport":"tcp"}
+{"description":"cisco STUN Priority 3 port","modification_date":null,"port_end":1992,"port_start":1992,"record_kind":"named","registration_date":null,"service_name":"stun-p3","source_row":3515,"transport":"tcp"}
+{"description":"IPsendmsg","modification_date":null,"port_end":1992,"port_start":1992,"record_kind":"named","registration_date":null,"service_name":"ipsendmsg","source_row":3518,"transport":"udp"}
+{"description":"cisco STUN Priority 3 port","modification_date":null,"port_end":1992,"port_start":1992,"record_kind":"named","registration_date":null,"service_name":"stun-p3","source_row":3516,"transport":"udp"}
+{"description":"cisco SNMP TCP port","modification_date":null,"port_end":1993,"port_start":1993,"record_kind":"named","registration_date":null,"service_name":"snmp-tcp-port","source_row":3519,"transport":"tcp"}
+{"description":"cisco SNMP TCP port","modification_date":null,"port_end":1993,"port_start":1993,"record_kind":"named","registration_date":null,"service_name":"snmp-tcp-port","source_row":3520,"transport":"udp"}
+{"description":"cisco serial tunnel port","modification_date":null,"port_end":1994,"port_start":1994,"record_kind":"named","registration_date":null,"service_name":"stun-port","source_row":3521,"transport":"tcp"}
+{"description":"cisco serial tunnel port","modification_date":null,"port_end":1994,"port_start":1994,"record_kind":"named","registration_date":null,"service_name":"stun-port","source_row":3522,"transport":"udp"}
+{"description":"cisco perf port","modification_date":null,"port_end":1995,"port_start":1995,"record_kind":"named","registration_date":null,"service_name":"perf-port","source_row":3523,"transport":"tcp"}
+{"description":"cisco perf port","modification_date":null,"port_end":1995,"port_start":1995,"record_kind":"named","registration_date":null,"service_name":"perf-port","source_row":3524,"transport":"udp"}
+{"description":"cisco Remote SRB port","modification_date":null,"port_end":1996,"port_start":1996,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-port","source_row":3525,"transport":"tcp"}
+{"description":"cisco Remote SRB port","modification_date":null,"port_end":1996,"port_start":1996,"record_kind":"named","registration_date":null,"service_name":"tr-rsrb-port","source_row":3526,"transport":"udp"}
+{"description":"cisco Gateway Discovery Protocol","modification_date":null,"port_end":1997,"port_start":1997,"record_kind":"named","registration_date":null,"service_name":"gdp-port","source_row":3527,"transport":"tcp"}
+{"description":"cisco Gateway Discovery Protocol","modification_date":null,"port_end":1997,"port_start":1997,"record_kind":"named","registration_date":null,"service_name":"gdp-port","source_row":3528,"transport":"udp"}
+{"description":"cisco X.25 service (XOT)","modification_date":null,"port_end":1998,"port_start":1998,"record_kind":"named","registration_date":null,"service_name":"x25-svc-port","source_row":3529,"transport":"tcp"}
+{"description":"cisco X.25 service (XOT)","modification_date":null,"port_end":1998,"port_start":1998,"record_kind":"named","registration_date":null,"service_name":"x25-svc-port","source_row":3530,"transport":"udp"}
+{"description":"cisco identification port","modification_date":null,"port_end":1999,"port_start":1999,"record_kind":"named","registration_date":null,"service_name":"tcp-id-port","source_row":3531,"transport":"tcp"}
+{"description":"cisco identification port","modification_date":null,"port_end":1999,"port_start":1999,"record_kind":"named","registration_date":null,"service_name":"tcp-id-port","source_row":3532,"transport":"udp"}
+{"description":"Cisco SCCP","modification_date":null,"port_end":2000,"port_start":2000,"record_kind":"named","registration_date":"2003-11","service_name":"cisco-sccp","source_row":3533,"transport":"tcp"}
+{"description":"Cisco SCCp","modification_date":null,"port_end":2000,"port_start":2000,"record_kind":"named","registration_date":"2003-11","service_name":"cisco-sccp","source_row":3534,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2001,"port_start":2001,"record_kind":"named","registration_date":null,"service_name":"dc","source_row":3535,"transport":"tcp"}
+{"description":"curry","modification_date":null,"port_end":2001,"port_start":2001,"record_kind":"named","registration_date":null,"service_name":"wizard","source_row":3536,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2002,"port_start":2002,"record_kind":"named","registration_date":null,"service_name":"globe","source_row":3537,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2002,"port_start":2002,"record_kind":"named","registration_date":null,"service_name":"globe","source_row":3538,"transport":"udp"}
+{"description":"Brutus Server","modification_date":null,"port_end":2003,"port_start":2003,"record_kind":"named","registration_date":"2008-02-28","service_name":"brutus","source_row":3539,"transport":"tcp"}
+{"description":"Brutus Server","modification_date":null,"port_end":2003,"port_start":2003,"record_kind":"named","registration_date":"2008-02-28","service_name":"brutus","source_row":3540,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2004,"port_start":2004,"record_kind":"named","registration_date":null,"service_name":"mailbox","source_row":3541,"transport":"tcp"}
+{"description":"CCWS mm conf","modification_date":null,"port_end":2004,"port_start":2004,"record_kind":"named","registration_date":null,"service_name":"emce","source_row":3542,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2005,"port_start":2005,"record_kind":"named","registration_date":null,"service_name":"berknet","source_row":3543,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2005,"port_start":2005,"record_kind":"named","registration_date":null,"service_name":"oracle","source_row":3544,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2006,"port_start":2006,"record_kind":"named","registration_date":null,"service_name":"invokator","source_row":3545,"transport":"tcp"}
+{"description":"raid","modification_date":null,"port_end":2006,"port_start":2006,"record_kind":"named","registration_date":null,"service_name":"raid-cd","source_row":3546,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2007,"port_start":2007,"record_kind":"named","registration_date":null,"service_name":"dectalk","source_row":3547,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2007,"port_start":2007,"record_kind":"named","registration_date":null,"service_name":"raid-am","source_row":3548,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2008,"port_start":2008,"record_kind":"named","registration_date":null,"service_name":"conf","source_row":3549,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2008,"port_start":2008,"record_kind":"named","registration_date":null,"service_name":"terminaldb","source_row":3550,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2009,"port_start":2009,"record_kind":"named","registration_date":null,"service_name":"news","source_row":3551,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2009,"port_start":2009,"record_kind":"named","registration_date":null,"service_name":"whosockami","source_row":3552,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2010,"port_start":2010,"record_kind":"named","registration_date":null,"service_name":"search","source_row":3553,"transport":"tcp"}
+{"description":"IANA assigned this well-formed service name as a replacement for \"pipe_server\".","modification_date":null,"port_end":2010,"port_start":2010,"record_kind":"named","registration_date":null,"service_name":"pipe-server","source_row":3554,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2010,"port_start":2010,"record_kind":"named","registration_date":null,"service_name":"pipe_server","source_row":3555,"transport":"udp"}
+{"description":"raid","modification_date":null,"port_end":2011,"port_start":2011,"record_kind":"named","registration_date":null,"service_name":"raid-cc","source_row":3556,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2011,"port_start":2011,"record_kind":"named","registration_date":null,"service_name":"servserv","source_row":3557,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2012,"port_start":2012,"record_kind":"named","registration_date":null,"service_name":"ttyinfo","source_row":3558,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2012,"port_start":2012,"record_kind":"named","registration_date":null,"service_name":"raid-ac","source_row":3559,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2013,"port_start":2013,"record_kind":"named","registration_date":null,"service_name":"raid-am","source_row":3560,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2013,"port_start":2013,"record_kind":"named","registration_date":null,"service_name":"raid-cd","source_row":3561,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2014,"port_start":2014,"record_kind":"named","registration_date":null,"service_name":"troff","source_row":3562,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2014,"port_start":2014,"record_kind":"named","registration_date":null,"service_name":"raid-sf","source_row":3563,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2015,"port_start":2015,"record_kind":"named","registration_date":null,"service_name":"cypress","source_row":3564,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2015,"port_start":2015,"record_kind":"named","registration_date":null,"service_name":"raid-cs","source_row":3565,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2016,"port_start":2016,"record_kind":"named","registration_date":null,"service_name":"bootserver","source_row":3566,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2016,"port_start":2016,"record_kind":"named","registration_date":null,"service_name":"bootserver","source_row":3567,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2017,"port_start":2017,"record_kind":"named","registration_date":null,"service_name":"cypress-stat","source_row":3568,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2017,"port_start":2017,"record_kind":"named","registration_date":null,"service_name":"bootclient","source_row":3569,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2018,"port_start":2018,"record_kind":"named","registration_date":null,"service_name":"terminaldb","source_row":3570,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2018,"port_start":2018,"record_kind":"named","registration_date":null,"service_name":"rellpack","source_row":3571,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2019,"port_start":2019,"record_kind":"named","registration_date":null,"service_name":"whosockami","source_row":3572,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2019,"port_start":2019,"record_kind":"named","registration_date":null,"service_name":"about","source_row":3573,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2020,"port_start":2020,"record_kind":"named","registration_date":null,"service_name":"xinupageserver","source_row":3574,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2020,"port_start":2020,"record_kind":"named","registration_date":null,"service_name":"xinupageserver","source_row":3575,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2021,"port_start":2021,"record_kind":"named","registration_date":null,"service_name":"servexec","source_row":3576,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2021,"port_start":2021,"record_kind":"named","registration_date":null,"service_name":"xinuexpansion1","source_row":3577,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2022,"port_start":2022,"record_kind":"named","registration_date":null,"service_name":"down","source_row":3578,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2022,"port_start":2022,"record_kind":"named","registration_date":null,"service_name":"xinuexpansion2","source_row":3579,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2023,"port_start":2023,"record_kind":"named","registration_date":null,"service_name":"xinuexpansion3","source_row":3580,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2023,"port_start":2023,"record_kind":"named","registration_date":null,"service_name":"xinuexpansion3","source_row":3581,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2024,"port_start":2024,"record_kind":"named","registration_date":null,"service_name":"xinuexpansion4","source_row":3582,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2024,"port_start":2024,"record_kind":"named","registration_date":null,"service_name":"xinuexpansion4","source_row":3583,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2025,"port_start":2025,"record_kind":"named","registration_date":null,"service_name":"ellpack","source_row":3584,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2025,"port_start":2025,"record_kind":"named","registration_date":null,"service_name":"xribs","source_row":3585,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2026,"port_start":2026,"record_kind":"named","registration_date":null,"service_name":"scrabble","source_row":3586,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2026,"port_start":2026,"record_kind":"named","registration_date":null,"service_name":"scrabble","source_row":3587,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2027,"port_start":2027,"record_kind":"named","registration_date":null,"service_name":"shadowserver","source_row":3588,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2027,"port_start":2027,"record_kind":"named","registration_date":null,"service_name":"shadowserver","source_row":3589,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2028,"port_start":2028,"record_kind":"named","registration_date":null,"service_name":"submitserver","source_row":3590,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2028,"port_start":2028,"record_kind":"named","registration_date":null,"service_name":"submitserver","source_row":3591,"transport":"udp"}
+{"description":"Hot Standby Router Protocol IPv6","modification_date":null,"port_end":2029,"port_start":2029,"record_kind":"named","registration_date":"2004-11","service_name":"hsrpv6","source_row":3592,"transport":"tcp"}
+{"description":"Hot Standby Router Protocol IPv6","modification_date":null,"port_end":2029,"port_start":2029,"record_kind":"named","registration_date":"2004-11","service_name":"hsrpv6","source_row":3593,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2030,"port_start":2030,"record_kind":"named","registration_date":null,"service_name":"device2","source_row":3594,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2030,"port_start":2030,"record_kind":"named","registration_date":null,"service_name":"device2","source_row":3595,"transport":"udp"}
+{"description":"mobrien-chat","modification_date":null,"port_end":2031,"port_start":2031,"record_kind":"named","registration_date":"2004-11","service_name":"mobrien-chat","source_row":3596,"transport":"tcp"}
+{"description":"mobrien-chat","modification_date":null,"port_end":2031,"port_start":2031,"record_kind":"named","registration_date":"2004-11","service_name":"mobrien-chat","source_row":3597,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2032,"port_start":2032,"record_kind":"named","registration_date":null,"service_name":"blackboard","source_row":3598,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2032,"port_start":2032,"record_kind":"named","registration_date":null,"service_name":"blackboard","source_row":3599,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2033,"port_start":2033,"record_kind":"named","registration_date":null,"service_name":"glogger","source_row":3600,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2033,"port_start":2033,"record_kind":"named","registration_date":null,"service_name":"glogger","source_row":3601,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2034,"port_start":2034,"record_kind":"named","registration_date":null,"service_name":"scoremgr","source_row":3602,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2034,"port_start":2034,"record_kind":"named","registration_date":null,"service_name":"scoremgr","source_row":3603,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2035,"port_start":2035,"record_kind":"named","registration_date":null,"service_name":"imsldoc","source_row":3604,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2035,"port_start":2035,"record_kind":"named","registration_date":null,"service_name":"imsldoc","source_row":3605,"transport":"udp"}
+{"description":"Ethernet WS DP network","modification_date":null,"port_end":2036,"port_start":2036,"record_kind":"named","registration_date":"2005-08","service_name":"e-dpnet","source_row":3606,"transport":"tcp"}
+{"description":"Ethernet WS DP network","modification_date":null,"port_end":2036,"port_start":2036,"record_kind":"named","registration_date":"2005-08","service_name":"e-dpnet","source_row":3607,"transport":"udp"}
+{"description":"APplus Application Server","modification_date":"2021-07-20","port_end":2037,"port_start":2037,"record_kind":"named","registration_date":"2008-06-06","service_name":"applus","source_row":3608,"transport":"tcp"}
+{"description":"APplus Application Server","modification_date":"2021-07-20","port_end":2037,"port_start":2037,"record_kind":"named","registration_date":"2008-06-06","service_name":"applus","source_row":3609,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2038,"port_start":2038,"record_kind":"named","registration_date":null,"service_name":"objectmanager","source_row":3610,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2038,"port_start":2038,"record_kind":"named","registration_date":null,"service_name":"objectmanager","source_row":3611,"transport":"udp"}
+{"description":"Prizma Monitoring Service","modification_date":null,"port_end":2039,"port_start":2039,"record_kind":"named","registration_date":"2005-12","service_name":"prizma","source_row":3612,"transport":"tcp"}
+{"description":"Prizma Monitoring Service","modification_date":null,"port_end":2039,"port_start":2039,"record_kind":"named","registration_date":"2005-12","service_name":"prizma","source_row":3613,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2040,"port_start":2040,"record_kind":"named","registration_date":null,"service_name":"lam","source_row":3614,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2040,"port_start":2040,"record_kind":"named","registration_date":null,"service_name":"lam","source_row":3615,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2041,"port_start":2041,"record_kind":"named","registration_date":null,"service_name":"interbase","source_row":3616,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2041,"port_start":2041,"record_kind":"named","registration_date":null,"service_name":"interbase","source_row":3617,"transport":"udp"}
+{"description":"isis","modification_date":null,"port_end":2042,"port_start":2042,"record_kind":"named","registration_date":null,"service_name":"isis","source_row":3618,"transport":"tcp"}
+{"description":"isis","modification_date":null,"port_end":2042,"port_start":2042,"record_kind":"named","registration_date":null,"service_name":"isis","source_row":3619,"transport":"udp"}
+{"description":"isis-bcast","modification_date":null,"port_end":2043,"port_start":2043,"record_kind":"named","registration_date":null,"service_name":"isis-bcast","source_row":3620,"transport":"tcp"}
+{"description":"isis-bcast","modification_date":null,"port_end":2043,"port_start":2043,"record_kind":"named","registration_date":null,"service_name":"isis-bcast","source_row":3621,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2044,"port_start":2044,"record_kind":"named","registration_date":null,"service_name":"rimsl","source_row":3622,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2044,"port_start":2044,"record_kind":"named","registration_date":null,"service_name":"rimsl","source_row":3623,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2045,"port_start":2045,"record_kind":"named","registration_date":null,"service_name":"cdfunc","source_row":3624,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2045,"port_start":2045,"record_kind":"named","registration_date":null,"service_name":"cdfunc","source_row":3625,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2046,"port_start":2046,"record_kind":"named","registration_date":null,"service_name":"sdfunc","source_row":3626,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2046,"port_start":2046,"record_kind":"named","registration_date":null,"service_name":"sdfunc","source_row":3627,"transport":"udp"}
+{"description":null,"modification_date":null,"port_end":2047,"port_start":2047,"record_kind":"named","registration_date":null,"service_name":"dls","source_row":3628,"transport":"tcp"}
+{"description":null,"modification_date":null,"port_end":2047,"port_start":2047,"record_kind":"named","registration_date":null,"service_name":"dls","source_row":3629,"transport":"udp"}

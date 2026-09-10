@@ -52,7 +52,7 @@ jobs:
       - name: Build distributions and install wheel
         run: |
           set -euo pipefail
-          python -m pip install "build==1.6.0"
+          python -m pip install "build==1.6.0" "setuptools==80.9.0" "pytest>=8,<9" "jsonschema>=4.23,<5"
           python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
           python -m venv "$RUNNER_TEMP/wheel-venv"
           wheels=("$RUNNER_TEMP"/distributions/megalodon_defense-*.whl)
@@ -60,14 +60,49 @@ jobs:
           [ "${#wheels[@]}" -eq 1 ]
           [ "${#sdists[@]}" -eq 1 ]
           sha256sum "${wheels[0]}" "${sdists[0]}"
+          mkdir "$RUNNER_TEMP/sdist-check"
+          tar -xzf "${sdists[0]}" -C "$RUNNER_TEMP/sdist-check"
+          sdist_roots=("$RUNNER_TEMP"/sdist-check/megalodon_defense-*)
+          [ "${#sdist_roots[@]}" -eq 1 ]
+          test -f "${sdist_roots[0]}/.gitignore"
+          test -f "${sdist_roots[0]}/.github/workflows/ci.yml"
+          test -f "${sdist_roots[0]}/config/settings.toml"
+          test -f "${sdist_roots[0]}/contracts/automation/v1/schema.json"
+          test -f "${sdist_roots[0]}/contracts/platform/windows-core-v1/acceptance.json"
+          test -f "${sdist_roots[0]}/contracts/suricata-eve/v1/schema.json"
+          test -f "${sdist_roots[0]}/docs/platform-baseline.md"
+          test -f "${sdist_roots[0]}/docs/reference-data.md"
+          test -f "${sdist_roots[0]}/examples/events.jsonl"
+          test -f "${sdist_roots[0]}/tools/build_reference_assets.py"
           "$RUNNER_TEMP/wheel-venv/bin/python" -m pip install --no-index --no-deps "${wheels[0]}"
           "$RUNNER_TEMP/wheel-venv/bin/python" -m pip check
+          python -m venv --system-site-packages "$RUNNER_TEMP/sdist-venv"
+          "$RUNNER_TEMP/sdist-venv/bin/python" -m pip install --no-index --no-deps --no-build-isolation "${sdists[0]}"
+          "$RUNNER_TEMP/sdist-venv/bin/python" -m pip check
+          (
+            cd "${sdist_roots[0]}"
+            git init -q
+            "$RUNNER_TEMP/sdist-venv/bin/python" - <<'PY'
+          from pathlib import Path
+          import megalodon
+
+          source = Path(megalodon.__file__).resolve()
+          assert source.is_relative_to(Path.cwd().resolve()), source
+          PY
+            "$RUNNER_TEMP/sdist-venv/bin/python" -m pytest
+          )
       - name: Run installed default outside checkout
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/wheel-run"
           cd "$RUNNER_TEMP/wheel-run"
           "$RUNNER_TEMP/wheel-venv/bin/megalodon" --help
+          "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" --help
           "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon --help
           "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon.offline --help
           "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon run --source sample --max-events 1
+          "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" reference verify
+          "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" reference port tcp 443
+          "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" corpus --scenario dns-protocol-gates-v1
+          "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" reference verify
+          "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" corpus --scenario dns-protocol-gates-v1
