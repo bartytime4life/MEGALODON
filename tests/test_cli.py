@@ -206,6 +206,21 @@ class CliTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         self.assertEqual(error.getvalue(), f"megalodon: {LIVE_APPLY_UNSUPPORTED}\n")
 
+    def test_top_level_option_terminator_does_not_bypass_live_apply_preflight(self):
+        commands = (
+            ["--", "block", "--apply"],
+            ["--", "firewall-install", "--apply"],
+        )
+        for command in commands:
+            output = io.StringIO()
+            error = io.StringIO()
+            with self.subTest(command=command), redirect_stdout(output), redirect_stderr(error):
+                with self.assertRaises(SystemExit) as raised:
+                    main(command)
+            self.assertEqual(raised.exception.code, 2)
+            self.assertEqual(output.getvalue(), "")
+            self.assertEqual(error.getvalue(), f"megalodon: {LIVE_APPLY_UNSUPPORTED}\n")
+
     def test_non_apply_block_still_uses_normal_argument_validation(self):
         error = io.StringIO()
         with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
@@ -214,13 +229,21 @@ class CliTests(unittest.TestCase):
         self.assertIn("the following arguments are required: --reason", error.getvalue())
         self.assertNotIn(LIVE_APPLY_UNSUPPORTED, error.getvalue())
 
-    def test_apply_text_after_option_terminator_is_not_preflighted(self):
-        error = io.StringIO()
-        with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
-            main(["block", "--", "--apply"])
-        self.assertEqual(raised.exception.code, 2)
-        self.assertIn("the following arguments are required: --reason", error.getvalue())
-        self.assertNotIn(LIVE_APPLY_UNSUPPORTED, error.getvalue())
+    def test_apply_text_after_subcommand_option_terminator_is_not_preflighted(self):
+        commands = (
+            ["block", "--", "--apply"],
+            ["--", "block", "--", "--apply"],
+            ["firewall-install", "--", "--apply"],
+            ["--", "firewall-install", "--", "--apply"],
+        )
+        for command in commands:
+            error = io.StringIO()
+            with self.subTest(command=command), redirect_stderr(error):
+                with self.assertRaises(SystemExit) as raised:
+                    main(command)
+            self.assertEqual(raised.exception.code, 2)
+            self.assertIn("usage: megalodon", error.getvalue())
+            self.assertNotIn(LIVE_APPLY_UNSUPPORTED, error.getvalue())
 
     def test_live_apply_refusal_creates_no_store_or_action_row(self):
         with tempfile.TemporaryDirectory() as directory, chdir(directory):
