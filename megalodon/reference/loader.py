@@ -246,6 +246,7 @@ class IanaBundle:
     verification_scope: str
     services: tuple[ServicePortRecord, ...]
     protocols: tuple[ProtocolNumberRecord, ...]
+    source_provenance: tuple[dict[str, str], ...] = ()
 
     def summary(self) -> dict[str, object]:
         return {
@@ -260,6 +261,7 @@ class IanaBundle:
             "protocol_records": len(self.protocols),
             "services_last_updated": self.services_last_updated,
             "protocols_last_updated": self.protocols_last_updated,
+            "sources": [dict(source) for source in self.source_provenance],
             "verification_scope": self.verification_scope,
             "warning": self.warning,
             "network_access_performed": False,
@@ -640,6 +642,16 @@ def load_iana() -> IanaBundle:
         verification_scope=manifest["verification_scope"],
         services=services,
         protocols=protocols,
+        source_provenance=tuple(
+            {
+                "id": source["id"],
+                "registry_url": source["registry_url"],
+                "registry_last_updated": source["registry_last_updated"],
+                "retrieved_at": source["retrieved_at"],
+                "retrieved_at_basis": source["retrieved_at_basis"],
+            }
+            for source in manifest["sources"]
+        ),
     )
 
 
@@ -664,6 +676,7 @@ def lookup_port(transport: str, port: int) -> dict[str, object]:
         "match_count": len(all_matches),
         "matches": [item.public() for item in matches],
         "truncated": len(all_matches) > len(matches),
+        "sources": [dict(source) for source in getattr(bundle, "source_provenance", ())],
         "action_status": "not_attempted",
         "network_access_performed": False,
         "persistence_status": "not_attempted",
@@ -688,6 +701,7 @@ def lookup_protocol(number: int) -> dict[str, object]:
         "match_count": len(all_matches),
         "matches": [item.public() for item in matches],
         "truncated": len(all_matches) > len(matches),
+        "sources": [dict(source) for source in getattr(bundle, "source_provenance", ())],
         "action_status": "not_attempted",
         "network_access_performed": False,
         "persistence_status": "not_attempted",

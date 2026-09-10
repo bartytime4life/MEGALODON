@@ -116,6 +116,38 @@ JSON error object without echoing data or local paths. Command-line syntax and
 type errors exit 2 with a bounded JSON error containing `INVALID_ARGUMENTS` on
 stderr before an operation begins.
 
+## Local dashboard Reference Library
+
+The loopback dashboard includes a manual **Reference Library** panel over the
+same verified `iana-v1` bundle. It is a context lookup, not a detector join:
+the browser cannot query hidden detection details, download the registry, or
+turn a registration into service identification, a reputation score, or a
+security verdict. The panel displays the bundle ID/version, manifest digest,
+source registry, registry date, connector-receipt retrieval time, and the
+always-visible interpretation warning.
+
+The panel uses only bounded GET routes:
+
+| Route | Closed query | Result states |
+| --- | --- | --- |
+| `/api/reference/status` | none | `ready`, `unavailable`, `integrity_failure` |
+| `/api/reference/port` | `transport=tcp\|udp\|sctp\|dccp&port=0..65535` | `no_match`, `one_match`, `multiple_matches` |
+| `/api/reference/protocol` | `number=0..255` | `no_match`, `one_match`, `multiple_matches` |
+
+Queries reject unknown or repeated fields, uppercase or non-canonical
+transports, booleans, floats, leading-zero numbers, out-of-range values, and
+oversized query strings. Results contain at most eight records and the process
+keeps at most 16 exact lookup results in memory; responses are capped at 64
+KiB. A missing, unexpected, oversized, tampered, or schema-invalid resource
+invalidates the whole bundle and returns one path-free `503` status rather than
+partial rows. The panel preserves a prior result as explicitly **stale** only
+when a later local request fails; stale content is never relabeled as current.
+
+The route set is read-only and has no database, update, subprocess, firewall,
+notifier, or external-network path. Browser acceptance and native Windows
+rendering remain separately tracked under [#7](https://github.com/bartytime4life/MEGALODON/issues/7)
+and [#27](https://github.com/bartytime4life/MEGALODON/issues/27).
+
 ## Synthetic scenario corpus
 
 `corpus-v1` contains 6,492 `PacketEvent`-shaped metadata records in 12

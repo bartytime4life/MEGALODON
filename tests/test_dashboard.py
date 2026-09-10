@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -22,6 +23,8 @@ from megalodon.dashboard import (
     DASHBOARD_JS,
     DashboardHandler,
     INDEX_HTML,
+    MAX_REFERENCE_CACHE_ENTRIES,
+    ReferenceLibrary,
     serve,
 )
 from megalodon.models import DetectionResult, PacketEvent
@@ -29,6 +32,11 @@ from megalodon.offline.common import Batch, Limits, OfflineError
 from megalodon.offline import reports, tshark
 from megalodon.offline_projection import MAX_PROJECTED_PORTS, load_offline_projection
 from megalodon.storage import Store
+
+
+# Keep the browserless dashboard harness bounded while allowing hosted sdist
+# runners enough headroom to parse and execute the larger UI contract.
+NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS = 10
 
 
 def _packet(index: int, port: int = 443) -> PacketEvent:
@@ -314,6 +322,12 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "Sequential count-change signal only" in INDEX_HTML
     assert "High / critical stored" in INDEX_HTML
     assert "Action records" in INDEX_HTML
+    assert "Reference Library" in INDEX_HTML
+    assert 'id="reference-port-form"' in INDEX_HTML
+    assert 'id="reference-protocol-form"' in INDEX_HTML
+    assert 'id="reference-status" role="status" aria-live="polite"' in INDEX_HTML
+    assert "manifest-verified IANA snapshot" in INDEX_HTML
+    assert "Registration is analyst context" in INDEX_HTML
     assert "<button" in INDEX_HTML
     assert "<style" not in INDEX_HTML
     assert "<script>" not in INDEX_HTML
@@ -339,6 +353,9 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "innerHTML" not in DASHBOARD_JS
     assert "localStorage" not in DASHBOARD_JS
     assert "navigator.clipboard" not in DASHBOARD_JS
+    assert "reference-library-lookup-v1" in DASHBOARD_JS
+    assert "integrity_failure" in DASHBOARD_JS
+    assert "last successful reference result as stale" in DASHBOARD_JS
     for forbidden in ("Notification", "Audio(", "WebSocket", "EventSource"):
         assert forbidden not in INDEX_HTML + DASHBOARD_JS
     for private_field in ("dst_ip", "evidence", "recommendation", "suppressed_reason"):
@@ -352,6 +369,146 @@ def test_dashboard_ui_has_accessible_read_only_states():
     referenced_ids = re.findall(r"byId\('([^']+)'\)", DASHBOARD_JS)
     assert len(ids) == len(set(ids))
     assert set(referenced_ids) <= set(ids)
+
+
+def _reference_http(server, method, path):
+    connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+    connection.request(method, path, headers={"Host": f"127.0.0.1:{server.server_port}"})
+    response = connection.getresponse()
+    payload = json.loads(response.read())
+    headers = dict(response.getheaders())
+    connection.close()
+    return response.status, payload, headers
+
+
+def test_reference_library_is_verified_bounded_and_provenance_pinned():
+    library = ReferenceLibrary.load()
+    status = library.status()
+    assert status["schema"] == "reference-library-status-v1"
+    assert status["status"] == "ready"
+    assert status["available"] is True
+    assert status["bundle_version"] == "v1"
+    assert status["service_records"] == 12_577
+    assert status["protocol_records"] == 152
+    assert len(status["sources"]) == 2
+    assert all(
+        set(source) == {
+            "id", "registry_url", "registry_last_updated", "retrieved_at", "retrieved_at_basis"
+        }
+        for source in status["sources"]
+    )
+    one = library.lookup_port("tcp", 443)
+    assert one["status"] == "one_match"
+    assert one["sources"][0]["id"] == "iana-service-names-port-numbers"
+    assert "warning" in one and "proof" in one["warning"]
+    multiple = library.lookup_port("tcp", 80)
+    assert multiple["status"] == "multiple_matches"
+    assert multiple["match_count"] == 3
+    empty = library.lookup_port("dccp", 65_535)
+    assert empty["status"] == "no_match"
+    assert empty["matches"] == []
+    assert library.lookup_protocol(6)["status"] == "one_match"
+    for operation in (
+        lambda: library.lookup_port("tcp", -1),
+        lambda: library.lookup_port("tcp", 65_536),
+        lambda: library.lookup_protocol(-1),
+        lambda: library.lookup_protocol(256),
+    ):
+        with pytest.raises(ValueError, match="invalid reference lookup"):
+            operation()
+    for number in range(MAX_REFERENCE_CACHE_ENTRIES + 5):
+        library.lookup_protocol(number)
+    assert library.cache_size <= MAX_REFERENCE_CACHE_ENTRIES
+
+
+def test_reference_dashboard_api_is_get_only_closed_and_side_effect_free(tmp_path):
+    with Store(tmp_path / "events.db") as store:
+        handler = type(
+            "ReferenceDashboardHandler",
+            (DashboardHandler,),
+            {"store": store, "reference_library": ReferenceLibrary.load()},
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, payload, headers = _reference_http(server, "GET", "/api/reference/status")
+            assert status == 200
+            assert payload["status"] == "ready"
+            assert headers["Cache-Control"] == "no-store"
+            assert headers["X-Frame-Options"] == "DENY"
+            assert "'unsafe-inline'" not in headers["Content-Security-Policy"]
+
+            cases = (
+                ("/api/reference/port?transport=tcp&port=443", "one_match"),
+                ("/api/reference/port?transport=tcp&port=80", "multiple_matches"),
+                ("/api/reference/port?transport=dccp&port=65535", "no_match"),
+                ("/api/reference/protocol?number=6", "one_match"),
+            )
+            for path, expected in cases:
+                code, result, _ = _reference_http(server, "GET", path)
+                assert code == 200
+                assert result["status"] == expected
+                assert result["network_access_performed"] is False
+                assert result["persistence_status"] == "not_attempted"
+                assert result["action_status"] == "not_attempted"
+                assert "sources" in result and "warning" in result
+
+            invalid = (
+                "/api/reference/port?transport=TCP&port=443",
+                "/api/reference/port?transport=tcp&port=0443",
+                "/api/reference/port?transport=tcp&port=443.0",
+                "/api/reference/port?transport=tcp&port=true",
+                "/api/reference/port?transport=tcp&port=65536",
+                "/api/reference/port?transport=tcp&port=443&port=80",
+                "/api/reference/port?transport=tcp&port=443&extra=1",
+                "/api/reference/protocol?number=256",
+                "/api/reference/protocol?number=6.0",
+                "/api/reference/protocol?number=true",
+                "/api/reference/protocol?number=6&number=7",
+                "/api/reference/status?extra=1",
+            )
+            for path in invalid:
+                code, error, _ = _reference_http(server, "GET", path)
+                assert code == 400
+                assert set(error) == {"error"}
+                assert str(tmp_path) not in json.dumps(error)
+
+            code, error, headers = _reference_http(server, "POST", "/api/reference/port?transport=tcp&port=443")
+            assert code == 405
+            assert error == {"error": "method not allowed"}
+            assert headers["Allow"] == "GET"
+            assert store.summary() == {"events": 0, "detections": 0, "actions": 0, "high_or_critical": 0}
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+def test_reference_dashboard_fails_closed_without_partial_bundle_data(tmp_path):
+    with Store(tmp_path / "events.db") as store:
+        for failure in ("unavailable", "integrity_failure"):
+            handler = type(
+                "UnavailableReferenceDashboardHandler",
+                (DashboardHandler,),
+                {"store": store, "reference_library": ReferenceLibrary(failure=failure)},
+            )
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                code, payload, _ = _reference_http(server, "GET", "/api/reference/status")
+                assert code == 503
+                assert payload["status"] == failure
+                assert "path" not in json.dumps(payload).lower()
+                code, payload, _ = _reference_http(server, "GET", "/api/reference/port?transport=tcp&port=443")
+                assert code == 503
+                assert payload["status"] == failure
+                assert "matches" not in payload
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
 
 
 def test_dashboard_triage_filter_timeline_priority_and_response_contracts():
@@ -567,7 +724,7 @@ process.stdin.on('end', () => {
         input=DASHBOARD_JS,
         text=True,
         capture_output=True,
-        timeout=5,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -636,7 +793,7 @@ process.stdin.on('end', async () => {
         input=DASHBOARD_JS,
         text=True,
         capture_output=True,
-        timeout=5,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -782,7 +939,7 @@ process.stdin.on('end', async () => {
         input=DASHBOARD_JS,
         text=True,
         capture_output=True,
-        timeout=5,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stderr
