@@ -25,8 +25,10 @@ also fail closed with fixed schema errors instead of being repaired or downgrade
 
 The explicit `database-migrate` command is the only v1-to-v2 path. Run it with all
 other MEGALODON processes stopped. On POSIX, the database must be in an
-operator-owned directory that is not group- or world-writable. The migration
-refuses symlink sources and missing files, opens the source and newly created
+operator-owned mode-`0700` directory, and the source must be an owner-private,
+regular, single-link database (normally mode `0600`). The migration refuses
+symlink sources, hardlinks, public modes, unsafe sidecars, and missing files,
+opens the source and newly created
 backup with no-follow descriptors, and keeps those descriptors bound through
 SQLite backup and validation. It fails if either pathname stops identifying its
 opened file. The command creates a sibling `<database>.pre-v2.bak` without
@@ -35,11 +37,62 @@ structural contract, checks that the source did not change, and applies the
 additive table migration and version marker in one transaction. A pre-migration
 failure removes only the backup path that still identifies the file it created;
 a migration-stage failure rolls back the source and retains the verified backup.
-POSIX creation uses mode 0600. Platforms without a stable descriptor-backed
-SQLite path still require an operator-controlled private directory and path
-identity checks; Windows confidentiality and replacement resistance remain part
-of the separately unverified private-directory/NTFS ACL control. Re-running
-against v2 is an idempotent no-op.
+POSIX creation uses mode 0600. Writer and reader startup require a stable
+descriptor-backed SQLite path through `/proc/self/fd` or `/dev/fd`; absence is a
+fixed refusal. Path ancestors must be owned by root or the runtime user and must
+not be group/world-writable unless a trusted sticky directory prevents another
+user from renaming the next entry. Windows confidentiality and replacement
+resistance remain part of the separately unverified private-directory/NTFS ACL
+control. Re-running against v2 is an idempotent no-op.
+
+## Dashboard read isolation
+
+`DashboardStore` is separate from the writer `Store`. It requires an existing
+schema-v2 database and never creates a directory/database, initializes or
+migrates schema, changes `user_version`/journal mode, or exposes a write method.
+On POSIX it anchors and rechecks the private parent and regular single-link
+database descriptors, and validates any WAL/SHM coordination files before and
+after reads. A missing, unsafe, linked, corrupt, replaced, or incompatible store
+is refused before serving with a fixed, path-free error. Native NTFS ACL and
+replacement evidence remains open under issue #27. Supported POSIX serving also
+requires `/proc/self/fd` or `/dev/fd`; an environment without either stable
+descriptor path receives `DASHBOARD_STORE:DESCRIPTOR_PATH_UNAVAILABLE`.
+
+When no sidecars are observed, startup uses a short-lived
+`mode=ro&immutable=1` connection only to validate the static schema without
+creating WAL/SHM. This is not a quiescence claim: a writer starting during the
+descriptor-path connect or changing entries after the stable generation sample
+causes refusal; a writer accepted between those points is revalidated through
+the later normal connections. The immutable connection is never used for served
+data. An unserved normal connection next
+establishes any required WAL/SHM files and validates them as private, regular,
+single-link files. While that connection remains open, startup opens the final
+`mode=ro&cache=private` connection. Before any schema query, SQLite's
+`database_list` must report the configured private path for the held database
+descriptor. Final schema validation, closing the coordination connection, and
+every served read must preserve the same parent directory-entry generation and
+path/descriptor identity. Use a dedicated database directory: any entry-level
+change, including an unrelated file rename, forces restart rather than letting
+SQLite retain an unlinked main or sidecar file.
+
+The served connection enables `PRAGMA query_only=ON` and installs a
+deny-by-default SQLite authorizer. It permits only `SELECT`, `count`, and reads
+of the summary inputs or the five public detection columns; it denies `ATTACH`,
+DDL/DML, write PRAGMAs, internal row-ID reads, and private-column reads. SQLite
+3.22.0 is the minimum because that release added supported read-only WAL access.
+
+Summary counts are four scalar counts in one `SELECT`, hence one SQLite read
+snapshot. Recent detections select exactly `detected_at`, `rule_id`, `severity`,
+`src_ip`, and `message`, ordered by the indexed public `detected_at` field;
+private destination/evidence/recommendation/suppression columns and internal IDs
+are neither selected nor decoded. Successful WAL reads can create private
+coordination entries during the unserved startup step and can later update their
+contents in the already verified directory. They do
+not mutate the main database, schema, version, journal mode, or application
+rows. Missing or incompatible no-sidecar databases and unsafe symlink paths are
+refused without creating WAL/SHM. A runtime identity, sidecar, or directory
+generation refusal returns a fixed generic HTTP `503`; it does not disclose the
+diagnostic cause or configured path to the browser.
 
 The success receipt reports only the fixed backup state `created`, not the
 configured filesystem path. The operator can derive the local sibling name from
@@ -115,7 +168,7 @@ From the repository root in its supported test environment:
 
 ```bash
 python -m compileall -q megalodon tests
-python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py tests/test_ingestion_runs.py
+python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py tests/test_dashboard_store.py tests/test_dashboard_binding.py tests/test_cli.py tests/test_ingestion_runs.py
 ```
 
 The failure suite covers each of the three write methods with a statement
@@ -131,6 +184,13 @@ The schema-lifecycle cases separately cover fresh creation, explicit legacy
 migration, required-migration refusal, backup preservation/non-overwrite,
 idempotence, partial and altered schema refusal, future-version non-mutation, and
 atomic rollback for both initial creation and v2 migration.
+The dashboard-store cases cover no-create refusal, private path/object identity,
+URI encoding, query-only/authorizer enforcement, incompatible no-sidecar refusal,
+exact-field indexed SQL, one-statement summary snapshots, coherent returned
+counts when a WAL commit overlaps execution, committed-versus-uncommitted WAL
+visibility, a writer starting during immutable preflight, transient public-path
+replacement, between-request
+sidecar ABA replacement, and fixed browser-facing read failure.
 The ingestion-run cases cover completed and failed terminal transitions,
 run-to-event provenance, derived counts, closed sources/failure codes, invalid or
 terminal run refusal, malformed JSONL after a valid prefix, storage-write failure,
@@ -176,3 +236,6 @@ sharing is authorized by these tests or this document.
 - [Python 3.11 SQLite connection context manager](https://docs.python.org/3.11/library/sqlite3.html#how-to-use-the-connection-context-manager).
 - [SQLite FAIL conflict behavior](https://www.sqlite.org/lang_conflict.html).
 - [SQLite deferred foreign-key constraints](https://www.sqlite.org/foreignkeys.html#fk_deferred).
+- [SQLite URI filenames and `mode=ro`](https://www.sqlite.org/uri.html).
+- [SQLite `PRAGMA query_only`](https://www.sqlite.org/pragma.html#pragma_query_only).
+- [SQLite read-only WAL behavior](https://www.sqlite.org/wal.html#read_only_databases).

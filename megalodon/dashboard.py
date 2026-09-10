@@ -5,16 +5,22 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import json
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 
-from .storage import Store
+from .storage import StorageSchemaError
 
 
 MIN_REFRESH_SECONDS = 2
 MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
 DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
+
+
+class DashboardReader(Protocol):
+    def summary(self) -> dict[str, Any]: ...
+
+    def recent(self, limit: int = 50) -> list[dict[str, Any]]: ...
 
 
 INDEX_HTML = """<!doctype html>
@@ -468,7 +474,7 @@ bootstrap();
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
-    store: Store
+    store: DashboardReader
     offline_summary: dict[str, Any] | None = None
     refresh_seconds: int = 5
     event_limit: int = 50
@@ -499,7 +505,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
         if route.path == "/api/summary":
-            self._send_json(self.store.summary())
+            try:
+                summary = self.store.summary()
+            except StorageSchemaError:
+                self._send_json(
+                    {"error": "telemetry unavailable"}, status=503
+                )
+                return
+            self._send_json(summary)
             return
         if route.path == "/api/events":
             params = parse_qs(route.query, keep_blank_values=True)
@@ -517,7 +530,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not 1 <= limit <= MAX_EVENT_LIMIT:
                 self._send_json({"error": f"limit must be between 1 and {MAX_EVENT_LIMIT}"}, status=400)
                 return
-            self._send_json(_dashboard_events(self.store, limit))
+            try:
+                events = _dashboard_events(self.store, limit)
+            except StorageSchemaError:
+                self._send_json(
+                    {"error": "telemetry unavailable"}, status=503
+                )
+                return
+            self._send_json(events)
             return
         if route.path == "/api/offline-summary":
             self._send_json(
@@ -573,7 +593,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return
 
 
-def _dashboard_events(store: Store, limit: int) -> list[dict[str, Any]]:
+def _dashboard_events(store: DashboardReader, limit: int) -> list[dict[str, Any]]:
     """Project stored detections onto the dashboard's minimal read-only contract."""
     return [
         {field: detection[field] for field in DASHBOARD_EVENT_FIELDS}
@@ -609,7 +629,7 @@ def loopback_host(host: str, *, allow_remote: bool = False) -> str:
 
 
 def serve(
-    store: Store,
+    store: DashboardReader,
     host: str,
     port: int,
     *,

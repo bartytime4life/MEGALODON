@@ -6,7 +6,7 @@
 MEGALODON is a local-first defensive network telemetry MVP with a Python
 metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
-audit trail, and offers a read-only localhost dashboard. Live capture, offline
+audit trail, and offers a read-only localhost dashboard projection. Live capture, offline
 analysis, and firewall planning are separate choices, not mandatory parts of
 every configuration. The evaluation-release candidate is plan-only and does
 not support live firewall application.
@@ -28,6 +28,9 @@ malicious activity.
 - closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
   provenance and cannot carry arbitrary payload-like fields;
 - local only: the dashboard defaults to `127.0.0.1:8787` and has no write API;
+- isolated dashboard storage: on POSIX, serving requires an existing compatible private
+  database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
+  authorizer; it cannot create or migrate the audit database;
 - no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
 - no shell interpolation: untrusted event values never become shell code;
 - finite response: block plans require validated global targets and an expiry;
@@ -122,7 +125,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
-| Dashboard | Read-only loopback UI with bounded recent-detection controls and an optional privacy-safe summary of one completed offline run |
+| Dashboard | Read-only loopback UI backed by a separate read-only SQLite projection, bounded recent-detection controls, and an optional privacy-safe summary of one completed offline run |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for selected free/open-source tools; performs no host probe or installation |
@@ -137,7 +140,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | --- | --- | --- |
 | Python 3.11 or newer | CLI, validation, detectors, SQLite store, dashboard, and offline adapters | Package minimum, not proof of every Python/OS combination |
 | Python `venv` and `pip` | Isolated editable installation | Recommended |
-| SQLite (`sqlite3`) | Local audit database | Included in the Python standard library; no separate pip package |
+| SQLite (`sqlite3`) | Local audit database | Included in the Python standard library; the dashboard refuses SQLite older than 3.22.0 because read-only WAL support is required |
 | Scapy `>=2.5,<3` | Optional Linux live metadata capture | Install with the `capture` extra only for that workflow |
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
@@ -229,26 +232,59 @@ The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
 applies a reviewed retention procedure. The store marks its current layout with
 SQLite `user_version = 2`. New databases include the reserved ingestion-run
-ledger. On POSIX, the writer creates a missing database as mode 0600 inside an
-operator-owned directory with no group or other access; unsafe or symlinked
-storage boundaries are refused. The dashboard opens only an existing compatible
-database through a separate SQLite read-only, query-only connection. It does not
-create the directory or database, initialize or migrate schema, or change journal
-mode. SQLite may maintain WAL coordination sidecars inside the verified private
-directory while a writer is live. Native Windows privacy remains an NTFS ACL
-acceptance gate. Existing exact v1 or unversioned-v1 databases require the explicit
+ledger. On POSIX, the writer creates a missing leaf directory with mode `0700`
+and database with mode `0600`; it refuses symlinked ancestors, hard-linked or
+foreign-owned databases, and an immediate database directory with group/other
+access. Every ancestor must be owned by root or the runtime user and must not be
+group/world-writable unless it is a trusted sticky directory. Both writer and
+reader require a stable `/proc/self/fd` or `/dev/fd` SQLite path on POSIX so the
+opened inode cannot drift from SQLite's journal path. Existing exact v1 or
+unversioned-v1 databases require the explicit
 `database-migrate` command; ordinary startup does not migrate them. The command
 first creates and verifies a sibling backup ending in `.pre-v2.bak`, never
 overwrites an existing backup, and then applies the additive migration in one
 transaction. Its JSON receipt reports only `backup: created`, not the configured
-filesystem path. The backup is created mode 0600 on POSIX; Windows confidentiality
+filesystem path. The backup is created mode `0600` on POSIX; Windows confidentiality
 still depends on the private-directory/NTFS ACL acceptance tracked separately.
-POSIX migration also requires an operator-owned parent directory that is not
-group- or world-writable and keeps no-follow source/backup descriptors bound
+POSIX migration also requires an operator-owned mode-`0700` parent and mode-`0600`
+regular, single-link database, and keeps no-follow source/backup descriptors bound
 through backup verification. Stop other MEGALODON processes before migrating and
 retain the backup until the new database has been operationally verified.
 Partial, altered, extended, or newer application schemas are refused rather than
 repaired or downgraded.
+
+The dashboard command refuses a disabled configuration before reading an offline
+projection or opening storage. When enabled, it requires that database to exist
+with the exact current schema and private path boundary. A no-sidecar immutable
+schema preflight prevents failed compatibility checks from creating SQLite
+coordination files. An unserved normal connection then establishes and validates
+any required private WAL coordination before the final `mode=ro` connection can
+serve committed WAL rows. On supported POSIX hosts, the opened descriptor pins
+the database inode while SQLite's own `database_list` must resolve it to the
+configured private path. The parent directory's entry generation must remain
+stable from final open through every served read; replacement or sidecar-entry
+changes force a fixed refusal and a generic HTTP `503` rather than a path-bearing
+traceback. `PRAGMA query_only=ON` and a closed SQL authorizer block writes, DDL,
+`ATTACH`, internal row-ID reads, and private-column reads. Summary counts come from
+one SQLite statement, and recent detections select and order only by public data:
+`detected_at`, `rule_id`, `severity`, `src_ip`, and `message`. Compatible WAL
+reads may create or update private `-wal`/`-shm` coordination files inside the
+verified mode-`0700` directory; they do not change the main database, schema,
+`user_version`, or journal mode. Windows ACL enforcement remains issue #27.
+
+For an existing POSIX installation, stop every MEGALODON process before the
+first post-upgrade open. Inspect the literal configured directory, database, and
+any `-wal`/`-shm` files: each must be owned by the runtime user, must not be a
+symlink or non-regular file, and the database/sidecars must have exactly one hard
+link. Only after those checks, a conventional `data/megalodon.db` installation
+can be normalized with `chmod 700 -- data` and
+`chmod 600 -- data/megalodon.db`. Do not apply those commands to an unverified,
+shared, linked, or redirected path; preserve unexpected sidecars for recovery
+review or copy the stopped database to a newly created private location. Writer
+startup normalizes an already owner-controlled database and sidecars to mode
+`0600`, but deliberately refuses to change an existing public parent directory.
+Use a dedicated private database directory: while a dashboard reader is serving,
+any directory-entry addition, removal, or rename requires a reader restart.
 The [`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audit
 and standalone offline-report retention separate and defines fail-closed
 outcomes; it selects no deletion value or automatic job.
@@ -303,8 +339,6 @@ content-security policy does not require inline-script or inline-style access.
 The live events API projects only detection time, rule ID, severity, source IP,
 and message. Destination IP, evidence, recommendation, and suppression details
 remain in the local audit store and are not served to the browser.
-Summary counts are collected from one read transaction so a refresh cannot mix
-values from different database snapshots.
 
 ## Commands
 
@@ -316,7 +350,7 @@ values from different database snapshots.
 | `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
 | `run --source scapy --interface IFACE` | Perform optional Linux live metadata capture |
 | `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 audit database to v2; never overwrites its backup |
-| `dashboard` | Serve the read-only dashboard using configured host and port |
+| `dashboard` | Serve the loopback dashboard from an existing compatible database through the separate read-only projection |
 | `firewall-plan IP` | Validate a target and print a non-mutating, time-limited block plan |
 | `firewall-install` | Print the isolated nftables table plan; the retained `--apply` option explicitly refuses and executes nothing |
 | `block IP --reason TEXT` | Print one block plan; the retained `--apply` option explicitly refuses and executes nothing |
@@ -410,7 +444,7 @@ a separately reviewed change requires otherwise.
 
 | Section | Important defaults | Notes |
 | --- | --- | --- |
-| `[app]` | `db_path = "data/megalodon.db"`, `log_level = "INFO"` | Database parent directories are created locally as needed |
+| `[app]` | `db_path = "data/megalodon.db"`, `log_level = "INFO"` | Writer startup creates a missing private leaf directory; dashboard startup never creates the directory or database |
 | `[capture]` | `source = "sample"`, empty `interface` | The CLI can override the source and interface per run |
 | `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | TOML integers only; windows max at 3,600s, cooldown at 86,400s, DNS length at 65,535, and both state ceilings at 65,536. Thresholds cannot exceed the per-source event ceiling |
 | `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | Timeout is a TOML integer from 1–604,800s; `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
@@ -445,7 +479,7 @@ The server exposes only these read routes:
 | `GET /` | Static dashboard HTML |
 | `GET /assets/dashboard.css`, `GET /assets/dashboard.js` | Same-origin no-store assets |
 | `GET /api/config` | Immutable polling, row-budget, and offline-summary availability metadata |
-| `GET /api/summary` | SQLite event, detection, action, and severity counts |
+| `GET /api/summary` | SQLite event, detection, action, and severity counts from one read snapshot |
 | `GET /api/events?limit=N` | Five-field recent-detection projections with strict query validation and a 200-row ceiling |
 | `GET /api/offline-summary` | Availability plus one startup-validated, capped offline summary; never record rows or capture paths |
 
@@ -556,7 +590,8 @@ operational work unbuilt.
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
 | [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; machine-readable matrix and Linux-run unsupported-operation controls exist, but native Windows/NTFS/browser receipts remain unperformed |
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
-| [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; this candidate removes the executor and makes every retained apply route refuse before configuration or host/process work; exact-head CI and independent review remain required |
+| [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; executor removal and fail-closed apply refusal are on `main`; independent review and any separately designed restoration gate remain required |
+| [#66 — isolate dashboard reads](https://github.com/bartytime4life/MEGALODON/issues/66) | This revision separates dashboard reads from the writer, validates private database identity/schema, and constrains SQL to the five-field projection; independent review and native Windows ACL evidence remain open |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because

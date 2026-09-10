@@ -70,6 +70,8 @@ class CliTests(unittest.TestCase):
                 for statement in SCHEMA_V1_STATEMENTS:
                     connection.execute(statement)
                 connection.execute("PRAGMA user_version = 1")
+            if os.name == "posix":
+                database.chmod(0o600)
 
             output = io.StringIO()
             with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
