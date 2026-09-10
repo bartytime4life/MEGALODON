@@ -227,6 +227,7 @@ def _run(args: argparse.Namespace) -> int:
 def _dashboard(args: argparse.Namespace) -> int:
     from .dashboard import loopback_host, serve
     from .offline_projection import load_offline_projection
+    from .storage import DashboardStore
 
     try:
         settings = _load(args.config)
@@ -234,7 +235,7 @@ def _dashboard(args: argparse.Namespace) -> int:
         port = args.port if args.port is not None else settings.dashboard.port
         host = loopback_host(host, allow_remote=args.allow_remote)
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
-        with Store(settings.db_path) as store:
+        with DashboardStore(settings.db_path) as store:
             serve(
                 store,
                 host,

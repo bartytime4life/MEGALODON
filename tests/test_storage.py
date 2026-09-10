@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 import sqlite3
 
 import pytest
 
 from megalodon.models import ActionRecord, DetectionResult, PacketEvent
-from megalodon.storage import Store
+from megalodon.storage import DashboardStore, StorageSchemaError, Store
 
 
 STAMP = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -22,6 +23,41 @@ def _populate(store: Store) -> None:
     store.record_action(
         ActionRecord(STAMP, "test", event.src_ip, "not_attempted", "synthetic")
     )
+
+
+def test_dashboard_store_requires_existing_private_compatible_database(tmp_path):
+    database = tmp_path / "audit.db"
+    with pytest.raises(StorageSchemaError, match="NO_DATABASE"):
+        DashboardStore(database)
+    with Store(database) as store:
+        _populate(store)
+    with DashboardStore(database) as reader:
+        assert reader.summary() == {
+            "events": 1, "detections": 1, "actions": 1, "high_or_critical": 0,
+        }
+        assert reader.recent(1) == [{
+            "detected_at": STAMP.isoformat(), "rule_id": "TEST", "severity": "LOW",
+            "src_ip": "192.0.2.1", "message": "synthetic",
+        }]
+        assert reader.connection.execute("PRAGMA query_only").fetchone()[0] == 1
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            reader.connection.execute("DELETE FROM events")
+
+
+def test_dashboard_store_rejects_symlink_and_public_storage(tmp_path):
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    database = private / "audit.db"
+    with Store(database):
+        pass
+    alias = private / "alias.db"
+    alias.symlink_to(database)
+    with pytest.raises(StorageSchemaError, match="UNSAFE_DATABASE"):
+        DashboardStore(alias)
+    if os.name == "posix":
+        private.chmod(0o755)
+        with pytest.raises(StorageSchemaError, match="UNSAFE_DIRECTORY"):
+            DashboardStore(database)
 
 
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):

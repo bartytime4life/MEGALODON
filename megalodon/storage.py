@@ -10,6 +10,7 @@ import sqlite3
 import stat
 from threading import RLock
 from typing import Any
+from urllib.parse import quote
 
 from .models import ActionRecord, DetectionResult, PacketEvent
 from .validation import (
@@ -195,6 +196,38 @@ class StorageSchemaError(ValueError):
 
 class IngestionRunError(ValueError):
     """An ingestion run transition or association is invalid."""
+
+
+def _validate_private_storage_path(path: Path, *, require_file: bool) -> Path:
+    """Return an absolute local path whose immediate storage boundary is private."""
+    resolved = path.absolute()
+    parent = resolved.parent
+    try:
+        parent_stat = parent.lstat()
+    except OSError as exc:
+        raise StorageSchemaError("STORAGE_PRIVACY:UNSAFE_DIRECTORY") from exc
+    if not stat.S_ISDIR(parent_stat.st_mode):
+        raise StorageSchemaError("STORAGE_PRIVACY:UNSAFE_DIRECTORY")
+    if os.name == "posix" and (
+        parent_stat.st_uid != os.geteuid()
+        or parent_stat.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+    ):
+        raise StorageSchemaError("STORAGE_PRIVACY:UNSAFE_DIRECTORY")
+    if require_file:
+        try:
+            file_stat = resolved.lstat()
+        except OSError as exc:
+            raise StorageSchemaError("STORAGE_READER:NO_DATABASE") from exc
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise StorageSchemaError("STORAGE_READER:UNSAFE_DATABASE")
+        if os.name == "posix" and (
+            file_stat.st_uid != os.geteuid()
+            or file_stat.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        ):
+            raise StorageSchemaError("STORAGE_READER:UNSAFE_DATABASE")
+    elif os.path.lexists(resolved) and resolved.is_symlink():
+        raise StorageSchemaError("STORAGE_PRIVACY:SYMLINK_REFUSED")
+    return resolved
 
 
 def _validate_schema(
@@ -536,9 +569,25 @@ def migrate_database(path: str | Path) -> dict[str, object]:
 class Store:
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.path = _validate_private_storage_path(self.path, require_file=False)
+        created_descriptor: int | None = None
+        if not os.path.lexists(self.path):
+            created_descriptor = _open_regular_file(
+                self.path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
+            )
         self._lock = RLock()
-        self.connection = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
+        try:
+            self.connection = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
+        except Exception:
+            if created_descriptor is not None and _path_matches_descriptor(
+                self.path, created_descriptor
+            ):
+                self.path.unlink(missing_ok=True)
+            raise
+        finally:
+            if created_descriptor is not None:
+                os.close(created_descriptor)
         self.connection.row_factory = sqlite3.Row
         try:
             with self._lock:
@@ -919,3 +968,75 @@ class Store:
                 "events": events.rowcount,
                 "actions": actions.rowcount,
             }
+
+
+class DashboardStore:
+    """Validated query-only view of an existing writer-owned audit database."""
+
+    def __init__(self, path: str | Path):
+        self.path = _validate_private_storage_path(Path(path), require_file=True)
+        self._lock = RLock()
+        descriptor: int | None = None
+        try:
+            descriptor = _open_regular_file(self.path, os.O_RDONLY)
+            uri = f"file:{quote(str(self.path))}?mode=ro"
+            self.connection = sqlite3.connect(uri, uri=True, timeout=10, check_same_thread=False)
+            self.connection.row_factory = sqlite3.Row
+            self.connection.execute("PRAGMA query_only=ON")
+            if not _path_matches_descriptor(self.path, descriptor):
+                raise StorageSchemaError("STORAGE_READER:DATABASE_CHANGED")
+            if int(self.connection.execute("PRAGMA user_version").fetchone()[0]) != SCHEMA_VERSION:
+                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
+            _validate_schema(
+                self.connection,
+                _TABLE_COLUMNS_V2,
+                _INDEX_COLUMNS_V2,
+                _FOREIGN_KEYS_V2,
+                _UNIQUE_INDEXES_V2,
+                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+            )
+        except Exception:
+            if hasattr(self, "connection"):
+                self.connection.close()
+            raise
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+
+    def close(self) -> None:
+        with self._lock:
+            self.connection.close()
+
+    def __enter__(self) -> "DashboardStore":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def summary(self) -> dict[str, Any]:
+        with self._lock:
+            self.connection.execute("BEGIN")
+            try:
+                row = self.connection.execute(
+                    """SELECT
+                      (SELECT COUNT(*) FROM events) AS events,
+                      (SELECT COUNT(*) FROM detections) AS detections,
+                      (SELECT COUNT(*) FROM actions) AS actions,
+                      (SELECT COUNT(*) FROM detections
+                       WHERE severity IN ('HIGH', 'CRITICAL')) AS high_or_critical"""
+                ).fetchone()
+                self.connection.commit()
+            except Exception:
+                self.connection.rollback()
+                raise
+        return {name: int(row[name]) for name in ("events", "detections", "actions", "high_or_critical")}
+
+    def recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 200))
+        with self._lock:
+            rows = self.connection.execute(
+                """SELECT detected_at, rule_id, severity, src_ip, message
+                FROM detections ORDER BY id DESC LIMIT ?""",
+                (safe_limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
