@@ -130,6 +130,42 @@ def test_writer_refuses_public_parent_symlink_and_hardlink_targets(tmp_path):
         Store(hardlink)
 
 
+@pytest.mark.parametrize(
+    ("constructor", "prefix"),
+    [
+        (DashboardStore, "DASHBOARD_STORE"),
+        (Store, "STORAGE_PATH"),
+    ],
+)
+def test_database_paths_reject_dotdot_before_symlink_collapse(
+    tmp_path, monkeypatch, constructor, prefix
+):
+    private = tmp_path / "private"
+    canonical = private / "audit.db"
+    _seed(canonical)
+    other = tmp_path / "other"
+    other.mkdir(mode=0o700)
+    alias = private / "alias"
+    try:
+        alias.symlink_to(other, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+    ambiguous = private / "alias" / ".." / "audit.db"
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("SQLite opened an ambiguous database path")
+
+    monkeypatch.setattr(storage_module.sqlite3, "connect", forbidden)
+    with pytest.raises(
+        StorageSchemaError, match=rf"^{prefix}:AMBIGUOUS_PATH$"
+    ):
+        constructor(ambiguous)
+
+    assert canonical.is_file()
+    assert not (tmp_path / "audit.db").exists()
+    assert _sidecars(canonical) == set()
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ancestor modes required")
 def test_reader_and_writer_refuse_a_replaceable_ancestor_before_sqlite(
     tmp_path, monkeypatch

@@ -352,7 +352,7 @@ def _validate_connection_path(
     sequence, name, filename = rows[0][:3]
     if int(sequence) != 0 or str(name) != "main" or not filename:
         _raise_path_error(prefix, "DATABASE_CHANGED")
-    actual = _absolute_database_path(str(filename))
+    actual = _absolute_database_path(str(filename), prefix)
     if os.path.normcase(os.fspath(actual)) != os.path.normcase(os.fspath(expected)):
         _raise_path_error(prefix, "DATABASE_CHANGED")
 
@@ -369,10 +369,15 @@ def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
     return descriptor
 
 
-def _absolute_database_path(path: str | Path) -> Path:
+def _absolute_database_path(
+    path: str | Path, prefix: str = "STORAGE_PATH"
+) -> Path:
     """Return an absolute lexical path without following a filesystem link."""
 
-    return Path(os.path.abspath(os.fspath(path)))
+    raw = Path(path)
+    if ".." in raw.parts:
+        _raise_path_error(prefix, "AMBIGUOUS_PATH")
+    return Path(os.path.abspath(os.fspath(raw)))
 
 
 def _raise_path_error(
@@ -591,7 +596,7 @@ def _validate_migration_directory(path: Path) -> None:
 def migrate_database(path: str | Path) -> dict[str, object]:
     """Explicitly migrate an exact v1 database after a verified local backup."""
 
-    source_path = _absolute_database_path(path)
+    source_path = _absolute_database_path(path, "STORAGE_MIGRATION")
     if source_path.is_symlink():
         raise StorageSchemaError("STORAGE_MIGRATION:SYMLINK_REFUSED")
     if not source_path.is_file():
@@ -804,7 +809,7 @@ def migrate_database(path: str | Path) -> dict[str, object]:
 
 class Store:
     def __init__(self, path: str | Path):
-        self.path = _absolute_database_path(path)
+        self.path = _absolute_database_path(path, "STORAGE_PATH")
         self._lock = RLock()
         self._closed = False
         self._directory_descriptor: int | None = None
@@ -1299,7 +1304,7 @@ class DashboardStore:
     }
 
     def __init__(self, path: str | Path):
-        self.path = _absolute_database_path(path)
+        self.path = _absolute_database_path(path, "DASHBOARD_STORE")
         self._lock = RLock()
         self._closed = False
         self._directory_descriptor: int | None = None
