@@ -312,9 +312,15 @@ def _firewall(args: argparse.Namespace, mode: str) -> int:
 
 def _live_apply_requested(argv: list[str]) -> bool:
     """Detect the retained apply flag before argparse validates route arguments."""
-    if not argv or argv[0] not in {"block", "firewall-install"}:
+    if not argv:
         return False
-    for argument in argv[1:]:
+    command_index = 1 if argv[0] == "--" else 0
+    if (
+        command_index >= len(argv)
+        or argv[command_index] not in {"block", "firewall-install"}
+    ):
+        return False
+    for argument in argv[command_index + 1 :]:
         if argument == "--":
             break
         if argument.startswith("--a") and "--apply".startswith(argument):
