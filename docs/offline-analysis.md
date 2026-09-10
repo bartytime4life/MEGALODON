@@ -278,16 +278,21 @@ its records or join packet and flow counts. Startup validation detects ordinary
 file changes but does not create an atomic filesystem snapshot against a
 malicious same-owner writer or compromised kernel.
 
-The same page provides local-only search and severity filters for the bounded
-recent SQLite detection set, plus manual refresh and pause/resume controls.
-These controls do not operate on offline record rows and cannot reload or
-replace the selected offline snapshot. Configure `dashboard.refresh_seconds`
-(2–300) and `dashboard.event_limit` (1–200), or use the matching command-line
-overrides for one launch. Polling stops while the page is hidden, does not
-overlap an in-flight request, and preserves the last rendered rows when a
-refresh fails. No filter state is persisted or exported.
+The same page provides local-only search, grouped/exact severity and exact-rule
+filters for the bounded recent SQLite detection set, plus a maximum 12-bin
+timeline over valid timestamps, manual refresh, clear controls, and pause/resume.
+Invalid timestamps remain table rows when no time filter is active and are
+explicitly excluded from the timeline. These controls do not operate on offline
+record rows and cannot reload or replace the selected offline snapshot.
+Configure `dashboard.refresh_seconds` (2–300) and `dashboard.event_limit`
+(1–200), or use the matching command-line overrides for one launch. Polling
+stops while the page is hidden, does not overlap an in-flight request, and
+preserves the last rendered rows, filters, last-success time, and stored
+high/critical baseline when a refresh fails. No filter state is persisted or
+exported. The sequential count-change signal is not a unique-alert,
+acknowledgement, resolution, incident, or capture-health mechanism.
 
-The live detection response is also data-minimized before serialization. It
+The recent-detection response is also data-minimized before serialization. It
 contains only detection time, rule ID, severity, source IP, and message—the five
 fields rendered by the table. Destination IP, evidence JSON, recommendation,
 and suppression reason remain available to local audit workflows in SQLite but

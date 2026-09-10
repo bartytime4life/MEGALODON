@@ -125,7 +125,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized writes and WAL mode |
-| Dashboard | Read-only loopback UI backed by a separate read-only SQLite projection, bounded recent-detection controls, and an optional privacy-safe summary of one completed offline run |
+| Dashboard | Read-only loopback UI backed by a separate read-only SQLite projection, bounded recent-detection triage controls, and an optional privacy-safe summary of one completed offline run |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for selected free/open-source tools; performs no host probe or installation |
@@ -322,12 +322,17 @@ non-canonical, and wrong-port values are rejected before routing or audit-store
 reads, limiting DNS-rebinding exposure. This check does not turn a proxy,
 tunnel, or port forward into a supported remote-access path.
 
-The recent-detections view supports local search, severity filtering, manual
-refresh, and pause/resume polling. Filters exist only in browser memory and do
-not alter SQLite, write files, or add an export path. Polling is suspended while
-the page is hidden, requests time out after five seconds, and an in-flight
-refresh is never overlapped. The safe built-in defaults can be replaced by an
-explicit `--config` file or overridden for one launch:
+The recent-detection triage view operates only on the bounded array returned by
+`/api/events`. It combines local search, grouped or exact severity, a dynamically
+derived exact-rule filter, and at most 12 chronological timestamp bins. Invalid
+timestamps remain visible in an otherwise unfiltered table but are excluded
+from the timeline with an explicit count. Returned-row, high/critical-row, and
+distinct-rule chips describe that array only; they are not full-history rates.
+Filters exist only in browser memory and do not alter SQLite, write files, or
+add an export path. Polling is suspended while the page is hidden, requests time
+out after five seconds, and an in-flight refresh is never overlapped. The safe
+built-in defaults can be replaced by an explicit `--config` file or overridden
+for one launch:
 
 ```bash
 python -m megalodon dashboard --refresh-seconds 12 --event-limit 125
@@ -336,9 +341,18 @@ python -m megalodon dashboard --refresh-seconds 12 --event-limit 125
 `refresh_seconds` accepts 2–300 and `event_limit` accepts 1–200. The dashboard
 serves its CSS and JavaScript from same-origin, no-store asset endpoints so its
 content-security policy does not require inline-script or inline-style access.
-The live events API projects only detection time, rule ID, severity, source IP,
+The recent-events API projects only detection time, rule ID, severity, source IP,
 and message. Destination IP, evidence, recommendation, and suppression details
 remain in the local audit store and are not served to the browser.
+
+After each successful summary fetch, the page compares the stored
+`high_or_critical` count with the preceding successful value. It reports an
+initial baseline or a sequential increase/decrease only. This is not unique-new
+alert detection, deduplication, acknowledgement, assignment, resolution,
+incident state, or evidence that capture/ingestion is healthy. Summary and event
+rows come from separate HTTP reads and are never presented as one coherent
+snapshot. A partial or malformed refresh preserves the prior rows, filters,
+last-success timestamp, and count baseline while marking the display stale.
 
 ## Commands
 
@@ -464,12 +478,19 @@ unsupported; any future restoration must satisfy the gate below.
 
 The current UI is a responsive dark-theme status view with:
 
-- summary cards for stored events, detections, actions, and high/critical counts;
+- summary cards for stored events, detections, action records, and high/critical
+  counts, with action records explicitly distinguished from live application;
 - a five-column recent-detections table: time, severity, rule, source, and message;
-- local text search and severity filtering, manual refresh, and pause/resume;
+- combined local search, priority/exact-severity and exact-rule filters, plus a
+  maximum 12-bin timeline over valid timestamps in the returned set;
+- returned-set scope chips and a sequential stored high/critical count-change
+  signal that explicitly does not claim unique alerts or incident state;
+- manual refresh, clear-filter controls, and pause/resume polling;
 - bounded five-second polling by default, suspended while the page is hidden;
-- an optional privacy-bounded summary of one explicitly selected completed
-  offline run; and
+- an optional schema-checked, privacy-bounded summary of one explicitly selected
+  completed offline run;
+- a truthful operator-status strip that separates dashboard API reachability
+  from unmeasured capture/ingestion health and marks preserved data stale; and
 - DOM text-node rendering rather than raw HTML insertion.
 
 The server exposes only these read routes:
@@ -592,6 +613,8 @@ operational work unbuilt.
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
 | [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; executor removal and fail-closed apply refusal are on `main`; independent review and any separately designed restoration gate remain required |
 | [#66 — isolate dashboard reads](https://github.com/bartytime4life/MEGALODON/issues/66) | This revision separates dashboard reads from the writer, validates private database identity/schema, and constrains SQL to the five-field projection; independent review and native Windows ACL evidence remain open |
+| [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Open integrity gate; runtime alert persistence, acknowledgement, or delivery must not be layered over potentially partial event/detection/action commits or ambiguous terminal receipts |
+| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; finite detector and endpoint limits do not yet prove bounded long-running storage, overload, retention, or notifier behavior |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because
@@ -644,7 +667,9 @@ This is a defensive MVP, not a finished enterprise IDS/IPS. The fixed detections
 are simple heuristics. There is no authenticated remote UI, arbitrary rule
 authoring, threat-feed or SIEM/SOAR integration, distributed sensor management,
 automatic retention job, production rollback orchestration, model execution,
-active scheduler, or Suricata runtime importer on `main`.
+active scheduler, Suricata runtime importer, alert acknowledgement/resolution/
+escalation lifecycle, notification dispatcher, or continuous capture-health
+monitor on `main`.
 
 Before operational deployment, use representative authorized replay data to
 measure false positives; validate live capture and TShark separately; define

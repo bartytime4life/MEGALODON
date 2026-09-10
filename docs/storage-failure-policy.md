@@ -94,6 +94,14 @@ refused without creating WAL/SHM. A runtime identity, sidecar, or directory
 generation refusal returns a fixed generic HTTP `503`; it does not disclose the
 diagnostic cause or configured path to the browser.
 
+`/api/summary` and `/api/events` are separate reads, not a shared SQLite
+snapshot. A browser comparison of successive `high_or_critical` summary totals
+is not an ingestion receipt, unique-alert count, or terminal alert lifecycle;
+[#67](https://github.com/bartytime4life/MEGALODON/issues/67) remains the
+run-integrity gate. The 200-row API ceiling and 12-bin browser timeline bound
+only this projection and do not close the detector/capture/storage resource gate
+in [#68](https://github.com/bartytime4life/MEGALODON/issues/68).
+
 The success receipt reports only the fixed backup state `created`, not the
 configured filesystem path. The operator can derive the local sibling name from
 the reviewed configuration and fixed `.pre-v2.bak` suffix without copying a

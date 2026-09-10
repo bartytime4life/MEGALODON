@@ -50,9 +50,11 @@ addresses, or the database files themselves.
 
 For the UI, start the foreground server on `127.0.0.1`, read back the native
 listener, and use a real local browser to test the current summary/events API,
-five-field projection, keyboard controls, pause/hidden polling, and recovery.
-Stop the server manually. A source assertion or CI server process is not a native
-Windows 11 browser receipt.
+five-field projection, text/review-priority/exact-rule/time filters, the
+at-most-12-bin timeline, sequential priority-count states, keyboard controls,
+pause/hidden polling, and recovery. Verify the explicit no-capture-health and
+no-alert-lifecycle labels. Stop the server manually. A source assertion or CI
+server process is not a native Windows 11 browser receipt.
 
 ## Unsupported-operation controls
 
