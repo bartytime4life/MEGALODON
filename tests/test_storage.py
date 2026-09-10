@@ -39,11 +39,13 @@ def test_dashboard_store_requires_existing_private_compatible_database(tmp_path)
             "detected_at": STAMP.isoformat(), "rule_id": "TEST", "severity": "LOW",
             "src_ip": "192.0.2.1", "message": "synthetic",
         }]
-        assert reader.connection.execute("PRAGMA query_only").fetchone()[0] == 1
-        with pytest.raises(sqlite3.OperationalError, match="readonly"):
-            reader.connection.execute("DELETE FROM events")
+        assert not hasattr(reader, "connection")
+        assert reader._connection.execute("PRAGMA query_only").fetchone()[0] == 1
+        with pytest.raises(sqlite3.DatabaseError, match="not authorized"):
+            reader._connection.execute("DELETE FROM events")
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlink and mode semantics")
 def test_dashboard_store_rejects_symlink_and_public_storage(tmp_path):
     private = tmp_path / "private"
     private.mkdir(mode=0o700)
@@ -52,12 +54,11 @@ def test_dashboard_store_rejects_symlink_and_public_storage(tmp_path):
         pass
     alias = private / "alias.db"
     alias.symlink_to(database)
-    with pytest.raises(StorageSchemaError, match="UNSAFE_DATABASE"):
+    with pytest.raises(StorageSchemaError, match="SYMLINK_REFUSED"):
         DashboardStore(alias)
-    if os.name == "posix":
-        private.chmod(0o755)
-        with pytest.raises(StorageSchemaError, match="UNSAFE_DIRECTORY"):
-            DashboardStore(database)
+    private.chmod(0o755)
+    with pytest.raises(StorageSchemaError, match="UNSAFE_DIRECTORY"):
+        DashboardStore(database)
 
 
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):

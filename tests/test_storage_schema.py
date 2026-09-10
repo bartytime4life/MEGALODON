@@ -50,6 +50,8 @@ def _create_v1(path, *, version: int = 1) -> None:
             "'not_attempted', 'legacy', '{}')"
         )
         connection.execute(f"PRAGMA user_version = {version}")
+    if os.name == "posix":
+        path.chmod(0o600)
 
 
 def test_fresh_database_is_created_at_the_explicit_schema_version(tmp_path):
@@ -245,6 +247,9 @@ def test_v1_schema_with_added_check_constraint_is_refused_before_backup(tmp_path
                 )
             )
         connection.execute("PRAGMA user_version = 1")
+
+    if os.name == "posix":
+        path.chmod(0o600)
 
     with pytest.raises(StorageSchemaError, match="^STORAGE_SCHEMA:INCOMPATIBLE$"):
         migrate_database(path)

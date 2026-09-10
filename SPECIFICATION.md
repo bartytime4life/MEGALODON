@@ -25,14 +25,15 @@ MEGALODON provides local defensive network telemetry and bounded response for
 a Linux host. It is an evidence-producing assistant, not an autonomous
 authority to change the host’s network policy.
 
-The bounded 0.2 evaluation target is limited to sample and explicitly
+The proposed bounded evaluation target, whose first release version remains an
+owner decision under issue #70, is limited to sample and explicitly
 authorized JSONL metadata, three fixed detection rules, private local SQLite,
-and a genuinely read-only loopback dashboard. That accepted artifact remains
+and an application/SQL-read-only loopback dashboard projection. Acceptance remains
 gated by the open integrity, resource, browser, installed-tool, and release
 controls. The current repository also exposes an explicit, non-executing
 nftables plan boundary; firewall application is unsupported.
 
-Optional Scapy code exists outside the accepted 0.2 evaluation artifact pending
+Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
 metadata queue. The callback does not block; the first overflow makes the
 consumer stop with a bounded error and does not publish queued events after the
@@ -67,7 +68,10 @@ capture-buffer sizing or loss-free operation under production load.
    `planned`, or `failed` status are stored in the action ledger. `applied`
    remains a closed compatibility value, but the evaluation-release candidate
    has no firewall path that produces it.
-8. **Dashboard is read-only.** The HTTP surface has no mutation endpoint.
+8. **Dashboard is read-only.** The HTTP surface has no mutation endpoint, and
+   its separate store uses SQLite `mode=ro`, `query_only`, and a deny-by-default
+   SQL authorizer. POSIX additionally requires an existing compatible private
+   database; native Windows confidentiality remains an ACL acceptance gate.
 9. **Loopback binds only.** The dashboard refuses non-loopback addresses and
    the legacy remote opt-in. It does not provide remote authentication.
 10. **Fail closed for live response.** Every CLI and direct-backend apply
@@ -192,6 +196,39 @@ a loopback address. The CLI checks the bind before opening the audit store or
 loading an offline report; `serve()` independently enforces the same boundary.
 This does not authorize a proxy, tunnel or port-forwarding workaround.
 
+A disabled dashboard is refused before offline-projection or database access.
+An enabled dashboard never creates a parent, database, or schema; runs a
+migration; changes `user_version` or journal mode; or exposes the writer API.
+On POSIX it requires an owner-controlled mode-`0700` leaf directory and an
+owner-controlled, regular, single-link, non-symlink database with no group or
+world permission bits. Path ancestors must be root/runtime-user owned and
+non-writable by group/other unless they are trusted sticky directories. The
+writer creates new leaf directories and databases as mode `0700` and `0600`;
+explicit migration requires the same leaf boundary. Both reader and writer
+require a stable `/proc/self/fd` or `/dev/fd` SQLite path on POSIX.
+Native Windows ACL proof remains a separate #27 acceptance requirement.
+
+When no WAL/SHM files exist, startup first validates the static schema through
+a short-lived read-only immutable connection. That compatibility preflight is
+closed before serving and is never used for data reads because immutable mode
+would not safely observe a live writer. A separate, unserved normal connection
+then establishes and validates any WAL/SHM coordination state. Only after a
+second `mode=ro` connection resolves the held database descriptor to the exact
+configured path and the parent directory-entry generation remains unchanged is
+that connection served. The invariant is rechecked before and after every read.
+On supported POSIX hosts, the descriptor path requires `/proc/self/fd` or
+`/dev/fd`; absence is a fixed refusal. The served connection sets
+`PRAGMA query_only=ON` and installs an authorizer that permits only the
+dashboard's `SELECT`/`count` projection. `ATTACH`, DDL, DML, write PRAGMAs,
+internal row-ID reads, and reads of private columns are denied. Existing WAL and
+SHM files must both be private regular single-link files; a journal or one-sided
+pair is refused. Successful reads may create or update private WAL/SHM contents
+inside the verified directory, but any later directory-entry change requires a
+reader restart. A missing, linked, unsafe, corrupt, or incompatible no-sidecar
+database is refused without creating WAL/SHM. SQLite 3.22.0 or newer is required
+for supported read-only WAL behavior. A runtime storage refusal becomes one
+fixed path-free HTTP `503` response.
+
 Every `GET` request must carry exactly one `Host` header matching the numeric
 loopback address on which the server is listening, with either no port or the
 actual listening port. The literal `localhost` forms are also accepted when the
@@ -214,14 +251,6 @@ The dashboard exposes only:
   reasons are excluded from the browser contract;
 - `GET /api/offline-summary` — either `available: false` or one immutable,
   validated `dashboard-offline-summary-v1` snapshot selected at startup.
-
-The dashboard uses a separate SQLite URI `mode=ro` connection with
-`PRAGMA query_only=ON` and accepts only an existing exact compatible schema in a
-verified private storage directory. It never creates or migrates the database or
-changes journal mode. Summary counts share one read transaction, and the recent
-detection query selects only the five public fields in the API contract. SQLite
-WAL coordination files may still be maintained inside that private directory;
-this is not a zero-filesystem-write snapshot-viewer claim.
 
 `dashboard.refresh_seconds` is an integer from 2 through 300 and
 `dashboard.event_limit` is an integer from 1 through 200. The matching
@@ -282,6 +311,9 @@ The MVP is acceptable for local experimentation when:
 - every CLI and direct-backend apply request returns the fixed refusal before a
   subprocess or host mutation and produces no `applied` receipt;
 - dashboard rejects unsafe binds and legacy overrides before socket creation;
+- dashboard refuses disabled, missing, unsafe, replaced, linked, or incompatible
+  stores before serving; one summary statement supplies a single SQLite read
+  snapshot and recent rows select only the five public fields;
 - offline summaries reject incomplete, public, linked, mismatched, or tampered
   report sets and remain unavailable on remote binds;
 - sample replay produces a database and no firewall mutation;
