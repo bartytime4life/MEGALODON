@@ -13,6 +13,7 @@ import pytest
 
 from megalodon import cli, dashboard
 from megalodon import offline_projection
+from megalodon.storage import DashboardStore, StorageSchemaError, Store
 
 
 INVALID_HOSTS = (
@@ -77,7 +78,7 @@ def test_cli_refuses_before_store_report_or_server(monkeypatch, capsys, host, ov
         dashboard=SimpleNamespace(host="0.0.0.0", port=8787), db_path="not-opened",
     )
     monkeypatch.setattr(cli, "_load", lambda _: settings)
-    monkeypatch.setattr(cli, "Store", _forbidden)
+    monkeypatch.setattr(cli, "DashboardStore", _forbidden)
     monkeypatch.setattr(offline_projection, "load_offline_projection", _forbidden)
     monkeypatch.setattr(dashboard, "serve", _forbidden)
     args = argparse.Namespace(
@@ -92,15 +93,108 @@ def test_cli_refuses_before_store_report_or_server(monkeypatch, capsys, host, ov
     assert "not-opened" not in result.err
 
 
+def test_disabled_cli_dashboard_refuses_before_projection_or_store(monkeypatch, capsys):
+    settings = SimpleNamespace(
+        dashboard=SimpleNamespace(
+            host="127.0.0.1", port=8787, enabled=False
+        ),
+        db_path="not-opened",
+    )
+    monkeypatch.setattr(cli, "_load", lambda _: settings)
+    monkeypatch.setattr(cli, "DashboardStore", _forbidden)
+    monkeypatch.setattr(offline_projection, "load_offline_projection", _forbidden)
+    monkeypatch.setattr(dashboard, "serve", _forbidden)
+    args = argparse.Namespace(
+        config="unused",
+        host=None,
+        port=None,
+        allow_remote=False,
+        offline_run="not-read",
+        refresh_seconds=None,
+        event_limit=None,
+    )
+
+    assert cli._dashboard(args) == 2
+    result = capsys.readouterr()
+    assert result.out == ""
+    assert result.err == "megalodon: dashboard is disabled by configuration\n"
+
+
+def test_cli_dashboard_uses_the_dedicated_reader(tmp_path, monkeypatch):
+    path = tmp_path / "private" / "audit.db"
+    with Store(path):
+        pass
+    settings = SimpleNamespace(
+        dashboard=SimpleNamespace(
+            host="127.0.0.1",
+            port=8787,
+            enabled=True,
+            refresh_seconds=5,
+            event_limit=50,
+        ),
+        db_path=path,
+    )
+    observed = {}
+
+    def inspect(reader, *_args, **_kwargs):
+        observed["reader"] = reader
+        assert isinstance(reader, DashboardStore)
+        assert reader.summary()["events"] == 0
+
+    monkeypatch.setattr(cli, "_load", lambda _: settings)
+    monkeypatch.setattr(dashboard, "serve", inspect)
+    args = argparse.Namespace(
+        config="unused",
+        host=None,
+        port=None,
+        allow_remote=False,
+        offline_run=None,
+        refresh_seconds=None,
+        event_limit=None,
+    )
+
+    assert cli._dashboard(args) == 0
+    assert "reader" in observed
+
+
+def test_cli_dashboard_missing_store_creates_nothing(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "missing" / "audit.db"
+    settings = SimpleNamespace(
+        dashboard=SimpleNamespace(
+            host="127.0.0.1",
+            port=8787,
+            enabled=True,
+            refresh_seconds=5,
+            event_limit=50,
+        ),
+        db_path=path,
+    )
+    monkeypatch.setattr(cli, "_load", lambda _: settings)
+    monkeypatch.setattr(dashboard, "serve", _forbidden)
+    args = argparse.Namespace(
+        config="unused",
+        host=None,
+        port=None,
+        allow_remote=False,
+        offline_run=None,
+        refresh_seconds=None,
+        event_limit=None,
+    )
+
+    assert cli._dashboard(args) == 2
+    assert not path.parent.exists()
+    assert str(path) not in capsys.readouterr().err
+
+
 def test_parser_preserves_legacy_flag_for_explicit_refusal():
     args = cli.build_parser().parse_args(["dashboard", "--allow-remote"])
     assert args.allow_remote is True
 
 
-def _host_request(server, values):
+def _host_request(server, values, path="/api/summary"):
     connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
     connection.putrequest(
-        "GET", "/api/summary", skip_host=True, skip_accept_encoding=True
+        "GET", path, skip_host=True, skip_accept_encoding=True
     )
     for value in values:
         connection.putheader("Host", value)
@@ -171,6 +265,35 @@ def test_dashboard_accepts_only_bound_loopback_host_forms():
             assert status == 200
             assert body == store.summary.return_value
         assert store.summary.call_count == len(expected)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_dashboard_returns_a_fixed_503_when_a_served_read_fails():
+    store = Mock()
+    store.summary.side_effect = StorageSchemaError(
+        "DASHBOARD_STORE:DIRECTORY_CHANGED:/private/operator/path"
+    )
+    store.recent.side_effect = StorageSchemaError(
+        "DASHBOARD_STORE:READ_FAILED:/private/operator/path"
+    )
+    handler = type(
+        "FailClosedDashboardHandler", (dashboard.DashboardHandler,), {"store": store}
+    )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        for path in ("/api/summary", "/api/events?limit=1"):
+            status, body, headers = _host_request(
+                server, (f"127.0.0.1:{server.server_port}",), path
+            )
+            assert status == 503
+            assert body == {"error": "telemetry unavailable"}
+            assert headers["Cache-Control"] == "no-store"
+            assert "private" not in json.dumps(body)
     finally:
         server.shutdown()
         server.server_close()

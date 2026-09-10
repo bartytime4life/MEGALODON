@@ -16,7 +16,7 @@ from .config import load_settings
 from .firewall import FirewallError, LIVE_APPLY_UNSUPPORTED, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
-from .storage import migrate_database, Store
+from .storage import DashboardStore, migrate_database, Store
 from .validation import safe_text, ValidationError
 
 
@@ -227,20 +227,22 @@ def _run(args: argparse.Namespace) -> int:
 def _dashboard(args: argparse.Namespace) -> int:
     from .dashboard import loopback_host, serve
     from .offline_projection import load_offline_projection
-    from .storage import DashboardStore
 
     try:
         settings = _load(args.config)
         host = args.host if args.host is not None else settings.dashboard.host
         port = args.port if args.port is not None else settings.dashboard.port
         host = loopback_host(host, allow_remote=args.allow_remote)
+        enabled = getattr(settings.dashboard, "enabled", True)
+        if not enabled:
+            raise ValueError("dashboard is disabled by configuration")
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with DashboardStore(settings.db_path) as store:
             serve(
                 store,
                 host,
                 port,
-                enabled=settings.dashboard.enabled,
+                enabled=enabled,
                 allow_remote=args.allow_remote,
                 offline_summary=offline_summary,
                 refresh_seconds=(
