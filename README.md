@@ -352,6 +352,18 @@ The recent-events API projects only detection time, rule ID, severity, source IP
 and message. Destination IP, evidence, recommendation, and suppression details
 remain in the local audit store and are not served to the browser.
 
+The dashboard also exposes a manual **Reference Library** panel backed by the
+installed, manifest-verified IANA snapshot. It accepts one normalized transport
+plus decimal port or one decimal IP protocol number, returns at most eight
+registration rows, and shows bundle/source provenance and an interpretation
+warning. The panel is deliberately separate from detection evidence: a
+registration is not proof of an observed service, safety, malicious intent, or
+an alert. `/api/reference/status`, `/api/reference/port`, and
+`/api/reference/protocol` are GET-only, loopback-bound, no-store reads; they
+have no update, database, notifier, subprocess, firewall, or external-network
+path. Invalid, repeated, unknown, non-canonical, or out-of-range query fields
+fail closed, while a later failed lookup marks any preserved result stale.
+
 After each successful summary fetch, the page compares the stored
 `high_or_critical` count with the preceding successful value. It reports an
 initial baseline or a sequential increase/decrease only. This is not unique-new

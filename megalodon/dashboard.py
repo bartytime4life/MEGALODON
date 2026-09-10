@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import json
+from threading import Lock
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 
+from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
 
 
@@ -15,12 +18,245 @@ MIN_REFRESH_SECONDS = 2
 MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
 DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
+MAX_REFERENCE_QUERY_LENGTH = 256
+MAX_REFERENCE_RESPONSE_BYTES = 64 * 1024
+MAX_REFERENCE_CACHE_ENTRIES = 16
+MAX_REFERENCE_MATCHES = 8
+REFERENCE_BUNDLE_VERSION = "v1"
+REFERENCE_WARNING = (
+    "Registration is analyst context, not proof of what was observed or whether an endpoint "
+    "is safe or malicious."
+)
 
 
 class DashboardReader(Protocol):
     def summary(self) -> dict[str, Any]: ...
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]: ...
+
+
+class ReferenceLookupError(ValueError):
+    """A fixed, path-free diagnostic for the dashboard reference surface."""
+
+
+class ReferenceLibrary:
+    """A verified, immutable-in-process view of the bundled IANA snapshot.
+
+    The bundle is loaded once, never refreshed from the network, and only a
+    small LRU-like cache of exact manual lookups is retained.  The cache is a
+    performance detail, not a persistence or detection store.
+    """
+
+    def __init__(
+        self,
+        bundle: IanaBundle | Any | None = None,
+        *,
+        failure: str | None = None,
+    ) -> None:
+        if bundle is not None and failure is not None:
+            raise ValueError("reference bundle and failure are mutually exclusive")
+        self._bundle = bundle
+        self._failure = failure
+        self._cache: OrderedDict[tuple[str, str, int], dict[str, object]] = OrderedDict()
+        self._lock = Lock()
+
+    @classmethod
+    def load(cls) -> "ReferenceLibrary":
+        try:
+            return cls(load_iana())
+        except ReferenceDataError as exc:
+            # Do not expose loader detail or a filesystem/resource path to the
+            # browser.  The fixed category remains useful to an operator.
+            detail = str(exc)
+            category = "integrity_failure" if any(
+                token in detail
+                for token in (
+                    "INTEGRITY",
+                    "MANIFEST",
+                    "ARTIFACT",
+                    "RESOURCE_SET",
+                    "ROW_COUNT",
+                    "ORDER_OR_DUPLICATE",
+                )
+            ) else "unavailable"
+            return cls(failure=category)
+
+    @property
+    def available(self) -> bool:
+        return self._bundle is not None and self._failure is None
+
+    @property
+    def cache_size(self) -> int:
+        with self._lock:
+            return len(self._cache)
+
+    def status(self) -> dict[str, object]:
+        if not self.available:
+            category = self._failure or "unavailable"
+            return {
+                "schema": "reference-library-status-v1",
+                "available": False,
+                "status": category,
+                "error": (
+                    "reference bundle integrity failure"
+                    if category == "integrity_failure"
+                    else "reference bundle unavailable"
+                ),
+                "network_access_performed": False,
+                "persistence_status": "not_attempted",
+                "action_status": "not_attempted",
+            }
+        bundle = self._bundle
+        assert bundle is not None
+        return {
+            "schema": "reference-library-status-v1",
+            "available": True,
+            "status": "ready",
+            "bundle_id": bundle.bundle_id,
+            "bundle_version": REFERENCE_BUNDLE_VERSION,
+            "manifest_sha256": bundle.manifest_sha256,
+            "service_records": len(bundle.services),
+            "protocol_records": len(bundle.protocols),
+            "cache_entries": self.cache_size,
+            "cache_limit": MAX_REFERENCE_CACHE_ENTRIES,
+            "sources": self._sources(bundle),
+            "warning": bundle.warning,
+            "network_access_performed": False,
+            "persistence_status": "not_attempted",
+            "action_status": "not_attempted",
+        }
+
+    def lookup_port(self, transport: str, port: int) -> dict[str, object]:
+        if transport not in {"tcp", "udp", "sctp", "dccp"} or type(port) is not int:
+            raise ReferenceLookupError("invalid reference lookup")
+        key = ("port", transport, port)
+        with self._lock:
+            cached = self._cache.get(key)
+            if cached is not None:
+                self._cache.move_to_end(key)
+                return json.loads(json.dumps(cached))
+        if not self.available:
+            return self.status()
+        bundle = self._bundle
+        assert bundle is not None
+        all_matches = [
+            item
+            for item in bundle.services
+            if item.transport == transport and item.port_start <= port <= item.port_end
+        ]
+        result = self._result(
+            "port",
+            all_matches,
+            bundle,
+            query={"transport": transport, "port": port},
+            source_ids=("iana-service-names-port-numbers",),
+        )
+        self._remember(key, result)
+        return json.loads(json.dumps(result))
+
+    def lookup_protocol(self, number: int) -> dict[str, object]:
+        if type(number) is not int:
+            raise ReferenceLookupError("invalid reference lookup")
+        key = ("protocol", "", number)
+        with self._lock:
+            cached = self._cache.get(key)
+            if cached is not None:
+                self._cache.move_to_end(key)
+                return json.loads(json.dumps(cached))
+        if not self.available:
+            return self.status()
+        bundle = self._bundle
+        assert bundle is not None
+        all_matches = [
+            item
+            for item in bundle.protocols
+            if item.decimal_start <= number <= item.decimal_end
+        ]
+        result = self._result(
+            "protocol",
+            all_matches,
+            bundle,
+            query={"number": number},
+            source_ids=("iana-protocol-numbers",),
+        )
+        self._remember(key, result)
+        return json.loads(json.dumps(result))
+
+    def _remember(self, key: tuple[str, str, int], value: dict[str, object]) -> None:
+        with self._lock:
+            self._cache[key] = value
+            self._cache.move_to_end(key)
+            while len(self._cache) > MAX_REFERENCE_CACHE_ENTRIES:
+                self._cache.popitem(last=False)
+
+    @staticmethod
+    def _sources(bundle: Any) -> list[dict[str, str]]:
+        return [dict(item) for item in getattr(bundle, "source_provenance", ())]
+
+    def _result(
+        self,
+        kind: str,
+        all_matches: list[Any],
+        bundle: Any,
+        *,
+        query: dict[str, object],
+        source_ids: tuple[str, ...],
+    ) -> dict[str, object]:
+        matches = all_matches[:MAX_REFERENCE_MATCHES]
+        status = (
+            "no_match"
+            if not all_matches
+            else "one_match"
+            if len(all_matches) == 1
+            else "multiple_matches"
+        )
+        sources = [
+            source
+            for source in self._sources(bundle)
+            if source.get("id") in source_ids
+        ]
+        result = {
+            "schema": "reference-library-lookup-v1",
+            "status": status,
+            "available": True,
+            "kind": kind,
+            "bundle_id": bundle.bundle_id,
+            "bundle_version": REFERENCE_BUNDLE_VERSION,
+            "manifest_sha256": bundle.manifest_sha256,
+            "query": query,
+            "match_count": len(all_matches),
+            "matches": [item.public() for item in matches],
+            "truncated": len(all_matches) > len(matches),
+            "sources": sources,
+            "warning": bundle.warning or REFERENCE_WARNING,
+            "network_access_performed": False,
+            "persistence_status": "not_attempted",
+            "action_status": "not_attempted",
+        }
+        encoded = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
+        if len(encoded) > MAX_REFERENCE_RESPONSE_BYTES:
+            raise ReferenceLookupError("reference response exceeded bound")
+        return result
+
+
+_default_reference_library: ReferenceLibrary | None = None
+_default_reference_lock = Lock()
+
+
+def default_reference_library() -> ReferenceLibrary:
+    global _default_reference_library
+    with _default_reference_lock:
+        if _default_reference_library is None:
+            _default_reference_library = ReferenceLibrary.load()
+        return _default_reference_library
+
+
+def _canonical_decimal(value: object, maximum: int) -> bool:
+    if not isinstance(value, str) or not value or not value.isascii() or not value.isdecimal():
+        return False
+    if len(value) > len(str(maximum)) or value != str(int(value)):
+        return False
+    return 0 <= int(value) <= maximum
 
 
 INDEX_HTML = """<!doctype html>
@@ -62,6 +298,45 @@ INDEX_HTML = """<!doctype html>
       <div><dt>Detection scope</dt><dd id="scope-status">Newest 50 detections maximum</dd></div>
       <div><dt>Response boundary</dt><dd>Review only · no live application</dd></div>
     </dl>
+  </section>
+
+  <section class="panel reference-panel" aria-labelledby="reference-title">
+    <div class="panel-head">
+      <div><h2 id="reference-title">Reference Library</h2><p>Manual context lookup against the installed, manifest-verified IANA snapshot. It never classifies traffic or changes stored records.</p></div>
+      <span class="timestamp" id="reference-bundle-label">Loading pinned snapshot…</span>
+    </div>
+    <div class="reference-warning" role="note">
+      Registration is analyst context, not proof of what was observed or whether an endpoint is safe or malicious.
+    </div>
+    <div class="reference-grid">
+      <form class="reference-form" id="reference-port-form">
+        <h3>Service and port</h3>
+        <p>Look up one normalized transport and decimal port.</p>
+        <label class="field" for="reference-transport"><span>Transport</span>
+          <select id="reference-transport">
+            <option value="tcp">TCP</option><option value="udp">UDP</option><option value="sctp">SCTP</option><option value="dccp">DCCP</option>
+          </select>
+        </label>
+        <label class="field" for="reference-port"><span>Port</span>
+          <input id="reference-port" name="port" type="text" inputmode="numeric" autocomplete="off" maxlength="5" pattern="[0-9]{1,5}" placeholder="443" required>
+        </label>
+        <button type="submit">Look up service</button>
+      </form>
+      <form class="reference-form" id="reference-protocol-form">
+        <h3>IP protocol number</h3>
+        <p>Look up one decimal protocol number from 0 through 255.</p>
+        <label class="field" for="reference-protocol"><span>Number</span>
+          <input id="reference-protocol" name="number" type="text" inputmode="numeric" autocomplete="off" maxlength="3" pattern="[0-9]{1,3}" placeholder="6" required>
+        </label>
+        <button type="submit">Look up protocol</button>
+      </form>
+    </div>
+    <p class="reference-status" id="reference-status" role="status" aria-live="polite" aria-atomic="true">Loading the verified reference snapshot…</p>
+    <div class="reference-result" id="reference-result" aria-live="polite" aria-atomic="true">
+      <p class="reference-empty" id="reference-empty">Enter a value to inspect registration context.</p>
+      <div id="reference-meta" hidden></div>
+      <div id="reference-results" hidden></div>
+    </div>
   </section>
 
   <section class="metrics" id="live-metrics" aria-label="Stored telemetry summary">
@@ -317,6 +592,25 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .limitations li { position: relative; padding-left: 17px; color: var(--muted); font-size: .76rem; line-height: 1.5; }
 .limitations li::before { position: absolute; top: .53em; left: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); content: ""; }
 .offline-empty { padding: 28px 22px; color: var(--muted); font-size: .86rem; line-height: 1.65; }
+.reference-warning { margin: 16px 22px 0; padding: 12px 14px; border: 1px solid rgba(255, 209, 102, .26); border-radius: 12px; background: rgba(255, 209, 102, .06); color: #ffe5a1; font-size: .78rem; line-height: 1.5; }
+.reference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 22px 0; }
+.reference-form { display: grid; align-content: start; gap: 10px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .34); }
+.reference-form h3 { margin: 0; font-size: .86rem; }
+.reference-form p { min-height: 34px; margin: -3px 0 1px; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.reference-form button { justify-self: start; }
+.reference-status { margin: 16px 22px 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.reference-status.ready { color: var(--aqua); }
+.reference-status.empty { color: var(--muted); }
+.reference-status.stale, .reference-status.integrity_failure, .reference-status.unavailable { color: var(--amber); }
+.reference-result { margin: 12px 22px 22px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .28); }
+.reference-empty { margin: 0; color: var(--muted); font-size: .78rem; }
+.reference-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.reference-meta .summary-chip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .68rem; }
+.reference-records { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.reference-record { display: grid; grid-template-columns: minmax(105px, .38fr) minmax(0, 1fr); gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: rgba(110, 216, 255, .035); }
+.reference-record dt { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.reference-record dd { margin: 0; overflow-wrap: anywhere; font-size: .78rem; }
+.reference-record dd + dt { margin-top: 6px; }
 code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: rgba(0, 0, 0, .2); color: #c8f7ef; font-size: .85em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 [hidden] { display: none !important; }
@@ -328,6 +622,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
   .toolbar-actions { grid-column: 1 / -1; }
   .offline-grid { grid-template-columns: 1fr; }
   .offline-side { border-top: 1px solid var(--line); border-left: 0; }
+  .reference-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .shell { width: min(100% - 20px, 1240px); padding-top: 18px; }
@@ -341,6 +636,8 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
   .toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
   #clear-filters { grid-column: 1 / -1; }
   .triage-summary, .timeline-section { padding-right: 14px; padding-left: 14px; }
+  .reference-warning, .reference-grid, .reference-status, .reference-result { margin-right: 14px; margin-left: 14px; }
+  .reference-grid { padding-right: 0; padding-left: 0; }
   th, td { padding: 11px 12px; } .facts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
@@ -379,6 +676,16 @@ const state = {
   configDegraded: false,
   config: {event_limit: 50, refresh_seconds: 5}
 };
+const referenceState = {
+  available: null,
+  status: 'loading',
+  loading: false,
+  lastResult: null,
+  lastQuery: null
+};
+const referenceSourceFields = ['id', 'registry_url', 'registry_last_updated', 'retrieved_at', 'retrieved_at_basis'];
+const referencePortFields = ['service_name', 'transport', 'port_start', 'port_end', 'record_kind', 'description', 'registration_date', 'modification_date', 'source_row'];
+const referenceProtocolFields = ['keyword', 'protocol_name', 'decimal_start', 'decimal_end', 'record_kind', 'ipv6_extension_header', 'source_row'];
 
 function byId(value) { return document.getElementById(value); }
 function textNode(tag, value, className) {
@@ -431,7 +738,14 @@ async function requestJSON(path) {
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', signal: controller.signal});
-    if (!response.ok) throw new Error(`request failed (${response.status})`);
+    if (!response.ok) {
+      let payload = null;
+      try { payload = await response.json(); } catch (_) {}
+      const error = new Error(`request failed (${response.status})`);
+      error.payload = payload;
+      error.status = response.status;
+      throw error;
+    }
     return await response.json();
   } finally {
     window.clearTimeout(timeout);
@@ -697,6 +1011,169 @@ function setUpdatedTime(label, value = null) {
 function renderScope() {
   byId('scope-status').textContent = `Newest ${formatNumber(state.config.event_limit)} detections maximum${state.configDegraded ? ' · safe defaults' : ''}`;
 }
+function referenceExactKeys(value, expected) {
+  const keys = Object.keys(value).sort();
+  const sorted = [...expected].sort();
+  return keys.length === sorted.length && keys.every((key, index) => key === sorted[index]);
+}
+function validatedReferenceSources(value) {
+  if (!Array.isArray(value) || value.length > 2) throw new Error('invalid reference sources');
+  value.forEach(source => {
+    if (!source || typeof source !== 'object' || Array.isArray(source) || !referenceExactKeys(source, referenceSourceFields)) {
+      throw new Error('invalid reference source');
+    }
+    referenceSourceFields.forEach(field => {
+      if (typeof source[field] !== 'string' || source[field].length < 1 || source[field].length > 256) throw new Error('invalid reference source');
+    });
+  });
+  return value;
+}
+function validatedReferenceStatus(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.schema !== 'string') throw new Error('invalid reference status');
+  if (value.schema !== 'reference-library-status-v1' || typeof value.available !== 'boolean' || typeof value.status !== 'string') throw new Error('invalid reference status');
+  if (!value.available) {
+    if (!referenceExactKeys(value, ['schema', 'available', 'status', 'error', 'network_access_performed', 'persistence_status', 'action_status'])) throw new Error('invalid reference status');
+    if (!['unavailable', 'integrity_failure'].includes(value.status) || typeof value.error !== 'string') throw new Error('invalid reference status');
+    return value;
+  }
+  if (!referenceExactKeys(value, ['schema', 'available', 'status', 'bundle_id', 'bundle_version', 'manifest_sha256', 'service_records', 'protocol_records', 'cache_entries', 'cache_limit', 'sources', 'warning', 'network_access_performed', 'persistence_status', 'action_status'])) throw new Error('invalid reference status');
+  if (value.status !== 'ready' || ![value.service_records, value.protocol_records, value.cache_entries, value.cache_limit].every(item => Number.isSafeInteger(item) && item >= 0) || value.cache_entries > value.cache_limit) throw new Error('invalid reference status');
+  if (![value.bundle_id, value.bundle_version, value.manifest_sha256, value.warning].every(item => typeof item === 'string' && item.length > 0 && item.length <= 512)) throw new Error('invalid reference status');
+  if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted' || value.action_status !== 'not_attempted') throw new Error('invalid reference status');
+  validatedReferenceSources(value.sources);
+  return value;
+}
+function validatedReferenceResult(value) {
+  const expected = ['schema', 'status', 'available', 'kind', 'bundle_id', 'bundle_version', 'manifest_sha256', 'query', 'match_count', 'matches', 'truncated', 'sources', 'warning', 'network_access_performed', 'persistence_status', 'action_status'];
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !referenceExactKeys(value, expected)) throw new Error('invalid reference result');
+  if (value.schema !== 'reference-library-lookup-v1' || value.available !== true || !['no_match', 'one_match', 'multiple_matches'].includes(value.status) || !['port', 'protocol'].includes(value.kind)) throw new Error('invalid reference result');
+  if (![value.bundle_id, value.bundle_version, value.manifest_sha256, value.warning].every(item => typeof item === 'string' && item.length > 0 && item.length <= 512)) throw new Error('invalid reference result');
+  if (!Number.isSafeInteger(value.match_count) || value.match_count < 0 || value.match_count > 20000 || !Array.isArray(value.matches) || value.matches.length > 8 || value.matches.length > value.match_count || typeof value.truncated !== 'boolean') throw new Error('invalid reference result');
+  const queryKeys = value.kind === 'port' ? ['port', 'transport'] : ['number'];
+  if (!value.query || typeof value.query !== 'object' || Array.isArray(value.query) || !referenceExactKeys(value.query, queryKeys)) throw new Error('invalid reference result');
+  if (value.kind === 'port' && (typeof value.query.transport !== 'string' || !Number.isSafeInteger(value.query.port))) throw new Error('invalid reference result');
+  if (value.kind === 'protocol' && !Number.isSafeInteger(value.query.number)) throw new Error('invalid reference result');
+  const fields = value.kind === 'port' ? referencePortFields : referenceProtocolFields;
+  value.matches.forEach(match => {
+    if (!match || typeof match !== 'object' || Array.isArray(match) || !referenceExactKeys(match, fields)) throw new Error('invalid reference result');
+    fields.forEach(field => {
+      const item = match[field];
+      if (item !== null && typeof item !== 'string' && !Number.isSafeInteger(item)) throw new Error('invalid reference result');
+      if (typeof item === 'string' && item.length > 512) throw new Error('invalid reference result');
+    });
+  });
+  validatedReferenceSources(value.sources);
+  if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted' || value.action_status !== 'not_attempted') throw new Error('invalid reference result');
+  return value;
+}
+function setReferenceStatus(message, mode) {
+  const node = byId('reference-status');
+  const nextClass = `reference-status ${mode || 'empty'}`;
+  if (node.textContent !== message) node.textContent = message;
+  if (node.className !== nextClass) node.className = nextClass;
+}
+function setReferenceFormsEnabled(enabled) {
+  ['reference-transport', 'reference-port', 'reference-protocol'].forEach(id => { byId(id).disabled = !enabled; });
+  ['reference-port-form', 'reference-protocol-form'].forEach(id => {
+    const form = byId(id);
+    Array.from(form.children || []).forEach(child => { if ('disabled' in child) child.disabled = !enabled; });
+  });
+}
+function referenceChip(label) {
+  return textNode('span', label, 'summary-chip');
+}
+function renderReferenceMeta(result) {
+  const meta = byId('reference-meta');
+  const query = result.kind === 'port' ? `${result.query.transport}/${result.query.port}` : `IP protocol ${result.query.number}`;
+  const sourceText = result.sources.map(source => `${source.id} · updated ${source.registry_last_updated}`).join(' · ');
+  meta.replaceChildren(
+    referenceChip(`${result.status.replaceAll('_', ' ')} · ${formatNumber(result.match_count)} registered`),
+    referenceChip(`Bundle ${result.bundle_id} · ${result.bundle_version}`),
+    referenceChip(query),
+    referenceChip(sourceText || 'Pinned source provenance available in manifest')
+  );
+  meta.hidden = false;
+}
+function renderReferenceResult(result) {
+  const empty = byId('reference-empty');
+  const results = byId('reference-results');
+  renderReferenceMeta(result);
+  if (!result.matches.length) {
+    empty.textContent = 'No registration matches this exact lookup. This does not show that the observed endpoint is unknown or unsafe.';
+    empty.hidden = false; results.hidden = true; results.replaceChildren(); return;
+  }
+  empty.hidden = true; results.hidden = false;
+  const fields = result.kind === 'port' ? referencePortFields : referenceProtocolFields;
+  const labels = {
+    service_name: 'Service', transport: 'Transport', port_start: 'Port start', port_end: 'Port end', record_kind: 'Record kind', description: 'Description', registration_date: 'Registered', modification_date: 'Modified', source_row: 'Source row',
+    keyword: 'Keyword', protocol_name: 'Protocol', decimal_start: 'Number start', decimal_end: 'Number end', ipv6_extension_header: 'IPv6 extension header'
+  };
+  const rows = result.matches.map(match => {
+    const item = document.createElement('li'); item.className = 'reference-record';
+    const definition = document.createElement('dl');
+    fields.forEach(field => {
+      if (match[field] === null || match[field] === '') return;
+      definition.append(textNode('dt', labels[field] || field), textNode('dd', match[field]));
+    });
+    item.append(definition); return item;
+  });
+  const list = document.createElement('ul'); list.className = 'reference-records'; list.replaceChildren(...rows);
+  results.replaceChildren(list);
+}
+function renderReferenceUnavailable(payload, fallbackMode = 'unavailable') {
+  const mode = payload && payload.status === 'integrity_failure' ? 'integrity_failure' : fallbackMode;
+  const message = mode === 'integrity_failure'
+    ? 'Reference Library integrity failure. Manual lookup is disabled; no partial records are shown.'
+    : 'Reference Library is unavailable. Manual lookup is disabled until the verified snapshot can be loaded.';
+  referenceState.available = false; referenceState.status = mode; setReferenceFormsEnabled(false); setReferenceStatus(message, mode);
+  byId('reference-bundle-label').textContent = mode === 'integrity_failure' ? 'Integrity failure' : 'Unavailable';
+  byId('reference-empty').textContent = message; byId('reference-empty').hidden = false;
+  byId('reference-meta').hidden = true; byId('reference-results').hidden = true; byId('reference-results').replaceChildren();
+}
+async function loadReferenceStatus() {
+  try {
+    const payload = validatedReferenceStatus(await requestJSON('/api/reference/status'));
+    if (!payload.available) { renderReferenceUnavailable(payload, payload.status); return; }
+    referenceState.available = true; referenceState.status = 'ready'; setReferenceFormsEnabled(true);
+    byId('reference-bundle-label').textContent = `IANA ${payload.bundle_version} · ${payload.bundle_id}`;
+    setReferenceStatus('Pinned IANA snapshot ready. Enter one value for a read-only context lookup.', 'ready');
+  } catch (error) {
+    renderReferenceUnavailable(error.payload, error.payload && error.payload.status ? error.payload.status : 'unavailable');
+  }
+}
+function decimalReferenceInput(value, maximum) {
+  const text = String(value);
+  if (!/^[0-9]+$/.test(text) || text.length > String(maximum).length || String(Number(text)) !== text || Number(text) > maximum) throw new Error('invalid reference input');
+  return Number(text);
+}
+async function lookupReference(kind) {
+  if (!referenceState.available || referenceState.loading) return;
+  let query;
+  try {
+    if (kind === 'port') query = {transport: byId('reference-transport').value, port: decimalReferenceInput(byId('reference-port').value, 65535)};
+    else query = {number: decimalReferenceInput(byId('reference-protocol').value, 255)};
+  } catch (_) {
+    setReferenceStatus(kind === 'port' ? 'Enter a normalized transport and a decimal port from 0 through 65535.' : 'Enter a decimal IP protocol number from 0 through 255.', 'empty');
+    return;
+  }
+  referenceState.loading = true; setReferenceStatus('Loading one bounded reference result…', 'empty');
+  const params = kind === 'port' ? `transport=${encodeURIComponent(query.transport)}&port=${query.port}` : `number=${query.number}`;
+  try {
+    const result = validatedReferenceResult(await requestJSON(`/api/reference/${kind}?${params}`));
+    referenceState.lastResult = result; referenceState.lastQuery = query; renderReferenceResult(result);
+    const suffix = result.truncated ? ' The returned rows are capped.' : '';
+    setReferenceStatus(result.status === 'no_match' ? `No registration found for this exact ${kind} lookup.${suffix}` : `Reference context loaded: ${formatNumber(result.match_count)} ${result.match_count === 1 ? 'registration' : 'registrations'}.${suffix}`, result.status === 'no_match' ? 'empty' : 'ready');
+  } catch (error) {
+    if (error.payload && (error.payload.status === 'integrity_failure' || error.payload.status === 'unavailable')) {
+      renderReferenceUnavailable(error.payload, error.payload.status); return;
+    }
+    if (referenceState.lastResult) {
+      setReferenceStatus('Lookup failed. Showing the last successful reference result as stale; no new data was applied.', 'stale');
+    } else {
+      setReferenceStatus('Lookup failed. No reference result is available.', 'unavailable');
+    }
+  } finally { referenceState.loading = false; }
+}
 function setSnapshotStatus(mode) {
   const strip = byId('trust-strip');
   const status = byId('snapshot-status');
@@ -831,6 +1308,7 @@ async function bootstrap() {
   }
   try { renderOffline(await requestJSON('/api/offline-summary')); }
   catch (_) { renderOfflineError(); }
+  loadReferenceStatus();
   await refresh(false); scheduleNext();
 }
 
@@ -842,6 +1320,8 @@ byId('clear-filters').addEventListener('click', clearFilters);
 byId('clear-time-filter').addEventListener('click', () => { state.activeBin = null; state.timelineNotice = ''; applyFilters(); });
 byId('refresh-button').addEventListener('click', () => refresh(true));
 byId('pause-button').addEventListener('click', togglePause);
+byId('reference-port-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('port'); });
+byId('reference-protocol-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('protocol'); });
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && !state.paused) { refresh(false); scheduleNext(); }
 });
@@ -852,6 +1332,7 @@ bootstrap();
 class DashboardHandler(BaseHTTPRequestHandler):
     store: DashboardReader
     offline_summary: dict[str, Any] | None = None
+    reference_library: ReferenceLibrary | None = None
     refresh_seconds: int = 5
     event_limit: int = 50
 
@@ -922,7 +1403,67 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 else {"available": True, "snapshot": self.offline_summary}
             )
             return
+        if route.path == "/api/reference/status":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+                return
+            library = self._reference_library()
+            payload = library.status()
+            self._send_json(payload, status=200 if payload.get("available") else 503)
+            return
+        if route.path == "/api/reference/port":
+            values = self._reference_query(route.query, {"transport", "port"})
+            if values is None:
+                return
+            transport, port_text = values["transport"], values["port"]
+            if transport not in {"tcp", "udp", "sctp", "dccp"} or not _canonical_decimal(port_text, 65_535):
+                self._send_json({"error": "reference lookup requires one normalized transport and decimal port"}, status=400)
+                return
+            payload = self._reference_library().lookup_port(transport, int(port_text))
+            self._send_reference_result(payload)
+            return
+        if route.path == "/api/reference/protocol":
+            values = self._reference_query(route.query, {"number"})
+            if values is None:
+                return
+            number_text = values["number"]
+            if not _canonical_decimal(number_text, 255):
+                self._send_json({"error": "reference lookup requires one decimal protocol number"}, status=400)
+                return
+            payload = self._reference_library().lookup_protocol(int(number_text))
+            self._send_reference_result(payload)
+            return
         self._send(404, "text/plain; charset=utf-8", b"not found")
+
+    def do_POST(self) -> None:  # noqa: N802
+        if not self._has_expected_host():
+            self._send_json({"error": "invalid request host"}, status=400)
+            return
+        self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
+
+    def _reference_library(self) -> ReferenceLibrary:
+        library = self.reference_library
+        if library is None:
+            library = default_reference_library()
+        return library
+
+    def _reference_query(self, query: str, expected: set[str]) -> dict[str, str] | None:
+        if len(query) > MAX_REFERENCE_QUERY_LENGTH:
+            self._send_json({"error": "reference query is too long"}, status=400)
+            return None
+        params = parse_qs(query, keep_blank_values=True)
+        if set(params) != expected or any(len(values) != 1 for values in params.values()):
+            self._send_json({"error": "unsupported or repeated reference query parameter"}, status=400)
+            return None
+        return {key: values[0] for key, values in params.items()}
+
+    def _send_reference_result(self, payload: dict[str, object]) -> None:
+        available = payload.get("available") is True
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+        if len(encoded) > MAX_REFERENCE_RESPONSE_BYTES:
+            self._send_json({"error": "reference response unavailable"}, status=503)
+            return
+        self._send_json(payload, status=200 if available else 503)
 
     def _has_expected_host(self) -> bool:
         """Reject DNS-rebound and ambiguous requests before routing or store access."""
@@ -941,11 +1482,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
             expected.update({"localhost", f"localhost:{bound_port}"})
         return supplied in expected
 
-    def _send_json(self, value: object, *, status: int = 200) -> None:
+    def _send_json(self, value: object, *, status: int = 200, extra_headers: dict[str, str] | None = None) -> None:
         payload = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
-        self._send(status, "application/json; charset=utf-8", payload)
+        self._send(status, "application/json; charset=utf-8", payload, extra_headers=extra_headers)
 
-    def _send(self, status: int, content_type: str, payload: bytes) -> None:
+    def _send(
+        self,
+        status: int,
+        content_type: str,
+        payload: bytes,
+        *,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
@@ -962,6 +1510,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(payload)
 
@@ -1012,6 +1562,7 @@ def serve(
     enabled: bool = True,
     allow_remote: bool = False,
     offline_summary: dict[str, Any] | None = None,
+    reference_library: ReferenceLibrary | None = None,
     refresh_seconds: int = 5,
     event_limit: int = 50,
 ) -> None:
@@ -1028,6 +1579,7 @@ def serve(
         {
             "store": store,
             "offline_summary": offline_summary,
+            "reference_library": reference_library,
             "refresh_seconds": refresh_seconds,
             "event_limit": event_limit,
         },
