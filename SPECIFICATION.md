@@ -199,6 +199,25 @@ server is bound to `127.0.0.1`. Missing, repeated, foreign, non-canonical, and
 wrong-port values fail with a fixed `400` response before route handling or
 SQLite access. This is a DNS-rebinding defense, not remote authentication.
 
+Dashboard startup uses a dedicated read-only store rather than the service
+writer. It accepts only an existing exact-v2 regular database in an
+operator-owned private directory, refuses symlinks, unsafe ownership or modes,
+incompatible schemas, and path replacement, and keeps a descriptor bound to the
+validated file identity for the life of the reader. SQLite is opened with
+`mode=ro` and `PRAGMA query_only=ON`; startup does not create a directory or
+database, initialize or migrate schema, or select/change journal mode. Composite
+summary counts execute inside one SQLite read transaction, and recent detections
+are selected directly as the five browser fields below and revalidated against
+their closed types and bounds. When no coordination files exist, a
+descriptor-bound immutable schema preflight keeps incompatible refusals
+sidecar-free; an existing live database must provide a complete private WAL/SHM
+pair before the separate live connection observes committed WAL state. Any
+`-wal`, `-shm`, or `-journal` coordination file must be regular, single-link,
+operator-owned, private, and confined to the validated database directory. A
+lone WAL/SHM file or rollback journal requires writer-side recovery. A read,
+row-validation, or identity failure after startup returns a fixed `503` JSON
+error without filesystem or SQLite details.
+
 The dashboard exposes only:
 
 - `GET /` — static local dashboard;
@@ -282,6 +301,8 @@ The MVP is acceptable for local experimentation when:
 - every CLI and direct-backend apply request returns the fixed refusal before a
   subprocess or host mutation and produces no `applied` receipt;
 - dashboard rejects unsafe binds and legacy overrides before socket creation;
+- dashboard refuses missing, linked, public, replaced, or incompatible storage
+  without creating or migrating it, and its SQLite connection rejects writes;
 - offline summaries reject incomplete, public, linked, mismatched, or tampered
   report sets and remain unavailable on remote binds;
 - sample replay produces a database and no firewall mutation;

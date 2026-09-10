@@ -248,6 +248,24 @@ through backup verification. Stop other MEGALODON processes before migrating and
 retain the backup until the new database has been operationally verified.
 Partial, altered, extended, or newer application schemas are refused rather than
 repaired or downgraded.
+
+On POSIX, the writer creates the database parent as mode `0700` and the database
+as mode `0600`; an existing database is opened without following links and is
+hardened to `0600` only after its owner, type, link count, and path identity pass
+validation. Dashboard startup uses a separate reader. It requires an existing,
+operator-owned, private, exact-v2 database and private parent, retains an open
+descriptor and connects through that identity, uses SQLite `mode=ro`, and
+enforces `PRAGMA query_only=ON`. When no coordination files exist, a
+descriptor-bound immutable preflight validates the exact schema without creating
+them; an already active database must present a complete private WAL/SHM pair.
+The live reader then observes committed WAL state. It cannot create or migrate a
+database or change its journal mode. Existing and SQLite-created `-wal`, `-shm`,
+and `-journal` files must remain regular, single-link, operator-owned, and
+private inside the validated directory; lone WAL/SHM files and rollback journals
+are left for the writer to recover. Missing, linked, public, replaced,
+incompatible, or malformed inputs produce a fixed refusal; stop the dashboard
+and use the explicit writer or migration command to prepare storage.
+
 The [`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audit
 and standalone offline-report retention separate and defines fail-closed
 outcomes; it selects no deletion value or automatic job.

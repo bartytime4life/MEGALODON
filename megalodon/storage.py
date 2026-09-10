@@ -10,13 +10,15 @@ import sqlite3
 import stat
 from threading import RLock
 from typing import Any
-from urllib.parse import quote
 
 from .models import ActionRecord, DetectionResult, PacketEvent
 from .validation import (
+    parse_ip,
     parse_nonnegative_int,
     parse_timestamp,
+    safe_text,
     SQLITE_INTEGER_MAX,
+    ValidationError,
     validate_metadata,
     validate_packet_metadata,
 )
@@ -24,6 +26,7 @@ from .validation import (
 
 SCHEMA_VERSION = 2
 MIGRATION_BACKUP_SUFFIX = ".pre-v2.bak"
+DASHBOARD_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 SCHEMA_V1_STATEMENTS = (
     """CREATE TABLE events (
@@ -198,38 +201,376 @@ class IngestionRunError(ValueError):
     """An ingestion run transition or association is invalid."""
 
 
-def _validate_private_storage_path(path: Path, *, require_file: bool) -> Path:
-    """Return an absolute local path whose immediate storage boundary is private."""
-    resolved = path.absolute()
-    parent = resolved.parent
-    try:
-        parent_stat = parent.lstat()
-    except OSError as exc:
-        raise StorageSchemaError("STORAGE_PRIVACY:UNSAFE_DIRECTORY") from exc
-    if not stat.S_ISDIR(parent_stat.st_mode):
-        raise StorageSchemaError("STORAGE_PRIVACY:UNSAFE_DIRECTORY")
-    if os.name == "posix" and (
-        parent_stat.st_uid != os.geteuid()
-        or parent_stat.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
-    ):
-        raise StorageSchemaError("STORAGE_PRIVACY:UNSAFE_DIRECTORY")
-    if require_file:
+def _absolute_database_path(
+    path: str | Path, *, code: str = "STORAGE_PATH:UNSAFE_DATABASE"
+) -> Path:
+    """Return one unambiguous absolute path without resolving symlinks."""
+
+    raw = Path(path)
+    if ".." in raw.parts:
+        raise StorageSchemaError(code)
+    return Path(os.path.abspath(os.fspath(raw)))
+
+
+def _has_symlink_component(path: Path) -> bool:
+    """Reject path traversal through a symlink before opening SQLite."""
+
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
         try:
-            file_stat = resolved.lstat()
+            if current.is_symlink():
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def _validate_private_directory(path: Path, *, code: str) -> None:
+    try:
+        details = path.lstat()
+    except OSError as exc:
+        raise StorageSchemaError(code) from exc
+    if not stat.S_ISDIR(details.st_mode) or path.is_symlink():
+        raise StorageSchemaError(code)
+    if os.name == "posix" and (
+        details.st_uid != os.geteuid() or stat.S_IMODE(details.st_mode) & 0o077
+    ):
+        raise StorageSchemaError(code)
+
+
+def _validate_private_database_details(details: os.stat_result, *, code: str) -> None:
+    if not stat.S_ISREG(details.st_mode) or details.st_nlink != 1:
+        raise StorageSchemaError(code)
+    if os.name == "posix" and (
+        details.st_uid != os.geteuid() or stat.S_IMODE(details.st_mode) & 0o077
+    ):
+        raise StorageSchemaError(code)
+
+
+def _prepare_writer_directory(parent: Path) -> int | None:
+    """Create a POSIX path one no-follow component at a time."""
+
+    if os.name != "posix":
+        try:
+            parent.mkdir(parents=True, mode=0o700, exist_ok=True)
         except OSError as exc:
-            raise StorageSchemaError("STORAGE_READER:NO_DATABASE") from exc
-        if not stat.S_ISREG(file_stat.st_mode):
-            raise StorageSchemaError("STORAGE_READER:UNSAFE_DATABASE")
-        if os.name == "posix" and (
-            file_stat.st_uid != os.geteuid()
-            or file_stat.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DIRECTORY") from exc
+        if _has_symlink_component(parent):
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DIRECTORY")
+        _validate_private_directory(parent, code="STORAGE_PATH:UNSAFE_DIRECTORY")
+        return None
+
+    required = ("O_DIRECTORY", "O_NOFOLLOW")
+    if any(not hasattr(os, name) for name in required):
+        raise StorageSchemaError("STORAGE_PATH:UNSAFE_DIRECTORY")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        descriptor = os.open(parent.anchor or os.sep, flags)
+    except OSError as exc:
+        raise StorageSchemaError("STORAGE_PATH:UNSAFE_DIRECTORY") from exc
+    try:
+        for part in parent.parts[1:]:
+            created = False
+            try:
+                next_descriptor = os.open(part, flags, dir_fd=descriptor)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                    created = True
+                except FileExistsError:
+                    pass
+                next_descriptor = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+            if created:
+                os.fchmod(descriptor, 0o700)
+        details = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(details.st_mode)
+            or details.st_uid != os.geteuid()
+            or stat.S_IMODE(details.st_mode) & 0o077
+            or not _path_matches_descriptor(parent, descriptor)
         ):
-            raise StorageSchemaError("STORAGE_READER:UNSAFE_DATABASE")
-    elif os.path.lexists(resolved) and resolved.is_symlink():
-        raise StorageSchemaError("STORAGE_PRIVACY:SYMLINK_REFUSED")
-    return resolved
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DIRECTORY")
+        return descriptor
+    except Exception as exc:
+        os.close(descriptor)
+        if isinstance(exc, StorageSchemaError):
+            raise
+        raise StorageSchemaError("STORAGE_PATH:UNSAFE_DIRECTORY") from exc
 
 
+def _prepare_writer_database(path: str | Path) -> tuple[Path, int, bool, int | None]:
+    """Create or open a private writer database while retaining its identity."""
+
+    database = _absolute_database_path(path, code="STORAGE_PATH:UNSAFE_DIRECTORY")
+    parent_descriptor = _prepare_writer_directory(database.parent)
+    target: str | Path = database
+    stat_kwargs: dict[str, Any] = {"follow_symlinks": False}
+    open_kwargs: dict[str, Any] = {}
+    if parent_descriptor is not None:
+        target = database.name
+        stat_kwargs["dir_fd"] = parent_descriptor
+        open_kwargs["dir_fd"] = parent_descriptor
+    try:
+        existing = os.stat(target, **stat_kwargs)
+        created_database = False
+    except FileNotFoundError:
+        existing = None
+        created_database = True
+    except OSError as exc:
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+        raise StorageSchemaError("STORAGE_PATH:UNSAFE_DATABASE") from exc
+    flags = os.O_RDWR
+    mode: int | None = None
+    if created_database:
+        flags |= os.O_CREAT | os.O_EXCL
+        mode = 0o600
+    else:
+        assert existing is not None
+        if not stat.S_ISREG(existing.st_mode) or existing.st_nlink != 1:
+            if parent_descriptor is not None:
+                os.close(parent_descriptor)
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DATABASE")
+        if os.name == "posix" and existing.st_uid != os.geteuid():
+            if parent_descriptor is not None:
+                os.close(parent_descriptor)
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DATABASE")
+    try:
+        descriptor = _open_regular_file(target, flags, mode, **open_kwargs)
+    except (OSError, StorageSchemaError) as exc:
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+        raise StorageSchemaError("STORAGE_PATH:UNSAFE_DATABASE") from exc
+    try:
+        details = os.fstat(descriptor)
+        if os.name == "posix" and details.st_uid != os.geteuid():
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DATABASE")
+        if details.st_nlink != 1:
+            raise StorageSchemaError("STORAGE_PATH:UNSAFE_DATABASE")
+        if not _path_matches_descriptor(database, descriptor):
+            raise StorageSchemaError("STORAGE_PATH:DATABASE_CHANGED")
+        if os.name == "posix":
+            os.fchmod(descriptor, 0o600)
+        return database, descriptor, created_database, parent_descriptor
+    except Exception:
+        os.close(descriptor)
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+        raise
+
+
+def _open_dashboard_database(path: str | Path) -> tuple[Path, int]:
+    """Open one existing private database without following path substitutions."""
+
+    database = _absolute_database_path(
+        path, code="STORAGE_DASHBOARD:UNSAFE_DIRECTORY"
+    )
+    if _has_symlink_component(database.parent):
+        raise StorageSchemaError("STORAGE_DASHBOARD:UNSAFE_DIRECTORY")
+    _validate_private_directory(
+        database.parent, code="STORAGE_DASHBOARD:UNSAFE_DIRECTORY"
+    )
+    if not os.path.lexists(database):
+        raise StorageSchemaError("STORAGE_DASHBOARD:NO_DATABASE")
+    try:
+        initial = database.lstat()
+    except OSError as exc:
+        raise StorageSchemaError("STORAGE_DASHBOARD:OPEN_FAILED") from exc
+    _validate_private_database_details(
+        initial, code="STORAGE_DASHBOARD:UNSAFE_DATABASE"
+    )
+    try:
+        descriptor = _open_regular_file(database, os.O_RDONLY)
+    except (OSError, StorageSchemaError) as exc:
+        raise StorageSchemaError("STORAGE_DASHBOARD:UNSAFE_DATABASE") from exc
+    try:
+        _validate_private_database_details(
+            os.fstat(descriptor), code="STORAGE_DASHBOARD:UNSAFE_DATABASE"
+        )
+        if not _path_matches_descriptor(database, descriptor):
+            raise StorageSchemaError("STORAGE_DASHBOARD:DATABASE_CHANGED")
+        return database, descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _close_descriptors(
+    descriptors: dict[str, tuple[Path, int]],
+) -> None:
+    for _path, descriptor in descriptors.values():
+        os.close(descriptor)
+
+
+def _inspect_sqlite_sidecars(
+    database: Path, *, code: str
+) -> dict[str, tuple[Path, int]]:
+    """Open and validate any SQLite coordination files without following links."""
+
+    result: dict[str, tuple[Path, int]] = {}
+    try:
+        for suffix in DASHBOARD_SIDECAR_SUFFIXES:
+            sidecar = Path(f"{database}{suffix}")
+            if not os.path.lexists(sidecar):
+                continue
+            descriptor: int | None = None
+            try:
+                initial = sidecar.lstat()
+                _validate_private_database_details(initial, code=code)
+                descriptor = _open_regular_file(sidecar, os.O_RDONLY)
+                _validate_private_database_details(os.fstat(descriptor), code=code)
+                if not os.path.samestat(initial, os.fstat(descriptor)) or not (
+                    _path_matches_descriptor(sidecar, descriptor)
+                ):
+                    os.close(descriptor)
+                    descriptor = None
+                    raise StorageSchemaError(code)
+            except (OSError, StorageSchemaError) as exc:
+                if descriptor is not None:
+                    os.close(descriptor)
+                raise StorageSchemaError(code) from exc
+            assert descriptor is not None
+            result[suffix] = (sidecar, descriptor)
+        return result
+    except Exception:
+        _close_descriptors(result)
+        raise
+
+
+def _compare_sidecar_sets(
+    before: dict[str, tuple[Path, int]],
+    after: dict[str, tuple[Path, int]],
+    *,
+    code: str,
+    allow_removed: frozenset[str] = frozenset(),
+) -> None:
+    """Retain sidecar identity, except an explicitly recovered unlinked journal."""
+
+    try:
+        for suffix, (_path, descriptor) in before.items():
+            candidate = after.get(suffix)
+            if candidate is None:
+                removed = os.fstat(descriptor)
+                if (
+                    suffix in allow_removed
+                    and stat.S_ISREG(removed.st_mode)
+                    and removed.st_nlink == 0
+                    and (
+                        os.name != "posix"
+                        or (
+                            removed.st_uid == os.geteuid()
+                            and not stat.S_IMODE(removed.st_mode) & 0o077
+                        )
+                    )
+                ):
+                    continue
+                raise StorageSchemaError(code)
+            _validate_private_database_details(os.fstat(descriptor), code=code)
+            if not os.path.samestat(os.fstat(descriptor), os.fstat(candidate[1])):
+                raise StorageSchemaError(code)
+    except OSError as exc:
+        raise StorageSchemaError(code) from exc
+
+
+def _validate_dashboard_sidecar_state(
+    sidecars: dict[str, tuple[Path, int]],
+) -> None:
+    """Require a complete WAL pair and leave rollback recovery to the writer."""
+
+    has_wal = "-wal" in sidecars
+    has_shm = "-shm" in sidecars
+    if has_wal != has_shm or "-journal" in sidecars:
+        raise StorageSchemaError("STORAGE_DASHBOARD:UNSAFE_SIDECAR_STATE")
+
+
+def _descriptor_change_signature(descriptor: int) -> tuple[int, ...]:
+    details = os.fstat(descriptor)
+    return (
+        details.st_dev,
+        details.st_ino,
+        details.st_nlink,
+        details.st_size,
+        details.st_mtime_ns,
+        details.st_ctime_ns,
+    )
+
+
+def _validate_dashboard_path_identity(database: Path, descriptor: int) -> None:
+    if _has_symlink_component(database.parent):
+        raise StorageSchemaError("STORAGE_DASHBOARD:UNSAFE_DIRECTORY")
+    _validate_private_directory(
+        database.parent, code="STORAGE_DASHBOARD:UNSAFE_DIRECTORY"
+    )
+    if not _path_matches_descriptor(database, descriptor):
+        raise StorageSchemaError("STORAGE_DASHBOARD:DATABASE_CHANGED")
+    try:
+        current = database.lstat()
+        opened = os.fstat(descriptor)
+    except OSError as exc:
+        raise StorageSchemaError("STORAGE_DASHBOARD:DATABASE_CHANGED") from exc
+    _validate_private_database_details(
+        current, code="STORAGE_DASHBOARD:UNSAFE_DATABASE"
+    )
+    _validate_private_database_details(
+        opened, code="STORAGE_DASHBOARD:UNSAFE_DATABASE"
+    )
+
+
+def _dashboard_connection_uri(
+    descriptor: int, fallback: Path, *, immutable: bool = False
+) -> str:
+    source = Path(
+        _descriptor_bound_database_path(
+            descriptor,
+            fallback,
+            code="STORAGE_DASHBOARD:DESCRIPTOR_PATH_REQUIRED",
+        )
+    ).as_uri()
+    suffix = "&immutable=1" if immutable else ""
+    return f"{source}?mode=ro&cache=private{suffix}"
+
+
+def _validate_connection_path(
+    connection: sqlite3.Connection, database: Path, *, code: str
+) -> None:
+    rows = connection.execute("PRAGMA database_list").fetchall()
+    main_paths = [str(row[2]) for row in rows if str(row[1]) == "main"]
+    if len(main_paths) != 1 or _absolute_database_path(
+        main_paths[0], code=code
+    ) != database:
+        raise StorageSchemaError(code)
+
+
+def _validate_dashboard_schema(connection: sqlite3.Connection) -> None:
+    """Validate version and structure inside one stable read transaction."""
+
+    try:
+        connection.execute("BEGIN")
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        if version != SCHEMA_VERSION:
+            raise StorageSchemaError("STORAGE_DASHBOARD:INCOMPATIBLE")
+        _validate_schema(
+            connection,
+            _TABLE_COLUMNS_V2,
+            _INDEX_COLUMNS_V2,
+            _FOREIGN_KEYS_V2,
+            _UNIQUE_INDEXES_V2,
+            (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+        )
+        connection.commit()
+    except Exception as exc:
+        if connection.in_transaction:
+            connection.rollback()
+        if isinstance(exc, StorageSchemaError) and str(exc) == (
+            "STORAGE_DASHBOARD:INCOMPATIBLE"
+        ):
+            raise
+        raise StorageSchemaError("STORAGE_DASHBOARD:INCOMPATIBLE") from exc
 def _validate_schema(
     connection,
     tables,
@@ -331,6 +672,15 @@ def _descriptor_database_path(descriptor: int, fallback: Path) -> str:
     return str(fallback)
 
 
+def _descriptor_bound_database_path(
+    descriptor: int, fallback: Path, *, code: str
+) -> str:
+    path = _descriptor_database_path(descriptor, fallback)
+    if os.name == "posix" and path == str(fallback):
+        raise StorageSchemaError(code)
+    return path
+
+
 def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
     try:
         return os.path.samestat(
@@ -340,11 +690,21 @@ def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
         return False
 
 
-def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
+def _open_regular_file(
+    path: str | Path,
+    flags: int,
+    mode: int | None = None,
+    *,
+    dir_fd: int | None = None,
+) -> int:
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
     descriptor = (
-        os.open(path, flags, mode) if mode is not None else os.open(path, flags)
+        os.open(path, flags, mode, dir_fd=dir_fd)
+        if mode is not None
+        else os.open(path, flags, dir_fd=dir_fd)
     )
     if not stat.S_ISREG(os.fstat(descriptor).st_mode):
         os.close(descriptor)
@@ -566,37 +926,98 @@ def migrate_database(path: str | Path) -> dict[str, object]:
             os.close(source_descriptor)
 
 
+def _dashboard_detection_row(row: sqlite3.Row) -> dict[str, str]:
+    """Revalidate the bounded public projection from a potentially altered DB."""
+
+    try:
+        detected_at = safe_text(row["detected_at"], "detected_at", 64)
+        if detected_at != parse_timestamp(detected_at).isoformat():
+            raise ValidationError("detected_at is not canonical")
+        rule_id = safe_text(row["rule_id"], "rule_id", 64)
+        if not rule_id or rule_id != rule_id.strip():
+            raise ValidationError("rule_id is not canonical")
+        severity = safe_text(row["severity"], "severity", 16)
+        if severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+            raise ValidationError("severity is not canonical")
+        src_ip = safe_text(row["src_ip"], "src_ip", 45)
+        if src_ip != parse_ip(src_ip):
+            raise ValidationError("src_ip is not canonical")
+        message = safe_text(row["message"], "message", 512)
+        if not message or message != message.strip():
+            raise ValidationError("message is not canonical")
+    except (KeyError, TypeError, ValidationError) as exc:
+        raise StorageSchemaError("STORAGE_DASHBOARD:INVALID_DATA") from exc
+    return {
+        "detected_at": detected_at,
+        "rule_id": rule_id,
+        "severity": severity,
+        "src_ip": src_ip,
+        "message": message,
+    }
+
+
 class Store:
     def __init__(self, path: str | Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.path = _validate_private_storage_path(self.path, require_file=False)
-        created_descriptor: int | None = None
-        if not os.path.lexists(self.path):
-            created_descriptor = _open_regular_file(
-                self.path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
-            )
+        (
+            self.path,
+            descriptor,
+            created_database,
+            parent_descriptor,
+        ) = _prepare_writer_database(path)
         self._lock = RLock()
+        before_sidecars: dict[str, tuple[Path, int]] = {}
+        after_sidecars: dict[str, tuple[Path, int]] = {}
         try:
-            self.connection = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
-        except Exception:
-            if created_descriptor is not None and _path_matches_descriptor(
-                self.path, created_descriptor
-            ):
-                self.path.unlink(missing_ok=True)
-            raise
-        finally:
-            if created_descriptor is not None:
-                os.close(created_descriptor)
-        self.connection.row_factory = sqlite3.Row
-        try:
+            before_sidecars = _inspect_sqlite_sidecars(
+                self.path, code="STORAGE_PATH:UNSAFE_SIDECAR"
+            )
+            self.connection = sqlite3.connect(
+                _descriptor_bound_database_path(
+                    descriptor,
+                    self.path,
+                    code="STORAGE_PATH:DESCRIPTOR_PATH_REQUIRED",
+                ),
+                timeout=10,
+                check_same_thread=False,
+            )
+            _validate_connection_path(
+                self.connection,
+                self.path,
+                code="STORAGE_PATH:DATABASE_CHANGED",
+            )
+            if not _path_matches_descriptor(self.path, descriptor):
+                self.connection.close()
+                raise StorageSchemaError("STORAGE_PATH:DATABASE_CHANGED")
+            self.connection.row_factory = sqlite3.Row
             with self._lock:
                 self.connection.execute("PRAGMA foreign_keys=ON")
                 self._initialize_schema()
                 self.connection.execute("PRAGMA journal_mode=WAL")
+            after_sidecars = _inspect_sqlite_sidecars(
+                self.path, code="STORAGE_PATH:UNSAFE_SIDECAR"
+            )
+            _compare_sidecar_sets(
+                before_sidecars,
+                after_sidecars,
+                code="STORAGE_PATH:SIDECAR_CHANGED",
+                allow_removed=frozenset({"-journal"}),
+            )
         except Exception:
-            self.connection.close()
+            connection = getattr(self, "connection", None)
+            if connection is not None:
+                connection.close()
+            if created_database and _path_matches_descriptor(self.path, descriptor):
+                try:
+                    self.path.unlink()
+                except OSError:
+                    pass
             raise
+        finally:
+            _close_descriptors(after_sidecars)
+            _close_descriptors(before_sidecars)
+            os.close(descriptor)
+            if parent_descriptor is not None:
+                os.close(parent_descriptor)
 
     def _initialize_schema(self) -> None:
         try:
@@ -971,41 +1392,136 @@ class Store:
 
 
 class DashboardStore:
-    """Validated query-only view of an existing writer-owned audit database."""
+    """Read-only, existing-database projection for the loopback dashboard."""
 
     def __init__(self, path: str | Path):
-        self.path = _validate_private_storage_path(Path(path), require_file=True)
+        self.path, self._descriptor = _open_dashboard_database(path)
         self._lock = RLock()
-        descriptor: int | None = None
+        self._closed = False
+        self._sidecar_descriptors: dict[str, tuple[Path, int]] = {}
+        before_sidecars: dict[str, tuple[Path, int]] = {}
+        after_sidecars: dict[str, tuple[Path, int]] = {}
+        preflight: sqlite3.Connection | None = None
         try:
-            descriptor = _open_regular_file(self.path, os.O_RDONLY)
-            uri = f"file:{quote(str(self.path))}?mode=ro"
-            self.connection = sqlite3.connect(uri, uri=True, timeout=10, check_same_thread=False)
-            self.connection.row_factory = sqlite3.Row
-            self.connection.execute("PRAGMA query_only=ON")
-            if not _path_matches_descriptor(self.path, descriptor):
-                raise StorageSchemaError("STORAGE_READER:DATABASE_CHANGED")
-            if int(self.connection.execute("PRAGMA user_version").fetchone()[0]) != SCHEMA_VERSION:
-                raise StorageSchemaError("STORAGE_SCHEMA:INCOMPATIBLE")
-            _validate_schema(
-                self.connection,
-                _TABLE_COLUMNS_V2,
-                _INDEX_COLUMNS_V2,
-                _FOREIGN_KEYS_V2,
-                _UNIQUE_INDEXES_V2,
-                (*SCHEMA_V1_STATEMENTS, *SCHEMA_V2_STATEMENTS),
+            before_sidecars = _inspect_sqlite_sidecars(
+                self.path, code="STORAGE_DASHBOARD:UNSAFE_SIDECAR"
             )
-        except Exception:
-            if hasattr(self, "connection"):
-                self.connection.close()
+            _validate_dashboard_sidecar_state(before_sidecars)
+            if not before_sidecars:
+                preflight_signature = _descriptor_change_signature(self._descriptor)
+                preflight = sqlite3.connect(
+                    _dashboard_connection_uri(
+                        self._descriptor, self.path, immutable=True
+                    ),
+                    uri=True,
+                    timeout=10,
+                    check_same_thread=False,
+                )
+                preflight.row_factory = sqlite3.Row
+                _validate_connection_path(
+                    preflight,
+                    self.path,
+                    code="STORAGE_DASHBOARD:DATABASE_CHANGED",
+                )
+                preflight.execute("PRAGMA query_only=ON")
+                if int(preflight.execute("PRAGMA query_only").fetchone()[0]) != 1:
+                    raise StorageSchemaError("STORAGE_DASHBOARD:READ_ONLY_REQUIRED")
+                _validate_dashboard_schema(preflight)
+                if _descriptor_change_signature(self._descriptor) != (
+                    preflight_signature
+                ):
+                    raise StorageSchemaError("STORAGE_DASHBOARD:DATABASE_CHANGED")
+                preflight.close()
+                preflight = None
+            _validate_dashboard_path_identity(self.path, self._descriptor)
+
+            self.connection = sqlite3.connect(
+                _dashboard_connection_uri(self._descriptor, self.path),
+                uri=True,
+                timeout=10,
+                check_same_thread=False,
+            )
+            self.connection.row_factory = sqlite3.Row
+            _validate_connection_path(
+                self.connection,
+                self.path,
+                code="STORAGE_DASHBOARD:DATABASE_CHANGED",
+            )
+            self.connection.execute("PRAGMA query_only=ON")
+            if int(self.connection.execute("PRAGMA query_only").fetchone()[0]) != 1:
+                raise StorageSchemaError("STORAGE_DASHBOARD:READ_ONLY_REQUIRED")
+            _validate_dashboard_schema(self.connection)
+            after_sidecars = _inspect_sqlite_sidecars(
+                self.path, code="STORAGE_DASHBOARD:UNSAFE_SIDECAR"
+            )
+            _validate_dashboard_sidecar_state(after_sidecars)
+            _compare_sidecar_sets(
+                before_sidecars,
+                after_sidecars,
+                code="STORAGE_DASHBOARD:SIDECAR_CHANGED",
+            )
+            self._sidecar_descriptors = after_sidecars
+            after_sidecars = {}
+            self._assert_identity()
+        except StorageSchemaError:
+            if preflight is not None:
+                preflight.close()
+            connection = getattr(self, "connection", None)
+            if connection is not None:
+                connection.close()
+            _close_descriptors(after_sidecars)
+            _close_descriptors(self._sidecar_descriptors)
+            os.close(self._descriptor)
             raise
+        except (OSError, sqlite3.Error) as exc:
+            if preflight is not None:
+                preflight.close()
+            connection = getattr(self, "connection", None)
+            if connection is not None:
+                connection.close()
+            _close_descriptors(after_sidecars)
+            _close_descriptors(self._sidecar_descriptors)
+            os.close(self._descriptor)
+            raise StorageSchemaError("STORAGE_DASHBOARD:OPEN_FAILED") from exc
         finally:
-            if descriptor is not None:
-                os.close(descriptor)
+            _close_descriptors(before_sidecars)
+
+    def _assert_identity(self) -> None:
+        if self._closed:
+            raise StorageSchemaError("STORAGE_DASHBOARD:CLOSED")
+        _validate_dashboard_path_identity(self.path, self._descriptor)
+        current = _inspect_sqlite_sidecars(
+            self.path, code="STORAGE_DASHBOARD:UNSAFE_SIDECAR"
+        )
+        try:
+            _validate_dashboard_sidecar_state(current)
+            _compare_sidecar_sets(
+                self._sidecar_descriptors,
+                current,
+                code="STORAGE_DASHBOARD:SIDECAR_CHANGED",
+            )
+            for suffix, value in current.items():
+                if suffix in self._sidecar_descriptors:
+                    os.close(value[1])
+                else:
+                    self._sidecar_descriptors[suffix] = value
+            current = {}
+        finally:
+            _close_descriptors(current)
 
     def close(self) -> None:
         with self._lock:
-            self.connection.close()
+            if self._closed:
+                return
+            self._closed = True
+            try:
+                self.connection.close()
+            finally:
+                try:
+                    _close_descriptors(self._sidecar_descriptors)
+                finally:
+                    self._sidecar_descriptors = {}
+                    os.close(self._descriptor)
 
     def __enter__(self) -> "DashboardStore":
         return self
@@ -1014,29 +1530,76 @@ class DashboardStore:
         self.close()
 
     def summary(self) -> dict[str, Any]:
+        """Return one summary from a single stable SQLite read snapshot."""
+
         with self._lock:
+            self._assert_identity()
             self.connection.execute("BEGIN")
             try:
-                row = self.connection.execute(
-                    """SELECT
-                      (SELECT COUNT(*) FROM events) AS events,
-                      (SELECT COUNT(*) FROM detections) AS detections,
-                      (SELECT COUNT(*) FROM actions) AS actions,
-                      (SELECT COUNT(*) FROM detections
-                       WHERE severity IN ('HIGH', 'CRITICAL')) AS high_or_critical"""
-                ).fetchone()
+                event_count = self.connection.execute(
+                    "SELECT COUNT(*) FROM events"
+                ).fetchone()[0]
+                detection_count = self.connection.execute(
+                    "SELECT COUNT(*) FROM detections"
+                ).fetchone()[0]
+                action_count = self.connection.execute(
+                    "SELECT COUNT(*) FROM actions"
+                ).fetchone()[0]
+                active_threats = self.connection.execute(
+                    "SELECT COUNT(*) FROM detections "
+                    "WHERE severity IN ('HIGH', 'CRITICAL')"
+                ).fetchone()[0]
+                result = {
+                    "events": int(event_count),
+                    "detections": int(detection_count),
+                    "actions": int(action_count),
+                    "high_or_critical": int(active_threats),
+                }
+                self._assert_identity()
                 self.connection.commit()
+                return result
             except Exception:
                 self.connection.rollback()
                 raise
-        return {name: int(row[name]) for name in ("events", "detections", "actions", "high_or_critical")}
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Select only the five fields admitted to the dashboard contract."""
+
         safe_limit = max(1, min(int(limit), 200))
         with self._lock:
-            rows = self.connection.execute(
-                """SELECT detected_at, rule_id, severity, src_ip, message
-                FROM detections ORDER BY id DESC LIMIT ?""",
-                (safe_limit,),
-            ).fetchall()
-        return [dict(row) for row in rows]
+            self._assert_identity()
+            self.connection.execute("BEGIN")
+            try:
+                invalid = self.connection.execute(
+                    """
+                    SELECT 1 FROM (
+                        SELECT detected_at, rule_id, severity, src_ip, message
+                        FROM detections ORDER BY id DESC LIMIT ?
+                    )
+                    WHERE typeof(detected_at) != 'text'
+                       OR length(detected_at) > 64
+                       OR typeof(rule_id) != 'text' OR length(rule_id) > 64
+                       OR typeof(severity) != 'text' OR length(severity) > 16
+                       OR typeof(src_ip) != 'text' OR length(src_ip) > 45
+                       OR typeof(message) != 'text' OR length(message) > 512
+                    LIMIT 1
+                    """,
+                    (safe_limit,),
+                ).fetchone()
+                if invalid is not None:
+                    raise StorageSchemaError("STORAGE_DASHBOARD:INVALID_DATA")
+                rows = self.connection.execute(
+                    """
+                    SELECT detected_at, rule_id, severity, src_ip, message
+                    FROM detections
+                    ORDER BY id DESC LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
+                result = [_dashboard_detection_row(row) for row in rows]
+                self._assert_identity()
+                self.connection.commit()
+                return result
+            except Exception:
+                self.connection.rollback()
+                raise

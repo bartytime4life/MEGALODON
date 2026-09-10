@@ -77,7 +77,7 @@ def test_cli_refuses_before_store_report_or_server(monkeypatch, capsys, host, ov
         dashboard=SimpleNamespace(host="0.0.0.0", port=8787), db_path="not-opened",
     )
     monkeypatch.setattr(cli, "_load", lambda _: settings)
-    monkeypatch.setattr(cli, "Store", _forbidden)
+    monkeypatch.setattr(cli, "DashboardStore", _forbidden)
     monkeypatch.setattr(offline_projection, "load_offline_projection", _forbidden)
     monkeypatch.setattr(dashboard, "serve", _forbidden)
     args = argparse.Namespace(

@@ -25,7 +25,7 @@ proposal into a runtime capability or satisfy independent review.
 | High | Critical findings permanently auto-block an IP | False positives can cut off users, services, or an upstream network | Automatic and operator-requested live blocking are unsupported; proposed blocks remain time-limited plans only |
 | High | No allowlist precedence or protected-network policy | A detector can block loopback, private ranges, or management paths | Allowlist precedence and non-global rejection are enforced while producing plans; no live action follows |
 | High | No rollback, expiry, or action ledger | Operators cannot explain or safely undo a response | Supported plans are recorded in SQLite and block plans are time-limited; an unsupported apply request produces no false `applied` receipt, and live mutation stays disabled until the restoration gate below is met |
-| High | GUI design does not define authentication or bind address | A dashboard could expose threat data and controls on the LAN/WAN | Read-only dashboard binds to `127.0.0.1`, has no control endpoints, bounds its polling and recent-row budget, rejects ambiguous event queries, projects only the five live detection fields used by the UI, and serves same-origin assets under a no-inline CSP |
+| High | GUI design does not define authentication or bind address | A dashboard could expose threat data and controls on the LAN/WAN | Read-only dashboard binds to `127.0.0.1`, has no control endpoints, bounds its polling and recent-row budget, rejects ambiguous event queries, reads only an existing private exact-schema database through SQLite `mode=ro` plus `query_only`, projects only the five live detection fields used by the UI, and serves same-origin assets under a no-inline CSP |
 | High | A loopback listener trusts any HTTP `Host` value | DNS rebinding could let a foreign browser origin read local telemetry | Every dashboard `GET` requires one exact bound-loopback `Host` value and is rejected before routing or SQLite access when the value is missing, repeated, foreign, non-canonical, or names the wrong port |
 | High | A read-only UI opens the mutable database store | Dashboard startup can create or migrate state and mixed-query summaries can misstate one moment | A separate `mode=ro`, `query_only` reader requires an existing compatible database in a private boundary, selects only public fields, and reads summary counts in one transaction; live-WAL sidecars remain a disclosed SQLite behavior |
 | High | Offline reports could become a path-driven disclosure or analyzer trigger | A web request could expose case data, traverse local files, or start hostile-input processing | One operator-selected private report set is checked and its summary inputs are validated at startup; paths, records, evidence details, remote binds, uploads, and analyzer controls are excluded |
@@ -34,7 +34,7 @@ proposal into a runtime capability or satisfy independent review.
 | Medium | External feeds are called synchronously with no privacy contract | IP/domain disclosure, rate-limit failures, stale reputation, and API-key leakage | Feeds are out of MVP scope; later adapters must be cached, signed, rate-limited, and opt-in |
 | Medium | YAML rules imply arbitrary field/operator expansion | Unvalidated rules can create denial-of-service or unsafe actions | MVP rules are fixed and typed; a future rule schema must be allowlisted and versioned |
 | Medium | No IPv6 handling in the firewall examples | Incomplete protection and accidental IPv4-only assumptions | Plan generation uses separate validated IPv4/IPv6 nftables sets; this does not imply live enforcement |
-| Medium | No database schema, retention, or transaction policy | Unbounded growth and incomplete evidence | SQLite schema, WAL mode, parameterized writes, and a retention hook |
+| Medium | No database schema, retention, or transaction policy | Unbounded growth and incomplete evidence | Exact SQLite schema, descriptor-walked private writer paths, validated private SQLite sidecars, WAL mode, parameterized writes, one-snapshot dashboard summaries, a separately constrained and row-validating dashboard reader, and a retention hook |
 | Medium | GUI threat map can create a false precision problem | IP geolocation can expose or misrepresent people and locations | No map in MVP; future map must show uncertainty and avoid precise residential claims |
 | Low | `sqlite3` is listed as a pip requirement | It is part of Python’s standard library; install instructions are misleading | No runtime dependency for SQLite |
 | Low | `tshark>=1.4.0` is treated as a normal Python package | System Wireshark availability and bindings are different concerns | Scapy is an optional Python extra; tshark is not required by the MVP |
@@ -74,8 +74,11 @@ may receive malformed or adversarial network metadata. It protects against:
 - loss of an audit trail for supported planning and suppression decisions.
 
 It does not yet protect against a compromised kernel, a malicious root user,
-kernel-level packet forgery, an attacker who can write directly to the database,
-or a distributed sensor fleet. Those require a separate trust-boundary design.
+kernel-level packet forgery, or hostile code already running as the database
+owner and able to write or race the database directory and SQLite sidecars. It
+also does not cover a distributed sensor fleet. Those require a separate
+process-identity or trust-boundary design; path validation is not a sandbox for
+same-identity code.
 
 ## Required controls before production use
 
