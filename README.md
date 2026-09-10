@@ -53,6 +53,7 @@ record delivery state; they do not override the checked-in contracts.
 | Product boundary, commands, and first run | This README |
 | Runtime behavior and acceptance boundary | [`SPECIFICATION.md`](SPECIFICATION.md) |
 | Threat model and production controls | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
+| Red/blue/purple validation and future AI gates | [`docs/red-blue-security-guide.md`](docs/red-blue-security-guide.md) |
 | Platform choices and installation evidence | [`docs/platform-baseline.md`](docs/platform-baseline.md) |
 | Native Windows core acceptance matrix | [`docs/windows-core-acceptance.md`](docs/windows-core-acceptance.md) |
 | Offline analyst operation and report semantics | [`docs/offline-analysis.md`](docs/offline-analysis.md) |

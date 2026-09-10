@@ -1,13 +1,19 @@
 # Windows and Linux platform baseline
 
-**Baseline v1 — PROPOSED configuration and delivery plan.** Refreshed 2026-09-09
-against `71ed33500eca86da771012950a07873dbec6c57a` on `main` as the
-executable base. The #65 candidate behavior below remains proposed until its
-exact head is recorded and reviewed. This document is the canonical platform
-configuration entry point. It does not install software, activate sensors,
-certify Windows support, or authorize firewall changes.
-Google Drive carries coordination and historical evidence, not another runtime
-configuration authority. Recheck the exact repository revision before use.
+**Baseline v1 — immutable inspected configuration and delivery plan.**
+Repository state was observed at 2026-09-10T02:06:08Z against
+`adff346c55fb41be9e51be3cea0c7d8701175c2f` on `main` (tree
+`f2bcd4d39723a80d163aa1cd1271daf3020676f9`) as the executable base. This is
+an immutable observation, not a floating claim about current `main`. The merged
+firewall-containment changes from PRs #72–#74 and the first bounded #66
+dashboard-reader slice from PR #75 are implemented at this pin. Merged state
+and green CI do not establish independent approval; issues #3, #65, and #66
+remain open. This document is the canonical platform configuration entry point.
+It does not install software, activate sensors, certify Windows support, or
+authorize a license decision, tag, release, package publication, deployment,
+protection/ruleset change, firewall restoration, ready transition, or future
+merge. Google Drive carries coordination and historical evidence, not another
+runtime configuration authority. Recheck live repository state before use.
 
 ## 1. Platform decision and feature status
 
@@ -26,13 +32,13 @@ Ubuntu 24.04 is a deliberate maintained reference, not a claim that it is the
 newest Ubuntu release. Other distributions, Windows Server, Windows 10, ARM64,
 and other Python versions need their own evidence before inclusion. [S1, S2]
 
-| Feature | Pinned Linux implementation / #65 candidate | Native Windows baseline |
+| Feature | Pinned Linux implementation | Native Windows baseline |
 | --- | --- | --- |
 | Sample and bounded JSONL metadata; three fixed rules | Implemented | Evaluation target, unverified |
-| SQLite audit and read-only dashboard | Implemented; localhost by default | Evaluation target; private NTFS storage and loopback checks required |
+| SQLite audit and read-only dashboard | First bounded exact-v2, `mode=ro`, `query_only` slice merged in #75; `127.0.0.1` by default; #66 replacement/concurrency, WAL-sidecar, Windows ACL, and independent-review gates remain open | Evaluation target; private NTFS storage and loopback checks required |
 | Scapy live metadata capture | Optional `capture` extra; separate capture permission/authority | Not selected; driver, privilege, and adapter compatibility remain unreviewed |
 | Offline TShark packet metadata and Zeek connection-log import | Separate Linux-only command and private reports | Unsupported by the current offline implementation; use a validated L1 guest instead |
-| Firewall plans | Pinned base has explicit apply; #65 candidate makes nftables-shaped review output plan-only and refuses live application | No Windows firewall backend; an nftables plan is not a Windows rule |
+| Firewall plans | Merged #72–#74 containment is plan-only; every retained live-apply route returns a fixed unsupported diagnostic before configuration, privilege, or subprocess work | No Windows firewall backend; an nftables plan is not a Windows rule |
 | Offline-run dashboard projection | Implemented for one complete private report set on loopback | Native core evaluation target; remote projection is refused |
 | Suricata EVE integration | Inert record and bounded-reader contracts/tests on main; no runtime reader/importer | Contract only; native Suricata availability does not change this |
 | Scheduling and automated response | Automation schema exists; no scheduler/executor | Not implemented; no Task Scheduler installation or automatic blocking |
@@ -45,10 +51,13 @@ Implementation evidence: [package metadata](../pyproject.toml),
 [nftables plan backend](../megalodon/firewall.py).
 The offline code checks Linux/non-root/capability-free execution, uses Linux
 file descriptors and `/proc`, and invokes `/usr/bin/tshark`. Changing that path
-to `tshark.exe` is not a safe port. At the pinned base, the firewall apply path
-uses `os.geteuid()` and can reach `nft`. The #65 candidate instead retains
-every apply route only to return a fixed unsupported diagnostic before
-configuration, platform, executable, privilege, or subprocess work.
+to `tshark.exe` is not a safe port. In the pinned revision, #72 removed the live
+executor and #73–#74 closed parser-preflight spellings. Every retained
+`--apply` route and direct backend apply entry point returns the fixed
+unsupported diagnostic before configuration, platform, executable, privilege,
+database, or subprocess work. This is containment, not a completed
+crash-consistent response design; #65 remains open pending independent review
+and its restoration gate.
 
 ## 2. Open-source application selection
 
@@ -65,7 +74,7 @@ required by this baseline.
 | Zeek | Linux producer of separately scoped `conn.log` | Use the Linux guest for this baseline | Open-source network metadata producer; this is a baseline choice, not a claim that no Windows build exists [S7] |
 | ClamAV | Optional separate manual file scanner | Optional separate manual file scanner | Open-source supplementary file scanning; no MEGALODON file-content intake, quarantine, or antivirus replacement claim [S8] |
 | osquery | Later optional local host-inventory evaluation | Later optional local host-inventory evaluation | Open-source endpoint metadata tool; no importer, daemon, scheduled query pack, or remote enrollment in this slice [S9] |
-| Host firewall | Preserve the existing firewall manager; the #65 candidate emits inert nftables-shaped plans only | Preserve Windows Firewall and existing endpoint protection | Windows built-in security is not an open-source MEGALODON component; do not replace or disable it |
+| Host firewall | Preserve the plan-only firewall manager; merged #72–#74 containment emits inert nftables-shaped plans and refuses live application | Preserve Windows Firewall and existing endpoint protection | Windows built-in security is not an open-source MEGALODON component; do not replace or disable it |
 
 **Npcap is an exception, not an open-source dependency.** Its source availability
 and free-use cases do not make its license open source. Windows Wireshark can
@@ -175,7 +184,7 @@ cd "$HOME/Projects"
 [ ! -e MEGALODON-platform-baseline ] || { echo 'Target already exists; stop.'; exit 1; }
 git clone --no-checkout https://github.com/bartytime4life/MEGALODON.git MEGALODON-platform-baseline
 cd MEGALODON-platform-baseline
-BASE=71ed33500eca86da771012950a07873dbec6c57a
+BASE=adff346c55fb41be9e51be3cea0c7d8701175c2f
 git checkout --detach "$BASE"
 [ "$(git rev-parse HEAD)" = "$BASE" ]
 /usr/bin/python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
@@ -228,7 +237,7 @@ $Target = Join-Path $env:LOCALAPPDATA 'MEGALODON-platform-baseline'
 if (Test-Path -LiteralPath $Target) { throw 'Target already exists; stop.' }
 Invoke-Checked -Program 'git' -Arguments @('clone', '--no-checkout', 'https://github.com/bartytime4life/MEGALODON.git', $Target)
 Set-Location -LiteralPath $Target
-$Base = '71ed33500eca86da771012950a07873dbec6c57a'
+$Base = 'adff346c55fb41be9e51be3cea0c7d8701175c2f'
 Invoke-Checked -Program 'git' -Arguments @('checkout', '--detach', $Base)
 $Actual = & git rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $Actual -ne $Base) { throw 'Revision mismatch.' }
@@ -321,7 +330,7 @@ Do not attach real captures, SQLite databases, raw sensor logs, credentials,
 source paths containing personal information, or packet-derived hashes to a PR
 or Drive document. Share only a separately reviewed, bounded synthetic receipt.
 Keep `not_attempted`, `suppressed`, `planned`, and `failed` distinct. The
-#65 candidate does not produce an `applied` firewall receipt. A `failed`
+#65's pinned implementation does not produce an `applied` firewall receipt. A `failed`
 receipt records a planning or validation refusal, never an attempted mutation.
 A producer reporting a blocked event does not mean MEGALODON applied a rule.
 
@@ -361,15 +370,36 @@ OBSERVED upstream statements, not reproduced MEGALODON compatibility results.
 - S10: [Npcap distribution terms](https://npcap.com/) and [license](https://github.com/nmap/npcap/blob/master/LICENSE).
 - S11: [Microsoft WSL networking](https://learn.microsoft.com/en-us/windows/wsl/networking).
 
-Platform-relevant repository follow-ups
+At the repository-state readback recorded above, PRs
+[#72](https://github.com/bartytime4life/MEGALODON/pull/72),
+[#73](https://github.com/bartytime4life/MEGALODON/pull/73),
+[#74](https://github.com/bartytime4life/MEGALODON/pull/74), and
+[#75](https://github.com/bartytime4life/MEGALODON/pull/75) were merged.
+PRs #72–#74 establish plan-only firewall containment; #75 delivers only the
+first bounded #66 dashboard-reader slice. The only submitted review returned
+for #75 was an automated `COMMENTED` review, not an approval or independent
+review.
+
+Selected platform/release follow-ups observed open included
 [#3](https://github.com/bartytime4life/MEGALODON/issues/3),
 [#7](https://github.com/bartytime4life/MEGALODON/issues/7),
+[#23](https://github.com/bartytime4life/MEGALODON/issues/23),
 [#25](https://github.com/bartytime4life/MEGALODON/issues/25),
-[#27](https://github.com/bartytime4life/MEGALODON/issues/27), and
-[#65](https://github.com/bartytime4life/MEGALODON/issues/65) remain open at this
-refresh. [#9](https://github.com/bartytime4life/MEGALODON/issues/9),
+[#27](https://github.com/bartytime4life/MEGALODON/issues/27),
+[#65](https://github.com/bartytime4life/MEGALODON/issues/65),
+[#66](https://github.com/bartytime4life/MEGALODON/issues/66),
+[#67](https://github.com/bartytime4life/MEGALODON/issues/67),
+[#68](https://github.com/bartytime4life/MEGALODON/issues/68),
+[#69](https://github.com/bartytime4life/MEGALODON/issues/69), and
+[#70](https://github.com/bartytime4life/MEGALODON/issues/70). Issue #65 retains
+its independent-review and restoration-design gates; #66 retains unsatisfied
+reader/privacy acceptance; #69 retains sensitive-artifact, CI dependency, and
+required-check hygiene work; #70 leaves licensing and evaluation-release
+decisions to the owner. [#9](https://github.com/bartytime4life/MEGALODON/issues/9),
 [#24](https://github.com/bartytime4life/MEGALODON/issues/24), and
 [#28](https://github.com/bartytime4life/MEGALODON/issues/28) are closed
 design/test gates, not proof of a runtime capability or completed operational
 policy. Read live state before acting; this baseline does not freeze branch
-heads or turn proposals into shipped work.
+heads or turn proposals into shipped work. No license decision, tag, release,
+package publication, deployment, protection/ruleset change, ready transition,
+or future merge is authorized by this baseline.
