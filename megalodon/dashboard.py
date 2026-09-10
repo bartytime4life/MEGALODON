@@ -17,6 +17,7 @@ from .storage import StorageSchemaError
 MIN_REFRESH_SECONDS = 2
 MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
+MAX_EVENT_QUERY_LENGTH = 256
 DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
 MAX_REFERENCE_QUERY_LENGTH = 256
 MAX_REFERENCE_RESPONSE_BYTES = 64 * 1024
@@ -65,20 +66,14 @@ class ReferenceLibrary:
         try:
             return cls(load_iana())
         except ReferenceDataError as exc:
-            # Do not expose loader detail or a filesystem/resource path to the
-            # browser.  The fixed category remains useful to an operator.
-            detail = str(exc)
-            category = "integrity_failure" if any(
-                token in detail
-                for token in (
-                    "INTEGRITY",
-                    "MANIFEST",
-                    "ARTIFACT",
-                    "RESOURCE_SET",
-                    "ROW_COUNT",
-                    "ORDER_OR_DUPLICATE",
-                )
-            ) else "unavailable"
+            # Only a genuine resource-access error is ordinary unavailability.
+            # Every validation failure (including unknown future codes) fails
+            # closed as integrity_failure; never expose the loader diagnostic.
+            category = (
+                "unavailable"
+                if str(exc) == "REFERENCE_DATA:RESOURCE_IO"
+                else "integrity_failure"
+            )
             return cls(failure=category)
 
     @property
@@ -128,7 +123,8 @@ class ReferenceLibrary:
 
     def lookup_port(self, transport: str, port: int) -> dict[str, object]:
         if (
-            transport not in {"tcp", "udp", "sctp", "dccp"}
+            type(transport) is not str
+            or transport not in {"tcp", "udp", "sctp", "dccp"}
             or type(port) is not int
             or not 0 <= port <= 65_535
         ):
@@ -284,6 +280,13 @@ INDEX_HTML = """<!doctype html>
     <div class="connection" id="connection">Dashboard API · connecting</div>
   </header>
 
+  <nav class="section-nav" aria-label="Dashboard sections">
+    <a href="#detections-title">Detection triage</a>
+    <a href="#reference-title">Reference Library</a>
+    <a href="#offline-title">Offline snapshot</a>
+    <a href="#connections-title">Data connections</a>
+  </nav>
+
   <section class="hero" aria-labelledby="page-title">
     <div>
       <p class="eyebrow">Operational overview</p>
@@ -304,9 +307,9 @@ INDEX_HTML = """<!doctype html>
     </dl>
   </section>
 
-  <section class="panel reference-panel" aria-labelledby="reference-title">
+  <section class="panel reference-panel" id="reference-panel" aria-labelledby="reference-title" aria-busy="true">
     <div class="panel-head">
-      <div><h2 id="reference-title">Reference Library</h2><p>Manual context lookup against the installed, manifest-verified IANA snapshot. It never classifies traffic or changes stored records.</p></div>
+      <div><h2 id="reference-title" tabindex="-1">Reference Library</h2><p>Manual context lookup against the installed, manifest-verified IANA snapshot. It never classifies traffic or changes stored records.</p></div>
       <span class="timestamp" id="reference-bundle-label">Loading pinned snapshot…</span>
     </div>
     <div class="reference-warning" role="note">
@@ -335,6 +338,10 @@ INDEX_HTML = """<!doctype html>
         <button type="submit">Look up protocol</button>
       </form>
     </div>
+    <div class="reference-recovery">
+      <button id="reference-retry" type="button" class="button-secondary" aria-describedby="reference-retry-help" disabled>Recheck reference status</button>
+      <p id="reference-retry-help">Rechecks this process's installed snapshot status. It does not download data, repair the bundle, or restart the service.</p>
+    </div>
     <p class="reference-status" id="reference-status" role="status" aria-live="polite" aria-atomic="true">Loading the verified reference snapshot…</p>
     <div class="reference-result" id="reference-result" aria-live="polite" aria-atomic="true">
       <p class="reference-empty" id="reference-empty">Enter a value to inspect registration context.</p>
@@ -352,7 +359,7 @@ INDEX_HTML = """<!doctype html>
 
   <section class="panel" id="triage-panel" aria-labelledby="detections-title" aria-busy="true">
     <div class="panel-head">
-      <div><h2 id="detections-title">Recent detection triage</h2><p>Bounded local review of returned fixed-rule findings. Filters and timeline do not change stored data.</p></div>
+      <div><h2 id="detections-title" tabindex="-1">Recent detection triage</h2><p>Bounded local review of returned fixed-rule findings. Filters and timeline do not change stored data.</p></div>
       <time class="timestamp" id="updated">Awaiting first refresh</time>
     </div>
     <div class="priority-pulse" aria-labelledby="priority-title">
@@ -416,7 +423,7 @@ INDEX_HTML = """<!doctype html>
 
   <section class="panel" aria-labelledby="offline-title">
     <div class="panel-head">
-      <div><h2 id="offline-title">Offline analysis snapshot</h2><p>Validated, source-qualified, privacy-bounded summary loaded once at dashboard startup.</p></div>
+      <div><h2 id="offline-title" tabindex="-1">Offline analysis snapshot</h2><p>Validated, source-qualified, privacy-bounded summary loaded once at dashboard startup.</p></div>
       <span class="timestamp" id="offline-status">Checking</span>
     </div>
     <div class="offline-empty" id="offline-empty" hidden>
@@ -435,6 +442,17 @@ INDEX_HTML = """<!doctype html>
         <h3 class="subhead">Interpretation limits</h3><ul class="limitations" id="limitations"></ul>
       </aside>
     </div>
+  </section>
+  <section class="panel connection-guide" aria-labelledby="connections-title">
+    <div class="panel-head">
+      <div><h2 id="connections-title" tabindex="-1">Data connections</h2><p>Three separate read paths, not one combined health verdict. These descriptions do not probe installed tools or start integrations.</p></div>
+    </div>
+    <div class="connection-lanes">
+      <article><h3>Stored detections</h3><p>Bounded SQLite projection refreshed by the dashboard. A successful fetch does not establish that capture or ingestion is running.</p><a href="#detections-title">Review returned detections</a></article>
+      <article><h3>Registration context</h3><p>Manual lookup against a pinned IANA package snapshot. Registration is not an observed service, threat verdict, or live registry check.</p><a href="#reference-title">Inspect reference context</a></article>
+      <article><h3>Offline reports</h3><p>One explicitly selected, completed report snapshot loaded at startup. Packet and flow units remain source-qualified; dashboard refresh does not rerun analysis.</p><a href="#offline-title">Inspect the selected snapshot</a></article>
+    </div>
+    <p class="connection-boundary">No source is automatically joined to another. Sensor operation, capture, import, response, and alert delivery remain separate authority decisions.</p>
   </section>
   <p class="sr-only" id="refresh-announcement" aria-live="polite"></p>
   <noscript><p class="offline-empty">JavaScript is required to render this local dashboard.</p></noscript>
@@ -467,6 +485,19 @@ body::before {
 :focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .skip-link { position: fixed; z-index: 10; top: 10px; left: 10px; padding: 9px 12px; transform: translateY(-160%); border-radius: 9px; background: var(--text); color: var(--bg); font-weight: 800; }
 .skip-link:focus { transform: translateY(0); }
+.section-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: -14px 0 24px; }
+.section-nav a, .connection-lanes a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--cyan); text-underline-offset: .2em; overflow-wrap: anywhere; }
+h2[tabindex="-1"] { scroll-margin-top: 24px; }
+.reference-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 0 22px 12px; }
+.reference-recovery p { flex: 1 1 240px; margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.reference-provenance { display: grid; grid-template-columns: minmax(100px, .3fr) minmax(0, 1fr); gap: 8px 14px; margin: 14px 0 0; font-size: .78rem; }
+.reference-provenance dt { color: var(--muted); }
+.reference-provenance dd { margin: 0; overflow-wrap: anywhere; }
+.connection-guide { margin-top: 18px; }
+.connection-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; padding: 20px 22px; }
+.connection-lanes h3 { margin: 0; font-size: .9rem; }
+.connection-lanes p, .connection-boundary { color: var(--muted); font-size: .82rem; line-height: 1.6; }
+.connection-boundary { padding: 0 22px 18px; margin: 0; }
 .shell { position: relative; width: min(1240px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 34px; }
 .brand { display: flex; align-items: center; gap: 13px; }
@@ -684,6 +715,8 @@ const referenceState = {
   available: null,
   status: 'loading',
   loading: false,
+  statusLoading: false,
+  identity: null,
   lastResult: null,
   lastQuery: null
 };
@@ -1016,59 +1049,109 @@ function renderScope() {
   byId('scope-status').textContent = `Newest ${formatNumber(state.config.event_limit)} detections maximum${state.configDegraded ? ' · safe defaults' : ''}`;
 }
 function referenceExactKeys(value, expected) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const keys = Object.keys(value).sort();
   const sorted = [...expected].sort();
   return keys.length === sorted.length && keys.every((key, index) => key === sorted[index]);
 }
+function referenceUint(value, maximum) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= maximum;
+}
+function referenceText(value, maximum = 512, nullable = false) {
+  return (nullable && value === null)
+    || (typeof value === 'string' && value.length <= maximum);
+}
+function validatedReferenceIdentity(value) {
+  if (!referenceText(value.bundle_id) || !value.bundle_id.length
+      || value.bundle_version !== 'v1'
+      || typeof value.manifest_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.manifest_sha256)
+      || !referenceText(value.warning) || !value.warning.length) throw new Error('invalid reference identity');
+}
+function validatedReferencePosture(value) {
+  if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted'
+      || value.action_status !== 'not_attempted') throw new Error('invalid reference posture');
+}
 function validatedReferenceSources(value) {
   if (!Array.isArray(value) || value.length > 2) throw new Error('invalid reference sources');
+  const ids = new Set();
   value.forEach(source => {
-    if (!source || typeof source !== 'object' || Array.isArray(source) || !referenceExactKeys(source, referenceSourceFields)) {
-      throw new Error('invalid reference source');
-    }
+    if (!referenceExactKeys(source, referenceSourceFields)) throw new Error('invalid reference source');
     referenceSourceFields.forEach(field => {
-      if (typeof source[field] !== 'string' || source[field].length < 1 || source[field].length > 256) throw new Error('invalid reference source');
+      if (!referenceText(source[field], 256) || !source[field].length) throw new Error('invalid reference source');
     });
+    if (ids.has(source.id)) throw new Error('duplicate reference source');
+    ids.add(source.id);
   });
   return value;
 }
 function validatedReferenceStatus(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.schema !== 'string') throw new Error('invalid reference status');
-  if (value.schema !== 'reference-library-status-v1' || typeof value.available !== 'boolean' || typeof value.status !== 'string') throw new Error('invalid reference status');
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || value.schema !== 'reference-library-status-v1' || typeof value.available !== 'boolean') throw new Error('invalid reference status');
+  // Error responses must carry the same no-action/no-egress posture as success.
+  validatedReferencePosture(value);
   if (!value.available) {
     if (!referenceExactKeys(value, ['schema', 'available', 'status', 'error', 'network_access_performed', 'persistence_status', 'action_status'])) throw new Error('invalid reference status');
-    if (!['unavailable', 'integrity_failure'].includes(value.status) || typeof value.error !== 'string') throw new Error('invalid reference status');
+    const errors = {unavailable: 'reference bundle unavailable', integrity_failure: 'reference bundle integrity failure'};
+    if (!Object.hasOwn(errors, value.status) || value.error !== errors[value.status]) throw new Error('invalid reference status');
     return value;
   }
   if (!referenceExactKeys(value, ['schema', 'available', 'status', 'bundle_id', 'bundle_version', 'manifest_sha256', 'service_records', 'protocol_records', 'cache_entries', 'cache_limit', 'sources', 'warning', 'network_access_performed', 'persistence_status', 'action_status'])) throw new Error('invalid reference status');
-  if (value.status !== 'ready' || ![value.service_records, value.protocol_records, value.cache_entries, value.cache_limit].every(item => Number.isSafeInteger(item) && item >= 0) || value.cache_entries > value.cache_limit) throw new Error('invalid reference status');
-  if (![value.bundle_id, value.bundle_version, value.manifest_sha256, value.warning].every(item => typeof item === 'string' && item.length > 0 && item.length <= 512)) throw new Error('invalid reference status');
-  if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted' || value.action_status !== 'not_attempted') throw new Error('invalid reference status');
+  if (value.status !== 'ready' || !referenceUint(value.service_records, 20000)
+      || !referenceUint(value.protocol_records, 512) || value.cache_limit !== 16
+      || !referenceUint(value.cache_entries, value.cache_limit)) throw new Error('invalid reference status');
+  validatedReferenceIdentity(value);
   validatedReferenceSources(value.sources);
   return value;
 }
-function validatedReferenceResult(value) {
+function validatedReferenceResult(value, expectedKind = null, expectedQuery = null, expectedIdentity = null) {
   const expected = ['schema', 'status', 'available', 'kind', 'bundle_id', 'bundle_version', 'manifest_sha256', 'query', 'match_count', 'matches', 'truncated', 'sources', 'warning', 'network_access_performed', 'persistence_status', 'action_status'];
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !referenceExactKeys(value, expected)) throw new Error('invalid reference result');
-  if (value.schema !== 'reference-library-lookup-v1' || value.available !== true || !['no_match', 'one_match', 'multiple_matches'].includes(value.status) || !['port', 'protocol'].includes(value.kind)) throw new Error('invalid reference result');
-  if (![value.bundle_id, value.bundle_version, value.manifest_sha256, value.warning].every(item => typeof item === 'string' && item.length > 0 && item.length <= 512)) throw new Error('invalid reference result');
-  if (!Number.isSafeInteger(value.match_count) || value.match_count < 0 || value.match_count > 20000 || !Array.isArray(value.matches) || value.matches.length > 8 || value.matches.length > value.match_count || typeof value.truncated !== 'boolean') throw new Error('invalid reference result');
+  if (!referenceExactKeys(value, expected) || value.schema !== 'reference-library-lookup-v1'
+      || value.available !== true || !['port', 'protocol'].includes(value.kind)) throw new Error('invalid reference result');
+  validatedReferenceIdentity(value);
+  validatedReferencePosture(value);
+  const maximumCount = value.kind === 'port' ? 20000 : 512;
+  if (!referenceUint(value.match_count, maximumCount) || !Array.isArray(value.matches)
+      || value.matches.length !== Math.min(value.match_count, 8)
+      || value.truncated !== (value.match_count > 8)) throw new Error('invalid reference counts');
+  const status = value.match_count === 0 ? 'no_match' : value.match_count === 1 ? 'one_match' : 'multiple_matches';
+  if (value.status !== status) throw new Error('invalid reference counts');
   const queryKeys = value.kind === 'port' ? ['port', 'transport'] : ['number'];
-  if (!value.query || typeof value.query !== 'object' || Array.isArray(value.query) || !referenceExactKeys(value.query, queryKeys)) throw new Error('invalid reference result');
-  if (value.kind === 'port' && (typeof value.query.transport !== 'string' || !Number.isSafeInteger(value.query.port))) throw new Error('invalid reference result');
-  if (value.kind === 'protocol' && !Number.isSafeInteger(value.query.number)) throw new Error('invalid reference result');
+  if (!referenceExactKeys(value.query, queryKeys)) throw new Error('invalid reference query');
+  if (value.kind === 'port' && (!['tcp', 'udp', 'sctp', 'dccp'].includes(value.query.transport)
+      || !referenceUint(value.query.port, 65535))) throw new Error('invalid reference query');
+  if (value.kind === 'protocol' && !referenceUint(value.query.number, 255)) throw new Error('invalid reference query');
+  if (expectedKind !== null && (value.kind !== expectedKind || !referenceExactKeys(expectedQuery, queryKeys)
+      || !queryKeys.every(key => value.query[key] === expectedQuery[key]))) throw new Error('reference query mismatch');
+  if (expectedIdentity !== null && !['bundle_id', 'bundle_version', 'manifest_sha256']
+      .every(key => value[key] === expectedIdentity[key])) throw new Error('reference snapshot mismatch');
   const fields = value.kind === 'port' ? referencePortFields : referenceProtocolFields;
+  const sourceRows = new Set();
   value.matches.forEach(match => {
-    if (!match || typeof match !== 'object' || Array.isArray(match) || !referenceExactKeys(match, fields)) throw new Error('invalid reference result');
-    fields.forEach(field => {
-      const item = match[field];
-      if (item !== null && typeof item !== 'string' && !Number.isSafeInteger(item)) throw new Error('invalid reference result');
-      if (typeof item === 'string' && item.length > 512) throw new Error('invalid reference result');
-    });
+    if (!referenceExactKeys(match, fields) || !referenceUint(match.source_row, 20000)
+        || match.source_row === 0 || sourceRows.has(match.source_row)
+        || !referenceText(match.record_kind) || !match.record_kind.length) throw new Error('invalid reference record');
+    sourceRows.add(match.source_row);
+    if (value.kind === 'port') {
+      if (match.transport !== value.query.transport || !referenceUint(match.port_start, 65535)
+          || !referenceUint(match.port_end, 65535) || match.port_start > value.query.port
+          || match.port_end < value.query.port
+          || !['service_name', 'description', 'registration_date', 'modification_date']
+            .every(field => referenceText(match[field], 512, true))) throw new Error('invalid reference record');
+    } else {
+      if (!referenceUint(match.decimal_start, 255) || !referenceUint(match.decimal_end, 255)
+          || match.decimal_start > value.query.number || match.decimal_end < value.query.number
+          || !referenceText(match.ipv6_extension_header)
+          || !['keyword', 'protocol_name'].every(field => referenceText(match[field], 512, true))) throw new Error('invalid reference record');
+    }
   });
   validatedReferenceSources(value.sources);
-  if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted' || value.action_status !== 'not_attempted') throw new Error('invalid reference result');
   return value;
+}
+function referenceFailurePayload(error) {
+  try {
+    const payload = validatedReferenceStatus(error && error.payload);
+    return payload.available ? null : payload;
+  } catch (_) { return null; }
 }
 function setReferenceStatus(message, mode) {
   const node = byId('reference-status');
@@ -1089,12 +1172,21 @@ function referenceChip(label) {
 function renderReferenceMeta(result) {
   const meta = byId('reference-meta');
   const query = result.kind === 'port' ? `${result.query.transport}/${result.query.port}` : `IP protocol ${result.query.number}`;
-  const sourceText = result.sources.map(source => `${source.id} · updated ${source.registry_last_updated}`).join(' · ');
+  const provenance = document.createElement('dl'); provenance.className = 'reference-provenance';
+  provenance.append(textNode('dt', 'Manifest SHA-256'), textNode('dd', result.manifest_sha256));
+  result.sources.forEach(source => {
+    provenance.append(
+      textNode('dt', 'Source registry'), textNode('dd', source.id),
+      textNode('dt', 'Registry address'), textNode('dd', source.registry_url),
+      textNode('dt', 'Registry date'), textNode('dd', source.registry_last_updated),
+      textNode('dt', 'Retrieved at'), textNode('dd', source.retrieved_at),
+      textNode('dt', 'Retrieval basis'), textNode('dd', source.retrieved_at_basis)
+    );
+  });
+  if (!result.sources.length) provenance.append(textNode('dt', 'Retrieval provenance'), textNode('dd', 'Not supplied in this response.'));
   meta.replaceChildren(
-    referenceChip(`${result.status.replaceAll('_', ' ')} · ${formatNumber(result.match_count)} registered`),
-    referenceChip(`Bundle ${result.bundle_id} · ${result.bundle_version}`),
-    referenceChip(query),
-    referenceChip(sourceText || 'Pinned source provenance available in manifest')
+    referenceChip(`${result.status.replaceAll('_', ' ')} · ${formatNumber(result.match_count)} registry records`),
+    referenceChip(`Bundle ${result.bundle_id} · ${result.bundle_version}`), referenceChip(query), provenance
   );
   meta.hidden = false;
 }
@@ -1129,21 +1221,43 @@ function renderReferenceUnavailable(payload, fallbackMode = 'unavailable') {
   const message = mode === 'integrity_failure'
     ? 'Reference Library integrity failure. Manual lookup is disabled; no partial records are shown.'
     : 'Reference Library is unavailable. Manual lookup is disabled until the verified snapshot can be loaded.';
-  referenceState.available = false; referenceState.status = mode; setReferenceFormsEnabled(false); setReferenceStatus(message, mode);
+  referenceState.available = false; referenceState.status = mode; referenceState.identity = null;
+  clearReferenceResult(); setReferenceFormsEnabled(false); setReferenceStatus(message, mode);
   byId('reference-bundle-label').textContent = mode === 'integrity_failure' ? 'Integrity failure' : 'Unavailable';
   byId('reference-empty').textContent = message; byId('reference-empty').hidden = false;
   byId('reference-meta').hidden = true; byId('reference-results').hidden = true; byId('reference-results').replaceChildren();
 }
+function setReferenceBusy(busy) {
+  const panel = byId('reference-panel');
+  if (panel) panel.setAttribute('aria-busy', String(busy));
+  const retry = byId('reference-retry');
+  if (retry) retry.disabled = busy;
+  setReferenceFormsEnabled(!busy && referenceState.available === true);
+}
+function clearReferenceResult() {
+  referenceState.lastResult = null; referenceState.lastQuery = null;
+  byId('reference-meta').hidden = true; byId('reference-meta').replaceChildren();
+  byId('reference-results').hidden = true; byId('reference-results').replaceChildren();
+  byId('reference-empty').hidden = false;
+}
 async function loadReferenceStatus() {
+  if (referenceState.statusLoading || referenceState.loading) return;
+  referenceState.statusLoading = true; referenceState.available = false; referenceState.identity = null;
+  setReferenceBusy(true); clearReferenceResult();
+  byId('reference-empty').textContent = 'Checking the installed snapshot status. No lookup result is selected.';
+  setReferenceStatus('Checking the installed reference snapshot. No download or update is performed.', 'empty');
   try {
     const payload = validatedReferenceStatus(await requestJSON('/api/reference/status'));
     if (!payload.available) { renderReferenceUnavailable(payload, payload.status); return; }
-    referenceState.available = true; referenceState.status = 'ready'; setReferenceFormsEnabled(true);
+    referenceState.available = true; referenceState.status = 'ready';
+    referenceState.identity = {bundle_id: payload.bundle_id, bundle_version: payload.bundle_version, manifest_sha256: payload.manifest_sha256};
     byId('reference-bundle-label').textContent = `IANA ${payload.bundle_version} · ${payload.bundle_id}`;
+    byId('reference-empty').textContent = 'Enter a value to inspect registration context.';
     setReferenceStatus('Pinned IANA snapshot ready. Enter one value for a read-only context lookup.', 'ready');
   } catch (error) {
-    renderReferenceUnavailable(error.payload, error.payload && error.payload.status ? error.payload.status : 'unavailable');
-  }
+    const failure = referenceFailurePayload(error);
+    renderReferenceUnavailable(failure, failure ? failure.status : 'unavailable');
+  } finally { referenceState.statusLoading = false; setReferenceBusy(false); }
 }
 function decimalReferenceInput(value, maximum) {
   const text = String(value);
@@ -1151,32 +1265,36 @@ function decimalReferenceInput(value, maximum) {
   return Number(text);
 }
 async function lookupReference(kind) {
-  if (!referenceState.available || referenceState.loading) return;
+  if (!referenceState.available || !referenceState.identity || referenceState.loading || referenceState.statusLoading) return;
   let query;
   try {
-    if (kind === 'port') query = {transport: byId('reference-transport').value, port: decimalReferenceInput(byId('reference-port').value, 65535)};
-    else query = {number: decimalReferenceInput(byId('reference-protocol').value, 255)};
+    if (kind === 'port') {
+      query = {transport: byId('reference-transport').value, port: decimalReferenceInput(byId('reference-port').value, 65535)};
+      if (!['tcp', 'udp', 'sctp', 'dccp'].includes(query.transport)) throw new Error('invalid reference transport');
+    } else if (kind === 'protocol') query = {number: decimalReferenceInput(byId('reference-protocol').value, 255)};
+    else throw new Error('invalid reference kind');
   } catch (_) {
-    setReferenceStatus(kind === 'port' ? 'Enter a normalized transport and a decimal port from 0 through 65535.' : 'Enter a decimal IP protocol number from 0 through 255.', 'empty');
+    const preserved = referenceState.lastResult ? ' The prior result below still belongs to its displayed query.' : '';
+    setReferenceStatus((kind === 'port' ? 'Enter a normalized transport and a decimal port from 0 through 65535.' : 'Enter a decimal IP protocol number from 0 through 255.') + preserved, referenceState.lastResult ? 'stale' : 'empty');
     return;
   }
-  referenceState.loading = true; setReferenceStatus('Loading one bounded reference result…', 'empty');
+  referenceState.loading = true; setReferenceBusy(true);
+  setReferenceStatus('Loading one bounded reference result. Any prior result still belongs to its displayed query.', 'empty');
   const params = kind === 'port' ? `transport=${encodeURIComponent(query.transport)}&port=${query.port}` : `number=${query.number}`;
   try {
-    const result = validatedReferenceResult(await requestJSON(`/api/reference/${kind}?${params}`));
+    const result = validatedReferenceResult(await requestJSON(`/api/reference/${kind}?${params}`), kind, query, referenceState.identity);
     referenceState.lastResult = result; referenceState.lastQuery = query; renderReferenceResult(result);
     const suffix = result.truncated ? ' The returned rows are capped.' : '';
-    setReferenceStatus(result.status === 'no_match' ? `No registration found for this exact ${kind} lookup.${suffix}` : `Reference context loaded: ${formatNumber(result.match_count)} ${result.match_count === 1 ? 'registration' : 'registrations'}.${suffix}`, result.status === 'no_match' ? 'empty' : 'ready');
+    setReferenceStatus(result.status === 'no_match' ? `No registry record found for this exact ${kind} lookup.${suffix}` : `Reference context loaded: ${formatNumber(result.match_count)} registry ${result.match_count === 1 ? 'record' : 'records'}.${suffix}`, result.status === 'no_match' ? 'empty' : 'ready');
   } catch (error) {
-    if (error.payload && (error.payload.status === 'integrity_failure' || error.payload.status === 'unavailable')) {
-      renderReferenceUnavailable(error.payload, error.payload.status); return;
-    }
+    const failure = referenceFailurePayload(error);
+    if (failure) { renderReferenceUnavailable(failure, failure.status); return; }
     if (referenceState.lastResult) {
       setReferenceStatus('Lookup failed. Showing the last successful reference result as stale; no new data was applied.', 'stale');
     } else {
       setReferenceStatus('Lookup failed. No reference result is available.', 'unavailable');
     }
-  } finally { referenceState.loading = false; }
+  } finally { referenceState.loading = false; setReferenceBusy(false); }
 }
 function setSnapshotStatus(mode) {
   const strip = byId('trust-strip');
@@ -1326,6 +1444,8 @@ byId('refresh-button').addEventListener('click', () => refresh(true));
 byId('pause-button').addEventListener('click', togglePause);
 byId('reference-port-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('port'); });
 byId('reference-protocol-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('protocol'); });
+const referenceRetryButton = byId('reference-retry');
+if (referenceRetryButton) referenceRetryButton.addEventListener('click', () => loadReferenceStatus());
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && !state.paused) { refresh(false); scheduleNext(); }
 });
@@ -1344,7 +1464,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
-        route = urlparse(self.path)
+        try:
+            route = urlparse(self.path)
+        except ValueError:
+            self._send_json({"error": "invalid request target"}, status=400)
+            return
         if route.path == "/":
             self._send(200, "text/html; charset=utf-8", INDEX_HTML.encode())
             return
@@ -1376,6 +1500,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(summary)
             return
         if route.path == "/api/events":
+            # Bound framing before allocating parameter lists or converting a
+            # decimal. Oversized values must not escape as an int() exception.
+            if len(route.query) > MAX_EVENT_QUERY_LENGTH:
+                self._send_json({"error": "event query is too long"}, status=400)
+                return
             params = parse_qs(route.query, keep_blank_values=True)
             if set(params) - {"limit"}:
                 self._send_json({"error": "unsupported query parameter"}, status=400)
