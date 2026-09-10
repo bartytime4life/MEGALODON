@@ -127,7 +127,11 @@ class ReferenceLibrary:
         }
 
     def lookup_port(self, transport: str, port: int) -> dict[str, object]:
-        if transport not in {"tcp", "udp", "sctp", "dccp"} or type(port) is not int:
+        if (
+            transport not in {"tcp", "udp", "sctp", "dccp"}
+            or type(port) is not int
+            or not 0 <= port <= 65_535
+        ):
             raise ReferenceLookupError("invalid reference lookup")
         key = ("port", transport, port)
         with self._lock:
@@ -155,7 +159,7 @@ class ReferenceLibrary:
         return json.loads(json.dumps(result))
 
     def lookup_protocol(self, number: int) -> dict[str, object]:
-        if type(number) is not int:
+        if type(number) is not int or not 0 <= number <= 255:
             raise ReferenceLookupError("invalid reference lookup")
         key = ("protocol", "", number)
         with self._lock:

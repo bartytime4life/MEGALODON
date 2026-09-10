@@ -403,6 +403,14 @@ def test_reference_library_is_verified_bounded_and_provenance_pinned():
     assert empty["status"] == "no_match"
     assert empty["matches"] == []
     assert library.lookup_protocol(6)["status"] == "one_match"
+    for operation in (
+        lambda: library.lookup_port("tcp", -1),
+        lambda: library.lookup_port("tcp", 65_536),
+        lambda: library.lookup_protocol(-1),
+        lambda: library.lookup_protocol(256),
+    ):
+        with pytest.raises(ValueError, match="invalid reference lookup"):
+            operation()
     for number in range(MAX_REFERENCE_CACHE_ENTRIES + 5):
         library.lookup_protocol(number)
     assert library.cache_size <= MAX_REFERENCE_CACHE_ENTRIES
