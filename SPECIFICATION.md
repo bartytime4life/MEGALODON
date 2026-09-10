@@ -215,6 +215,14 @@ The dashboard exposes only:
 - `GET /api/offline-summary` — either `available: false` or one immutable,
   validated `dashboard-offline-summary-v1` snapshot selected at startup.
 
+The dashboard uses a separate SQLite URI `mode=ro` connection with
+`PRAGMA query_only=ON` and accepts only an existing exact compatible schema in a
+verified private storage directory. It never creates or migrates the database or
+changes journal mode. Summary counts share one read transaction, and the recent
+detection query selects only the five public fields in the API contract. SQLite
+WAL coordination files may still be maintained inside that private directory;
+this is not a zero-filesystem-write snapshot-viewer claim.
+
 `dashboard.refresh_seconds` is an integer from 2 through 300 and
 `dashboard.event_limit` is an integer from 1 through 200. The matching
 `--refresh-seconds` and `--event-limit` command options override configuration

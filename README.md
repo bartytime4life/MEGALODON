@@ -228,7 +228,14 @@ The default database is `data/megalodon.db`. Repeated runs append to the same
 database until the operator deliberately uses another configuration/database or
 applies a reviewed retention procedure. The store marks its current layout with
 SQLite `user_version = 2`. New databases include the reserved ingestion-run
-ledger. Existing exact v1 or unversioned-v1 databases require the explicit
+ledger. On POSIX, the writer creates a missing database as mode 0600 inside an
+operator-owned directory with no group or other access; unsafe or symlinked
+storage boundaries are refused. The dashboard opens only an existing compatible
+database through a separate SQLite read-only, query-only connection. It does not
+create the directory or database, initialize or migrate schema, or change journal
+mode. SQLite may maintain WAL coordination sidecars inside the verified private
+directory while a writer is live. Native Windows privacy remains an NTFS ACL
+acceptance gate. Existing exact v1 or unversioned-v1 databases require the explicit
 `database-migrate` command; ordinary startup does not migrate them. The command
 first creates and verifies a sibling backup ending in `.pre-v2.bak`, never
 overwrites an existing backup, and then applies the additive migration in one
@@ -295,6 +302,8 @@ content-security policy does not require inline-script or inline-style access.
 The live events API projects only detection time, rule ID, severity, source IP,
 and message. Destination IP, evidence, recommendation, and suppression details
 remain in the local audit store and are not served to the browser.
+Summary counts are collected from one read transaction so a refresh cannot mix
+values from different database snapshots.
 
 ## Commands
 
