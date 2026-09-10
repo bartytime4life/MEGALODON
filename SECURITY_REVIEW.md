@@ -21,8 +21,12 @@ for authorized adversarial validation and future-AI gates. That guide adds no
 model runtime, tool authority, or firewall authorization.
 
 The offline reference and synthetic evaluation subsystem is documented in
-[docs/reference-data.md](docs/reference-data.md). It adds bounded evidence for
-review without joining the ingestion, audit, dashboard, or response paths.
+[docs/reference-data.md](docs/reference-data.md). Its CLI does not join the
+ingestion, audit, or response paths. The dashboard separately provides manual
+read-only IANA lookups; it does not correlate that context with detections or
+serve or execute the synthetic corpus. See the
+[consumer and recovery contract](docs/ui-state-contract.md) and
+[operator workflows](docs/command-center-workflows.md).
 
 ## Findings and corrections
 
@@ -70,6 +74,45 @@ and do not execute `nft`.
 Issue #65 therefore has an implemented evaluation-containment boundary, not a
 restored mutation capability or production approval. Its exact-head validation,
 independent review, and issue lifecycle remain separate gates.
+
+### Dashboard reference-consumer and recovery controls
+
+The reference UI treats successful and failed responses as untrusted display
+input. Before replacement it checks closed fields and types, no-egress/no-write/
+no-action declarations, count/status/truncation consistency, record ranges,
+exact submitted query, and the successful status snapshot's bundle ID/version/
+manifest digest. A result for a different port, transport, protocol or snapshot
+cannot silently become the answer to the current query. This is consistency
+validation, not protection against a compromised server or independent publisher
+authentication.
+
+The backend reserves ordinary `unavailable` for the exact fixed resource-access
+diagnostic `REFERENCE_DATA:RESOURCE_IO`. All other loader validation failures,
+including previously unclassified size, JSON, framing and record errors, become
+`integrity_failure`; unknown future validation errors also fail closed. Neither
+category returns partial rows, raw diagnostics, paths, or cache entries.
+
+The UI displays the manifest digest, source registry, registry date, retrieval
+time and retrieval basis as inert text. It does not fetch registry URLs or
+convert registration into observed service, safety, reputation or vulnerability.
+A failed lookup preserves a prior result only as stale with its original query;
+a validated unavailable/integrity response clears old context. The manual
+status-recheck control performs one local GET, clears the prior client result,
+and prevents overlapping reference requests. It does not reload the server's
+bundle, update resources, reset its cache, start a tool, or create a retry loop.
+
+Oversized event queries are refused before parameter parsing or integer
+conversion at 256 characters. URL-parsing failures receive a fixed path-free
+400 before route/storage access. The direct reference port-lookup API checks
+transport type before set membership. These controls do not establish global
+HTTP connection, header, thread, retention or disk-capacity budgets.
+
+Regression coverage belongs to `tests/test_dashboard_workflow_regressions.py`
+and the existing dashboard/reference suites. Node/DOM checks, full repository
+CI, rendered-browser acceptance and eligible independent review are distinct
+evidence classes. In-page navigation and busy/failure messaging do not by
+themselves establish WCAG or screen-reader conformance. Issues #7/#27 retain
+those native/browser gates, and #68 retains whole-service resource acceptance.
 
 ## Threat model
 

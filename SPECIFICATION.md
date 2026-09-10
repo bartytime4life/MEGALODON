@@ -33,8 +33,10 @@ gated by the open integrity, resource, browser, installed-tool, and release
 controls. The current repository also exposes an explicit, non-executing
 nftables plan boundary; firewall application is unsupported. A separate offline
 reference and evaluation subsystem supplies pinned registration context and
-deterministic synthetic detector exercises. It does not join the service
-ingestion, audit, dashboard, or response paths.
+deterministic synthetic detector exercises. Its CLI does not join the service
+ingestion, audit, or response paths. The dashboard separately exposes manual
+read-only lookups against the installed IANA bundle; it does not join those
+results to detections or execute the synthetic corpus.
 
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
@@ -312,12 +314,53 @@ The dashboard exposes only:
 - `GET /api/summary` — event, detection, action, and high/critical counts;
 - `GET /api/events?limit=N` — recent detections, with one decimal integer from
   1 through 200; malformed, repeated, out-of-range, and unknown query fields
-  fail with `400` rather than being silently coerced. Each returned detection
-  contains only `detected_at`, `rule_id`, `severity`, `src_ip`, and `message`;
-  stored destination addresses, evidence, recommendations, and suppression
-  reasons are excluded from the browser contract;
+  fail with `400` rather than being silently coerced. The query string is capped
+  at 256 characters before parameter parsing or integer conversion. Each
+  returned detection contains only `detected_at`, `rule_id`, `severity`,
+  `src_ip`, and `message`; stored destination addresses, evidence,
+  recommendations, and suppression reasons are excluded from the browser contract;
 - `GET /api/offline-summary` — either `available: false` or one immutable,
-  validated `dashboard-offline-summary-v1` snapshot selected at startup.
+  validated `dashboard-offline-summary-v1` snapshot selected at startup;
+- `GET /api/reference/status` — installed IANA bundle readiness or a fixed
+  unavailable/integrity-failure disposition, with no query parameters;
+- `GET /api/reference/port?transport=tcp&port=443` — one canonical transport
+  (`tcp`, `udp`, `sctp`, `dccp`) and decimal port from 0 through 65535;
+- `GET /api/reference/protocol?number=6` — one canonical decimal protocol number
+  from 0 through 255. Reference lookup queries are capped at 256 characters;
+  repeated/unknown fields, leading zeros, signs, floats, booleans, unsupported
+  transports, and out-of-range numbers fail closed.
+
+Malformed request targets that make URL parsing raise receive a fixed `400`
+before routing. This and the per-query caps do not establish whole-server
+connection, thread, header, or long-running resource budgets.
+
+Reference lookup remains separate from the SQLite reader and service evidence.
+The complete installed bundle validates once per process before lookup; there
+is no runtime download, reload, update, writer, analyzer, or response path.
+Only `REFERENCE_DATA:RESOURCE_IO` is classified as ordinary `unavailable`;
+other loader validation failures, including unknown future codes, become
+`integrity_failure` without exposing the underlying diagnostic or partial rows.
+Results are limited to eight rows and 64 KiB, and the cache to 16 entries.
+The direct Python port-lookup boundary rejects a non-string transport before
+set membership, producing the fixed `ReferenceLookupError` diagnostic.
+
+The reference consumer verifies closed success and failure shapes, no-egress/
+no-persistence/no-action declarations, count/status/truncation consistency,
+record ranges, the exact submitted query, and the last successful status
+snapshot's bundle ID/version/manifest digest before replacing displayed data.
+Manifest digest and registry identity, date, retrieval time, and retrieval basis
+are rendered as inert text. A registry URL does not trigger a remote request.
+A failed lookup preserves a prior result only as stale and attached to its
+original query; an authoritative integrity/unavailable result clears it.
+
+The manual **Recheck reference status** control only reads the current process's
+status endpoint. It clears the selected client result, prevents overlapping
+status/lookup requests, and requires another explicit lookup after success.
+It does not repair an installed bundle, reset the server cache, restart the
+service, fetch an update, or create a retry loop. In-page section links and the
+Data connections guide explain the three read paths without probing tools or
+correlating records. See [operator workflows](docs/command-center-workflows.md)
+and the [consumer and recovery contract](docs/ui-state-contract.md).
 
 `dashboard.refresh_seconds` is an integer from 2 through 300 and
 `dashboard.event_limit` is an integer from 1 through 200. The matching
@@ -474,8 +517,10 @@ Its IANA data is registry context, not a threat-intelligence assertion or an
 observed-service label. Its 12-scenario, 6,492-event corpus verifies deterministic
 rule and resource-boundary behavior only; `synthetic-only` and `uncalibrated`
 results do not measure representativeness, false-positive rates, operational
-accuracy, readiness, or product efficacy. Neither path modifies the Stage 0
-automation schema, service SQLite schema, dashboard surface, or firewall boundary.
+accuracy, readiness, or product efficacy. Neither CLI path modifies the Stage 0
+automation schema, service SQLite schema, or firewall boundary, nor starts a
+dashboard. The dashboard's separate manual IANA projection is described in
+section 6; it does not serve or execute the evaluation corpus.
 
 ## 10. Proposed Windows/Linux platform contract
 
