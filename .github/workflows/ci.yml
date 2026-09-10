@@ -52,7 +52,7 @@ jobs:
       - name: Build distributions and install wheel
         run: |
           set -euo pipefail
-          python -m pip install "build==1.6.0" "pytest>=8,<9" "jsonschema>=4.23,<5"
+          python -m pip install "build==1.6.0" "setuptools==80.9.0" "pytest>=8,<9" "jsonschema>=4.23,<5"
           python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
           python -m venv "$RUNNER_TEMP/wheel-venv"
           wheels=("$RUNNER_TEMP"/distributions/megalodon_defense-*.whl)
