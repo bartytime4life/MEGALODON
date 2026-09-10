@@ -133,8 +133,14 @@ request must not create an `applied` receipt.
 | `DNS_TUNNELING` | DNS/UDP query metadata length at least 50 | CRITICAL | observed length and threshold | alert only |
 
 Rules use bounded in-memory deques and emit at most one alert per source/rule
-within the configured cooldown. That reduces duplicate noise; it does not
-prove the activity stopped.
+within the configured cooldown. Port-scan distinctness uses an incremental,
+bounded per-source frequency index that is updated on time expiry, capacity
+eviction, and source eviction; the event path does not reconstruct distinctness
+from the full queue. Queue and index cardinality remain constrained by the same
+tracked-source and per-source-event limits. These controls bound this detector
+state and remove a window-length hot-path scan. They do not prove the activity
+stopped, establish malicious intent, or close the separate whole-service
+availability gate.
 
 ## 5. Operational modes
 

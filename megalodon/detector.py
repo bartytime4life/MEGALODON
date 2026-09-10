@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict, defaultdict, deque
+from collections import Counter, OrderedDict, defaultdict, deque
 from collections.abc import Callable
 from datetime import datetime, timezone
 import ipaddress
@@ -30,6 +30,7 @@ class Detector:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.syn_windows: dict[str, Deque[tuple[float, str]]] = defaultdict(deque)
         self.port_windows: dict[str, Deque[tuple[float, int]]] = defaultdict(deque)
+        self.port_counts: dict[str, Counter[int]] = defaultdict(Counter)
         self.last_emitted: dict[tuple[str, str], float] = {}
         self.source_high_watermarks: dict[str, float] = {}
         self.source_order: OrderedDict[str, None] = OrderedDict()
@@ -64,12 +65,18 @@ class Detector:
 
         if event.protocol == "TCP" and event.dst_port is not None:
             port_window = self.port_windows[event.src_ip]
+            port_counts = self.port_counts[event.src_ip]
             port_window.append((now, event.dst_port))
-            self._trim(port_window, now - self.settings.port_scan_window_seconds)
-            self._cap_window(port_window)
-            distinct_ports = {port for _, port in port_window}
+            port_counts[event.dst_port] += 1
+            self._trim_port_window(
+                port_window,
+                port_counts,
+                now - self.settings.port_scan_window_seconds,
+            )
+            self._cap_port_window(port_window, port_counts)
+            distinct_port_count = len(port_counts)
             if (
-                len(distinct_ports) >= self.settings.port_scan_distinct_ports
+                distinct_port_count >= self.settings.port_scan_distinct_ports
                 and self._can_emit("PORT_SCAN", event.src_ip, now)
             ):
                 results.append(
@@ -77,9 +84,9 @@ class Detector:
                         event,
                         "PORT_SCAN",
                         "MEDIUM",
-                        f"{len(distinct_ports)} destination ports targeted in {self.settings.port_scan_window_seconds}s",
+                        f"{distinct_port_count} destination ports targeted in {self.settings.port_scan_window_seconds}s",
                         {
-                            "distinct_ports": len(distinct_ports),
+                            "distinct_ports": distinct_port_count,
                             "window_seconds": self.settings.port_scan_window_seconds,
                         },
                         now,
@@ -149,6 +156,7 @@ class Detector:
             evicted, _ = self.source_order.popitem(last=False)
             self.syn_windows.pop(evicted, None)
             self.port_windows.pop(evicted, None)
+            self.port_counts.pop(evicted, None)
             self.source_high_watermarks.pop(evicted, None)
             for key in tuple(self.last_emitted):
                 if key[1] == evicted:
@@ -157,6 +165,36 @@ class Detector:
     def _cap_window(self, window: Deque[tuple[float, object]]) -> None:
         while len(window) > self.settings.max_events_per_source_window:
             window.popleft()
+
+    @staticmethod
+    def _remove_port(counts: Counter[int], port: int) -> None:
+        current = counts.get(port)
+        if current is None or current < 1:
+            raise RuntimeError("port window frequency invariant violated")
+        if current == 1:
+            del counts[port]
+        else:
+            counts[port] = current - 1
+
+    @classmethod
+    def _trim_port_window(
+        cls,
+        window: Deque[tuple[float, int]],
+        counts: Counter[int],
+        cutoff: float,
+    ) -> None:
+        while window and window[0][0] < cutoff:
+            _, port = window.popleft()
+            cls._remove_port(counts, port)
+
+    def _cap_port_window(
+        self,
+        window: Deque[tuple[float, int]],
+        counts: Counter[int],
+    ) -> None:
+        while len(window) > self.settings.max_events_per_source_window:
+            _, port = window.popleft()
+            self._remove_port(counts, port)
 
     def _can_emit(self, rule_id: str, source: str, now: float) -> bool:
         key = (rule_id, source)

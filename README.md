@@ -398,7 +398,11 @@ exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
 at the storage boundary. Successful CLI output reports run-scoped `processed`
 and `detections` counts plus a separate `totals` object for the whole database.
 Detector state is capped at 4,096 tracked sources and 4,096 events per source
-window by default.
+window by default. Port-scan distinctness is maintained incrementally with one
+bounded frequency index per tracked source; expiry, capacity eviction, and
+source eviction update the queue and index together instead of rebuilding a set
+from the full window for every TCP event. These are processing and memory
+bounds, not evidence that a source is scanning or that traffic was blocked.
 
 For optional Linux live capture (`eth0` is an example, not an assumed interface):
 
@@ -614,7 +618,7 @@ operational work unbuilt.
 | [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; executor removal and fail-closed apply refusal are on `main`; independent review and any separately designed restoration gate remain required |
 | [#66 — isolate dashboard reads](https://github.com/bartytime4life/MEGALODON/issues/66) | This revision separates dashboard reads from the writer, validates private database identity/schema, and constrains SQL to the five-field projection; independent review and native Windows ACL evidence remain open |
 | [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Open integrity gate; runtime alert persistence, acknowledgement, or delivery must not be layered over potentially partial event/detection/action commits or ambiguous terminal receipts |
-| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; finite detector and endpoint limits do not yet prove bounded long-running storage, overload, retention, or notifier behavior |
+| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; incremental bounded port accounting removes one detector hot-path rescan, but capture liveness, long-running storage, overload, retention, and notifier behavior remain unresolved |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because

@@ -174,3 +174,40 @@ Remaining gates: designated human review, GitHub approval/control handling under
 interpretation. Closing #26 does not authorize apply, scheduling, external data
 sharing, host changes, or deployment, and it does not turn the fixture counts
 into an effectiveness measurement.
+
+## Port-window resource slice
+
+The issue #68 detector slice retains the bounded chronological port deque and
+adds a bounded frequency index for each tracked source. Insertion, time expiry,
+per-source capacity eviction, and least-recently-used source eviction update both
+structures together. The distinct-port decision reads the index cardinality;
+it no longer rebuilds a set by traversing every retained port event for every
+eligible TCP record. Duplicate ports remain counted until each corresponding
+event expires or is evicted.
+
+Regression controls replace the deque with a variant that fails if Python asks
+to iterate it, exercise duplicate expiry across the inclusive window boundary,
+and assert exact queue/index agreement after capacity and source eviction. The
+existing below/at/above, cooldown, timestamp, multi-source, and configuration
+acceptance cases remain unchanged. This is a detector hot-path improvement, not
+a throughput service-level objective and not closure of #68's capture, storage,
+retention, notifier, or sustained-overload work.
+
+One local, single-process diagnostic on 2026-09-10 used Python 3.12.14 on
+Linux x86_64. It preconstructed fixed-time typed TCP metadata, disabled rule
+emission by setting the threshold above the workload, retained every event, and
+reported the median of three detector-only runs. No sockets, files, database,
+capture, action adapter, or payloads were involved.
+
+| Retained events | `origin/main` median | Incremental-index median | Observed ratio |
+| ---: | ---: | ---: | ---: |
+| 4,096 | 0.300 s | 0.0129 s | 23x |
+| 8,192 | 1.523 s | 0.0269 s | 57x |
+| 16,384 | 5.786 s | 0.0621 s | 93x |
+
+The baseline was the tree at merge commit
+`a517a4bbb838263d7b8e882e44b67450fdabfa9f`. These timings are comparative
+diagnostic evidence from one shared host, not portable capacity claims. Exact
+results depend on interpreter, hardware, load, configuration, protocol mix, and
+other service work. The source and acceptance tests, rather than those timings,
+define the maintained behavior.

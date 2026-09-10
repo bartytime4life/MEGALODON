@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter, deque
 from datetime import datetime, timedelta, timezone
 import ipaddress
 import unittest
@@ -72,12 +73,141 @@ class DetectorTests(unittest.TestCase):
         self.assertNotIn("8.8.8.1", detector.syn_windows)
         self.assertLessEqual(len(detector.syn_windows), 2)
         self.assertLessEqual(len(detector.port_windows), 2)
+        self.assertLessEqual(len(detector.port_counts), 2)
 
         for index in range(3, 7):
             detector.analyze(event(index, src_ip="8.8.8.3"))
         self.assertLessEqual(len(detector.syn_windows["8.8.8.3"]), 2)
         self.assertLessEqual(len(detector.port_windows["8.8.8.3"]), 2)
+        self.assertLessEqual(len(detector.port_counts["8.8.8.3"]), 2)
 
+    def test_port_counts_track_duplicate_expiry_without_window_iteration(self):
+        class NoIterationDeque(deque):
+            def __iter__(self):
+                raise AssertionError("port-scan analysis must not rebuild a set from the window")
+
+        detector = Detector(
+            DetectionSettings(
+                port_scan_window_seconds=5,
+                port_scan_distinct_ports=3,
+                alert_cooldown_seconds=30,
+            )
+        )
+        source = "192.0.2.50"
+        detector.port_windows[source] = NoIterationDeque()
+
+        self.assertEqual(detector.analyze(event(0, src_ip=source, dst_port=21)), [])
+        self.assertEqual(
+            detector.analyze(
+                event(0, src_ip=source, dst_port=21, observed_at=BASE + timedelta(seconds=1))
+            ),
+            [],
+        )
+        self.assertEqual(
+            detector.analyze(
+                event(0, src_ip=source, dst_port=22, observed_at=BASE + timedelta(seconds=2))
+            ),
+            [],
+        )
+        results = detector.analyze(
+            event(0, src_ip=source, dst_port=23, observed_at=BASE + timedelta(seconds=5, milliseconds=500))
+        )
+
+        self.assertEqual([item.rule_id for item in results], ["PORT_SCAN"])
+        self.assertEqual(detector.port_counts[source], Counter({21: 1, 22: 1, 23: 1}))
+
+    def test_port_counts_remain_exact_when_window_capacity_evicts_duplicates(self):
+        detector = Detector(
+            DetectionSettings(
+                port_scan_distinct_ports=3,
+                max_events_per_source_window=3,
+            )
+        )
+        source = "192.0.2.51"
+
+        for index, port in enumerate((21, 21, 22, 23)):
+            detector.analyze(event(index, src_ip=source, dst_port=port))
+
+        self.assertEqual(len(detector.port_windows[source]), 3)
+        self.assertEqual(detector.port_counts[source], Counter({21: 1, 22: 1, 23: 1}))
+
+        detector.analyze(event(4, src_ip=source, dst_port=24))
+        self.assertEqual(detector.port_counts[source], Counter({22: 1, 23: 1, 24: 1}))
+
+    def test_port_counts_match_windows_through_expiry_capacity_and_source_churn(self):
+        detector = Detector(
+            DetectionSettings(
+                port_scan_window_seconds=1,
+                port_scan_distinct_ports=7,
+                max_tracked_sources=3,
+                max_events_per_source_window=7,
+            ),
+            clock=lambda: BASE + timedelta(days=1),
+        )
+
+        def assert_invariant() -> None:
+            self.assertLessEqual(len(detector.source_order), 3)
+            self.assertEqual(set(detector.port_windows), set(detector.port_counts))
+            for tracked_source, window in detector.port_windows.items():
+                self.assertLessEqual(len(window), 7)
+                self.assertEqual(
+                    detector.port_counts[tracked_source],
+                    Counter(port for _, port in window),
+                )
+
+        source = "192.0.2.10"
+        for index in range(12):
+            detector.analyze(
+                event(
+                    index,
+                    observed_at=BASE + timedelta(milliseconds=index * 50),
+                    src_ip=source,
+                    dst_port=20 + (index * 7) % 11,
+                    tcp_flags=["ACK"],
+                )
+            )
+            assert_invariant()
+        self.assertEqual(len(detector.port_windows[source]), 7)
+
+        detector.analyze(
+            event(
+                12,
+                observed_at=BASE + timedelta(seconds=2),
+                src_ip=source,
+                dst_port=53,
+                tcp_flags=["ACK"],
+            )
+        )
+        assert_invariant()
+        self.assertEqual(len(detector.port_windows[source]), 1)
+
+        for offset, suffix in enumerate((11, 12, 13), start=1):
+            detector.analyze(
+                event(
+                    12 + offset,
+                    observed_at=BASE + timedelta(seconds=2, milliseconds=offset),
+                    src_ip=f"192.0.2.{suffix}",
+                    dst_port=53 + offset,
+                    tcp_flags=["ACK"],
+                )
+            )
+            assert_invariant()
+        self.assertNotIn(source, detector.source_order)
+        self.assertNotIn(source, detector.port_windows)
+        self.assertNotIn(source, detector.port_counts)
+
+        for index in range(600):
+            detector.analyze(
+                event(
+                    20 + index,
+                    observed_at=BASE
+                    + timedelta(seconds=3, milliseconds=index * 10),
+                    src_ip=f"192.0.2.{11 + index % 3}",
+                    dst_port=20 + (index * 7) % 11,
+                    tcp_flags=["ACK"],
+                )
+            )
+            assert_invariant()
     def test_out_of_order_event_is_rejected_without_poisoning_state(self):
         detector = Detector(
             DetectionSettings(syn_flood_threshold=3),
