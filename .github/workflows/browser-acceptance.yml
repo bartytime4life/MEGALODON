@@ -56,7 +56,7 @@ jobs:
                 cat /tmp/megalodon-openbox.log
                 exit 1
               fi
-              if xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1; then
+              if xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "_NET_SUPPORTING_WM_CHECK(WINDOW)"; then
                 break
               fi
               if [ "$attempt" -eq 50 ]; then
