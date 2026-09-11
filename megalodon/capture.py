@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import queue
-from threading import Event
+import time
+from threading import Event, Lock
 from typing import Iterable, Iterator, TextIO
 
 from .capabilities import runtime_platform
@@ -21,6 +22,8 @@ class CaptureError(RuntimeError):
 MAX_JSONL_LINE_BYTES = 64 * 1024
 MAX_SCAPY_QUEUE_EVENTS = 1024
 SCAPY_QUEUE_POLL_SECONDS = 0.25
+SCAPY_STARTUP_TIMEOUT_SECONDS = 5.0
+SCAPY_SHUTDOWN_TIMEOUT_SECONDS = 2.0
 _SCAPY_TCP_FLAG_BITS = (
     (0x01, "FIN"),
     (0x02, "SYN"),
@@ -42,16 +45,25 @@ class _BoundedCaptureQueue:
             raise ValueError("capture queue maximum must be a positive integer")
         self._events: queue.Queue[PacketEvent] = queue.Queue(maxsize=maximum)
         self._overflowed = Event()
+        self._stats_lock = Lock()
+        self._offered = 0
+        self._accepted = 0
+        self._dropped = 0
 
     def offer(self, event: PacketEvent) -> bool:
-        if self._overflowed.is_set():
-            return False
-        try:
-            self._events.put_nowait(event)
-        except queue.Full:
-            self._overflowed.set()
-            return False
-        return True
+        with self._stats_lock:
+            self._offered += 1
+            if self._overflowed.is_set():
+                self._dropped += 1
+                return False
+            try:
+                self._events.put_nowait(event)
+            except queue.Full:
+                self._overflowed.set()
+                self._dropped += 1
+                return False
+            self._accepted += 1
+            return True
 
     def take(self) -> PacketEvent | None:
         if self._overflowed.is_set():
@@ -65,6 +77,18 @@ class _BoundedCaptureQueue:
         if self._overflowed.is_set():
             raise self._overflow_error()
         return event
+
+    def telemetry(self) -> dict[str, int | bool]:
+        """Return bounded in-memory queue/drop counters for diagnostics."""
+        with self._stats_lock:
+            return {
+                "capacity": self._events.maxsize,
+                "offered": self._offered,
+                "accepted": self._accepted,
+                "dropped": self._dropped,
+                "queued": self._events.qsize(),
+                "overflowed": self._overflowed.is_set(),
+            }
 
     def _overflow_error(self) -> CaptureError:
         return CaptureError(
@@ -83,6 +107,70 @@ def _normalize_scapy_tcp_flags(value: object) -> frozenset[str]:
     if bitmask < 0 or bitmask & ~_SCAPY_TCP_FLAG_MASK:
         raise ValidationError("unsupported Scapy TCP flag bitmask")
     return frozenset(name for bit, name in _SCAPY_TCP_FLAG_BITS if bitmask & bit)
+
+
+def _thread_is_alive(sniffer: object) -> bool | None:
+    """Return a reliable thread state, or None when the adapter cannot say."""
+    thread = getattr(sniffer, "thread", None)
+    if thread is None:
+        return False
+    probe = getattr(thread, "is_alive", None)
+    if not callable(probe):
+        return None
+    try:
+        alive = probe()
+    except Exception:
+        return None
+    return alive if isinstance(alive, bool) else None
+
+
+def _raise_if_sniffer_failed(sniffer: object, message: str) -> None:
+    if isinstance(getattr(sniffer, "exception", None), BaseException):
+        raise CaptureError(message) from None
+
+
+def _wait_for_sniffer_start(sniffer: object) -> None:
+    deadline = time.monotonic() + SCAPY_STARTUP_TIMEOUT_SECONDS
+    while True:
+        _raise_if_sniffer_failed(sniffer, "live capture failed during startup")
+        running = getattr(sniffer, "running", None)
+        if running is True or not isinstance(running, bool):
+            return
+        if _thread_is_alive(sniffer) is False:
+            raise CaptureError("live capture stopped during startup") from None
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise CaptureError("live capture startup timed out") from None
+        time.sleep(min(SCAPY_QUEUE_POLL_SECONDS, remaining))
+
+
+def _check_sniffer_liveness(sniffer: object) -> None:
+    _raise_if_sniffer_failed(sniffer, "live capture failed after startup")
+    running = getattr(sniffer, "running", None)
+    alive = _thread_is_alive(sniffer)
+    if running is False or alive is False:
+        raise CaptureError("live capture stopped unexpectedly") from None
+
+
+def _stop_sniffer_bounded(sniffer: object) -> None:
+    """Stop without Scapy's unbounded join, then bound the native thread wait."""
+    sniffer.stop(join=False)  # type: ignore[attr-defined]
+    thread = getattr(sniffer, "thread", None)
+    join = getattr(thread, "join", None)
+    if thread is None or not callable(join):
+        raise CaptureError(
+            "unable to verify live capture shutdown; shutdown is unverified"
+        ) from None
+    join(SCAPY_SHUTDOWN_TIMEOUT_SECONDS)
+    alive = _thread_is_alive(sniffer)
+    if alive is True:
+        raise CaptureError(
+            "unable to stop live capture; shutdown deadline exceeded"
+        ) from None
+    if alive is not False:
+        raise CaptureError(
+            "unable to verify live capture shutdown; shutdown is unverified"
+        ) from None
 
 
 def iter_jsonl(
@@ -232,32 +320,45 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
             # A malformed packet is ignored; raw packet data is never logged.
             return
 
-    try:
-        sniffer = AsyncSniffer(iface=interface, prn=callback, store=False)
-        sniffer.start()
-    except Exception:  # scapy raises several platform-specific errors
-        raise CaptureError("unable to start live capture") from None
+    sniffer: object | None = None
     primary_error: BaseException | None = None
     try:
+        try:
+            sniffer = AsyncSniffer(iface=interface, prn=callback, store=False)
+            sniffer.start()
+        except Exception:  # scapy raises several platform-specific errors
+            raise CaptureError("unable to start live capture") from None
+        try:
+            _wait_for_sniffer_start(sniffer)
+        except CaptureError:
+            raise
+        except Exception:
+            raise CaptureError("unable to start live capture") from None
+
         while True:
             event = events.take()
             if event is not None:
                 yield event
+                continue
+            _check_sniffer_liveness(sniffer)
     except BaseException as exc:
         primary_error = exc
         raise
     finally:
-        try:
-            sniffer.stop()
-        except BaseException as exc:
-            if primary_error is not None and not isinstance(primary_error, GeneratorExit):
-                # Preserve the original failure/interrupt, not the cleanup error.
-                BaseException.add_note(
-                    primary_error,
-                    "live capture cleanup failed; shutdown is unverified",
-                )
-            elif isinstance(exc, Exception):
-                # Closing a generator is not itself a failure: report failed stop.
-                raise CaptureError("unable to stop live capture; shutdown is unverified") from None
-            else:
-                raise
+        if sniffer is not None:
+            try:
+                _stop_sniffer_bounded(sniffer)
+            except BaseException as exc:
+                if primary_error is not None and not isinstance(primary_error, GeneratorExit):
+                    BaseException.add_note(
+                        primary_error,
+                        "live capture cleanup failed; shutdown is unverified",
+                    )
+                elif isinstance(exc, CaptureError):
+                    raise
+                elif isinstance(exc, Exception):
+                    raise CaptureError(
+                        "unable to stop live capture; shutdown is unverified"
+                    ) from None
+                else:
+                    raise
