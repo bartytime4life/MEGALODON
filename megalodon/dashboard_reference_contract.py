@@ -70,6 +70,8 @@ function referenceLookupContract(value, expectedKind = null, expectedQuery = nul
   }
   if (expectedBundle !== null) {
     if (!referenceSameBundle(value, expectedBundle) || value.warning !== expectedBundle.warning) referenceReject();
+    const total = value.kind === 'port' ? expectedBundle.service_records : expectedBundle.protocol_records;
+    if (!Number.isSafeInteger(total) || total < 0 || value.match_count > total) referenceReject();
     const source = value.sources[0];
     const expectedSource = expectedBundle.sources.find(item => item.id === source.id);
     if (!expectedSource || !referenceSourceFields.every(key => source[key] === expectedSource[key])) referenceReject();

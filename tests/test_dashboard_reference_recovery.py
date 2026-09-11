@@ -38,7 +38,7 @@ class ReferenceRecoveryAssetsTests(unittest.TestCase):
             environment = dict(os.environ, MEGALODON_TEST_ASSET=str(asset))
             environment.pop('MEGALODON_TEST_BASELINE', None)
             result = subprocess.run(
-                [shutil.which('node'), '--test', str(harness)],
+                [shutil.which('node'), '--test', '--test-reporter=tap', str(harness)],
                 cwd=directory, env=environment, capture_output=True,
                 text=True, timeout=30, check=False,
             )
