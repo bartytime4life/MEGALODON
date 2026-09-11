@@ -27,7 +27,9 @@ are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
 Chrome is headed under a virtual X display so native tab visibility can be
-exercised. Chromium sandboxing is explicitly requested. Missing Chrome/Xvfb,
+exercised. The test reads native visibility through bounded test-side polling;
+it does not use an in-page eval poller, override document.hidden, or add
+unsafe-eval to the application CSP. Chromium sandboxing is explicitly requested. Missing Chrome/Xvfb,
 root execution, sandbox failure, a policy-blocked loopback, timeout, or assertion
 failure returns nonzero. There is no no-sandbox fallback, skip-as-pass path,
 proxy, tunnel, browser download, or policy override. Keep the existing required
