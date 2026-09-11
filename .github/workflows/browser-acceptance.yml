@@ -33,7 +33,7 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
         run: |
           set -euo pipefail
-          python -m pip install -e ".[test]" "playwright==1.57.0"
+          python -m pip install -c constraints/ci.txt -e ".[test]" "playwright==1.57.0"
           python -m pip check
           python -m compileall -q megalodon tests
       - name: Exercise real CLI SQLite HTTP and browser
