@@ -1,0 +1,40 @@
+name: Linux browser acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  browser-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Check prepared browser prerequisites
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test -x /opt/google/chrome/chrome
+          test -x /usr/bin/xvfb-run
+          /opt/google/chrome/chrome --version
+      - name: Install test environment only
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          set -euo pipefail
+          python -m pip install -e ".[test]" "playwright==1.57.0"
+          python -m pip check
+          python -m compileall -q megalodon tests
+      - name: Exercise real CLI SQLite HTTP and browser
+        run: xvfb-run -a python tests/browser_acceptance.py
