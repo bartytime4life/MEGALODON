@@ -134,15 +134,25 @@ def offline_fixture(root: Path) -> Path:
     return output
 
 
-async def wait_native_state(page, hidden: bool) -> None:
+async def wait_native_visibility(page, hidden: bool) -> None:
     # Test-side polling avoids the driver's in-page eval poller under the real CSP.
     # Read native visibility only; do not override document.hidden or relax CSP.
     deadline = asyncio.get_running_loop().time() + 10
     while asyncio.get_running_loop().time() < deadline:
-        if await page.evaluate("hidden => document.hidden === hidden && !state.refreshing", hidden):
+        if await page.evaluate("hidden => document.hidden === hidden", hidden):
             return
         await asyncio.sleep(0.05)
-    raise AssertionError("native visibility/idle deadline exceeded")
+    visibility = "hidden" if hidden else "visible"
+    raise AssertionError(f"native visibility deadline exceeded ({visibility})")
+
+
+async def wait_refresh_idle(page, visibility: str) -> None:
+    deadline = asyncio.get_running_loop().time() + 10
+    while asyncio.get_running_loop().time() < deadline:
+        if await page.evaluate("!state.refreshing"):
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"refresh idle deadline exceeded ({visibility})")
 
 
 async def exercise(browser, port: int, nonempty: bool) -> None:
@@ -304,14 +314,16 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         REPORT["stage"] = "activate-native-background-tab"
         await other.bring_to_front()
         REPORT["stage"] = "wait-native-hidden-and-idle"
-        await wait_native_state(page, True)
+        await wait_native_visibility(page, True)
+        await wait_refresh_idle(page, "hidden")
         hidden_counts = dict(counts)
         await asyncio.sleep(2.4)
         passed("native hidden tab suspends polling", counts == hidden_counts)
         REPORT["stage"] = "activate-native-dashboard-tab"
         await page.bring_to_front()
         REPORT["stage"] = "wait-native-visible-and-idle"
-        await wait_native_state(page, False)
+        await wait_native_visibility(page, False)
+        await wait_refresh_idle(page, "visible")
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await page.locator("#pause-button").click()
         await other.close()
