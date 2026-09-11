@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from tools.check_repository_hygiene import (
     MAX_BINARY_FILE_BYTES,
     ROOT,
@@ -50,3 +52,17 @@ def test_example_environment_files_remain_allowed(tmp_path):
     path.write_text("MEGALODON_MODE=sample\n", encoding="utf-8")
 
     assert scan_paths(tmp_path, (".env.example",)) == []
+
+    
+def test_symlink_is_not_followed(tmp_path):
+    target = tmp_path / "outside.txt"
+    target.write_text("-----BEGIN PRIVATE KEY-----", encoding="ascii")
+    alias = tmp_path / "alias.txt"
+    try:
+        alias.symlink_to(target)
+    except OSError:
+        pytest.skip("symlinks are unavailable on this runner")
+
+    assert scan_paths(tmp_path, ("alias.txt",)) == [
+        "tracked path is not a regular file: alias.txt"
+    ]
