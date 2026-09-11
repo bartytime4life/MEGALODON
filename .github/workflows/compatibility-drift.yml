@@ -1,0 +1,42 @@
+name: Compatibility drift
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compatibility-drift
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install current compatible ranges
+        run: |
+          set -euo pipefail
+          python -m pip install -e ".[test]" "build>=1.6,<2" "setuptools>=80,<81"
+          python -m pip check
+      - name: Compile and test
+        run: |
+          set -euo pipefail
+          python -m compileall -q megalodon tests
+          python -m pytest
+      - name: Build distributions
+        run: |
+          set -euo pipefail
+          python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
+          test -n "$(find "$RUNNER_TEMP/distributions" -maxdepth 1 -type f -print -quit)"

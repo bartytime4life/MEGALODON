@@ -38,6 +38,19 @@ python3 -m venv .venv
 This installation can access package indexes. That setup action is distinct from
 normal application operation, which must not acquire a required vendor account,
 secret, subscription, cloud service, or outbound integration connection.
+
+To reproduce the deterministic Linux pull-request resolver, add the checked-in
+CI constraints while retaining the same test extra:
+
+```bash
+.venv/bin/python -m pip install -c constraints/ci.txt -e ".[test]"
+```
+
+`constraints/ci.txt` is evidence-bound to the reviewed Ubuntu CI toolchain; it is
+not a runtime lockfile or a native-Windows compatibility claim. The scheduled
+compatibility-drift workflow intentionally omits it and is non-required discovery
+work, so a newly released compatible tool is reported separately before any
+constraints change.
 Do not install the capture extra or launch an analyzer merely to run unit tests.
 
 For native Windows development, use an isolated environment without changing
