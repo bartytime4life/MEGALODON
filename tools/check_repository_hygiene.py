@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -58,20 +59,23 @@ def scan_paths(
     max_binary_bytes: int = MAX_BINARY_FILE_BYTES,
 ) -> list[str]:
     findings: list[str] = []
+    read_limit = max_file_bytes + 1
     for relative in paths:
         normalized = relative.replace("\\", "/")
         path = root / Path(relative)
         if _sensitive_path(normalized):
             findings.append(f"sensitive tracked filename: {normalized}")
         try:
-            if not path.is_file():
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode):
                 findings.append(f"tracked path is not a regular file: {normalized}")
                 continue
-            data = path.read_bytes()
+            size = metadata.st_size
+            with path.open("rb") as stream:
+                data = stream.read(read_limit)
         except OSError:
             findings.append(f"tracked file is unreadable: {normalized}")
             continue
-        size = len(data)
         if size > max_file_bytes:
             findings.append(
                 f"large tracked file: {normalized} ({size} bytes > {max_file_bytes})"
