@@ -99,3 +99,16 @@ privacy, or installed-tool containment. Report those evidence classes separately
 A PR receipt should identify exact commit, commands, environment, outcomes,
 skips, hosted run IDs, and remaining acceptance gates. Never upgrade local or
 partial-checkout evidence into full-repository or native-platform proof.
+
+## Connection design and dated review
+
+The [connection advancement plan](docs/connection-advancement-plan.md) is
+**PROPOSED**, not a runtime integration contract or source-admission decision.
+It separates capability, loaded evidence, and action authority, and prohibits
+raw-input or payload-derived hashes as a retention workaround.
+
+The [source-pinned correction review](docs/repository-review-2026-09-11.md)
+records the original ZIP preparation separately from GitHub delivery. The
+[Reference Library implementation and recovery runbook in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91)
+have their own exact-head checks and review gate. These documents do not require
+that PR to be merged; refresh its live lifecycle before relying on its behavior.
