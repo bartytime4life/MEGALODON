@@ -130,6 +130,27 @@ def test_synthetic_database_full_stops_without_a_phantom_success(tmp_path):
             assert observer.execute("SELECT COUNT(*) FROM events").fetchone()[0] == committed
 
 
+def test_configured_capacity_stops_before_event_transaction(tmp_path):
+    path = tmp_path / "synthetic.db"
+    event = PacketEvent(
+        STAMP,
+        "192.0.2.1",
+        "198.51.100.2",
+        "TCP",
+        interface="synthetic-capacity",
+    )
+    with Store(path, max_database_bytes=1) as store:
+        with pytest.raises(sqlite3.OperationalError, match="STORAGE_CAPACITY:HIGH_WATER"):
+            store.record_event(event)
+        assert store.connection.in_transaction is False
+        assert store.summary() == {
+            "events": 0,
+            "detections": 0,
+            "actions": 0,
+            "high_or_critical": 0,
+        }
+
+
 def test_injected_connect_permission_denial_propagates_without_database(tmp_path, monkeypatch):
     path = tmp_path / "private" / "synthetic.db"
 

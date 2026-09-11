@@ -42,6 +42,16 @@ class DashboardSettings:
     event_limit: int = 50
 
 
+DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
+MIN_MAX_DATABASE_BYTES = 1 * 1024 * 1024
+MAX_MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class StorageSettings:
+    max_database_bytes: int = DEFAULT_MAX_DATABASE_BYTES
+
+
 @dataclass(frozen=True)
 class Settings:
     name: str = "MEGALODON"
@@ -51,6 +61,7 @@ class Settings:
     interface: str = ""
     detection: DetectionSettings = field(default_factory=DetectionSettings)
     blocking: BlockingSettings = field(default_factory=BlockingSettings)
+    storage: StorageSettings = field(default_factory=StorageSettings)
     dashboard: DashboardSettings = field(default_factory=DashboardSettings)
 
 
@@ -118,6 +129,7 @@ def load_settings(path: str | Path | None = None) -> Settings:
     detection = _table(raw.get("detection", {}), "detection")
     blocking = _table(raw.get("blocking", {}), "blocking")
     dashboard = _table(raw.get("dashboard", {}), "dashboard")
+    storage = _table(raw.get("storage", {}), "storage")
 
     allowlist_values = blocking.get("allowlist", list(DEFAULT_ALLOWLIST))
     if not isinstance(allowlist_values, list) or not all(
@@ -142,6 +154,12 @@ def load_settings(path: str | Path | None = None) -> Settings:
         )
 
     port = _bounded_integer(dashboard.get("port", 8787), "dashboard.port", 1, 65535)
+    max_database_bytes = _bounded_integer(
+        storage.get("max_database_bytes", DEFAULT_MAX_DATABASE_BYTES),
+        "storage.max_database_bytes",
+        MIN_MAX_DATABASE_BYTES,
+        MAX_MAX_DATABASE_BYTES,
+    )
     max_events_per_source_window = _bounded_integer(
         detection.get("max_events_per_source_window", 4096),
         "detection.max_events_per_source_window",
@@ -235,6 +253,7 @@ def load_settings(path: str | Path | None = None) -> Settings:
             public_only=_boolean(blocking.get("public_only", True), "blocking.public_only"),
             allowlist=allowlist,
         ),
+        storage=StorageSettings(max_database_bytes=max_database_bytes),
         dashboard=DashboardSettings(
             enabled=_boolean(dashboard.get("enabled", True), "dashboard.enabled"),
             host=_text(dashboard.get("host", "127.0.0.1"), "dashboard.host", 253),
