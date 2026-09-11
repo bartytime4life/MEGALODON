@@ -180,13 +180,48 @@ def _load(config: str | None):
     return settings
 
 
+@contextmanager
+def _owned_source(source):
+    """Close a CLI-owned iterator/stream without hiding a primary failure."""
+
+    primary_error: BaseException | None = None
+    try:
+        yield source
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        try:
+            close = getattr(source, "close", None)
+            if close is not None:
+                close()
+        except BaseException as exc:
+            if primary_error is not None and not isinstance(primary_error, GeneratorExit):
+                BaseException.add_note(
+                    primary_error,
+                    "event source cleanup failed; shutdown is unverified",
+                )
+            elif isinstance(exc, Exception):
+                raise CaptureError(
+                    "event source cleanup failed; shutdown is unverified"
+                ) from None
+            else:
+                raise
+
+
+def _jsonl_file_events(path: Path):
+    # Lazy open: closing an unstarted iterator must not acquire a file.
+    with _owned_source(path.open("r", encoding="utf-8")) as stream:
+        yield from iter_jsonl(stream)
+
+
 def _events_for(args: argparse.Namespace, settings):
     source = _source_for(args, settings)
     if source == "sample":
         return iter_sample(include_demo_threat=args.demo_threat)
     if source == "jsonl":
         if args.input:
-            return iter_jsonl(args.input.open("r", encoding="utf-8"))
+            return _jsonl_file_events(args.input)
         return iter_jsonl(sys.stdin)
     if source == "scapy":
         return iter_scapy(args.interface or settings.interface)
@@ -250,8 +285,10 @@ def _run(args: argparse.Namespace) -> int:
             processed = 0
             termination_reason = "source_exhausted"
             try:
-                with _scoped_sigterm_interrupt():
-                    for event in _events_for(args, settings):
+                with _scoped_sigterm_interrupt(), _owned_source(
+                    _events_for(args, settings)
+                ) as events:
+                    for event in events:
                         service.process(event, run_id=run_id)
                         processed += 1
                         if args.max_events and processed >= args.max_events:
