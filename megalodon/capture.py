@@ -179,8 +179,8 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
         raise CaptureError("a capture interface is required for the scapy source")
     try:
         from scapy.all import AsyncSniffer, DNS, DNSQR, IP, IPv6, TCP, UDP
-    except ImportError as exc:
-        raise CaptureError("install the optional capture extra: pip install -e '.[capture]'") from exc
+    except ImportError:
+        raise CaptureError("install the optional capture extra: pip install -e '.[capture]'") from None
 
     events = _BoundedCaptureQueue()
 
@@ -232,15 +232,32 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
             # A malformed packet is ignored; raw packet data is never logged.
             return
 
-    sniffer = AsyncSniffer(iface=interface, prn=callback, store=False)
     try:
+        sniffer = AsyncSniffer(iface=interface, prn=callback, store=False)
         sniffer.start()
-    except Exception as exc:  # scapy raises several platform-specific errors
-        raise CaptureError(f"unable to start capture on {interface!r}: {exc}") from exc
+    except Exception:  # scapy raises several platform-specific errors
+        raise CaptureError("unable to start live capture") from None
+    primary_error: BaseException | None = None
     try:
         while True:
             event = events.take()
             if event is not None:
                 yield event
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
-        sniffer.stop()
+        try:
+            sniffer.stop()
+        except BaseException as exc:
+            if primary_error is not None and not isinstance(primary_error, GeneratorExit):
+                # Preserve the original failure/interrupt, not the cleanup error.
+                BaseException.add_note(
+                    primary_error,
+                    "live capture cleanup failed; shutdown is unverified",
+                )
+            elif isinstance(exc, Exception):
+                # Closing a generator is not itself a failure: report failed stop.
+                raise CaptureError("unable to stop live capture; shutdown is unverified") from None
+            else:
+                raise
