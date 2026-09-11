@@ -24,6 +24,7 @@ from .storage import (
     migrate_database,
     RECONCILIATION_REQUIRED,
     Store,
+    DEFAULT_MAX_DATABASE_BYTES,
 )
 from .validation import parse_timestamp, safe_text, ValidationError
 
@@ -232,6 +233,11 @@ def _source_for(args: argparse.Namespace, settings) -> str:
     return args.source or settings.capture_source
 
 
+def _storage_limit(settings) -> int:
+    storage = getattr(settings, "storage", None)
+    return getattr(storage, "max_database_bytes", DEFAULT_MAX_DATABASE_BYTES)
+
+
 def _run_failure_code(exc: Exception) -> str:
     if isinstance(exc, CaptureError):
         return "CAPTURE_ERROR"
@@ -279,7 +285,10 @@ def _reconciliation_message() -> str:
 def _run(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
-        with Store(settings.db_path) as store:
+        with Store(
+            settings.db_path,
+            max_database_bytes=_storage_limit(settings),
+        ) as store:
             service = MegalodonService(settings, store)
             run_id = store.start_ingestion_run(_source_for(args, settings))
             processed = 0
@@ -397,7 +406,11 @@ def _database_migrate(args: argparse.Namespace) -> int:
 def _database_reconciliation_status(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
-        with Store(settings.db_path, create=False) as store:
+        with Store(
+            settings.db_path,
+            create=False,
+            max_database_bytes=_storage_limit(settings),
+        ) as store:
             pending = store.pending_ingestion_reconciliation()
         print(json.dumps({"pending": pending}, sort_keys=True))
     except (OSError, ValueError) as exc:
@@ -410,7 +423,11 @@ def _database_reconcile(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
         started_at = parse_timestamp(args.started_at)
-        with Store(settings.db_path, create=False) as store:
+        with Store(
+            settings.db_path,
+            create=False,
+            max_database_bytes=_storage_limit(settings),
+        ) as store:
             receipt = store.mark_ingestion_run_reconciliation_required(
                 args.run_id, expected_started_at=started_at
             )
@@ -428,7 +445,10 @@ def _record_firewall_action(settings, mode: str, operation) -> None:
         safe_text(details["message"], "operation message", 256)
     except ValidationError:
         details["message"] = "multiline or oversized operation plan omitted from audit details"
-    with Store(settings.db_path) as store:
+    with Store(
+        settings.db_path,
+        max_database_bytes=_storage_limit(settings),
+    ) as store:
         store.record_action(
             ActionRecord(
                 created_at=datetime.now(timezone.utc),

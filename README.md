@@ -235,8 +235,9 @@ so detections appear in the audit store and UI; it is not a diagnosis of the
 host network.
 
 The default database is `data/megalodon.db`. Repeated runs append to the same
-database until the operator deliberately uses another configuration/database or
-applies a reviewed retention procedure. The store marks its current layout with
+database until the operator deliberately uses another configuration/database,
+reaches the configured storage high-water stop (256 MiB by default), or an
+operator applies a reviewed retention procedure. The store marks its current layout with
 SQLite `user_version = 3`. New databases include a versioned ingestion-run
 ledger and detection/action links. On POSIX, the writer creates a missing leaf directory with mode `0700`
 and database with mode `0600`; it refuses symlinked ancestors, hard-linked or
@@ -499,6 +500,7 @@ a separately reviewed change requires otherwise.
 | Section | Important defaults | Notes |
 | --- | --- | --- |
 | `[app]` | `db_path = "data/megalodon.db"`, `log_level = "INFO"` | Writer startup creates a missing private leaf directory; dashboard startup never creates the directory or database |
+| `[storage]` | `max_database_bytes = 268435456` | Writer stops event intake before observed SQLite main/WAL/SHM size plus its one-write reserve crosses the configured high-water budget; it never purges or redirects evidence |
 | `[capture]` | `source = "sample"`, empty `interface` | The CLI can override the source and interface per run |
 | `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | TOML integers only; windows max at 3,600s, cooldown at 86,400s, DNS length at 65,535, and both state ceilings at 65,536. Thresholds cannot exceed the per-source event ceiling |
 | `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | Timeout is a TOML integer from 1–604,800s; `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
