@@ -1,5 +1,41 @@
 # Repository correction review and PR delivery — 2026-09-11
 
+## Currentness correction after external lifecycle changes
+
+GitHub now records [PR #91](https://github.com/bartytime4life/MEGALODON/pull/91)
+as merged at `2026-09-11T14:41:01Z`, with merge/main commit
+`1b16069e430b539f9677c616a5f61c597fd0bec2` and tree
+`21ae0c25b85f826a00e93de3c32655accf626114`. The delivery session created it draft
+and did not mark it ready or merge it. Its only submitted review at this readback
+is bot COMMENTED review `5179840452` on the initial head, not an eligible
+independent approval. Its passing CI remains execution evidence, not approval.
+
+[PR #92](https://github.com/bartytime4life/MEGALODON/pull/92) was also created draft.
+Its branch subsequently received an external merge-from-main commit
+`df80bd1f75582e6f026c2b52e5975cfb9cb76592`, with parents `68ff4fe0634694c5bcdbb77ced0ca73b53100cdf`
+and `1b16069e430b539f9677c616a5f61c597fd0bec2`. It was observed open and non-draft.
+Neither that branch update nor its ready transition was performed by this
+session. Thus its runtime now includes #91; the earlier statement below that
+its checks exclude #91 is historical, not applicable to this updated branch.
+The proposed connection plan and CONTRIBUTING links keep their original
+preparation basis; references there to the #91 candidate do not negate its
+now-observed delivery or satisfy its outstanding review/browser gates.
+
+Two remaining bot suggestions have a separate current-main draft,
+[PR #93](https://github.com/bartytime4life/MEGALODON/pull/93), head
+`471f5f7e5f67cca2222c046f7155612abdbb4766`: bind lookup counts to the relevant
+accepted snapshot total and explicitly select the Node TAP reporter. Local
+validation passed four wrapper methods, including the existing 67 JavaScript
+cases and 16 new count cases. A baseline rejection lane failed with a missing
+expected exception while its positive lane passed. Hosted results belong in
+that PR's receipt; neither its pending state nor a merge is approval.
+
+The original checkpoint below is preserved unchanged as historical evidence.
+Its draft, unmerged, base and validation-scope language describes preparation,
+not later lifecycle. Issue #3 remains open; refresh exact refs before action.
+
+## Historical preparation checkpoint
+
 Status: **dated engineering checkpoint, not independent approval or a release**.
 This review is source-pinned and cross-cutting, not an exhaustive repository audit.
 Refresh GitHub before relying on any lifecycle or compatibility statement.
