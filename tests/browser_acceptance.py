@@ -155,18 +155,6 @@ async def wait_refresh_idle(page, visibility: str) -> None:
     raise AssertionError(f"refresh idle deadline exceeded ({visibility})")
 
 
-async def set_native_window_state(page, window_state: str) -> None:
-    cdp = await page.context.new_cdp_session(page)
-    try:
-        window = await cdp.send("Browser.getWindowForTarget")
-        await cdp.send("Browser.setWindowBounds", {
-            "windowId": window["windowId"],
-            "bounds": {"windowState": window_state},
-        })
-    finally:
-        await cdp.detach()
-
-
 async def exercise(browser, port: int, nonempty: bool) -> None:
     from playwright.async_api import expect
     origin = f"http://127.0.0.1:{port}"
