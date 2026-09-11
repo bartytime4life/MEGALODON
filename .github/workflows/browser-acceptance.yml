@@ -21,20 +21,19 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      - name: Install native display manager
+      - name: Install nested Wayland compositor
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y openbox x11-utils
+          sudo apt-get install --no-install-recommends -y weston
       - name: Check prepared browser prerequisites
         run: |
           set -euo pipefail
           test "$(id -u)" -ne 0
           test -x /opt/google/chrome/chrome
           test -x /usr/bin/xvfb-run
-          test -x /usr/bin/openbox
-          test -x /usr/bin/xprop
-          openbox --version
+          test -x /usr/bin/weston
+          weston --version
           /opt/google/chrome/chrome --version
       - name: Install test environment only
         env:
@@ -48,22 +47,26 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a bash -c 'set -euo pipefail
-            openbox --sm-disable --replace >/tmp/megalodon-openbox.log 2>&1 &
-            wm_pid=$!
-            trap "kill $wm_pid 2>/dev/null || true" EXIT
+            runtime=/tmp/megalodon-wayland-runtime
+            install -d -m 700 "$runtime"
+            export XDG_RUNTIME_DIR="$runtime"
+            export WAYLAND_DISPLAY=wayland-1
+            weston --backend=x11-backend.so --renderer=pixman --socket="$WAYLAND_DISPLAY" --idle-time=0 \
+              --width=1600 --height=1200 >/tmp/megalodon-weston.log 2>&1 &
+            compositor_pid=$!
+            trap "kill $compositor_pid 2>/dev/null || true" EXIT
             for attempt in $(seq 1 50); do
-              if ! kill -0 "$wm_pid" 2>/dev/null; then
-                cat /tmp/megalodon-openbox.log
+              if ! kill -0 "$compositor_pid" 2>/dev/null; then
+                cat /tmp/megalodon-weston.log
                 exit 1
               fi
-              if xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "_NET_SUPPORTING_WM_CHECK(WINDOW)"; then
+              if [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; then
                 break
               fi
               if [ "$attempt" -eq 50 ]; then
-                cat /tmp/megalodon-openbox.log
+                cat /tmp/megalodon-weston.log
                 exit 1
               fi
               sleep 0.1
             done
-            xprop -root _NET_SUPPORTING_WM_CHECK
-            python tests/browser_acceptance.py'
+            MEGALODON_BROWSER_PLATFORM=wayland python tests/browser_acceptance.py'
