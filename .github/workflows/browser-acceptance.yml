@@ -21,12 +21,20 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+      - name: Install native display manager
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y openbox x11-utils
       - name: Check prepared browser prerequisites
         run: |
           set -euo pipefail
           test "$(id -u)" -ne 0
           test -x /opt/google/chrome/chrome
           test -x /usr/bin/xvfb-run
+          test -x /usr/bin/openbox
+          test -x /usr/bin/xprop
+          openbox --version
           /opt/google/chrome/chrome --version
       - name: Install test environment only
         env:
@@ -37,4 +45,25 @@ jobs:
           python -m pip check
           python -m compileall -q megalodon tests
       - name: Exercise real CLI SQLite HTTP and browser
-        run: xvfb-run -a python tests/browser_acceptance.py
+        run: |
+          set -euo pipefail
+          xvfb-run -a bash -c 'set -euo pipefail
+            openbox --sm-disable --replace >/tmp/megalodon-openbox.log 2>&1 &
+            wm_pid=$!
+            trap "kill $wm_pid 2>/dev/null || true" EXIT
+            for attempt in $(seq 1 50); do
+              if ! kill -0 "$wm_pid" 2>/dev/null; then
+                cat /tmp/megalodon-openbox.log
+                exit 1
+              fi
+              if xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "_NET_SUPPORTING_WM_CHECK(WINDOW)"; then
+                break
+              fi
+              if [ "$attempt" -eq 50 ]; then
+                cat /tmp/megalodon-openbox.log
+                exit 1
+              fi
+              sleep 0.1
+            done
+            xprop -root _NET_SUPPORTING_WM_CHECK
+            python tests/browser_acceptance.py'

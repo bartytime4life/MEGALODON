@@ -20,17 +20,21 @@ xvfb-run -a python tests/browser_acceptance.py
 
 The companion `.github/workflows/browser-acceptance.yml` runs the last command
 on Ubuntu 24.04 with Python 3.11, the runner's existing Chrome, and an isolated
-browser profile. Its package-setup step installs the test driver; it does not
-install a browser, sensor, daemon, or MEGALODON service. The core package gains
+browser profile. Its package-setup steps install the Openbox display manager and test
+driver; they do not install a browser, sensor, daemon, or MEGALODON service. The core package gains
 no dependency. The driver is pinned, but transitive packages and the runner image
 are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
-Chrome is headed under a virtual X display so native visibility can be
-exercised. The test minimizes and restores the actual browser window through
-Chromium's browser-level window-state API; it never assigns document.hidden or
-dispatches visibility events as proof. The test reads native visibility through
-bounded test-side polling, then waits separately for application refresh idle.
+Chrome is headed under a virtual X display with Openbox running as
+the display's window manager so native visibility can be exercised. The test
+minimizes and restores the actual browser window through Chromium's browser-level
+window-state API; it never assigns document.hidden or dispatches visibility events
+as proof. The test reads native visibility through bounded test-side polling, then
+waits separately for application refresh idle. The workflow installs Openbox and x11-utils explicitly, then verifies
+Openbox owns the X display before launching Chrome; Xvfb alone does not provide
+a window manager. The acceptance receipt records Chrome's observed native window
+bounds after each state change.
 Failure labels identify the predicate that missed its deadline. It does not use
 an in-page eval poller or add unsafe-eval to the application CSP. Chromium
 sandboxing is explicitly requested. Missing Chrome/Xvfb,

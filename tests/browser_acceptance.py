@@ -155,7 +155,7 @@ async def wait_refresh_idle(page, visibility: str) -> None:
     raise AssertionError(f"refresh idle deadline exceeded ({visibility})")
 
 
-async def set_native_window_state(page, window_state: str) -> None:
+async def set_native_window_state(page, window_state: str) -> dict:
     cdp = await page.context.new_cdp_session(page)
     try:
         window = await cdp.send("Browser.getWindowForTarget")
@@ -163,6 +163,8 @@ async def set_native_window_state(page, window_state: str) -> None:
             "windowId": window["windowId"],
             "bounds": {"windowState": window_state},
         })
+        observed = await cdp.send("Browser.getWindowForTarget")
+        return observed["bounds"]
     finally:
         await cdp.detach()
 
@@ -323,7 +325,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await page.locator("#pause-button").click()
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         REPORT["stage"] = "minimize-native-dashboard-window"
-        await set_native_window_state(page, "minimized")
+        REPORT["native_window_after_minimize"] = await set_native_window_state(page, "minimized")
         try:
             REPORT["stage"] = "wait-native-hidden-and-idle"
             await wait_native_visibility(page, True)
@@ -333,7 +335,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             passed("native hidden window suspends polling", counts == hidden_counts)
         finally:
             REPORT["stage"] = "restore-native-dashboard-window"
-            await set_native_window_state(page, "normal")
+            REPORT["native_window_after_restore"] = await set_native_window_state(page, "normal")
         REPORT["stage"] = "wait-native-visible-and-idle"
         await wait_native_visibility(page, False)
         await wait_refresh_idle(page, "visible")
