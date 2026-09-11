@@ -26,11 +26,14 @@ no dependency. The driver is pinned, but transitive packages and the runner imag
 are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
-Chrome is headed under a virtual X display so native tab visibility can be
-exercised. The test reads native visibility through bounded test-side polling, then
-waits separately for the application refresh state to become idle. Failure labels
-identify the predicate that missed its deadline. It does not use an in-page eval
-poller, override document.hidden, or add unsafe-eval to the application CSP. Chromium sandboxing is explicitly requested. Missing Chrome/Xvfb,
+Chrome is headed under a virtual X display so native visibility can be
+exercised. The test minimizes and restores the actual browser window through
+Chromium's browser-level window-state API; it never assigns document.hidden or
+dispatches visibility events as proof. The test reads native visibility through
+bounded test-side polling, then waits separately for application refresh idle.
+Failure labels identify the predicate that missed its deadline. It does not use
+an in-page eval poller or add unsafe-eval to the application CSP. Chromium
+sandboxing is explicitly requested. Missing Chrome/Xvfb,
 root execution, sandbox failure, a policy-blocked loopback, timeout, or assertion
 failure returns nonzero. There is no no-sandbox fallback, skip-as-pass path,
 proxy, tunnel, browser download, or policy override. Keep the existing required
@@ -52,7 +55,7 @@ no-store, MIME and no-inline CSP header presence; empty/nonempty rendering;
 five cells with semantic time in each row; keyboard skip-link activation;
 search and clear; reference lookup/clear; actual offline projection address
 exclusions; static-map initial failure, retry and delayed-profile filtering;
-pause, native hidden-tab suspension/foreground recovery; peer-settlement
+pause, native hidden-window suspension/foreground recovery; peer-settlement
 protection; the real five-second request-helper timeout and recovery; mobile
 page overflow and rendered focus. The main database bytes must remain unchanged
 through serving. SQLite's private WAL/SHM coordination is not claimed write-free.
