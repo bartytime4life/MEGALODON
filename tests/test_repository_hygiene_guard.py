@@ -4,7 +4,6 @@ from pathlib import Path
 
 from tools.check_repository_hygiene import (
     MAX_BINARY_FILE_BYTES,
-    MAX_TRACKED_FILE_BYTES,
     ROOT,
     scan_paths,
     tracked_paths,
@@ -38,7 +37,7 @@ def test_large_binary_is_reported_without_emitting_contents(tmp_path):
     findings = scan_paths(
         tmp_path,
         ("fixture.bin",),
-        max_file_bytes=MAX_TRACKED_FILE_BYTES,
+        max_file_bytes=MAX_BINARY_FILE_BYTES,
     )
 
     assert any(finding.startswith("large tracked file: fixture.bin") for finding in findings)
