@@ -55,6 +55,32 @@ response is not partly applied. After a failure, a prior map remains visible as
 **stale**; without a prior map, the panel says unavailable. A failed map request
 does not stop telemetry polling or destroy an offline snapshot.
 
+### Filtering during a load or after failure
+
+Search, availability filtering, and **Clear map filters** remain local operations
+while a map request is pending. They must retain the loading message and the
+profile captured when that request was dispatched. The loaded-profile label and
+cards continue to describe the previous accepted map, not the pending profile.
+The load button and profile selector remain disabled until that request settles;
+filtering does not start another request.
+
+A first-load failure remains **unavailable** after search, filter, clear, or
+profile-selection changes. Those controls cannot turn failure into an ordinary
+empty result. With a previous map, failure remains **stale**. A retry can display
+both its pending request and the previous failure; only a validated successful
+response clears the failure. When the request settles, the busy flag, disabled
+controls, and status message are updated together so no completed load retains a
+loading announcement.
+
+The regression suite in
+[`tests/test_integration_map_states.py`](../tests/test_integration_map_states.py)
+executes the complete Integration Map JavaScript with synthetic DOM and request
+promises. For rendered acceptance, repeat the filter/search/clear sequence during
+a delayed first load and a delayed profile change, then after a failed first load.
+Confirm both the visible message and the `aria-live` status remain truthful. A
+component-only browser harness does not establish full-dashboard, real HTTP/CSP,
+SQLite, assistive-technology, or native-platform acceptance.
+
 Availability words are deliberately narrow:
 
 - **Implemented/optional** describe a repository path, not an installed or running
