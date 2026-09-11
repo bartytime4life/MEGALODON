@@ -2,7 +2,9 @@
 
 The required `test` job runs `tools/check_repository_hygiene.py` before package
 installation. It scans only files tracked by Git and emits bounded finding
-categories without printing file contents.
+categories without printing file contents. It reads at most 5 MiB plus one byte
+per file, and rejects tracked symlinks and other non-regular paths without
+following them.
 
 The guard fails on:
 
