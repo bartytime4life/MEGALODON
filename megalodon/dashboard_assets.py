@@ -6,6 +6,7 @@ constants to preserve the existing public/test interface.
 """
 
 from .dashboard_connections import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
+from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 
 
 INDEX_HTML = """<!doctype html>
@@ -124,7 +125,7 @@ INDEX_HTML = """<!doctype html>
     </div>
   </section>
 
-  <section class="panel reference-panel" aria-labelledby="reference-title">
+  <section class="panel reference-panel" id="reference-panel" aria-labelledby="reference-title" aria-busy="true">
     <div class="panel-head">
       <div><h2 id="reference-title" tabindex="-1">Reference Library</h2><p>Manual context lookup against the installed, manifest-verified IANA snapshot. It never classifies traffic or changes stored records.</p></div>
       <span class="timestamp" id="reference-bundle-label">Loading pinned snapshot…</span>
@@ -155,7 +156,15 @@ INDEX_HTML = """<!doctype html>
         <button type="submit">Look up protocol</button>
       </form>
     </div>
+    <div class="reference-actions" role="group" aria-label="Reference Library recovery and display controls">
+      <button id="reference-retry" type="button" class="button-secondary" disabled>Recheck local snapshot</button>
+      <button id="reference-clear" type="button" class="button-secondary" disabled>Clear displayed context</button>
+    </div>
     <p class="reference-status" id="reference-status" role="status" aria-live="polite" aria-atomic="true">Loading the verified reference snapshot…</p>
+    <details class="reference-provenance">
+      <summary>Snapshot provenance and verification limits</summary>
+      <div id="reference-provenance" hidden></div>
+    </details>
     <div class="reference-result" id="reference-result" aria-live="polite" aria-atomic="true">
       <p class="reference-empty" id="reference-empty">Enter a value to inspect registration context.</p>
       <div id="reference-meta" hidden></div>
@@ -436,6 +445,8 @@ const referenceState = {
   available: null,
   status: 'loading',
   loading: false,
+  statusLoading: false,
+  snapshot: null,
   lastResult: null,
   lastQuery: null
 };
@@ -493,7 +504,7 @@ async function requestJSON(path) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', signal: controller.signal});
+    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal});
     if (!response.ok) {
       let payload = null;
       try { payload = await response.json(); } catch (_) {}
@@ -787,9 +798,12 @@ function validatedReferenceSources(value) {
 function validatedReferenceStatus(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.schema !== 'string') throw new Error('invalid reference status');
   if (value.schema !== 'reference-library-status-v1' || typeof value.available !== 'boolean' || typeof value.status !== 'string') throw new Error('invalid reference status');
+  referenceBoundary(value);
   if (!value.available) {
     if (!referenceExactKeys(value, ['schema', 'available', 'status', 'error', 'network_access_performed', 'persistence_status', 'action_status'])) throw new Error('invalid reference status');
     if (!['unavailable', 'integrity_failure'].includes(value.status) || typeof value.error !== 'string') throw new Error('invalid reference status');
+    const expectedError = value.status === 'integrity_failure' ? 'reference bundle integrity failure' : 'reference bundle unavailable';
+    if (value.error !== expectedError) referenceReject();
     return value;
   }
   if (!referenceExactKeys(value, ['schema', 'available', 'status', 'bundle_id', 'bundle_version', 'manifest_sha256', 'service_records', 'protocol_records', 'cache_entries', 'cache_limit', 'sources', 'warning', 'network_access_performed', 'persistence_status', 'action_status'])) throw new Error('invalid reference status');
@@ -797,9 +811,10 @@ function validatedReferenceStatus(value) {
   if (![value.bundle_id, value.bundle_version, value.manifest_sha256, value.warning].every(item => typeof item === 'string' && item.length > 0 && item.length <= 512)) throw new Error('invalid reference status');
   if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted' || value.action_status !== 'not_attempted') throw new Error('invalid reference status');
   validatedReferenceSources(value.sources);
+  referenceReadyContract(value);
   return value;
 }
-function validatedReferenceResult(value) {
+function validatedReferenceResult(value, expectedKind = null, expectedQuery = null, expectedBundle = null) {
   const expected = ['schema', 'status', 'available', 'kind', 'bundle_id', 'bundle_version', 'manifest_sha256', 'query', 'match_count', 'matches', 'truncated', 'sources', 'warning', 'network_access_performed', 'persistence_status', 'action_status'];
   if (!value || typeof value !== 'object' || Array.isArray(value) || !referenceExactKeys(value, expected)) throw new Error('invalid reference result');
   if (value.schema !== 'reference-library-lookup-v1' || value.available !== true || !['no_match', 'one_match', 'multiple_matches'].includes(value.status) || !['port', 'protocol'].includes(value.kind)) throw new Error('invalid reference result');
@@ -820,6 +835,7 @@ function validatedReferenceResult(value) {
   });
   validatedReferenceSources(value.sources);
   if (value.network_access_performed !== false || value.persistence_status !== 'not_attempted' || value.action_status !== 'not_attempted') throw new Error('invalid reference result');
+  referenceLookupContract(value, expectedKind, expectedQuery, expectedBundle);
   return value;
 }
 function setReferenceStatus(message, mode) {
@@ -877,24 +893,41 @@ function renderReferenceResult(result) {
   results.replaceChildren(list);
 }
 function renderReferenceUnavailable(payload, fallbackMode = 'unavailable') {
-  const mode = payload && payload.status === 'integrity_failure' ? 'integrity_failure' : fallbackMode;
+  const mode = payload && payload.status === 'integrity_failure' ? 'integrity_failure'
+    : fallbackMode === 'invalid_response' ? 'invalid_response' : 'unavailable';
   const message = mode === 'integrity_failure'
-    ? 'Reference Library integrity failure. Manual lookup is disabled; no partial records are shown.'
-    : 'Reference Library is unavailable. Manual lookup is disabled until the verified snapshot can be loaded.';
-  referenceState.available = false; referenceState.status = mode; setReferenceFormsEnabled(false); setReferenceStatus(message, mode);
-  byId('reference-bundle-label').textContent = mode === 'integrity_failure' ? 'Integrity failure' : 'Unavailable';
-  byId('reference-empty').textContent = message; byId('reference-empty').hidden = false;
-  byId('reference-meta').hidden = true; byId('reference-results').hidden = true; byId('reference-results').replaceChildren();
+    ? 'Reference Library integrity failure. Lookup is disabled; no partial records are shown. Recheck after the local service has been repaired and restarted.'
+    : mode === 'invalid_response'
+      ? 'Reference response rejected. No new context was accepted; lookup is disabled. Recheck the local snapshot.'
+      : 'Reference Library is unavailable. Recheck the local snapshot to retry. A server-side bundle failure requires local repair and service restart.';
+  referenceState.available = false; referenceState.status = mode; referenceState.snapshot = null;
+  clearReferenceResult(message); renderReferenceProvenance(null);
+  setReferenceStatus(message, mode);
+  byId('reference-bundle-label').textContent = mode === 'integrity_failure' ? 'Integrity failure'
+    : mode === 'invalid_response' ? 'Invalid response' : 'Unavailable';
+  syncReferenceControls();
 }
 async function loadReferenceStatus() {
+  if (referenceState.statusLoading || referenceState.loading) return;
+  referenceState.statusLoading = true;
+  setReferenceStatus('Checking the existing local snapshot. This does not download or reload a registry.', 'empty');
+  syncReferenceControls();
   try {
-    const payload = validatedReferenceStatus(await requestJSON('/api/reference/status'));
+    const response = await requestJSON('/api/reference/status');
+    let payload;
+    try { payload = validatedReferenceStatus(response); } catch (_) { referenceReject(); }
     if (!payload.available) { renderReferenceUnavailable(payload, payload.status); return; }
-    referenceState.available = true; referenceState.status = 'ready'; setReferenceFormsEnabled(true);
+    // A recheck starts a fresh display context, even when bundle identity is unchanged.
+    clearReferenceResult();
+    referenceState.snapshot = payload; referenceState.available = true; referenceState.status = 'ready';
     byId('reference-bundle-label').textContent = `IANA ${payload.bundle_version} · ${payload.bundle_id}`;
+    renderReferenceProvenance(payload);
     setReferenceStatus('Pinned IANA snapshot ready. Enter one value for a read-only context lookup.', 'ready');
   } catch (error) {
-    renderReferenceUnavailable(error.payload, error.payload && error.payload.status ? error.payload.status : 'unavailable');
+    const failure = referenceFailureEnvelope(error);
+    renderReferenceUnavailable(failure, (error && error.referenceInvalid) ? 'invalid_response' : 'unavailable');
+  } finally {
+    referenceState.statusLoading = false; syncReferenceControls();
   }
 }
 function decimalReferenceInput(value, maximum) {
@@ -903,32 +936,43 @@ function decimalReferenceInput(value, maximum) {
   return Number(text);
 }
 async function lookupReference(kind) {
-  if (!referenceState.available || referenceState.loading) return;
+  if (!referenceState.available || !referenceState.snapshot || referenceState.loading || referenceState.statusLoading) return;
   let query;
   try {
     if (kind === 'port') query = {transport: byId('reference-transport').value, port: decimalReferenceInput(byId('reference-port').value, 65535)};
-    else query = {number: decimalReferenceInput(byId('reference-protocol').value, 255)};
+    else if (kind === 'protocol') query = {number: decimalReferenceInput(byId('reference-protocol').value, 255)};
+    else throw new Error('invalid lookup kind');
+    referenceQueryContract(kind, query);
   } catch (_) {
-    setReferenceStatus(kind === 'port' ? 'Enter a normalized transport and a decimal port from 0 through 65535.' : 'Enter a decimal IP protocol number from 0 through 255.', 'empty');
+    const prior = referenceState.lastResult;
+    const retained = prior ? ` Displayed context is still for ${referenceQueryLabel(prior.kind, prior.query)}.` : '';
+    setReferenceStatus((kind === 'port' ? 'Enter a normalized transport and a decimal port from 0 through 65535.' : 'Enter a decimal IP protocol number from 0 through 255.') + retained, prior ? 'stale' : 'empty');
     return;
   }
-  referenceState.loading = true; setReferenceStatus('Loading one bounded reference result…', 'empty');
+  referenceState.loading = true; syncReferenceControls();
+  const label = referenceQueryLabel(kind, query);
+  setReferenceStatus(`Loading bounded context for ${label}. Any displayed context remains from the previous lookup.`, 'empty');
   const params = kind === 'port' ? `transport=${encodeURIComponent(query.transport)}&port=${query.port}` : `number=${query.number}`;
   try {
-    const result = validatedReferenceResult(await requestJSON(`/api/reference/${kind}?${params}`));
+    const response = await requestJSON(`/api/reference/${kind}?${params}`);
+    let result;
+    try { result = validatedReferenceResult(response, kind, query, referenceState.snapshot); }
+    catch (_) { referenceReject(); }
     referenceState.lastResult = result; referenceState.lastQuery = query; renderReferenceResult(result);
-    const suffix = result.truncated ? ' The returned rows are capped.' : '';
-    setReferenceStatus(result.status === 'no_match' ? `No registration found for this exact ${kind} lookup.${suffix}` : `Reference context loaded: ${formatNumber(result.match_count)} ${result.match_count === 1 ? 'registration' : 'registrations'}.${suffix}`, result.status === 'no_match' ? 'empty' : 'ready');
+    const suffix = result.truncated ? ' The returned rows are capped at 8.' : '';
+    setReferenceStatus(result.status === 'no_match' ? `No registration found for ${label}.${suffix}` : `Reference context loaded for ${label}: ${formatNumber(result.match_count)} ${result.match_count === 1 ? 'registration' : 'registrations'}.${suffix}`, result.status === 'no_match' ? 'empty' : 'ready');
   } catch (error) {
-    if (error.payload && (error.payload.status === 'integrity_failure' || error.payload.status === 'unavailable')) {
-      renderReferenceUnavailable(error.payload, error.payload.status); return;
+    const failure = referenceFailureEnvelope(error);
+    if (failure || (error && error.referenceInvalid)) {
+      renderReferenceUnavailable(failure, (error && error.referenceInvalid) ? 'invalid_response' : 'unavailable'); return;
     }
     if (referenceState.lastResult) {
-      setReferenceStatus('Lookup failed. Showing the last successful reference result as stale; no new data was applied.', 'stale');
+      const prior = referenceState.lastResult;
+      setReferenceStatus(`Lookup for ${label} failed. Showing the last successful reference result as stale context for ${referenceQueryLabel(prior.kind, prior.query)}; no new data was applied.`, 'stale');
     } else {
-      setReferenceStatus('Lookup failed. No reference result is available.', 'unavailable');
+      setReferenceStatus(`Lookup for ${label} failed. No reference result is available. Submit again or recheck the local snapshot.`, 'unavailable');
     }
-  } finally { referenceState.loading = false; }
+  } finally { referenceState.loading = false; syncReferenceControls(); }
 }
 function setSnapshotStatus(mode) {
   const strip = byId('trust-strip');
@@ -1079,9 +1123,19 @@ byId('refresh-button').addEventListener('click', () => refresh(true));
 byId('pause-button').addEventListener('click', togglePause);
 byId('reference-port-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('port'); });
 byId('reference-protocol-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('protocol'); });
+byId('reference-retry').addEventListener('click', loadReferenceStatus);
+byId('reference-clear').addEventListener('click', () => {
+  if (referenceState.loading || referenceState.statusLoading) return;
+  clearReferenceResult(); syncReferenceControls();
+  setReferenceStatus('Displayed context cleared. Stored records and the server cache were not changed.', referenceState.available ? 'ready' : 'unavailable');
+});
+['reference-transport', 'reference-port', 'reference-protocol'].forEach(id => {
+  byId(id).addEventListener(id === 'reference-transport' ? 'change' : 'input', referenceInputChanged);
+});
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && !state.paused) { refresh(false); scheduleNext(); }
 });
 """
 
-DASHBOARD_JS += INTEGRATIONS_JS + "\nbootstrap();\n"
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + INTEGRATIONS_JS + "\nbootstrap();\n"
