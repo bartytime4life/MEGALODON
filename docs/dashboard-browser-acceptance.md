@@ -21,7 +21,7 @@ xvfb-run -a python tests/browser_acceptance.py
 The companion `.github/workflows/browser-acceptance.yml` runs the last command
 on Ubuntu 24.04 with Python 3.11, the runner's existing Chrome, and an isolated
 browser profile. Its package-setup steps install the Openbox display manager and test
- driver; they do not install a browser, sensor, daemon, or MEGALODON service. The core package gains
+driver; they do not install a browser, sensor, daemon, or MEGALODON service. The core package gains
 no dependency. The driver is pinned, but transitive packages and the runner image
 are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
