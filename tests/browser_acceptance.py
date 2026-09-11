@@ -155,6 +155,18 @@ async def wait_refresh_idle(page, visibility: str) -> None:
     raise AssertionError(f"refresh idle deadline exceeded ({visibility})")
 
 
+async def set_native_window_state(page, window_state: str) -> None:
+    cdp = await page.context.new_cdp_session(page)
+    try:
+        window = await cdp.send("Browser.getWindowForTarget")
+        await cdp.send("Browser.setWindowBounds", {
+            "windowId": window["windowId"],
+            "bounds": {"windowState": window_state},
+        })
+    finally:
+        await cdp.detach()
+
+
 async def exercise(browser, port: int, nonempty: bool) -> None:
     from playwright.async_api import expect
     origin = f"http://127.0.0.1:{port}"
@@ -305,28 +317,28 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip paused")
         passed("timeout recovery uses real backend")
 
-        # Real tab visibility in headed Chrome under Xvfb; do not override document.hidden.
+        # Use an actual headed browser-window state transition under Xvfb; do not override document.hidden.
+        REPORT["native_stimulus"] = "Browser.setWindowBounds:minimized/normal"
         REPORT["stage"] = "resume-before-native-visibility"
         await page.locator("#pause-button").click()
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
-        REPORT["stage"] = "create-native-background-tab"
-        other = await context.new_page()
-        REPORT["stage"] = "activate-native-background-tab"
-        await other.bring_to_front()
-        REPORT["stage"] = "wait-native-hidden-and-idle"
-        await wait_native_visibility(page, True)
-        await wait_refresh_idle(page, "hidden")
-        hidden_counts = dict(counts)
-        await asyncio.sleep(2.4)
-        passed("native hidden tab suspends polling", counts == hidden_counts)
-        REPORT["stage"] = "activate-native-dashboard-tab"
-        await page.bring_to_front()
+        REPORT["stage"] = "minimize-native-dashboard-window"
+        await set_native_window_state(page, "minimized")
+        try:
+            REPORT["stage"] = "wait-native-hidden-and-idle"
+            await wait_native_visibility(page, True)
+            await wait_refresh_idle(page, "hidden")
+            hidden_counts = dict(counts)
+            await asyncio.sleep(2.4)
+            passed("native hidden window suspends polling", counts == hidden_counts)
+        finally:
+            REPORT["stage"] = "restore-native-dashboard-window"
+            await set_native_window_state(page, "normal")
         REPORT["stage"] = "wait-native-visible-and-idle"
         await wait_native_visibility(page, False)
         await wait_refresh_idle(page, "visible")
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await page.locator("#pause-button").click()
-        await other.close()
         passed("native foreground resumes polling", counts["summary"] > hidden_counts["summary"])
         REPORT["stage"] = "mobile-layout-and-focus"
         await page.set_viewport_size({"width": 375, "height": 812})
