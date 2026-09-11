@@ -150,11 +150,13 @@ lifecycle.
 
 ## CLI completion semantics
 
-- Natural iterator exhaustion records `completed/source_exhausted`.
-- `--max-events N` records `incomplete/event_limit_reached` immediately after
-  the Nth accepted event. It does not peek at or discard the next live event.
-- A malformed suffix behind an event limit remains unread; the run is incomplete,
-  not falsely complete and not falsely failed.
+- Natural iterator exhaustion records `completed/source_exhausted` after
+  owned-source cleanup returns without error.
+- `--max-events N` stops intake after the Nth accepted event, then records
+  `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
+  the next live event.
+- A malformed suffix behind an event limit remains unread; when cleanup succeeds,
+  the run is incomplete, not falsely complete and not falsely failed.
 - A malformed record that intake reaches records `failed/failed` with the fixed
   `CAPTURE_ERROR` class.
 - A handled SIGINT returns 130 and a handled SIGTERM returns 143 after recording
@@ -165,6 +167,85 @@ lifecycle.
 Diagnostics and shared receipts contain only closed status values, fixed failure
 classes, timestamps, counts, and source names. They do not include packet
 payloads, input paths, raw exceptions, credentials, or database paths.
+
+## CLI-owned source lifetime
+
+The CLI holds its selected event iterator explicitly. Exhaustion, an event-limit
+break, an input failure, a service/storage failure, or a handled interruption
+leaves the ingestion block through the same ownership boundary. Its `close()`
+method, when present, is invoked before any terminal run write or terminal JSON
+output. Closure stays inside the scoped SIGTERM handler. An iterator without a
+close method remains supported; this does not assert that an arbitrary producer
+has released native resources.
+
+The JSONL file path has two owners: the CLI owns the event iterator, and that
+iterator owns the text stream it opens. The file is opened lazily on first
+iteration and closed on exhaustion, failure, or explicit early iterator closure.
+Closing an unstarted iterator opens nothing. By contrast, stdin is borrowed:
+closing the JSONL parser must not close `sys.stdin`. This change does not widen
+the existing JSONL line limit, validate a new source format, or add new filesystem
+identity/permission guarantees for input files.
+
+### Failure ordering
+
+| Ingestion outcome | Source close outcome | CLI disposition |
+| --- | --- | --- |
+| Natural exhaustion | Returns normally | Existing `completed/source_exhausted` receipt |
+| Event limit | Returns normally | Existing `incomplete/event_limit_reached` receipt; no read-ahead |
+| No earlier failure | Ordinary close exception | Fixed `CaptureError`; `failed/failed` with `CAPTURE_ERROR`, exit 2, no success JSON |
+| Capture, I/O, validation, or storage failure | Also raises | Preserve the primary exception and its existing failure category; attach one fixed cleanup note at each failing ownership boundary |
+| Handled SIGINT/SIGTERM | Also raises | Preserve the interruption path and exit 130/143 when finalization succeeds |
+| Reconciliation-required failure | Either | Preserve the refusal; do not retry or write a normal terminal receipt on the poisoned writer |
+| No earlier failure | `KeyboardInterrupt` or `SystemExit` during close | Preserve control flow rather than converting it to an ordinary capture failure |
+
+The fixed cleanup diagnostic is
+`event source cleanup failed; shutdown is unverified`. It contains no path,
+interface, source record, or upstream exception text. `CAPTURE_ERROR` here can
+mean a source-lifecycle failure; it is not a security detection and does not mean
+that previously committed events were rejected. The existing per-event audit
+prefix remains intact. Cleanup failure does not authorize replay, deletion,
+reconciliation, a process restart, or another attempt to close the source.
+
+A consumer exception occurs outside its generator. The ownership boundary
+therefore preserves it while explicitly closing the generator, rather than
+assuming garbage collection will convey the consumer failure into the producer.
+`GeneratorExit` used for an ordinary close is not itself treated as a primary
+failure: otherwise it could hide an actual file-close failure. A source that
+already masked an error internally before returning to the CLI needs its own
+producer-side correction; caller ownership cannot recover the lost exception.
+
+Exception notes are not persisted as a new audit field and are not printed by
+the CLI's fixed-category error reporter. Standard traceback display can show
+notes. Suppressed exception context is still inspectable in memory; it is not
+redaction or permission to serialize exception internals. The existing receipt
+schema has no separate shutdown-verification field. Historical terminal
+receipts also do not establish that this newer ownership boundary executed.
+
+### Validation and remaining limits
+
+`tests/test_cli_source_ownership.py` keeps explicit references to sources and
+checks close-before-finalization order, no read-ahead, primary-error identity,
+interruption, reconciliation, fixed errors, lazy file opening, nested generator
+close failures, and borrowed stdin. Six real CLI/service/SQLite cases verify
+that committed prefix counts and links survive failure and that ordinary close
+errors cannot produce either a completed or event-limit success receipt. Test
+producers are synthetic; no Scapy installation, capture, socket, DNS lookup, or
+subprocess is needed by these tests.
+
+This is deterministic ownership, not a deadline or a native-shutdown receipt.
+A blocking `next()` or `close()` can still block. Async sniffer death, partial
+startup cleanup, bounded stop/join, kernel loss, repeated-signal resilience,
+physical disk/power loss, native Windows behavior, and continuous operation
+remain outside this correction under issue #68 and the existing acceptance
+program. Unexpected programming errors still propagate rather than being
+misreported as clean completion; a run left `running` needs the existing
+operator reconciliation procedure after all ingestion has stopped.
+
+Python's [context-manager cleanup pattern](https://docs.python.org/3.11/library/contextlib.html#contextlib.closing),
+[generator close semantics](https://docs.python.org/3.11/reference/expressions.html#generator.close),
+and [exception notes](https://docs.python.org/3.11/library/exceptions.html#BaseException.add_note)
+explain the language mechanisms. They do not establish installed-producer or
+operational acceptance for MEGALODON.
 
 ## Deliberate limits
 
