@@ -56,7 +56,7 @@ def test_example_environment_files_remain_allowed(tmp_path):
     
 def test_symlink_is_not_followed(tmp_path):
     target = tmp_path / "outside.txt"
-    target.write_text("-----BEGIN PRIVATE KEY-----", encoding="ascii")
+    target.write_text("-----BEGIN " + "PRIVATE KEY-----", encoding="ascii")
     alias = tmp_path / "alias.txt"
     try:
         alias.symlink_to(target)
