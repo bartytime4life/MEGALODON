@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from urllib.parse import urlsplit
 
 REPORT = {"schema": "dashboard-browser-acceptance-v1", "status": "failed",
@@ -284,20 +285,27 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         passed("timeout recovery uses real backend")
 
         # Real tab visibility in headed Chrome under Xvfb; do not override document.hidden.
+        REPORT["stage"] = "resume-before-native-visibility"
         await page.locator("#pause-button").click()
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
+        REPORT["stage"] = "create-native-background-tab"
         other = await context.new_page()
+        REPORT["stage"] = "activate-native-background-tab"
         await other.bring_to_front()
+        REPORT["stage"] = "wait-native-hidden-and-idle"
         await page.wait_for_function("document.hidden && !state.refreshing")
         hidden_counts = dict(counts)
         await asyncio.sleep(2.4)
         passed("native hidden tab suspends polling", counts == hidden_counts)
+        REPORT["stage"] = "activate-native-dashboard-tab"
         await page.bring_to_front()
+        REPORT["stage"] = "wait-native-visible-and-idle"
         await page.wait_for_function("!document.hidden && !state.refreshing")
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await page.locator("#pause-button").click()
         await other.close()
         passed("native foreground resumes polling", counts["summary"] > hidden_counts["summary"])
+        REPORT["stage"] = "mobile-layout-and-focus"
         await page.set_viewport_size({"width": 375, "height": 812})
         passed("mobile page fits viewport", await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
         await page.locator("#filter-query").focus()
@@ -371,6 +379,7 @@ async def run() -> None:
                     await browser.close()
     finally:
         os.umask(prior_umask)
+    REPORT.pop("stage", None)
     REPORT["status"] = "passed"
 
 
@@ -380,6 +389,16 @@ if __name__ == "__main__":
     except Exception as error:
         # Synthetic test stage names aid diagnosis without dumping app rows/paths.
         REPORT["failure"] = type(error).__name__
+        sites = [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
+                 if frame.filename == __file__]
+        REPORT["failure_line"] = sites[-1] if sites else None
+        for needle, code in (("unsafe-eval", "CSP_EVAL_REFUSED"),
+                             ("state is not defined", "STATE_SCOPE_UNAVAILABLE"),
+                             ("Execution context was destroyed", "CONTEXT_DESTROYED"),
+                             ("Target page, context or browser has been closed", "TARGET_CLOSED")):
+            if needle in str(error):
+                REPORT["driver_error_code"] = code
+                break
         if isinstance(error, AssertionError):
             REPORT["failure_check"] = str(error)[:160]
     finally:
