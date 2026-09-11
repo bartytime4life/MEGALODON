@@ -20,9 +20,12 @@ See the [red, blue, and purple security practice](docs/red-blue-security-guide.m
 for authorized adversarial validation and future-AI gates. That guide adds no
 model runtime, tool authority, or firewall authorization.
 
-The offline reference and synthetic evaluation subsystem is documented in
-[docs/reference-data.md](docs/reference-data.md). It adds bounded evidence for
-review without joining the ingestion, audit, dashboard, or response paths.
+The offline reference and synthetic evaluation commands are documented in
+[docs/reference-data.md](docs/reference-data.md). They do not start ingestion
+or the dashboard, populate the audit store, or invoke response policy. The
+existing dashboard separately reuses the IANA loader for bounded, manual
+Reference Library lookups. This is a read-only context connection, not a
+telemetry join, a corpus-execution endpoint, or evidence of an observed service.
 
 ## Findings and corrections
 
@@ -70,6 +73,45 @@ and do not execute `nft`.
 Issue #65 therefore has an implemented evaluation-containment boundary, not a
 restored mutation capability or production approval. Its exact-head validation,
 independent review, and issue lifecycle remain separate gates.
+
+### Dashboard reference and static-integration boundary
+
+The implemented HTTP surface includes `/api/integrations` and the three
+`/api/reference/status`, `/api/reference/port`, and `/api/reference/protocol`
+GET routes. Their presence must not be obscured by the standalone evaluator's
+no-dashboard side-effect boundary. The complete route inventory is in
+[SPECIFICATION.md section 6](SPECIFICATION.md#6-dashboard-contract), with exact
+HTTP contracts in [docs/dashboard-http-contract.md](docs/dashboard-http-contract.md).
+
+`DashboardHandler` checks the bound-loopback Host before routing. The integration
+route returns only the closed built-in workflow map: it reads no telemetry and
+performs no installation, host probe, process launch, or provider request.
+Reference routes likewise do not read or write the audit store. They use the
+process-local `ReferenceLibrary`, whose default instance lazily loads the full
+IANA bundle once and keeps only a bounded in-memory lookup cache. Library
+failure remains a fixed unavailable/integrity disposition until process restart;
+a status recheck is not a file reload, maintenance operation, or network update.
+These route-local boundaries do not remove the dashboard CLI's existing private
+telemetry-store startup requirements.
+
+The reference client validates the returned query against the submitted query,
+bundle identity and provenance against the accepted status, and match counts
+against the relevant source total. Returned rows are limited to eight, with
+explicit truncation for larger match counts. It rejects contradictory
+truncation/status claims and action/persistence/network flags.
+Provenance is rendered as text; registry URLs are not contacted. Recheck and
+clear controls change the displayed context without authorizing a tool or
+changing SQLite. A transient request failure can preserve explicitly labeled
+stale context, whereas a rejected lookup response or declared bundle failure
+clears it and disables lookup; see the
+[Reference Library recovery contract](docs/reference-library-recovery.md).
+
+The server's bundle-byte validation and the browser's response-consistency
+validation are different checks. Neither proves publisher authenticity,
+observed-service identity, traffic safety, or malware attribution. Synthetic
+regressions and passing CI are not independent review or rendered-browser
+acceptance. This documentation reconciles the existing connections; it grants
+no new endpoint, source, execution, remote-access, or response authority.
 
 ## Threat model
 
