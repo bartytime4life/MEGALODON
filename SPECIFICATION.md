@@ -33,8 +33,11 @@ gated by the open integrity, resource, browser, installed-tool, and release
 controls. The current repository also exposes an explicit, non-executing
 nftables plan boundary; firewall application is unsupported. A separate offline
 reference and evaluation subsystem supplies pinned registration context and
-deterministic synthetic detector exercises. It does not join the service
-ingestion, audit, dashboard, or response paths.
+deterministic synthetic detector exercises. Its commands do not start the
+service or dashboard, populate the audit store, or invoke response policy.
+The dashboard independently reuses the IANA loader for manual, read-only
+Reference Library lookups described in section 6. That connection supplies
+registration context, not telemetry enrichment or corpus execution.
 
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
@@ -317,7 +320,41 @@ The dashboard exposes only:
   stored destination addresses, evidence, recommendations, and suppression
   reasons are excluded from the browser contract;
 - `GET /api/offline-summary` — either `available: false` or one immutable,
-  validated `dashboard-offline-summary-v1` snapshot selected at startup.
+  validated `dashboard-offline-summary-v1` snapshot selected at startup;
+- `GET /api/integrations` — a static, non-executing workflow map with an optional
+  single `platform=linux|windows|other` parameter; exactly eight workflow cards
+  and a 32 KiB response ceiling, not installed-tool discovery or connectivity;
+- `GET /api/reference/status` — the process-local IANA library's `ready`,
+  `unavailable`, or `integrity_failure` disposition; no query parameters;
+- `GET /api/reference/port` — one `transport=tcp|udp|sctp|dccp` and one
+  canonical decimal `port=0..65535`;
+- `GET /api/reference/protocol` — one canonical decimal `number=0..255`.
+
+The Integration Map and Reference Library routes do not read the telemetry
+store, start an analyzer, or call another service. Their query grammars reject
+unknown, repeated, malformed, or out-of-range fields rather than choosing an
+arbitrary endpoint or command. Query strings are bounded to 256 characters.
+The precise HTTP schemas and failure codes are documented in
+[docs/dashboard-http-contract.md](docs/dashboard-http-contract.md).
+
+The default reference library is initialized lazily once per process; subsequent
+requests reuse its validated in-memory bundle or fixed failure disposition.
+Port/protocol lookups return at most eight rows with the full match count and
+truncation flag, retain at most 16 exact results in memory, and enforce a 64 KiB
+lookup-response ceiling. They neither join detections nor run the synthetic
+corpus. Loader validation failures disable the whole library; no partial bundle
+is served. Ordinary resource unavailability is distinct from an integrity
+failure, and neither diagnosis proves malicious tampering.
+
+**Recheck local snapshot** requests the existing local service's status; it does
+not reload files or contact IANA. A failed library initialization requires local
+repair and a process restart. **Clear displayed context** changes browser state
+only, not stored records or the server cache. The client binds lookup claims to
+the submitted kind/query, accepted bundle identity, source provenance, source
+record total, and consistent match/truncation states. Browser consistency checks
+are not an independent verification of bundle bytes. Recovery and query-qualified
+stale-result behavior are defined in
+[docs/reference-library-recovery.md](docs/reference-library-recovery.md).
 
 `dashboard.refresh_seconds` is an integer from 2 through 300 and
 `dashboard.event_limit` is an integer from 1 through 200. The matching
@@ -474,8 +511,11 @@ Its IANA data is registry context, not a threat-intelligence assertion or an
 observed-service label. Its 12-scenario, 6,492-event corpus verifies deterministic
 rule and resource-boundary behavior only; `synthetic-only` and `uncalibrated`
 results do not measure representativeness, false-positive rates, operational
-accuracy, readiness, or product efficacy. Neither path modifies the Stage 0
-automation schema, service SQLite schema, dashboard surface, or firewall boundary.
+accuracy, readiness, or product efficacy. Neither command path modifies the
+Stage 0 automation schema or service SQLite schema, starts or controls the
+dashboard, or invokes firewall policy. The dashboard's separate reuse of IANA
+package data is the read-only Reference Library connection in section 6, not
+an HTTP route to the evaluator or a new ingestion adapter.
 
 ## 10. Proposed Windows/Linux platform contract
 
