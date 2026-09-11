@@ -14,15 +14,15 @@ MAX_TRACKED_FILE_BYTES = 5 * 1024 * 1024
 MAX_BINARY_FILE_BYTES = 1 * 1024 * 1024
 
 _SENSITIVE_PATH = re.compile(
-    r"(?:^|/)(?:\\.env(?:\\..*)?|\\.netrc|\\.pypirc|"
-    r"credentials[^/]*|secrets[^/]*|[^/]+\\.(?:pem|key|p12|pfx|jks|token))$",
+    r"(?:^|/)(?:\.env(?:\..*)?|\.netrc|\.pypirc|"
+    r"credentials[^/]*|secrets[^/]*|[^/]+\.(?:pem|key|p12|pfx|jks|token))$",
     re.IGNORECASE,
 )
 _SECRET_PATTERNS = (
     ("private-key", re.compile(rb"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")),
-    ("aws-access-key", re.compile(rb"\\bAKIA[0-9A-Z]{16}\\b")),
-    ("github-token", re.compile(rb"\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\\b")),
-    ("slack-token", re.compile(rb"\\bxox[baprs]-[A-Za-z0-9-]{20,}\\b")),
+    ("aws-access-key", re.compile(rb"\bAKIA[0-9A-Z]{16}\b")),
+    ("github-token", re.compile(rb"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")),
+    ("slack-token", re.compile(rb"\bxox[baprs]-[A-Za-z0-9-]{20,}\b")),
 )
 
 
@@ -37,13 +37,13 @@ def tracked_paths(root: Path = ROOT) -> tuple[str, ...]:
         raise RuntimeError("git ls-files failed")
     return tuple(
         item.decode("utf-8")
-        for item in result.stdout.split(b"\\0")
+        for item in result.stdout.split(b"\0")
         if item
     )
 
 
 def _sensitive_path(relative: str) -> bool:
-    normalized = relative.replace("\\\\", "/")
+    normalized = relative.replace("\\", "/")
     name = Path(normalized).name.lower()
     if name == ".env.example" or (name.startswith(".env.") and name.endswith(".example")):
         return False
@@ -59,7 +59,7 @@ def scan_paths(
 ) -> list[str]:
     findings: list[str] = []
     for relative in paths:
-        normalized = relative.replace("\\\\", "/")
+        normalized = relative.replace("\\", "/")
         path = root / Path(relative)
         if _sensitive_path(normalized):
             findings.append(f"sensitive tracked filename: {normalized}")
@@ -76,7 +76,7 @@ def scan_paths(
             findings.append(
                 f"large tracked file: {normalized} ({size} bytes > {max_file_bytes})"
             )
-        if b"\\0" in data and size > max_binary_bytes:
+        if b"\0" in data and size > max_binary_bytes:
             findings.append(
                 f"large tracked binary: {normalized} ({size} bytes > {max_binary_bytes})"
             )
