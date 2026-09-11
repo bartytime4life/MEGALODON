@@ -31,8 +31,10 @@ the display's window manager so native visibility can be exercised. The test
 minimizes and restores the actual browser window through Chromium's browser-level
 window-state API; it never assigns document.hidden or dispatches visibility events
 as proof. The test reads native visibility through bounded test-side polling, then
-waits separately for application refresh idle. The workflow installs the exact
-display-manager prerequisite explicitly because Xvfb alone does not provide one.
+waits separately for application refresh idle. The workflow installs Openbox and x11-utils explicitly, then verifies
+Openbox owns the X display before launching Chrome; Xvfb alone does not provide
+a window manager. The acceptance receipt records Chrome's observed native window
+bounds after each state change.
 Failure labels identify the predicate that missed its deadline. It does not use
 an in-page eval poller or add unsafe-eval to the application CSP. Chromium
 sandboxing is explicitly requested. Missing Chrome/Xvfb,
