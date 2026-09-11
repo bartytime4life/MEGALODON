@@ -330,6 +330,9 @@ RECONCILIATION_REQUIRED = "INGESTION_RUN:RECONCILIATION_REQUIRED"
 
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_DATABASE_MODE = 0o600
+DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
+MAX_MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024
+CAPACITY_RESERVE_BYTES = 256 * 1024
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
@@ -339,6 +342,10 @@ class StorageSchemaError(ValueError):
 
 class IngestionRunError(ValueError):
     """An ingestion run transition or association is invalid."""
+
+
+class StorageCapacityError(sqlite3.OperationalError):
+    """The configured storage high-water stop refused an intake write."""
 
 
 def _validate_schema(
@@ -990,7 +997,20 @@ def migrate_database(path: str | Path) -> dict[str, object]:
 
 
 class Store:
-    def __init__(self, path: str | Path, *, create: bool = True):
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        create: bool = True,
+        max_database_bytes: int = DEFAULT_MAX_DATABASE_BYTES,
+    ):
+        if (
+            isinstance(max_database_bytes, bool)
+            or not isinstance(max_database_bytes, int)
+            or not 1 <= max_database_bytes <= MAX_MAX_DATABASE_BYTES
+        ):
+            raise StorageCapacityError("STORAGE_CAPACITY:INVALID_LIMIT")
+        self.max_database_bytes = max_database_bytes
         self.path = _absolute_database_path(path, "STORAGE_PATH")
         self._lock = RLock()
         self._closed = False
@@ -1055,6 +1075,78 @@ class Store:
                 self._discard_created_database()
             self._close_descriptors()
             raise
+
+    def _sidecar_size(self, suffix: str) -> int:
+        sidecar = self.path.with_name(self.path.name + suffix)
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+        target: str | Path = (
+            sidecar.name if self._directory_descriptor is not None else sidecar
+        )
+        kwargs = (
+            {"dir_fd": self._directory_descriptor}
+            if self._directory_descriptor is not None
+            else {}
+        )
+        descriptor: int | None = None
+        try:
+            if os.name != "posix" and sidecar.is_symlink():
+                raise StorageCapacityError("STORAGE_CAPACITY:UNSAFE_SIDECAR")
+            try:
+                descriptor = os.open(target, flags, **kwargs)
+            except FileNotFoundError:
+                return 0
+            except OSError as exc:
+                raise StorageCapacityError(
+                    "STORAGE_CAPACITY:SIDECAR_UNREADABLE"
+                ) from exc
+            try:
+                info = os.fstat(descriptor)
+                try:
+                    _validate_private_database_stat(
+                        info, writable=True, prefix="STORAGE_CAPACITY"
+                    )
+                except StorageSchemaError as exc:
+                    raise StorageCapacityError(
+                        "STORAGE_CAPACITY:UNSAFE_SIDECAR"
+                    ) from exc
+                return int(info.st_size)
+            except StorageCapacityError:
+                raise
+            except OSError as exc:
+                raise StorageCapacityError(
+                    "STORAGE_CAPACITY:SIDECAR_UNREADABLE"
+                ) from exc
+        finally:
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+
+    def _observed_storage_bytes(self) -> int:
+        try:
+            self._assert_path_identity()
+            if self._database_descriptor is None:
+                raise StorageCapacityError("STORAGE_CAPACITY:IDENTITY_UNVERIFIED")
+            total = int(os.fstat(self._database_descriptor).st_size)
+            total += sum(
+                self._sidecar_size(suffix) for suffix in _SQLITE_SIDECAR_SUFFIXES
+            )
+            return total
+        except StorageCapacityError:
+            raise
+        except (OSError, StorageSchemaError) as exc:
+            raise StorageCapacityError(
+                "STORAGE_CAPACITY:IDENTITY_UNVERIFIED"
+            ) from exc
+
+    def _ensure_capacity(self) -> None:
+        if (
+            self._observed_storage_bytes() + CAPACITY_RESERVE_BYTES
+            > self.max_database_bytes
+        ):
+            raise StorageCapacityError("STORAGE_CAPACITY:HIGH_WATER")
 
     def _assert_path_identity(self) -> None:
         if self._database_descriptor is None or not _path_matches_descriptor(
@@ -1613,6 +1705,7 @@ class Store:
 
         with self._lock:
             self._assert_write_trusted()
+            self._ensure_capacity()
             try:
                 self.connection.execute("BEGIN IMMEDIATE")
                 event_id = self._insert_event(event_values)
@@ -1693,12 +1786,14 @@ class Store:
         values = self._event_values(event)
         with self._lock, self.connection:
             self._assert_write_trusted()
+            self._ensure_capacity()
             return self._insert_event(values)
 
     def record_detection(self, event_id: int, detection: DetectionResult) -> int:
         values = self._detection_values(detection)
         with self._lock, self.connection:
             self._assert_write_trusted()
+            self._ensure_capacity()
             if self.connection.execute(
                 "SELECT 1 FROM ingestion_run_events WHERE event_id = ?",
                 (event_id,),
@@ -1722,6 +1817,7 @@ class Store:
         values = self._action_values(action)
         with self._lock, self.connection:
             self._assert_write_trusted()
+            self._ensure_capacity()
             cursor = self.connection.execute(
                 """
                 INSERT INTO actions (

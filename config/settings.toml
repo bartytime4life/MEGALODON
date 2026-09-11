@@ -3,6 +3,11 @@ name = "MEGALODON"
 db_path = "data/megalodon.db"
 log_level = "INFO"
 
+[storage]
+# Stop event intake before the SQLite database and WAL/SHM sidecars cross
+# this private local high-water budget; this does not purge evidence.
+max_database_bytes = 268435456
+
 [capture]
 source = "sample"
 interface = ""

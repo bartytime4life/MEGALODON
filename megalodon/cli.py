@@ -279,7 +279,10 @@ def _reconciliation_message() -> str:
 def _run(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
-        with Store(settings.db_path) as store:
+        with Store(
+            settings.db_path,
+            max_database_bytes=settings.storage.max_database_bytes,
+        ) as store:
             service = MegalodonService(settings, store)
             run_id = store.start_ingestion_run(_source_for(args, settings))
             processed = 0

@@ -16,6 +16,7 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(settings.blocking.enabled)
         self.assertTrue(settings.blocking.dry_run)
         self.assertFalse(settings.blocking.auto_block)
+        self.assertEqual(settings.storage.max_database_bytes, 256 * 1024 * 1024)
         self.assertEqual(
             tuple(str(network) for network in settings.blocking.allowlist),
             (
@@ -96,6 +97,29 @@ class ConfigTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValidationError, "must not exceed"):
                 load_settings(config)
+
+    def test_storage_capacity_is_bounded_and_typed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "settings.toml"
+            config.write_text(
+                "[storage]\n"
+                "max_database_bytes = 1048576\n",
+                encoding="utf-8",
+            )
+            settings = load_settings(config)
+            self.assertEqual(settings.storage.max_database_bytes, 1048576)
+
+            invalid_values = (
+                "max_database_bytes = 1048575",
+                "max_database_bytes = 4294967297",
+                'max_database_bytes = "1048576"',
+                "max_database_bytes = true",
+            )
+            for value in invalid_values:
+                with self.subTest(value=value):
+                    config.write_text(f"[storage]\n{value}\n", encoding="utf-8")
+                    with self.assertRaises(ValidationError):
+                        load_settings(config)
 
     def test_text_tables_and_allowlist_do_not_use_string_coercion(self):
         invalid_documents = (

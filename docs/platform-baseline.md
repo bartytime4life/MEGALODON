@@ -152,10 +152,11 @@ listeners. Do not run the core as root/Administrator. No capture is needed for
 the sample demonstration. Existing `--allow-remote` is not an approved exposure
 mode: do not use it, port forwarding, a reverse proxy, or a tunnel.
 
-Set a local retention period and disk budget before real telemetry. No automatic
-retention job or universal total-database size ceiling is implemented. Stop
-collection at the operator's budget; review deletion separately rather than
-silently purging evidence. Redacted reports are not anonymous or share-approved.
+Set a local retention period and review the configured disk budget before real
+telemetry. The writer applies a 256 MiB default total SQLite main/WAL/SHM
+high-water stop and refuses the next event before its transaction when the
+observed budget would be crossed. There is no automatic retention job or purge;
+review deletion separately rather than silently purging evidence. Redacted reports are not anonymous or share-approved.
 
 Package downloads and signature/rule updates are maintenance network activity,
 not permission to upload telemetry. Prepare dependencies before isolated
