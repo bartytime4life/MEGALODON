@@ -27,10 +27,11 @@ are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
 Chrome is headed under a virtual X display so native visibility can be
-exercised. The test minimizes and restores the actual browser window through
-Chromium's browser-level window-state API; it never assigns document.hidden or
-dispatches visibility events as proof. The test reads native visibility through
-bounded test-side polling, then waits separately for application refresh idle.
+exercised. The test activates a separate headed browser context/window and
+returns focus to the dashboard through real page activation; it never assigns
+document.hidden or dispatches visibility events as proof. The test reads native
+visibility through bounded test-side polling, then waits separately for
+application refresh idle.
 Failure labels identify the predicate that missed its deadline. It does not use
 an in-page eval poller or add unsafe-eval to the application CSP. Chromium
 sandboxing is explicitly requested. Missing Chrome/Xvfb,
