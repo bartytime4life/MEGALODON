@@ -72,12 +72,6 @@ def config(root: Path, name: str) -> tuple[Path, Path]:
     return settings, db
 
 
-def browser_launch_args() -> list[str]:
-    if os.environ.get("MEGALODON_BROWSER_PLATFORM") == "wayland":
-        return ["--ozone-platform=wayland", "--enable-features=UseOzonePlatform"]
-    return []
-
-
 @contextmanager
 def dashboard(settings: Path, offline: Path | None = None):
     # Reserve an ephemeral candidate port; a competing bind fails closed below.
@@ -161,7 +155,7 @@ async def wait_refresh_idle(page, visibility: str) -> None:
     raise AssertionError(f"refresh idle deadline exceeded ({visibility})")
 
 
-async def exercise(browser, browser_type, port: int, nonempty: bool) -> None:
+async def exercise(browser, port: int, nonempty: bool) -> None:
     from playwright.async_api import expect
     origin = f"http://127.0.0.1:{port}"
     context = await browser.new_context(viewport={"width": 1440, "height": 1000},
@@ -311,49 +305,37 @@ async def exercise(browser, browser_type, port: int, nonempty: bool) -> None:
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip paused")
         passed("timeout recovery uses real backend")
 
-        # Use a separate headed Chromium process/window; do not override document.hidden.
-        REPORT["native_stimulus"] = "Page.bring_to_front:separate-chromium-process"
+        # Use a real headed browser-context/window activation; do not override document.hidden.
+        REPORT["native_stimulus"] = "Page.bring_to_front:separate-browser-context"
         REPORT["stage"] = "resume-before-native-visibility"
         await page.locator("#pause-button").click()
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
-        other_browser = await browser_type.launch(
-            channel="chrome",
-            headless=False,
-            chromium_sandbox=True,
-            args=browser_launch_args(),
-            timeout=20000,
+        other_context = await browser.new_context(
+            viewport={"width": 1440, "height": 1000},
+            reduced_motion="reduce",
+            service_workers="block",
         )
         try:
-            REPORT["native_background_browser"] = other_browser.version
-            other_context = await other_browser.new_context(
-                viewport={"width": 1440, "height": 1000},
-                reduced_motion="reduce",
-                service_workers="block",
-            )
-            try:
-                REPORT["stage"] = "create-native-background-window"
-                other = await other_context.new_page()
-                await other.goto("about:blank")
-                REPORT["stage"] = "activate-native-background-window"
-                await other.bring_to_front()
-                REPORT["stage"] = "wait-native-hidden-and-idle"
-                await wait_native_visibility(page, True)
-                await wait_refresh_idle(page, "hidden")
-                hidden_counts = dict(counts)
-                await asyncio.sleep(2.4)
-                passed("native hidden window suspends polling", counts == hidden_counts)
-                REPORT["stage"] = "activate-native-dashboard-window"
-                await page.bring_to_front()
-                REPORT["stage"] = "wait-native-visible-and-idle"
-                await wait_native_visibility(page, False)
-                await wait_refresh_idle(page, "visible")
-                await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
-                await page.locator("#pause-button").click()
-                passed("native foreground resumes polling", counts["summary"] > hidden_counts["summary"])
-            finally:
-                await other_context.close()
+            REPORT["stage"] = "create-native-background-window"
+            other = await other_context.new_page()
+            REPORT["stage"] = "activate-native-background-window"
+            await other.bring_to_front()
+            REPORT["stage"] = "wait-native-hidden-and-idle"
+            await wait_native_visibility(page, True)
+            await wait_refresh_idle(page, "hidden")
+            hidden_counts = dict(counts)
+            await asyncio.sleep(2.4)
+            passed("native hidden window suspends polling", counts == hidden_counts)
+            REPORT["stage"] = "activate-native-dashboard-window"
+            await page.bring_to_front()
+            REPORT["stage"] = "wait-native-visible-and-idle"
+            await wait_native_visibility(page, False)
+            await wait_refresh_idle(page, "visible")
+            await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
+            await page.locator("#pause-button").click()
+            passed("native foreground resumes polling", counts["summary"] > hidden_counts["summary"])
         finally:
-            await other_browser.close()
+            await other_context.close()
         REPORT["stage"] = "mobile-layout-and-focus"
         await page.set_viewport_size({"width": 375, "height": 812})
         passed("mobile page fits viewport", await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
@@ -373,7 +355,6 @@ async def run() -> None:
     REPORT.update(python=platform.python_version(), os=platform.freedesktop_os_release().get("PRETTY_NAME"),
                   sqlite=sqlite3.sqlite_version, playwright=version("playwright"),
                   sandbox_requested=True, headed=True, reduced_motion="reduce",
-                  browser_platform=os.environ.get("MEGALODON_BROWSER_PLATFORM", "x11"),
                   viewports=[[1440, 1000], [375, 812]])
     with sqlite3.connect(":memory:") as connection:
         REPORT["sqlite_source_id"] = connection.execute("select sqlite_source_id()").fetchone()[0]
@@ -399,13 +380,8 @@ async def run() -> None:
             offline = offline_fixture(root)
             async with async_playwright() as playwright:
                 # No download, executable override, sandbox disable, or policy workaround.
-                browser = await playwright.chromium.launch(
-                    channel="chrome",
-                    headless=False,
-                    chromium_sandbox=True,
-                    args=browser_launch_args(),
-                    timeout=20000,
-                )
+                browser = await playwright.chromium.launch(channel="chrome", headless=False,
+                                                            chromium_sandbox=True, timeout=20000)
                 REPORT["browser"] = browser.version
                 try:
                     for settings, db, nonempty in ((empty, empty_db, False), (populated, populated_db, True)):
@@ -427,7 +403,7 @@ async def run() -> None:
                                                  ("duplicate", [f"127.0.0.1:{port}", f"127.0.0.1:{port}"])):
                                 passed("Host refusal " + label + " " + str(nonempty),
                                        request(port, "/api/summary", hosts)[0] == 400)
-                            await exercise(browser, playwright.chromium, port, nonempty)
+                            await exercise(browser, port, nonempty)
                         passed("main database bytes unchanged " + str(nonempty),
                                hashlib.sha256(db.read_bytes()).hexdigest() == original)
                 finally:
