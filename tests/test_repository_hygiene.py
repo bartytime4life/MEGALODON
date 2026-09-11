@@ -93,16 +93,58 @@ def test_sensitive_runtime_and_build_artifacts_are_ignored():
 
 
 def test_actions_are_sha_pinned_and_checkouts_do_not_persist_credentials():
-    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+    workflow_paths = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflow_paths
+
+    for path in workflow_paths:
+        workflow = path.read_text(encoding="utf-8")
+        action_refs = re.findall(
+            r"^\s+uses:\s+([^@\s]+)@([^\s#]+)", workflow, re.MULTILINE
+        )
+        assert action_refs, path
+        assert all(
+            re.fullmatch(r"[0-9a-f]{40}", revision)
+            for _, revision in action_refs
+        ), path
+
+        checkout_steps = re.findall(
+            r"(?ms)^      - name: Check out source\n(.*?)(?=^      - name:|\Z)",
+            workflow,
+        )
+        checkout_refs = [name for name, _ in action_refs if name == "actions/checkout"]
+        assert len(checkout_steps) == len(checkout_refs) > 0, path
+        assert all("persist-credentials: false" in step for step in checkout_steps), path
+
+
+def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
+    constraints = ROOT / "constraints" / "ci.txt"
+    entries = {
+        line.strip()
+        for line in constraints.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    expected = {
+        "attrs==26.1.0",
+        "build==1.6.0",
+        "iniconfig==2.3.0",
+        "jsonschema==4.26.0",
+        "jsonschema-specifications==2025.9.1",
+        "packaging==26.3",
+        "pluggy==1.6.0",
+        "pygments==2.21.0",
+        "pyproject-hooks==1.2.0",
+        "pytest==8.4.2",
+        "referencing==0.37.0",
+        "rpds-py==2026.6.3",
+        "setuptools==80.9.0",
+        "typing-extensions==4.16.0",
+    }
+    assert entries == expected
+    assert all(re.fullmatch(r"[A-Za-z0-9_.-]+==[^#]+", entry) for entry in entries)
+
+    drift = (ROOT / ".github" / "workflows" / "compatibility-drift.yml").read_text(
         encoding="utf-8"
     )
-    action_refs = re.findall(r"^\s+uses:\s+([^@\s]+)@([^\s#]+)", workflow, re.MULTILINE)
-    assert action_refs
-    assert all(re.fullmatch(r"[0-9a-f]{40}", revision) for _, revision in action_refs)
-
-    checkout_steps = re.findall(
-        r"(?ms)^      - name: Check out source\n(.*?)(?=^      - name:|\Z)", workflow
-    )
-    checkout_refs = [name for name, _ in action_refs if name == "actions/checkout"]
-    assert len(checkout_steps) == len(checkout_refs) > 0
-    assert all("persist-credentials: false" in step for step in checkout_steps)
+    assert "schedule:" in drift
+    assert "workflow_dispatch:" in drift
+    assert "constraints/ci.txt" not in drift

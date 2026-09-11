@@ -24,7 +24,7 @@ jobs:
       - name: Install package
         run: |
           set -euo pipefail
-          python -m pip install -e ".[test]"
+          python -m pip install -c constraints/ci.txt -e ".[test]"
           python -m pip check
       - name: Compile Python sources
         run: python -m compileall -q megalodon tests
@@ -52,7 +52,7 @@ jobs:
       - name: Build distributions and install wheel
         run: |
           set -euo pipefail
-          python -m pip install "build==1.6.0" "setuptools==80.9.0" "pytest>=8,<9" "jsonschema>=4.23,<5"
+          python -m pip install -c constraints/ci.txt build setuptools pytest jsonschema
           python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
           python -m venv "$RUNNER_TEMP/wheel-venv"
           wheels=("$RUNNER_TEMP"/distributions/megalodon_defense-*.whl)
@@ -65,6 +65,7 @@ jobs:
           sdist_roots=("$RUNNER_TEMP"/sdist-check/megalodon_defense-*)
           [ "${#sdist_roots[@]}" -eq 1 ]
           test -f "${sdist_roots[0]}/.gitignore"
+          test -f "${sdist_roots[0]}/constraints/ci.txt"
           test -f "${sdist_roots[0]}/.github/workflows/ci.yml"
           test -f "${sdist_roots[0]}/config/settings.toml"
           test -f "${sdist_roots[0]}/contracts/automation/v1/schema.json"

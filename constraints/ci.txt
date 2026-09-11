@@ -1,0 +1,21 @@
+# CI resolver constraints for deterministic pull-request validation.
+#
+# Evidence basis: main@6ae356be33c615e136e380168360d8c3d0b31755,
+# workflow run 34624008251 (2026-09-11 UTC). These versions were observed in
+# the green test and wheel-smoke jobs. This is a reviewed CI constraints file,
+# not a complete cross-platform lockfile: the runner image, Python, pip,
+# operating system, and wheel hashes remain separate evidence.
+attrs==26.1.0
+build==1.6.0
+iniconfig==2.3.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+packaging==26.3
+pluggy==1.6.0
+pygments==2.21.0
+pyproject-hooks==1.2.0
+pytest==8.4.2
+referencing==0.37.0
+rpds-py==2026.6.3
+setuptools==80.9.0
+typing-extensions==4.16.0
