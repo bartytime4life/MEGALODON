@@ -142,17 +142,17 @@ async def wait_native_visibility(page, hidden: bool) -> None:
         if await page.evaluate("hidden => document.hidden === hidden", hidden):
             return
         await asyncio.sleep(0.05)
-    state = "hidden" if hidden else "visible"
-    raise AssertionError("native visibility deadline exceeded (" + state + ")");
+    visibility = "hidden" if hidden else "visible"
+    raise AssertionError(f"native visibility deadline exceeded ({visibility})")
 
 
-async def wait_refresh_idle(page, state: str) -> None:
+async def wait_refresh_idle(page, visibility: str) -> None:
     deadline = asyncio.get_running_loop().time() + 10
     while asyncio.get_running_loop().time() < deadline:
         if await page.evaluate("!state.refreshing"):
             return
         await asyncio.sleep(0.05)
-    raise AssertionError("refresh idle deadline exceeded (" + state + ")")
+    raise AssertionError(f"refresh idle deadline exceeded ({visibility})")
 
 
 async def exercise(browser, port: int, nonempty: bool) -> None:
