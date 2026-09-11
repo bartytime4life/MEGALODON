@@ -26,11 +26,13 @@ no dependency. The driver is pinned, but transitive packages and the runner imag
 are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
-Chrome is headed under a virtual X display so native visibility can be
-exercised. The test minimizes and restores the actual browser window through
-Chromium's browser-level window-state API; it never assigns document.hidden or
-dispatches visibility events as proof. The test reads native visibility through
-bounded test-side polling, then waits separately for application refresh idle.
+Chrome is headed under a virtual X display with Openbox running as
+the display's window manager so native visibility can be exercised. The test
+minimizes and restores the actual browser window through Chromium's browser-level
+window-state API; it never assigns document.hidden or dispatches visibility events
+as proof. The test reads native visibility through bounded test-side polling, then
+waits separately for application refresh idle. The workflow installs the exact
+display-manager prerequisite explicitly because Xvfb alone does not provide one.
 Failure labels identify the predicate that missed its deadline. It does not use
 an in-page eval poller or add unsafe-eval to the application CSP. Chromium
 sandboxing is explicitly requested. Missing Chrome/Xvfb,
