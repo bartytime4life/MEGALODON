@@ -968,7 +968,7 @@ async function lookupReference(kind) {
     }
     if (referenceState.lastResult) {
       const prior = referenceState.lastResult;
-      setReferenceStatus(`Lookup for ${label} failed. Showing stale context for ${referenceQueryLabel(prior.kind, prior.query)}; no new data was applied.`, 'stale');
+      setReferenceStatus(`Lookup for ${label} failed. Showing the last successful reference result as stale context for ${referenceQueryLabel(prior.kind, prior.query)}; no new data was applied.`, 'stale');
     } else {
       setReferenceStatus(`Lookup for ${label} failed. No reference result is available. Submit again or recheck the local snapshot.`, 'unavailable');
     }
