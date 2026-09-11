@@ -15,6 +15,25 @@ prove exactly-once ingestion, power-loss durability, or continuous operation.
 The remaining operator-policy and operational-failure decisions are not closed
 by issue lifecycle state.
 
+## Capacity high-water stop
+
+The writer `Store` accepts a bounded `max_database_bytes` setting. The checked-in
+configuration defaults to 256 MiB and operators may select another value between
+1 MiB and 4 GiB. The guard measures the private SQLite main database plus any
+`-wal`, `-shm`, and rollback-journal sidecars through the already-verified
+database directory. Before each event-bearing write, it rechecks identity under
+the store lock and refuses the write with the fixed
+`STORAGE_CAPACITY:HIGH_WATER` error when the observed size plus a bounded
+256 KiB one-write reserve would cross the configured budget. No event transaction
+is opened, no row ID is returned, and the writer does not purge, redirect,
+compress, upload, or silently discard evidence. Run-finalization writes remain
+available so a capacity-stopped intake can record a failed terminal receipt.
+
+This is a preflight high-water control, not proof against a physical disk-full
+condition or a guarantee that filesystem growth cannot race the next write.
+The existing SQLite rollback and uncertain-commit handling remains authoritative;
+a native storage-exhaustion test is still not a physical disk or power-loss test.
+
 The application schema is explicitly marked as SQLite `user_version = 3`.
 Startup validates the closed set of application tables and indexes, rejects
 additional non-internal tables, indexes, triggers, and views, and checks the
@@ -168,7 +187,7 @@ the operation in the other.
 
 | Data class | Included evidence | Cutoff/budget basis | Authorized surface today | Required operator decision |
 | --- | --- | --- | --- | --- |
-| Live SQLite audit | `events`, `detections`, `actions`, plus the database's WAL/SHM sidecars | One timezone-aware cutoff normalized to UTC; separate finite database/disk stop budget | Internal atomic `Store.purge_before()` hook only; no CLI, timer, preview receipt, or automatic call | Retention duration, capacity threshold, intake-stop point, backup interaction, owner, review/confirmation and recovery procedure |
+| Live SQLite audit | `events`, `detections`, `actions`, plus the database's WAL/SHM sidecars | One timezone-aware cutoff normalized to UTC; separate finite database/disk stop budget | Configured `Store` high-water intake stop plus internal atomic `Store.purge_before()` hook; no CLI, timer, preview receipt, or automatic purge call | Retention duration, capacity threshold, intake-stop point, backup interaction, owner, review/confirmation and recovery procedure |
 | Standalone offline reports | One complete private `offline-run-v1` report set and its fixed files | Case/run policy based on completion and operator inventory; never SQLite row timestamps | No deletion API, filesystem sweep, scheduler, or dashboard control | Retention duration, case closure authority, storage budget, backup/export relationship, exact selected run sets and recovery procedure |
 
 Any future preview must bind the data class, canonical store identity, UTC cutoff,
@@ -181,7 +200,8 @@ operation and confirmation protocol remain a separately authorized code slice.
 
 | Failure | Required observable outcome | Recovery boundary |
 | --- | --- | --- |
-| SQLite page budget / storage exhaustion | The failing write raises; no row ID or success receipt is returned; prior committed rows remain truthful | Stop intake, preserve the store, free or provision reviewed local capacity, then reopen/verify before resuming |
+| Configured SQLite high-water | The preflight raises before the event transaction; no row ID or success receipt is returned and prior committed rows remain truthful | Stop intake, preserve the store, review the budget or retention decision, then reopen/verify before resuming |
+| SQLite page budget / physical storage exhaustion | The failing write raises; no row ID or success receipt is returned; prior committed rows remain truthful | Stop intake, preserve the store, free or provision reviewed local capacity, then reopen/verify before resuming |
 | Database open/create permission denial | Initialization raises and no usable `Store` is returned | Correct the selected private location/permissions outside MEGALODON; no fallback directory or upload |
 | Bundle statement failure | The event, detections, actions, links, and counters all roll back; detector state does not advance | Investigate the fixed failure class; do not retry until input identity and policy permit it |
 | Commit outcome uncertain | No clean-state claim; the writer is poisoned and the run remains discoverable | Stop intake, reopen for bounded readback, and explicitly reconcile the pinned run without replay |
@@ -237,10 +257,13 @@ crash or power-loss test. Those native environments remain unproved.
 
 ## Retention decisions still required
 
-The operator must separately choose finite retention periods and storage
+The operator must separately review finite retention periods and storage
 budgets for the SQLite audit database and for standalone offline report sets.
-No values are selected by this document. SQLite/WAL/SHM files are not offline
-reports, and permission to remove one class never authorizes deleting another.
+The checked-in writer default is a 256 MiB high-water stop; an operator may
+select a different bounded value in configuration before collection. The
+high-water stop does not purge rows or sidecars. SQLite/WAL/SHM files are not
+offline reports, and permission to remove one class never authorizes deleting
+another.
 Use explicit timezone-aware UTC-normalized cutoffs; no ambient local timezone,
 scheduler, default cleanup, live purge or destructive command is introduced.
 
