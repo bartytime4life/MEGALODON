@@ -63,7 +63,7 @@ INTEGRATIONS_JS = r"""
 
 // Static plans are a separate read model. They do not participate in telemetry
 // polling, reference lookup, persistence, execution, or connection health.
-const integrationState = {snapshot: null, loading: false, failed: false};
+const integrationState = {snapshot: null, loading: false, pendingPlatform: null, failed: false};
 const integrationPlatforms = ['linux', 'windows', 'other'];
 const integrationStatuses = {
   implemented: 'Implemented', optional: 'Optional', evaluation_only: 'Evaluation only — unverified',
@@ -137,11 +137,19 @@ function integrationCard(item) {
 }
 function integrationViewStatus(visibleCount) {
   const snapshot = integrationState.snapshot;
-  if (!snapshot) return 'No successful integration map is available. Choose a profile and load the static map.';
-  const chosen = byId('integrations-platform').value;
-  let message = `${visibleCount} of ${snapshot.workflows.length} workflows shown for the loaded ${snapshot.selected_platform} documentation profile. No host has been inspected.`;
-  if (chosen !== snapshot.selected_platform) message += ` Selected profile ${integrationPlatforms.includes(chosen) ? chosen : 'invalid'} is not loaded; the previous profile remains visible.`;
-  if (integrationState.failed) message = 'Load failed. Preserved map is stale. ' + message;
+  let message;
+  if (!snapshot) {
+    message = integrationState.failed
+      ? 'Integration map unavailable. No partial map was applied. Retry loading the selected profile.'
+      : 'No successful integration map is available. Choose a profile and load the static map.';
+  } else {
+    const chosen = byId('integrations-platform').value;
+    message = `${visibleCount} of ${snapshot.workflows.length} workflows shown for the loaded ${snapshot.selected_platform} documentation profile. No host has been inspected.`;
+    if (chosen !== snapshot.selected_platform) message += ` Selected profile ${integrationPlatforms.includes(chosen) ? chosen : 'invalid'} is not loaded; the previous profile remains visible.`;
+    if (integrationState.failed) message = 'Load failed. Preserved map is stale. ' + message;
+  }
+  // Local filters must not erase request state or relabel the dispatched profile.
+  if (integrationState.loading) message = `Loading the static ${integrationState.pendingPlatform} documentation profile. No tool is being connected. ` + message;
   return message;
 }
 function renderIntegrationMap() {
@@ -165,6 +173,7 @@ async function loadIntegrationMap() {
     byId('integrations-status').textContent = 'Choose one supported documentation profile. No request was made.'; return;
   }
   integrationState.loading = true;
+  integrationState.pendingPlatform = platform;
   byId('integrations-load').disabled = true;
   byId('integrations-platform').disabled = true;
   byId('integrations-cards').setAttribute('aria-busy', 'true');
@@ -173,16 +182,15 @@ async function loadIntegrationMap() {
     const snapshot = validatedIntegrationMap(await requestJSON(`/api/integrations?platform=${platform}`), platform);
     integrationState.snapshot = snapshot;
     integrationState.failed = false;
-    renderIntegrationMap();
   } catch (_) {
     integrationState.failed = true;
-    renderIntegrationMap();
-    if (!integrationState.snapshot) byId('integrations-status').textContent = 'Integration map unavailable. No partial map was applied. Retry loading the selected profile.';
   } finally {
     integrationState.loading = false;
+    integrationState.pendingPlatform = null;
     byId('integrations-load').disabled = false;
     byId('integrations-platform').disabled = false;
     byId('integrations-cards').setAttribute('aria-busy', 'false');
+    renderIntegrationMap();
   }
 }
 // No automatic fetch: this panel cannot delay the telemetry bootstrap path.
