@@ -187,3 +187,9 @@ updates:
     assert "insecure-external-code-execution:" not in policy
     assert "allow:" not in policy
     assert "ignore:" not in policy
+    manifest_entries = {
+        line.strip()
+        for line in (ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    assert "include .github/dependabot.yml" in manifest_entries
