@@ -8,7 +8,7 @@ from megalodon.config import BlockingSettings, DetectionSettings, Settings
 from megalodon.firewall import FirewallOperation, NftablesFirewall
 from megalodon.models import PacketEvent
 from megalodon.service import MegalodonService
-from megalodon.storage import Store
+from megalodon.storage import StorageCapacityError, Store
 from megalodon.validation import ValidationError
 
 
@@ -135,3 +135,41 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(action["status"], "planned")
             firewall.plan_block.assert_called_once()
             firewall.block.assert_not_called()
+    def test_capacity_stop_rolls_back_detector_state(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Settings(
+                db_path=Path(directory) / "events.db",
+                detection=DetectionSettings(
+                    port_scan_distinct_ports=2,
+                    max_events_per_source_window=2,
+                ),
+            )
+            event = PacketEvent(
+                observed_at=datetime.now(timezone.utc),
+                src_ip="198.51.100.10",
+                dst_ip="192.0.2.53",
+                protocol="TCP",
+                dst_port=443,
+            )
+            with Store(settings.db_path, max_database_bytes=1) as store:
+                service = MegalodonService(settings, store)
+                with self.assertRaisesRegex(
+                    StorageCapacityError, "STORAGE_CAPACITY:HIGH_WATER"
+                ):
+                    service.process(event)
+
+                self.assertEqual(service.detector.port_windows, {})
+                self.assertEqual(service.detector.port_counts, {})
+                self.assertFalse(store.connection.in_transaction)
+                self.assertEqual(
+                    store.summary(),
+                    {
+                        "events": 0,
+                        "detections": 0,
+                        "actions": 0,
+                        "high_or_critical": 0,
+                    },
+                )
