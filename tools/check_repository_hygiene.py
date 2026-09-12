@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import stat
 import subprocess
@@ -51,6 +52,38 @@ def _sensitive_path(relative: str) -> bool:
     return bool(_SENSITIVE_PATH.search(normalized))
 
 
+class _ChangedFileError(OSError):
+    """A tracked pathname or opened file changed during the bounded scan."""
+
+
+def _file_signature(metadata: os.stat_result) -> tuple[int, ...]:
+    # Reading may update atime; it must not create a false change finding.
+    return (metadata.st_dev, metadata.st_ino, metadata.st_mode,
+            metadata.st_nlink, metadata.st_size,
+            metadata.st_mtime_ns, metadata.st_ctime_ns)
+
+
+def _read_checked(path: Path, metadata: os.stat_result, limit: int) -> bytes:
+    # On Linux, refuse a final-component symlink swap and do not block opening
+    # a substituted FIFO. The checkout's parent directories remain trusted.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if (not stat.S_ISREG(opened.st_mode)
+                or _file_signature(opened) != _file_signature(metadata)):
+            raise _ChangedFileError
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            data = stream.read(limit)
+        if (_file_signature(os.fstat(descriptor)) != _file_signature(metadata)
+                or _file_signature(path.lstat()) != _file_signature(metadata)):
+            raise _ChangedFileError
+        return data
+    finally:
+        os.close(descriptor)
+
+
 def scan_paths(
     root: Path,
     paths: Iterable[str],
@@ -70,9 +103,12 @@ def scan_paths(
             if not stat.S_ISREG(metadata.st_mode):
                 findings.append(f"tracked path is not a regular file: {normalized}")
                 continue
-            size = metadata.st_size
-            with path.open("rb") as stream:
-                data = stream.read(read_limit)
+            data = _read_checked(path, metadata, read_limit)
+            # The overflow byte is evidence too, even if a stale stat was small.
+            size = max(metadata.st_size, len(data))
+        except _ChangedFileError:
+            findings.append(f"tracked file changed during scan: {normalized}")
+            continue
         except OSError:
             findings.append(f"tracked file is unreadable: {normalized}")
             continue
