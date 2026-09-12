@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import stat
@@ -14,6 +15,7 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 MAX_TRACKED_FILE_BYTES = 5 * 1024 * 1024
 MAX_BINARY_FILE_BYTES = 1 * 1024 * 1024
+MAX_DISPLAY_PATH_CHARS = 256
 
 _SENSITIVE_PATH = re.compile(
     r"(?:^|/)(?:\.env(?:\..*)?|\.netrc|\.pypirc|"
@@ -84,6 +86,27 @@ def _read_checked(path: Path, metadata: os.stat_result, limit: int) -> bytes:
         os.close(descriptor)
 
 
+def _display_path(relative: str) -> str:
+    """Bound and escape filename data without changing the filesystem path."""
+    suffix = "...[truncated]"
+    remaining = MAX_DISPLAY_PATH_CHARS - len(suffix)
+    parts: list[str] = []
+    for char in relative:
+        # Encode one character at a time so even escaping work is bounded.
+        escaped = json.dumps(char, ensure_ascii=True)[1:-1]
+        # Escape delimiter text even mid-line; newline escaping alone leaves
+        # it intact. Neutralize both modern and legacy command delimiters.
+        if char == ":":
+            escaped = r"\u003a"
+        elif char == "#":
+            escaped = r"\u0023"
+        if len(escaped) > remaining:
+            return "".join(parts) + suffix
+        parts.append(escaped)
+        remaining -= len(escaped)
+    return "".join(parts)
+
+
 def scan_paths(
     root: Path,
     paths: Iterable[str],
@@ -95,34 +118,35 @@ def scan_paths(
     read_limit = max_file_bytes + 1
     for relative in paths:
         normalized = relative.replace("\\", "/")
+        display = _display_path(relative)
         path = root / Path(relative)
         if _sensitive_path(normalized):
-            findings.append(f"sensitive tracked filename: {normalized}")
+            findings.append(f"sensitive tracked filename: {display}")
         try:
             metadata = path.lstat()
             if not stat.S_ISREG(metadata.st_mode):
-                findings.append(f"tracked path is not a regular file: {normalized}")
+                findings.append(f"tracked path is not a regular file: {display}")
                 continue
             data = _read_checked(path, metadata, read_limit)
             # The overflow byte is evidence too, even if a stale stat was small.
             size = max(metadata.st_size, len(data))
         except _ChangedFileError:
-            findings.append(f"tracked file changed during scan: {normalized}")
+            findings.append(f"tracked file changed during scan: {display}")
             continue
         except OSError:
-            findings.append(f"tracked file is unreadable: {normalized}")
+            findings.append(f"tracked file is unreadable: {display}")
             continue
         if size > max_file_bytes:
             findings.append(
-                f"large tracked file: {normalized} ({size} bytes > {max_file_bytes})"
+                f"large tracked file: {display} ({size} bytes > {max_file_bytes})"
             )
         if b"\0" in data and size > max_binary_bytes:
             findings.append(
-                f"large tracked binary: {normalized} ({size} bytes > {max_binary_bytes})"
+                f"large tracked binary: {display} ({size} bytes > {max_binary_bytes})"
             )
         for label, pattern in _SECRET_PATTERNS:
             if pattern.search(data):
-                findings.append(f"suspected {label} marker: {normalized}")
+                findings.append(f"suspected {label} marker: {display}")
     return findings
 
 
