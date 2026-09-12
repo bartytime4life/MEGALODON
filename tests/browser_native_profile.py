@@ -1,6 +1,6 @@
 """Run the fixed browser suite with an isolated, pinned native-focus driver copy.
 
-Stock Playwright 1.57.0 forces pages active on its own CDP session. A second
+Stock Playwright 1.62.0 forces pages active on its own CDP session. A second
 session cannot release that session's Chromium capturer. Change only that
 initialization call, in a temporary copy; never edit the installed driver.
 """
@@ -17,11 +17,12 @@ import subprocess
 import sys
 import tempfile
 
-PROFILE = "playwright-1.57.0-native-focus-v1"
-DRIVER_MODULE = Path("driver/package/lib/server/chromium/crPage.js")
-STOCK_SHA256 = "71aab16b0912f23cb9aa3095b8072bfc6fbd6e47e4e13a7be3684b796aa1cd28"
-NATIVE_SHA256 = "13b187fcf0558fb182751ada23d5864f5ba1daba7a7b5b585cfd7a7b974c63cd"
-FOCUS_CALL = b'promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));'
+PROFILE = "playwright-1.62.0-native-focus-v1"
+DRIVER_MODULE = Path("driver/package/lib/coreBundle.js")
+MAX_DRIVER_BYTES = 4 * 1024 * 1024
+STOCK_SHA256 = "3258d1cf334c6afc95f22aa9c292436cb976b391e0437f1359c83b84f0cb9d66"
+NATIVE_SHA256 = "6460cb04d15f438710b5c4e62c0fc4f58e08bf8ee8d46d62824cb6e27bfd1f81"
+FOCUS_CALL = b'promises2.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));'
 NATIVE_CALL = FOCUS_CALL.replace(b"true", b"false")
 
 
@@ -30,7 +31,7 @@ class ProfileError(RuntimeError):
 
 
 def native_driver_bytes(data: bytes) -> bytes:
-    if len(data) > 65536 or hashlib.sha256(data).hexdigest() != STOCK_SHA256:
+    if len(data) > MAX_DRIVER_BYTES or hashlib.sha256(data).hexdigest() != STOCK_SHA256:
         raise ProfileError("DRIVER_SOURCE_MISMATCH")
     if data.count(FOCUS_CALL) != 1:
         raise ProfileError("DRIVER_CALL_MISMATCH")
@@ -42,7 +43,7 @@ def native_driver_bytes(data: bytes) -> bytes:
 
 def read_driver(root: Path) -> bytes:
     with (root / DRIVER_MODULE).open("rb") as stream:
-        return stream.read(65537)
+        return stream.read(MAX_DRIVER_BYTES + 1)
 
 
 def prepare_profile(source: Path, destination: Path) -> None:
@@ -89,7 +90,7 @@ def run_suite(environment: dict[str, str]) -> int:
 def main() -> int:
     if sys.platform != "linux" or os.geteuid() == 0:
         raise ProfileError("UNPRIVILEGED_LINUX_REQUIRED")
-    if version("playwright") != "1.57.0":
+    if version("playwright") != "1.62.0":
         raise ProfileError("DRIVER_VERSION_MISMATCH")
     if any(os.environ.get(key) for key in ("PLAYWRIGHT_NODEJS_PATH", "NODE_OPTIONS")):
         raise ProfileError("DRIVER_OVERRIDE_REFUSED")

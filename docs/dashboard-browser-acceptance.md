@@ -10,7 +10,7 @@ suite is not acceptance, independent review, or a supported-platform promise.
 ## Prepared environment and execution
 
 From an installed repository checkout on non-root Linux, with Chrome stable,
-Xvfb/Openbox, and the test-only Playwright 1.57.0 package already installed,
+Xvfb/Openbox, and the test-only Playwright 1.62.0 package already installed,
 use an X display already managed by Openbox:
 
 ```bash
@@ -49,8 +49,8 @@ branch protection and does not supply an independent approval.
 ## Native-focus driver profile (issue #97)
 
 The test must remove automation's forced-visible behavior before measuring
-native visibility. [Playwright 1.57.0's page initialization](https://github.com/microsoft/playwright/blob/v1.57.0/packages/playwright-core/src/server/chromium/crPage.ts#L483-L488)
-sets `Emulation.setFocusEmulationEnabled` to `true` on its own CDP session.
+native visibility. The reviewed Playwright 1.62.0 driver core bundle sets
+`Emulation.setFocusEmulationEnabled` to `true` on its own CDP session.
 [Chrome documents](https://developer.chrome.com/docs/devtools/rendering/apply-effects#emulate_a_focused_page)
 that focus emulation keeps visibility at `visible` and suppresses visibility
 changes. Minimizing the window or replacing its window manager does not undo

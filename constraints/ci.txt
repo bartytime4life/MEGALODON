@@ -16,8 +16,8 @@ packaging==26.3
 pluggy==1.6.0
 pygments==2.21.0
 pyproject-hooks==1.2.0
-pytest==8.4.2
+pytest==9.1.1
 referencing==0.37.0
 rpds-py==2026.6.3
-setuptools==80.9.0
+setuptools==84.0.0
 typing-extensions==4.16.0

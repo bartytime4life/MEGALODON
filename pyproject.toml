@@ -12,7 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 capture = ["scapy>=2.5,<3"]
-test = ["pytest>=8,<9", "jsonschema>=4.23,<5"]
+test = ["pytest>=8,<10", "jsonschema>=4.23,<5"]
 
 [project.scripts]
 megalodon = "megalodon.cli:main"

@@ -30,7 +30,11 @@ def test_changes_only_the_driver_owned_focus_initialization(module_bytes):
 @pytest.mark.parametrize("kind", ["changed", "already-patched", "oversized"])
 def test_refuses_unknown_or_already_modified_driver(module_bytes, kind):
     source, expected = module_bytes
-    invalid = {"changed": source + b"x", "already-patched": expected, "oversized": b"x" * 65537}[kind]
+    invalid = {
+        "changed": source + b"x",
+        "already-patched": expected,
+        "oversized": b"x" * (profile.MAX_DRIVER_BYTES + 1),
+    }[kind]
     with pytest.raises(profile.ProfileError, match="DRIVER_SOURCE_MISMATCH"):
         profile.native_driver_bytes(invalid)
 

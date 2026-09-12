@@ -98,7 +98,7 @@ def test_profile_weakenings_fail(mutation):
             "unhashed": backend.split(" --hash=")[0],
             "extra": backend + "\nother==1.0 --hash=sha256:" + "0" * 64,
             "weak-hash": backend.replace("sha256:", "md5:"),
-            "version": backend.replace("==80.9.0", "==80.9.1"),
+            "version": backend.replace("==84.0.0", "==84.0.1"),
             "shared-hash": backend.split("sha256:")[0] + "sha256:" + "0" * 64,
         }[mutation]
         damaged = text.replace(backend, replacement, 1)

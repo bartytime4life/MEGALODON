@@ -170,9 +170,10 @@ python -m compileall -q megalodon tests
 python -m pytest tests/test_service.py tests/test_service_acceptance.py
 ```
 
-Current integrated-tree focused execution passed 72 cases (68 acceptance cases
-and four service unit cases) with Python 3.12.14, SQLite 3.53.1, and supported
-pytest 8.4.2. Five earlier isolated negative controls were detected: invoking
+The referenced integrated-tree focused execution passed 72 cases (68 acceptance
+cases and four service unit cases) with Python 3.12.14, SQLite 3.53.1, and
+then-supported pytest 8.4.2. It is historical test evidence, not a claim about
+the current dependency pin. Five earlier isolated negative controls were detected: invoking
 block instead of plan caused 20
 failures; skipping allowlist suppression 12; ignoring enabled policy 6; recording
 applied for a plan 13; omitting the detection audit 53. The block-entry guard
@@ -180,7 +181,7 @@ stopped the first mutation before any operation. All experiments used disposable
 copies; no weakened source was committed. No new runtime defect is claimed.
 Those earlier mutation experiments used identity-checked partial sources,
 Python 3.13.5, SQLite 3.46.1 and pytest 9.0.2 with plugin autoload disabled;
-pytest 9 was outside the unchanged supported constraint. Full hosted results
+pytest 9 was outside the constraint at that historical checkpoint. Full hosted results
 belong in the exact-head PR receipt, not in an inferred pass here.
 
 Remaining gates: designated human review, GitHub approval/control handling under
