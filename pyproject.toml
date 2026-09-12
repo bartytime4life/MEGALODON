@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "megalodon-defense"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A local-first, observe-only-by-default Linux network defense MVP"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,9 @@ addopts = "-q"
 
 [tool.setuptools.packages.find]
 include = ["megalodon*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "megalodon.__version__"}
 
 [tool.setuptools.package-data]
 "megalodon.reference" = [

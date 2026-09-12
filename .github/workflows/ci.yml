@@ -193,6 +193,7 @@ jobs:
           print("SDIST_ENV:INSTALLED_PROJECT_CONFIRMED")
           PYINSTALLED
           "$RUNNER_TEMP/wheel-venv/bin/megalodon" --help
+          "$RUNNER_TEMP/wheel-venv/bin/megalodon" --version
           "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" --help
           "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon --help
           "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon.offline --help
@@ -202,3 +203,4 @@ jobs:
           "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" corpus --scenario dns-protocol-gates-v1
           "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" reference verify
           "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" corpus --scenario dns-protocol-gates-v1
+          "$RUNNER_TEMP/sdist-venv/bin/megalodon" --version
