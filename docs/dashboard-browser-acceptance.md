@@ -10,20 +10,22 @@ suite is not acceptance, independent review, or a supported-platform promise.
 ## Prepared environment and execution
 
 From an installed repository checkout on non-root Linux, with Chrome stable,
-Xvfb, and the test-only Playwright 1.57.0 package already installed:
+Xvfb/Openbox, and the test-only Playwright 1.57.0 package already installed,
+use an X display already managed by Openbox:
 
 ```bash
 python -m compileall -q megalodon tests
 python -m pytest -ra
-xvfb-run -a python tests/browser_acceptance.py
+python tests/browser_native_profile.py
 ```
 
-The companion `.github/workflows/browser-acceptance.yml` runs the last command
+The companion `.github/workflows/browser-acceptance.yml` creates its own Xvfb
+display, verifies Openbox readiness, and runs the last command
 on Ubuntu 24.04 with Python 3.11, the runner's existing Chrome, and an isolated
 browser profile. Its package-setup steps install the Openbox display manager and test
 driver; they do not install a browser, sensor, daemon, or MEGALODON service. The core package gains
-no dependency. The driver is pinned, but transitive packages and the runner image
-are not locked; the emitted versions describe one execution, not reproducible
+no dependency. The driver is pinned and Python inputs use the CI constraints;
+the runner image and Chrome are not pinned; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
 Chrome is headed under a virtual X display so native visibility can be
@@ -43,6 +45,43 @@ failure returns nonzero. There is no no-sandbox fallback, skip-as-pass path,
 proxy, tunnel, browser download, or policy override. Keep the existing required
 `test` check unchanged. This additional check is not automatically required by
 branch protection and does not supply an independent approval.
+
+## Native-focus driver profile (issue #97)
+
+The test must remove automation's forced-visible behavior before measuring
+native visibility. [Playwright 1.57.0's page initialization](https://github.com/microsoft/playwright/blob/v1.57.0/packages/playwright-core/src/server/chromium/crPage.ts#L483-L488)
+sets `Emulation.setFocusEmulationEnabled` to `true` on its own CDP session.
+[Chrome documents](https://developer.chrome.com/docs/devtools/rendering/apply-effects#emulate_a_focused_page)
+that focus emulation keeps visibility at `visible` and suppresses visibility
+changes. Minimizing the window or replacing its window manager does not undo
+that automation setting. A second CDP session setting it to false does not
+release the original session's browser-side capturer.
+
+`tests/browser_native_profile.py` verifies the installed Playwright version and
+both exact driver-module digests, copies the installed test package to a private
+temporary directory, and changes only that initialization call from true to
+false in the copy. It runs the unchanged acceptance suite in a subprocess using
+that copy. The installed package, Chromium binary/policy, application assets,
+CSP, sandbox request, visibility getters, events, and assertion deadlines are
+unchanged. The copy is removed on completion. This is an explicitly modified
+test-driver profile, not a stock-Playwright compatibility claim or vendored code.
+
+The companion `MEGALODON_BROWSER_DRIVER_PROFILE` records the profile ID,
+original/result SHA-256, preparation, and child exit status. A prepared profile
+is not a passing test. Require both its terminal passed result and the complete
+`MEGALODON_BROWSER_ACCEPTANCE` passed receipt. Unknown driver versions/bytes,
+already-patched installations, copy failure, or child failure return nonzero.
+The fixed hashes require fresh review when Playwright changes; do not merely
+refresh them to accept unknown code. Pure regression tests run without a browser
+or Playwright installation and cover mismatch, nonunique edits, preservation,
+and child-failure propagation.
+
+The stock-driver failure and the corrected-profile result must remain separate
+historical observations. An empty-page A/B probe establishes driver behavior,
+not MEGALODON acceptance; only the real-application lane establishes the latter.
+The profile still has to observe native hidden and visible states and demonstrate
+suspension/recovery through unchanged application logic. It never synthesizes
+visibility to make an assertion pass.
 
 ## Exercised boundaries
 
