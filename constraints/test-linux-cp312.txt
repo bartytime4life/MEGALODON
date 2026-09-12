@@ -19,7 +19,7 @@ pluggy==1.6.0 --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d83
 # pygments-2.21.0-py3-none-any.whl — https://pypi.org/project/pygments/2.21.0/#files
 pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
 # pytest-8.4.2-py3-none-any.whl — https://pypi.org/project/pytest/8.4.2/#files
-pytest==8.4.2 --hash=sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79
+pytest==9.1.1 --hash=sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313 --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c
 # referencing-0.37.0-py3-none-any.whl — https://pypi.org/project/referencing/0.37.0/#files
 referencing==0.37.0 --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
 # rpds_py-2026.6.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl — https://pypi.org/project/rpds-py/2026.6.3/#files
