@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from datetime import datetime
 import json
 from pathlib import Path
 
@@ -37,6 +38,62 @@ def load(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def transition_outcome(case: dict[str, object]) -> str:
+    """Test-only oracle for an eventual atomic alert-transition operation."""
+    projection = case["projection"]
+    candidate = case["candidate"]
+    prior = case["prior"]
+    assert isinstance(projection, dict)
+    assert isinstance(candidate, dict)
+    assert isinstance(prior, list)
+    validator("alertProjection").validate(projection)
+    validator("transition").validate(candidate)
+    for transition in prior:
+        validator("transition").validate(transition)
+    if candidate["alert_id"] != projection["id"]:
+        return "ALERT_MISMATCH"
+    if candidate["expected_revision"] != projection["revision"]:
+        return "STALE_REVISION"
+    if candidate["sequence"] != candidate["expected_revision"] + 1:
+        return "SEQUENCE_MISMATCH"
+    if candidate["from_state"] != projection["state"]:
+        return "STATE_MISMATCH"
+    if candidate["policy_version"] != projection["policy_version"]:
+        return "POLICY_VERSION_MISMATCH"
+    if _timestamp(candidate["occurred_at"]) < _timestamp(projection["updated_at"]):
+        return "CLOCK_ROLLBACK"
+    if any(
+        transition["alert_id"] == candidate["alert_id"]
+        and transition["idempotency_key"] == candidate["idempotency_key"]
+        for transition in prior
+    ):
+        return "REPLAYED_IDEMPOTENCY_KEY"
+    if (candidate["from_state"], candidate["to_state"]) not in LEGAL_TRANSITIONS:
+        return "ILLEGAL_EDGE"
+    return "accepted"
+
+
+def receipt_outcome(case: dict[str, object]) -> str:
+    """Test-only oracle proving the v1 inert outbox cannot produce an attempt."""
+    outbox = case["outbox"]
+    receipt = case["receipt"]
+    assert isinstance(outbox, dict)
+    assert isinstance(receipt, dict)
+    validator("outboxIntent").validate(outbox)
+    validator("deliveryReceipt").validate(receipt)
+    if receipt["outbox_id"] != outbox["id"]:
+        return "OUTBOX_MISMATCH"
+    if outbox["max_attempts"] == 0 and (
+        receipt["attempt"] != 0 or receipt["status"] != "not_attempted"
+    ):
+        return "OUTBOX_HAS_NO_ATTEMPTS"
+    return "accepted"
+
+
 def test_schema_is_valid_draft_2020_12() -> None:
     Draft202012Validator.check_schema(SCHEMA)
 
@@ -65,15 +122,49 @@ def test_transition_matrix_is_explicit_and_discriminating() -> None:
     assert ("resolved", "open") not in LEGAL_TRANSITIONS
 
 
+def test_transition_semantic_cases_fail_closed() -> None:
+    cases = load(ROOT / "fixtures" / "semantic-cases.json")["transitions"]
+    outcomes = {case["name"]: transition_outcome(case) for case in cases}
+    assert outcomes == {
+        "first_acknowledgement": "accepted",
+        "stale_revision": "STALE_REVISION",
+        "replayed_idempotency_key": "REPLAYED_IDEMPOTENCY_KEY",
+        "forged_alert_reference": "ALERT_MISMATCH",
+        "policy_version_mismatch": "POLICY_VERSION_MISMATCH",
+        "clock_rollback": "CLOCK_ROLLBACK",
+        "illegal_edge": "ILLEGAL_EDGE",
+        "out_of_order_sequence": "SEQUENCE_MISMATCH",
+    }
+
+
+def test_inert_outbox_semantic_cases_refuse_all_attempts() -> None:
+    cases = load(ROOT / "fixtures" / "semantic-cases.json")["receipts"]
+    outcomes = {case["name"]: receipt_outcome(case) for case in cases}
+    assert outcomes == {
+        "not_attempted_is_the_only_v1_receipt": "accepted",
+        "ambiguous_timeout_cannot_be_delivered_from_v1_outbox": "OUTBOX_HAS_NO_ATTEMPTS",
+    }
+
+
 def test_outbox_and_receipt_keep_delivery_authority_closed() -> None:
     outbox = SCHEMA["$defs"]["outboxIntent"]["properties"]
     receipt = SCHEMA["$defs"]["deliveryReceipt"]["properties"]
     assert outbox["destination_class"] == {"enum": ["not_configured"]}
-    assert outbox["max_attempts"]["maximum"] == 3
+    assert outbox["max_attempts"] == {"const": 0}
     assert outbox["status"] == {"const": "pending"}
     assert set(receipt["status"]["enum"]) == {
         "not_attempted", "attempted", "delivered", "failed", "expired", "suppressed", "dead_lettered"
     }
+    assert SCHEMA["$defs"]["receiptCode"]["enum"] == [
+        "DELIVERY_NOT_CONFIGURED",
+        "DELIVERY_ATTEMPTED",
+        "DELIVERY_DELIVERED",
+        "DELIVERY_FAILED",
+        "DELIVERY_TIMEOUT_AMBIGUOUS",
+        "DELIVERY_EXPIRED",
+        "DELIVERY_SUPPRESSED",
+        "DELIVERY_DEAD_LETTERED",
+    ]
     field_names = {
         field
         for definition in SCHEMA["$defs"].values()
