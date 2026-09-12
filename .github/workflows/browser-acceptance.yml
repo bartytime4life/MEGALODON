@@ -66,4 +66,4 @@ jobs:
               sleep 0.1
             done
             xprop -root _NET_SUPPORTING_WM_CHECK
-            python tests/browser_acceptance.py'
+            python tests/browser_native_profile.py'
