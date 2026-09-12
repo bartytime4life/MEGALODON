@@ -1,0 +1,30 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# `security-events: write` is required only to upload the analysis result.
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze-python:
+    name: Analyze Python source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: python
+          build-mode: none
+      - name: Analyze source
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0

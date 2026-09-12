@@ -67,7 +67,7 @@ def test_purge_requires_a_timezone_aware_cutoff(tmp_path):
         before = store.summary()
 
         with pytest.raises(ValueError, match="timezone-aware"):
-            store.purge_before(datetime(2027, 1, 1))
+            store.preview_purge(datetime(2027, 1, 1))
 
         assert store.summary() == before
 
@@ -76,11 +76,20 @@ def test_purge_removes_all_matching_audit_rows(tmp_path):
     with Store(tmp_path / "audit.db") as store:
         _populate(store)
 
-        assert store.purge_before(datetime(2027, 1, 1, tzinfo=timezone.utc)) == {
+        cutoff = datetime(2027, 1, 1, tzinfo=timezone.utc)
+        preview = store.preview_purge(cutoff)
+        receipt = store.purge_before(
+            cutoff,
+            batch_limit=preview["batch_limit"],
+            preview_token=preview["preview_token"],
+        )
+        assert receipt["deleted"] == {
             "detections": 1,
             "events": 1,
             "actions": 1,
         }
+        assert receipt["deleted_total"] == 3
+        assert receipt["complete"] is True
         assert store.summary() == {
             "events": 0,
             "detections": 0,
@@ -93,6 +102,8 @@ def test_purge_rolls_back_every_table_when_one_delete_fails(tmp_path):
     with Store(tmp_path / "audit.db") as store:
         _populate(store)
         before = store.summary()
+        cutoff = datetime(2027, 1, 1, tzinfo=timezone.utc)
+        preview = store.preview_purge(cutoff)
         store.connection.execute(
             """
             CREATE TRIGGER stop_event_delete
@@ -105,7 +116,11 @@ def test_purge_rolls_back_every_table_when_one_delete_fails(tmp_path):
         store.connection.commit()
 
         with pytest.raises(sqlite3.IntegrityError):
-            store.purge_before(datetime(2027, 1, 1, tzinfo=timezone.utc))
+            store.purge_before(
+                cutoff,
+                batch_limit=preview["batch_limit"],
+                preview_token=preview["preview_token"],
+            )
 
         assert store.connection.in_transaction is False
         assert store.summary() == before

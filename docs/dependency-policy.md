@@ -282,9 +282,29 @@ the ruleset. A drift failure is a maintenance signal, not permission to weaken a
 required check or update constraints automatically.
 
 Action references in every workflow remain full commit SHAs, checkout credentials
-are disabled, and workflow permissions stay read-only. Updating an action,
-constraint, Python version, or runner requires a separate reviewed change with
-the exact observed run and any new compatibility or security evidence recorded.
+are disabled, and the build/test workflow permissions stay read-only. Updating
+an action, constraint, Python version, or runner requires a separate reviewed
+change with the exact observed run and any new compatibility or security evidence
+recorded.
+
+## Source-only CodeQL scanning
+
+`.github/workflows/codeql.yml` uses the pinned CodeQL v4 action to analyze the
+checked-out Python source on pull requests targeting `main` and on pushes to
+`main`. It deliberately selects `build-mode: none`, so the workflow does not
+install dependencies, build distributions, run the test suite, invoke a
+MEGALODON command, or launch a MEGALODON analyzer. The checkout remains
+read-only from the workflow's perspective: persisted Git credentials are
+disabled, and the only write permission is `security-events: write`, which
+CodeQL needs to upload its analysis result to GitHub's code-scanning surface.
+
+The pinned action revision and this source-only shape are regression-checked in
+`tests/test_repository_hygiene.py`. A CodeQL result is static-analysis input,
+not a secret/history scan, dependency-vulnerability inventory, independent
+review, release receipt, or proof that every execution path is safe. Findings
+need exact-head human triage; a clean result does not authorize a merge,
+deployment, publication, live capture, alert delivery, or any other product
+authority.
 
 ## Bounded update intake
 

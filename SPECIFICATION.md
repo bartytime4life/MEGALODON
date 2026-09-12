@@ -412,10 +412,21 @@ timestamps use semantic `time` elements.
 
 The store keeps normalized metadata and evidence JSON. It must be assigned a
 retention period and finite capacity/stop budget before production use. The
-internal `Store.purge_before()` hook can atomically delete matching audit rows,
-but no CLI, preview receipt, scheduler, default cleanup, or automatic caller is
-provided. SQLite audit data and standalone offline report sets have independent
-operator-owned retention decisions; authority over one never covers the other.
+internal `Store.preview_purge()` / `Store.purge_before()` pair exposes only one
+finite SQLite batch at a time. Preview returns a path-free store identity, UTC
+cutoff, exact candidate counts, a row limit from 1 through 256, and a token bound
+to those candidate IDs. Apply requires that same cutoff, limit, and token under
+one immediate transaction; a stale preview, active or reconciliation-required
+ingestion run, changed database path, row-count mismatch, rollback failure, or
+uncertain commit fails closed. The default preview limit is 100 rows, but there
+is no default cutoff, CLI, scheduler, cleanup job, or automatic caller. A full
+batch is not proof that no further eligible rows remain; callers repeat
+preview/apply until a committed receipt reports `complete = true`.
+
+This internal mechanism does not select or authorize a retention period and is
+not secure erasure. SQLite audit data and standalone offline report sets have
+independent operator-owned retention decisions; authority over one never covers
+the other.
 
 External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
 future integration must document what identifiers leave the host and require

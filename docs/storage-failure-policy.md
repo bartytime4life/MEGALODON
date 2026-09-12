@@ -1,10 +1,12 @@
 # Audit-write failure and retention boundaries
 
 Status: implemented per-event ingestion transaction handling plus standalone
-write regression coverage. [Issue #28](https://github.com/bartytime4life/MEGALODON/issues/28) is
-closed as a documentation/test gate; operator retention choices and operational
-acceptance remain OPEN. This is not production approval. The [specification](../SPECIFICATION.md) and
-[security review](../SECURITY_REVIEW.md) remain authoritative.
+write regression coverage, a finite storage high-water stop, and an internal
+preview-bound retention batch. [Issue #28](https://github.com/bartytime4life/MEGALODON/issues/28)
+is closed as a documentation/test gate; operator retention choices and native
+operational acceptance remain OPEN. This is not production approval. The
+[specification](../SPECIFICATION.md) and [security review](../SECURITY_REVIEW.md)
+remain authoritative.
 
 Current repository interpretation: one service event, all of its detections,
 one policy-plan action per detection, their links, and run counters commit or
@@ -187,14 +189,38 @@ the operation in the other.
 
 | Data class | Included evidence | Cutoff/budget basis | Authorized surface today | Required operator decision |
 | --- | --- | --- | --- | --- |
-| Live SQLite audit | `events`, `detections`, `actions`, plus the database's WAL/SHM sidecars | One timezone-aware cutoff normalized to UTC; separate finite database/disk stop budget | Configured `Store` high-water intake stop plus internal atomic `Store.purge_before()` hook; no CLI, timer, preview receipt, or automatic purge call | Retention duration, capacity threshold, intake-stop point, backup interaction, owner, review/confirmation and recovery procedure |
+| Live SQLite audit | `events`, `detections`, `actions`, plus the database's WAL/SHM sidecars | One timezone-aware cutoff normalized to UTC; one explicit 1–256-row batch limit; separate finite database/disk stop budget | Configured `Store` high-water intake stop plus internal preview/apply API; no CLI, timer, default cutoff, policy choice, or automatic purge call | Retention duration, capacity threshold, intake-stop point, backup interaction, owner, review/confirmation and recovery procedure |
 | Standalone offline reports | One complete private `offline-run-v1` report set and its fixed files | Case/run policy based on completion and operator inventory; never SQLite row timestamps | No deletion API, filesystem sweep, scheduler, or dashboard control | Retention duration, case closure authority, storage budget, backup/export relationship, exact selected run sets and recovery procedure |
 
-Any future preview must bind the data class, canonical store identity, UTC cutoff,
-relevant row/file inventory, and a freshness token that can be checked immediately
-before deletion. Because SQLite can change after a count and files can be replaced,
-an unbound count or path list cannot authorize later deletion. The destructive
-operation and confirmation protocol remain a separately authorized code slice.
+`Store.preview_purge()` starts a read transaction and returns only
+`retention-purge-v1`, a path-free digest of the descriptor-backed store identity,
+the normalized UTC cutoff, the batch limit, exact per-table candidate counts,
+the total, a saturation flag, and a token bound to the ordered candidate IDs.
+It does not mutate rows. The default preview limit is 100 and every limit must be
+a native integer from 1 through 256. `batch_full = true` means only that the
+preview filled its limit; it is not a completeness claim.
+
+`Store.purge_before()` has no implicit mode. It requires the exact preview
+cutoff, limit, and token, takes an immediate transaction, recomputes the same
+finite candidate set, compares the token, and deletes only those IDs. Detections
+are removed before events, and an event is eligible in that batch only when no
+non-candidate detection still references it. An action is likewise eligible only
+when no non-candidate detection/action link would be severed. Actions use any
+remaining slots.
+The success receipt reports exact committed deletion counts and `complete`,
+which is true only when no eligible detection, orphan-safe event, or action
+remains for that cutoff in the committed transaction. A later concurrent write
+can of course add new eligible data, so the receipt is not a permanent database
+state claim.
+
+Preview and apply both refuse an unrelated open transaction and any ingestion
+run in `running` or `reconciliation_required` state. Apply also refuses malformed
+or stale tokens, database-path replacement, and candidate row-count mismatch.
+Any statement failure rolls the whole batch back. Rollback failure or uncertain
+commit poisons the writer and returns `RETENTION:RECONCILIATION_REQUIRED` without
+a success receipt. The token is freshness binding, not user authentication,
+authorization, or a durable audit log. It intentionally contains no path or row
+contents and may be carried across a clean reopen of the same inode.
 
 ## Failure behavior matrix
 
@@ -207,6 +233,9 @@ operation and confirmation protocol remain a separately authorized code slice.
 | Commit outcome uncertain | No clean-state claim; the writer is poisoned and the run remains discoverable | Stop intake, reopen for bounded readback, and explicitly reconcile the pinned run without replay |
 | Handled interruption | The active bundle rolls back and finalization records `failed/interrupted` when possible | SIGINT/SIGTERM handling is not power-loss or kill-proof durability evidence |
 | Hard kill, rollback failure, or terminal-write uncertainty | No automatic completion or retry; a `running` receipt blocks a new run | Preserve database and sidecars, stop every writer, then perform exact operator reconciliation |
+| Retention preview changed before apply | The apply returns `RETENTION:STALE_PREVIEW`; no candidate row is deleted | Obtain a new bounded preview after checking store and ingestion state; never substitute a count or old token |
+| Retention statement or row-count failure | The entire finite batch rolls back and no success receipt is returned | Preserve the store, investigate the fixed failure class, then preview again only after the cause is resolved |
+| Retention commit or rollback uncertain | The writer is poisoned, returns `RETENTION:RECONCILIATION_REQUIRED`, and accepts no later write | Stop all access, preserve database and sidecars, reopen for readback, and reconcile externally before any new retention attempt |
 
 Diagnostics and shared receipts must remain bounded and metadata-only. They may
 name a fixed failure class, counts, UTC cutoff and synthetic test identity, but
@@ -219,7 +248,7 @@ From the repository root in its supported test environment:
 
 ```bash
 python -m compileall -q megalodon tests
-python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py tests/test_dashboard_store.py tests/test_dashboard_binding.py tests/test_cli.py tests/test_ingestion_runs.py
+python -m pytest tests/test_storage.py tests/test_storage_failures.py tests/test_storage_schema.py tests/test_retention_batches.py tests/test_dashboard_store.py tests/test_dashboard_binding.py tests/test_cli.py tests/test_ingestion_runs.py
 ```
 
 The failure suite covers standalone writes plus every event-bundle stage with a
@@ -229,7 +258,11 @@ injected connection permission denial, and SQLite progress interruption. The
 transaction cases verify closure, prior-row preservation, visibility from a
 separate connection, successful recovery writes and reopened-database counts.
 They prevent tentative failed rows being committed by the next call.
-Existing aware-cutoff and all-table purge rollback tests are retained unchanged.
+Retention cases cover strict finite limits, path-free non-mutating previews,
+cutoff/limit/store/candidate token binding, stale and malformed refusal, clean
+restart, exact per-transaction deletion ceilings, terminal completion, active
+and ambiguous-run refusal, unrelated transaction refusal, path replacement,
+whole-batch rollback, and uncertain-commit poisoning.
 Only synthetic temporary databases and fixed test triggers are used.
 The schema-lifecycle cases separately cover fresh creation, explicit legacy
 migration, required-migration refusal, backup preservation/non-overwrite,
@@ -265,13 +298,12 @@ high-water stop does not purge rows or sidecars. SQLite/WAL/SHM files are not
 offline reports, and permission to remove one class never authorizes deleting
 another.
 Use explicit timezone-aware UTC-normalized cutoffs; no ambient local timezone,
-scheduler, default cleanup, live purge or destructive command is introduced.
-
-A future preview/deletion workflow must define database identity, snapshot and
-cutoff binding, stale-preview refusal, exact confirmation, failure recovery and
-audit semantics before implementation. Counting rows in a live database does
-not by itself bind a later deletion to the same state. Preserve the existing
-atomic `purge_before()` hook without exposing it as an operator command here.
+scheduler, default cleanup, dashboard control, or destructive command is
+introduced. The internal preview/apply methods are library primitives, not an
+operator workflow: they do not choose the cutoff, authenticate an operator,
+record approval, inventory backups, or schedule another batch. Counting rows in
+a live database does not authorize deletion; only the exact preview token can
+bind one later transaction, and every subsequent batch requires a new preview.
 Deletion is not a secure-erasure or backup-retention guarantee. Private parent
 directories and SQLite sidecars require deployment review; native Windows ACL
 acceptance is separately tracked in #27. Stop intake on unresolved storage
@@ -279,8 +311,8 @@ failure; do not silently redirect evidence, purge history or upload a backup.
 
 Independent review, physical storage-exhaustion/permission/interruption evidence,
 operator policy values and #3 review-control repair remain separate gates.
-No timer, filesystem sweep, live database deletion, firewall action or telemetry
-sharing is authorized by these tests or this document.
+No timer, filesystem sweep, command/dashboard deletion surface, firewall action,
+or telemetry sharing is authorized by these tests or this document.
 
 ## Transaction semantics references
 
