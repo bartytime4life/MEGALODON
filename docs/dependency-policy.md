@@ -19,6 +19,54 @@ The constraints file is packaged into source distributions so the extracted-sdis
 test exercises the same policy file. The core package still has no third-party
 runtime dependency, and developer installs remain explicit choices.
 
+## Isolated build constraint boundary
+
+A command-line `-c constraints/ci.txt` applies to its pip installation, not
+necessarily to an isolated backend resolver. Historical PR #105 packaging run
+`34665291138`, job `103475830445`, installed setuptools 80.9.0 in the outer
+environment but resolved setuptools 84.0.0 inside the sdist/wheel build
+environments. That was a build-input drift defect, not a runtime dependency or
+application defect. The historical passing tests do not prove constrained builds.
+
+Both deterministic workflows now set two workflow-scoped environment variables
+to the absolute `${{ github.workspace }}/constraints/ci.txt` path:
+
+- `PIP_CONSTRAINT` constrains ordinary installs, including the pip install
+  subprocesses that `python -m build` uses to populate its temporary environment.
+- `PIP_BUILD_CONSTRAINT` separately constrains pip's isolated backend dependency
+  installs, including editable-install preparation. pip 25.3 introduced build
+  constraints; pip 26.2 stopped propagating ordinary constraints into its own
+  isolated build environments. Setting just the ordinary variable is insufficient.
+
+The same file covers the existing listed pins; no dependency version or product
+build-system range is changed by this wiring correction. Absolute paths avoid
+silently losing the policy when a build or installed-package check changes its
+working directory. Each job prints pip's version and requires its install help
+to expose `--build-constraint` before package installation. An older pip fails
+that setup step; there is no automatic pip upgrade or unconstrained fallback.
+Build isolation remains enabled for editable installation and the primary
+sdist/wheel build. The pre-existing offline installation of the resulting sdist
+continues to use its already provisioned environment.
+
+The workflow regression checks protect both variables, workflow scope, absolute
+paths, absence of narrower overrides, and all three jobs' prerequisite checks.
+Their mutation controls detect missing/relative/mis-scoped policy and an omitted
+pip prerequisite. These are static configuration tests, not resolver execution.
+The exact-head hosted build log must also show the expected setuptools pin in
+both isolated build environments, followed by the full test/package/browser
+receipts. Do not accept an outer-environment version alone as that proof.
+
+This is not a complete lock, an offline build, or a reproducibility attestation.
+Unlisted dependencies, indexes, build bootstrap tools, runner/OS/browser images,
+Python/pip versions and package hashes remain separate work. A new or dynamic
+build requirement needs review and appropriate constraints rather than an
+assumption that this file already covers it. The scheduled compatibility workflow
+is intentionally outside this environment policy and remains unchanged.
+
+Primary references: [pip build constraints](https://pip.pypa.io/en/stable/user_guide/#build-constraints),
+[pip build-system interface](https://pip.pypa.io/en/stable/reference/build-system/),
+and [build environment variables](https://build.pypa.io/en/latest/reference/environment-variables.html).
+
 ## Compatibility drift lane
 
 .github/workflows/compatibility-drift.yml runs weekly and by manual dispatch.
