@@ -26,12 +26,13 @@ no dependency. The driver is pinned, but transitive packages and the runner imag
 are not locked; the emitted versions describe one execution, not reproducible
 build or compatibility proof for every future Chrome release.
 
-Chrome is headed under a virtual X display with Openbox running as
-the display's window manager so native visibility can be exercised. The test
-minimizes and restores the actual browser window through Chromium's browser-level
-window-state API; it never assigns document.hidden or dispatches visibility events
-as proof. The test reads native visibility through bounded test-side polling, then
-waits separately for application refresh idle. The workflow installs Openbox and x11-utils explicitly, then verifies
+Chrome is headed under a virtual X display so native visibility can be
+exercised. The test activates a separate headed browser context/window and
+returns focus to the dashboard through real page activation; it never assigns
+document.hidden or dispatches visibility events as proof. The test reads native
+visibility through bounded test-side polling, then waits separately for
+application refresh idle.
+The workflow installs Openbox and x11-utils explicitly, then verifies
 Openbox owns the X display before launching Chrome; Xvfb alone does not provide
 a window manager. The acceptance receipt records Chrome's observed native window
 bounds after each state change.
