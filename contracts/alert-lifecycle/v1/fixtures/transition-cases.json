@@ -1,0 +1,10 @@
+[
+  {"from": "open", "to": "acknowledged", "valid": true},
+  {"from": "open", "to": "suppressed", "valid": true},
+  {"from": "acknowledged", "to": "resolved", "valid": true},
+  {"from": "acknowledged", "to": "open", "valid": true},
+  {"from": "suppressed", "to": "open", "valid": true},
+  {"from": "open", "to": "resolved", "valid": false},
+  {"from": "resolved", "to": "open", "valid": false},
+  {"from": "expired", "to": "acknowledged", "valid": false}
+]
