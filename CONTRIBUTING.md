@@ -39,8 +39,8 @@ This installation can access package indexes. That setup action is distinct from
 normal application operation, which must not acquire a required vendor account,
 secret, subscription, cloud service, or outbound integration connection.
 
-To reproduce the deterministic Linux pull-request resolver, add the checked-in
-CI constraints while retaining the same test extra:
+For the reviewed Linux dependency versions, add the checked-in CI constraints
+while retaining the same test extra:
 
 ```bash
 .venv/bin/python -m pip install -c constraints/ci.txt -e ".[test]"
@@ -52,6 +52,10 @@ compatibility-drift workflow intentionally omits it and is non-required discover
 work, so a newly released compatible tool is reported separately before any
 constraints change.
 Do not install the capture extra or launch an analyzer merely to run unit tests.
+The command above selects versions only. The CI wheel hashes, platform checks,
+and index-free build preparation are defined in the
+[dependency policy](docs/dependency-policy.md); this command does not reproduce
+those artifact-verification steps.
 
 For native Windows development, use an isolated environment without changing
 PowerShell execution policy or enabling unsupported capture:
@@ -112,6 +116,44 @@ privacy, or installed-tool containment. Report those evidence classes separately
 A PR receipt should identify exact commit, commands, environment, outcomes,
 skips, hosted run IDs, and remaining acceptance gates. Never upgrade local or
 partial-checkout evidence into full-repository or native-platform proof.
+
+## Controlled pytest execution in CI
+
+Verifying dependency wheels does not prevent pytest from discovering unrelated
+plugins already installed on a runner. The ordinary CI workflow therefore sets
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, and clears `PYTEST_PLUGINS` and
+`PYTEST_ADDOPTS` at workflow scope. This applies to both the Python 3.11 test run
+and the Python 3.12 extracted-source tests. Built-in pytest fixtures and trusted
+repository configuration still load; the repository's `-q` option is preserved.
+Both invocations add `-ra` so nonpassing outcomes, including skip reasons, appear
+in the terminal summary instead of an unidentified skipped-test count.
+
+From the repository root, after explicitly preparing your development environment,
+the equivalent test-launch policy is:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS= PYTEST_ADDOPTS= \
+  .venv/bin/python -m pytest -ra
+```
+
+The regression probes use real pytest with inert, temporary entry-point metadata.
+They show that an autoload tripwire executes without the policy, is not imported
+with it, and cannot return through inherited plugin/argument variables. They also
+prove built-in fixtures still work, a known skip reason remains visible, and an
+actual assertion failure still exits nonzero. Metadata discovery is restricted to
+the synthetic distribution in each child process; no third-party package is
+installed or fetched. These are plugin-loading tests, not full runner isolation.
+
+Explicit `-p` options, repository `conftest.py` or `pytest_plugins` declarations,
+Python startup hooks, imported packages, and the runner itself remain trusted
+inputs. Any required external plugin must have a reviewed lock and explicit load
+path, not a restoration of ambient autoload. This policy does not isolate all
+installed packages, hash-lock Python/pip, disable product tests, certify the runner,
+or authorize capture to eliminate an installed-tool skip. The browser and
+compatibility-discovery workflows are unchanged. Developer plugin choices outside
+CI remain explicit local choices; they do not alter the CI evidence requirements.
+
+Primary behavior reference: [pytest plugin loading and autoload controls](https://docs.pytest.org/en/stable/how-to/plugins.html).
 
 ## Connection design and dated review
 

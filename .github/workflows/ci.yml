@@ -13,6 +13,10 @@ permissions:
 env:
   PIP_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
   PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+  # Do not execute ambient pytest entry points or inherit plugin/argument overrides.
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+  PYTEST_PLUGINS: ""
+  PYTEST_ADDOPTS: ""
 
 jobs:
   test:
@@ -61,7 +65,7 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q megalodon tests
       - name: Run tests
-        run: python -m pytest
+        run: python -m pytest -ra
       - name: CLI smoke checks
         run: |
           set -euo pipefail
@@ -157,7 +161,7 @@ jobs:
           source = Path(megalodon.__file__).resolve()
           assert source.is_relative_to(Path.cwd().resolve()), source
           PY
-            "$RUNNER_TEMP/sdist-venv/bin/python" -m pytest
+            "$RUNNER_TEMP/sdist-venv/bin/python" -m pytest -ra
           )
       - name: Run installed default outside checkout
         run: |
