@@ -8,12 +8,15 @@ telemetry.
 ## Deterministic pull-request lane
 
 The .github/workflows/ci.yml and the Linux browser-acceptance workflow use
-constraints/ci.txt for their Python test/build resolver. The constraint entries
-are pinned to versions observed in green workflow run
-34663054911 on main@a0d8b535d6958435abcb575e855784ce784e557e. The file is
-intentionally a constraints file rather than a full lockfile: runner images,
-Python, pip, platform wheels, package indexes, and hash-verified artifact
-selection remain separate evidence.
+constraints/ci.txt for their Python test/build resolver. The integrated policy
+is present on current `main@fb2563ba97ee05526c60c45cadbd68f790a5236c` after the
+isolated-build correction in PR #108 and the subsequent capture merge in PR #106.
+The constraint entries retain their original provenance from green workflow run
+`34663054911` on `main@a0d8b535d6958435abcb575e855784ce784e557e`; the resolver
+propagation was revalidated in full PR run `34669482416` on the tested tree.
+The file is intentionally a constraints file rather than a full lockfile:
+runner images, Python, pip, platform wheels, package indexes, and hash-verified
+artifact selection remain separate evidence.
 
 The constraints file is packaged into source distributions so the extracted-sdist
 test exercises the same policy file. The core package still has no third-party
