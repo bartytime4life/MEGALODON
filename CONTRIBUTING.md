@@ -155,6 +155,51 @@ CI remain explicit local choices; they do not alter the CI evidence requirements
 
 Primary behavior reference: [pytest plugin loading and autoload controls](https://docs.pytest.org/en/stable/how-to/plugins.html).
 
+## Isolated source-distribution test environment
+
+The Python 3.12 `wheel-smoke` job creates a fresh `sdist-venv` without
+`--system-site-packages`. It refuses an existing directory or symlink rather
+than reusing an environment. The existing verified test and build wheelhouses
+supply its fourteen third-party dependencies; the shared `packaging` wheel
+appears in both unchanged locks. Installation requires hashes, admits only
+wheels, disables the index/cache, and retains dependency resolution. There is
+no new download, version upgrade, or fallback to runner-installed packages.
+
+Before installing the generated sdist, the job runs
+`tools/check_sdist_environment.py` with the venv interpreter's `-I` flag. The
+read-only check requires a real isolated interpreter, disabled user/system site
+packages, and metadata origins inside that venv for every expected dependency.
+It emits a bounded receipt or a nonzero fixed diagnostic, never raw paths or
+package metadata. The helper itself is byte-compared with its sdist copy.
+Python/pip bootstrap is still supplied by the runner and `ensurepip`; pip's
+version is reported, not newly pinned or upgraded by this step.
+
+The two packaging run blocks clear inherited `PYTHONPATH`/`PYTHONHOME` and disable
+user-site loading. The extracted-source pytest run still deliberately imports
+MEGALODON from the extracted sdist, not the original checkout; its full selection,
+plugin policy and `-ra` skip report are unchanged. Separately, an isolated import
+outside either source tree must resolve the installed MEGALODON package inside
+`sdist-venv` before the existing installed-command smokes execute. Do not describe
+the extracted-source test run as a full installed-wheel test suite.
+
+Regression tests cover changed workflow ordering and weakened flags, missing or
+external dependency metadata, and actual temporary virtual environments with
+synthetic metadata only. These fixtures fetch/install no third-party package.
+The exact-head hosted result must additionally prove both real hashed lock
+installations, the fourteen-dependency origin receipt, installed-project origin,
+full source tests and unchanged browser acceptance. Missing installed-TShark
+acceptance remains a visible skip, not permission to enable capture.
+
+This closes source-distribution environment inheritance only. The outer build,
+Python 3.11 and browser environments, approved package code/startup hooks,
+Python/pip and OS provenance remain trusted and separately reviewable. Metadata
+location is not code-integrity or publisher-authenticity verification, and a
+virtual environment is not process/network containment or a reproducible-build
+attestation. All product, sensor, firewall and release authority is unchanged.
+
+Primary references: [Python virtual environments](https://docs.python.org/3.12/library/venv.html)
+and [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/).
+
 ## Connection design and dated review
 
 The [connection advancement plan](docs/connection-advancement-plan.md) is
