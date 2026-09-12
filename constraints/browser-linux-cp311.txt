@@ -1,0 +1,14 @@
+# Browser-test wheel requirements, NOT constraints. Install with -r.
+# Profile: Linux glibc x86_64 / CPython 3.11 / browser-acceptance only.
+# Reuse the reviewed twelve-wheel test/backend closure; add three browser wheels.
+# Versions match passing browser run 34675326174; no upgrade is intended.
+# Exact browser wheel SHA-256 values observed on PyPI on 2026-09-12 UTC.
+# The sole include is relative to this file, never a URL or operator input.
+# OS/Chrome/Xvfb/Openbox and Python/pip bootstrap remain outside this lock.
+-r test-linux-cp311.txt
+# greenlet-3.5.5-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl — https://pypi.org/project/greenlet/3.5.5/#files
+greenlet==3.5.5 --hash=sha256:74cc6df89ec5302337adc9cf096221cbed2510fd444b0e0f1586cf0470740864
+# playwright-1.57.0-py3-none-manylinux1_x86_64.whl — https://pypi.org/project/playwright/1.57.0/#files
+playwright==1.57.0 --hash=sha256:284ed5a706b7c389a06caa431b2f0ba9ac4130113c3a779767dda758c2497bb1
+# pyee-13.0.1-py3-none-any.whl — https://pypi.org/project/pyee/13.0.1/#files
+pyee==13.0.1 --hash=sha256:af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228

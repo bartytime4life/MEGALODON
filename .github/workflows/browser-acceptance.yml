@@ -49,7 +49,29 @@ jobs:
           set -euo pipefail
           python -m pip --version
           python -m pip install --help | grep -F -- '--build-constraint'
-          python -m pip install -c constraints/ci.txt -e ".[test]" "playwright==1.57.0"
+          python - <<'PYBROWSERPROFILE'
+          import platform
+          import sys
+
+          if (sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 11)
+                  or sys.platform != "linux" or platform.machine() != "x86_64"
+                  or platform.libc_ver()[0] != "glibc"):
+              raise SystemExit("BROWSER_INPUT_PROFILE:UNSUPPORTED")
+          PYBROWSERPROFILE
+          mkdir "$RUNNER_TEMP/browser-cp311-wheelhouse"
+          python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
+            --dest "$RUNNER_TEMP/browser-cp311-wheelhouse" -r constraints/browser-linux-cp311.txt
+          browser_wheels=("$RUNNER_TEMP"/browser-cp311-wheelhouse/*.whl)
+          [ "${#browser_wheels[@]}" -eq 15 ]
+          sha256sum constraints/browser-linux-cp311.txt constraints/test-linux-cp311.txt "${browser_wheels[@]}"
+          python -m pip install -c constraints/ci.txt --no-index \
+            --find-links "$RUNNER_TEMP/browser-cp311-wheelhouse" --require-hashes \
+            --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/browser-linux-cp311.txt
+          python -m pip check
+          PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/browser-cp311-wheelhouse" \
+            PIP_ONLY_BINARY=:all: python -m pip install -c constraints/ci.txt \
+            --no-cache-dir --verbose -e ".[test]"
           python -m pip check
           python -m compileall -q megalodon tests
       - name: Exercise real CLI SQLite HTTP and browser
