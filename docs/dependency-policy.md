@@ -286,6 +286,38 @@ are disabled, and workflow permissions stay read-only. Updating an action,
 constraint, Python version, or runner requires a separate reviewed change with
 the exact observed run and any new compatibility or security evidence recorded.
 
+## Bounded update intake
+
+`.github/dependabot.yml` asks GitHub's native Dependabot service to open review
+pull requests for the root Python package metadata on Tuesday and GitHub Actions
+references on Wednesday. Both schedules are weekly at 04:17 UTC, target only
+`main`, allow at most three open pull requests per ecosystem, and disable
+automatic rebases. The configuration supplies no registry, credential, reviewer,
+assignee, label, or auto-merge path. It does not grant workflow write permission
+or add a new repository workflow. A generated pull request is still subject to
+the repository's existing `pull_request` checks.
+
+For Python metadata, `increase-if-necessary` may propose a declared range change
+when the current declaration excludes an available version. It does not safely
+regenerate the repository's platform-specific hash locks. A Python update pull
+request is therefore only an intake signal: it may correctly fail the existing
+lock-parity or hosted acquisition checks until a maintainer verifies exact wheel
+identity and dependency closure, updates every affected profile in the same
+reviewed change, and records the new evidence. Never weaken hashes or add an
+alternate artifact merely to make an automated proposal green.
+
+For Actions, Dependabot may propose changing a checked-in action reference. The
+existing repository-hygiene test still requires every resulting `uses` value to
+be one full 40-character commit SHA and every checkout to keep
+`persist-credentials: false`; a tag or shortened reference fails CI. The update
+must also preserve read-only workflow permissions, job names, constraints,
+timeouts, and the separation of required and compatibility lanes.
+
+Dependabot authorship is not independent security approval, passing CI is not
+merge authorization, and an update pull request is not a release/provenance
+receipt. A human must review upstream changes and the exact candidate tree. The
+repository ruleset and independent-review gate remain separate controls.
+
 ## Boundaries
 
 These workflows run package-installation/build/test activity in GitHub Actions.

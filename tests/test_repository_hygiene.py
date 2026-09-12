@@ -148,3 +148,48 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
     assert "schedule:" in drift
     assert "workflow_dispatch:" in drift
     assert "constraints/ci.txt" not in drift
+
+
+def test_dependabot_only_opens_bounded_review_prs():
+    policy = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    assert policy == """version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:17"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    rebase-strategy: "disabled"
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "04:17"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+"""
+    assert "registries:" not in policy
+    assert "insecure-external-code-execution:" not in policy
+    assert "allow:" not in policy
+    assert "ignore:" not in policy
+    manifest_entries = {
+        line.strip()
+        for line in (ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    assert "include .github/dependabot.yml" in manifest_entries
