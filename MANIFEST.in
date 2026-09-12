@@ -1,4 +1,5 @@
 include .gitignore
+include .github/dependabot.yml
 include constraints/ci.txt
 include constraints/build-linux-cp312.txt
 include constraints/test-linux-cp312.txt
