@@ -279,9 +279,15 @@ def test_v3_run_event_link_preserves_retention_deletion(tmp_path):
         )
         store.connection.commit()
 
-        deleted = store.purge_before(datetime(2027, 1, 1, tzinfo=timezone.utc))
+        cutoff = datetime(2027, 1, 1, tzinfo=timezone.utc)
+        preview = store.preview_purge(cutoff)
+        receipt = store.purge_before(
+            cutoff,
+            batch_limit=preview["batch_limit"],
+            preview_token=preview["preview_token"],
+        )
 
-        assert deleted["events"] == 1
+        assert receipt["deleted"]["events"] == 1
         assert store.connection.execute(
             "SELECT COUNT(*) FROM ingestion_run_events"
         ).fetchone()[0] == 0

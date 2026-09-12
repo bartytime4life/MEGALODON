@@ -294,7 +294,10 @@ Use a dedicated private database directory: while a dashboard reader is serving,
 any directory-entry addition, removal, or rename requires a reader restart.
 The [`storage-failure-policy`](docs/storage-failure-policy.md) keeps SQLite audit
 and standalone offline-report retention separate and defines fail-closed
-outcomes; it selects no deletion value or automatic job.
+outcomes. Its internal Python API previews and applies at most one finite,
+identity-bound SQLite batch at a time, refuses stale previews or active/ambiguous
+ingestion runs, and emits path-free receipts. It selects no cutoff or deletion
+value and exposes no CLI, scheduler, or automatic job.
 
 Each `run` command writes a closed lifecycle receipt before consuming input.
 Natural exhaustion records `completed/source_exhausted`; an operator event limit
@@ -656,8 +659,8 @@ operational work unbuilt.
 | [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; executor removal and fail-closed apply refusal are on `main`; independent review and any separately designed restoration gate remain required |
 | [#66 — isolate dashboard reads](https://github.com/bartytime4life/MEGALODON/issues/66) | This revision separates dashboard reads from the writer, validates private database identity/schema, and constrains SQL to the five-field projection; independent review and native Windows ACL evidence remain open |
 | [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Per-event atomic event/detection/action/link/counter commits, explicit terminal reasons, detector rollback behavior, and pinned orphan reconciliation are implemented in this slice; exact-head review and issue disposition remain separate, and no alert lifecycle or delivery follows |
-| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; incremental bounded port accounting, fail-closed storage high-water intake, and Scapy startup/death/queue/shutdown bounds are on `main`. Installed-Scapy/native resource and loss evidence, sustained-capacity/retention/purge, and notifier behavior remain unproved |
-| [#69 — CI dependency drift and artifact hygiene](https://github.com/bartytime4life/MEGALODON/issues/69) | Repository hygiene, constrained CI inputs, and isolated-build constraint propagation are on `main`; hashed locking, bootstrap/index/provenance, authorized required-check decisions, and independent review remain open |
+| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; incremental bounded port accounting, fail-closed storage high-water intake, Scapy startup/death/queue/shutdown bounds, and preview-bound retention batches are implemented. Installed-Scapy/native resource and loss evidence, operator retention values, sustained-capacity evidence, and notifier behavior remain unproved |
+| [#69 — CI dependency drift and artifact hygiene](https://github.com/bartytime4life/MEGALODON/issues/69) | Repository hygiene, hashed constrained CI inputs, isolated-build constraint propagation, and exact-tree checks are on `main`; update automation, authorized required-check decisions, and independent review remain open |
 
 Open issues and branches are coordination/evidence records, not shipped features
 or deployment approval. Review the current issue readback before acting because
