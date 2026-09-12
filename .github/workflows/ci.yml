@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# Cover both build's nested pip installs and pip's own isolated backends.
+# Absolute paths survive the temporary build directories and sdist checks.
+env:
+  PIP_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+  PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -26,6 +32,8 @@ jobs:
       - name: Install package
         run: |
           set -euo pipefail
+          python -m pip --version
+          python -m pip install --help | grep -F -- '--build-constraint'
           python -m pip install -c constraints/ci.txt -e ".[test]"
           python -m pip check
       - name: Compile Python sources
@@ -54,6 +62,8 @@ jobs:
       - name: Build distributions and install wheel
         run: |
           set -euo pipefail
+          python -m pip --version
+          python -m pip install --help | grep -F -- '--build-constraint'
           python -m pip install -c constraints/ci.txt build setuptools pytest jsonschema
           python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
           python -m venv "$RUNNER_TEMP/wheel-venv"
