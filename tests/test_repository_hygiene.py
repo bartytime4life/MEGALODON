@@ -204,11 +204,17 @@ def test_codeql_scans_python_source_with_only_required_permissions():
     assert "name: CodeQL\n" in workflow
     assert "push:\n    branches: [main]" in workflow
     assert "pull_request:\n    branches: [main]" in workflow
-    assert "contents: read" in workflow
-    assert "security-events: write" in workflow
-    assert "contents: write" not in workflow
-    assert "pull-requests: write" not in workflow
-    assert "issues: write" not in workflow
+    workflow_permissions = re.search(
+        r"(?m)^permissions:\n(?P<body>(?:  [^\n]+\n)+)(?:\n)*(?=^[^\s]|\Z)",
+        workflow,
+    )
+    assert workflow_permissions is not None
+    assert workflow_permissions.group("body") == (
+        "  contents: read\n"
+        "  security-events: write\n"
+    )
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    assert not re.findall(r"(?m)^ +permissions:\s*", jobs)
     assert "persist-credentials: false" in workflow
     assert workflow.count(codeql_revision) == 2
     assert f"github/codeql-action/init@{codeql_revision}" in workflow
