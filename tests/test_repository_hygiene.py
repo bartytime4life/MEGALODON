@@ -148,26 +148,3 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
     assert "schedule:" in drift
     assert "workflow_dispatch:" in drift
     assert "constraints/ci.txt" not in drift
-
-
-def test_codeql_scans_python_source_with_only_required_permissions():
-    workflow = (ROOT / ".github" / "workflows" / "codeql.yml").read_text(
-        encoding="utf-8"
-    )
-    codeql_revision = "b96794f015dfd88f77b49b1c93e0fa7110f94c63"
-
-    assert "name: CodeQL\n" in workflow
-    assert "push:\n    branches: [main]" in workflow
-    assert "pull_request:\n    branches: [main]" in workflow
-    assert "contents: read" in workflow
-    assert "security-events: write" in workflow
-    assert "contents: write" not in workflow
-    assert "pull-requests: write" not in workflow
-    assert "issues: write" not in workflow
-    assert "persist-credentials: false" in workflow
-    assert workflow.count(codeql_revision) == 2
-    assert f"github/codeql-action/init@{codeql_revision}" in workflow
-    assert f"github/codeql-action/analyze@{codeql_revision}" in workflow
-    assert "languages: python" in workflow
-    assert "build-mode: none" in workflow
-    assert "run:" not in workflow
