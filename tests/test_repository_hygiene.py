@@ -213,7 +213,8 @@ def test_codeql_scans_python_source_with_only_required_permissions():
         "  contents: read\n"
         "  security-events: write\n"
     )
-    assert not re.findall(r"(?m)^    permissions:\s*", workflow)
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    assert not re.findall(r"(?m)^ +permissions:\s*", jobs)
     assert "persist-credentials: false" in workflow
     assert workflow.count(codeql_revision) == 2
     assert f"github/codeql-action/init@{codeql_revision}" in workflow
