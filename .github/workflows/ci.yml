@@ -148,9 +148,22 @@ jobs:
           test -f "${sdist_roots[0]}/tools/build_reference_assets.py"
           "$RUNNER_TEMP/wheel-venv/bin/python" -m pip install --no-index --no-deps "${wheels[0]}"
           "$RUNNER_TEMP/wheel-venv/bin/python" -m pip check
-          python -m venv --system-site-packages "$RUNNER_TEMP/sdist-venv"
-          "$RUNNER_TEMP/sdist-venv/bin/python" -m pip install --no-index --no-deps --no-build-isolation "${sdists[0]}"
-          "$RUNNER_TEMP/sdist-venv/bin/python" -m pip check
+          # Use only the already verified CPython 3.12 wheels, not runner packages.
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          test ! -e "$RUNNER_TEMP/sdist-venv"
+          test ! -L "$RUNNER_TEMP/sdist-venv"
+          python -m venv "$RUNNER_TEMP/sdist-venv"
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip --version
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip install --no-index \
+            --find-links "$RUNNER_TEMP/test-wheelhouse" --find-links "$RUNNER_TEMP/build-wheelhouse" \
+            --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/test-linux-cp312.txt -r constraints/build-linux-cp312.txt
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip check
+          cmp tools/check_sdist_environment.py "${sdist_roots[0]}/tools/check_sdist_environment.py"
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I tools/check_sdist_environment.py
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip install --no-index --no-deps --no-build-isolation --no-cache-dir "${sdists[0]}"
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip check
           (
             cd "${sdist_roots[0]}"
             git init -q
@@ -166,8 +179,19 @@ jobs:
       - name: Run installed default outside checkout
         run: |
           set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
           mkdir "$RUNNER_TEMP/wheel-run"
           cd "$RUNNER_TEMP/wheel-run"
+          "$RUNNER_TEMP/sdist-venv/bin/python" -I - <<'PYINSTALLED'
+          from pathlib import Path
+          import sys
+          import megalodon
+
+          if not Path(megalodon.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()):
+              raise SystemExit("SDIST_ENV:PROJECT_OUTSIDE_VENV")
+          print("SDIST_ENV:INSTALLED_PROJECT_CONFIRMED")
+          PYINSTALLED
           "$RUNNER_TEMP/wheel-venv/bin/megalodon" --help
           "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" --help
           "$RUNNER_TEMP/wheel-venv/bin/python" -m megalodon --help
