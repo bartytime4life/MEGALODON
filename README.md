@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/megalodon-github-hero-compact.png" alt="MEGALODON defensive network telemetry shark and shield emblem" width="760">
+</p>
+
 # MEGALODON Defense MVP
 
 **MEGALODON** = **M**alware **E**limination **G**ateway **A**nd **L**ayered
