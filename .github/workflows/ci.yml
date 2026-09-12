@@ -64,8 +64,27 @@ jobs:
           set -euo pipefail
           python -m pip --version
           python -m pip install --help | grep -F -- '--build-constraint'
-          python -m pip install -c constraints/ci.txt build setuptools pytest jsonschema
-          python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
+          python - <<'PYPROFILE'
+          import platform
+          import sys
+
+          if (sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 12)
+                  or sys.platform != "linux" or platform.machine() != "x86_64"):
+              raise SystemExit("BUILD_INPUT_PROFILE:UNSUPPORTED")
+          PYPROFILE
+          python -m pip install -c constraints/ci.txt pytest jsonschema
+          mkdir "$RUNNER_TEMP/build-wheelhouse"
+          python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
+            --dest "$RUNNER_TEMP/build-wheelhouse" -r constraints/build-linux-cp312.txt
+          build_wheels=("$RUNNER_TEMP"/build-wheelhouse/*.whl)
+          [ "${#build_wheels[@]}" -eq 4 ]
+          sha256sum constraints/build-linux-cp312.txt "${build_wheels[@]}"
+          python -m pip install --no-index --find-links "$RUNNER_TEMP/build-wheelhouse" \
+            --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/build-linux-cp312.txt
+          python -m pip check
+          PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/build-wheelhouse" \
+            PIP_ONLY_BINARY=:all: python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"
           python -m venv "$RUNNER_TEMP/wheel-venv"
           wheels=("$RUNNER_TEMP"/distributions/megalodon_defense-*.whl)
           sdists=("$RUNNER_TEMP"/distributions/megalodon_defense-*.tar.gz)
@@ -78,6 +97,7 @@ jobs:
           [ "${#sdist_roots[@]}" -eq 1 ]
           test -f "${sdist_roots[0]}/.gitignore"
           test -f "${sdist_roots[0]}/constraints/ci.txt"
+          cmp constraints/build-linux-cp312.txt "${sdist_roots[0]}/constraints/build-linux-cp312.txt"
           test -f "${sdist_roots[0]}/.github/workflows/ci.yml"
           test -f "${sdist_roots[0]}/config/settings.toml"
           test -f "${sdist_roots[0]}/contracts/automation/v1/schema.json"

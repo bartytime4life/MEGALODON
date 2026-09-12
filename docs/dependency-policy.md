@@ -70,6 +70,65 @@ Primary references: [pip build constraints](https://pip.pypa.io/en/stable/user_g
 [pip build-system interface](https://pip.pypa.io/en/stable/reference/build-system/),
 and [build environment variables](https://build.pypa.io/en/latest/reference/environment-variables.html).
 
+## Hash-verified Linux build-tool profile
+
+`constraints/build-linux-cp312.txt` is a **requirements lock**, consumed with
+`-r`, not a second constraints file. Its scope is the `wheel-smoke` build tools
+on Linux x86_64 / CPython 3.12: `build`, `packaging`, `pyproject-hooks`, and
+`setuptools`, including the frontend's dependency closure for that profile.
+Their versions match `constraints/ci.txt`; the lock does not upgrade them.
+Each entry admits one exact PyPI wheel using SHA-256, with its filename and
+source page recorded beside the pin. Source archives are not admitted.
+
+The job refuses other platform/interpreter profiles before installation. It
+then downloads into a new temporary wheelhouse with `--require-hashes`,
+`--only-binary=:all:`, and dependency resolution enabled. An omitted dependency,
+missing hash, or mismatched artifact fails the step. It prints the lock and wheel
+digests, then installs all four using the same hash policy, `--no-index`, and
+`--force-reinstall`; an already installed tool cannot satisfy that verification
+without its wheel being checked again. The source distribution includes the
+exact lock bytes and the packaging job compares them with the checkout.
+
+The primary sdist/wheel build retains isolation. For that command only,
+`PIP_NO_INDEX=1`, `PIP_FIND_LINKS` naming the verified wheelhouse, and
+`PIP_ONLY_BINARY=:all:` constrain its pip dependency installs to the staged
+wheels. Existing ordinary/build constraints remain in force. A new backend
+requirement absent from the wheelhouse fails rather than falling back to an
+index. The already provisioned source-distribution install keeps its existing
+`--no-index --no-deps --no-build-isolation` behavior. No package archive, new
+installer, or third-party source is committed or published.
+
+This separates acquisition from the index-free resolver/build phase; it is
+**not OS-level network containment**, a complete CI lock, a signed provenance
+attestation, or a byte-reproducible build claim. pip/Python bootstrap, the outer
+test dependencies, the runner and operating system, editable installs in the
+other jobs, and browser-only dependencies remain outside this four-wheel lock.
+The trusted CI workspace must preserve the verified wheelhouse; this is not a
+defense against a malicious runner replacing files after verification. PyPI's
+published digest is an artifact identity input, not independent publisher
+signature verification or a security verdict about the package contents.
+
+`tests/test_build_input_lock.py` checks lock shape, uniqueness, version parity,
+manifest inclusion, and the reviewed workflow sequence. Mutation controls must
+reject omitted checks and policy weakening. Separate offline tests give real pip
+small metadata-only synthetic wheels: the valid hashed wheel must download,
+while corrupted bytes, a missing hash, and an unhashed transitive dependency
+must fail. These tests use `--no-index`, local fixtures, no package installation,
+and no sensor or product telemetry. They do not prove the real PyPI artifacts;
+that requires the exact-head hosted hash-checked acquisition/build log.
+
+For a maintenance update, verify the exact wheel on its recorded PyPI source
+page, review the package/version and dependency changes, update both pin files
+where necessary, and rerun the synthetic refusals plus full CI, package smoke,
+and browser acceptance. Do not replace a hash merely to clear a mismatch or
+regenerate it from an unreviewed local archive. Expand to another interpreter
+or dependency family only in a separate reviewed profile.
+
+Primary basis: [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/)
+and the four exact-version PyPI pages recorded in the lock. The ordinary
+constraints' historical provenance above is retained, not rewritten as a
+complete artifact-lock or release receipt.
+
 ## Compatibility drift lane
 
 .github/workflows/compatibility-drift.yml runs weekly and by manual dispatch.

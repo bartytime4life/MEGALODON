@@ -1,0 +1,14 @@
+# Build-tool wheel requirements, NOT a pip constraints file. Install with -r.
+# Profile: Linux x86_64 / CPython 3.12 / wheel-smoke only.
+# Versions match constraints/ci.txt; no version upgrade is made by this lock.
+# SHA-256 values observed from the exact PyPI wheel pages on 2026-09-12 UTC.
+# Only the named wheels are admitted; source archives are deliberately excluded.
+# Publisher/signature verification and the rest of CI are separate gates.
+# build-1.6.0-py3-none-any.whl — https://pypi.org/project/build/1.6.0/#files
+build==1.6.0 --hash=sha256:f7aaf1ebbb79178a02ba248bb524f2176b256017e17e8e4bd4289c7b38cc2bad
+# packaging-26.3-py3-none-any.whl — https://pypi.org/project/packaging/26.3/#files
+packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+# pyproject_hooks-1.2.0-py3-none-any.whl — https://pypi.org/project/pyproject-hooks/1.2.0/#files
+pyproject-hooks==1.2.0 --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913
+# setuptools-80.9.0-py3-none-any.whl — https://pypi.org/project/setuptools/80.9.0/#files
+setuptools==80.9.0 --hash=sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922
