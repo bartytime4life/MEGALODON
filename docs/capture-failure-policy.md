@@ -6,8 +6,11 @@ This document covers a narrow failure-reporting slice of
 proposed evaluation artifact under the [specification](../SPECIFICATION.md).
 Nothing here enables capture or establishes an installed-tool receipt.
 
-The candidate lifecycle slice below is branch-scoped until exact-head hosted
-validation and independent review are complete. It adds observability and
+The three-path capture lifecycle change is present on current `main` at
+`fb2563ba97ee05526c60c45cadbd68f790a5236c` through merged PR #106. The
+recorded candidate workflow run `34664505722` passed `1058` tests with `1`
+skip, including wheel-smoke; the merge and hosted result are delivery evidence,
+not independent approval under issue #3. The change adds observability and
 fail-closed handling around the optional Scapy adapter; it does not activate
 capture or create a live-capture receipt.
 
