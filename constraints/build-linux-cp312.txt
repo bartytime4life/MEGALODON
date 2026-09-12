@@ -11,4 +11,4 @@ packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb55
 # pyproject_hooks-1.2.0-py3-none-any.whl — https://pypi.org/project/pyproject-hooks/1.2.0/#files
 pyproject-hooks==1.2.0 --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913
 # setuptools-80.9.0-py3-none-any.whl — https://pypi.org/project/setuptools/80.9.0/#files
-setuptools==80.9.0 --hash=sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922
+setuptools==84.0.0 --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670 --hash=sha256:f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73
