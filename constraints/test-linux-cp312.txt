@@ -1,0 +1,28 @@
+# Test-dependency wheel requirements, NOT constraints. Install with -r.
+# Profile: Linux glibc x86_64 / CPython 3.12 / wheel-smoke only.
+# pytest + jsonschema closure; versions match constraints/ci.txt, no upgrade.
+# Exact PyPI wheel SHA-256 observations: 2026-09-12 UTC.
+# One wheel per entry; no source archives, markers, extras, or alternate hashes.
+# Build tools remain in build-linux-cp312.txt. Bootstrap and other jobs are not locked.
+# attrs-26.1.0-py3-none-any.whl — https://pypi.org/project/attrs/26.1.0/#files
+attrs==26.1.0 --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+# iniconfig-2.3.0-py3-none-any.whl — https://pypi.org/project/iniconfig/2.3.0/#files
+iniconfig==2.3.0 --hash=sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12
+# jsonschema-4.26.0-py3-none-any.whl — https://pypi.org/project/jsonschema/4.26.0/#files
+jsonschema==4.26.0 --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
+# jsonschema_specifications-2025.9.1-py3-none-any.whl — https://pypi.org/project/jsonschema-specifications/2025.9.1/#files
+jsonschema-specifications==2025.9.1 --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe
+# packaging-26.3-py3-none-any.whl — https://pypi.org/project/packaging/26.3/#files
+packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+# pluggy-1.6.0-py3-none-any.whl — https://pypi.org/project/pluggy/1.6.0/#files
+pluggy==1.6.0 --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+# pygments-2.21.0-py3-none-any.whl — https://pypi.org/project/pygments/2.21.0/#files
+pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+# pytest-8.4.2-py3-none-any.whl — https://pypi.org/project/pytest/8.4.2/#files
+pytest==8.4.2 --hash=sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79
+# referencing-0.37.0-py3-none-any.whl — https://pypi.org/project/referencing/0.37.0/#files
+referencing==0.37.0 --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
+# rpds_py-2026.6.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl — https://pypi.org/project/rpds-py/2026.6.3/#files
+rpds-py==2026.6.3 --hash=sha256:ecabd69db66de867690f9797f2f8fa27ba501bbc24540cbdbdc649cd15888ba6
+# typing_extensions-4.16.0-py3-none-any.whl — https://pypi.org/project/typing-extensions/4.16.0/#files
+typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
