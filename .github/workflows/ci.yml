@@ -132,6 +132,7 @@ jobs:
           cmp constraints/build-linux-cp312.txt "${sdist_roots[0]}/constraints/build-linux-cp312.txt"
           cmp constraints/test-linux-cp312.txt "${sdist_roots[0]}/constraints/test-linux-cp312.txt"
           cmp constraints/test-linux-cp311.txt "${sdist_roots[0]}/constraints/test-linux-cp311.txt"
+          cmp constraints/browser-linux-cp311.txt "${sdist_roots[0]}/constraints/browser-linux-cp311.txt"
           test -f "${sdist_roots[0]}/.github/workflows/ci.yml"
           test -f "${sdist_roots[0]}/config/settings.toml"
           test -f "${sdist_roots[0]}/contracts/automation/v1/schema.json"

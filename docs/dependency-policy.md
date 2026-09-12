@@ -158,9 +158,9 @@ unhashed dependency that fails. These metadata-only probes install nothing;
 exact artifact closure still requires the hosted eleven-wheel acquisition log.
 
 This extends the packaging job's input coverage, not the entire CI environment.
-The Python 3.11 test job has the separate profile below. The browser job retains
-its constrained, not hash-locked, dependency setup. Compatibility discovery is
-intentionally unconstrained. Python/pip bootstrap, preinstalled runner packages and plugins,
+The Python 3.11 test and browser jobs have separate profiles below.
+Compatibility discovery is intentionally unconstrained. Python/pip bootstrap,
+preinstalled runner packages and plugins,
 OS/browser binaries, publisher authenticity, signed provenance, and byte-for-byte
 reproducibility remain separate. No project dependency, runtime integration,
 sensor, service, or update scheduler is added. Acquisition uses network access;
@@ -212,8 +212,9 @@ existing real-pip offline hash refusal tests remain a separate control; hosted
 logs must establish twelve actual wheel matches, isolated setuptools selection,
 full pytest and safe CLI results, plus unchanged packaging/browser acceptance.
 
-This does not hash-lock browser setup, Python/pip bootstrap, ambient packages or
-pytest plugins, Node, runner/OS binaries, or publisher authenticity. It is not a
+The browser profile below adds its driver dependencies. These locks do not pin
+Python/pip bootstrap, ambient packages or pytest plugins, external Node,
+runner/OS binaries, or publisher authenticity. This is not a
 signed provenance/SBOM, hermetic-build, reproducibility, or network-containment
 claim. The CI workspace is trusted to preserve verified artifacts until use.
 Runtime dependencies, captures, firewall behavior, and operator-host setup are
@@ -221,6 +222,55 @@ unchanged. Maintenance must review wheel identity and dependency changes across
 profiles; never broaden admitted hashes solely to silence a failed build.
 The primary hash-policy reference remains
 [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/).
+
+## Hash-verified browser-test profile
+
+`constraints/browser-linux-cp311.txt` composes the existing twelve-wheel
+`test-linux-cp311.txt` requirements through one fixed relative `-r` include, plus
+three exact browser wheels: Playwright 1.57.0, greenlet 3.5.5, and pyee 13.0.1.
+These versions were observed in passing browser run `34675326174`; this is an
+artifact-verification change, not a browser/tool upgrade. The three new wheel
+hashes and filenames come from the exact PyPI pages recorded beside the pins.
+Reusing the test profile keeps shared dependency identities in one place.
+
+The browser job requires Linux glibc x86_64 / CPython 3.11. After its existing
+pip prerequisite, it acquires all fifteen wheels into a fresh separate directory
+with mandatory hashes, wheel-only policy, no cache, and dependency resolution.
+It records both requirements-file digests and the wheel digests, then performs
+hash-required force-reinstallation with index lookup disabled. The subsequent
+local editable install retains build isolation and dependency resolution, using
+only this verified wheelhouse for pip's backend requirements. A missing include,
+new dependency, incompatible wheel, or bad hash fails before acceptance starts;
+there is no source-build or index fallback. Both composition files are packaged
+and byte-compared in the sdist; CPython 3.12 does not install the browser profile.
+
+This lock verifies the distributed Playwright wheel before the unchanged
+`playwright-1.57.0-native-focus-v1` helper checks and copies its driver module.
+It does not replace that helper's exact-byte checks or modify its one-setting
+native-focus correction. The real application still must pass all browser
+assertions. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, the prepared Chrome binary,
+Openbox readiness, sandbox request, native visibility observations, failure
+propagation, and test deadlines remain unchanged. No browser download is added.
+
+Static tests protect composition, exact artifacts, source packaging, verification
+order, and the isolated editable boundary. Offline real-pip fixtures separately
+prove relative inclusion from another working directory and refusal of a missing
+include, missing child hash, or altered included wheel. Those synthetic probes
+install nothing and make no index request. Hosted execution must additionally
+show fifteen real wheel matches, the staged editable backend, and complete
+browser, ordinary test, and packaging receipts for the exact candidate.
+
+This closes the declared Python wheel inputs for the three deterministic jobs,
+not their whole execution environments. Python/pip bootstrap, ambient installed
+packages/plugins, external Node, the OS and apt repositories, Chrome, Xvfb and
+Openbox remain separate provenance/isolation work. The Playwright wheel digest
+covers its bundled driver files, not independently authenticated upstream
+components. Acquisition uses network; index-free pip use is not OS-level egress
+containment. Hash identity is not a publisher signature or package-safety verdict.
+Do not widen hashes or change the native-focus digests to clear a failure;
+review an update across both composed profiles and the driver helper first.
+Normal MEGALODON operation still requires no Playwright, provider account,
+subscription, cloud service, or new runtime dependency.
 
 ## Compatibility drift lane
 
