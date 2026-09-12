@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from megalodon import __version__
 from megalodon.cli import build_parser, main
 from megalodon.dashboard import serve
 from megalodon.firewall import LIVE_APPLY_UNSUPPORTED
@@ -32,6 +33,13 @@ def write_config(directory: str) -> tuple[Path, Path]:
 
 
 class CliTests(unittest.TestCase):
+    def test_version_is_available_without_selecting_a_command(self):
+        output = io.StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+            main(["--version"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(output.getvalue(), f"megalodon {__version__}\n")
+
     def test_default_run_works_outside_the_source_checkout(self):
         with tempfile.TemporaryDirectory() as directory, chdir(directory):
             output = io.StringIO()

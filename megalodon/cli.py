@@ -12,6 +12,7 @@ import signal
 import sqlite3
 import sys
 
+from . import __version__
 from .capabilities import catalog
 from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
 from .config import load_settings
@@ -49,6 +50,7 @@ def _bounded_cli_integer(name: str, minimum: int, maximum: int):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="megalodon", description="Local-first defensive network telemetry")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     capabilities = sub.add_parser("capabilities", help="print the static platform and free-software catalog")
