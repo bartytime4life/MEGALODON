@@ -10,7 +10,7 @@ telemetry.
 The .github/workflows/ci.yml and the Linux browser-acceptance workflow use
 constraints/ci.txt for their Python test/build resolver. The constraint entries
 are pinned to versions observed in green workflow run
-34624008251 on main@6ae356be33c615e136e380168360d8c3d0b31755. The file is
+34663054911 on main@a0d8b535d6958435abcb575e855784ce784e557e. The file is
 intentionally a constraints file rather than a full lockfile: runner images,
 Python, pip, platform wheels, package indexes, and hash-verified artifact
 selection remain separate evidence.
