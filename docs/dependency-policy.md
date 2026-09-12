@@ -76,7 +76,8 @@ and [build environment variables](https://build.pypa.io/en/latest/reference/envi
 `-r`, not a second constraints file. Its scope is the `wheel-smoke` build tools
 on Linux x86_64 / CPython 3.12: `build`, `packaging`, `pyproject-hooks`, and
 `setuptools`, including the frontend's dependency closure for that profile.
-Their versions match `constraints/ci.txt`; the lock does not upgrade them.
+Their versions match `constraints/ci.txt`; the lock admits the reviewed
+setuptools 84.0.0 maintenance update.
 Each entry admits one exact PyPI wheel using SHA-256, with its filename and
 source page recorded beside the pin. Source archives are not admitted.
 
@@ -134,7 +135,8 @@ complete artifact-lock or release receipt.
 The `wheel-smoke` job also consumes `constraints/test-linux-cp312.txt` with
 `-r`. This separate requirements lock covers `pytest`, `jsonschema`, and their
 nine transitive requirements on **Linux glibc x86_64 / CPython 3.12**. Its eleven
-versions match the existing resolver constraints; no package upgrade is implied.
+versions match the revised resolver constraints, including the reviewed pytest
+9.1.1 maintenance update.
 Each entry records one exact wheel filename, PyPI source page, and SHA-256.
 In particular, `rpds-py` admits the CPython 3.12 manylinux x86_64 wheel, not
 Windows, macOS, musl, another architecture/interpreter, or a source archive.
@@ -179,10 +181,11 @@ the exact-version PyPI pages are provenance observations, not signature checks.
 The required `test` job consumes `constraints/test-linux-cp311.txt` with `-r`.
 This profile covers **Linux glibc x86_64 / CPython 3.11**: the eleven pytest and
 jsonschema dependency wheels plus the existing setuptools editable-build backend.
-All twelve versions match `constraints/ci.txt`. Pure-Python wheel hashes agree
+All twelve versions match `constraints/ci.txt`, including the reviewed pytest
+9.1.1 and setuptools 84.0.0 maintenance updates. Pure-Python wheel hashes agree
 with the existing packaging profiles; `rpds-py` instead admits exactly its
-CPython 3.11 manylinux x86_64 wheel. This is not a cross-platform lock or a
-package upgrade. Python 3.12 packaging continues to use its own unchanged locks.
+CPython 3.11 manylinux x86_64 wheel. This is not a cross-platform lock; Python
+3.12 packaging continues to use its own profile-specific locks.
 
 The job checks the interpreter, OS, architecture, and libc before acquisition.
 It creates a fresh `test-cp311-wheelhouse`, downloads the full requirements with
@@ -227,10 +230,10 @@ The primary hash-policy reference remains
 
 `constraints/browser-linux-cp311.txt` composes the existing twelve-wheel
 `test-linux-cp311.txt` requirements through one fixed relative `-r` include, plus
-three exact browser wheels: Playwright 1.57.0, greenlet 3.5.5, and pyee 13.0.1.
-These versions were observed in passing browser run `34675326174`; this is an
-artifact-verification change, not a browser/tool upgrade. The three new wheel
-hashes and filenames come from the exact PyPI pages recorded beside the pins.
+three exact browser wheels: Playwright 1.62.0, greenlet 3.5.5, and pyee 13.0.1.
+The Playwright wheel is admitted with an accompanying exact-byte native-focus
+driver-profile review; its hash and filename come from the exact PyPI page
+recorded beside the pin.
 Reusing the test profile keeps shared dependency identities in one place.
 
 The browser job requires Linux glibc x86_64 / CPython 3.11. After its existing
@@ -244,8 +247,8 @@ new dependency, incompatible wheel, or bad hash fails before acceptance starts;
 there is no source-build or index fallback. Both composition files are packaged
 and byte-compared in the sdist; CPython 3.12 does not install the browser profile.
 
-This lock verifies the distributed Playwright wheel before the unchanged
-`playwright-1.57.0-native-focus-v1` helper checks and copies its driver module.
+This lock verifies the distributed Playwright wheel before the version-pinned
+`playwright-1.62.0-native-focus-v1` helper checks and copies its driver module.
 It does not replace that helper's exact-byte checks or modify its one-setting
 native-focus correction. The real application still must pass all browser
 assertions. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, the prepared Chrome binary,
