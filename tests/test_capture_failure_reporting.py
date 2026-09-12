@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from megalodon import capture
+from megalodon.capture import _BoundedCaptureQueue
 
 
 PRIVATE_DIAGNOSTIC = "private-scapy-diagnostic-canary"
@@ -24,6 +25,10 @@ class CaptureFailureReportingTests(unittest.TestCase):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.sniffer = Mock()
+        self.sniffer.running = True
+        self.thread = Mock()
+        self.thread.is_alive.return_value = False
+        self.sniffer.thread = self.thread
         self.factory = Mock(return_value=self.sniffer)
         package = ModuleType("scapy")
         package.__path__ = []
@@ -63,7 +68,8 @@ class CaptureFailureReportingTests(unittest.TestCase):
             next(capture.iter_scapy(PRIVATE_INTERFACE))
         self.assertEqual(str(caught.exception), "unable to start live capture")
         self.assert_redacted(caught.exception)
-        self.sniffer.stop.assert_not_called()
+        self.sniffer.stop.assert_called_once_with(join=False)
+        self.thread.join.assert_called_once_with(capture.SCAPY_SHUTDOWN_TIMEOUT_SECONDS)
         self.queue.take.assert_not_called()
 
     def test_missing_extra_does_not_display_import_error_context(self):
@@ -88,14 +94,15 @@ class CaptureFailureReportingTests(unittest.TestCase):
                 with self.assertRaises(type(error)) as caught:
                     next(capture.iter_scapy("synthetic"))
                 self.assertIs(caught.exception, error)
-        self.sniffer.stop.assert_not_called()
+        self.assertEqual(self.sniffer.stop.call_count, 2)
+        self.assertTrue(all(call.kwargs == {"join": False} for call in self.sniffer.stop.call_args_list))
 
     def test_close_after_a_yield_stops_once_and_preserves_fixed_options(self):
         source = capture.iter_scapy("synthetic")
         self.assertIs(next(source), self.queue.take.return_value)
         self.assertIsNone(source.close())
         self.sniffer.start.assert_called_once_with()
-        self.sniffer.stop.assert_called_once_with()
+        self.sniffer.stop.assert_called_once_with(join=False)
         self.assertEqual(self.factory.call_args.kwargs["iface"], "synthetic")
         self.assertIs(self.factory.call_args.kwargs["store"], False)
         self.assertTrue(callable(self.factory.call_args.kwargs["prn"]))
@@ -109,7 +116,7 @@ class CaptureFailureReportingTests(unittest.TestCase):
             source.close()
         self.assertEqual(str(caught.exception), STOP_ERROR)
         self.assert_redacted(caught.exception)
-        self.sniffer.stop.assert_called_once_with()
+        self.sniffer.stop.assert_called_once_with(join=False)
 
     def test_close_control_flow_is_not_swallowed(self):
         for error in (KeyboardInterrupt(), SystemExit(7)):
@@ -143,7 +150,7 @@ class CaptureFailureReportingTests(unittest.TestCase):
             next(capture.iter_scapy("synthetic"))
         self.assertIs(caught.exception, primary)
         self.assertFalse(hasattr(primary, "__notes__"))
-        self.sniffer.stop.assert_called_once_with()
+        self.sniffer.stop.assert_called_once_with(join=False)
 
     def test_error_thrown_at_yield_remains_primary(self):
         source = capture.iter_scapy("synthetic")
@@ -155,7 +162,74 @@ class CaptureFailureReportingTests(unittest.TestCase):
         self.assertIs(caught.exception, primary)
         self.assertEqual(primary.__notes__, [CLEANUP_NOTE])
         self.assertNotIn(PRIVATE_DIAGNOSTIC, "".join(traceback.format_exception(primary)))
-        self.sniffer.stop.assert_called_once_with()
+        self.sniffer.stop.assert_called_once_with(join=False)
+
+
+    def test_queue_telemetry_counts_accepted_and_dropped_events(self):
+        events = _BoundedCaptureQueue(maximum=2)
+        self.assertTrue(events.offer(object()))
+        self.assertTrue(events.offer(object()))
+        self.assertFalse(events.offer(object()))
+        self.assertFalse(events.offer(object()))
+        self.assertEqual(
+            events.telemetry(),
+            {
+                "capacity": 2,
+                "offered": 4,
+                "accepted": 2,
+                "dropped": 2,
+                "queued": 2,
+                "overflowed": True,
+            },
+        )
+
+    def test_async_sniffer_exception_is_reported_without_upstream_details(self):
+        def fail_after_start():
+            self.sniffer.exception = RuntimeError(PRIVATE_DIAGNOSTIC)
+            self.sniffer.running = False
+            return None
+        self.queue.take.side_effect = fail_after_start
+        with self.assertRaises(capture.CaptureError) as caught:
+            next(capture.iter_scapy(PRIVATE_INTERFACE))
+        self.assertEqual(str(caught.exception), "live capture failed after startup")
+        self.assert_redacted(caught.exception)
+
+    def test_async_sniffer_exit_is_reported_without_upstream_details(self):
+        self.queue.take.side_effect = lambda: setattr(self.sniffer, "running", False) or None
+        with self.assertRaises(capture.CaptureError) as caught:
+            next(capture.iter_scapy(PRIVATE_INTERFACE))
+        self.assertEqual(str(caught.exception), "live capture stopped unexpectedly")
+        self.assert_redacted(caught.exception)
+
+    def test_startup_exit_is_reported_before_queue_consumption(self):
+        self.sniffer.running = False
+        self.thread.is_alive.return_value = False
+        with self.assertRaises(capture.CaptureError) as caught:
+            next(capture.iter_scapy(PRIVATE_INTERFACE))
+        self.assertEqual(str(caught.exception), "live capture stopped during startup")
+        self.assert_redacted(caught.exception)
+        self.queue.take.assert_not_called()
+
+    def test_startup_timeout_is_reported_without_unbounded_wait(self):
+        self.sniffer.running = False
+        self.thread.is_alive.return_value = True
+        with patch.object(capture, "SCAPY_STARTUP_TIMEOUT_SECONDS", 0):
+            with self.assertRaises(capture.CaptureError) as caught:
+                next(capture.iter_scapy(PRIVATE_INTERFACE))
+        self.assertEqual(str(caught.exception), "live capture startup timed out")
+        self.assert_redacted(caught.exception)
+        self.queue.take.assert_not_called()
+
+    def test_shutdown_deadline_is_not_reported_as_success(self):
+        source = capture.iter_scapy(PRIVATE_INTERFACE)
+        next(source)
+        self.thread.is_alive.return_value = True
+        with self.assertRaises(capture.CaptureError) as caught:
+            source.close()
+        self.assertEqual(str(caught.exception), "unable to stop live capture; shutdown deadline exceeded")
+        self.assert_redacted(caught.exception)
+        self.sniffer.stop.assert_called_once_with(join=False)
+        self.thread.join.assert_called_once_with(capture.SCAPY_SHUTDOWN_TIMEOUT_SECONDS)
 
     def test_invalid_platform_refuses_before_sniffer_construction(self):
         with patch.object(capture, "runtime_platform", return_value="windows"):

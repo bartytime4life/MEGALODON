@@ -6,6 +6,11 @@ This document covers a narrow failure-reporting slice of
 proposed evaluation artifact under the [specification](../SPECIFICATION.md).
 Nothing here enables capture or establishes an installed-tool receipt.
 
+The candidate lifecycle slice below is branch-scoped until exact-head hosted
+validation and independent review are complete. It adds observability and
+fail-closed handling around the optional Scapy adapter; it does not activate
+capture or create a live-capture receipt.
+
 ## Iterator diagnostic contract
 
 | Failure boundary | Result |
@@ -16,11 +21,21 @@ Nothing here enables capture or establishes an installed-tool receipt.
 | Explicit generator close, then stop raises an ordinary exception | `CaptureError("unable to stop live capture; shutdown is unverified")`; do not silently report successful close |
 | Start or close is interrupted without an earlier primary failure | Preserve `KeyboardInterrupt` or `SystemExit`, rather than converting it to an ordinary capture error |
 | Stop returns without error | No new cleanup diagnostic; this alone is not proof of native resource release |
+| The background sniffer reports an exception | Fixed `CaptureError("live capture failed during startup")` or `CaptureError("live capture failed after startup")`; upstream text is not exposed |
+| The sniffer thread exits before a requested stop | Fixed startup or unexpected-stop `CaptureError`; a normal exhausted capture is not inferred |
+| Startup does not reach a running state before five seconds | Fixed `CaptureError("live capture startup timed out")` |
+| The bounded stop wait still sees a live thread after two seconds | Fixed `CaptureError("unable to stop live capture; shutdown deadline exceeded")`; shutdown is not reported as successful |
+| Thread state cannot be verified after the bounded join | Fixed `CaptureError("unable to verify live capture shutdown; shutdown is unverified")` |
 
 The primary-error rule covers exceptions raised while advancing the iterator
 and exceptions explicitly thrown into it at a yield. `GeneratorExit` from an
 ordinary close is not treated as a primary failure that could hide a failed
 stop. No automatic retry, restarted capture, or success receipt is added.
+
+The queue keeps bounded in-memory `offered`, `accepted`, `dropped`, `queued`,
+`capacity`, and `overflowed` diagnostics. These counters are diagnostic state,
+not a durable receipt, packet-loss guarantee, or new dashboard field; the
+current CLI and SQLite schema do not persist them.
 
 The fixed cleanup note is an exception note, not a log, a SQLite field, or a
 new CLI response. Python's standard traceback formatter displays notes; a
@@ -30,19 +45,26 @@ its interruption path. This slice changes neither the CLI nor the run schema.
 
 ## Explicit limits and next lifecycle work
 
-`AsyncSniffer.stop()` is still synchronous and has no new deadline. A call that
-never returns cannot reach this failure handler. Async startup/death detection,
-partial-start cleanup, stop/join deadlines, native thread/resource release, and
-producer/kernel loss accounting remain unproved. A synchronous start exception
-does not establish that no native work began.
+`iter_scapy` now polls Scapy's `running` and (where available) `exception`
+state after each bounded queue wait. It applies a five-second startup deadline,
+attempts cleanup for every constructed sniffer, calls Scapy's non-joining stop
+form, and waits at most two seconds for the native thread. A timeout or
+unverifiable thread state fails closed; it is not reported as successful
+shutdown. These bounds cover the adapter's explicit wait/join operations; they
+cannot interrupt a third-party implementation that blocks inside
+`stop(join=False)`, prove native socket release, or measure kernel-level packet
+loss. Pinned installed-Scapy profiles and stronger producer/kernel accounting
+remain separate acceptance work.
 
-Errors in a consumer's processing code happen outside this generator. Closing
-or garbage-collecting it does not automatically pass that consumer exception
-back into the iterator. In particular, the CLI's event-limit break does not
-explicitly own and check generator closure; cleanup failure can be unraisable
-there instead of entering its run receipt. Deterministic caller-owned closure
-and terminalization after cleanup need a separate current-main lifecycle slice.
-Do not claim this iterator correction fixes the whole service's cleanup path.
+The queue counters are exposed only through the private in-memory diagnostic
+object; they are not included in exceptions or audit rows. A later service-level
+slice must decide how to persist loss/health receipts without treating a local
+queue count as proof of loss-free capture.
+
+Errors in a consumer's processing code happen outside this generator. The CLI
+now owns and checks closure before run terminalization; cleanup errors remain
+subject to the separate ingestion receipt contract. Do not claim this iterator
+slice fixes the whole service's cleanup path or provides exactly-once capture.
 
 `raise ... from None` suppresses chained context in standard diagnostic display;
 it does not erase the original in-memory exception or its traceback locals.
