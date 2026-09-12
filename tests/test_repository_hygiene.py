@@ -148,3 +148,71 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
     assert "schedule:" in drift
     assert "workflow_dispatch:" in drift
     assert "constraints/ci.txt" not in drift
+
+
+def test_dependabot_only_opens_bounded_review_prs():
+    policy = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    assert policy == """version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:17"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    rebase-strategy: "disabled"
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "04:17"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+"""
+    assert "registries:" not in policy
+    assert "insecure-external-code-execution:" not in policy
+    assert "allow:" not in policy
+    assert "ignore:" not in policy
+    manifest_entries = {
+        line.strip()
+        for line in (ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    assert "include .github/dependabot.yml" in manifest_entries
+
+
+def test_codeql_scans_python_source_with_only_required_permissions():
+    workflow = (ROOT / ".github" / "workflows" / "codeql.yml").read_text(
+        encoding="utf-8"
+    )
+    codeql_revision = "b96794f015dfd88f77b49b1c93e0fa7110f94c63"
+
+    assert "name: CodeQL\n" in workflow
+    assert "push:\n    branches: [main]" in workflow
+    assert "pull_request:\n    branches: [main]" in workflow
+    assert "contents: read" in workflow
+    assert "security-events: write" in workflow
+    assert "contents: write" not in workflow
+    assert "pull-requests: write" not in workflow
+    assert "issues: write" not in workflow
+    assert "persist-credentials: false" in workflow
+    assert workflow.count(codeql_revision) == 2
+    assert f"github/codeql-action/init@{codeql_revision}" in workflow
+    assert f"github/codeql-action/analyze@{codeql_revision}" in workflow
+    assert "languages: python" in workflow
+    assert "build-mode: none" in workflow
+    assert "run:" not in workflow
