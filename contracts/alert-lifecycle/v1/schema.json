@@ -41,10 +41,11 @@
     "transition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "alert_id", "sequence", "expected_revision", "from_state", "to_state", "actor_id", "reason_code", "idempotency_key", "occurred_at"],
+      "required": ["id", "alert_id", "policy_version", "sequence", "expected_revision", "from_state", "to_state", "actor_id", "reason_code", "idempotency_key", "occurred_at"],
       "properties": {
         "id": {"$ref": "#/$defs/logicalId"},
         "alert_id": {"$ref": "#/$defs/logicalId"},
+        "policy_version": {"$ref": "#/$defs/logicalId"},
         "sequence": {"type": "integer", "minimum": 1, "maximum": 2147483647},
         "expected_revision": {"type": "integer", "minimum": 1, "maximum": 2147483647},
         "from_state": {"$ref": "#/$defs/alertState"},
@@ -65,10 +66,22 @@
         "transition_id": {"$ref": "#/$defs/logicalId"},
         "policy_version": {"$ref": "#/$defs/logicalId"},
         "destination_class": {"enum": ["not_configured"]},
-        "max_attempts": {"type": "integer", "minimum": 0, "maximum": 3},
+        "max_attempts": {"const": 0},
         "status": {"const": "pending"},
         "created_at": {"$ref": "#/$defs/utcTimestamp"}
       }
+    },
+    "receiptCode": {
+      "enum": [
+        "DELIVERY_NOT_CONFIGURED",
+        "DELIVERY_ATTEMPTED",
+        "DELIVERY_DELIVERED",
+        "DELIVERY_FAILED",
+        "DELIVERY_TIMEOUT_AMBIGUOUS",
+        "DELIVERY_EXPIRED",
+        "DELIVERY_SUPPRESSED",
+        "DELIVERY_DEAD_LETTERED"
+      ]
     },
     "deliveryReceipt": {
       "type": "object",
@@ -79,9 +92,39 @@
         "outbox_id": {"$ref": "#/$defs/logicalId"},
         "attempt": {"type": "integer", "minimum": 0, "maximum": 3},
         "status": {"enum": ["not_attempted", "attempted", "delivered", "failed", "expired", "suppressed", "dead_lettered"]},
-        "code": {"$ref": "#/$defs/boundedText"},
+        "code": {"$ref": "#/$defs/receiptCode"},
         "occurred_at": {"$ref": "#/$defs/utcTimestamp"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "not_attempted"}}},
+          "then": {"properties": {"attempt": {"const": 0}, "code": {"const": "DELIVERY_NOT_CONFIGURED"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "attempted"}}},
+          "then": {"properties": {"attempt": {"minimum": 1}, "code": {"const": "DELIVERY_ATTEMPTED"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "delivered"}}},
+          "then": {"properties": {"attempt": {"minimum": 1}, "code": {"const": "DELIVERY_DELIVERED"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "failed"}}},
+          "then": {"properties": {"attempt": {"minimum": 1}, "code": {"enum": ["DELIVERY_FAILED", "DELIVERY_TIMEOUT_AMBIGUOUS"]}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "expired"}}},
+          "then": {"properties": {"code": {"const": "DELIVERY_EXPIRED"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "suppressed"}}},
+          "then": {"properties": {"code": {"const": "DELIVERY_SUPPRESSED"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "dead_lettered"}}},
+          "then": {"properties": {"attempt": {"minimum": 1}, "code": {"const": "DELIVERY_DEAD_LETTERED"}}}
+        }
+      ]
     }
   }
 }

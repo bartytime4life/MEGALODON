@@ -1,0 +1,270 @@
+{
+  "transitions": [
+    {
+      "name": "first_acknowledgement",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-001",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v1",
+        "sequence": 2,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-001.transition.2",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "stale_revision",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-002",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v1",
+        "sequence": 3,
+        "expected_revision": 2,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-001.transition.3",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "replayed_idempotency_key",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [
+        {
+          "id": "transition-prior-001",
+          "alert_id": "alert-001",
+          "policy_version": "alert-policy-v1",
+          "sequence": 2,
+          "expected_revision": 1,
+          "from_state": "open",
+          "to_state": "acknowledged",
+          "actor_id": "operator-local-001",
+          "reason_code": "operator_acknowledged",
+          "idempotency_key": "alert-001.transition.2",
+          "occurred_at": "2026-09-12T18:35:02Z"
+        }
+      ],
+      "candidate": {
+        "id": "transition-replay-001",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v1",
+        "sequence": 2,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-001.transition.2",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "forged_alert_reference",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-003",
+        "alert_id": "alert-002",
+        "policy_version": "alert-policy-v1",
+        "sequence": 2,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-002.transition.2",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "policy_version_mismatch",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-004",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v2",
+        "sequence": 2,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-001.transition.2-v2",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "clock_rollback",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-005",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v1",
+        "sequence": 2,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-001.transition.clock",
+        "occurred_at": "2026-09-12T18:33:02Z"
+      }
+    },
+    {
+      "name": "illegal_edge",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-006",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v1",
+        "sequence": 2,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "resolved",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_resolved",
+        "idempotency_key": "alert-001.transition.resolved",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "out_of_order_sequence",
+      "projection": {
+        "id": "alert-001",
+        "detection_id": "detection-001",
+        "policy_version": "alert-policy-v1",
+        "state": "open",
+        "revision": 1,
+        "created_at": "2026-09-12T18:34:02Z",
+        "updated_at": "2026-09-12T18:34:02Z"
+      },
+      "prior": [],
+      "candidate": {
+        "id": "transition-007",
+        "alert_id": "alert-001",
+        "policy_version": "alert-policy-v1",
+        "sequence": 3,
+        "expected_revision": 1,
+        "from_state": "open",
+        "to_state": "acknowledged",
+        "actor_id": "operator-local-001",
+        "reason_code": "operator_acknowledged",
+        "idempotency_key": "alert-001.transition.sequence",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    }
+  ],
+  "receipts": [
+    {
+      "name": "not_attempted_is_the_only_v1_receipt",
+      "outbox": {
+        "id": "outbox-001",
+        "alert_id": "alert-001",
+        "transition_id": "transition-001",
+        "policy_version": "alert-policy-v1",
+        "destination_class": "not_configured",
+        "max_attempts": 0,
+        "status": "pending",
+        "created_at": "2026-09-12T18:35:02Z"
+      },
+      "receipt": {
+        "id": "receipt-001",
+        "outbox_id": "outbox-001",
+        "attempt": 0,
+        "status": "not_attempted",
+        "code": "DELIVERY_NOT_CONFIGURED",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    },
+    {
+      "name": "ambiguous_timeout_cannot_be_delivered_from_v1_outbox",
+      "outbox": {
+        "id": "outbox-001",
+        "alert_id": "alert-001",
+        "transition_id": "transition-001",
+        "policy_version": "alert-policy-v1",
+        "destination_class": "not_configured",
+        "max_attempts": 0,
+        "status": "pending",
+        "created_at": "2026-09-12T18:35:02Z"
+      },
+      "receipt": {
+        "id": "receipt-002",
+        "outbox_id": "outbox-001",
+        "attempt": 1,
+        "status": "failed",
+        "code": "DELIVERY_TIMEOUT_AMBIGUOUS",
+        "occurred_at": "2026-09-12T18:35:02Z"
+      }
+    }
+  ]
+}

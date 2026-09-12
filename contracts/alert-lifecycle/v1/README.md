@@ -12,18 +12,18 @@ This is the smallest source-only slice for [issue #84](https://github.com/bartyt
 | Definition | Purpose | Fixed boundary |
 | --- | --- | --- |
 | `alertProjection` | Mutable operator-facing state derived from one detection | Carries only stable IDs, policy version, state, revision, and timestamps; it contains no evidence payload or verdict. |
-| `transition` | Future append-only state-change ledger entry | Requires a prior state, expected revision, actor placeholder, bounded reason, and idempotency key. |
-| `outboxIntent` | Future durable intent associated with a transition | The only allowed destination class is `not_configured`; no endpoint, credential, provider, or message body exists. |
-| `deliveryReceipt` | Future outcome record, independent of transition state | `not_attempted` is explicit. Attempted, delivered, failed, expired, suppressed, and dead-lettered are descriptions, never proof that an alert transition or detection changed. |
+| `transition` | Future append-only state-change ledger entry | Requires the policy version in force, prior state, expected revision, actor placeholder, bounded reason, and idempotency key. |
+| `outboxIntent` | Future durable intent associated with a transition | The only allowed destination class is `not_configured` and `max_attempts` is exactly zero; no endpoint, credential, provider, or message body exists. |
+| `deliveryReceipt` | Future outcome record, independent of transition state | Uses a closed, provider-neutral code vocabulary. `not_attempted` is explicit; an ambiguous timeout is a failure code, never delivery proof. |
 
-The deterministic transition cases allow `open -> acknowledged`, `open -> suppressed`, `acknowledged -> resolved`, `acknowledged -> open`, and `suppressed -> open`. Direct `open -> resolved`, terminal reopening, and acknowledgement after expiry are rejected. A future implementation must enforce this graph transactionally and must add an explicit, reviewed policy before changing it.
+The deterministic transition cases allow `open -> acknowledged`, `open -> suppressed`, `acknowledged -> resolved`, `acknowledged -> open`, and `suppressed -> open`. Direct `open -> resolved`, terminal reopening, and acknowledgement after expiry are rejected. The semantic fixture oracle also rejects stale revisions, replayed idempotency keys, cross-alert references, policy-version mismatches, clock rollback, and out-of-order sequence values. A future implementation must enforce these relationships transactionally and must add an explicit, reviewed policy before changing them.
 
 ## Limits and exclusions
 
 - All objects are closed; unknown fields fail validation.
 - IDs are bounded logical identifiers, not filesystem paths, URLs, commands, credentials, or provider names.
-- `max_attempts` is capped at three. The supplied draft only permits an inert `not_configured` outbox intent with zero attempts.
-- Receipts carry a fixed bounded code, never raw exceptions, headers, destination values, secrets, packet content, or hashes.
+- The future delivery vocabulary remains bounded to three attempts, but the supplied v1 outbox permits exactly zero attempts. The semantic fixture proves that even an ambiguous-timeout receipt cannot be attached as an attempted or delivered result to this inert intent.
+- Receipts use a fixed provider-neutral code vocabulary, never raw exceptions, headers, destination values, secrets, packet content, or hashes.
 - Schema validation cannot prove authentication, authorization, transactionality, optimistic-concurrency enforcement, ordering, retention, rate limiting, or delivery. Those require separately reviewed runtime work.
 
 ## Validation
@@ -32,7 +32,7 @@ The deterministic transition cases allow `open -> acknowledged`, `open -> suppre
 python -m pytest -q tests/test_alert_lifecycle_contract.py
 ```
 
-The test suite validates the JSON Schema, every positive and negative fixture, the legal transition matrix, bounded retry behavior, and the absence of runtime imports, network/client fields, or executable authority. It does not execute a notifier or create a storage surface.
+The test suite validates the JSON Schema, every positive and negative fixture, the legal transition matrix, semantic replay/stale/clock/policy refusal cases, inert receipt behavior, and the absence of runtime imports, network/client fields, or executable authority. It does not execute a notifier or create a storage surface.
 
 ## Next gate
 

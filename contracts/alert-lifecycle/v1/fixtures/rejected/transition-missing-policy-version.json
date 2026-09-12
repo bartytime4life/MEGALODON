@@ -1,9 +1,8 @@
 {
   "schema": "transition",
   "value": {
-    "id": "transition-001",
+    "id": "transition-002",
     "alert_id": "alert-001",
-    "policy_version": "alert-policy-v1",
     "sequence": 2,
     "expected_revision": 1,
     "from_state": "open",
