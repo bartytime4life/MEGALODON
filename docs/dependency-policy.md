@@ -129,6 +129,51 @@ and the four exact-version PyPI pages recorded in the lock. The ordinary
 constraints' historical provenance above is retained, not rewritten as a
 complete artifact-lock or release receipt.
 
+## Hash-verified packaging-test profile
+
+The `wheel-smoke` job also consumes `constraints/test-linux-cp312.txt` with
+`-r`. This separate requirements lock covers `pytest`, `jsonschema`, and their
+nine transitive requirements on **Linux glibc x86_64 / CPython 3.12**. Its eleven
+versions match the existing resolver constraints; no package upgrade is implied.
+Each entry records one exact wheel filename, PyPI source page, and SHA-256.
+In particular, `rpds-py` admits the CPython 3.12 manylinux x86_64 wheel, not
+Windows, macOS, musl, another architecture/interpreter, or a source archive.
+A missing compatible wheel or dependency fails acquisition, not a source build.
+
+After the existing platform/interpreter preflight, the job downloads the full
+test closure into a separate fresh temporary wheelhouse with mandatory hashes,
+wheel-only policy, no cache, and dependency resolution enabled. It requires
+exactly eleven wheels, records their hashes and the lock digest, then installs
+with `--require-hashes --no-index --force-reinstall` from that directory and runs
+`pip check`. Already installed packages cannot bypass artifact verification.
+The original four-wheel build-tool acquisition and isolated builds then run
+unchanged. Both locks must agree on the shared `packaging` version **and hash**.
+The extracted source distribution byte-matches both locks before running tests.
+
+The existing lock tests now exercise both closed profiles, protect verification
+before use and the independent wheelhouses, and reject test-only weakening even
+when all build-tool controls remain intact. The offline real-pip fixtures also
+include a fully hashed transitive dependency that succeeds, alongside the
+unhashed dependency that fails. These metadata-only probes install nothing;
+exact artifact closure still requires the hosted eleven-wheel acquisition log.
+
+This extends the packaging job's input coverage, not the entire CI environment.
+The Python 3.11 test job and browser job still have their previous constrained,
+not hash-locked, dependency setup. The compatibility-discovery job remains
+unconstrained. Python/pip bootstrap, preinstalled runner packages and plugins,
+OS/browser binaries, publisher authenticity, signed provenance, and byte-for-byte
+reproducibility remain separate. No project dependency, runtime integration,
+sensor, service, or update scheduler is added. Acquisition uses network access;
+index-free installation is not whole-process or OS-level network containment.
+
+Maintain both profiles explicitly: verify the named wheel on the recorded source
+page, review dependency and tag changes, retain hash-failure controls, and read
+full hosted test/package/browser results before accepting a revised lock. Do not
+relax hashes, use `--no-deps` for dependency acquisition, or add alternate
+artifacts merely to make an unsupported profile pass. The primary hash-policy
+basis is [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/);
+the exact-version PyPI pages are provenance observations, not signature checks.
+
 ## Compatibility drift lane
 
 .github/workflows/compatibility-drift.yml runs weekly and by manual dispatch.

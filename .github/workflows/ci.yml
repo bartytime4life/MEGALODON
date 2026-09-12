@@ -72,7 +72,17 @@ jobs:
                   or sys.platform != "linux" or platform.machine() != "x86_64"):
               raise SystemExit("BUILD_INPUT_PROFILE:UNSUPPORTED")
           PYPROFILE
-          python -m pip install -c constraints/ci.txt pytest jsonschema
+          mkdir "$RUNNER_TEMP/test-wheelhouse"
+          python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
+            --dest "$RUNNER_TEMP/test-wheelhouse" -r constraints/test-linux-cp312.txt
+          test_wheels=("$RUNNER_TEMP"/test-wheelhouse/*.whl)
+          [ "${#test_wheels[@]}" -eq 11 ]
+          sha256sum constraints/test-linux-cp312.txt "${test_wheels[@]}"
+          python -m pip install -c constraints/ci.txt --no-index \
+            --find-links "$RUNNER_TEMP/test-wheelhouse" --require-hashes \
+            --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/test-linux-cp312.txt
+          python -m pip check
           mkdir "$RUNNER_TEMP/build-wheelhouse"
           python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
             --dest "$RUNNER_TEMP/build-wheelhouse" -r constraints/build-linux-cp312.txt
@@ -98,6 +108,7 @@ jobs:
           test -f "${sdist_roots[0]}/.gitignore"
           test -f "${sdist_roots[0]}/constraints/ci.txt"
           cmp constraints/build-linux-cp312.txt "${sdist_roots[0]}/constraints/build-linux-cp312.txt"
+          cmp constraints/test-linux-cp312.txt "${sdist_roots[0]}/constraints/test-linux-cp312.txt"
           test -f "${sdist_roots[0]}/.github/workflows/ci.yml"
           test -f "${sdist_roots[0]}/config/settings.toml"
           test -f "${sdist_roots[0]}/contracts/automation/v1/schema.json"
