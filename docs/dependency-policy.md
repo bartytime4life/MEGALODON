@@ -9,7 +9,7 @@ telemetry.
 
 The .github/workflows/ci.yml and the Linux browser-acceptance workflow use
 constraints/ci.txt for their Python test/build resolver. The integrated policy
-is present on current `main@fb2563ba97ee05526c60c45cadbd68f790a5236c` after the
+was recorded at `main@fb2563ba97ee05526c60c45cadbd68f790a5236c` after the
 isolated-build correction in PR #108 and the subsequent capture merge in PR #106.
 The constraint entries retain their original provenance from green workflow run
 `34663054911` on `main@a0d8b535d6958435abcb575e855784ce784e557e`; the resolver
@@ -158,9 +158,9 @@ unhashed dependency that fails. These metadata-only probes install nothing;
 exact artifact closure still requires the hosted eleven-wheel acquisition log.
 
 This extends the packaging job's input coverage, not the entire CI environment.
-The Python 3.11 test job and browser job still have their previous constrained,
-not hash-locked, dependency setup. The compatibility-discovery job remains
-unconstrained. Python/pip bootstrap, preinstalled runner packages and plugins,
+The Python 3.11 test job has the separate profile below. The browser job retains
+its constrained, not hash-locked, dependency setup. Compatibility discovery is
+intentionally unconstrained. Python/pip bootstrap, preinstalled runner packages and plugins,
 OS/browser binaries, publisher authenticity, signed provenance, and byte-for-byte
 reproducibility remain separate. No project dependency, runtime integration,
 sensor, service, or update scheduler is added. Acquisition uses network access;
@@ -173,6 +173,54 @@ relax hashes, use `--no-deps` for dependency acquisition, or add alternate
 artifacts merely to make an unsupported profile pass. The primary hash-policy
 basis is [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/);
 the exact-version PyPI pages are provenance observations, not signature checks.
+
+## Hash-verified Python 3.11 test profile
+
+The required `test` job consumes `constraints/test-linux-cp311.txt` with `-r`.
+This profile covers **Linux glibc x86_64 / CPython 3.11**: the eleven pytest and
+jsonschema dependency wheels plus the existing setuptools editable-build backend.
+All twelve versions match `constraints/ci.txt`. Pure-Python wheel hashes agree
+with the existing packaging profiles; `rpds-py` instead admits exactly its
+CPython 3.11 manylinux x86_64 wheel. This is not a cross-platform lock or a
+package upgrade. Python 3.12 packaging continues to use its own unchanged locks.
+
+The job checks the interpreter, OS, architecture, and libc before acquisition.
+It creates a fresh `test-cp311-wheelhouse`, downloads the full requirements with
+mandatory SHA-256 hashes, binary-only policy, no cache, and dependency resolution,
+and requires twelve wheels. It prints the lock and artifact digests, then
+force-reinstalls from that directory with hashes and index lookup disabled.
+`pip check` follows. Existing installs cannot short-circuit wheel verification.
+A failed acquisition may leave a staged prefix; the nonzero result stops the
+job before installation or editable preparation.
+
+Only after this verification does pip install the repository's local
+`.[test]` editable target. That separate command retains build isolation,
+ordinary/build constraints, and dependency resolution, but receives
+`PIP_NO_INDEX=1`, an absolute `PIP_FIND_LINKS` pointing to the verified wheelhouse,
+and `PIP_ONLY_BINARY=:all:`. A missing backend or newly required third-party
+package fails rather than falling back to an index or source distribution.
+Verbose output records the isolated backend's actual local wheel/version.
+The local repository itself is the pinned Git input, not a downloaded wheel;
+this editable command does not claim that pip hash mode supports editable inputs.
+
+The packaging lane includes and byte-compares this lock in the sdist, but does
+not install its CPython 3.11 wheels. Static regression tests protect the exact
+profile, closure/version/hash parity, verification order, source packaging, and
+index-free isolated editable boundary. Mutation controls distinguish broken
+Python 3.11 wiring even when the older packaging controls remain present. The
+existing real-pip offline hash refusal tests remain a separate control; hosted
+logs must establish twelve actual wheel matches, isolated setuptools selection,
+full pytest and safe CLI results, plus unchanged packaging/browser acceptance.
+
+This does not hash-lock browser setup, Python/pip bootstrap, ambient packages or
+pytest plugins, Node, runner/OS binaries, or publisher authenticity. It is not a
+signed provenance/SBOM, hermetic-build, reproducibility, or network-containment
+claim. The CI workspace is trusted to preserve verified artifacts until use.
+Runtime dependencies, captures, firewall behavior, and operator-host setup are
+unchanged. Maintenance must review wheel identity and dependency changes across
+profiles; never broaden admitted hashes solely to silence a failed build.
+The primary hash-policy reference remains
+[pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/).
 
 ## Compatibility drift lane
 
