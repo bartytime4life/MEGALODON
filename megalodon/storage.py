@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import errno
+import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -333,6 +335,10 @@ PRIVATE_DATABASE_MODE = 0o600
 DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
 MAX_MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024
 CAPACITY_RESERVE_BYTES = 256 * 1024
+DEFAULT_RETENTION_BATCH_ROWS = 100
+MAX_RETENTION_BATCH_ROWS = 256
+RETENTION_RECEIPT_VERSION = "retention-purge-v1"
+RETENTION_RECONCILIATION_REQUIRED = "RETENTION:RECONCILIATION_REQUIRED"
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
@@ -346,6 +352,10 @@ class IngestionRunError(ValueError):
 
 class StorageCapacityError(sqlite3.OperationalError):
     """The configured storage high-water stop refused an intake write."""
+
+
+class RetentionError(ValueError):
+    """A retention preview or bounded purge request failed closed."""
 
 
 def _validate_schema(
@@ -1872,7 +1882,8 @@ class Store:
             )
         return result
 
-    def purge_before(self, before: datetime) -> dict[str, int]:
+    @staticmethod
+    def _retention_cutoff(before: datetime) -> str:
         if not isinstance(before, datetime) or before.tzinfo is None:
             raise ValueError("retention cutoff must be a timezone-aware datetime")
         try:
@@ -1882,22 +1893,297 @@ class Store:
         if offset is None:
             raise ValueError("retention cutoff must be a timezone-aware datetime")
         try:
-            cutoff = before.astimezone(timezone.utc).isoformat()
+            return before.astimezone(timezone.utc).isoformat()
         except (OverflowError, ValueError) as exc:
             raise ValueError("retention cutoff is outside the supported UTC range") from exc
+
+    @staticmethod
+    def _retention_batch_limit(batch_limit: int) -> int:
+        if isinstance(batch_limit, bool) or not isinstance(batch_limit, int):
+            raise RetentionError("RETENTION:INVALID_BATCH_LIMIT")
+        try:
+            parsed = parse_nonnegative_int(
+                batch_limit,
+                "batch_limit",
+                maximum=MAX_RETENTION_BATCH_ROWS,
+            )
+        except ValueError as exc:
+            raise RetentionError("RETENTION:INVALID_BATCH_LIMIT") from exc
+        if parsed == 0:
+            raise RetentionError("RETENTION:INVALID_BATCH_LIMIT")
+        return parsed
+
+    @staticmethod
+    def _valid_retention_token(preview_token: object) -> bool:
+        if not isinstance(preview_token, str) or not preview_token.startswith(
+            "sha256:"
+        ):
+            return False
+        digest = preview_token.removeprefix("sha256:")
+        return len(digest) == 64 and all(char in "0123456789abcdef" for char in digest)
+
+    def _retention_store_identity(self) -> str:
+        self._assert_path_identity()
+        if self._database_descriptor is None:
+            raise RetentionError("RETENTION:IDENTITY_UNVERIFIED")
+        try:
+            info = os.fstat(self._database_descriptor)
+        except OSError as exc:
+            raise RetentionError("RETENTION:IDENTITY_UNVERIFIED") from exc
+        identity = f"{info.st_dev}:{info.st_ino}:{SCHEMA_VERSION}".encode("ascii")
+        return f"sha256:{hashlib.sha256(identity).hexdigest()}"
+
+    def _assert_retention_ready(self) -> None:
+        if self.connection.in_transaction:
+            raise RetentionError("RETENTION:ACTIVE_TRANSACTION")
+        if self.connection.execute(
+            "SELECT 1 FROM ingestion_runs "
+            "WHERE status IN ('running', 'reconciliation_required') LIMIT 1"
+        ).fetchone() is not None:
+            raise RetentionError("RETENTION:ACTIVE_RUN")
+
+    def _retention_candidates(
+        self, cutoff: str, batch_limit: int
+    ) -> tuple[tuple[str, tuple[int, ...]], ...]:
+        remaining = batch_limit
+        candidates: list[tuple[str, tuple[int, ...]]] = []
+        detection_rows = self.connection.execute(
+            "SELECT id FROM detections WHERE detected_at < ? "
+            "ORDER BY detected_at, id LIMIT ?",
+            (cutoff, remaining),
+        ).fetchall()
+        detection_ids = tuple(int(row[0]) for row in detection_rows)
+        candidates.append(("detections", detection_ids))
+        remaining -= len(detection_ids)
+
+        event_ids: tuple[int, ...] = ()
+        if remaining:
+            if detection_ids:
+                placeholders = ",".join("?" for _ in detection_ids)
+                event_statement = (
+                    "SELECT event.id FROM events AS event "
+                    "WHERE event.observed_at < ? AND NOT EXISTS ("
+                    "SELECT 1 FROM detections AS detection "
+                    "WHERE detection.event_id = event.id "
+                    f"AND detection.id NOT IN ({placeholders})) "
+                    "ORDER BY event.observed_at, event.id LIMIT ?"
+                )
+                event_parameters = (cutoff, *detection_ids, remaining)
+            else:
+                event_statement = (
+                    "SELECT event.id FROM events AS event "
+                    "WHERE event.observed_at < ? AND NOT EXISTS ("
+                    "SELECT 1 FROM detections AS detection "
+                    "WHERE detection.event_id = event.id) "
+                    "ORDER BY event.observed_at, event.id LIMIT ?"
+                )
+                event_parameters = (cutoff, remaining)
+            event_rows = self.connection.execute(
+                event_statement, event_parameters
+            ).fetchall()
+            event_ids = tuple(int(row[0]) for row in event_rows)
+        candidates.append(("events", event_ids))
+        remaining -= len(event_ids)
+
+        action_ids: tuple[int, ...] = ()
+        if remaining:
+            if detection_ids:
+                placeholders = ",".join("?" for _ in detection_ids)
+                action_statement = (
+                    "SELECT action.id FROM actions AS action "
+                    "WHERE action.created_at < ? AND NOT EXISTS ("
+                    "SELECT 1 FROM detection_actions AS link "
+                    "WHERE link.action_id = action.id "
+                    f"AND link.detection_id NOT IN ({placeholders})) "
+                    "ORDER BY action.created_at, action.id LIMIT ?"
+                )
+                action_parameters = (cutoff, *detection_ids, remaining)
+            else:
+                action_statement = (
+                    "SELECT action.id FROM actions AS action "
+                    "WHERE action.created_at < ? AND NOT EXISTS ("
+                    "SELECT 1 FROM detection_actions AS link "
+                    "WHERE link.action_id = action.id) "
+                    "ORDER BY action.created_at, action.id LIMIT ?"
+                )
+                action_parameters = (cutoff, remaining)
+            action_rows = self.connection.execute(
+                action_statement,
+                action_parameters,
+            ).fetchall()
+            action_ids = tuple(int(row[0]) for row in action_rows)
+        candidates.append(("actions", action_ids))
+        return tuple(candidates)
+
+    def _retention_candidates_exist(self, cutoff: str) -> bool:
+        statements = (
+            "SELECT 1 FROM detections WHERE detected_at < ? LIMIT 1",
+            "SELECT 1 FROM events AS event WHERE event.observed_at < ? "
+            "AND NOT EXISTS (SELECT 1 FROM detections AS detection "
+            "WHERE detection.event_id = event.id) LIMIT 1",
+            "SELECT 1 FROM actions AS action WHERE action.created_at < ? "
+            "AND NOT EXISTS (SELECT 1 FROM detection_actions AS link "
+            "WHERE link.action_id = action.id) LIMIT 1",
+        )
+        return any(
+            self.connection.execute(statement, (cutoff,)).fetchone() is not None
+            for statement in statements
+        )
+
+    @staticmethod
+    def _retention_token(
+        *,
+        store_identity: str,
+        cutoff: str,
+        batch_limit: int,
+        candidates: tuple[tuple[str, tuple[int, ...]], ...],
+    ) -> str:
+        payload = {
+            "schema": RETENTION_RECEIPT_VERSION,
+            "store_identity": store_identity,
+            "cutoff": cutoff,
+            "batch_limit": batch_limit,
+            "candidates": {
+                table: list(identifiers) for table, identifiers in candidates
+            },
+        }
+        encoded = json.dumps(
+            payload, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+    def _rollback_retention_write(self) -> None:
+        try:
+            self._connection_rollback()
+        except BaseException as exc:
+            self._write_poisoned = True
+            raise RetentionError(RETENTION_RECONCILIATION_REQUIRED) from exc
+
+    def _commit_retention_write(self) -> None:
+        try:
+            self._connection_commit()
+        except BaseException as exc:
+            self._write_poisoned = True
+            try:
+                self.connection.rollback()
+            except sqlite3.Error:
+                pass
+            raise RetentionError(RETENTION_RECONCILIATION_REQUIRED) from exc
+
+    def preview_purge(
+        self,
+        before: datetime,
+        *,
+        batch_limit: int = DEFAULT_RETENTION_BATCH_ROWS,
+    ) -> dict[str, object]:
+        """Describe one finite purge batch without changing audit evidence."""
+
+        cutoff = self._retention_cutoff(before)
+        safe_limit = self._retention_batch_limit(batch_limit)
         with self._lock:
             self._assert_write_trusted()
-            with self.connection:
-                detections = self.connection.execute(
-                    "DELETE FROM detections WHERE detected_at < ?", (cutoff,)
+            self._assert_retention_ready()
+            self.connection.execute("BEGIN")
+            try:
+                store_identity = self._retention_store_identity()
+                if self.connection.execute(
+                    "SELECT 1 FROM ingestion_runs "
+                    "WHERE status IN ('running', 'reconciliation_required') LIMIT 1"
+                ).fetchone() is not None:
+                    raise RetentionError("RETENTION:ACTIVE_RUN")
+                candidates = self._retention_candidates(cutoff, safe_limit)
+                preview_token = self._retention_token(
+                    store_identity=store_identity,
+                    cutoff=cutoff,
+                    batch_limit=safe_limit,
+                    candidates=candidates,
                 )
-                events = self.connection.execute("DELETE FROM events WHERE observed_at < ?", (cutoff,))
-                actions = self.connection.execute("DELETE FROM actions WHERE created_at < ?", (cutoff,))
-            return {
-                "detections": detections.rowcount,
-                "events": events.rowcount,
-                "actions": actions.rowcount,
-            }
+            except BaseException:
+                self._rollback_retention_write()
+                raise
+            self._rollback_retention_write()
+
+        counts = {
+            table: len(identifiers) for table, identifiers in candidates
+        }
+        candidate_total = sum(counts.values())
+        return {
+            "receipt_version": RETENTION_RECEIPT_VERSION,
+            "store_identity": store_identity,
+            "cutoff": cutoff,
+            "batch_limit": safe_limit,
+            "candidate_counts": counts,
+            "candidate_total": candidate_total,
+            "batch_full": candidate_total == safe_limit,
+            "preview_token": preview_token,
+        }
+
+    def purge_before(
+        self,
+        before: datetime,
+        *,
+        batch_limit: int = DEFAULT_RETENTION_BATCH_ROWS,
+        preview_token: str | None = None,
+    ) -> dict[str, object]:
+        """Apply exactly one preview-bound, finite retention batch."""
+
+        cutoff = self._retention_cutoff(before)
+        safe_limit = self._retention_batch_limit(batch_limit)
+
+        with self._lock:
+            self._assert_write_trusted()
+            if not self._valid_retention_token(preview_token):
+                raise RetentionError("RETENTION:INVALID_PREVIEW_TOKEN")
+            self._assert_retention_ready()
+            try:
+                self.connection.execute("BEGIN IMMEDIATE")
+                store_identity = self._retention_store_identity()
+                if self.connection.execute(
+                    "SELECT 1 FROM ingestion_runs "
+                    "WHERE status IN ('running', 'reconciliation_required') LIMIT 1"
+                ).fetchone() is not None:
+                    raise RetentionError("RETENTION:ACTIVE_RUN")
+                candidates = self._retention_candidates(cutoff, safe_limit)
+                actual_token = self._retention_token(
+                    store_identity=store_identity,
+                    cutoff=cutoff,
+                    batch_limit=safe_limit,
+                    candidates=candidates,
+                )
+                if not hmac.compare_digest(preview_token, actual_token):
+                    raise RetentionError("RETENTION:STALE_PREVIEW")
+
+                deleted: dict[str, int] = {}
+                for table, identifiers in candidates:
+                    if not identifiers:
+                        deleted[table] = 0
+                        continue
+                    placeholders = ",".join("?" for _ in identifiers)
+                    cursor = self.connection.execute(
+                        f"DELETE FROM {table} WHERE id IN ({placeholders})",
+                        identifiers,
+                    )
+                    if cursor.rowcount != len(identifiers):
+                        raise RetentionError("RETENTION:CANDIDATE_CHANGED")
+                    deleted[table] = int(cursor.rowcount)
+                self._assert_path_identity()
+                complete = not self._retention_candidates_exist(cutoff)
+            except BaseException:
+                if self.connection.in_transaction:
+                    self._rollback_retention_write()
+                raise
+            self._commit_retention_write()
+
+        return {
+            "receipt_version": RETENTION_RECEIPT_VERSION,
+            "store_identity": store_identity,
+            "cutoff": cutoff,
+            "batch_limit": safe_limit,
+            "preview_token": actual_token,
+            "deleted": deleted,
+            "deleted_total": sum(deleted.values()),
+            "complete": complete,
+        }
 
 
 class DashboardStore:
