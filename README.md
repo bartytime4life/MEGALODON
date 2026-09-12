@@ -62,6 +62,7 @@ record delivery state; they do not override the checked-in contracts.
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
+| Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
 | Suricata record and bounded-reader gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md) and [`reader`](contracts/suricata-eve/v1/reader/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
@@ -137,6 +138,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
+| Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures; no alert mutation, notifier, delivery adapter, or credential path |
 | Reference and evaluation | Manifest-pinned, privacy-minimized IANA service/port and protocol context plus a bounded synthetic detector corpus; separate read-only CLI with no network, store, persistence, action, or subprocess path |
 | CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel builds, an extracted-sdist full test, and installed-package smokes, on pushes to `main` and pull requests |
 
@@ -705,6 +707,7 @@ checks, and skips for every configuration claim.
 .github/workflows/           hosted CI
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
+contracts/alert-lifecycle/v1/ inert alert lifecycle schema, fixtures, and contract notes
 contracts/suricata-eve/v1/   inert alert and bounded-reader contracts, fixtures, and tests
 docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
