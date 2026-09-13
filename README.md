@@ -161,7 +161,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
 | osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
 | nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
-| pytest `>=8,<9` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
+| pytest `>=8,<10` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
 The core Python package currently has no third-party runtime dependency. Git is
 needed for a source checkout; no analyzer, antivirus, capture driver, or firewall
