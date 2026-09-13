@@ -1,9 +1,11 @@
+import json
 import socket
 import subprocess
 
 import pytest
 
 from megalodon import posture
+from megalodon.cli import main
 from megalodon.reference import ReferenceDataError
 
 
@@ -104,3 +106,19 @@ def test_default_profile_is_explicitly_labeled_as_runtime_selection(monkeypatch)
     value = posture.local_posture()
     assert value["selected_platform"] == "windows"
     assert value["selection_mode"] == "runtime_platform"
+
+
+def test_cli_emits_one_bounded_posture_receipt(monkeypatch, capsys):
+    monkeypatch.setattr(posture, "load_iana", lambda: Bundle())
+
+    with pytest.raises(SystemExit) as exit_status:
+        main(["posture", "--platform", "windows"])
+
+    assert exit_status.value.code == 0
+    value = json.loads(capsys.readouterr().out)
+    assert value["schema"] == posture.SCHEMA
+    assert value["selected_platform"] == "windows"
+    assert value["selection_mode"] == "explicit_static_profile"
+    assert value["reference_data"]["status"] == "verified"
+    assert value["network_access_performed"] is False
+    assert value["host_change_performed"] is False
