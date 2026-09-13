@@ -153,6 +153,25 @@ def test_input_mutation_is_failure(tmp_path):
             (tmp_path / 'data').write_text('changed')
 
 
+def test_open_input_close_failure_preserves_primary_error(tmp_path, monkeypatch):
+    (tmp_path / 'data').write_text('metadata')
+    with pytest.raises(OfflineError, match='PRIMARY') as error:
+        with common.open_input(str(tmp_path), 'data', Limits()):
+            monkeypatch.setattr(common.os, 'close', lambda _fd: (_ for _ in ()).throw(OSError('SECRET')))
+            raise OfflineError('PRIMARY')
+    assert error.value.__notes__ == ['offline input cleanup failed; closure is unverified']
+    assert 'SECRET' not in str(error.value)
+
+
+def test_open_input_close_failure_is_a_fixed_error(tmp_path, monkeypatch):
+    (tmp_path / 'data').write_text('metadata')
+    with pytest.raises(OfflineError, match='^INPUT_IO_ERROR$') as error:
+        with common.open_input(str(tmp_path), 'data', Limits()):
+            monkeypatch.setattr(common.os, 'close', lambda _fd: (_ for _ in ()).throw(OSError('SECRET')))
+            pass
+    assert 'SECRET' not in str(error.value)
+
+
 def test_fixed_argv():
     args = tshark.fixed_argv(7, Limits(records=2))
     assert args[:8] == ('/usr/bin/tshark', '-n', '-l', '-r', '/proc/self/fd/7', '-c', '3', '-T')

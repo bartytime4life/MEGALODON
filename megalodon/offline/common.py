@@ -197,6 +197,7 @@ def open_input(root: str, relative: str, limits: Limits) -> Iterator[tuple[int, 
         raise OfflineError('SCOPED_INPUT_ROOT_REQUIRED')
     directory = None
     fd = None
+    primary_error: BaseException | None = None
     try:
         directory = open_directory(root)
         for part in parts[:-1]:
@@ -215,12 +216,28 @@ def open_input(root: str, relative: str, limits: Limits) -> Iterator[tuple[int, 
         if _identity(os.fstat(fd)) != _identity(before):
             raise OfflineError('INPUT_CHANGED')
     except OSError:
-        raise OfflineError('INPUT_IO_ERROR') from None
+        primary_error = OfflineError('INPUT_IO_ERROR')
+        raise primary_error from None
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
+        cleanup_failed = False
         if fd is not None:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except OSError:
+                cleanup_failed = True
         if directory is not None:
-            os.close(directory)
+            try:
+                os.close(directory)
+            except OSError:
+                cleanup_failed = True
+        if cleanup_failed:
+            if primary_error is not None:
+                BaseException.add_note(primary_error, 'offline input cleanup failed; closure is unverified')
+            else:
+                raise OfflineError('INPUT_IO_ERROR') from None
 
 
 def lines(fd: int, limits: Limits) -> Iterator[str]:
