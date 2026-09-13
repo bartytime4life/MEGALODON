@@ -454,6 +454,23 @@ def test_write_failure_removes_partial_report_files(tmp_path, monkeypatch):
     assert list(output.iterdir()) == []
 
 
+def test_output_directory_close_failure_preserves_primary_error(tmp_path, monkeypatch):
+    with pytest.raises(OfflineError, match='PRIMARY') as error:
+        with reports.output_directory(str(tmp_path / 'run')):
+            monkeypatch.setattr(reports.os, 'close', lambda _fd: (_ for _ in ()).throw(OSError('SECRET')))
+            raise OfflineError('PRIMARY')
+    assert error.value.__notes__ == ['offline output cleanup failed; closure is unverified']
+    assert 'SECRET' not in str(error.value)
+
+
+def test_output_directory_close_failure_is_a_fixed_error(tmp_path, monkeypatch):
+    with pytest.raises(OfflineError, match='^OUTPUT_IO_ERROR$') as error:
+        with reports.output_directory(str(tmp_path / 'run')):
+            monkeypatch.setattr(reports.os, 'close', lambda _fd: (_ for _ in ()).throw(OSError('SECRET')))
+            pass
+    assert 'SECRET' not in str(error.value)
+
+
 def test_cleanup_failure_preserves_report_io_error(tmp_path, monkeypatch):
     original_write = reports._write
 

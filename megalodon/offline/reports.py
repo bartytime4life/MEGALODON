@@ -53,6 +53,7 @@ def output_directory(path: str) -> Iterator[int]:
         raise OfflineError('INVALID_OUTPUT_PATH')
     parent = open_directory('/' + '/'.join(parts[:-1]))
     directory = None
+    primary_error: BaseException | None = None
     try:
         os.mkdir(parts[-1], mode=0o700, dir_fd=parent)
         directory = os.open(parts[-1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -62,11 +63,27 @@ def output_directory(path: str) -> Iterator[int]:
             raise OfflineError('PRIVATE_OUTPUT_REQUIRED')
         yield directory
     except OSError:
-        raise OfflineError('OUTPUT_IO_ERROR') from None
+        primary_error = OfflineError('OUTPUT_IO_ERROR')
+        raise primary_error from None
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
+        cleanup_failed = False
         if directory is not None:
-            os.close(directory)
-        os.close(parent)
+            try:
+                os.close(directory)
+            except OSError:
+                cleanup_failed = True
+        try:
+            os.close(parent)
+        except OSError:
+            cleanup_failed = True
+        if cleanup_failed:
+            if primary_error is not None:
+                BaseException.add_note(primary_error, 'offline output cleanup failed; closure is unverified')
+            else:
+                raise OfflineError('OUTPUT_IO_ERROR') from None
 
 
 def _write(directory: int, name: str, content: bytes) -> None:
