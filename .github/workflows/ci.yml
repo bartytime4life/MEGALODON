@@ -33,6 +33,8 @@ jobs:
           python-version: "3.11"
       - name: Repository hygiene guard
         run: python tools/check_repository_hygiene.py
+      - name: Build-input inventory guard
+        run: python tools/build_input_inventory.py --check
       - name: Install package
         run: |
           set -euo pipefail
@@ -140,6 +142,8 @@ jobs:
           test -f "${sdist_roots[0]}/.github/workflows/ci.yml"
           test -f "${sdist_roots[0]}/config/settings.toml"
           test -f "${sdist_roots[0]}/contracts/automation/v1/schema.json"
+          test -f "${sdist_roots[0]}/contracts/build-inputs/v1/README.md"
+          test -f "${sdist_roots[0]}/contracts/build-inputs/v1/inventory.json"
           test -f "${sdist_roots[0]}/contracts/platform/windows-core-v1/acceptance.json"
           test -f "${sdist_roots[0]}/contracts/suricata-eve/v1/schema.json"
           test -f "${sdist_roots[0]}/docs/platform-baseline.md"
@@ -161,7 +165,12 @@ jobs:
             -r constraints/test-linux-cp312.txt -r constraints/build-linux-cp312.txt
           "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip check
           cmp tools/check_sdist_environment.py "${sdist_roots[0]}/tools/check_sdist_environment.py"
+          cmp tools/build_input_inventory.py "${sdist_roots[0]}/tools/build_input_inventory.py"
           "$RUNNER_TEMP/sdist-venv/bin/python" -I tools/check_sdist_environment.py
+          (
+            cd "${sdist_roots[0]}"
+            "$RUNNER_TEMP/sdist-venv/bin/python" -I tools/build_input_inventory.py --check
+          )
           "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip install --no-index --no-deps --no-build-isolation --no-cache-dir "${sdists[0]}"
           "$RUNNER_TEMP/sdist-venv/bin/python" -I -m pip check
           (
