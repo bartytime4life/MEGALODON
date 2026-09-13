@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -30,6 +31,7 @@ from megalodon.dashboard import (
 from megalodon.models import DetectionResult, PacketEvent
 from megalodon.offline.common import Batch, Limits, OfflineError
 from megalodon.offline import reports, tshark
+from megalodon import offline_projection
 from megalodon.offline_projection import MAX_PROJECTED_PORTS, load_offline_projection
 from megalodon.storage import Store
 
@@ -106,6 +108,47 @@ def test_projection_accepts_an_empty_but_complete_run(tmp_path):
     assert projection["summary"]["protocols"] == []
     assert projection["summary"]["relative_window_minutes"] == 0
     assert projection["candidates"] == []
+
+
+def test_projection_file_cleanup_preserves_the_primary_refusal(tmp_path, monkeypatch):
+    output = _run(tmp_path)
+    directory = os.open(output, os.O_RDONLY | os.O_DIRECTORY)
+    original_close = offline_projection.os.close
+
+    def close_then_fail(fd):
+        original_close(fd)
+        raise OSError("synthetic close failure")
+
+    monkeypatch.setattr(offline_projection.os, "close", close_then_fail)
+    try:
+        with pytest.raises(OfflineError, match="OFFLINE_REPORT_SIZE_LIMIT") as error:
+            offline_projection._read_private_file(directory, "manifest.json", 1)
+    finally:
+        original_close(directory)
+
+    assert error.value.__notes__ == ["offline report cleanup failed; closure is unverified"]
+    assert "synthetic close failure" not in str(error.value)
+
+
+def test_projection_file_cleanup_normalizes_close_only_failures(tmp_path, monkeypatch):
+    output = _run(tmp_path)
+    directory = os.open(output, os.O_RDONLY | os.O_DIRECTORY)
+    original_close = offline_projection.os.close
+
+    def close_then_fail(fd):
+        original_close(fd)
+        raise OSError("synthetic close failure")
+
+    monkeypatch.setattr(offline_projection.os, "close", close_then_fail)
+    try:
+        with pytest.raises(OfflineError, match="OFFLINE_REPORT_IO_ERROR"):
+            offline_projection._private_file_size(
+                directory,
+                "manifest.json",
+                offline_projection.MAX_MANIFEST_BYTES,
+            )
+    finally:
+        original_close(directory)
 
 
 def test_projection_rejects_relative_symlink_public_and_incomplete_runs(tmp_path):

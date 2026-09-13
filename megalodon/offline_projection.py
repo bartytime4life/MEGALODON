@@ -96,6 +96,7 @@ def _identity(info: os.stat_result) -> tuple[int, ...]:
 
 def _read_private_file(directory: int, name: str, maximum: int, *, allow_empty: bool = False) -> bytes:
     fd = None
+    primary_error: BaseException | None = None
     try:
         fd = os.open(
             name,
@@ -124,14 +125,25 @@ def _read_private_file(directory: int, name: str, maximum: int, *, allow_empty: 
             _fail("OFFLINE_REPORT_CHANGED")
         return bytes(data)
     except OSError:
-        _fail("OFFLINE_REPORT_IO_ERROR")
+        primary_error = OfflineError("OFFLINE_REPORT_IO_ERROR")
+        raise primary_error from None
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
         if fd is not None:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except OSError:
+                if primary_error is not None:
+                    BaseException.add_note(primary_error, 'offline report cleanup failed; closure is unverified')
+                else:
+                    _fail("OFFLINE_REPORT_IO_ERROR")
 
 
 def _private_file_size(directory: int, name: str, maximum: int, *, allow_empty: bool = False) -> int:
     fd = None
+    primary_error: BaseException | None = None
     try:
         fd = os.open(
             name,
@@ -150,10 +162,20 @@ def _private_file_size(directory: int, name: str, maximum: int, *, allow_empty: 
             _fail("OFFLINE_REPORT_SIZE_LIMIT")
         return info.st_size
     except OSError:
-        _fail("OFFLINE_REPORT_IO_ERROR")
+        primary_error = OfflineError("OFFLINE_REPORT_IO_ERROR")
+        raise primary_error from None
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
         if fd is not None:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except OSError:
+                if primary_error is not None:
+                    BaseException.add_note(primary_error, 'offline report cleanup failed; closure is unverified')
+                else:
+                    _fail("OFFLINE_REPORT_IO_ERROR")
 
 
 def _read_report_set(path: str | Path) -> tuple[dict[str, bytes], dict[str, int]]:
@@ -161,6 +183,7 @@ def _read_report_set(path: str | Path) -> tuple[dict[str, bytes], dict[str, int]
     if not os.path.isabs(value) or value == "/":
         _fail("ABSOLUTE_OFFLINE_RUN_REQUIRED")
     directory = None
+    primary_error: BaseException | None = None
     try:
         directory = open_directory(value)
         before = os.fstat(directory)
@@ -200,13 +223,21 @@ def _read_report_set(path: str | Path) -> tuple[dict[str, bytes], dict[str, int]
         if _identity(os.fstat(directory)) != _identity(before):
             _fail("OFFLINE_REPORT_CHANGED")
         return result, sizes
-    except OfflineError:
+    except OfflineError as exc:
+        primary_error = exc
         raise
     except OSError:
-        _fail("OFFLINE_REPORT_IO_ERROR")
+        primary_error = OfflineError("OFFLINE_REPORT_IO_ERROR")
+        raise primary_error from None
     finally:
         if directory is not None:
-            os.close(directory)
+            try:
+                os.close(directory)
+            except OSError:
+                if primary_error is not None:
+                    BaseException.add_note(primary_error, 'offline report cleanup failed; closure is unverified')
+                else:
+                    _fail("OFFLINE_REPORT_IO_ERROR")
 
 
 def _utc_timestamp(value: object) -> datetime:
