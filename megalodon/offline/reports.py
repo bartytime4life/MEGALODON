@@ -124,5 +124,8 @@ def finish(directory: int, receipt: dict, limits: Limits, *, batch: Batch | None
                 os.unlink(name, dir_fd=directory)
             except FileNotFoundError:
                 pass
+            except OSError:
+                # A cleanup failure must not replace the fixed public failure code.
+                pass
         raise OfflineError('REPORT_IO_ERROR') from None
     return receipt
