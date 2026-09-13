@@ -454,6 +454,32 @@ def test_write_failure_removes_partial_report_files(tmp_path, monkeypatch):
     assert list(output.iterdir()) == []
 
 
+def test_cleanup_failure_preserves_report_io_error(tmp_path, monkeypatch):
+    original_write = reports._write
+
+    def fail_write(fd, name, data):
+        if name == 'baseline.json':
+            raise OSError('SECRET_WRITE_FAILURE')
+        original_write(fd, name, data)
+
+    original_unlink = reports.os.unlink
+
+    def fail_cleanup(name, *, dir_fd):
+        if name == 'records.jsonl':
+            raise OSError('SECRET_CLEANUP_FAILURE')
+        original_unlink(name, dir_fd=dir_fd)
+
+    monkeypatch.setattr(reports, '_write', fail_write)
+    monkeypatch.setattr(reports.os, 'unlink', fail_cleanup)
+    output = tmp_path / 'run'
+    with reports.output_directory(str(output)) as fd:
+        with pytest.raises(OfflineError, match='REPORT_IO_ERROR') as error:
+            reports.finish(fd, reports.manifest('case1', 'tshark', Limits()), Limits(),
+                           batch=batch([packet_at(0)]))
+    assert 'SECRET' not in str(error.value)
+    assert (output / 'records.jsonl').exists()
+
+
 def cli_args(tmp_path, source='zeek-json'):
     return ['--source', source, '--input-root', str(tmp_path), '--input', 'conn.jsonl',
             '--output', str(tmp_path / 'run'), '--case', 'case1', '--zeek-version', '8.2.2']
