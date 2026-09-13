@@ -59,7 +59,9 @@ def test_posture_is_closed_and_marks_every_side_effect_not_attempted(monkeypatch
         "status": "verified",
     }
     assert set(value["capability_status_counts"]) == posture.STATUSES
-    assert sum(value["capability_status_counts"].values()) == 3
+    assert sum(value["capability_status_counts"].values()) == len(
+        posture.catalog("windows")["components"]
+    )
 
 
 @pytest.mark.parametrize(
