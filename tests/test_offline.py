@@ -250,6 +250,34 @@ def test_process_failures_are_bounded_and_sanitized(tmp_path, code, kwargs, expe
     assert 'SECRET' not in str(caught.value)
 
 
+def test_process_cleanup_failure_does_not_replace_the_primary_refusal(tmp_path, monkeypatch):
+    class Process:
+        pid = 123
+        stdout = None
+        stderr = None
+
+        def wait(self, timeout):
+            raise subprocess.TimeoutExpired('synthetic', timeout)
+
+    class BrokenSelector:
+        def __enter__(self):
+            raise OSError('synthetic selector failure')
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(tshark.subprocess, 'Popen', lambda *_args, **_kwargs: Process())
+    monkeypatch.setattr(tshark.selectors, 'DefaultSelector', BrokenSelector)
+    monkeypatch.setattr(tshark.os, 'killpg', lambda *_args: None)
+
+    with pytest.raises(OfflineError, match='ANALYZER_IO_ERROR') as caught:
+        tshark._bounded_process(('synthetic',), env={}, cwd=str(tmp_path), limits=Limits())
+
+    assert caught.value.__notes__ == [
+        'offline analyzer cleanup failed; shutdown is unverified'
+    ]
+
+
 def test_descendant_pipe_holder_is_killed(tmp_path):
     code = ("import subprocess,sys,pathlib; "
             "p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
