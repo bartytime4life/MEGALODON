@@ -43,53 +43,74 @@ def _bounded_process(argv: tuple[str, ...], *, env: dict[str, str], cwd: str,
     output = bytearray()
     stderr_size = 0
     process = None
+    primary_error: BaseException | None = None
     deadline = time.monotonic() + limits.timeout_seconds
     try:
-        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, shell=False, env=env, cwd=cwd,
-                                   close_fds=True, pass_fds=pass_fds, start_new_session=True)
-        with selectors.DefaultSelector() as selector:
-            for stream in (process.stdout, process.stderr):
-                os.set_blocking(stream.fileno(), False)
-                selector.register(stream, selectors.EVENT_READ)
-            while selector.get_map():
+        try:
+            process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, shell=False, env=env, cwd=cwd,
+                                       close_fds=True, pass_fds=pass_fds, start_new_session=True)
+            with selectors.DefaultSelector() as selector:
+                for stream in (process.stdout, process.stderr):
+                    os.set_blocking(stream.fileno(), False)
+                    selector.register(stream, selectors.EVENT_READ)
+                while selector.get_map():
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise OfflineError('TIMEOUT')
+                    for key, _ in selector.select(min(remaining, 0.1)):
+                        is_stdout = key.fileobj is process.stdout
+                        used = len(output) if is_stdout else stderr_size
+                        cap = limits.stdout_bytes if is_stdout else limits.stderr_bytes
+                        chunk = os.read(key.fd, min(4096, cap - used + 1))
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                            continue
+                        if used + len(chunk) > cap:
+                            raise OfflineError('STDOUT_LIMIT' if is_stdout else 'STDERR_LIMIT')
+                        if is_stdout:
+                            output.extend(chunk)
+                        else:
+                            stderr_size += len(chunk)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise OfflineError('TIMEOUT')
-                for key, _ in selector.select(min(remaining, 0.1)):
-                    is_stdout = key.fileobj is process.stdout
-                    used = len(output) if is_stdout else stderr_size
-                    cap = limits.stdout_bytes if is_stdout else limits.stderr_bytes
-                    chunk = os.read(key.fd, min(4096, cap - used + 1))
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                        continue
-                    if used + len(chunk) > cap:
-                        raise OfflineError('STDOUT_LIMIT' if is_stdout else 'STDERR_LIMIT')
-                    if is_stdout:
-                        output.extend(chunk)
-                    else:
-                        stderr_size += len(chunk)
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise OfflineError('TIMEOUT')
-            if process.wait(timeout=remaining) != 0:
-                raise OfflineError('ANALYZER_FAILED')
-        return bytes(output)
-    except subprocess.TimeoutExpired:
-        raise OfflineError('TIMEOUT') from None
-    except OSError:
-        raise OfflineError('ANALYZER_IO_ERROR') from None
+                if process.wait(timeout=remaining) != 0:
+                    raise OfflineError('ANALYZER_FAILED')
+            return bytes(output)
+        except subprocess.TimeoutExpired:
+            raise OfflineError('TIMEOUT') from None
+        except OSError:
+            raise OfflineError('ANALYZER_IO_ERROR') from None
+    except BaseException as error:
+        primary_error = error
+        raise
     finally:
         if process is not None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait(timeout=2)
+            cleanup_error: BaseException | None = None
+
+            def cleanup(operation, ignored: tuple[type[BaseException], ...] = ()) -> None:
+                nonlocal cleanup_error
+                try:
+                    operation()
+                except ignored:
+                    return
+                except BaseException as error:
+                    if cleanup_error is None:
+                        cleanup_error = error
+
+            cleanup(lambda: os.killpg(process.pid, signal.SIGKILL), (ProcessLookupError,))
+            cleanup(lambda: process.wait(timeout=2))
             for stream in (process.stdout, process.stderr):
                 if stream is not None:
-                    stream.close()
+                    cleanup(stream.close)
+            if cleanup_error is not None:
+                if primary_error is not None:
+                    primary_error.add_note("offline analyzer cleanup failed; shutdown is unverified")
+                elif isinstance(cleanup_error, Exception):
+                    raise OfflineError('ANALYZER_CLEANUP_FAILED') from None
+                else:
+                    raise cleanup_error
 
 
 def parse_fields(row: str) -> PacketEvent | None:
@@ -157,30 +178,3 @@ def replay(root: str, relative: str, limits: Limits = Limits()) -> Batch:
         if magic not in MAGIC or size < (28 if magic == b'\x0a\x0d\x0d\x0a' else 24):
             raise OfflineError('UNSUPPORTED_CAPTURE_FORMAT')
         env = {'PATH': '/usr/bin:/bin', 'LANG': 'C', 'LC_ALL': 'C', 'HOME': home,
-               'XDG_CONFIG_HOME': home, 'XDG_CACHE_HOME': home, 'WIRESHARK_CONFIG_DIR': home}
-        probe_limits = Limits(stdout_bytes=8192, stderr_bytes=4096, timeout_seconds=5)
-        probe = _bounded_process((EXECUTABLE, '--version'), env=env, cwd=home, limits=probe_limits)
-        match = re.match(rb'TShark \(Wireshark\) ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})(?:\s|\()', probe)
-        if not match:
-            raise OfflineError('UNRECOGNIZED_ANALYZER_VERSION')
-        tool_version = version(match.group(1).decode('ascii'))
-        raw = _bounded_process(fixed_argv(fd, limits), env=env, cwd=home,
-                               limits=limits, pass_fds=(fd,))
-        if raw and not raw.endswith(b'\n'):
-            raise OfflineError('TRUNCATED_ANALYZER_OUTPUT')
-        if raw.count(b'\n') > limits.records:
-            raise OfflineError('RECORD_LIMIT')
-        rows = raw.split(b'\n')[:-1] if raw else []
-        records = []
-        for row in rows:
-            if len(row) > min(1024, limits.line_bytes):
-                raise OfflineError('FIELD_LINE_LIMIT')
-            try:
-                event = parse_fields(row.decode('ascii'))
-            except UnicodeDecodeError:
-                raise OfflineError('INVALID_ENCODING') from None
-            if event is not None:
-                records.append(event)
-        result = Batch(ADAPTER, 'packet', tuple(records), len(rows), len(rows) - len(records),
-                       size, tool_version, 'subprocess_version')
-    return result  # Only after successful exit, full parse, and input stability check.
