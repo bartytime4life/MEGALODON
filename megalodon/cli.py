@@ -14,6 +14,7 @@ import sys
 
 from . import __version__
 from .capabilities import catalog
+from .posture import local_posture
 from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
 from .config import load_settings
 from .firewall import FirewallError, LIVE_APPLY_UNSUPPORTED, NftablesFirewall
@@ -58,6 +59,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--platform",
         choices=("linux", "windows", "other"),
         help="show one documented profile; defaults to the current runtime family",
+    )
+
+    posture = sub.add_parser(
+        "posture",
+        help="print a bounded package-level posture receipt without probing the host",
+    )
+    posture.add_argument(
+        "--platform",
+        choices=("linux", "windows", "other"),
+        help="select a documented static profile; defaults to the runtime platform family",
     )
 
     hub = sub.add_parser("hub-plan", help="print the static, non-executing integration workflow plan")
@@ -164,6 +175,11 @@ def _configure_logging(level: str) -> None:
 
 def _capabilities(args: argparse.Namespace) -> int:
     print(json.dumps(catalog(args.platform), sort_keys=True))
+    return 0
+
+
+def _posture(args: argparse.Namespace) -> int:
+    print(json.dumps(local_posture(args.platform), sort_keys=True))
     return 0
 
 
@@ -516,6 +532,8 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(raw_argv)
     if args.command == "capabilities":
         code = _capabilities(args)
+    elif args.command == "posture":
+        code = _posture(args)
     elif args.command == "hub-plan":
         code = _hub_plan(args)
     elif args.command == "run":
