@@ -116,10 +116,13 @@ def _valid_receipt(value: object) -> bool:
     if type(value) is not dict or set(value) != _RECEIPT_FIELDS:
         return False
     return (
-        value["provider_class"] == "local_loopback"
+        type(value["provider_class"]) is str
+        and value["provider_class"] == "local_loopback"
+        and type(value["model_id"]) is str
         and value["model_id"] == APPROVED_MODEL_ID
         and type(value["model_artifact_sha256"]) is str
         and _SHA256.fullmatch(value["model_artifact_sha256"]) is not None
+        and type(value["policy_version"]) is str
         and value["policy_version"] == POLICY_VERSION
     )
 
