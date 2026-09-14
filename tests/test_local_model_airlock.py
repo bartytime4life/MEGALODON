@@ -91,9 +91,12 @@ def test_preflight_denies_closed_policy_violations(mutate: object) -> None:
 def test_preflight_denies_when_prompt_would_exceed_its_fixed_byte_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     admitted = airlock.preflight(request())
     assert admitted.plan is not None
-    monkeypatch.setattr(airlock, "MAX_INPUT_BYTES", len(admitted.plan.prompt.encode("utf-8")) - 1)
+    constrained_limit = len(admitted.plan.prompt.encode("utf-8")) - 1
+    monkeypatch.setattr(airlock, "MAX_INPUT_BYTES", constrained_limit)
+    constrained_request = request()
+    constrained_request["limits"]["max_input_bytes"] = constrained_limit
 
-    denied = airlock.preflight(request())
+    denied = airlock.preflight(constrained_request)
 
     assert denied.outcome == "DENY"
     assert denied.code == "POLICY_DENIED"
