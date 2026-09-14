@@ -121,10 +121,10 @@ def test_cli_refuses_growth_without_printing_content(tmp_path, monkeypatch, caps
     monkeypatch.setattr(guard, "tracked_paths", lambda: (path.name,))
     assert guard.main() == 1
     output = capsys.readouterr()
-    assert output.out == ("repository hygiene guard: failed\n"
-                          "- tracked file changed during scan: fixture.txt\n")
-    assert marker.decode() not in output.out
-    assert output.err == ""
+    assert output.out == "repository hygiene guard: failed\n"
+    assert output.err == "repository hygiene guard: 1 finding(s) withheld\n"
+    assert marker.decode() not in output.out + output.err
+    assert "fixture.txt" not in output.out + output.err
 
 
 def test_read_error_is_bounded_and_descriptor_closed(tmp_path, monkeypatch):
