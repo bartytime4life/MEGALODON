@@ -9,7 +9,9 @@ from dataclasses import FrozenInstanceError
 import hashlib
 import http.client
 import json
+import os
 from pathlib import Path
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -191,6 +193,51 @@ def _set_path(value: object, path: list[object], replacement: object) -> None:
         target[final] = replacement  # type: ignore[index]
 
 
+def _json_input_bytes(value: object) -> bytes:
+    """Preserve member order so even order-only input mutation is observable."""
+
+    return json.dumps(
+        value,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("ascii")
+
+
+def _forbid_preflight_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
+    def denied(*args, **kwargs):
+        raise AssertionError("adversarial preflight attempted a forbidden side effect")
+
+    monkeypatch.setattr(builtins, "open", denied)
+    monkeypatch.setattr(os, "open", denied)
+    monkeypatch.setattr(Path, "open", denied)
+    monkeypatch.setattr(socket, "socket", denied)
+    monkeypatch.setattr(socket, "create_connection", denied)
+    monkeypatch.setattr(socket, "getaddrinfo", denied)
+    monkeypatch.setattr(subprocess, "Popen", denied)
+    monkeypatch.setattr(subprocess, "run", denied)
+    monkeypatch.setattr(subprocess, "call", denied)
+    monkeypatch.setattr(subprocess, "check_call", denied)
+    monkeypatch.setattr(subprocess, "check_output", denied)
+    monkeypatch.setattr(sqlite3, "connect", denied)
+    monkeypatch.setattr(urllib.request, "urlopen", denied)
+    monkeypatch.setattr(http.client, "HTTPConnection", denied)
+    monkeypatch.setattr(http.client, "HTTPSConnection", denied)
+    monkeypatch.setattr(Path, "write_text", denied)
+    monkeypatch.setattr(Path, "write_bytes", denied)
+    monkeypatch.setattr(Path, "touch", denied)
+    monkeypatch.setattr(Path, "mkdir", denied)
+    monkeypatch.setattr(Path, "unlink", denied)
+    monkeypatch.setattr(Path, "rename", denied)
+    monkeypatch.setattr(Path, "replace", denied)
+    monkeypatch.setattr(shutil, "which", denied)
+    monkeypatch.setattr(firewall.NftablesFirewall, "available", denied)
+    monkeypatch.setattr(firewall.NftablesFirewall, "install", denied)
+    monkeypatch.setattr(firewall.NftablesFirewall, "plan_block", denied)
+    monkeypatch.setattr(firewall.NftablesFirewall, "block", denied)
+    monkeypatch.setattr(cli, "main", denied)
+
+
 @pytest.mark.parametrize("value", (None, [], "request", 1, True))
 def test_non_object_requests_fail_closed(value: object) -> None:
     assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
@@ -210,6 +257,7 @@ def test_adversarial_corpus_covers_every_denial_class_and_forbidden_registry_fie
     assert {case["expected"] for case in cases} == expected
     case_names = {case["name"] for case in cases}
     assert len(case_names) == len(cases)
+    assert "registry-artifact-digest-tamper" in case_names
     assert set(CORPUS["required_closed_request_cases"]) <= case_names
     paths = {tuple(patch["path"]) for case in cases for patch in case["patches"]}
     for field in ("endpoint", "url", "command", "path", "credential", "prompt"):
@@ -249,6 +297,64 @@ def test_non_string_object_key_is_denied_without_rehashing_or_comparison() -> No
     assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
 
 
+def test_registry_admission_uses_the_fingerprinted_snapshot(monkeypatch) -> None:
+    registry = deepcopy(REGISTRY)
+    substituted_request = request()
+    substituted_request["model_receipt"]["model_id"] = "local:qwen-substituted-v1"
+    substituted_request["model_receipt"]["model_artifact_sha256"] = "f" * 64
+    original_snapshot = advisory._canonical_object_snapshot
+
+    def mutate_caller_registry_after_snapshot(value: dict[str, object]):
+        snapshot = original_snapshot(value)
+        assert snapshot is not None
+        if "models" in value:
+            value["models"][0]["model_receipt"] = deepcopy(  # type: ignore[index]
+                substituted_request["model_receipt"]
+            )
+        return snapshot
+
+    monkeypatch.setattr(
+        advisory, "_canonical_object_snapshot", mutate_caller_registry_after_snapshot
+    )
+
+    decision = preflight_advisory(
+        substituted_request,
+        local_model_registry=registry,
+        local_model_registry_sha256=REGISTRY_SHA256,
+    )
+
+    assert decision.decision == "DENY"
+    assert decision.reason_code == "MODEL_NOT_APPROVED"
+    assert decision.provider_request_performed is False
+
+
+def test_admitted_prompt_uses_the_validated_request_snapshot(monkeypatch) -> None:
+    value = request()
+    original_snapshot = advisory._canonical_object_snapshot
+
+    def mutate_caller_request_after_snapshot(candidate: dict[str, object]):
+        snapshot = original_snapshot(candidate)
+        assert snapshot is not None
+        if "projection" in candidate:
+            candidate["projection"]["source_kind"] = "mutated"  # type: ignore[index]
+        return snapshot
+
+    monkeypatch.setattr(
+        advisory, "_canonical_object_snapshot", mutate_caller_request_after_snapshot
+    )
+
+    decision = preflight_advisory(
+        value,
+        local_model_registry=deepcopy(REGISTRY),
+        local_model_registry_sha256=REGISTRY_SHA256,
+    )
+
+    assert decision.decision == "ADMIT"
+    assert decision.prompt is not None
+    assert '"source_kind":"tshark"' in decision.prompt
+    assert "mutated" not in decision.prompt
+
+
 @pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda case: case["name"])
 def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, object]
@@ -263,41 +369,32 @@ def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     if "max_input_bytes_override" in case:
         monkeypatch.setattr(advisory, "MAX_INPUT_BYTES", case["max_input_bytes_override"])
 
-    def denied(*args, **kwargs):
-        raise AssertionError("adversarial preflight attempted a forbidden side effect")
-
-    monkeypatch.setattr(builtins, "open", denied)
-    monkeypatch.setattr(socket, "socket", denied)
-    monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr(socket, "getaddrinfo", denied)
-    monkeypatch.setattr(subprocess, "Popen", denied)
-    monkeypatch.setattr(subprocess, "run", denied)
-    monkeypatch.setattr(subprocess, "call", denied)
-    monkeypatch.setattr(subprocess, "check_call", denied)
-    monkeypatch.setattr(subprocess, "check_output", denied)
-    monkeypatch.setattr(sqlite3, "connect", denied)
-    monkeypatch.setattr(urllib.request, "urlopen", denied)
-    monkeypatch.setattr(http.client, "HTTPConnection", denied)
-    monkeypatch.setattr(http.client, "HTTPSConnection", denied)
-    monkeypatch.setattr(Path, "write_text", denied)
-    monkeypatch.setattr(Path, "write_bytes", denied)
-    monkeypatch.setattr(Path, "touch", denied)
-    monkeypatch.setattr(Path, "mkdir", denied)
-    monkeypatch.setattr(Path, "unlink", denied)
-    monkeypatch.setattr(Path, "rename", denied)
-    monkeypatch.setattr(Path, "replace", denied)
-    monkeypatch.setattr(firewall.NftablesFirewall, "install", denied)
-    monkeypatch.setattr(firewall.NftablesFirewall, "block", denied)
-    monkeypatch.setattr(cli, "main", denied)
-
-    decision = preflight_advisory(
-        inputs["request"],
-        local_model_registry=inputs["registry"],
-        local_model_registry_sha256=inputs["registry_sha256"],
+    first_inputs = deepcopy(inputs)
+    second_inputs = deepcopy(inputs)
+    first_before = _json_input_bytes(first_inputs)
+    second_before = _json_input_bytes(second_inputs)
+    _forbid_preflight_side_effects(monkeypatch)
+    first = preflight_advisory(
+        first_inputs["request"],
+        local_model_registry=first_inputs["registry"],
+        local_model_registry_sha256=first_inputs["registry_sha256"],
     )
+    assert _json_input_bytes(first_inputs) == first_before
+    second = preflight_advisory(
+        second_inputs["request"],
+        local_model_registry=second_inputs["registry"],
+        local_model_registry_sha256=second_inputs["registry_sha256"],
+    )
+    assert _json_input_bytes(second_inputs) == second_before
 
-    assert decision.to_dict() == CORPUS["expected_receipts"][case["expected"]]
-    assert "forbidden" not in str(decision.to_dict())
+    expected = CORPUS["expected_receipts"][case["expected"]]
+    assert first == second
+    assert first.to_dict() == expected
+    first_bytes = json.dumps(first.to_dict(), separators=(",", ":")).encode("ascii")
+    second_bytes = json.dumps(second.to_dict(), separators=(",", ":")).encode("ascii")
+    expected_bytes = json.dumps(expected, separators=(",", ":")).encode("ascii")
+    assert first_bytes == second_bytes == expected_bytes
+    assert "forbidden" not in str(first.to_dict())
 
 
 def test_decision_is_immutable_and_serialization_is_fresh() -> None:
@@ -310,25 +407,14 @@ def test_decision_is_immutable_and_serialization_is_fresh() -> None:
 
 
 def test_preflight_performs_no_file_network_process_database_or_host_action(monkeypatch) -> None:
-    def denied(*args, **kwargs):
-        raise AssertionError("advisory preflight attempted a forbidden side effect")
-
-    monkeypatch.setattr(builtins, "open", denied)
-    monkeypatch.setattr(socket, "socket", denied)
-    monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr(subprocess, "Popen", denied)
-    monkeypatch.setattr(subprocess, "run", denied)
-    monkeypatch.setattr(sqlite3, "connect", denied)
-    monkeypatch.setattr(urllib.request, "urlopen", denied)
-    monkeypatch.setattr(http.client, "HTTPConnection", denied)
-    monkeypatch.setattr(http.client, "HTTPSConnection", denied)
+    _forbid_preflight_side_effects(monkeypatch)
 
     decision = preflight(request())
     assert decision.decision == "ADMIT"
     assert decision.provider_request_performed is False
 
 
-def test_module_has_no_provider_or_mutating_runtime_imports() -> None:
+def test_module_has_only_pure_standard_library_imports() -> None:
     tree = ast.parse(MODULE.read_text(encoding="utf-8"))
     imported_roots = {
         alias.name.split(".")[0]
@@ -340,17 +426,14 @@ def test_module_has_no_provider_or_mutating_runtime_imports() -> None:
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom)
     }
-    assert not imported_roots & {
-        "asyncio",
-        "http",
-        "megalodon",
-        "os",
-        "pathlib",
-        "requests",
-        "socket",
-        "sqlite3",
-        "subprocess",
-        "urllib",
+    assert imported_roots == {
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "re",
+        "types",
+        "typing",
     }
 
 

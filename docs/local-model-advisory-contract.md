@@ -49,7 +49,7 @@ limits before prompt construction.
 | Run provenance | source kind, adapter version, terminal status, time basis | Fixed allowlist and bounded strings |
 | Aggregate counts | accepted/rejected records, detections by fixed rule, dropped/partial counts | Non-negative bounded integers; a failed run may use JSON `null` only for an unknown rejected-record count |
 | Fixed detector context | rule name, severity, threshold, cooldown, explicit limitation | Repository-owned constants only |
-| Operator question | one explicit bounded question selected from an allowlisted purpose | Plain text, no tool instruction or data query language |
+| Operator question | `explain_run` or `explain_rule_limitations` | Repository-selected purpose text; no free-form prompt, tool instruction, or data query language |
 | Model receipt | logical model ID, provider class, model artifact digest/version, and fixed limits copied from the pinned one-entry registry | Metadata only; no provider secret or endpoint in output |
 
 The projection must exclude:
@@ -104,7 +104,7 @@ future adapter may accept only this conceptual envelope:
   "model_receipt": {
     "provider_class": "local_loopback",
     "model_id": "local:qwen-approved-v1",
-    "model_artifact": "operator-recorded identifier",
+    "model_artifact_sha256": "operator-recorded lowercase SHA-256",
     "policy_version": "local-model-advisory-v1"
   }
 }
@@ -138,8 +138,8 @@ any model request:
 2. a literal loopback endpoint and a single configured provider path;
 3. a closed one-entry local model registry, canonically serialized and matched
    to an independently supplied lowercase SHA-256 pin before request validation;
-4. a strict request timeout, input-byte cap, output-byte cap, token cap, and
-   concurrency cap;
+4. the fixed 4 KiB input cap, 4 KiB output cap, 15-second timeout, and
+   concurrency-one policy;
 5. no automatic model pull, model update, model discovery, fallback provider,
    cloud API, environment-secret read, or outbound DNS/HTTP request;
 6. a fresh, deterministic preflight that rejects the request before contacting
@@ -153,6 +153,13 @@ retrieval store, agent loop, function calling, model-selected model name, or
 streaming transcript. A model provider being installed or reachable does not
 change MEGALODON's static capability catalog.
 
+The preflight rejects a request unless both its registry entry and its request
+carry those four exact limits; it also measures the constructed prompt as UTF-8
+before admission. Because this slice performs no I/O, it cannot consume the
+output, timeout, or concurrency budgets. The second PR must enforce all three
+against the one literal-loopback call and fail closed on partial, late, or
+oversized responses.
+
 ## Security and red-team controls
 
 | Risk | Required control |
@@ -162,7 +169,7 @@ change MEGALODON's static capability catalog.
 | Model requests tools or remediation | No tool schema, no executor, and no model-selected command/action field. |
 | Data disclosure | Metadata-only projection, deny sensitive fields by schema, private local storage, and no egress. |
 | Endpoint redirection or cloud use | Accept only a validated literal loopback endpoint; no redirects, proxy settings, or fallback provider. |
-| Resource exhaustion | Fixed request, response, token, timeout, concurrency, and report-display bounds; cancellation and failure tests. |
+| Resource exhaustion | Fixed request, response, timeout, concurrency, and report-display bounds; cancellation and failure tests. |
 | Model/provider substitution | Require the request receipt and limits to match the sole entry in a structurally closed, fingerprint-pinned local registry. |
 
 ## Delivery sequence
@@ -179,17 +186,18 @@ change MEGALODON's static capability catalog.
    ADMIT/DENY decisions; a reusable adversarial denial corpus; and deterministic
    side-effect negative controls. ADMIT authorizes prompt construction only; no
    request is made.
-4. Add an opt-in literal-loopback provider call only after separately reviewing
-   redirect, proxy, DNS, timeout, response-size, concurrency, and cancellation
-   controls. It must not start Ollama, download a model, or change Qwen
-   configuration.
-5. Add a read-only dashboard projection only after the adapter's data,
-   privacy, error, and browser bounds are proven.
+4. **Second PR:** add one opt-in literal-loopback provider call only after
+   separately reviewing redirect, proxy, DNS, timeout, response-size,
+   concurrency, and cancellation controls. It must not start Ollama, download
+   a model, or change Qwen configuration.
+5. **Third PR:** expose only the immutable read-only receipt in the existing
+   **Deep analysis & context** panel after the adapter's data, privacy, error,
+   and browser bounds are proven.
 6. Consider any active host, network, file, or response integration only as a
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
 
-The existing Qwen identifiers in the automation fixtures remain placeholders.
+The existing Qwen identifiers in the contract fixtures remain placeholders.
 The v1 contract does not mean that Qwen is installed, configured, invoked, or
 allowed to perform any protective action. A runtime remains blocked on step 4.
 

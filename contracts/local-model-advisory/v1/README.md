@@ -61,5 +61,8 @@ python -m pytest -q tests/test_advisory.py
 
 The reusable adversarial denial corpus is
 `fixtures/adversarial/denials.json`. It covers every finite DENY class and the
-forbidden registry-field matrix. Each case is executed under HTTP/socket,
-subprocess, firewall, SQLite, filesystem-write, and command-entry sentinels.
+forbidden registry-field matrix, including a validly shaped artifact-digest
+tamper. Each case runs twice and must return the same exact serialized receipt
+without changing its inputs. HTTP/socket, subprocess, firewall, SQLite,
+filesystem read/write, tool-discovery, and command-entry sentinels fail on any
+attempted side effect.

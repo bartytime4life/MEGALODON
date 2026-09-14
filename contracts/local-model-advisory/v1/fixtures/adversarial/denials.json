@@ -207,6 +207,16 @@
       "expected": "REGISTRY_FINGERPRINT_MISMATCH"
     },
     {
+      "name": "registry-artifact-digest-tamper",
+      "patches": [
+        {
+          "path": ["registry", "models", 0, "model_receipt", "model_artifact_sha256"],
+          "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "expected": "REGISTRY_FINGERPRINT_MISMATCH"
+    },
+    {
       "name": "request-raw-evidence-field",
       "patches": [{"path": ["request", "projection", "raw_log"], "value": "forbidden"}],
       "expected": "REQUEST_SHAPE_INVALID"
