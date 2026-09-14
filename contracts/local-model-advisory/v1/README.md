@@ -1,7 +1,7 @@
 # Local model advisory contract v1
 
-This is a **data-only, proposed** contract for issue #145.  It validates the
-small metadata projection and display-only result envelope described in
+This is a **data-only, proposed** contract delivered through issue #145. It
+validates the small metadata projection and display-only result envelope described in
 [`docs/local-model-advisory-contract.md`](../../../docs/local-model-advisory-contract.md).
 
 Validation is not an adapter.  It does not connect to Ollama, install or start
@@ -30,3 +30,19 @@ python -m pytest -q tests/test_local_model_advisory_contract.py
 
 The fixtures are synthetic and contain no captures, payloads, host identifiers,
 credentials, local paths, or provider configuration.
+
+## No-network preflight
+
+Issue #154 adds a deterministic Python preflight around this contract. It uses
+repository-owned source/adapter pairs, checks one exact operator-approved model
+ID and artifact digest, and constructs one canonical in-memory prompt. An
+`ADMIT` decision authorizes prompt construction only. It is not a provider
+request, model result, detection, evidence item, or action authorization.
+
+The preflight deliberately contains no provider client, endpoint, socket,
+subprocess, filesystem read, database access, capture path, tool call, or host
+mutation. Run its negative controls with:
+
+~~~bash
+python -m pytest -q tests/test_advisory.py
+~~~
