@@ -283,7 +283,7 @@ def preflight_advisory(
     """Admit canonical prompt construction or fail closed without side effects.
 
     An ``ADMIT`` decision authorizes only use of the returned in-memory prompt
-    by a separately reviewed future adapter. This function performs no provider
+    by the separately reviewed provider adapter. This function performs no provider
     request, discovery, file access, process launch, database access, or action.
     """
     if not _valid_digest(local_model_registry_sha256):

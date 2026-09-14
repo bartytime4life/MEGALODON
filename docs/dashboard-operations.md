@@ -23,11 +23,12 @@ closed mapping and never choose an arbitrary selector or route.
 
 The Analysis workspace also shows a **Reserved analysis window · not active**
 card. This is an honest capability boundary, not a button or a model-health
-claim: main currently has only the data-only local-model advisory contract. A
-future explicit, loopback-only advisory invocation may receive one completed
+claim. A separate library-only adapter can make one explicitly enabled,
+Airlock-admitted request to literal IPv4 loopback, but the dashboard does not
+invoke it or read its result. The adapter may receive one completed
 privacy-bounded metadata projection for at most 15 seconds with concurrency one.
-It must not inspect raw traffic, contact the Internet, run in the background, or
-apply a response. Until a separately reviewed runtime adapter exists, its state
+It must not inspect raw traffic, run in the background, or apply a response.
+Until a separately reviewed read-only receipt projection exists, the panel state
 remains **Not implemented**.
 
 There are five distinct surfaces. Do not combine their meanings:
@@ -38,7 +39,7 @@ There are five distinct surfaces. Do not combine their meanings:
 | Offline snapshot | One explicitly selected, validated report projection loaded at startup | A live analyzer connection or automatically refreshed run |
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |
 | Application interfaces | Fourteen repository-defined capability slots, workflow contracts, and next gates for one profile | Embedded vendor consoles, installed programs, live connections, active sensors, or platform acceptance |
-| Reserved AI advisory window | A visible future-runtime boundary: one explicit, bounded local explanation request | An installed/reachable model, live traffic analysis, an evidence source, or a response authority |
+| Reserved AI advisory window | A visible future dashboard boundary for one read-only bounded advisory receipt | An installed/reachable model, an invocation control, live traffic analysis, an evidence source, or a response authority |
 
 The high/critical counter compares sequential stored counts. An increase is not a
 unique new incident; a decrease is not proof that a threat was remediated. The
@@ -108,9 +109,10 @@ Availability words are deliberately narrow:
 - **Evaluation only/guest only** preserve unproved or non-native platform status.
   They must not be promoted by a successful Linux test or by installing a tool.
 - **Contract only/manual only/proposed/unsupported** remain non-runtime or limited
-  relationships. Suricata and the Qwen/Ollama advisory have no runtime importer
-  or provider; ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone,
-  Zabbix, and Nagios Core remain proposed.
+  relationships. Suricata has no runtime importer; Qwen/Ollama is limited to
+  one explicitly enabled library call with no dashboard or CLI entry point;
+  ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone, Zabbix, and
+  Nagios Core remain proposed.
 
 ## Recognize unavailable, paused, and stale data
 
