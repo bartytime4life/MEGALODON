@@ -144,7 +144,7 @@ INDEX_HTML = """<!doctype html>
     <dl class="analysis-facts">
       <div><dt>Current state</dt><dd>Not implemented</dd></div>
       <div><dt>Allowed input</dt><dd>Completed metadata only</dd></div>
-      <div><dt>Result meaning</dt><dd>Advisory · not evidence</dd></div>
+      <div><dt>Result meaning</dt><dd>Advisory · not proof</dd></div>
     </dl>
   </section>
 
