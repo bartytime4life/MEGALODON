@@ -214,6 +214,19 @@ def test_adversarial_corpus_covers_every_denial_class_and_forbidden_registry_fie
     assert ("registry", "tools", 0) in paths
 
 
+def test_non_string_registry_schema_is_denied_without_invoking_equality() -> None:
+    class HostileEquality:
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("registry validation invoked caller-defined equality")
+
+    registry = deepcopy(REGISTRY)
+    registry["schema"] = HostileEquality()
+
+    assert preflight(
+        request(), local_model_registry=registry
+    ).reason_code == "REGISTRY_INVALID"
+
+
 @pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda case: case["name"])
 def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, object]

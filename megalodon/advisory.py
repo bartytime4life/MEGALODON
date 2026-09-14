@@ -207,7 +207,7 @@ def _valid_registry(value: object) -> bool:
     registry = value
     models = registry["models"]
     tools = registry["tools"]
-    if registry["schema"] != _REGISTRY_SCHEMA:
+    if type(registry["schema"]) is not str or registry["schema"] != _REGISTRY_SCHEMA:
         return False
     if type(models) is not list or len(models) != 1 or type(tools) is not list or tools:
         return False
