@@ -172,6 +172,15 @@ calibration, or action authority is produced. A later source-qualified run
 receipt would need to establish those missing measurement assumptions before
 statistical inference or a dashboard comparison surface is considered.
 
+The repository acceptance suite launches the installed comparison module as a
+real subprocess on Linux with isolated Python flags, private synthetic files,
+and the actual identity/capability preflight. It skips with a visible reason on
+root or non-Linux test hosts. A non-root pass requires a bounded successful
+receipt, empty stderr, byte-identical inputs, and no added input-root entries.
+Separate adversarial unit tests deny network, analyzer, model, database,
+firewall, subprocess, and write calls from the command. These tests are not
+installed-TShark evidence and do not authorize operator telemetry.
+
 ## Fixed limits and file boundary
 
 | Boundary | Default and hard ceiling |
