@@ -11,7 +11,8 @@ import stat
 from typing import Any
 
 from .capabilities import runtime_platform
-from .offline.analysis import MAX_CANDIDATES, PROTOCOLS
+from .offline.analysis import MAX_CANDIDATES
+from .offline.baseline import validate_baseline
 from .offline.common import Limits, OfflineError, open_directory, uint, version
 from .offline.reports import REPORT_NAMES, case_id
 from .offline.zeek import json_object
@@ -73,17 +74,6 @@ _CANDIDATE_RULES = (
     "REGULAR_INTERVAL",
     "PORT_53_BURST",
 )
-_BASELINE_FIELDS = {
-    "schema",
-    "adapter",
-    "record_kind",
-    "record_count",
-    "total_bytes",
-    "protocols",
-    "destination_ports",
-    "byte_bands",
-    "relative_minutes",
-}
 
 
 def _fail(code: str) -> None:
@@ -340,111 +330,27 @@ def _manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Limits]:
 
 
 def _baseline(value: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
-    if (
-        set(value) != _BASELINE_FIELDS
-        or value.get("schema") != "offline-baseline-v1"
-        or value.get("adapter") != run["adapter"]
-        or value.get("record_kind") != run["record_kind"]
-    ):
-        _fail("INVALID_OFFLINE_BASELINE")
-    size = run["accepted_records"]
     try:
-        if uint(value.get("record_count"), 10_000) != size:
-            _fail("INVALID_OFFLINE_BASELINE")
-        total_bytes = uint(value.get("total_bytes"), size * (2**41 - 2))
+        summary = validate_baseline(value)
     except OfflineError:
         _fail("INVALID_OFFLINE_BASELINE")
-
-    protocol_items = value.get("protocols")
-    if not isinstance(protocol_items, list) or len(protocol_items) > len(PROTOCOLS):
+    if (summary.adapter != run["adapter"] or summary.record_kind != run["record_kind"] or
+            summary.record_count != run["accepted_records"]):
         _fail("INVALID_OFFLINE_BASELINE")
-    protocols: list[dict[str, int | str]] = []
-    protocol_names: set[str] = set()
-    protocol_total = 0
-    for item in protocol_items:
-        if not isinstance(item, dict) or set(item) != {"protocol", "count"}:
-            _fail("INVALID_OFFLINE_BASELINE")
-        protocol = item.get("protocol")
-        if not isinstance(protocol, str) or protocol not in PROTOCOLS or protocol in protocol_names:
-            _fail("INVALID_OFFLINE_BASELINE")
-        try:
-            count = uint(item.get("count"), size)
-        except OfflineError:
-            _fail("INVALID_OFFLINE_BASELINE")
-        if count == 0:
-            _fail("INVALID_OFFLINE_BASELINE")
-        protocol_names.add(protocol)
-        protocol_total += count
-        protocols.append({"protocol": protocol, "count": count})
-    if protocol_total != size:
-        _fail("INVALID_OFFLINE_BASELINE")
-
-    port_items = value.get("destination_ports")
-    if not isinstance(port_items, list) or len(port_items) > size:
-        _fail("INVALID_OFFLINE_BASELINE")
-    ports: list[dict[str, int | str]] = []
-    port_pairs: set[tuple[str, int]] = set()
-    port_total = 0
-    for item in port_items:
-        if not isinstance(item, dict) or set(item) != {"protocol", "port", "count"}:
-            _fail("INVALID_OFFLINE_BASELINE")
-        protocol = item.get("protocol")
-        if protocol not in {"TCP", "UDP"} or protocol not in protocol_names:
-            _fail("INVALID_OFFLINE_BASELINE")
-        try:
-            port = uint(item.get("port"), 65535)
-            count = uint(item.get("count"), size)
-        except OfflineError:
-            _fail("INVALID_OFFLINE_BASELINE")
-        pair = protocol, port
-        if pair in port_pairs or count == 0:
-            _fail("INVALID_OFFLINE_BASELINE")
-        port_pairs.add(pair)
-        port_total += count
-        ports.append({"protocol": protocol, "port": port, "count": count})
-    if port_total > size:
-        _fail("INVALID_OFFLINE_BASELINE")
-
-    bands = value.get("byte_bands")
-    if not isinstance(bands, dict) or set(bands) != {"small", "medium", "large"}:
-        _fail("INVALID_OFFLINE_BASELINE")
-    try:
-        byte_bands = {name: uint(bands[name], size) for name in ("small", "medium", "large")}
-    except OfflineError:
-        _fail("INVALID_OFFLINE_BASELINE")
-    if sum(byte_bands.values()) != size:
-        _fail("INVALID_OFFLINE_BASELINE")
-
-    minute_items = value.get("relative_minutes")
-    if not isinstance(minute_items, list) or len(minute_items) > size:
-        _fail("INVALID_OFFLINE_BASELINE")
-    minute_total = 0
-    minutes: set[int] = set()
-    for item in minute_items:
-        if not isinstance(item, dict) or set(item) != {"minute", "count"}:
-            _fail("INVALID_OFFLINE_BASELINE")
-        try:
-            minute = uint(item.get("minute"), 68_374_080)
-            count = uint(item.get("count"), size)
-        except OfflineError:
-            _fail("INVALID_OFFLINE_BASELINE")
-        if minute in minutes or count == 0:
-            _fail("INVALID_OFFLINE_BASELINE")
-        minutes.add(minute)
-        minute_total += count
-    if minute_total != size:
-        _fail("INVALID_OFFLINE_BASELINE")
-
-    ranked_ports = sorted(ports, key=lambda item: (-int(item["count"]), str(item["protocol"]), int(item["port"])))
+    protocols = [{"protocol": name, "count": count} for name, count in summary.protocols]
+    ports = [{"protocol": name, "port": port, "count": count}
+             for name, port, count in summary.destination_ports]
+    ranked_ports = sorted(ports, key=lambda item: (-item["count"], item["protocol"], item["port"]))
     return {
-        "record_count": size,
-        "total_bytes": total_bytes,
-        "protocols": sorted(protocols, key=lambda item: (-int(item["count"]), str(item["protocol"]))),
+        "record_count": summary.record_count,
+        "total_bytes": summary.total_bytes,
+        "protocols": sorted(protocols, key=lambda item: (-item["count"], item["protocol"])),
         "destination_ports": ranked_ports[:MAX_PROJECTED_PORTS],
         "destination_ports_total": len(ranked_ports),
         "destination_ports_truncated": len(ranked_ports) > MAX_PROJECTED_PORTS,
-        "byte_bands": byte_bands,
-        "relative_window_minutes": max(minutes) + 1 if minutes else 0,
+        "byte_bands": dict(zip(("small", "medium", "large"), summary.byte_bands)),
+        "relative_window_minutes": (summary.relative_minutes[-1][0] + 1
+                                    if summary.relative_minutes else 0),
     }
 
 
