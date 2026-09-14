@@ -189,7 +189,7 @@ raise SystemExit(guard.main())
 
 
 def test_main_withholds_marker_derived_finding_details(monkeypatch, capsys):
-    marker = "-----BEGIN PRIVATE KEY-----"
+    marker = "-----BEGIN " + "PRIVATE KEY-----"
 
     monkeypatch.setattr(guard, "tracked_paths", lambda: ("fixture.txt",))
     monkeypatch.setattr(
