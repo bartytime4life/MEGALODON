@@ -177,6 +177,11 @@ wrapped text support narrow layouts without changing the read model. Actual
 rendering, contrast, screen readers, zoom, and platform behavior still require
 separate acceptance evidence.
 
+The workspace router recognizes only the fixed fragment targets already owned
+by the dashboard. Startup and `hashchange` restore the owning workspace before
+scrolling to that local element; unknown, oversized, and non-fragment values do
+not change workspace state or become selectors.
+
 ## Validation and residual risk
 
 `tests/test_dashboard_boundaries.py` covers oversized, duplicate, type-confused,

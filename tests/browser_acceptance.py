@@ -206,11 +206,17 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
 
     page.on("request", count)
     try:
-        response = await page.goto(origin + "/")
+        response = await page.goto(origin + ("/#reference-title" if not nonempty else "/"))
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await expect(page.locator("#triage-panel")).to_have_attribute("aria-busy", "false")
-        await expect(page.locator("#workspace-live")).to_be_visible()
-        await expect(page.locator("#workspace-analysis")).to_be_hidden()
+        if not nonempty:
+            await expect(page.locator("#workspace-live")).to_be_hidden()
+            await expect(page.locator("#workspace-analysis")).to_be_visible()
+            passed("startup fragment selects its owning workspace")
+            await page.locator("#workspace-tab-live").click()
+        else:
+            await expect(page.locator("#workspace-live")).to_be_visible()
+            await expect(page.locator("#workspace-analysis")).to_be_hidden()
         await expect(page.locator("#workspace-interfaces")).to_be_hidden()
         await page.locator("#pause-button").click()
         await expect(page.locator("#pause-button")).to_have_attribute("aria-pressed", "true")

@@ -16,6 +16,11 @@ reserved AI boundary; **Interfaces** contains every closed application slot.
 Switching workspaces preserves local filters and never fetches external data or
 starts an analysis.
 
+Existing fragment links continue to select the workspace that owns their target.
+This includes live-review/detection, deep-analysis/reference/offline, and
+integration-map fragments; browser back/forward fragment changes use the same
+closed mapping and never choose an arbitrary selector or route.
+
 The Analysis workspace also shows a **Reserved analysis window · not active**
 card. This is an honest capability boundary, not a button or a model-health
 claim: main currently has only the data-only local-model advisory contract. A
