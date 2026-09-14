@@ -328,6 +328,35 @@ def test_registry_admission_uses_the_fingerprinted_snapshot(monkeypatch) -> None
     assert decision.provider_request_performed is False
 
 
+def test_structural_validation_receives_only_owned_snapshots(monkeypatch) -> None:
+    registry = deepcopy(REGISTRY)
+    value = request()
+    original_registry_validator = advisory._valid_registry
+    original_projection_validator = advisory._valid_projection
+
+    def validate_registry(candidate: object) -> bool:
+        assert candidate is not registry
+        registry.clear()
+        return original_registry_validator(candidate)
+
+    def validate_projection(candidate: object) -> bool:
+        assert candidate is not value["projection"]
+        value["projection"].clear()
+        return original_projection_validator(candidate)
+
+    monkeypatch.setattr(advisory, "_valid_registry", validate_registry)
+    monkeypatch.setattr(advisory, "_valid_projection", validate_projection)
+
+    decision = preflight_advisory(
+        value,
+        local_model_registry=registry,
+        local_model_registry_sha256=REGISTRY_SHA256,
+    )
+
+    assert decision.decision == "ADMIT"
+    assert decision.model_id == MODEL_ID
+
+
 def test_admitted_prompt_uses_the_validated_request_snapshot(monkeypatch) -> None:
     value = request()
     original_snapshot = advisory._canonical_object_snapshot

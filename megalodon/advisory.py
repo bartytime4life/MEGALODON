@@ -255,22 +255,47 @@ def _valid_registry(value: object) -> bool:
     )
 
 
-def _canonical_object_snapshot(
-    value: dict[str, object],
-) -> tuple[dict[str, object], bytes] | None:
-    """Return one immutable-by-ownership JSON snapshot and its exact bytes."""
+class _SnapshotError(Exception):
+    pass
+
+
+def _owned_json_value(value: object) -> object:
+    """Copy exact built-in JSON values without caller-defined comparisons."""
+    value_type = type(value)
+    if value is None or value_type in {str, int, bool, float}:
+        return value
+    if value_type is list:
+        return [_owned_json_value(item) for item in tuple(value)]
+    if value_type is dict:
+        items = tuple(dict.items(value))
+        if not all(type(key) is str for key, _ in items):
+            raise _SnapshotError
+        return {key: _owned_json_value(item) for key, item in items}
+    raise _SnapshotError
+
+
+def _canonical_object_snapshot(value: object) -> tuple[dict[str, object], bytes] | None:
+    """Return a guarded owned JSON snapshot and its exact canonical bytes."""
     try:
+        snapshot = _owned_json_value(value)
+        if type(snapshot) is not dict:
+            return None
         canonical_bytes = json.dumps(
-            value,
+            snapshot,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=True,
             allow_nan=False,
         ).encode("utf-8")
-        snapshot = json.loads(canonical_bytes)
-    except (MemoryError, OverflowError, RecursionError, RuntimeError, TypeError, ValueError):
-        return None
-    if type(snapshot) is not dict:
+    except (
+        _SnapshotError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
         return None
     return snapshot, canonical_bytes
 
@@ -289,8 +314,6 @@ def preflight_advisory(
     """
     if not _valid_digest(local_model_registry_sha256):
         return _deny("REGISTRY_PIN_INVALID")
-    if not _valid_registry(local_model_registry):
-        return _deny("REGISTRY_INVALID")
     registry_snapshot = _canonical_object_snapshot(local_model_registry)
     if registry_snapshot is None:
         return _deny("REGISTRY_INVALID")
@@ -301,23 +324,12 @@ def preflight_advisory(
     if registry_sha256 != local_model_registry_sha256:
         return _deny("REGISTRY_FINGERPRINT_MISMATCH")
 
-    if not _exact_object(request, _REQUEST_KEYS):
-        return _deny("REQUEST_SHAPE_INVALID")
-    advisory_request = request
-    projection = advisory_request["projection"]
-    receipt = advisory_request["model_receipt"]
-    limits = advisory_request["limits"]
-    if not (
-        _valid_projection(projection)
-        and _valid_model_receipt(receipt)
-        and _valid_limits(limits)
-    ):
-        return _deny("REQUEST_SHAPE_INVALID")
-
-    request_snapshot = _canonical_object_snapshot(advisory_request)
+    request_snapshot = _canonical_object_snapshot(request)
     if request_snapshot is None:
         return _deny("REQUEST_SHAPE_INVALID")
     advisory_request, _ = request_snapshot
+    if not _exact_object(advisory_request, _REQUEST_KEYS):
+        return _deny("REQUEST_SHAPE_INVALID")
     projection = advisory_request["projection"]
     receipt = advisory_request["model_receipt"]
     limits = advisory_request["limits"]
