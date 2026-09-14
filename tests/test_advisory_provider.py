@@ -13,6 +13,7 @@ import socket
 import sqlite3
 import subprocess
 import threading
+import time
 import urllib.request
 
 import pytest
@@ -56,6 +57,7 @@ class FakeResponse:
         self.offset = 0
         self.read_sizes: list[int] = []
         self.cancel_after_first_read = cancel_after_first_read
+        self.closed = False
 
     def getheader(self, name: str) -> str | None:
         return self.headers.get(name)
@@ -67,6 +69,9 @@ class FakeResponse:
         if self.cancel_after_first_read is not None and len(self.read_sizes) == 1:
             self.cancel_after_first_read.set()
         return chunk
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class FakeConnection:
@@ -82,6 +87,7 @@ class FakeConnection:
         self.timeout = timeout
         self.requests: list[tuple[str, str, bytes, dict[str, str]]] = []
         self.closed = False
+        self.aborted = False
         type(self).instances.append(self)
 
     def request(self, method: str, path: str, *, body: bytes, headers: dict[str, str]) -> None:
@@ -98,6 +104,10 @@ class FakeConnection:
         self.closed = True
         if type(self).close_error is not None:
             raise type(self).close_error
+
+    def abort(self) -> None:
+        self.aborted = True
+        self.close()
 
 
 @pytest.fixture(autouse=True)
@@ -138,6 +148,7 @@ def test_success_uses_only_the_fixed_loopback_request_and_returns_bounded_receip
         15,
     )
     assert connection.closed is True
+    assert FakeConnection.response.closed is True
     assert len(connection.requests) == 1
     method, path, body, headers = connection.requests[0]
     assert method == "POST"
@@ -292,6 +303,93 @@ def test_cancellation_during_bounded_read_closes_the_connection() -> None:
     assert FakeConnection.response.read_sizes == [1024]
 
 
+def test_end_to_end_deadline_interrupts_a_slow_drip_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SlowDripResponse(FakeResponse):
+        def __init__(self, abort_event: threading.Event) -> None:
+            super().__init__()
+            self.abort_event = abort_event
+
+        def read(self, size: int) -> bytes:
+            self.read_sizes.append(size)
+            if self.abort_event.wait(0.02):
+                raise OSError("interrupted slow body")
+            return b" "
+
+    class SlowBodyConnection(FakeConnection):
+        def __init__(self, host: str, port: int, *, timeout: int) -> None:
+            super().__init__(host, port, timeout=timeout)
+            self.abort_event = threading.Event()
+            self.slow_response = SlowDripResponse(self.abort_event)
+
+        def getresponse(self) -> SlowDripResponse:
+            return self.slow_response
+
+        def abort(self) -> None:
+            self.aborted = True
+            self.abort_event.set()
+            self.close()
+
+    monkeypatch.setattr(provider, "_LiteralLoopbackConnection", SlowBodyConnection)
+    monkeypatch.setattr(
+        provider,
+        "FIXED_LIMITS",
+        {**provider.FIXED_LIMITS, "timeout_seconds": 0.06},
+    )
+    started = time.monotonic()
+    receipt = invoke()
+    elapsed = time.monotonic() - started
+
+    connection = SlowBodyConnection.instances[-1]
+    assert receipt.reason_code == "PROVIDER_TIMEOUT"
+    assert receipt.provider_request_performed is True
+    assert connection.aborted is True
+    assert len(connection.slow_response.read_sizes) < 10
+    assert elapsed < 1
+
+
+def test_in_flight_cancellation_interrupts_a_blocked_header_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BlockingHeaderConnection(FakeConnection):
+        entered = threading.Event()
+        released = threading.Event()
+
+        def getresponse(self) -> FakeResponse:
+            type(self).entered.set()
+            type(self).released.wait(2)
+            if self.aborted:
+                raise OSError("interrupted header wait")
+            return super().getresponse()
+
+        def abort(self) -> None:
+            self.aborted = True
+            type(self).released.set()
+            self.close()
+
+    monkeypatch.setattr(provider, "_LiteralLoopbackConnection", BlockingHeaderConnection)
+    cancellation = threading.Event()
+
+    def cancel_after_header_wait_starts() -> None:
+        assert BlockingHeaderConnection.entered.wait(1)
+        cancellation.set()
+
+    canceller = threading.Thread(target=cancel_after_header_wait_starts)
+    canceller.start()
+    started = time.monotonic()
+    receipt = invoke(cancel_event=cancellation)
+    elapsed = time.monotonic() - started
+    canceller.join(1)
+
+    connection = BlockingHeaderConnection.instances[-1]
+    assert receipt.reason_code == "CANCELLED_DURING_RESPONSE"
+    assert receipt.provider_request_performed is True
+    assert connection.aborted is True
+    assert not canceller.is_alive()
+    assert elapsed < 1
+
+
 @pytest.mark.parametrize(
     ("raw", "reason"),
     [
@@ -399,6 +497,44 @@ def test_wrong_literal_connection_target_fails_before_socket_creation(monkeypatc
         PRODUCTION_CONNECTION("127.0.0.2", 11434, timeout=15).connect()
     with pytest.raises(OSError, match="literal loopback invariant"):
         PRODUCTION_CONNECTION("127.0.0.1", 11435, timeout=15).connect()
+
+
+def test_literal_connection_abort_shuts_down_the_detached_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class Socket:
+        def settimeout(self, timeout: object) -> None:
+            calls.append(("timeout", timeout))
+
+        def connect(self, address: object) -> None:
+            calls.append(("connect", address))
+
+        def shutdown(self, direction: object) -> None:
+            calls.append(("shutdown", direction))
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    monkeypatch.setattr(
+        socket,
+        "socket",
+        lambda family, kind: (
+            calls.append(("socket", family, kind)) or Socket()
+        ),
+    )
+    connection = PRODUCTION_CONNECTION(
+        provider.LOOPBACK_HOST,
+        provider.LOOPBACK_PORT,
+        timeout=15,
+    )
+    connection.connect()
+    connection.sock = None  # HTTPConnection detaches on a Connection: close response.
+    connection.abort()
+
+    assert ("shutdown", socket.SHUT_RDWR) in calls
+    assert calls[-1] == ("close",)
 
 
 def test_provider_surface_has_no_endpoint_model_prompt_header_or_transport_argument() -> None:

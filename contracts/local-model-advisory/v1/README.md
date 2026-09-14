@@ -82,9 +82,11 @@ The adapter has no endpoint, URL, model override, raw prompt, header, credential
 transport, tool, or action parameter. It does not use proxy environment values,
 DNS, redirects, streaming, discovery, model pull/update, subprocesses, files,
 SQLite, capture, or firewall code. One process-wide nonblocking lock enforces
-concurrency one; the socket timeout is 15 seconds; `num_predict` is 512;
-`think` is false; `keep_alive` is zero; raw response and decoded model text are
-separately bounded.
+concurrency one; a monotonic end-to-end deadline is 15 seconds; `num_predict` is
+512; `think` is false; `keep_alive` is zero; raw response and decoded model text
+are separately bounded. A short-lived guard shuts down the fixed active socket
+when the deadline expires or the caller cancels, including during blocked header
+and body reads.
 
 Provider output is accepted only from one terminal HTTP 200 JSON response with
 the exact model ID, `done: true`, no non-empty reasoning field, a closed provider

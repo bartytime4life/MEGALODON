@@ -14,6 +14,7 @@ import http.client
 import json
 import socket
 import threading
+import time
 from types import MappingProxyType
 from typing import Any
 
@@ -33,6 +34,8 @@ MAX_PROVIDER_REQUEST_BYTES = 6144
 MAX_PROVIDER_BODY_BYTES = 12_288
 MAX_SUMMARY_CHARACTERS = 1200
 MAX_PREDICT_TOKENS = 512
+WATCHDOG_POLL_SECONDS = 0.05
+WATCHDOG_JOIN_SECONDS = 0.25
 
 _RESPONSE_REQUIRED_KEYS = frozenset({"model", "response", "done"})
 _RESPONSE_ALLOWED_KEYS = frozenset(
@@ -132,17 +135,114 @@ class AdvisoryInvocationReceipt:
 class _LiteralLoopbackConnection(http.client.HTTPConnection):
     """HTTP/1.1 connection that cannot resolve or select another host."""
 
+    def __init__(self, host: str, port: int, *, timeout: float) -> None:
+        super().__init__(host, port, timeout=timeout)
+        self._abort_requested = threading.Event()
+        self._transport_socket: socket.socket | None = None
+
     def connect(self) -> None:
         if self.host != LOOPBACK_HOST or self.port != LOOPBACK_PORT:
             raise OSError("literal loopback invariant failed")
+        if self._abort_requested.is_set():
+            raise OSError("literal loopback connection aborted")
         connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._transport_socket = connection
+        self.sock = connection
         try:
             connection.settimeout(self.timeout)
+            if self._abort_requested.is_set():
+                raise OSError("literal loopback connection aborted")
             connection.connect((LOOPBACK_HOST, LOOPBACK_PORT))
+            if self._abort_requested.is_set():
+                raise OSError("literal loopback connection aborted")
         except BaseException:
+            if self.sock is connection:
+                self.sock = None
             connection.close()
+            if self._transport_socket is connection:
+                self._transport_socket = None
             raise
-        self.sock = connection
+
+    def abort(self) -> None:
+        """Interrupt any active connect, header wait, or body read."""
+        self._abort_requested.set()
+        connection = self._transport_socket
+        if connection is None:
+            return
+        try:
+            connection.shutdown(socket.SHUT_RDWR)
+        except (OSError, ValueError):
+            pass
+        try:
+            connection.close()
+        except (OSError, ValueError):
+            pass
+        if self.sock is connection:
+            self.sock = None
+
+
+class _InvocationGuard:
+    """Enforce one monotonic deadline and observable in-flight cancellation."""
+
+    def __init__(
+        self,
+        connection: _LiteralLoopbackConnection,
+        cancel_event: threading.Event | None,
+        deadline: float,
+    ) -> None:
+        self._connection = connection
+        self._cancel_event = cancel_event
+        self._deadline = deadline
+        self._complete = threading.Event()
+        self._lock = threading.Lock()
+        self._reason: str | None = None
+        self._started = False
+        self._thread = threading.Thread(
+            target=self._watch,
+            name="megalodon-local-advisory-guard",
+            daemon=True,
+        )
+
+    def _trigger_reason(self) -> str | None:
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            return "CANCELLED_DURING_RESPONSE"
+        if time.monotonic() >= self._deadline:
+            return "PROVIDER_TIMEOUT"
+        return None
+
+    def _trip(self, reason: str) -> None:
+        with self._lock:
+            if self._complete.is_set() or self._reason is not None:
+                return
+            self._reason = reason
+        self._connection.abort()
+
+    def _watch(self) -> None:
+        while not self._complete.is_set():
+            reason = self._trigger_reason()
+            if reason is not None:
+                self._trip(reason)
+                return
+            remaining = max(0.0, self._deadline - time.monotonic())
+            wait_seconds = remaining
+            if self._cancel_event is not None:
+                wait_seconds = min(wait_seconds, WATCHDOG_POLL_SECONDS)
+            if self._complete.wait(wait_seconds):
+                return
+
+    def start(self) -> None:
+        self._thread.start()
+        self._started = True
+
+    def finish(self) -> str | None:
+        with self._lock:
+            if self._reason is None:
+                self._reason = self._trigger_reason()
+            self._complete.set()
+            reason = self._reason
+        if self._started:
+            self._thread.join(WATCHDOG_JOIN_SECONDS)
+        return reason
 
 
 class _InvalidProviderResponse(ValueError):
@@ -314,8 +414,11 @@ def _invoke_admitted(
     admission: AirlockDecision,
     cancel_event: threading.Event | None,
 ) -> AdvisoryInvocationReceipt:
+    deadline = time.monotonic() + FIXED_LIMITS["timeout_seconds"]
     provider_request_performed = False
     connection: _LiteralLoopbackConnection | None = None
+    response: http.client.HTTPResponse | None = None
+    guard: _InvocationGuard | None = None
     result: AdvisoryInvocationReceipt
     try:
         body = _canonical_provider_request(admission)
@@ -329,6 +432,8 @@ def _invoke_admitted(
             LOOPBACK_PORT,
             timeout=FIXED_LIMITS["timeout_seconds"],
         )
+        guard = _InvocationGuard(connection, cancel_event, deadline)
+        guard.start()
         provider_request_performed = True
         connection.request(
             "POST",
@@ -430,13 +535,26 @@ def _invoke_admitted(
             provider_request_performed=provider_request_performed,
         )
     finally:
+        forced_reason = guard.finish() if guard is not None else None
         close_failed = False
+        if response is not None:
+            try:
+                response.close()
+            except Exception:
+                close_failed = True
         if connection is not None:
             try:
                 connection.close()
             except Exception:
                 close_failed = True
-        if close_failed:
+        if forced_reason is not None:
+            result = _receipt(
+                "ERROR",
+                forced_reason,
+                admission=admission,
+                provider_request_performed=provider_request_performed,
+            )
+        elif close_failed:
             result = _receipt(
                 "ERROR",
                 "PROVIDER_CLOSE_FAILED",

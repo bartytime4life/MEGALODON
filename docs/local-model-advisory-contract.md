@@ -146,7 +146,8 @@ before any model request:
 2. the compiled literal loopback endpoint and single fixed provider path;
 3. a closed one-entry local model registry, canonically serialized and matched
    to an independently supplied lowercase SHA-256 pin before request validation;
-4. the fixed 4 KiB input cap, 4 KiB output cap, 15-second timeout, and
+4. the fixed 4 KiB input cap, 4 KiB output cap, 15-second end-to-end monotonic
+   deadline, and
    concurrency-one policy;
 5. no automatic model pull, model update, model discovery, fallback provider,
    cloud API, environment-secret read, DNS lookup, or non-loopback HTTP request;
@@ -172,6 +173,12 @@ finite non-sensitive receipts. Raw provider bodies and exceptions are not copied
 into those receipts. `provider_request_performed: true` records that the adapter
 crossed the request-attempt boundary; it does not claim the provider received or
 completed a request.
+
+A per-invocation guard observes the single monotonic deadline and an optional
+caller cancellation event. It shuts down only the already-fixed loopback socket
+to interrupt connect/request, response-header, or response-body waits, then exits
+before the invocation returns. It is not a scheduler, poller, or model-analysis
+worker.
 
 The exact installed-model artifact remains an operator trust obligation. The
 runtime uses the registry-bound logical model ID as the exact Ollama model name
