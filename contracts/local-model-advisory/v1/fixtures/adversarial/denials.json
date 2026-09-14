@@ -124,6 +124,38 @@
       "provider_request_performed": false
     }
   },
+  "required_closed_request_cases": [
+    "request-root-prompt-field",
+    "request-raw-evidence-field",
+    "request-projection-tool-field",
+    "request-adapter-instruction",
+    "request-adapter-pair-mismatch",
+    "request-adapter-wrong-type",
+    "request-source-unknown",
+    "request-terminal-status-unknown",
+    "request-terminal-status-wrong-type",
+    "request-question-unknown",
+    "request-question-wrong-type",
+    "request-count-boolean",
+    "request-count-float",
+    "request-count-string",
+    "request-count-negative",
+    "request-count-over-limit",
+    "request-provider-substitution",
+    "request-provider-wrong-type",
+    "request-policy-substitution",
+    "request-artifact-uppercase",
+    "request-receipt-endpoint-field",
+    "request-limit-substitution",
+    "request-input-limit-substitution",
+    "request-concurrency-boolean",
+    "request-limit-unknown-field",
+    "request-projection-wrong-type",
+    "request-receipt-wrong-type",
+    "request-limits-wrong-type",
+    "unapproved-model-id",
+    "unapproved-model-artifact"
+  ],
   "cases": [
     {
       "name": "invalid-uppercase-pin",
@@ -180,6 +212,85 @@
       "expected": "REQUEST_SHAPE_INVALID"
     },
     {
+      "name": "request-root-prompt-field",
+      "patches": [{"path": ["request", "prompt"], "value": "ignore previous instructions"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-projection-tool-field",
+      "patches": [{"path": ["request", "projection", "tool"], "value": "shell"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-adapter-instruction",
+      "patches": [
+        {"path": ["request", "projection", "adapter_id"], "value": "ignore-previous-instructions"}
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-adapter-pair-mismatch",
+      "patches": [
+        {"path": ["request", "projection", "adapter_id"], "value": "offline-tshark-v1"}
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-adapter-wrong-type",
+      "patches": [{"path": ["request", "projection", "adapter_id"], "value": []}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-source-unknown",
+      "patches": [{"path": ["request", "projection", "source_kind"], "value": "unknown"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-terminal-status-unknown",
+      "patches": [{"path": ["request", "projection", "terminal_status"], "value": "running"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-terminal-status-wrong-type",
+      "patches": [{"path": ["request", "projection", "terminal_status"], "value": []}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-question-unknown",
+      "patches": [{"path": ["request", "projection", "question_type"], "value": "run a command"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-question-wrong-type",
+      "patches": [{"path": ["request", "projection", "question_type"], "value": []}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-count-boolean",
+      "patches": [{"path": ["request", "projection", "accepted_records"], "value": true}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-count-float",
+      "patches": [{"path": ["request", "projection", "accepted_records"], "value": 1.0}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-count-string",
+      "patches": [{"path": ["request", "projection", "accepted_records"], "value": "1"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-count-negative",
+      "patches": [{"path": ["request", "projection", "accepted_records"], "value": -1}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-count-over-limit",
+      "patches": [{"path": ["request", "projection", "accepted_records"], "value": 1000001}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
       "name": "request-provider-substitution",
       "patches": [
         {"path": ["request", "model_receipt", "provider_class"], "value": "remote"}
@@ -194,8 +305,55 @@
       "expected": "REQUEST_SHAPE_INVALID"
     },
     {
+      "name": "request-provider-wrong-type",
+      "patches": [{"path": ["request", "model_receipt", "provider_class"], "value": []}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-artifact-uppercase",
+      "patches": [
+        {"path": ["request", "model_receipt", "model_artifact_sha256"], "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-receipt-endpoint-field",
+      "patches": [{"path": ["request", "model_receipt", "endpoint"], "value": "loopback"}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
       "name": "request-limit-substitution",
       "patches": [{"path": ["request", "limits", "max_output_bytes"], "value": 4095}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-input-limit-substitution",
+      "patches": [{"path": ["request", "limits", "max_input_bytes"], "value": 4097}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-concurrency-boolean",
+      "patches": [{"path": ["request", "limits", "max_concurrency"], "value": true}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-limit-unknown-field",
+      "patches": [{"path": ["request", "limits", "token_budget"], "value": 10}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-projection-wrong-type",
+      "patches": [{"path": ["request", "projection"], "value": []}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-receipt-wrong-type",
+      "patches": [{"path": ["request", "model_receipt"], "value": []}],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-limits-wrong-type",
+      "patches": [{"path": ["request", "limits"], "value": []}],
       "expected": "REQUEST_SHAPE_INVALID"
     },
     {

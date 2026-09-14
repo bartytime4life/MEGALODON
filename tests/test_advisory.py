@@ -208,6 +208,9 @@ def test_adversarial_corpus_covers_every_denial_class_and_forbidden_registry_fie
     }
     cases = CORPUS["cases"]
     assert {case["expected"] for case in cases} == expected
+    case_names = {case["name"] for case in cases}
+    assert len(case_names) == len(cases)
+    assert set(CORPUS["required_closed_request_cases"]) <= case_names
     paths = {tuple(patch["path"]) for case in cases for patch in case["patches"]}
     for field in ("endpoint", "url", "command", "path", "credential", "prompt"):
         assert ("registry", field) in paths
