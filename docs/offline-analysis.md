@@ -348,6 +348,23 @@ Track the pinned installed-tool receipt in
 skip is expected and must not be restated as either a pass or a failure of that
 optional compatibility lane.
 
+### Recorded prepared-host receipt
+
+On 2026-09-13, the existing header-only lane passed on
+`main@7ad539ccd33687725d18ee8a8cedcc84073c3609` in a Linux UID-1000
+(non-root) environment using Python 3.12.3 and the reviewed system executable
+`/usr/bin/tshark`: TShark/Wireshark 4.2.2, packaged as
+`4.2.2-1.1build3`. The exact invocation and its metadata-only result are
+recorded in [issue #25](https://github.com/bartytime4life/MEGALODON/issues/25).
+The same prepared environment also completed exact-target compilation and the
+full local pytest suite with its expected installed-tool skip.
+
+This is a genuine-tool compatibility receipt for one synthetic header-only
+fixture. It is not a live-capture result, arbitrary-capture containment proof,
+native resource-bound proof, independent GitHub approval, release, deployment,
+or operational authorization. The retained CI skip neither contradicts nor
+extends this receipt.
+
 ## Official format and tool references
 
 - [TShark manual](https://www.wireshark.org/docs/man-pages/tshark.html)
