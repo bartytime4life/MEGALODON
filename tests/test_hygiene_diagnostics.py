@@ -88,13 +88,11 @@ def test_main_keeps_one_line_per_finding_and_nonzero_status(tmp_path, monkeypatc
     monkeypatch.setattr(guard, "tracked_paths", lambda: (name,))
     assert guard.main() == 1
     output = capsys.readouterr()
-    assert output.err == ""
-    lines = output.out.splitlines()
-    assert len(lines) == 2
-    assert lines[0] == "repository hygiene guard: failed"
-    assert lines[1].startswith("- sensitive tracked filename: ")
-    assert_safe_display(lines[1])
-    assert "synthetic ordinary text" not in output.out
+    assert output.out == "repository hygiene guard: failed\n"
+    assert output.err == "repository hygiene guard: 1 finding(s) withheld\n"
+    assert "sensitive tracked filename" not in output.out + output.err
+    assert name not in output.out + output.err
+    assert "synthetic ordinary text" not in output.out + output.err
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX hostile filename fixture")
@@ -184,10 +182,28 @@ raise SystemExit(guard.main())
         cwd=tmp_path, capture_output=True, text=True, timeout=5,
     )
     assert result.returncode == 1
-    assert result.stderr == ""
-    assert len(result.stdout.splitlines()) == 2
-    assert_safe_display(result.stdout.removesuffix("\n").replace("\n", ""))
-    assert "synthetic ordinary text" not in result.stdout
+    assert result.stdout == "repository hygiene guard: failed\n"
+    assert result.stderr == "repository hygiene guard: 1 finding(s) withheld\n"
+    assert "fixture" not in result.stdout + result.stderr
+    assert "synthetic ordinary text" not in result.stdout + result.stderr
+
+
+def test_main_withholds_marker_derived_finding_details(monkeypatch, capsys):
+    marker = "-----BEGIN PRIVATE KEY-----"
+
+    monkeypatch.setattr(guard, "tracked_paths", lambda: ("fixture.txt",))
+    monkeypatch.setattr(
+        guard,
+        "scan_paths",
+        lambda *args: [f"suspected private-key marker: {marker}"],
+    )
+
+    assert guard.main() == 1
+    output = capsys.readouterr()
+    assert output.out == "repository hygiene guard: failed\\n"
+    assert output.err == "repository hygiene guard: 1 finding(s) withheld\\n"
+    assert marker not in output.out + output.err
+    assert "private-key" not in output.out + output.err
 
 
 def test_error_receipt_remains_path_free(monkeypatch, capsys):
