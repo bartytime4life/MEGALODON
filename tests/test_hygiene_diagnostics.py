@@ -200,8 +200,8 @@ def test_main_withholds_marker_derived_finding_details(monkeypatch, capsys):
 
     assert guard.main() == 1
     output = capsys.readouterr()
-    assert output.out == "repository hygiene guard: failed\\n"
-    assert output.err == "repository hygiene guard: 1 finding(s) withheld\\n"
+    assert output.out.splitlines() == ["repository hygiene guard: failed"]
+    assert output.err.splitlines() == ["repository hygiene guard: 1 finding(s) withheld"]
     assert marker not in output.out + output.err
     assert "private-key" not in output.out + output.err
 
