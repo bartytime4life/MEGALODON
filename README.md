@@ -144,7 +144,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
-| Local Qwen advisory | Proposed local-only explanation contract with no runtime adapter, model request, tool use, detector authority, or response authority |
+| Local Qwen advisory | No-network prompt preflight with a fingerprint-pinned one-entry registry and adversarial denial corpus; no runtime adapter, model request, tool use, detector authority, or response authority |
 | Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures; no alert mutation, notifier, delivery adapter, or credential path |
 | Reference and evaluation | Manifest-pinned, privacy-minimized IANA service/port and protocol context plus a bounded synthetic detector corpus; separate read-only CLI with no network, store, persistence, action, or subprocess path |
 | CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel builds, an extracted-sdist full test, and installed-package smokes, on pushes to `main` and pull requests |

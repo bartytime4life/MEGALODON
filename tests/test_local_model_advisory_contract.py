@@ -68,6 +68,12 @@ def test_contract_keeps_provider_and_action_authority_closed() -> None:
         "timeout_seconds": {"const": 15},
         "max_concurrency": {"const": 1},
     }
+    registry = SCHEMA["$defs"]["localModelRegistry"]
+    assert registry["additionalProperties"] is False
+    assert registry["properties"]["schema"] == {"const": "local-model-registry-v1"}
+    assert registry["properties"]["models"]["minItems"] == 1
+    assert registry["properties"]["models"]["maxItems"] == 1
+    assert registry["properties"]["tools"] == {"type": "array", "maxItems": 0}
 
 
 def test_outcome_vocabulary_and_codes_are_closed() -> None:

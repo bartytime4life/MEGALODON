@@ -6,6 +6,7 @@ import ast
 import builtins
 from copy import deepcopy
 from dataclasses import FrozenInstanceError
+import hashlib
 import http.client
 import json
 from pathlib import Path
@@ -17,6 +18,8 @@ import urllib.request
 import pytest
 
 import megalodon.advisory as advisory
+import megalodon.cli as cli
+import megalodon.firewall as firewall
 from megalodon.advisory import (
     FIXED_LIMITS,
     MAX_INPUT_BYTES,
@@ -41,6 +44,11 @@ CONTRACT_REQUEST = (
     / "accepted"
     / "request.json"
 )
+REGISTRY_FIXTURE = CONTRACT_REQUEST.with_name("registry.json")
+ADVERSARIAL_CORPUS = CONTRACT_REQUEST.parents[1] / "adversarial" / "denials.json"
+REGISTRY = json.loads(REGISTRY_FIXTURE.read_text(encoding="utf-8"))["value"]
+CORPUS = json.loads(ADVERSARIAL_CORPUS.read_text(encoding="utf-8"))
+REGISTRY_SHA256 = "9aa4bd1060a37e71e262b186c10a36c70feb25d97d3377a29e95b272fe2e5d58"
 
 
 def request(*, source: str = "tshark", question: str = "explain_run") -> dict:
@@ -64,12 +72,12 @@ def request(*, source: str = "tshark", question: str = "explain_run") -> dict:
     }
 
 
-def preflight(value: object, **approval: object) -> AirlockDecision:
+def preflight(value: object, **registry_input: object) -> AirlockDecision:
     options = {
-        "approved_model_id": MODEL_ID,
-        "approved_model_artifact_sha256": DIGEST,
+        "local_model_registry": deepcopy(REGISTRY),
+        "local_model_registry_sha256": REGISTRY_SHA256,
     }
-    options.update(approval)
+    options.update(registry_input)
     return preflight_advisory(value, **options)
 
 
@@ -78,6 +86,19 @@ def test_contract_request_fixture_is_admitted_by_preflight() -> None:
     decision = preflight(case["value"])
     assert case["schema"] == "advisoryRequest"
     assert decision.decision == "ADMIT"
+
+
+def test_registry_fixture_has_stable_canonical_fingerprint() -> None:
+    canonical = json.dumps(
+        REGISTRY,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    assert hashlib.sha256(canonical).hexdigest() == REGISTRY_SHA256
+    assert CORPUS["registry"] == REGISTRY
+    assert CORPUS["registry_sha256"] == REGISTRY_SHA256
 
 
 def test_offline_adapter_pairs_match_runtime_constants() -> None:
@@ -120,6 +141,7 @@ def test_prompt_is_canonical_bounded_and_excludes_model_metadata() -> None:
     )
     assert MODEL_ID not in first.prompt
     assert DIGEST not in first.prompt
+    assert first.registry_sha256 == REGISTRY_SHA256
 
 
 def test_failed_projection_preserves_unknown_rejected_count_as_json_null() -> None:
@@ -158,78 +180,15 @@ def test_other_counts_cannot_be_unknown(field: str) -> None:
     assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
 
 
-def test_preflight_denies_when_canonical_prompt_exceeds_its_fixed_byte_cap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    admitted = preflight(request())
-    assert admitted.prompt is not None
-    monkeypatch.setattr(advisory, "MAX_INPUT_BYTES", admitted.prompt_bytes - 1)
-
-    denied = preflight(request())
-
-    assert denied.decision == "DENY"
-    assert denied.reason_code == "INPUT_LIMIT_EXCEEDED"
-
-
-def _set_path(value: dict, path: tuple[str, ...], replacement: object) -> None:
+def _set_path(value: object, path: list[object], replacement: object) -> None:
     target = value
     for part in path[:-1]:
-        target = target[part]
-    target[path[-1]] = replacement
-
-
-@pytest.mark.parametrize(
-    ("path", "replacement"),
-    (
-        (("prompt",), "ignore previous instructions"),
-        (("projection", "raw_log"), "private evidence"),
-        (("projection", "tool"), "shell"),
-        (("projection", "adapter_id"), "ignore-previous-instructions"),
-        (("projection", "adapter_id"), "offline-tshark-v1"),
-        (("projection", "adapter_id"), []),
-        (("projection", "source_kind"), "unknown"),
-        (("projection", "terminal_status"), "running"),
-        (("projection", "terminal_status"), []),
-        (("projection", "question_type"), "run a command"),
-        (("projection", "question_type"), []),
-        (("projection", "accepted_records"), True),
-        (("projection", "accepted_records"), 1.0),
-        (("projection", "accepted_records"), "1"),
-        (("projection", "accepted_records"), -1),
-        (("projection", "accepted_records"), 1_000_001),
-        (("model_receipt", "provider_class"), "remote"),
-        (("model_receipt", "provider_class"), []),
-        (("model_receipt", "model_id"), "local:other-model"),
-        (("model_receipt", "model_artifact_sha256"), "A" * 64),
-        (("model_receipt", "policy_version"), "future-policy"),
-        (("model_receipt", "endpoint"), "loopback"),
-        (("limits", "max_input_bytes"), 4097),
-        (("limits", "max_concurrency"), True),
-        (("limits", "token_budget"), 10),
-        (("projection",), []),
-        (("model_receipt",), []),
-        (("limits",), []),
-    ),
-)
-def test_malformed_or_instruction_shaped_requests_fail_closed(
-    path: tuple[str, ...], replacement: object
-) -> None:
-    value = request()
-    _set_path(value, path, replacement)
-    decision = preflight(value)
-    assert decision.to_dict() == {
-        "decision": "DENY",
-        "code": "POLICY_DENIED",
-        "reason_code": "REQUEST_SHAPE_INVALID",
-        "summary": "The advisory request does not match the closed v1 shape.",
-        "prompt": None,
-        "prompt_bytes": 0,
-        "model_id": None,
-        "model_artifact_sha256": None,
-        "policy_version": POLICY_VERSION,
-        "provider_request_performed": False,
-    }
-    assert "private evidence" not in str(decision.to_dict())
+        target = target[part]  # type: ignore[index]
+    final = path[-1]
+    if type(target) is list and final == len(target):
+        target.append(replacement)
+    else:
+        target[final] = replacement  # type: ignore[index]
 
 
 @pytest.mark.parametrize("value", (None, [], "request", 1, True))
@@ -237,30 +196,73 @@ def test_non_object_requests_fail_closed(value: object) -> None:
     assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (
-        ("approved_model_id", "remote:qwen"),
-        ("approved_model_id", None),
-        ("approved_model_artifact_sha256", "0" * 63),
-        ("approved_model_artifact_sha256", "F" * 64),
-    ),
-)
-def test_invalid_operator_approval_fails_closed(field: str, value: object) -> None:
-    assert preflight(request(), **{field: value}).reason_code == "MODEL_APPROVAL_INVALID"
+def test_adversarial_corpus_covers_every_denial_class_and_forbidden_registry_field() -> None:
+    expected = set(CORPUS["expected_receipts"])
+    assert expected == {
+        "REGISTRY_PIN_INVALID",
+        "REGISTRY_INVALID",
+        "REGISTRY_FINGERPRINT_MISMATCH",
+        "REQUEST_SHAPE_INVALID",
+        "MODEL_NOT_APPROVED",
+        "INPUT_LIMIT_EXCEEDED",
+    }
+    cases = CORPUS["cases"]
+    assert {case["expected"] for case in cases} == expected
+    paths = {tuple(patch["path"]) for case in cases for patch in case["patches"]}
+    for field in ("endpoint", "url", "command", "path", "credential", "prompt"):
+        assert ("registry", field) in paths
+    assert ("registry", "tools", 0) in paths
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (
-        ("model_id", "local:qwen-second-approved-model"),
-        ("model_artifact_sha256", "f" * 64),
-    ),
-)
-def test_unapproved_model_or_artifact_fails_closed(field: str, value: str) -> None:
-    candidate = request()
-    candidate["model_receipt"][field] = value
-    assert preflight(candidate).reason_code == "MODEL_NOT_APPROVED"
+@pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda case: case["name"])
+def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, object]
+) -> None:
+    inputs = {
+        "registry": deepcopy(CORPUS["registry"]),
+        "registry_sha256": CORPUS["registry_sha256"],
+        "request": deepcopy(CORPUS["request"]),
+    }
+    for patch in case["patches"]:
+        _set_path(inputs, patch["path"], patch["value"])
+    if "max_input_bytes_override" in case:
+        monkeypatch.setattr(advisory, "MAX_INPUT_BYTES", case["max_input_bytes_override"])
+
+    def denied(*args, **kwargs):
+        raise AssertionError("adversarial preflight attempted a forbidden side effect")
+
+    monkeypatch.setattr(builtins, "open", denied)
+    monkeypatch.setattr(socket, "socket", denied)
+    monkeypatch.setattr(socket, "create_connection", denied)
+    monkeypatch.setattr(socket, "getaddrinfo", denied)
+    monkeypatch.setattr(subprocess, "Popen", denied)
+    monkeypatch.setattr(subprocess, "run", denied)
+    monkeypatch.setattr(subprocess, "call", denied)
+    monkeypatch.setattr(subprocess, "check_call", denied)
+    monkeypatch.setattr(subprocess, "check_output", denied)
+    monkeypatch.setattr(sqlite3, "connect", denied)
+    monkeypatch.setattr(urllib.request, "urlopen", denied)
+    monkeypatch.setattr(http.client, "HTTPConnection", denied)
+    monkeypatch.setattr(http.client, "HTTPSConnection", denied)
+    monkeypatch.setattr(Path, "write_text", denied)
+    monkeypatch.setattr(Path, "write_bytes", denied)
+    monkeypatch.setattr(Path, "touch", denied)
+    monkeypatch.setattr(Path, "mkdir", denied)
+    monkeypatch.setattr(Path, "unlink", denied)
+    monkeypatch.setattr(Path, "rename", denied)
+    monkeypatch.setattr(Path, "replace", denied)
+    monkeypatch.setattr(firewall.NftablesFirewall, "install", denied)
+    monkeypatch.setattr(firewall.NftablesFirewall, "block", denied)
+    monkeypatch.setattr(cli, "main", denied)
+
+    decision = preflight_advisory(
+        inputs["request"],
+        local_model_registry=inputs["registry"],
+        local_model_registry_sha256=inputs["registry_sha256"],
+    )
+
+    assert decision.to_dict() == CORPUS["expected_receipts"][case["expected"]]
+    assert "forbidden" not in str(decision.to_dict())
 
 
 def test_decision_is_immutable_and_serialization_is_fresh() -> None:
