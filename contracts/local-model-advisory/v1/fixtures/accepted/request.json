@@ -1,0 +1,26 @@
+{
+  "schema": "advisoryRequest",
+  "value": {
+    "projection": {
+      "source_kind": "tshark",
+      "adapter_id": "offline-tshark-v1",
+      "terminal_status": "complete",
+      "accepted_records": 206,
+      "rejected_records": 0,
+      "candidate_count": 0,
+      "question_type": "explain_run"
+    },
+    "model_receipt": {
+      "provider_class": "local_loopback",
+      "model_id": "local:qwen-approved-v1",
+      "model_artifact_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "policy_version": "local-model-advisory-v1"
+    },
+    "limits": {
+      "max_input_bytes": 4096,
+      "max_output_bytes": 4096,
+      "timeout_seconds": 15,
+      "max_concurrency": 1
+    }
+  }
+}
