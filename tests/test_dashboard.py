@@ -349,8 +349,12 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "Reserved analysis window · not active" in INDEX_HTML
     assert "A future explicit local advisory may inspect one completed" in INDEX_HTML
     assert "It cannot inspect raw traffic, contact the Internet, start background analysis, or apply a response." in INDEX_HTML
-    assert 'href="#live-review-title"' in INDEX_HTML
-    assert 'href="#deep-analysis-title"' in INDEX_HTML
+    assert 'role="tablist"' in INDEX_HTML
+    assert 'id="workspace-tab-live" type="button" role="tab"' in INDEX_HTML
+    assert 'id="workspace-tab-analysis" type="button" role="tab"' in INDEX_HTML
+    assert 'id="workspace-tab-interfaces" type="button" role="tab"' in INDEX_HTML
+    assert 'id="workspace-analysis" role="tabpanel"' in INDEX_HTML
+    assert 'id="workspace-interfaces" role="tabpanel"' in INDEX_HTML
     assert 'aria-live="polite"' in INDEX_HTML
     assert 'scope="col"' in INDEX_HTML
     assert 'href="#detections-title"' in INDEX_HTML

@@ -136,10 +136,10 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
-| Dashboard | Read-only loopback UI with a short **Live review** layer for stored telemetry and fixed-rule triage, plus a separate **Deep analysis & context** layer for the Reference Library, one selected offline summary, and the static Integration Map. The displayed AI advisory window is reserved/not active: it starts no model request, traffic analysis, or host/network action |
+| Dashboard | Read-only loopback UI pinned to one viewport with persistent **Live review**, **Analysis**, and **Interfaces** workspace tabs. The internally scrolling workspaces separate stored telemetry/triage, Reference Library/offline context, and 14 static application-interface slots. No vendor console is embedded. The displayed AI advisory window is reserved/not active: it starts no model request, traffic analysis, or host/network action |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
-| Capability catalog | Static, read-only Linux/Windows/other status for selected free/open-source tools; performs no host probe or installation |
+| Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |

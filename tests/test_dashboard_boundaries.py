@@ -188,19 +188,20 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert DASHBOARD_JS.rstrip().endswith("bootstrap();")
     assert DASHBOARD_JS.count("\nbootstrap();") == 1
     assert INDEX_HTML.index('id="triage-panel"') < INDEX_HTML.index('id="reference-title"')
-    for target in (
-        "live-review-title",
-        "detections-title",
-        "deep-analysis-title",
-        "reference-title",
-        "offline-title",
-        "integrations-title",
-    ):
-        assert f'href="#{target}"' in INDEX_HTML
+    assert 'id="skip-link" href="#detections-title"' in INDEX_HTML
+    for workspace in ("live", "analysis", "interfaces"):
+        assert f'id="workspace-tab-{workspace}"' in INDEX_HTML
+        assert f'aria-controls="workspace-{workspace}"' in INDEX_HTML
+        assert f'id="workspace-{workspace}" role="tabpanel"' in INDEX_HTML
+    for target in ("live-review-title", "detections-title", "deep-analysis-title", "reference-title", "offline-title", "integrations-title"):
         assert f'id="{target}" tabindex="-1"' in INDEX_HTML
     assert 'role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in DASHBOARD_CSS
+    assert "height: 100dvh" in DASHBOARD_CSS
+    assert "overflow: hidden" in DASHBOARD_CSS
+    assert ".workspace-scroll" in DASHBOARD_CSS
+    assert "<iframe" not in INDEX_HTML.lower()
     assert "innerHTML" not in DASHBOARD_JS and "localStorage" not in DASHBOARD_JS
 
 
@@ -239,6 +240,15 @@ process.stdin.on('end', async () => {
     const nodeFor = id => document.getElementById(id);
     const textOf = n => n.textContent + n.children.map(textOf).join(' ');
     context.plans = plans;
+    run("activateWorkspace('analysis')");
+    assert.equal(nodeFor('workspace-live').hidden, true);
+    assert.equal(nodeFor('workspace-analysis').hidden, false);
+    assert.equal(nodeFor('workspace-interfaces').hidden, true);
+    assert.equal(nodeFor('workspace-tab-analysis').attrs['aria-selected'], 'true');
+    assert.equal(nodeFor('workspace-tab-live').attrs['aria-selected'], 'false');
+    run("activateWorkspace('live')");
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(nodeFor('workspace-analysis').hidden, true);
     for (const platform of ['linux', 'windows', 'other']) {
       assert.equal(run(`validatedIntegrationMap(plans.${platform}, '${platform}').selected_platform`), platform);
     }
@@ -264,12 +274,14 @@ process.stdin.on('end', async () => {
       context.bad = value;
       assert.throws(() => run("applyConfig({schema:'dashboard-config-v1',read_only:true,event_limit:50,refresh_seconds:bad})"));
     }
-    await run('loadIntegrationMap()'); assert.equal(calls.length, 1); assert.equal(nodeFor('integrations-cards').children.length, 8);
+    await run('loadIntegrationMap()'); assert.equal(calls.length, 1); assert.equal(nodeFor('integrations-cards').children.length, 14);
     assert.match(nodeFor('integrations-profile').textContent, /linux/);
     nodeFor('integrations-query').value = 'does-not-exist'; run('renderIntegrationMap()');
-    assert.match(nodeFor('integrations-status').textContent, /0 of 8/);
+    assert.match(nodeFor('integrations-status').textContent, /0 of 14/);
     nodeFor('integrations-query').value = ''; nodeFor('integrations-status-filter').value = 'contract_only'; run('renderIntegrationMap()');
-    assert.equal(nodeFor('integrations-cards').children.length, 1); assert.match(textOf(nodeFor('integrations-cards')), /Suricata/);
+    assert.equal(nodeFor('integrations-cards').children.length, 2);
+    assert.match(textOf(nodeFor('integrations-cards')), /Suricata/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Qwen via local Ollama/);
     nodeFor('integrations-status-filter').value = 'ALL'; nodeFor('integrations-platform').value = 'windows'; run('renderIntegrationMap()');
     assert.match(nodeFor('integrations-profile').textContent, /linux/); assert.match(nodeFor('integrations-status').textContent, /windows is not loaded/);
     await run('loadIntegrationMap()'); assert.match(textOf(nodeFor('integrations-cards')), /Evaluation only/);

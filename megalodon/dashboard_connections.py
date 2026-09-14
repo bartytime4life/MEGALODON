@@ -3,10 +3,10 @@
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
-      <div><h2 id="integrations-title" tabindex="-1">Integration Map</h2><p>Follow each documented input to its output, ownership boundary, and next acceptance gate.</p></div>
+      <div><h2 id="integrations-title" tabindex="-1">Application interfaces</h2><p>See every current or planned MEGALODON interface slot, then follow its documented input, output, ownership boundary, and next acceptance gate.</p></div>
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
-    <p class="reference-warning" id="integrations-boundary">Static capability map — not installed-tool detection, live connectivity, or health monitoring. Loading this map does not install, start, connect, or configure anything.</p>
+    <p class="reference-warning" id="integrations-boundary">View-only MEGALODON slots — never embedded vendor consoles. This static map is not installed-tool detection, live connectivity, or health monitoring; loading it does not install, start, connect, or configure anything.</p>
     <div class="integration-controls">
       <label class="field" for="integrations-platform"><span>Documentation profile</span>
         <select id="integrations-platform"><option value="linux">Linux</option><option value="windows">Windows evaluation</option><option value="other">Other platforms</option></select>
@@ -31,9 +31,6 @@ INTEGRATIONS_HTML = """
 """
 
 INTEGRATIONS_CSS = """
-.section-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
-.section-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 9px 14px; color: var(--text); text-decoration: none; border: 1px solid var(--line); border-radius: 11px; background: rgba(110, 216, 255, .05); }
-.section-nav a:hover { text-decoration: underline; }
 h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 18px 22px 0; }
 .integration-controls .field { flex: 1 1 180px; min-width: 0; }
@@ -41,6 +38,7 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 22px; }
 .integration-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .34); overflow-wrap: anywhere; }
 .integration-card h3 { margin: 0 0 9px; font-size: .95rem; }
+.integration-zone { margin: 0 0 6px; color: var(--aqua); font-size: .65rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
 .integration-card .summary-chip { display: inline-block; border-radius: 9px; }
 .integration-flow { display: grid; gap: 6px; margin: 14px 0; }
 .integration-card dt { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04em; }
@@ -52,7 +50,6 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-empty { grid-column: 1 / -1; margin: 0; padding: 18px; color: var(--muted); font-size: .85rem; }
 @media (max-width: 720px) { .integration-cards { grid-template-columns: 1fr; } }
 @media (max-width: 560px) {
-  .section-nav a { flex: 1 1 130px; }
   .integration-controls, .integration-cards { padding-right: 14px; padding-left: 14px; }
   .integration-footnote { padding-right: 14px; padding-left: 14px; }
   .integration-controls .field, .integration-controls button { flex-basis: 100%; }
@@ -72,8 +69,19 @@ const integrationStatuses = {
 };
 const integrationIds = [
   'core-metadata', 'offline-packet-metadata', 'offline-flow-metadata', 'alert-metadata',
-  'live-metadata-capture', 'time-limited-response', 'manual-file-scan', 'endpoint-inventory'
+  'live-metadata-capture', 'time-limited-response', 'manual-file-scan', 'endpoint-inventory',
+  'local-ai-advisory', 'network-inventory-import', 'host-integrity-import',
+  'vulnerability-report-import', 'zabbix-availability-read', 'nagios-availability-read'
 ];
+const integrationZones = {
+  'core-metadata': 'Core telemetry', 'offline-packet-metadata': 'Packet data',
+  'offline-flow-metadata': 'Flow data', 'alert-metadata': 'Detection data',
+  'live-metadata-capture': 'Capture source', 'time-limited-response': 'Response review',
+  'manual-file-scan': 'Endpoint data', 'endpoint-inventory': 'Endpoint data',
+  'local-ai-advisory': 'Advisory context', 'network-inventory-import': 'Discovery data',
+  'host-integrity-import': 'Endpoint data', 'vulnerability-report-import': 'Vulnerability data',
+  'zabbix-availability-read': 'Availability data', 'nagios-availability-read': 'Availability data'
+};
 const integrationFields = [
   'id', 'component', 'software', 'selected_status', 'source_kind', 'integration_owner',
   'input_contract', 'output_contract', 'entry_point', 'launch_policy', 'data_boundary',
@@ -101,6 +109,7 @@ function validatedIntegrationMap(value, expectedPlatform) {
   const seen = new Set();
   value.workflows.forEach(item => {
     if (!integrationExactKeys(item, integrationFields) || !integrationIds.includes(item.id)
+        || !Object.prototype.hasOwnProperty.call(integrationZones, item.id)
         || seen.has(item.id) || !Object.prototype.hasOwnProperty.call(integrationStatuses, item.selected_status)) {
       throw new Error('invalid integration workflow');
     }
@@ -119,7 +128,11 @@ function integrationDefinition(label, value, parent) {
 }
 function integrationCard(item) {
   const card = document.createElement('article'); card.className = 'integration-card';
-  card.append(textNode('h3', item.software), textNode('span', integrationStatuses[item.selected_status], 'summary-chip'));
+  card.append(
+    textNode('p', integrationZones[item.id], 'integration-zone'),
+    textNode('h3', item.software),
+    textNode('span', integrationStatuses[item.selected_status], 'summary-chip')
+  );
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);
@@ -193,7 +206,11 @@ async function loadIntegrationMap() {
     renderIntegrationMap();
   }
 }
-// No automatic fetch: this panel cannot delay the telemetry bootstrap path.
+// First entry may fetch the same-origin static read model; page bootstrap and
+// telemetry polling never wait for this panel, and failures require manual retry.
+function maybeLoadIntegrationMap() {
+  if (!integrationState.snapshot && !integrationState.loading && !integrationState.failed) loadIntegrationMap();
+}
 byId('integrations-load').addEventListener('click', loadIntegrationMap);
 byId('integrations-query').addEventListener('input', renderIntegrationMap);
 byId('integrations-status-filter').addEventListener('change', renderIntegrationMap);

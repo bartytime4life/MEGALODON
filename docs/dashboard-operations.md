@@ -1,6 +1,6 @@
 # Local command center: operator and acceptance runbook
 
-Status: read-only dashboard behavior and a manually loaded **static Integration
+Status: read-only dashboard behavior and a same-origin **static Integration
 Map**. This guide does not authorize a deployment, remote listener, service,
 capture, analyzer installation, or response action. See the
 [HTTP contract](dashboard-http-contract.md) for exact request semantics and the
@@ -8,14 +8,15 @@ capture, analyzer installation, or response action. See the
 
 ## Read the interface in evidence order
 
-The **Live review** layer leads with the trust strip, stored counters, and
-detection triage. It is the shortest path to the bounded data the dashboard can
-currently read. **Deep analysis & context** follows as a separate layer for
-Reference Library, an offline snapshot, and the static Integration Map. Section
-navigation moves to either layer without changing filters, fetching external
-data, or starting an analysis.
+The command center stays pinned to one browser viewport. Its persistent tabs
+switch among three internally scrolling workspaces without reloading the page:
+**Live review** leads with the trust strip, stored counters, and detection
+triage; **Analysis** contains the Reference Library, offline snapshot, and
+reserved AI boundary; **Interfaces** contains every closed application slot.
+Switching workspaces preserves local filters and never fetches external data or
+starts an analysis.
 
-The Deep analysis layer also shows a **Reserved analysis window · not active**
+The Analysis workspace also shows a **Reserved analysis window · not active**
 card. This is an honest capability boundary, not a button or a model-health
 claim: main currently has only the data-only local-model advisory contract. A
 future explicit, loopback-only advisory invocation may receive one completed
@@ -24,14 +25,14 @@ It must not inspect raw traffic, contact the Internet, run in the background, or
 apply a response. Until a separately reviewed runtime adapter exists, its state
 remains **Not implemented**.
 
-There are four distinct read models. Do not combine their meanings:
+There are five distinct surfaces. Do not combine their meanings:
 
 | Surface | What it represents | What it does not prove |
 | --- | --- | --- |
 | Stored telemetry and triage | The current successful read of bounded stored metadata/detections | Current capture, ingestion, endpoint health, or incident uniqueness |
 | Offline snapshot | One explicitly selected, validated report projection loaded at startup | A live analyzer connection or automatically refreshed run |
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |
-| Integration Map | Repository-defined capabilities, workflow contracts, and next gates for one profile | Installed programs, live connections, active sensors, or platform acceptance |
+| Application interfaces | Fourteen repository-defined capability slots, workflow contracts, and next gates for one profile | Embedded vendor consoles, installed programs, live connections, active sensors, or platform acceptance |
 | Reserved AI advisory window | A visible future-runtime boundary: one explicit, bounded local explanation request | An installed/reachable model, live traffic analysis, an evidence source, or a response authority |
 
 The high/critical counter compares sequential stored counts. An increase is not a
@@ -41,20 +42,23 @@ filters apply only to the returned view, not the entire history.
 
 ## Operate the Integration Map
 
-Choose **Linux**, **Windows evaluation**, or **Other platforms**, then select
-**Load integration map**. This makes one same-origin GET for static repository
-constants. It does not discover executables, inspect devices, resolve hosts,
-probe versions, install software, launch an adapter, or write to SQLite.
+Opening **Interfaces** loads the selected **Linux** profile once through a
+same-origin GET for static repository constants. Choose **Windows evaluation**
+or **Other platforms**, then select **Load integration map** to request that
+profile. A failed first load requires an explicit retry. None of these steps
+discovers executables, inspects devices, resolves hosts, probes versions,
+installs software, launches an adapter, embeds a vendor console, or writes to
+SQLite.
 
 The profile selector is an explicit documentation choice, not operating-system
-detection. Each successful map contains the eight closed hub workflows. Cards
-show software, documented availability, input, output, and the next acceptance
-gate. Expand a card to inspect its workflow ID, source kind, implementation
+detection. Each successful map contains the 14 closed hub workflows. Cards show
+an interface zone, software, documented availability, input, output, and the
+next acceptance gate. Expand a card to inspect its workflow ID, source kind, implementation
 owner, launch policy, data boundary, action boundary, and inert command template.
 A command displayed as text is not an executable control or a complete install
 instruction for the selected profile.
 
-Search filters at most eight cards in memory. The availability filter narrows
+Search filters at most 14 cards in memory. The availability filter narrows
 that same map. **Clear map filters** restores the full loaded map without another
 request. A zero-result filter is explicitly different from a failed map load.
 No filters are written to disk, local storage, the URL, or an external service.
@@ -99,8 +103,9 @@ Availability words are deliberately narrow:
 - **Evaluation only/guest only** preserve unproved or non-native platform status.
   They must not be promoted by a successful Linux test or by installing a tool.
 - **Contract only/manual only/proposed/unsupported** remain non-runtime or limited
-  relationships. Suricata has no runtime importer in this map; ClamAV is a manual
-  companion; osquery remains proposed.
+  relationships. Suricata and the Qwen/Ollama advisory have no runtime importer
+  or provider; ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone,
+  Zabbix, and Nagios Core remain proposed.
 
 ## Recognize unavailable, paused, and stale data
 

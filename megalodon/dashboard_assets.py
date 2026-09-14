@@ -20,7 +20,7 @@ INDEX_HTML = """<!doctype html>
   <script src="/assets/dashboard.js" defer></script>
 </head>
 <body>
-<a class="skip-link" href="#detections-title">Skip to detections</a>
+<a class="skip-link" id="skip-link" href="#detections-title">Skip to detections</a>
 <main class="shell">
   <header class="topbar">
     <div class="brand" aria-label="MEGALODON">
@@ -28,12 +28,17 @@ INDEX_HTML = """<!doctype html>
       <div><p class="brand-name">MEGALODON</p><p class="brand-subtitle">Local defense telemetry</p></div>
     </div>
     <div class="connection" id="connection">Dashboard API · connecting</div>
+    <p class="sr-only" id="refresh-announcement" aria-live="polite"></p>
   </header>
 
-  <nav class="section-nav" aria-label="Dashboard sections">
-    <a href="#live-review-title">Live review</a><a href="#detections-title">Detection triage</a><a href="#deep-analysis-title">Deep analysis</a><a href="#reference-title">Reference Library</a><a href="#offline-title">Offline snapshot</a><a href="#integrations-title">Integration Map</a>
+  <nav class="section-nav" aria-label="Command center workspaces" role="tablist">
+    <button id="workspace-tab-live" type="button" role="tab" aria-controls="workspace-live" aria-selected="true" tabindex="0">Live review</button>
+    <button id="workspace-tab-analysis" type="button" role="tab" aria-controls="workspace-analysis" aria-selected="false" tabindex="-1">Analysis</button>
+    <button id="workspace-tab-interfaces" type="button" role="tab" aria-controls="workspace-interfaces" aria-selected="false" tabindex="-1">Interfaces</button>
   </nav>
 
+  <div class="workspace-scroll" id="workspace-content">
+  <section class="workspace-view" id="workspace-live" role="tabpanel" aria-labelledby="workspace-tab-live">
   <section class="hero" aria-labelledby="page-title">
     <div>
       <p class="eyebrow">Live review</p>
@@ -129,7 +134,9 @@ INDEX_HTML = """<!doctype html>
       </table>
     </div>
   </section>
+  </section>
 
+  <section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>
   <section class="section-intro deep-analysis-intro" aria-labelledby="deep-analysis-title">
     <p class="eyebrow">Second layer</p>
     <div><h2 id="deep-analysis-title" tabindex="-1">Deep analysis &amp; context</h2><p>Optional, bounded views for investigating a completed result. They remain separate from the live review so context never looks like a real-time verdict.</p></div>
@@ -217,9 +224,13 @@ INDEX_HTML = """<!doctype html>
       </aside>
     </div>
   </section>
+  </section>
+
+  <section class="workspace-view" id="workspace-interfaces" role="tabpanel" aria-labelledby="workspace-tab-interfaces" hidden>
 """ + INTEGRATIONS_HTML + """
-  <p class="sr-only" id="refresh-announcement" aria-live="polite"></p>
+  </section>
   <noscript><p class="offline-empty">JavaScript is required to render this local dashboard.</p></noscript>
+  </div>
 </main>
 </body>
 </html>"""
@@ -235,8 +246,9 @@ DASHBOARD_CSS = """
   --shadow: 0 24px 70px rgba(0, 0, 0, .28);
 }
 * { box-sizing: border-box; }
+html { height: 100%; overflow: hidden; }
 body {
-  margin: 0; min-width: 300px; min-height: 100vh; color: var(--text);
+  margin: 0; min-width: 300px; height: 100vh; height: 100dvh; overflow: hidden; color: var(--text);
   background: radial-gradient(circle at 12% -8%, rgba(32, 151, 166, .22), transparent 34rem),
               radial-gradient(circle at 92% 8%, rgba(48, 103, 161, .18), transparent 30rem), var(--bg);
 }
@@ -249,8 +261,8 @@ body::before {
 :focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .skip-link { position: fixed; z-index: 10; top: 10px; left: 10px; padding: 9px 12px; transform: translateY(-160%); border-radius: 9px; background: var(--text); color: var(--bg); font-weight: 800; }
 .skip-link:focus { transform: translateY(0); }
-.shell { position: relative; width: min(1240px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 34px; }
+.shell { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr); width: min(1240px, calc(100% - 32px)); height: 100%; margin: 0 auto; padding: 20px 0 16px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
 .brand { display: flex; align-items: center; gap: 13px; }
 .mark {
   display: grid; width: 46px; height: 46px; place-items: center; color: var(--aqua);
@@ -269,9 +281,13 @@ body::before {
 .connection::before { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); content: ""; }
 .connection.ok::before { background: var(--aqua); box-shadow: 0 0 0 5px rgba(81, 230, 207, .1); }
 .connection.error::before { background: var(--rose); box-shadow: 0 0 0 5px rgba(255, 117, 143, .1); }
-.section-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: -20px 0 28px; }
-.section-nav a { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; font-weight: 750; text-decoration: none; }
-.section-nav a:hover { border-color: rgba(81, 230, 207, .38); color: #c8fff7; background: rgba(81, 230, 207, .08); }
+.section-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .68); }
+.section-nav button { min-height: 44px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 800; }
+.section-nav button:hover:not(:disabled) { border-color: rgba(81, 230, 207, .28); color: #c8fff7; background: rgba(81, 230, 207, .06); }
+.section-nav button[aria-selected="true"] { border-color: rgba(81, 230, 207, .42); color: #c8fff7; background: linear-gradient(145deg, rgba(81, 230, 207, .17), rgba(110, 216, 255, .07)); box-shadow: inset 0 1px rgba(255, 255, 255, .08); }
+.section-nav button[aria-selected="true"]:hover:not(:disabled) { background: linear-gradient(145deg, rgba(81, 230, 207, .2), rgba(110, 216, 255, .09)); }
+.workspace-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 10px 4px 32px; scrollbar-color: var(--muted) rgba(3, 13, 19, .42); }
+.workspace-view { min-height: 100%; }
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; margin-bottom: 24px; }
 .eyebrow { margin: 0 0 9px; color: var(--aqua); font-size: .75rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-height: .98; letter-spacing: -.055em; }
@@ -427,10 +443,10 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
   .reference-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .shell { width: min(100% - 20px, 1240px); padding-top: 18px; }
+  .shell { width: min(100% - 20px, 1240px); padding: 12px 0 10px; }
   .topbar { align-items: flex-start; } .brand-subtitle { display: none; } .connection { max-width: 145px; }
   .trust-strip { padding: 14px; } .trust-facts { grid-template-columns: 1fr; }
-  .section-nav { margin-top: -18px; } .section-intro { gap: 4px; margin-top: 24px; } .analysis-window { padding: 15px; } .analysis-facts { grid-template-columns: 1fr; }
+  .section-nav { gap: 4px; padding: 4px; } .section-nav button { padding: 7px 5px; font-size: .72rem; } .workspace-scroll { padding-top: 6px; } .section-intro { gap: 4px; margin-top: 24px; } .analysis-window { padding: 15px; } .analysis-facts { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: 1fr 1fr; } .metric { min-height: 108px; padding: 14px; }
   .panel-head { display: block; } .timestamp { display: block; margin-top: 7px; }
   .priority-pulse { display: block; padding: 14px; } .priority-boundary { margin-top: 8px; text-align: left; }
@@ -467,6 +483,7 @@ const eventFields = ['detected_at', 'message', 'rule_id', 'severity', 'src_ip'];
 const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
+const workspaceIds = ['live', 'analysis', 'interfaces'];
 const state = {
   events: [],
   activeBin: null,
@@ -495,6 +512,36 @@ const referencePortFields = ['service_name', 'transport', 'port_start', 'port_en
 const referenceProtocolFields = ['keyword', 'protocol_name', 'decimal_start', 'decimal_end', 'record_kind', 'ipv6_extension_header', 'source_row'];
 
 function byId(value) { return document.getElementById(value); }
+function activateWorkspace(nextWorkspace, moveFocus = false) {
+  if (!workspaceIds.includes(nextWorkspace)) return;
+  workspaceIds.forEach(workspace => {
+    const selected = workspace === nextWorkspace;
+    const tab = byId(`workspace-tab-${workspace}`);
+    tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+    tab.tabIndex = selected ? 0 : -1;
+    byId(`workspace-${workspace}`).hidden = !selected;
+  });
+  byId('workspace-content').scrollTop = 0;
+  if (nextWorkspace === 'interfaces' && typeof maybeLoadIntegrationMap === 'function') maybeLoadIntegrationMap();
+  if (moveFocus) {
+    const tab = byId(`workspace-tab-${nextWorkspace}`);
+    if (typeof tab.focus === 'function') tab.focus();
+  }
+}
+workspaceIds.forEach((workspace, index) => {
+  const tab = byId(`workspace-tab-${workspace}`);
+  tab.addEventListener('click', () => activateWorkspace(workspace));
+  tab.addEventListener('keydown', event => {
+    let nextIndex = null;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % workspaceIds.length;
+    if (event.key === 'ArrowLeft') nextIndex = (index - 1 + workspaceIds.length) % workspaceIds.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = workspaceIds.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault(); activateWorkspace(workspaceIds[nextIndex], true);
+  });
+});
+byId('skip-link').addEventListener('click', () => activateWorkspace('live'));
 function textNode(tag, value, className) {
   const node = document.createElement(tag);
   if (className) node.className = className;
