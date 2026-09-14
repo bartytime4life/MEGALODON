@@ -73,6 +73,7 @@ def test_preflight_admits_only_an_immutable_prompt_plan() -> None:
         lambda value: value["model_receipt"].__setitem__("model_artifact_sha256", "A" * 64),
         lambda value: value["model_receipt"].__setitem__("provider_class", "remote"),
         lambda value: value["limits"].__setitem__("max_input_bytes", 4095),
+        lambda value: value["limits"].__setitem__("max_concurrency", True),
     ],
 )
 def test_preflight_denies_closed_policy_violations(mutate: object) -> None:
