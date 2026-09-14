@@ -1,8 +1,10 @@
 # Repository hygiene guard
 
 The required `test` job runs `tools/check_repository_hygiene.py` before package
-installation. It scans only files tracked by Git and emits bounded finding
-categories without printing file contents. It reads at most 5 MiB plus one byte
+installation. It scans only files tracked by Git and prints only a generic
+pass/fail status plus an aggregate finding count. Individual finding categories,
+paths, and secret-marker details are deliberately withheld from all output. It
+reads at most 5 MiB plus one byte
 per file, and refuses tracked symlinks and other non-regular final path
 components. The checkout and its parent directories must remain trusted.
 
@@ -47,11 +49,12 @@ signature before any content read. It is closed on success and refusal. Missing
 platform flags are not evidence of equivalent native-platform protection;
 native Windows acceptance remains separate.
 
-A detected change produces `tracked file changed during scan` plus the tracked
-relative name. An open/read/stat failure remains `tracked file is unreadable`.
-Neither finding prints content, secret matches, or raw exceptions; the command
-exits nonzero. Stop the concurrent writer, inspect the intended changes, and
-rerun the check rather than accepting a partial scan or increasing the limits.
+A detected change or open/read/stat failure produces a nonzero result and
+increments the aggregate count. The command does not print the category, path,
+content, secret match, or raw exception for an individual finding. Stop the
+concurrent writer, inspect the intended changes through a private local
+workflow, and rerun the check rather than accepting a partial scan or
+increasing the limits.
 
 Regression tests inject growth, truncation, same-length rewriting, pathname
 replacement, and deletion before or after the read. Synthetic Linux symlink and
@@ -70,7 +73,7 @@ filename bound below does not bound those operations.
 
 Primary API basis: [Python file descriptors and stat fields](https://docs.python.org/3.12/library/os.html).
 
-## Safe filename diagnostics
+## Internal filename diagnostics
 
 A tracked filename is untrusted log data too. On Linux, a name can contain a
 newline, terminal escape, bidirectional text, or a runner-command delimiter.
@@ -78,7 +81,7 @@ Printing it verbatim can split one finding into forged log lines or pass command
 text to a CI runner even though the guard still exits nonzero. This is a logging
 boundary, not evidence that a real credential was exposed or a command executed.
 
-Every finding renders the original relative name as printable ASCII using
+Internal findings render the original relative name as printable ASCII using
 JSON string escapes without surrounding quotes. Colons and hash characters are
 also escaped as `\u003a` and `\u0023`, preventing both `::` and `##[` runner
 command delimiters, including in the middle of a line. Literal backslashes are
@@ -92,12 +95,14 @@ of expanding an arbitrarily long suffix. This is a display abbreviation, not
 an identity token, safe shell argument, reusable path, or complete JSON document.
 Do not copy an escaped or truncated diagnostic into a command as a file path.
 
-Only presentation is shortened. Sensitive-name matching and file opening use
-the full original input under the existing rules; content checks, limits,
-descriptor consistency and exit statuses are unchanged. Multiple findings
-remain multiple lines; one filename cannot add a line or a raw terminal control.
-The number of files and findings, Git output size and duration, all-history
-secret detection, and malicious-runner protection remain outside this control.
+Only internal presentation is shortened. Sensitive-name matching and file
+opening use the full original input under the existing rules; content checks,
+limits, descriptor consistency and exit statuses are unchanged. The CLI does
+not emit those internal strings: it writes a stable failure line and an
+aggregate count only. One filename therefore cannot add a line, a raw terminal
+control, or a sensitive detail to command output. The number of files and
+findings, Git output size and duration, all-history secret detection, and
+malicious-runner protection remain outside this control.
 
 Synthetic regressions cover controls, Unicode/bidirectional characters, both
 runner delimiter forms, all finding categories, a long path whose content must
