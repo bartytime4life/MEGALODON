@@ -285,8 +285,8 @@ process.stdin.on('end', async () => {
     nodeFor('integrations-query').value = ''; nodeFor('integrations-status-filter').value = 'contract_only'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
     assert.match(textOf(nodeFor('integrations-cards')), /Suricata/);
-    assert.doesNotMatch(textOf(nodeFor('integrations-cards')), /Qwen via local Ollama/);
-    nodeFor('integrations-status-filter').value = 'optional'; run('renderIntegrationMap()');
+    nodeFor('integrations-status-filter').value = 'manual_only'; run('renderIntegrationMap()');
+    assert.equal(nodeFor('integrations-cards').children.length, 2);
     assert.match(textOf(nodeFor('integrations-cards')), /Qwen via local Ollama/);
     nodeFor('integrations-status-filter').value = 'ALL'; nodeFor('integrations-platform').value = 'windows'; run('renderIntegrationMap()');
     assert.match(nodeFor('integrations-profile').textContent, /linux/); assert.match(nodeFor('integrations-status').textContent, /windows is not loaded/);

@@ -1,11 +1,10 @@
 # Local model advisory contract v1
 
-This directory contains the **data-only v1 contract** delivered through issue #145 and
-extended for the bounded invocation receipt in issue #165. It validates the small
-metadata projection, display-only result envelope, and runtime receipt described in
+This is a **data-only, proposed** contract delivered through issue #145. It
+validates the small metadata projection and display-only result envelope described in
 [`docs/local-model-advisory-contract.md`](../../../docs/local-model-advisory-contract.md).
 
-Schema validation is not an adapter. It does not connect to Ollama, install or start
+Validation is not an adapter.  It does not connect to Ollama, install or start
 Qwen, read a capture or a file, query a database, start a process, expose an
 endpoint, or grant an action capability.
 
@@ -15,9 +14,7 @@ endpoint, or grant an action capability.
 - one selected explanation purpose, not a free-form model prompt;
 - one fingerprint-pinned `local-model-registry-v1` containing exactly one local
   model receipt, its fixed v1 resource limits, and an empty tool list; and
-- one bounded, untrusted result with a closed outcome and fixed result code; and
-- one immutable invocation receipt that distinguishes policy denial, local-provider
-  error, and a bounded answer without retaining raw provider output.
+- one bounded, untrusted result with a closed outcome and fixed result code.
 
 `rejected_records` is a bounded integer for a completed run. A failed run may
 instead carry JSON `null` when the offline receipt could not determine the
@@ -29,9 +26,9 @@ zero. The other counts always remain bounded integers.
 Unknown fields, raw evidence, free-form prompts, provider addresses, credentials,
 tool/action fields, URLs, paths, commands, and mutable host controls have no
 place in the schema or registry. A registry cannot carry an endpoint, URL,
-command, path, credential, prompt, or tool. The runtime adapter reruns this
-contract's stricter Python Airlock **before** it makes any explicitly authorized,
-loopback-only local request.
+command, path, credential, prompt, or tool. A later runtime adapter must pass
+this contract **before** it makes any explicitly authorized, loopback-only local
+request.
 
 Run the contract suite with:
 
@@ -70,38 +67,29 @@ without changing its inputs. HTTP/socket, subprocess, firewall, SQLite,
 filesystem read/write, tool-discovery, and command-entry sentinels fail on any
 attempted side effect.
 
-## Literal-loopback provider boundary
+## Explicit Qwen provider adapter
 
-[`megalodon/advisory_provider.py`](../../../megalodon/advisory_provider.py) adds
-one internal, explicitly enabled request boundary. It accepts the closed request,
-registry, and independent registry pin; reruns preflight internally; and then can
-send only the admitted prompt and exact registry model ID to literal
-`127.0.0.1:11434/api/generate`.
+`megalodon.qwen_advisory.invoke_qwen_advisory` is a separate, library-only
+runtime boundary. It reruns the Airlock preflight, requires literal
+`enabled=True`, takes a non-blocking concurrency-one gate, and then makes at
+most one request to `127.0.0.1:11434/api/generate`. Its request fixes
+`stream=false`, `think=false`, `raw=true`, `keep_alive=0`, temperature zero,
+and a 512-token generation ceiling; it supplies no tools, credentials, URLs,
+arbitrary prompts, model discovery, retry, redirect, fallback, model pull, or
+process action.
 
-The adapter has no endpoint, URL, model override, raw prompt, header, credential,
-transport, tool, or action parameter. It does not use proxy environment values,
-DNS, redirects, streaming, discovery, model pull/update, subprocesses, files,
-SQLite, capture, or firewall code. One process-wide nonblocking lock enforces
-concurrency one; a monotonic end-to-end deadline is 15 seconds; `num_predict` is
-512; `think` is false; `keep_alive` is zero; raw response and decoded model text
-are separately bounded. A short-lived guard shuts down the fixed active socket
-when the deadline expires or the caller cancels, including during blocked header
-and body reads.
+The adapter applies one actively enforced 15-second deadline, accepts an
+optional per-invocation cancellation event, bounds the status line and headers
+to 8 KiB before standard-library parsing, bounds the JSON body to 32 KiB, and
+accepts at most 4 KiB of UTF-8 model text. Provider JSON has a closed field set;
+duplicate keys, tool-call fields, and non-empty thinking traces fail closed. Its
+display value is the closed `advisoryResult` shape. The operator-recorded
+artifact digest is checked against the fingerprint-pinned registry before HTTP,
+but the generate response does not independently attest loaded model bytes. The
+fixtures remain synthetic and are not a model installation or approval.
 
-Provider output is accepted only from one terminal HTTP 200 JSON response with
-the exact model ID, `done: true`, no non-empty reasoning field, a closed provider
-metadata shape, and bounded printable text. Unknown fields—including tool
-calls—fail closed. The text is
-whitespace-normalized and wrapped in the application-owned
-`advisoryInvocationReceipt`; it remains untrusted and non-executable.
-
-Run the provider boundary tests without a live Ollama instance:
+Run the adapter boundary tests with:
 
 ~~~bash
-python -m pytest -q tests/test_advisory_provider.py
+python -m pytest -q tests/test_qwen_advisory.py
 ~~~
-
-The fixture model ID and artifact digest are synthetic. The adapter records the
-registry-bound identity and rejects a mismatched response model ID, but it does
-not discover or attest installed Ollama model bytes. An operator must establish
-the exact local alias/artifact binding separately before real use.

@@ -278,6 +278,25 @@ def test_non_string_registry_schema_is_denied_without_invoking_equality() -> Non
     ).reason_code == "REGISTRY_INVALID"
 
 
+def test_hostile_metaclass_hash_is_not_invoked_during_snapshot() -> None:
+    class HostileMeta(type):
+        def __hash__(cls) -> int:
+            raise AssertionError("snapshot hashed a caller-controlled type")
+
+    class HostileValue(metaclass=HostileMeta):
+        pass
+
+    registry = deepcopy(REGISTRY)
+    registry["models"][0]["model_receipt"]["provider_class"] = HostileValue()
+    value = request()
+    value["projection"]["accepted_records"] = HostileValue()
+
+    assert preflight(
+        request(), local_model_registry=registry
+    ).reason_code == "REGISTRY_INVALID"
+    assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
+
+
 def test_non_string_object_key_is_denied_without_rehashing_or_comparison() -> None:
     class HostileKey:
         armed = False
@@ -326,6 +345,35 @@ def test_registry_admission_uses_the_fingerprinted_snapshot(monkeypatch) -> None
     assert decision.decision == "DENY"
     assert decision.reason_code == "MODEL_NOT_APPROVED"
     assert decision.provider_request_performed is False
+
+
+def test_structural_validation_receives_only_owned_snapshots(monkeypatch) -> None:
+    registry = deepcopy(REGISTRY)
+    value = request()
+    original_registry_validator = advisory._valid_registry
+    original_projection_validator = advisory._valid_projection
+
+    def validate_registry(candidate: object) -> bool:
+        assert candidate is not registry
+        registry.clear()
+        return original_registry_validator(candidate)
+
+    def validate_projection(candidate: object) -> bool:
+        assert candidate is not value["projection"]
+        value["projection"].clear()
+        return original_projection_validator(candidate)
+
+    monkeypatch.setattr(advisory, "_valid_registry", validate_registry)
+    monkeypatch.setattr(advisory, "_valid_projection", validate_projection)
+
+    decision = preflight_advisory(
+        value,
+        local_model_registry=registry,
+        local_model_registry_sha256=REGISTRY_SHA256,
+    )
+
+    assert decision.decision == "ADMIT"
+    assert decision.model_id == MODEL_ID
 
 
 def test_admitted_prompt_uses_the_validated_request_snapshot(monkeypatch) -> None:

@@ -66,7 +66,7 @@ record delivery state; they do not override the checked-in contracts.
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
-| Local Qwen advisory boundary | [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md), and [issue #145](https://github.com/bartytime4life/MEGALODON/issues/145) |
+| Local Qwen advisory boundary | [`megalodon/qwen_advisory.py`](megalodon/qwen_advisory.py), [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), and [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md) |
 | Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
 | Suricata record and bounded-reader gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md) and [`reader`](contracts/suricata-eve/v1/reader/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
@@ -86,7 +86,6 @@ not new named profiles, automatic installers, or a universal security suite.
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
 | Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
-| Request one bounded local Qwen explanation | Internal Python API behind the fingerprint-pinned Airlock; separately operated Ollama | Optional and disabled per call by default. The adapter can contact only literal `127.0.0.1:11434`; it has no CLI, dashboard route, model discovery/pull, raw-traffic access, persistence, tools, or action authority |
 | Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
@@ -145,7 +144,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
-| Local Qwen advisory | Fingerprint-pinned Airlock plus an internal, explicitly enabled, concurrency-one adapter for one non-streaming request to literal `127.0.0.1:11434/api/generate`. It has no CLI/dashboard route, configurable endpoint, proxy/DNS/redirect, discovery/pull, raw evidence, persistence, tool use, detector authority, or response authority |
+| Local Qwen advisory | One explicitly enabled Python call may pass the fingerprint-pinned Airlock and make one bounded request to `127.0.0.1:11434/api/generate`; no CLI, scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures; no alert mutation, notifier, delivery adapter, or credential path |
 | Reference and evaluation | Manifest-pinned, privacy-minimized IANA service/port and protocol context plus a bounded synthetic detector corpus; separate read-only CLI with no network, store, persistence, action, or subprocess path |
 | CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel builds, an extracted-sdist full test, and installed-package smokes, on pushes to `main` and pull requests |
@@ -158,7 +157,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Python `venv` and `pip` | Isolated editable installation | Recommended |
 | SQLite (`sqlite3`) | Local audit database | Included in the Python standard library; the dashboard refuses SQLite older than 3.22.0 because read-only WAL support is required |
 | Scapy `>=2.5,<3` | Optional Linux live metadata capture | Install with the `capture` extra only for that workflow |
-| Qwen through a separately operated local Ollama provider | Optional, explicit advisory explanation through the internal Python API | MEGALODON does not install, start, discover, pull, update, or configure the model/provider. The registry model ID must name an operator-created exact local alias; the shipped synthetic digest is not an installed-model attestation |
+| Qwen through a local Ollama provider | Optional manual advisory explanation only | Operator-installed and separately run; the library-only adapter never configures a service, background monitor, remote endpoint, tool-use mode, or automatic response |
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
 | Suricata | Optional future EVE alert source | Contract and synthetic fixtures only; not invoked, imported, or required |
@@ -198,7 +197,6 @@ MEGALODON's capability status.
 | Suricata | Contract-only EVE alert source; no runtime reader/importer | Rule updates, sensor mode, IPS mode, or its service |
 | ClamAV | Manual companion only; no file/result/quarantine integration | A daemon, automatic update, quarantine, or deletion |
 | osquery | Proposed endpoint-inventory work; no importer | A daemon, schedule, query pack, or remote enrollment |
-| Qwen and Ollama | Optional internal literal-loopback advisory adapter; no CLI or dashboard exposure | Automatic service start, model discovery/pull/update, remote bind, proxy, tool mode, retrieval, background analysis, or response automation |
 | nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
 
 The static catalog remains the source of truth. From the activated project

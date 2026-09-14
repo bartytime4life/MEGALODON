@@ -111,12 +111,11 @@ capture-buffer sizing or loss-free operation under production load.
     digests, and records before lookup or in-memory detector execution. It has
     no runtime network/update, `Store`, persistence, action, or subprocess path.
 16. **Local AI is explicit, literal-loopback, and advisory only.** The optional
-    provider API is disabled per invocation by default, exposes no endpoint or
-    raw-prompt parameter, uses no DNS/proxy/redirect/fallback path, enforces one
-    in-process request with a fixed end-to-end monotonic deadline plus
-    cancellation and token/byte bounds, and returns
-    untrusted text in a non-executable receipt. Model output cannot become a
-    detection, evidence item, command, target, query, or response action.
+    provider API exposes no endpoint or raw-prompt parameter, uses no
+    DNS/proxy/redirect/fallback path, and enforces one request with a shared
+    monotonic deadline, active cancellation, bounded status/headers and body,
+    fixed inference options, and token/text limits. Model output cannot become
+    a detection, evidence item, command, target, query, or response action.
 
 ## 3. Data contracts
 
@@ -193,21 +192,6 @@ name, real telemetry, or operational incident evidence is included. The
 authoritative provenance, schema, update, and interpretation contract is
 [docs/reference-data.md](docs/reference-data.md).
 
-### Local advisory invocation receipt
-
-The optional provider API returns a closed receipt with `outcome`, `code`,
-`reason_code`, bounded `summary` and `limitations`, an optional exact model
-receipt, optional registry SHA-256, and `provider_request_performed`. The last
-flag means the adapter crossed its request-attempt boundary; it does not prove
-that Ollama received or completed the request. ANSWER text remains untrusted and
-is never written to SQLite or routed into detection or response policy.
-
-The API accepts only the existing closed advisory request plus the one-entry
-registry and its independent pin. It has no endpoint, model override, free-form
-prompt, header, credential, tool, action, or transport argument. The repository
-fixture model ID and digest are synthetic; actual installed-model alias/artifact
-binding is not attested by this runtime.
-
 ## 4. Fixed MVP rules
 
 | ID | Trigger | Severity | Evidence | Default response |
@@ -245,14 +229,15 @@ start ingestion or the dashboard, trigger policy, or authorize response.
 
 ### Local Qwen advisory (internal API only)
 
-`megalodon.advisory_provider.invoke_local_advisory` is an optional Python API,
-not a CLI or dashboard feature. A caller must provide one closed advisory
-request, its closed one-entry registry and independent pin, and exact per-call
+`megalodon.qwen_advisory.invoke_qwen_advisory` is an optional Python API, not a
+CLI or dashboard feature. A caller must provide one closed advisory request,
+its closed one-entry registry and independent pin, and exact per-call
 enablement. The function reruns Airlock preflight, then may issue one POST to
 literal `127.0.0.1:11434/api/generate` with the admitted prompt, exact registry
-model ID, non-streaming mode, immediate unload policy, and fixed inference
-options. It never starts or configures Ollama, discovers or pulls a model,
-follows a redirect, reads proxy settings, resolves a host, or persists a result.
+model ID, non-streaming and reasoning-off modes, immediate unload policy, and
+fixed inference options. It never starts or configures Ollama, discovers or
+pulls a model, follows a redirect, reads proxy settings, resolves a host, or
+persists a result.
 
 ### Plan
 

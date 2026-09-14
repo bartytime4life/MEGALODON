@@ -92,33 +92,6 @@ def test_outcome_vocabulary_and_codes_are_closed() -> None:
     }
 
 
-def test_invocation_receipt_keeps_runtime_outcomes_and_authority_closed() -> None:
-    receipt = SCHEMA["$defs"]["advisoryInvocationReceipt"]
-    assert receipt["additionalProperties"] is False
-    assert receipt["properties"]["outcome"]["enum"] == ["ANSWER", "DENY", "ERROR"]
-    assert receipt["properties"]["code"]["enum"] == [
-        "ADVISORY_ANSWER",
-        "POLICY_DENIED",
-        "LOCAL_PROVIDER_ERROR",
-    ]
-    reasons = set(receipt["properties"]["reason_code"]["enum"])
-    assert {
-        "REQUEST_COMPLETED",
-        "PROVIDER_DISABLED",
-        "REGISTRY_FINGERPRINT_MISMATCH",
-        "CANCELLED_BEFORE_REQUEST",
-        "CANCELLED_DURING_RESPONSE",
-        "PROVIDER_BUSY",
-        "PROVIDER_TIMEOUT",
-        "PROVIDER_REDIRECT_DENIED",
-        "PROVIDER_RESPONSE_TOO_LARGE",
-        "PROVIDER_RESPONSE_INVALID",
-        "PROVIDER_MODEL_MISMATCH",
-    } <= reasons
-    assert not reasons & {"EXECUTE", "TOOL_CALL", "FIREWALL_APPLY", "MODEL_SELECTED_ACTION"}
-    assert receipt["properties"]["provider_request_performed"] == {"type": "boolean"}
-
-
 def test_contract_test_is_data_only_and_imports_no_runtime_modules() -> None:
     tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
     imported = {

@@ -115,11 +115,11 @@ _COMPONENTS = (
         "software": "Qwen via local Ollama",
         "integration": "explicit_literal_loopback_advisory",
         "platforms": {
-            "linux": "optional",
-            "windows": "evaluation_only",
+            "linux": "manual_only",
+            "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "An internal opt-in adapter can make one fixed literal-loopback request after Airlock admission; it has no CLI, dashboard route, raw-traffic access, tools, persistence, or action authority.",
+        "boundary": "One explicitly enabled Python call can request a bounded advisory from 127.0.0.1:11434; no CLI, background run, traffic inspection, tool, or response authority exists.",
     },
     {
         "id": "nmap",
