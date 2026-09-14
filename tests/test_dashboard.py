@@ -344,6 +344,13 @@ def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
     assert "Recent detection triage" in INDEX_HTML
+    assert "Live review" in INDEX_HTML
+    assert "Deep analysis &amp; context" in INDEX_HTML
+    assert "Reserved analysis window · not active" in INDEX_HTML
+    assert "A future explicit local advisory may inspect one completed" in INDEX_HTML
+    assert "It cannot inspect raw traffic, contact the Internet, start background analysis, or apply a response." in INDEX_HTML
+    assert 'href="#live-review-title"' in INDEX_HTML
+    assert 'href="#deep-analysis-title"' in INDEX_HTML
     assert 'aria-live="polite"' in INDEX_HTML
     assert 'scope="col"' in INDEX_HTML
     assert 'href="#detections-title"' in INDEX_HTML
@@ -378,6 +385,7 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert 'href="/assets/dashboard.css"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
     assert "forced-colors: active" in DASHBOARD_CSS
+    assert ".analysis-window" in DASHBOARD_CSS
     assert ".timeline-bar.level-0 { height: 0; }" in DASHBOARD_CSS
     assert "replaceChildren" in DASHBOARD_JS
     assert "AbortController" in DASHBOARD_JS

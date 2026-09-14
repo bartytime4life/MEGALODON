@@ -188,7 +188,14 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert DASHBOARD_JS.rstrip().endswith("bootstrap();")
     assert DASHBOARD_JS.count("\nbootstrap();") == 1
     assert INDEX_HTML.index('id="triage-panel"') < INDEX_HTML.index('id="reference-title"')
-    for target in ("page-title", "detections-title", "reference-title", "offline-title", "integrations-title"):
+    for target in (
+        "live-review-title",
+        "detections-title",
+        "deep-analysis-title",
+        "reference-title",
+        "offline-title",
+        "integrations-title",
+    ):
         assert f'href="#{target}"' in INDEX_HTML
         assert f'id="{target}" tabindex="-1"' in INDEX_HTML
     assert 'role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
