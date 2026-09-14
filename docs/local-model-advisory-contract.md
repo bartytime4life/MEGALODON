@@ -1,9 +1,13 @@
 # Local Qwen advisory contract
 
-**Status:** proposed, data-only contract boundary for
-[issue #145](https://github.com/bartytime4life/MEGALODON/issues/145). The v1
+**Status:** the proposed data-only contract boundary from
+[issue #145](https://github.com/bartytime4life/MEGALODON/issues/145) is joined
+by the no-network preflight from
+[issue #154](https://github.com/bartytime4life/MEGALODON/issues/154). The v1
 [schema and fixtures](../contracts/local-model-advisory/v1/README.md) validate
-the permitted shapes, but do not add a model runtime, Ollama request, API
+the permitted shapes. [`megalodon/advisory.py`](../megalodon/advisory.py) can
+validate an exact operator-approved model identity and construct one canonical
+in-memory prompt. Neither surface adds a model runtime, Ollama request, API
 client, daemon, scheduler, monitor, detector, file scanner, sandbox, or
 response action.
 
@@ -32,9 +36,10 @@ execution, vulnerability scanning, or automatic incident response.
 
 ## Proposed input projection
 
-A future adapter must construct the prompt itself from a typed projection. It
-must not append raw evidence or treat any input as instructions. All scalar
-fields have finite limits before prompt construction.
+The no-network preflight constructs the prompt itself from a typed projection.
+A future provider caller must use that canonical prompt without appending raw
+evidence or treating any input as instructions. All scalar fields have finite
+limits before prompt construction.
 
 | Allowed field class | Examples | Limit |
 | --- | --- | --- |
@@ -60,6 +65,22 @@ The v1 data schema rejects unknown fields, control characters, raw-evidence
 fields, provider substitution, and values outside the fixed v1 byte, timeout,
 and concurrency limits. It contains no endpoint, credential, prompt, tool,
 action, filesystem, capture, database, or firewall field.
+
+The Python preflight is deliberately stricter than the structural schema. It
+accepts only these repository-owned source/adapter pairs:
+
+| Source kind | Advisory adapter ID |
+| --- | --- |
+| sample | `sample-packet-v1` |
+| jsonl | `jsonl-packet-v1` |
+| scapy | `scapy-packet-v1` |
+| tshark | `tshark-fields-v1` |
+| zeek-json | `zeek-conn-json-v1` |
+| zeek-tsv | `zeek-conn-tsv-v1` |
+
+The TShark and Zeek IDs match the implemented offline adapter constants. The
+sample, JSONL, and Scapy IDs name only the advisory projection shape; they do
+not add a new capture or ingestion path.
 
 ## Outcome envelope
 
@@ -142,36 +163,12 @@ change MEGALODON's static capability catalog.
 2. **Delivered in this contract slice:** data-only tests for closed fields,
    sensitive-field refusal, outcome bounds, and absent executable/provider
    authority.
-3. **No-network Airlock preflight (issue #154):** validate one closed typed
-   request and construct an immutable canonical prompt plan. An ADMIT decision
-   permits prompt construction only; it must not contact a provider, load Qwen,
-   probe Ollama, read local evidence, or change host state.
-4. Add a separately reviewed, opt-in local adapter only after a new exact-current
-   decision authorizes one loopback request path and its data, privacy, error,
-   and browser bounds are proven.
-5. Consider any active host, network, file, or response integration only as a
+
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
 
 The existing Qwen identifiers in the automation fixtures remain placeholders.
-The v1 contract and Airlock preflight do not mean that Qwen is installed,
-configured, invoked, or allowed to perform any protective action. A provider-call
-runtime remains a separately authorized future step.
 
-## No-network Qwen Airlock preflight
-
-The Airlock is a side-effect-free repository module. It accepts only the closed
-v1 projection, model receipt, and fixed limits; accepts only local:qwen-approved-v1
-plus a lowercase SHA-256 artifact digest; and returns an immutable canonical
-metadata-only prompt plan or a fixed DENY / POLICY_DENIED receipt. Unknown fields,
-control characters, malformed counts, substituted models, malformed digests,
-instruction-like extra fields, and invalid limits are denied without echoing the input.
-
-An ADMIT result is not a model request, model availability claim, network or
-Internet action, evidence, detection, database write, dashboard action, capture,
-firewall operation, scheduler, or host action. The module contains no provider
-client, endpoint, subprocess, filesystem, SQLite, capture, firewall, or dashboard
-surface.
 
 ## Verification target
 
@@ -179,6 +176,7 @@ This contract slice proves, without a local model installation or network reques
 
 ~~~bash
 python -m pytest -q tests/test_local_model_advisory_contract.py
+python -m pytest -q tests/test_advisory.py
 python -m megalodon capabilities --platform linux
 python -m megalodon hub-plan --platform linux
 ~~~

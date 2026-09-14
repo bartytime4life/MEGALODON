@@ -3,7 +3,7 @@
   "value": {
     "projection": {
       "source_kind": "tshark",
-      "adapter_id": "offline-tshark-v1",
+      "adapter_id": "tshark-fields-v1",
       "terminal_status": "complete",
       "accepted_records": 206,
       "rejected_records": 0,
