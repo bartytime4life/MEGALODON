@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
 
@@ -43,6 +44,25 @@ def test_rejected_contract_fixtures(path: Path) -> None:
     with pytest.raises(Exception) as caught:
         validator(case["schema"]).validate(case["value"])
     assert caught.type.__module__.startswith("jsonschema")
+
+
+def test_count_until_regression_control_is_discriminating() -> None:
+    rejected = [
+        "count-before-until.json",
+        "until-before-count.json",
+        "count-intervening-until.json",
+    ]
+    weakened = deepcopy(SCHEMA)
+    del weakened["$defs"]["canonicalRrule"]["not"]
+    weakened_validator = Draft202012Validator(
+        {"$ref": "#/$defs/draftCreate", "$defs": weakened["$defs"]},
+        format_checker=FORMAT_CHECKER,
+    )
+    for name in rejected:
+        case = load(ROOT / "fixtures" / "rejected" / name)
+        with pytest.raises(Exception):
+            validator(case["schema"]).validate(case["value"])
+        weakened_validator.validate(case["value"])
 
 
 def test_contract_keeps_execution_authority_closed() -> None:
