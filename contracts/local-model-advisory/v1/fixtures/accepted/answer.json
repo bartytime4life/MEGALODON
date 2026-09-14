@@ -1,0 +1,15 @@
+{
+  "schema": "advisoryResult",
+  "value": {
+    "outcome": "ANSWER",
+    "code": "ADVISORY_ANSWER",
+    "summary": "The bounded run completed and reported no candidates.",
+    "limitations": ["This is an AI advisory, not evidence or an action."],
+    "model_receipt": {
+      "provider_class": "local_loopback",
+      "model_id": "local:qwen-approved-v1",
+      "model_artifact_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "policy_version": "local-model-advisory-v1"
+    }
+  }
+}
