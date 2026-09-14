@@ -163,24 +163,12 @@ change MEGALODON's static capability catalog.
 2. **Delivered in this contract slice:** data-only tests for closed fields,
    sensitive-field refusal, outcome bounds, and absent executable/provider
    authority.
-3. **Delivered in the no-network preflight slice:** closed repository-owned
-   source/adapter pairs, exact model ID and artifact-digest approval, canonical
-   prompt construction, a 4 KiB input gate, immutable ADMIT/DENY decisions, and
-   deterministic side-effect negative controls. ADMIT authorizes prompt
-   construction only; no request is made.
-4. Add an opt-in literal-loopback provider call only after separately reviewing
-   redirect, proxy, DNS, timeout, response-size, concurrency, and cancellation
-   controls. It must not start Ollama, download a model, or change Qwen
-   configuration.
-5. Add a read-only dashboard projection only after the adapter's data,
-   privacy, error, and browser bounds are proven.
-6. Consider any active host, network, file, or response integration only as a
+
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
 
 The existing Qwen identifiers in the automation fixtures remain placeholders.
-The v1 contract does not mean that Qwen is installed, configured, invoked, or
-allowed to perform any protective action. A runtime remains blocked on step 4.
+
 
 ## Verification target
 
