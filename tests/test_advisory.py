@@ -16,6 +16,7 @@ import urllib.request
 
 import pytest
 
+import megalodon.advisory as advisory
 from megalodon.advisory import (
     FIXED_LIMITS,
     MAX_INPUT_BYTES,
@@ -119,6 +120,55 @@ def test_prompt_is_canonical_bounded_and_excludes_model_metadata() -> None:
     )
     assert MODEL_ID not in first.prompt
     assert DIGEST not in first.prompt
+
+
+def test_failed_projection_preserves_unknown_rejected_count_as_json_null() -> None:
+    value = request(source="zeek-json")
+    value["projection"]["terminal_status"] = "failed"
+    value["projection"]["rejected_records"] = None
+
+    decision = preflight(value)
+
+    assert decision.decision == "ADMIT"
+    assert decision.prompt is not None
+    assert '"rejected_records":null' in decision.prompt
+    assert '"rejected_records":0' not in decision.prompt
+
+
+def test_failed_projection_may_retain_a_known_rejected_count() -> None:
+    value = request()
+    value["projection"]["terminal_status"] = "failed"
+    value["projection"]["rejected_records"] = 3
+
+    assert preflight(value).decision == "ADMIT"
+
+
+def test_complete_projection_cannot_claim_an_unknown_rejected_count() -> None:
+    value = request()
+    value["projection"]["rejected_records"] = None
+
+    assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
+
+
+@pytest.mark.parametrize("field", ("accepted_records", "candidate_count"))
+def test_other_counts_cannot_be_unknown(field: str) -> None:
+    value = request()
+    value["projection"][field] = None
+
+    assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
+
+
+def test_preflight_denies_when_canonical_prompt_exceeds_its_fixed_byte_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admitted = preflight(request())
+    assert admitted.prompt is not None
+    monkeypatch.setattr(advisory, "MAX_INPUT_BYTES", admitted.prompt_bytes - 1)
+
+    denied = preflight(request())
+
+    assert denied.decision == "DENY"
+    assert denied.reason_code == "INPUT_LIMIT_EXCEEDED"
 
 
 def _set_path(value: dict, path: tuple[str, ...], replacement: object) -> None:
@@ -265,3 +315,8 @@ def test_module_has_no_provider_or_mutating_runtime_imports() -> None:
         "subprocess",
         "urllib",
     }
+
+
+def test_canonical_preflight_has_no_duplicate_runtime_module() -> None:
+    duplicate = MODULE.with_name("local_model_advisory.py")
+    assert not duplicate.exists()
