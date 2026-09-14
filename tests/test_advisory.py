@@ -227,6 +227,25 @@ def test_non_string_registry_schema_is_denied_without_invoking_equality() -> Non
     ).reason_code == "REGISTRY_INVALID"
 
 
+def test_non_string_object_key_is_denied_without_rehashing_or_comparison() -> None:
+    class HostileKey:
+        armed = False
+
+        def __hash__(self) -> int:
+            if self.armed:
+                raise AssertionError("closed-object validation rehashed a caller key")
+            return 1
+
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("closed-object validation compared a caller key")
+
+    key = HostileKey()
+    value = {key: None}
+    key.armed = True
+
+    assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
+
+
 @pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda case: case["name"])
 def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, object]

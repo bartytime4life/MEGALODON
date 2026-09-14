@@ -121,7 +121,11 @@ class AirlockDecision:
 
 
 def _exact_object(value: object, keys: frozenset[str]) -> bool:
-    return type(value) is dict and set(value) == keys
+    return (
+        type(value) is dict
+        and len(value) == len(keys)
+        and all(type(key) is str and key in keys for key in value)
+    )
 
 
 def _valid_count(value: object) -> bool:
