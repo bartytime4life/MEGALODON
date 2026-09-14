@@ -163,9 +163,13 @@ manual-only capability to an automatic or healthy state.
 The preflight authenticates the registry bytes with its independently supplied
 fingerprint and matches the operator-recorded artifact digest before HTTP. The
 provider adapter then applies a non-blocking process-local concurrency-one gate,
-one shared 15-second deadline, a 4 KiB UTF-8 model-output cap, and a 32 KiB
-transport-envelope cap. It fails closed on partial, late, redirected, encoded,
-malformed, or oversized responses.
+one actively enforced shared 15-second deadline, an optional explicit
+per-invocation cancellation event, a 4 KiB UTF-8 model-output cap, an 8 KiB
+status/header/chunk-framing/trailer cap applied during standard-library
+parsing, and a 32 KiB body cap. The fixed request asks the provider to unload after the call,
+uses temperature zero and a 512-token generation ceiling, and has no tool
+field. The adapter fails closed on partial, late, redirected, encoded,
+malformed, duplicate-key, tool-bearing, or oversized responses.
 
 Ollama's generate response does not attest the loaded artifact digest, so this
 one-call slice cannot independently prove that the separately operated provider
