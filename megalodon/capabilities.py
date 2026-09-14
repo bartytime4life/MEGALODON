@@ -110,6 +110,72 @@ _COMPONENTS = (
         },
         "boundary": "No query pack, arbitrary SQL, scheduler, remote enrollment, or importer exists.",
     },
+    {
+        "id": "qwen-ollama",
+        "software": "Qwen via local Ollama",
+        "integration": "local_ai_advisory_contract",
+        "platforms": {
+            "linux": "contract_only",
+            "windows": "contract_only",
+            "other": "unsupported",
+        },
+        "boundary": "No runtime provider exists; a future model result is advisory only and cannot inspect traffic or apply actions.",
+    },
+    {
+        "id": "nmap",
+        "software": "Nmap",
+        "integration": "future_network_inventory_import",
+        "platforms": {
+            "linux": "proposed",
+            "windows": "proposed",
+            "other": "unsupported",
+        },
+        "boundary": "No scan launcher, script engine, service-banner intake, or XML importer exists.",
+    },
+    {
+        "id": "ossec",
+        "software": "OSSEC",
+        "integration": "future_host_integrity_import",
+        "platforms": {
+            "linux": "proposed",
+            "windows": "proposed",
+            "other": "unsupported",
+        },
+        "boundary": "No daemon, alert importer, active response, enrollment, or configuration path exists.",
+    },
+    {
+        "id": "greenbone",
+        "software": "Greenbone Community Edition",
+        "integration": "future_completed_vulnerability_report_import",
+        "platforms": {
+            "linux": "proposed",
+            "windows": "guest_only",
+            "other": "unsupported",
+        },
+        "boundary": "No scanner or feed control exists; only a future bounded import of completed reports is proposed.",
+    },
+    {
+        "id": "zabbix",
+        "software": "Zabbix",
+        "integration": "future_availability_read_model",
+        "platforms": {
+            "linux": "proposed",
+            "windows": "proposed",
+            "other": "unsupported",
+        },
+        "boundary": "No endpoint, credential, API client, background poller, or runtime reader is configured.",
+    },
+    {
+        "id": "nagios-core",
+        "software": "Nagios Core",
+        "integration": "future_availability_read_model",
+        "platforms": {
+            "linux": "proposed",
+            "windows": "guest_only",
+            "other": "unsupported",
+        },
+        "boundary": "No CGI endpoint, credential, command pipe, background poller, or runtime reader is configured.",
+    },
 )
 
 _EXCLUDED = (

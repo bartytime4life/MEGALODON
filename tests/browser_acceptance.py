@@ -209,6 +209,9 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         response = await page.goto(origin + "/")
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await expect(page.locator("#triage-panel")).to_have_attribute("aria-busy", "false")
+        await expect(page.locator("#workspace-live")).to_be_visible()
+        await expect(page.locator("#workspace-analysis")).to_be_hidden()
+        await expect(page.locator("#workspace-interfaces")).to_be_hidden()
         await page.locator("#pause-button").click()
         await expect(page.locator("#pause-button")).to_have_attribute("aria-pressed", "true")
         passed("real HTTP bootstrap " + ("nonempty" if nonempty else "empty"), response.status == 200)
@@ -217,6 +220,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         passed("pause stops scheduled polling " + str(nonempty), counts == stable)
         if not nonempty:
             await expect(page.locator("#events")).to_contain_text("No detections recorded.")
+            await page.locator("#workspace-tab-analysis").click()
             await expect(page.locator("#offline-empty")).to_be_visible()
             passed("empty database and unselected offline states")
             passed("empty page has no script errors or nonlocal requests", not errors and not violations)
@@ -233,6 +237,9 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await expect(page.locator("#events")).to_contain_text("No detections match these filters.")
         await page.locator("#clear-filters").click()
         passed("local search and clear", await rows.count() == 2)
+        await page.locator("#workspace-tab-analysis").click()
+        await expect(page.locator("#workspace-live")).to_be_hidden()
+        await expect(page.locator("#workspace-analysis")).to_be_visible()
         await expect(page.locator("#offline-content")).to_be_visible()
         offline_text = await page.locator("#offline-content").inner_text()
         passed("real offline projection excludes addresses", "203.0.113." not in offline_text and
@@ -248,7 +255,9 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             await route.abort("failed")
 
         await page.route("**/api/integrations?*", fail)
-        await page.locator("#integrations-load").click()
+        await page.locator("#workspace-tab-interfaces").click()
+        await expect(page.locator("#workspace-analysis")).to_be_hidden()
+        await expect(page.locator("#workspace-interfaces")).to_be_visible()
         await expect(page.locator("#integrations-status")).to_contain_text("unavailable")
         await page.locator("#integrations-query").fill("no-synthetic-match")
         await expect(page.locator("#integrations-status")).to_contain_text("unavailable")
@@ -273,6 +282,8 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await page.unroute("**/api/integrations?*", slow)
         passed("pending integration profile survives real request delay")
 
+        await page.locator("#workspace-tab-live").click()
+        await expect(page.locator("#workspace-live")).to_be_visible()
         saved_rows = await page.locator("#events").inner_text()
         saved_time = await page.locator("#updated").get_attribute("datetime")
         await page.route("**/api/summary", fail)
@@ -345,6 +356,8 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         REPORT["stage"] = "mobile-layout-and-focus"
         await page.set_viewport_size({"width": 375, "height": 812})
         passed("mobile page fits viewport", await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+        passed("command center remains viewport-pinned", await page.evaluate(
+            "document.body.scrollHeight <= innerHeight + 1 && getComputedStyle(document.body).overflow === 'hidden'"))
         await page.locator("#filter-query").focus()
         passed("rendered keyboard focus", await page.locator("#filter-query").evaluate(
             "el => document.activeElement === el && getComputedStyle(el).outlineStyle !== 'none'"))

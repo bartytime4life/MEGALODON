@@ -94,6 +94,24 @@ def test_workflow_contracts_match_their_owned_entry_points():
         "disposable-namespace safety tests"
     )
 
+    advisory = integration_plan("linux", "local-ai-advisory")["workflows"][0]
+    assert advisory["entry_point"] is None
+    assert advisory["launch_policy"] == "contract_only_no_runtime_provider"
+    assert "no raw traffic" in advisory["data_boundary"]
+    assert "cannot execute commands" in advisory["action_boundary"]
+
+    for workflow in (
+        "network-inventory-import",
+        "host-integrity-import",
+        "vulnerability-report-import",
+        "zabbix-availability-read",
+        "nagios-availability-read",
+    ):
+        item = integration_plan("linux", workflow)["workflows"][0]
+        assert item["entry_point"] is None
+        assert item["selected_status"] == "proposed"
+        assert item["integration_owner"] == "not_implemented"
+
 
 def test_unknown_workflow_is_rejected():
     with pytest.raises(ValueError, match="unknown integration workflow"):

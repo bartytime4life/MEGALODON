@@ -140,12 +140,12 @@ The existing `megalodon-integration-hub-v1` envelope and
 `megalodon-capability-catalog-v1` reference are preserved. Each workflow carries
 ID, component, software, selected status, source kind, owner, input/output,
 nullable entry point, launch policy, data/action boundaries, and next gate.
-The HTTP surface permits eight workflows, string fields up to 512 characters,
+The HTTP surface permits 14 workflows, string fields up to 512 characters,
 and encoded responses up to 32 KiB. A budget failure returns a fixed 503 with no
 partial map. Adding workflows requires a coordinated reviewed bound/contract/UI
 change, not silently dropping rows or broadening a generic plugin loader.
 
-The browser requires the complete eight-ID set, unique IDs, the exact envelope
+The browser requires the complete 14-ID set, unique IDs, the exact envelope
 and workflow keys, bounded field types, a known status, and a response matching
 the profile captured when the request began. It requires
 `hub_mode=static_plan_only`, `default_posture=observe_only`,
@@ -161,8 +161,9 @@ source-admission, connection, or health receipt.
 
 ## UI state and safe rendering
 
-The Integration Map is loaded only on operator request; it is not added to
-telemetry polling or the startup critical path. It has one in-flight request, the
+The Integration Map is loaded on first entry to the **Interfaces** workspace or
+by the explicit load button; it is not added to telemetry polling or the startup
+critical path. It has one in-flight request, the
 existing five-second browser abort budget, bounded in-memory filters, explicit
 first-load unavailability, and preservation of a previous map as stale after a
 failure. A selected profile and a successfully loaded profile are separate
