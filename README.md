@@ -176,6 +176,318 @@ python -m pip install -e ".[capture]"     # optional Scapy capture
 python -m pip install -e ".[capture,test]" # both optional groups
 ```
 
+
+## Ubuntu 24.04 companion-tool setup
+
+This is an **operator-managed installation guide**, not a MEGALODON installer.
+Install only what an approved workflow requires. The commands below do not
+start a capture, scanner, IDS/IPS sensor, service, scheduler, firewall rule,
+remote listener, rule download, or telemetry upload. They do not change
+MEGALODON's capability status.
+
+| Tool | MEGALODON relationship after installation | Do not configure or start for MEGALODON |
+| --- | --- | --- |
+| SQLite and Python | Core local store and runtime | Nothing beyond private local storage |
+| Scapy | Optional Linux live-metadata capture extra | Packet crafting/injection or unattended capture |
+| TShark | Implemented Linux-only offline packet adapter at /usr/bin/tshark | Live-capture permission or a public capture directory |
+| Zeek | Implemented offline importer for the closed conn.log profile | A service, cluster, or automatic producer |
+| Suricata | Contract-only EVE alert source; no runtime reader/importer | Rule updates, sensor mode, IPS mode, or its service |
+| ClamAV | Manual companion only; no file/result/quarantine integration | A daemon, automatic update, quarantine, or deletion |
+| osquery | Proposed endpoint-inventory work; no importer | A daemon, schedule, query pack, or remote enrollment |
+| nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
+
+The static catalog remains the source of truth. From the activated project
+environment, inspect it without probing or launching any companion tool:
+
+~~~bash
+python -m megalodon capabilities --platform linux
+python -m megalodon hub-plan --platform linux
+~~~
+
+### 1. Install the base packages without starting services
+
+Run this on **Ubuntu 24.04** in an ordinary terminal. It is deliberately
+failure-checked and stops if the machine already has a package-install policy
+guard. The temporary guard prevents package post-install scripts from starting
+a service while software is being installed; it is removed even when the
+command fails.
+
+~~~bash
+(
+  set -euo pipefail
+
+  guard=/usr/sbin/policy-rc.d
+  if sudo test -e "$guard"; then
+    echo "An existing package service-start guard is present at $guard; review it and stop."
+    exit 1
+  fi
+
+  cleanup() { sudo rm -f "$guard"; }
+  trap cleanup EXIT HUP INT TERM
+
+  printf '%s\n' '#!/bin/sh' 'exit 101' | sudo tee "$guard" >/dev/null
+  sudo chmod 0755 "$guard"
+
+  printf '%s\n' 'wireshark-common wireshark-common/install-setuid boolean false' |
+    sudo debconf-set-selections
+
+  sudo apt-get update
+  sudo apt-get install -y --no-install-recommends \
+    ca-certificates curl gpg git \
+    python3 python3-venv python3-pip \
+    sqlite3 tshark clamav nftables \
+    cmake make gcc g++ flex libfl-dev bison libpcap-dev libssl-dev \
+    python3-dev swig zlib1g-dev software-properties-common
+
+  sqlite3 --version
+  /usr/bin/tshark --version | sed -n '1p'
+  clamscan --version
+  nft --version
+)
+~~~
+
+Keep the TShark capture-permission answer at **No**. MEGALODON's offline
+adapter does not need live-capture permission, and installation should not
+grant it. The clamav package provides the manual command-line scanner; this
+guide does not add the daemon or signature-update service.
+
+### 2. Add optional producer packages, still disabled
+
+Suricata's official Ubuntu instructions use the OISF stable PPA. Add it only
+when you need to evaluate its separate EVE contract; an installed Suricata
+binary does not create a MEGALODON reader.
+
+~~~bash
+(
+  set -euo pipefail
+
+  guard=/usr/sbin/policy-rc.d
+  if sudo test -e "$guard"; then
+    echo "An existing package service-start guard is present at $guard; review it and stop."
+    exit 1
+  fi
+
+  cleanup() { sudo rm -f "$guard"; }
+  trap cleanup EXIT HUP INT TERM
+
+  printf '%s\n' '#!/bin/sh' 'exit 101' | sudo tee "$guard" >/dev/null
+  sudo chmod 0755 "$guard"
+
+  sudo add-apt-repository -y ppa:oisf/suricata-stable
+  sudo apt-get update
+  sudo apt-get install -y --no-install-recommends suricata
+
+  sudo systemctl disable --now suricata.service 2>/dev/null || true
+)
+suricata --build-info | sed -n '1,12p'
+systemctl is-enabled suricata.service || true
+systemctl is-active suricata.service || true
+~~~
+
+Do **not** edit the Suricata YAML configuration, run its rule updater, or start
+the service for MEGALODON. Those operations would configure and activate a
+separate sensor; no current MEGALODON runtime consumes its output. See
+[Suricata's Ubuntu package guide](https://docs.suricata.io/en/suricata-8.0.4/install/ubuntu.html)
+for a separately approved Suricata deployment.
+
+osquery is similarly an unintegrated, future-facing companion. If a local
+interactive shell is wanted for separate evaluation, its repository can be
+added with a scoped signing key; osqueryd stays disabled and no configuration
+file is created.
+
+~~~bash
+(
+  set -euo pipefail
+
+  sudo install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL https://pkg.osquery.io/deb/pubkey.gpg |
+    sudo gpg --dearmor --yes -o /etc/apt/keyrings/osquery.gpg
+  printf '%s\n' \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/osquery.gpg] https://pkg.osquery.io/deb deb main" |
+    sudo tee /etc/apt/sources.list.d/osquery.list >/dev/null
+
+  guard=/usr/sbin/policy-rc.d
+  if sudo test -e "$guard"; then
+    echo "An existing package service-start guard is present at $guard; review it and stop."
+    exit 1
+  fi
+
+  cleanup() { sudo rm -f "$guard"; }
+  trap cleanup EXIT HUP INT TERM
+
+  printf '%s\n' '#!/bin/sh' 'exit 101' | sudo tee "$guard" >/dev/null
+  sudo chmod 0755 "$guard"
+
+  sudo apt-get update
+  sudo apt-get install -y --no-install-recommends osquery
+  sudo systemctl disable --now osqueryd.service 2>/dev/null || true
+)
+osqueryi --version
+systemctl is-enabled osqueryd.service || true
+systemctl is-active osqueryd.service || true
+~~~
+
+The osquery package source is external to MEGALODON. Review the current
+[osquery Linux installation documentation](https://osquery.readthedocs.io/en/latest/installation/install-linux/)
+and its signing-key provenance before adding it to a production machine.
+
+### 3. Build Zeek as a private, non-service producer
+
+Ubuntu 24.04's standard package sources may not provide a usable Zeek executable.
+Build the reviewed release as the current user under the local prefix shown
+below; do not use a system prefix, create a service, or initialize ZeekControl.
+The Zeek project documents the prerequisites and supported source-build flow.
+
+Before setting the version below, obtain the corresponding release source and
+checksum/signature from the [official Zeek downloads page](https://zeek.org/get-zeek/).
+Record the exact version and verification result with the case evidence.
+
+~~~bash
+(
+  set -euo pipefail
+  umask 077
+
+  ZEEK_VERSION=8.0.10
+  source_root="$HOME/src/zeek-build"
+  prefix="$HOME/.local/zeek-$ZEEK_VERSION"
+  archive="$source_root/zeek-$ZEEK_VERSION.tar.gz"
+  source_dir="$source_root/zeek-$ZEEK_VERSION"
+
+  [ ! -e "$prefix" ] && [ ! -L "$prefix" ] ||
+    { echo "Zeek prefix already exists; do not overwrite it."; exit 1; }
+  [ ! -e "$source_dir" ] && [ ! -L "$source_dir" ] ||
+    { echo "Zeek source directory already exists; do not overwrite it."; exit 1; }
+
+  install -d -m 700 "$source_root"
+  curl -fL --proto '=https' --tlsv1.2 \
+    -o "$archive" "https://download.zeek.org/zeek-$ZEEK_VERSION.tar.gz"
+
+  # Verify the release checksum/signature against the value obtained above
+  # before extracting. Do not treat this placeholder as verification.
+  sha256sum "$archive"
+
+  tar -xzf "$archive" -C "$source_root"
+  cd "$source_dir"
+  ./configure --prefix="$prefix"
+  make -j"$(nproc)"
+  make install
+
+  "$prefix/bin/zeek" --version
+)
+~~~
+
+For the current shell only, expose the private Zeek build with:
+
+~~~bash
+export PATH="$HOME/.local/zeek-8.0.10/bin:$PATH"
+zeek --version
+~~~
+
+Persist a PATH change only after verifying the version and prefix. MEGALODON
+never launches Zeek: it imports a separately produced, closed-profile conn.log
+in offline analysis. Preserve original producer output; an unsupported record
+must be treated as an input-contract problem, not silently altered in place.
+See [Zeek's source-build documentation](https://docs.zeek.org/en/v8.0.8/building-from-source.html).
+
+### 4. Install and configure the MEGALODON Python environment
+
+Create the virtual environment inside an already reviewed checkout. This
+creates a private configuration copy with a database outside a project,
+synced, or shared directory. It leaves every integration disabled by default.
+
+~~~bash
+(
+  set -euo pipefail
+  umask 077
+  cd "$HOME/Projects/MEGALODON"
+
+  [ "$(id -u)" -ne 0 ] || { echo "Use a non-root account."; exit 1; }
+  [ ! -e .venv312 ] && [ ! -L .venv312 ] ||
+    { echo ".venv312 already exists; reuse it or choose a new name."; exit 1; }
+
+  python3 -m venv .venv312
+  .venv312/bin/python -m pip install --upgrade pip
+  .venv312/bin/python -m pip install -e '.[capture,test]'
+  .venv312/bin/python -m pip check
+
+  install -d -m 700 "$HOME/.config/megalodon" "$HOME/.local/share/megalodon"
+  config="$HOME/.config/megalodon/local-settings.toml"
+  [ ! -e "$config" ] && [ ! -L "$config" ] ||
+    { echo "Local settings already exist; do not overwrite them."; exit 1; }
+  install -m 600 /dev/null "$config"
+
+  .venv312/bin/python - "$config" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path("config/settings.toml").read_text(encoding="utf-8")
+old = 'db_path = "data/megalodon.db"'
+new = f'db_path = "{Path.home()}/.local/share/megalodon/megalodon.db"'
+if source.count(old) != 1:
+    raise SystemExit("Expected default db_path not found exactly once; stop.")
+Path(sys.argv[1]).write_text(source.replace(old, new), encoding="utf-8")
+PY
+  chmod 600 "$config"
+
+  .venv312/bin/python -m pytest -q
+  .venv312/bin/python -m megalodon capabilities --platform linux
+  .venv312/bin/python -m megalodon hub-plan --platform linux
+  .venv312/bin/python -m megalodon run \
+    --config "$config" --source sample --max-events 13
+)
+~~~
+
+If .venv312 already exists, do not recreate it. Refresh only the package and
+run the same safe checks:
+
+~~~bash
+cd "$HOME/Projects/MEGALODON"
+.venv312/bin/python -m pip install -e '.[capture,test]'
+.venv312/bin/python -m pip check
+.venv312/bin/python -m pytest -q
+~~~
+
+### 5. Bounded adapter verification
+
+The checks below verify only the two implemented offline integrations. They
+operate on already authorized, locally stored evidence and do not initiate
+capture or start an upstream program:
+
+~~~bash
+cd "$HOME/Projects/MEGALODON"
+MEGALODON_TEST_TSHARK=1 \
+  .venv312/bin/python -m pytest -q tests/test_offline.py -k system_tshark_headers_only
+
+export PATH="$HOME/.local/zeek-8.0.10/bin:$PATH"
+zeek --version
+.venv312/bin/python -m megalodon.offline --help
+~~~
+
+For an explicit offline run, follow
+[docs/offline-analysis.md](docs/offline-analysis.md) and use a fresh, private
+output directory. The adapter intentionally fails closed on missing, oversized,
+malformed, or out-of-profile inputs. It is not a live-capture, packet-decoding,
+or arbitrary-log ingestion tool.
+
+### 6. Start the local dashboard only when needed
+
+After a successful local run, this starts a foreground, loopback-only
+dashboard. It does not expose a network service beyond the local machine; stop
+it with Ctrl+C.
+
+~~~bash
+cd "$HOME/Projects/MEGALODON"
+.venv312/bin/python -m megalodon dashboard \
+  --config "$HOME/.config/megalodon/local-settings.toml" \
+  --host 127.0.0.1 --port 8787
+~~~
+
+Open <http://127.0.0.1:8787/> locally. Do not use remote-listening options,
+port forwarding, a reverse proxy, or a tunnel. Re-run the static catalog after
+any tool update; successful installation does not expand the supported
+integration boundary.
+
+
 ## Installation and first run
 
 For a **new checkout**, use the pinned, failure-checked
