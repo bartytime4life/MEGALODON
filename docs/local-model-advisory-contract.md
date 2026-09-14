@@ -180,7 +180,7 @@ change MEGALODON's static capability catalog.
 
 The existing Qwen identifiers in the automation fixtures remain placeholders.
 The v1 contract does not mean that Qwen is installed, configured, invoked, or
-allowed to perform any protective action. A runtime remains blocked on step 3.
+allowed to perform any protective action. A runtime remains blocked on step 4.
 
 ## Verification target
 
