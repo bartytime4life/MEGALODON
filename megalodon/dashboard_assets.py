@@ -484,6 +484,12 @@ const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
 const workspaceIds = ['live', 'analysis', 'interfaces'];
+const workspaceTargets = {
+  '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'live',
+  'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'reference-title': 'analysis',
+  'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
+  'workspace-interfaces': 'interfaces'
+};
 const state = {
   events: [],
   activeBin: null,
@@ -528,6 +534,20 @@ function activateWorkspace(nextWorkspace, moveFocus = false) {
     if (typeof tab.focus === 'function') tab.focus();
   }
 }
+function workspaceFromHash(value) {
+  if (typeof value !== 'string' || value.length > 128 || (value && !value.startsWith('#'))) return null;
+  const target = value.startsWith('#') ? value.slice(1) : '';
+  return Object.prototype.hasOwnProperty.call(workspaceTargets, target) ? workspaceTargets[target] : null;
+}
+function restoreWorkspaceFromHash() {
+  const hash = window.location && typeof window.location.hash === 'string' ? window.location.hash : '';
+  const workspace = workspaceFromHash(hash);
+  if (!workspace) return;
+  activateWorkspace(workspace);
+  const targetId = hash.startsWith('#') ? hash.slice(1) : '';
+  const target = targetId ? byId(targetId) : null;
+  if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'start'});
+}
 workspaceIds.forEach((workspace, index) => {
   const tab = byId(`workspace-tab-${workspace}`);
   tab.addEventListener('click', () => activateWorkspace(workspace));
@@ -542,6 +562,7 @@ workspaceIds.forEach((workspace, index) => {
   });
 });
 byId('skip-link').addEventListener('click', () => activateWorkspace('live'));
+if (typeof window.addEventListener === 'function') window.addEventListener('hashchange', restoreWorkspaceFromHash);
 function textNode(tag, value, className) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -1189,6 +1210,7 @@ function applyConfig(payload) {
   renderScope();
 }
 async function bootstrap() {
+  restoreWorkspaceFromHash();
   try { applyConfig(await requestJSON('/api/config')); }
   catch (_) {
     state.configDegraded = true; renderScope();

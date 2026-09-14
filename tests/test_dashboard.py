@@ -393,6 +393,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert ".timeline-bar.level-0 { height: 0; }" in DASHBOARD_CSS
     assert "replaceChildren" in DASHBOARD_JS
     assert "AbortController" in DASHBOARD_JS
+    assert "hashchange" in DASHBOARD_JS
+    assert "restoreWorkspaceFromHash" in DASHBOARD_JS
     assert "knownSeverities.has(normalized)" in DASHBOARD_JS
     assert "Audit decisions; no live application" in DASHBOARD_JS
     assert "Schema-checked startup snapshot" in DASHBOARD_JS

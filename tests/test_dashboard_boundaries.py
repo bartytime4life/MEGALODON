@@ -230,7 +230,7 @@ process.stdin.on('end', async () => {
     const document = {hidden: false, createElement: fakeNode, addEventListener() {},
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); }};
     const context = {document, AbortController, Intl, Date, Number, String, Math, Set, Promise, Error, Array,
-      window: {setTimeout(fn, ms) { assert.equal(ms, 5000); timers.set(++sequence, fn); return sequence; }, clearTimeout(id) { timers.delete(id); }},
+      window: {location: {hash: ''}, setTimeout(fn, ms) { assert.equal(ms, 5000); timers.set(++sequence, fn); return sequence; }, clearTimeout(id) { timers.delete(id); }},
       fetch: async path => { calls.push(path); return {ok: true, json: async () => plans[new URL(path, 'http://localhost').searchParams.get('platform')]}; }
     };
     vm.createContext(context);
@@ -246,7 +246,11 @@ process.stdin.on('end', async () => {
     assert.equal(nodeFor('workspace-interfaces').hidden, true);
     assert.equal(nodeFor('workspace-tab-analysis').attrs['aria-selected'], 'true');
     assert.equal(nodeFor('workspace-tab-live').attrs['aria-selected'], 'false');
-    run("activateWorkspace('live')");
+    assert.equal(run("workspaceFromHash('#reference-title')"), 'analysis');
+    assert.equal(run("workspaceFromHash('#offline-title')"), 'analysis');
+    assert.equal(run("workspaceFromHash('#integrations-title')"), 'interfaces');
+    assert.equal(run("workspaceFromHash('#unknown')"), null);
+    context.window.location.hash = '#detections-title'; run('restoreWorkspaceFromHash()');
     assert.equal(nodeFor('workspace-live').hidden, false);
     assert.equal(nodeFor('workspace-analysis').hidden, true);
     for (const platform of ['linux', 'windows', 'other']) {
