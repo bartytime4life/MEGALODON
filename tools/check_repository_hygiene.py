@@ -158,9 +158,13 @@ def main() -> int:
         print(f"repository hygiene guard error: {type(error).__name__}", file=sys.stderr)
         return 2
     if findings:
+        # Findings may be derived from a credential marker or sensitive path.
+        # Their details are intentionally withheld from CI and terminal output.
         print("repository hygiene guard: failed")
-        for finding in findings:
-            print(f"- {finding}")
+        print(
+            f"repository hygiene guard: {len(findings)} finding(s) withheld",
+            file=sys.stderr,
+        )
         return 1
     print(f"repository hygiene guard: passed ({len(paths)} tracked files)")
     return 0
