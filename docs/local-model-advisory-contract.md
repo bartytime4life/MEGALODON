@@ -165,8 +165,8 @@ fingerprint and matches the operator-recorded artifact digest before HTTP. The
 provider adapter then applies a non-blocking process-local concurrency-one gate,
 one actively enforced shared 15-second deadline, an optional explicit
 per-invocation cancellation event, a 4 KiB UTF-8 model-output cap, an 8 KiB
-status-and-header cap applied before standard-library header parsing, and a
-32 KiB body cap. The fixed request asks the provider to unload after the call,
+status/header/chunk-framing/trailer cap applied during standard-library
+parsing, and a 32 KiB body cap. The fixed request asks the provider to unload after the call,
 uses temperature zero and a 512-token generation ceiling, and has no tool
 field. The adapter fails closed on partial, late, redirected, encoded,
 malformed, duplicate-key, tool-bearing, or oversized responses.

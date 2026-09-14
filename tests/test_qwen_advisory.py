@@ -602,6 +602,33 @@ def test_status_and_headers_are_bounded_before_stdlib_parsing() -> None:
         response.begin()
 
 
+def test_chunk_framing_and_trailers_share_the_protocol_line_budget() -> None:
+    class MemorySocket:
+        def __init__(self, payload: bytes) -> None:
+            self.stream = io.BytesIO(payload)
+
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return self.stream
+
+    response_bytes = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n"
+        b"2\r\n{}\r\n"
+        b"0\r\n"
+        b"X-Padding: "
+        + b"a" * qwen.MAX_PROVIDER_HEADER_BYTES
+        + b"\r\n\r\n"
+    )
+    response = qwen._BoundedHTTPResponse(MemorySocket(response_bytes))
+    response.begin()
+
+    with pytest.raises(qwen._ProviderResponseInvalid):
+        while response.read1(4096):
+            pass
+
+
 def test_exact_four_kibibyte_utf8_output_is_accepted() -> None:
     output = "🙂" * 1024
     assert len(output.encode("utf-8")) == 4096

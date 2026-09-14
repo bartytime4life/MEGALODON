@@ -79,16 +79,13 @@ class _ProviderRequestInvalid(ValueError):
 
 
 class _HeaderBudgetReader:
-    """Bound status-line and response-header bytes before stdlib parsing."""
+    """Bound response status, header, chunk-framing, and trailer lines."""
 
     def __init__(self, wrapped: Any, limit: int) -> None:
         self._wrapped = wrapped
         self._remaining = limit
-        self._active = True
 
     def readline(self, size: int = -1) -> bytes:
-        if not self._active:
-            return self._wrapped.readline(size)
         request_size = self._remaining + 1
         if size >= 0:
             request_size = min(request_size, size)
@@ -98,15 +95,12 @@ class _HeaderBudgetReader:
         self._remaining -= len(line)
         return line
 
-    def deactivate(self) -> None:
-        self._active = False
-
     def __getattr__(self, name: str) -> Any:
         return getattr(self._wrapped, name)
 
 
 class _BoundedHTTPResponse(http.client.HTTPResponse):
-    """HTTP response whose status line and headers share a fixed byte budget."""
+    """HTTP response whose protocol lines share one fixed byte budget."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -114,12 +108,6 @@ class _BoundedHTTPResponse(http.client.HTTPResponse):
             raise _ProviderResponseInvalid("provider response stream unavailable")
         self._header_reader = _HeaderBudgetReader(self.fp, MAX_PROVIDER_HEADER_BYTES)
         self.fp = self._header_reader
-
-    def begin(self) -> None:
-        try:
-            super().begin()
-        finally:
-            self._header_reader.deactivate()
 
 
 class _LiteralLoopbackHTTPConnection(http.client.HTTPConnection):
