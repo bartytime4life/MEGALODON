@@ -31,16 +31,21 @@ INDEX_HTML = """<!doctype html>
   </header>
 
   <nav class="section-nav" aria-label="Dashboard sections">
-    <a href="#page-title">Overview</a><a href="#detections-title">Detection triage</a><a href="#reference-title">Reference Library</a><a href="#offline-title">Offline snapshot</a><a href="#integrations-title">Integration Map</a>
+    <a href="#live-review-title">Live review</a><a href="#detections-title">Detection triage</a><a href="#deep-analysis-title">Deep analysis</a><a href="#reference-title">Reference Library</a><a href="#offline-title">Offline snapshot</a><a href="#integrations-title">Integration Map</a>
   </nav>
 
   <section class="hero" aria-labelledby="page-title">
     <div>
-      <p class="eyebrow">Operational overview</p>
-      <h1 id="page-title" tabindex="-1">Signal without surrendering control.</h1>
-      <p class="lede">Review local metadata detections and one explicitly selected offline analysis snapshot. This surface cannot start analysis or apply a response.</p>
+      <p class="eyebrow">Live review</p>
+      <h1 id="page-title" tabindex="-1">Start with the signal you can act on.</h1>
+      <p class="lede">Review the latest bounded local metadata summary first, then move into deeper context only when it helps. A dashboard refresh is not proof that capture, ingestion, or a model analysis is running.</p>
     </div>
     <div class="read-only">HTTP read only · loopback only</div>
+  </section>
+
+  <section class="section-intro" aria-labelledby="live-review-title">
+    <p class="eyebrow">First layer</p>
+    <div><h2 id="live-review-title" tabindex="-1">Live review</h2><p>Stored telemetry and fixed-rule findings, refreshed only on this local dashboard’s controlled cadence. This view never changes the host or the network.</p></div>
   </section>
 
   <section class="trust-strip waiting" id="trust-strip" aria-labelledby="trust-title">
@@ -123,6 +128,24 @@ INDEX_HTML = """<!doctype html>
         <tbody id="events"><tr><td class="empty" colspan="5">Loading local detections…</td></tr></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="section-intro deep-analysis-intro" aria-labelledby="deep-analysis-title">
+    <p class="eyebrow">Second layer</p>
+    <div><h2 id="deep-analysis-title" tabindex="-1">Deep analysis &amp; context</h2><p>Optional, bounded views for investigating a completed result. They remain separate from the live review so context never looks like a real-time verdict.</p></div>
+  </section>
+
+  <section class="analysis-window" aria-labelledby="analysis-window-title">
+    <div>
+      <p class="eyebrow">AI advisory status</p>
+      <h3 id="analysis-window-title">Reserved analysis window · not active</h3>
+      <p>A future explicit local advisory may inspect one completed, privacy-bounded metadata projection for up to 15 seconds, one request at a time. It cannot inspect raw traffic, contact the Internet, start background analysis, or apply a response.</p>
+    </div>
+    <dl class="analysis-facts">
+      <div><dt>Current state</dt><dd>Not implemented</dd></div>
+      <div><dt>Allowed input</dt><dd>Completed metadata only</dd></div>
+      <div><dt>Result meaning</dt><dd>Advisory · not evidence</dd></div>
+    </dl>
   </section>
 
   <section class="panel reference-panel" id="reference-panel" aria-labelledby="reference-title" aria-busy="true">
@@ -246,6 +269,9 @@ body::before {
 .connection::before { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); content: ""; }
 .connection.ok::before { background: var(--aqua); box-shadow: 0 0 0 5px rgba(81, 230, 207, .1); }
 .connection.error::before { background: var(--rose); box-shadow: 0 0 0 5px rgba(255, 117, 143, .1); }
+.section-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: -20px 0 28px; }
+.section-nav a { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; font-weight: 750; text-decoration: none; }
+.section-nav a:hover { border-color: rgba(81, 230, 207, .38); color: #c8fff7; background: rgba(81, 230, 207, .08); }
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; margin-bottom: 24px; }
 .eyebrow { margin: 0 0 9px; color: var(--aqua); font-size: .75rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-height: .98; letter-spacing: -.055em; }
@@ -255,6 +281,18 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
   border-radius: 14px; background: rgba(81, 230, 207, .07); color: #b7fff2;
   font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
 }
+.section-intro { display: grid; grid-template-columns: 144px minmax(0, 1fr); gap: 18px; align-items: start; margin: 30px 0 14px; padding: 0 4px; }
+.section-intro .eyebrow { margin-top: 5px; }
+.section-intro h2 { margin: 0; font-size: 1.08rem; letter-spacing: -.01em; }
+.section-intro p:not(.eyebrow) { max-width: 780px; margin: 6px 0 0; color: var(--muted); font-size: .83rem; line-height: 1.55; }
+.deep-analysis-intro { margin-top: 40px; }
+.analysis-window { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .7fr); gap: 18px; align-items: center; margin: 0 0 18px; padding: 18px 20px; border: 1px solid rgba(255, 209, 102, .28); border-radius: var(--radius); background: linear-gradient(145deg, rgba(65, 54, 23, .24), rgba(8, 24, 33, .88)); box-shadow: var(--shadow); }
+.analysis-window h3 { margin: 0; font-size: .94rem; }
+.analysis-window p:not(.eyebrow) { max-width: 720px; margin: 7px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.analysis-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 0; }
+.analysis-facts div { padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .42); }
+.analysis-facts dt { color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.analysis-facts dd { margin: 5px 0 0; color: #ffe5a1; font-size: .74rem; font-weight: 750; line-height: 1.35; }
 .trust-strip {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .65fr); gap: 18px;
   align-items: center; margin: 24px 0 12px; padding: 16px 18px; border: 1px solid var(--line);
@@ -379,6 +417,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
 [hidden] { display: none !important; }
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; } .read-only { justify-self: start; }
+  .section-intro, .analysis-window { grid-template-columns: 1fr; }
   .trust-strip { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolbar { grid-template-columns: minmax(0, 1fr) minmax(150px, .45fr); }
@@ -391,6 +430,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
   .shell { width: min(100% - 20px, 1240px); padding-top: 18px; }
   .topbar { align-items: flex-start; } .brand-subtitle { display: none; } .connection { max-width: 145px; }
   .trust-strip { padding: 14px; } .trust-facts { grid-template-columns: 1fr; }
+  .section-nav { margin-top: -18px; } .section-intro { gap: 4px; margin-top: 24px; } .analysis-window { padding: 15px; } .analysis-facts { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: 1fr 1fr; } .metric { min-height: 108px; padding: 14px; }
   .panel-head { display: block; } .timestamp { display: block; margin-top: 7px; }
   .priority-pulse { display: block; padding: 14px; } .priority-boundary { margin-top: 8px; text-align: left; }
