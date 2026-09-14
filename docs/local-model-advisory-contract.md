@@ -1,9 +1,11 @@
 # Local Qwen advisory contract
 
-**Status:** proposed, documentation-only boundary for
-[issue #145](https://github.com/bartytime4life/MEGALODON/issues/145). This
-document does not add a model runtime, Ollama request, API client, daemon,
-scheduler, monitor, detector, file scanner, sandbox, or response action.
+**Status:** proposed, data-only contract boundary for
+[issue #145](https://github.com/bartytime4life/MEGALODON/issues/145). The v1
+[schema and fixtures](../contracts/local-model-advisory/v1/README.md) validate
+the permitted shapes, but do not add a model runtime, Ollama request, API
+client, daemon, scheduler, monitor, detector, file scanner, sandbox, or
+response action.
 
 MEGALODON may eventually use a locally hosted Qwen model as an explicit,
 operator-requested explanation surface. The model is an advisory reader of a
@@ -54,9 +56,10 @@ The projection must exclude:
 - unbounded history, retrieval documents, embeddings, training data, or chat
   transcripts.
 
-A future data schema must reject unknown fields, control characters, nested
-objects not explicitly listed, and values that exceed the selected byte, token,
-or cardinality limits.
+The v1 data schema rejects unknown fields, control characters, raw-evidence
+fields, provider substitution, and values outside the fixed v1 byte, timeout,
+and concurrency limits. It contains no endpoint, credential, prompt, tool,
+action, filesystem, capture, database, or firewall field.
 
 ## Outcome envelope
 
@@ -134,10 +137,11 @@ change MEGALODON's static capability catalog.
 
 ## Delivery sequence
 
-1. Add a versioned JSON Schema and accepted/rejected fixtures for the input
-   projection and result envelope.
-2. Add data-only tests proving closed fields, sensitive-field refusal, outcome
-   bounds, and the absence of executable/provider authority.
+1. **Delivered in this contract slice:** v1 JSON Schema plus accepted/rejected
+   fixtures for the input projection and result envelope.
+2. **Delivered in this contract slice:** data-only tests for closed fields,
+   sensitive-field refusal, outcome bounds, and absent executable/provider
+   authority.
 3. Add an opt-in local adapter with loopback preflight and deterministic
    negative controls. It must not start Ollama, download a model, or change
    Qwen configuration.
@@ -147,14 +151,13 @@ change MEGALODON's static capability catalog.
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
 
-Until steps 1–3 are complete, the existing Qwen identifiers in the automation
-fixtures are placeholders only. They do not mean that Qwen is installed,
-configured, invoked, or allowed to perform any protective action.
+The existing Qwen identifiers in the automation fixtures remain placeholders.
+The v1 contract does not mean that Qwen is installed, configured, invoked, or
+allowed to perform any protective action. A runtime remains blocked on step 3.
 
 ## Verification target
 
-The first code PR for this issue should be able to prove, without a local model
-installation or network request:
+This contract slice proves, without a local model installation or network request:
 
 ~~~bash
 python -m pytest -q tests/test_local_model_advisory_contract.py
