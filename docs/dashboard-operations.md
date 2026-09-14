@@ -8,11 +8,21 @@ capture, analyzer installation, or response action. See the
 
 ## Read the interface in evidence order
 
-The overview and trust strip lead into stored counters and detection triage.
-Reference context follows triage instead of pushing the primary review task below
-large lookup forms. Section navigation moves directly to overview, triage,
-Reference Library, offline snapshot, and Integration Map. Navigation does not
-change filters, fetch external data, or start an analysis.
+The **Live review** layer leads with the trust strip, stored counters, and
+detection triage. It is the shortest path to the bounded data the dashboard can
+currently read. **Deep analysis & context** follows as a separate layer for
+Reference Library, an offline snapshot, and the static Integration Map. Section
+navigation moves to either layer without changing filters, fetching external
+data, or starting an analysis.
+
+The Deep analysis layer also shows a **Reserved analysis window · not active**
+card. This is an honest capability boundary, not a button or a model-health
+claim: main currently has only the data-only local-model advisory contract. A
+future explicit, loopback-only advisory invocation may receive one completed
+privacy-bounded metadata projection for at most 15 seconds with concurrency one.
+It must not inspect raw traffic, contact the Internet, run in the background, or
+apply a response. Until a separately reviewed runtime adapter exists, its state
+remains **Not implemented**.
 
 There are four distinct read models. Do not combine their meanings:
 
@@ -22,6 +32,7 @@ There are four distinct read models. Do not combine their meanings:
 | Offline snapshot | One explicitly selected, validated report projection loaded at startup | A live analyzer connection or automatically refreshed run |
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |
 | Integration Map | Repository-defined capabilities, workflow contracts, and next gates for one profile | Installed programs, live connections, active sensors, or platform acceptance |
+| Reserved AI advisory window | A visible future-runtime boundary: one explicit, bounded local explanation request | An installed/reachable model, live traffic analysis, an evidence source, or a response authority |
 
 The high/critical counter compares sequential stored counts. An increase is not a
 unique new incident; a decrease is not proof that a threat was remediated. The
