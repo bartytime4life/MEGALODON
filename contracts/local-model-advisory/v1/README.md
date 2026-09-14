@@ -1,10 +1,11 @@
 # Local model advisory contract v1
 
-This is a **data-only, proposed** contract delivered through issue #145. It
-validates the small metadata projection and display-only result envelope described in
+This directory contains the **data-only v1 contract** delivered through issue #145 and
+extended for the bounded invocation receipt in issue #165. It validates the small
+metadata projection, display-only result envelope, and runtime receipt described in
 [`docs/local-model-advisory-contract.md`](../../../docs/local-model-advisory-contract.md).
 
-Validation is not an adapter.  It does not connect to Ollama, install or start
+Schema validation is not an adapter. It does not connect to Ollama, install or start
 Qwen, read a capture or a file, query a database, start a process, expose an
 endpoint, or grant an action capability.
 
@@ -14,7 +15,9 @@ endpoint, or grant an action capability.
 - one selected explanation purpose, not a free-form model prompt;
 - one fingerprint-pinned `local-model-registry-v1` containing exactly one local
   model receipt, its fixed v1 resource limits, and an empty tool list; and
-- one bounded, untrusted result with a closed outcome and fixed result code.
+- one bounded, untrusted result with a closed outcome and fixed result code; and
+- one immutable invocation receipt that distinguishes policy denial, local-provider
+  error, and a bounded answer without retaining raw provider output.
 
 `rejected_records` is a bounded integer for a completed run. A failed run may
 instead carry JSON `null` when the offline receipt could not determine the
@@ -26,9 +29,9 @@ zero. The other counts always remain bounded integers.
 Unknown fields, raw evidence, free-form prompts, provider addresses, credentials,
 tool/action fields, URLs, paths, commands, and mutable host controls have no
 place in the schema or registry. A registry cannot carry an endpoint, URL,
-command, path, credential, prompt, or tool. A later runtime adapter must pass
-this contract **before** it makes any explicitly authorized, loopback-only local
-request.
+command, path, credential, prompt, or tool. The runtime adapter reruns this
+contract's stricter Python Airlock **before** it makes any explicitly authorized,
+loopback-only local request.
 
 Run the contract suite with:
 
@@ -66,3 +69,37 @@ tamper. Each case runs twice and must return the same exact serialized receipt
 without changing its inputs. HTTP/socket, subprocess, firewall, SQLite,
 filesystem read/write, tool-discovery, and command-entry sentinels fail on any
 attempted side effect.
+
+## Literal-loopback provider boundary
+
+[`megalodon/advisory_provider.py`](../../../megalodon/advisory_provider.py) adds
+one internal, explicitly enabled request boundary. It accepts the closed request,
+registry, and independent registry pin; reruns preflight internally; and then can
+send only the admitted prompt and exact registry model ID to literal
+`127.0.0.1:11434/api/generate`.
+
+The adapter has no endpoint, URL, model override, raw prompt, header, credential,
+transport, tool, or action parameter. It does not use proxy environment values,
+DNS, redirects, streaming, discovery, model pull/update, subprocesses, files,
+SQLite, capture, or firewall code. One process-wide nonblocking lock enforces
+concurrency one; the socket timeout is 15 seconds; `num_predict` is 512;
+`think` is false; `keep_alive` is zero; raw response and decoded model text are
+separately bounded.
+
+Provider output is accepted only from one terminal HTTP 200 JSON response with
+the exact model ID, `done: true`, no non-empty reasoning field, a closed provider
+metadata shape, and bounded printable text. Unknown fields—including tool
+calls—fail closed. The text is
+whitespace-normalized and wrapped in the application-owned
+`advisoryInvocationReceipt`; it remains untrusted and non-executable.
+
+Run the provider boundary tests without a live Ollama instance:
+
+~~~bash
+python -m pytest -q tests/test_advisory_provider.py
+~~~
+
+The fixture model ID and artifact digest are synthetic. The adapter records the
+registry-bound identity and rejects a mismatched response model ID, but it does
+not discover or attest installed Ollama model bytes. An operator must establish
+the exact local alias/artifact binding separately before real use.

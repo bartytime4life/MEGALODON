@@ -113,13 +113,13 @@ _COMPONENTS = (
     {
         "id": "qwen-ollama",
         "software": "Qwen via local Ollama",
-        "integration": "local_ai_advisory_contract",
+        "integration": "explicit_literal_loopback_advisory",
         "platforms": {
-            "linux": "contract_only",
-            "windows": "contract_only",
+            "linux": "optional",
+            "windows": "evaluation_only",
             "other": "unsupported",
         },
-        "boundary": "No runtime provider exists; a future model result is advisory only and cannot inspect traffic or apply actions.",
+        "boundary": "An internal opt-in adapter can make one fixed literal-loopback request after Airlock admission; it has no CLI, dashboard route, raw-traffic access, tools, persistence, or action authority.",
     },
     {
         "id": "nmap",

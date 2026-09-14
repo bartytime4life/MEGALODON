@@ -1,0 +1,17 @@
+{
+  "schema": "advisoryInvocationReceipt",
+  "value": {
+    "outcome": "DENY",
+    "code": "POLICY_DENIED",
+    "reason_code": "PROVIDER_DISABLED",
+    "summary": "The local advisory provider is disabled for this invocation.",
+    "limitations": [
+      "AI advisory; not evidence or an action.",
+      "Model output cannot select or execute a tool, command, target, or response.",
+      "Only the canonical privacy-bounded metadata prompt was supplied."
+    ],
+    "model_receipt": null,
+    "registry_sha256": null,
+    "provider_request_performed": false
+  }
+}

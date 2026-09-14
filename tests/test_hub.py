@@ -95,9 +95,10 @@ def test_workflow_contracts_match_their_owned_entry_points():
     )
 
     advisory = integration_plan("linux", "local-ai-advisory")["workflows"][0]
-    assert advisory["entry_point"] is None
-    assert advisory["launch_policy"] == "contract_only_no_runtime_provider"
+    assert advisory["entry_point"] == "Python API: megalodon.advisory_provider.invoke_local_advisory"
+    assert advisory["launch_policy"] == "explicit_opt_in_literal_loopback_only"
     assert "no raw traffic" in advisory["data_boundary"]
+    assert "proxy, DNS, redirect" in advisory["data_boundary"]
     assert "cannot execute commands" in advisory["action_boundary"]
 
     for workflow in (
