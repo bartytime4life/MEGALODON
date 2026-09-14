@@ -210,8 +210,9 @@ def _recv(sock: socket.socket, size: int, deadline: float, cancel_event: object)
             continue
 
 
-def _response_body(sock: socket.socket, cancel_event: object) -> bytes:
-    deadline = time.monotonic() + TIMEOUT_SECONDS
+def _response_body(
+    sock: socket.socket, cancel_event: object, deadline: float
+) -> bytes:
     buffered = bytearray()
     marker = b"\r\n\r\n"
     while marker not in buffered:
@@ -339,6 +340,7 @@ def request_advisory(
 
     sock: socket.socket | None = None
     performed = False
+    deadline = time.monotonic() + TIMEOUT_SECONDS
     try:
         try:
             request_bytes = _request_bytes(admitted)
@@ -347,8 +349,11 @@ def request_advisory(
         if _cancelled(cancel_event):
             return _receipt("DENY", "CANCELLED", performed=False, decision=admitted)
         try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return _receipt("ERROR", "TIMEOUT", performed=False, decision=admitted)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(TIMEOUT_SECONDS)
+            sock.settimeout(remaining)
             sock.connect(("127.0.0.1", 11434))
         except socket.timeout:
             return _receipt("ERROR", "TIMEOUT", performed=False, decision=admitted)
@@ -356,14 +361,20 @@ def request_advisory(
             return _receipt("ERROR", "CONNECT_FAILED", performed=False, decision=admitted)
         if _cancelled(cancel_event):
             return _receipt("DENY", "CANCELLED", performed=False, decision=admitted)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return _receipt("ERROR", "TIMEOUT", performed=False, decision=admitted)
+        sock.settimeout(remaining)
         performed = True
         try:
             sock.sendall(request_bytes)
-            body = _response_body(sock, cancel_event)
+            body = _response_body(sock, cancel_event, deadline)
             answer = _answer(body, admitted)
         except _ProviderFailure as failure:
             outcome = "DENY" if failure.code == "CANCELLED" else "ERROR"
             return _receipt(outcome, failure.code, performed=performed, decision=admitted)
+        except socket.timeout:
+            return _receipt("ERROR", "TIMEOUT", performed=performed, decision=admitted)
         except (OSError, UnicodeError, ValueError):
             return _receipt(
                 "ERROR", "REQUEST_FAILED", performed=performed, decision=admitted

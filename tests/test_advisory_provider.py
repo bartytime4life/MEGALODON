@@ -420,6 +420,25 @@ def test_read_timeout_uses_the_fixed_total_budget(monkeypatch) -> None:
     assert receipt.provider_request_performed is True
 
 
+def test_connect_time_consumes_the_single_total_deadline(monkeypatch) -> None:
+    clock = [100.0]
+
+    class SlowConnectSocket(FakeSocket):
+        def connect(self, endpoint: object) -> None:
+            super().connect(endpoint)
+            clock[0] += provider.TIMEOUT_SECONDS
+
+    fake = SlowConnectSocket(response_bytes(valid_response()))
+    install_fake(monkeypatch, fake)
+    monkeypatch.setattr(provider.time, "monotonic", lambda: clock[0])
+
+    receipt = request_advisory(admitted(), enabled=True)
+
+    assert receipt.code == "TIMEOUT"
+    assert receipt.provider_request_performed is False
+    assert fake.sent == b""
+
+
 def test_concurrency_one_returns_busy_without_a_second_socket(monkeypatch) -> None:
     sent = threading.Event()
     release = threading.Event()
