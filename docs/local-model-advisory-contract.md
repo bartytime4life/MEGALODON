@@ -142,18 +142,36 @@ change MEGALODON's static capability catalog.
 2. **Delivered in this contract slice:** data-only tests for closed fields,
    sensitive-field refusal, outcome bounds, and absent executable/provider
    authority.
-3. Add an opt-in local adapter with loopback preflight and deterministic
-   negative controls. It must not start Ollama, download a model, or change
-   Qwen configuration.
-4. Add a read-only dashboard projection only after the adapter's data,
-   privacy, error, and browser bounds are proven.
+3. **No-network Airlock preflight (issue #154):** validate one closed typed
+   request and construct an immutable canonical prompt plan. An ADMIT decision
+   permits prompt construction only; it must not contact a provider, load Qwen,
+   probe Ollama, read local evidence, or change host state.
+4. Add a separately reviewed, opt-in local adapter only after a new exact-current
+   decision authorizes one loopback request path and its data, privacy, error,
+   and browser bounds are proven.
 5. Consider any active host, network, file, or response integration only as a
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
 
 The existing Qwen identifiers in the automation fixtures remain placeholders.
-The v1 contract does not mean that Qwen is installed, configured, invoked, or
-allowed to perform any protective action. A runtime remains blocked on step 3.
+The v1 contract and Airlock preflight do not mean that Qwen is installed,
+configured, invoked, or allowed to perform any protective action. A provider-call
+runtime remains a separately authorized future step.
+
+## No-network Qwen Airlock preflight
+
+The Airlock is a side-effect-free repository module. It accepts only the closed
+v1 projection, model receipt, and fixed limits; accepts only local:qwen-approved-v1
+plus a lowercase SHA-256 artifact digest; and returns an immutable canonical
+metadata-only prompt plan or a fixed DENY / POLICY_DENIED receipt. Unknown fields,
+control characters, malformed counts, substituted models, malformed digests,
+instruction-like extra fields, and invalid limits are denied without echoing the input.
+
+An ADMIT result is not a model request, model availability claim, network or
+Internet action, evidence, detection, database write, dashboard action, capture,
+firewall operation, scheduler, or host action. The module contains no provider
+client, endpoint, subprocess, filesystem, SQLite, capture, firewall, or dashboard
+surface.
 
 ## Verification target
 
