@@ -229,6 +229,28 @@ def test_oversized_canonical_request_fails_before_http(monkeypatch) -> None:
     assert result.provider_request_performed is False
 
 
+def test_cancellation_during_request_construction_performs_zero_http(monkeypatch) -> None:
+    cancellation = threading.Event()
+    real_request_bytes = qwen._request_bytes
+
+    def build_then_cancel(model_id: str, prompt: str) -> bytes:
+        body = real_request_bytes(model_id, prompt)
+        cancellation.set()
+        return body
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("post-construction cancellation attempted HTTP")
+
+    monkeypatch.setattr(qwen, "_request_bytes", build_then_cancel)
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", forbidden)
+
+    result = invoke(cancel_event=cancellation)
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "CANCELLED_BEFORE_REQUEST"
+    assert result.provider_request_performed is False
+
+
 @pytest.mark.parametrize("invalid", ("pin", "digest", "request"))
 def test_airlock_denial_performs_zero_http(invalid: str, monkeypatch) -> None:
     def forbidden(*args, **kwargs):
@@ -298,6 +320,27 @@ def test_pre_request_cancellation_performs_zero_http(monkeypatch) -> None:
     assert result.outcome == "DENY"
     assert result.reason_code == "CANCELLED_BEFORE_REQUEST"
     assert result.provider_request_performed is False
+
+
+def test_cancellation_after_connection_construction_performs_zero_request(
+    monkeypatch,
+) -> None:
+    cancellation = threading.Event()
+
+    class CancellingConnection(FakeConnection):
+        def __init__(self, host: str, port: int, *, timeout: float) -> None:
+            super().__init__(host, port, timeout=timeout)
+            cancellation.set()
+
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", CancellingConnection)
+
+    result = invoke(cancel_event=cancellation)
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "CANCELLED_BEFORE_REQUEST"
+    assert result.provider_request_performed is False
+    assert CancellingConnection.instances[-1].requests == []
+    assert CancellingConnection.instances[-1].closed is True
 
 
 def test_concurrency_one_fails_closed_without_http(monkeypatch) -> None:
@@ -593,7 +636,7 @@ def test_status_and_headers_are_bounded_before_stdlib_parsing() -> None:
     oversized_headers = (
         b"HTTP/1.1 200 OK\r\n"
         + b"X-Padding: "
-        + b"a" * qwen.MAX_PROVIDER_HEADER_BYTES
+        + b"a" * qwen.MAX_PROVIDER_PROTOCOL_BYTES
         + b"\r\n\r\n"
     )
     response = qwen._BoundedHTTPResponse(MemorySocket(oversized_headers))
@@ -602,7 +645,7 @@ def test_status_and_headers_are_bounded_before_stdlib_parsing() -> None:
         response.begin()
 
 
-def test_chunk_framing_and_trailers_share_the_protocol_line_budget() -> None:
+def test_chunk_framing_and_trailers_share_the_protocol_budget() -> None:
     class MemorySocket:
         def __init__(self, payload: bytes) -> None:
             self.stream = io.BytesIO(payload)
@@ -618,8 +661,34 @@ def test_chunk_framing_and_trailers_share_the_protocol_line_budget() -> None:
         b"2\r\n{}\r\n"
         b"0\r\n"
         b"X-Padding: "
-        + b"a" * qwen.MAX_PROVIDER_HEADER_BYTES
+        + b"a" * qwen.MAX_PROVIDER_PROTOCOL_BYTES
         + b"\r\n\r\n"
+    )
+    response = qwen._BoundedHTTPResponse(MemorySocket(response_bytes))
+    response.begin()
+
+    with pytest.raises(qwen._ProviderResponseInvalid):
+        while response.read1(4096):
+            pass
+
+
+def test_highly_fragmented_chunks_cannot_bypass_the_protocol_budget() -> None:
+    class MemorySocket:
+        def __init__(self, payload: bytes) -> None:
+            self.stream = io.BytesIO(payload)
+
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return self.stream
+
+    json_body = b'{}' + b" " * 1998
+    fragmented = b"".join(b"1\r\n" + bytes([byte]) + b"\r\n" for byte in json_body)
+    response_bytes = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n"
+        + fragmented
+        + b"0\r\n\r\n"
     )
     response = qwen._BoundedHTTPResponse(MemorySocket(response_bytes))
     response.begin()

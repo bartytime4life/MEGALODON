@@ -113,7 +113,7 @@ capture-buffer sizing or loss-free operation under production load.
 16. **Local AI is explicit, literal-loopback, and advisory only.** The optional
     provider API exposes no endpoint or raw-prompt parameter, uses no
     DNS/proxy/redirect/fallback path, and enforces one request with a shared
-    monotonic deadline, active cancellation, bounded HTTP protocol lines and body,
+    monotonic deadline, active cancellation, bounded HTTP protocol framing and body,
     fixed inference options, and token/text limits. Model output cannot become
     a detection, evidence item, command, target, query, or response action.
 

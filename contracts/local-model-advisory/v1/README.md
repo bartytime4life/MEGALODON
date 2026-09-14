@@ -80,8 +80,8 @@ process action.
 
 The adapter applies one actively enforced 15-second deadline, accepts an
 optional per-invocation cancellation event, gives the status line, headers,
-chunk framing, and trailers one cumulative 8 KiB budget, bounds the JSON body to 32 KiB, and
-accepts at most 4 KiB of UTF-8 model text. Provider JSON has a closed field set;
+chunk framing, and trailers one cumulative 8 KiB budget, bounds the JSON body
+to 32 KiB, and accepts at most 4 KiB of UTF-8 model text. Provider JSON has a closed field set;
 duplicate keys, tool-call fields, and non-empty thinking traces fail closed. Its
 display value is the closed `advisoryResult` shape. The operator-recorded
 artifact digest is checked against the fingerprint-pinned registry before HTTP,

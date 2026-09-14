@@ -26,7 +26,7 @@ MAX_OUTPUT_BYTES = FIXED_LIMITS["max_output_bytes"]
 TIMEOUT_SECONDS = FIXED_LIMITS["timeout_seconds"]
 MAX_PROVIDER_REQUEST_BYTES = 6144
 MAX_PROVIDER_ENVELOPE_BYTES = MAX_OUTPUT_BYTES * 8
-MAX_PROVIDER_HEADER_BYTES = 8192
+MAX_PROVIDER_PROTOCOL_BYTES = 8192
 MAX_SUMMARY_CHARACTERS = 1200
 MAX_PREDICT_TOKENS = 512
 
@@ -78,36 +78,46 @@ class _ProviderRequestInvalid(ValueError):
     """A non-sensitive marker for an invalid bounded provider request."""
 
 
-class _HeaderBudgetReader:
-    """Bound response status, header, chunk-framing, and trailer lines."""
+class _ProtocolBudgetReader:
+    """Bound response status, headers, chunk framing, and trailers."""
 
     def __init__(self, wrapped: Any, limit: int) -> None:
         self._wrapped = wrapped
         self._remaining = limit
 
+    def _consume(self, value: object) -> bytes:
+        if type(value) is not bytes or len(value) > self._remaining:
+            raise _ProviderResponseInvalid("provider response protocol exceeds limit")
+        self._remaining -= len(value)
+        return value
+
     def readline(self, size: int = -1) -> bytes:
         request_size = self._remaining + 1
         if size >= 0:
             request_size = min(request_size, size)
-        line = self._wrapped.readline(request_size)
-        if type(line) is not bytes or len(line) > self._remaining:
-            raise _ProviderResponseInvalid("provider response headers exceed limit")
-        self._remaining -= len(line)
-        return line
+        return self._consume(self._wrapped.readline(request_size))
+
+    def read(self, size: int = -1) -> bytes:
+        request_size = self._remaining + 1
+        if size >= 0:
+            request_size = min(request_size, size)
+        return self._consume(self._wrapped.read(request_size))
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._wrapped, name)
 
 
 class _BoundedHTTPResponse(http.client.HTTPResponse):
-    """HTTP response whose protocol lines share one fixed byte budget."""
+    """HTTP response whose parsed protocol framing shares one byte budget."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         if self.fp is None:
             raise _ProviderResponseInvalid("provider response stream unavailable")
-        self._header_reader = _HeaderBudgetReader(self.fp, MAX_PROVIDER_HEADER_BYTES)
-        self.fp = self._header_reader
+        self._protocol_reader = _ProtocolBudgetReader(
+            self.fp, MAX_PROVIDER_PROTOCOL_BYTES
+        )
+        self.fp = self._protocol_reader
 
 
 class _LiteralLoopbackHTTPConnection(http.client.HTTPConnection):
@@ -461,6 +471,16 @@ def _provider_error(
     )
 
 
+def _cancelled_before_request(admitted: AirlockDecision) -> QwenAdvisoryResult:
+    return _result(
+        admitted,
+        outcome="DENY",
+        code="POLICY_DENIED",
+        reason_code="CANCELLED_BEFORE_REQUEST",
+        summary="The local Qwen advisory was cancelled before its request.",
+    )
+
+
 def invoke_qwen_advisory(
     request: object,
     *,
@@ -501,13 +521,7 @@ def invoke_qwen_advisory(
         )
     cancellation = cancel_event
     if cancellation is not None and cancellation.is_set():
-        return _result(
-            admitted,
-            outcome="DENY",
-            code="POLICY_DENIED",
-            reason_code="CANCELLED_BEFORE_REQUEST",
-            summary="The local Qwen advisory was cancelled before its request.",
-        )
+        return _cancelled_before_request(admitted)
     if not _INVOCATION_LOCK.acquire(blocking=False):
         return _result(
             admitted,
@@ -526,13 +540,7 @@ def invoke_qwen_advisory(
     result: QwenAdvisoryResult
     try:
         if cancellation is not None and cancellation.is_set():
-            return _result(
-                admitted,
-                outcome="DENY",
-                code="POLICY_DENIED",
-                reason_code="CANCELLED_BEFORE_REQUEST",
-                summary="The local Qwen advisory was cancelled before its request.",
-            )
+            return _cancelled_before_request(admitted)
         deadline = time.monotonic() + TIMEOUT_SECONDS
         if admitted.prompt is None or admitted.model_id is None:
             result = _provider_error(
@@ -542,6 +550,8 @@ def invoke_qwen_advisory(
             body = _request_bytes(admitted.model_id, admitted.prompt)
             if len(body) > MAX_PROVIDER_REQUEST_BYTES:
                 raise _ProviderRequestInvalid("provider request exceeds limit")
+            if cancellation is not None and cancellation.is_set():
+                return _cancelled_before_request(admitted)
             connection = _LiteralLoopbackHTTPConnection(
                 LOOPBACK_HOST,
                 LOOPBACK_PORT,
@@ -558,6 +568,8 @@ def invoke_qwen_advisory(
                 "Host": f"{LOOPBACK_HOST}:{LOOPBACK_PORT}",
             }
             _set_connection_timeout(connection, deadline)
+            if cancellation is not None and cancellation.is_set():
+                return _cancelled_before_request(admitted)
             request_performed = True
             connection.request("POST", GENERATE_PATH, body=body, headers=headers)
             _set_connection_timeout(connection, deadline)
