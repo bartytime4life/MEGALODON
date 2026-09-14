@@ -246,6 +246,7 @@ DASHBOARD_CSS = """
   --shadow: 0 24px 70px rgba(0, 0, 0, .28);
 }
 * { box-sizing: border-box; }
+html { height: 100%; overflow: hidden; }
 body {
   margin: 0; min-width: 300px; height: 100vh; height: 100dvh; overflow: hidden; color: var(--text);
   background: radial-gradient(circle at 12% -8%, rgba(32, 151, 166, .22), transparent 34rem),

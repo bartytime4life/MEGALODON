@@ -356,8 +356,14 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         REPORT["stage"] = "mobile-layout-and-focus"
         await page.set_viewport_size({"width": 375, "height": 812})
         passed("mobile page fits viewport", await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
-        passed("command center remains viewport-pinned", await page.evaluate(
-            "document.body.scrollHeight <= innerHeight + 1 && getComputedStyle(document.body).overflow === 'hidden'"))
+        passed("command center remains viewport-pinned", await page.evaluate("""() => {
+            const shell = document.querySelector('.shell').getBoundingClientRect();
+            const scroller = document.querySelector('.workspace-scroll');
+            return shell.top >= -1 && shell.bottom <= innerHeight + 1
+                && getComputedStyle(document.documentElement).overflow === 'hidden'
+                && getComputedStyle(document.body).overflow === 'hidden'
+                && getComputedStyle(scroller).overflowY === 'auto';
+        }"""))
         await page.locator("#filter-query").focus()
         passed("rendered keyboard focus", await page.locator("#filter-query").evaluate(
             "el => document.activeElement === el && getComputedStyle(el).outlineStyle !== 'none'"))
