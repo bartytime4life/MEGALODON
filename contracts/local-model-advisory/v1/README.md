@@ -26,9 +26,9 @@ zero. The other counts always remain bounded integers.
 Unknown fields, raw evidence, free-form prompts, provider addresses, credentials,
 tool/action fields, URLs, paths, commands, and mutable host controls have no
 place in the schema or registry. A registry cannot carry an endpoint, URL,
-command, path, credential, prompt, or tool. A later runtime adapter must pass
-this contract **before** it makes any explicitly authorized, loopback-only local
-request.
+command, path, credential, prompt, or tool. The optional runtime adapter accepts
+only the intact immutable ADMIT and performs at most one explicitly enabled call
+to its compiled literal-loopback tuple and fixed provider path.
 
 Run the contract suite with:
 
@@ -66,3 +66,13 @@ tamper. Each case runs twice and must return the same exact serialized receipt
 without changing its inputs. HTTP/socket, subprocess, firewall, SQLite,
 filesystem read/write, tool-discovery, and command-entry sentinels fail on any
 attempted side effect.
+
+## Literal-loopback provider adapter
+
+Issue #165 adds `megalodon.advisory_provider.request_advisory` as an internal
+Python boundary. It is disabled by default, accepts no raw prompt or provider
+configuration, and connects only to `127.0.0.1:11434` with the fixed
+`/api/generate` path. It does not use a URL parser, proxies, DNS, redirects,
+provider discovery, model lifecycle controls, tools, subprocesses, files,
+SQLite, capture, firewall, or dashboard route. Its closed fake-provider and real
+loopback protocol tests live in `tests/test_advisory_provider.py`.

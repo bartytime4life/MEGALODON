@@ -9,10 +9,13 @@ fingerprint-pinned registry hardening from
 [schema and fixtures](../contracts/local-model-advisory/v1/README.md) validate
 the permitted shapes. [`megalodon/advisory.py`](../megalodon/advisory.py) can
 validate one closed local-model registry against an independently supplied
-SHA-256 pin and construct one canonical in-memory prompt. Neither surface adds a
-model runtime, Ollama request, API
-client, daemon, scheduler, monitor, detector, file scanner, sandbox, or
-response action.
+SHA-256 pin and construct one canonical in-memory prompt.
+[`megalodon/advisory_provider.py`](../megalodon/advisory_provider.py) can consume
+only an intact immutable ADMIT for one explicitly enabled request to literal
+`127.0.0.1:11434/api/generate`. No surface installs, discovers, starts, pulls,
+updates, or configures a model; adds a daemon, scheduler, monitor, detector,
+file scanner, sandbox, dashboard route, or response action; or permits a remote
+endpoint, proxy, DNS lookup, redirect, arbitrary prompt, or tool.
 
 MEGALODON may eventually use a locally hosted Qwen model as an explicit,
 operator-requested explanation surface. The model is an advisory reader of a
@@ -24,8 +27,8 @@ security decision.
 
 | Question | Contract answer |
 | --- | --- |
-| Where can the model run? | Only on an explicitly configured local loopback provider, initially expected to be a separately operated Ollama instance. |
-| When can it run? | Only after an operator invokes a future explicit advisory command. No startup action, polling, background job, service, or scheduler is allowed. |
+| Where can the model run? | Only at the compiled literal IPv4 loopback tuple `127.0.0.1:11434` and fixed `/api/generate` path on a separately operated Ollama instance. |
+| When can it run? | Only through an explicitly enabled internal Python call after an intact Airlock ADMIT. There is no CLI/dashboard control, startup action, polling, background job, service, or scheduler. |
 | What may it receive? | A closed, size-limited projection of already validated local metadata and receipts. |
 | What can it return? | A bounded explanation with one of four outcomes: ANSWER, ABSTAIN, DENY, or ERROR. |
 | Can it make detections or evidence? | No. Deterministic detectors and immutable receipts remain the evidence source. |
@@ -131,8 +134,8 @@ infected, contained, or remediated.
 ## Provider and execution controls
 
 Ollama and Qwen are operator-installed companion software, not MEGALODON
-dependencies. A future implementation must require all of the following before
-any model request:
+dependencies. The bounded adapter requires all of the following before its one
+model request:
 
 1. explicit enablement for one invocation; the default is disabled;
 2. a literal loopback endpoint and a single configured provider path;
@@ -147,18 +150,24 @@ any model request:
 7. one bounded advisory receipt that records only policy/model metadata,
    outcome, and fixed error code.
 
-The initial runtime must use a direct, schema-checked local request only. It
-must not expose a generic chat endpoint, arbitrary prompt box, tool-use mode,
-retrieval store, agent loop, function calling, model-selected model name, or
-streaming transcript. A model provider being installed or reachable does not
-change MEGALODON's static capability catalog.
+The adapter uses a direct, schema-checked HTTP/1.1 request over an IPv4 socket.
+The request body contains only the admitted model and prompt, `stream: false`,
+`keep_alive: 0`, and fixed deterministic inference options. The adapter requires
+one terminal HTTP 200 JSON body with the exact admitted model ID, `done: true`,
+bounded plain text, and no unknown/tool/action field. It does not expose a
+generic chat endpoint, arbitrary prompt box, tool-use mode, retrieval store,
+agent loop, function calling, model-selected model name, or streaming transcript.
+A model provider being installed or reachable does not prove that it is
+approved, healthy, invoked, or safe.
 
 The preflight rejects a request unless both its registry entry and its request
 carry those four exact limits; it also measures the constructed prompt as UTF-8
-before admission. Because this slice performs no I/O, it cannot consume the
-output, timeout, or concurrency budgets. The second PR must enforce all three
-against the one literal-loopback call and fail closed on partial, late, or
-oversized responses.
+before admission. The provider layer separately enforces a bounded canonical
+request, 15-second connect/read deadline, concurrency one, bounded raw headers
+and body, and a 4 KiB decoded UTF-8 answer. Disabled, malformed, pre-cancelled,
+or busy calls stop before socket creation. Partial, late, redirected, non-200,
+oversized, model-mismatched, or schema-invalid responses fail closed with fixed
+non-echoing receipts.
 
 ## Security and red-team controls
 
@@ -186,10 +195,10 @@ oversized responses.
    ADMIT/DENY decisions; a reusable adversarial denial corpus; and deterministic
    side-effect negative controls. ADMIT authorizes prompt construction only; no
    request is made.
-4. **Second PR:** add one opt-in literal-loopback provider call only after
-   separately reviewing redirect, proxy, DNS, timeout, response-size,
-   concurrency, and cancellation controls. It must not start Ollama, download
-   a model, or change Qwen configuration.
+4. **Delivered in the second runtime slice:** one opt-in literal-loopback
+   provider call with closed redirect, proxy, DNS, timeout, response-size,
+   concurrency, cancellation, model-provenance, and no-tool controls. It does
+   not start Ollama, download a model, or change Qwen configuration.
 5. **Third PR:** expose only the immutable read-only receipt in the existing
    **Deep analysis & context** panel after the adapter's data, privacy, error,
    and browser bounds are proven.
@@ -198,12 +207,14 @@ oversized responses.
    readback, reconciliation, and independent security review.
 
 The existing Qwen identifiers in the contract fixtures remain placeholders.
-The v1 contract does not mean that Qwen is installed, configured, invoked, or
-allowed to perform any protective action. A runtime remains blocked on step 4.
+The v1 contract and adapter do not mean that Qwen is installed, configured,
+reachable, invoked, trustworthy, or allowed to perform any protective action.
+The dashboard projection remains blocked on step 5.
 
 ## Verification target
 
-This contract slice proves, without a local model installation or network request:
+The preflight and static boundaries require no local model installation or
+network request:
 
 ~~~bash
 python -m pytest -q tests/test_local_model_advisory_contract.py
@@ -212,6 +223,13 @@ python -m megalodon capabilities --platform linux
 python -m megalodon hub-plan --platform linux
 ~~~
 
-Those checks should validate data shapes and static catalog truth only. They
-must not probe an Ollama endpoint, start a model, inspect a host, capture
-traffic, read files, write SQLite, or mutate a firewall.
+The provider suite uses adversarial fake sockets plus one test-owned literal
+loopback server; it never contacts the Internet or an external provider:
+
+~~~bash
+python -m pytest -q tests/test_advisory_provider.py
+~~~
+
+No check probes an unowned Ollama endpoint, starts or changes a model, inspects
+a host, captures traffic, reads evidence files, writes SQLite, executes a tool,
+or mutates a firewall.

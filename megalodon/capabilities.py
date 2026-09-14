@@ -113,13 +113,13 @@ _COMPONENTS = (
     {
         "id": "qwen-ollama",
         "software": "Qwen via local Ollama",
-        "integration": "local_ai_advisory_contract",
+        "integration": "local_ai_advisory_runtime",
         "platforms": {
-            "linux": "contract_only",
+            "linux": "optional",
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "No runtime provider exists; a future model result is advisory only and cannot inspect traffic or apply actions.",
+        "boundary": "One explicit literal-loopback call is optional on Linux; its output is advisory only and cannot inspect traffic or apply actions.",
     },
     {
         "id": "nmap",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import re
@@ -65,6 +65,7 @@ _REQUEST_KEYS = frozenset({"projection", "model_receipt", "limits"})
 _REGISTRY_ENTRY_KEYS = frozenset({"model_receipt", "limits"})
 _REGISTRY_KEYS = frozenset({"schema", "models", "tools"})
 _REGISTRY_SCHEMA = "local-model-registry-v1"
+_ADMISSION_SEAL = object()
 
 _PROMPT_PREAMBLE = (
     "MEGALODON_LOCAL_ADVISORY_V1\n"
@@ -102,6 +103,12 @@ class AirlockDecision:
     registry_sha256: str | None
     policy_version: str = POLICY_VERSION
     provider_request_performed: bool = False
+    _admission_seal: object | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _admission_digest: str | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a fresh JSON-compatible projection with no executable fields."""
@@ -118,6 +125,31 @@ class AirlockDecision:
             "policy_version": self.policy_version,
             "provider_request_performed": self.provider_request_performed,
         }
+
+
+def _decision_digest(decision: AirlockDecision) -> str:
+    canonical = json.dumps(
+        decision.to_dict(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def is_admitted_decision(value: object) -> bool:
+    """Return whether ``value`` is an intact ADMIT produced by this module."""
+    if (
+        type(value) is not AirlockDecision
+        or value._admission_seal is not _ADMISSION_SEAL
+        or type(value._admission_digest) is not str
+    ):
+        return False
+    try:
+        return value._admission_digest == _decision_digest(value)
+    except (MemoryError, OverflowError, RecursionError, TypeError, ValueError):
+        return False
 
 
 def _exact_object(value: object, keys: frozenset[str]) -> bool:
@@ -321,7 +353,7 @@ def preflight_advisory(
     if prompt_bytes > MAX_INPUT_BYTES:
         return _deny("INPUT_LIMIT_EXCEEDED")
 
-    return AirlockDecision(
+    decision = AirlockDecision(
         decision="ADMIT",
         code="PREFLIGHT_ADMITTED",
         reason_code="REQUEST_ADMITTED",
@@ -332,3 +364,6 @@ def preflight_advisory(
         model_artifact_sha256=receipt["model_artifact_sha256"],
         registry_sha256=registry_sha256,
     )
+    object.__setattr__(decision, "_admission_seal", _ADMISSION_SEAL)
+    object.__setattr__(decision, "_admission_digest", _decision_digest(decision))
+    return decision

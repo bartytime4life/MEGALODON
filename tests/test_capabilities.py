@@ -81,9 +81,11 @@ def test_critical_boundaries_are_explicit():
 
 def test_planned_interface_slots_never_claim_runtime_authority():
     items = {item["id"]: item for item in catalog("linux")["components"]}
-    planned = {"qwen-ollama", "nmap", "ossec", "greenbone", "zabbix", "nagios-core"}
+    planned = {"nmap", "ossec", "greenbone", "zabbix", "nagios-core"}
     assert set(items) >= planned
     assert {items[item]["selected_status"] for item in planned} <= {"contract_only", "proposed"}
+    assert items["qwen-ollama"]["selected_status"] == "optional"
+    assert items["qwen-ollama"]["integration"] == "local_ai_advisory_runtime"
     assert "cannot inspect traffic or apply actions" in items["qwen-ollama"]["boundary"]
     assert "No scan launcher" in items["nmap"]["boundary"]
     assert "No daemon" in items["ossec"]["boundary"]
