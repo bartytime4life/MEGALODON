@@ -297,6 +297,64 @@ def test_non_string_object_key_is_denied_without_rehashing_or_comparison() -> No
     assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
 
 
+def test_registry_admission_uses_the_fingerprinted_snapshot(monkeypatch) -> None:
+    registry = deepcopy(REGISTRY)
+    substituted_request = request()
+    substituted_request["model_receipt"]["model_id"] = "local:qwen-substituted-v1"
+    substituted_request["model_receipt"]["model_artifact_sha256"] = "f" * 64
+    original_snapshot = advisory._canonical_object_snapshot
+
+    def mutate_caller_registry_after_snapshot(value: dict[str, object]):
+        snapshot = original_snapshot(value)
+        assert snapshot is not None
+        if "models" in value:
+            value["models"][0]["model_receipt"] = deepcopy(  # type: ignore[index]
+                substituted_request["model_receipt"]
+            )
+        return snapshot
+
+    monkeypatch.setattr(
+        advisory, "_canonical_object_snapshot", mutate_caller_registry_after_snapshot
+    )
+
+    decision = preflight_advisory(
+        substituted_request,
+        local_model_registry=registry,
+        local_model_registry_sha256=REGISTRY_SHA256,
+    )
+
+    assert decision.decision == "DENY"
+    assert decision.reason_code == "MODEL_NOT_APPROVED"
+    assert decision.provider_request_performed is False
+
+
+def test_admitted_prompt_uses_the_validated_request_snapshot(monkeypatch) -> None:
+    value = request()
+    original_snapshot = advisory._canonical_object_snapshot
+
+    def mutate_caller_request_after_snapshot(candidate: dict[str, object]):
+        snapshot = original_snapshot(candidate)
+        assert snapshot is not None
+        if "projection" in candidate:
+            candidate["projection"]["source_kind"] = "mutated"  # type: ignore[index]
+        return snapshot
+
+    monkeypatch.setattr(
+        advisory, "_canonical_object_snapshot", mutate_caller_request_after_snapshot
+    )
+
+    decision = preflight_advisory(
+        value,
+        local_model_registry=deepcopy(REGISTRY),
+        local_model_registry_sha256=REGISTRY_SHA256,
+    )
+
+    assert decision.decision == "ADMIT"
+    assert decision.prompt is not None
+    assert '"source_kind":"tshark"' in decision.prompt
+    assert "mutated" not in decision.prompt
+
+
 @pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda case: case["name"])
 def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, object]
@@ -311,23 +369,23 @@ def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     if "max_input_bytes_override" in case:
         monkeypatch.setattr(advisory, "MAX_INPUT_BYTES", case["max_input_bytes_override"])
 
-    before_bytes = _json_input_bytes(inputs)
+    first_inputs = deepcopy(inputs)
     second_inputs = deepcopy(inputs)
-    second_before_bytes = _json_input_bytes(second_inputs)
+    first_before = _json_input_bytes(first_inputs)
+    second_before = _json_input_bytes(second_inputs)
     _forbid_preflight_side_effects(monkeypatch)
     first = preflight_advisory(
-        inputs["request"],
-        local_model_registry=inputs["registry"],
-        local_model_registry_sha256=inputs["registry_sha256"],
+        first_inputs["request"],
+        local_model_registry=first_inputs["registry"],
+        local_model_registry_sha256=first_inputs["registry_sha256"],
     )
-    assert _json_input_bytes(inputs) == before_bytes
-
+    assert _json_input_bytes(first_inputs) == first_before
     second = preflight_advisory(
         second_inputs["request"],
         local_model_registry=second_inputs["registry"],
         local_model_registry_sha256=second_inputs["registry_sha256"],
     )
-    assert _json_input_bytes(second_inputs) == second_before_bytes
+    assert _json_input_bytes(second_inputs) == second_before
 
     expected = CORPUS["expected_receipts"][case["expected"]]
     assert first == second

@@ -223,14 +223,24 @@ def _valid_registry(value: object) -> bool:
     )
 
 
-def _registry_bytes(registry: dict[str, object]) -> bytes:
-    return json.dumps(
-        registry,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    ).encode("utf-8")
+def _canonical_object_snapshot(
+    value: dict[str, object],
+) -> tuple[dict[str, object], bytes] | None:
+    """Return one immutable-by-ownership JSON snapshot and its exact bytes."""
+    try:
+        canonical_bytes = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf-8")
+        snapshot = json.loads(canonical_bytes)
+    except (MemoryError, OverflowError, RecursionError, RuntimeError, TypeError, ValueError):
+        return None
+    if type(snapshot) is not dict:
+        return None
+    return snapshot, canonical_bytes
 
 
 def preflight_advisory(
@@ -249,14 +259,33 @@ def preflight_advisory(
         return _deny("REGISTRY_PIN_INVALID")
     if not _valid_registry(local_model_registry):
         return _deny("REGISTRY_INVALID")
-    registry = local_model_registry
-    registry_sha256 = hashlib.sha256(_registry_bytes(registry)).hexdigest()
+    registry_snapshot = _canonical_object_snapshot(local_model_registry)
+    if registry_snapshot is None:
+        return _deny("REGISTRY_INVALID")
+    registry, registry_bytes = registry_snapshot
+    if not _valid_registry(registry):
+        return _deny("REGISTRY_INVALID")
+    registry_sha256 = hashlib.sha256(registry_bytes).hexdigest()
     if registry_sha256 != local_model_registry_sha256:
         return _deny("REGISTRY_FINGERPRINT_MISMATCH")
 
     if not _exact_object(request, _REQUEST_KEYS):
         return _deny("REQUEST_SHAPE_INVALID")
     advisory_request = request
+    projection = advisory_request["projection"]
+    receipt = advisory_request["model_receipt"]
+    limits = advisory_request["limits"]
+    if not (
+        _valid_projection(projection)
+        and _valid_model_receipt(receipt)
+        and _valid_limits(limits)
+    ):
+        return _deny("REQUEST_SHAPE_INVALID")
+
+    request_snapshot = _canonical_object_snapshot(advisory_request)
+    if request_snapshot is None:
+        return _deny("REQUEST_SHAPE_INVALID")
+    advisory_request, _ = request_snapshot
     projection = advisory_request["projection"]
     receipt = advisory_request["model_receipt"]
     limits = advisory_request["limits"]
