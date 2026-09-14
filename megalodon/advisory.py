@@ -230,7 +230,13 @@ class _SnapshotError(Exception):
 def _owned_json_value(value: object) -> object:
     """Copy exact built-in JSON values without caller-defined comparisons."""
     value_type = type(value)
-    if value is None or value_type in {str, int, bool, float}:
+    if (
+        value is None
+        or value_type is str
+        or value_type is int
+        or value_type is bool
+        or value_type is float
+    ):
         return value
     if value_type is list:
         return [_owned_json_value(item) for item in tuple(value)]

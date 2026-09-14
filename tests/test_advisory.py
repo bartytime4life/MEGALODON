@@ -278,6 +278,25 @@ def test_non_string_registry_schema_is_denied_without_invoking_equality() -> Non
     ).reason_code == "REGISTRY_INVALID"
 
 
+def test_hostile_metaclass_hash_is_not_invoked_during_snapshot() -> None:
+    class HostileMeta(type):
+        def __hash__(cls) -> int:
+            raise AssertionError("snapshot hashed a caller-controlled type")
+
+    class HostileValue(metaclass=HostileMeta):
+        pass
+
+    registry = deepcopy(REGISTRY)
+    registry["models"][0]["model_receipt"]["provider_class"] = HostileValue()
+    value = request()
+    value["projection"]["accepted_records"] = HostileValue()
+
+    assert preflight(
+        request(), local_model_registry=registry
+    ).reason_code == "REGISTRY_INVALID"
+    assert preflight(value).reason_code == "REQUEST_SHAPE_INVALID"
+
+
 def test_non_string_object_key_is_denied_without_rehashing_or_comparison() -> None:
     class HostileKey:
         armed = False
