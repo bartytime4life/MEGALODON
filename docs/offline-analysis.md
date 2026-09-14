@@ -97,6 +97,81 @@ read-only to the command. Baseline identity is schema/adapter/kind-qualified;
 a packet baseline cannot be used for flows, and JSON/TSV adapter identities are
 not interchangeable in v1. No ambient baseline is loaded or updated.
 
+## Read-only baseline comparison
+
+The separate comparison command reads two existing `offline-baseline-v1` files
+and prints one `offline-baseline-comparison-v1` JSON receipt. It does not run
+TShark, Zeek, Qwen, the service, or the dashboard. It does not create an output
+directory, report file, database, hash, or action. Its input root and two relative
+file names are explicit; duplicate options and abbreviated options are rejected.
+
+From the reviewed checkout and a prepared non-root Linux analyst environment:
+
+```bash
+cd "$HOME/Projects/MEGALODON"
+.venv/bin/python -m megalodon.offline.compare \
+  --input-root "$HOME/Analysis/case001/input" \
+  --reference before.json --current after.json
+```
+
+Deliberately place the selected existing baselines under that local root first.
+The command reuses the descriptor-relative regular/single-link file reader,
+1 MiB per-file ceiling, ASCII JSON, duplicate-key rejection, four-level nesting
+bound, input-change checks, and non-root/capability-free Linux preflight. Files
+are read sequentially, not as an atomic pair. An operator must select stable,
+authorized inputs and keep the terminal/output private; ports and aggregate
+counts can reveal operational patterns even without addresses.
+
+All three baseline consumers share semantic validation. Integer fields must be
+JSON integers, not strings, booleans, or fractions. Schema, adapter and record
+kind must be supported. Counts in protocol, byte-band, and minute partitions
+must sum to `record_count`. Every admitted TCP/UDP record in these adapters has
+a destination port, so destination-port counts must sum to the corresponding
+TCP/UDP count separately. Duplicate groups, missing port counts, and borrowing
+records from another protocol are invalid. Existing valid v1 reports keep the
+same shape; malformed files previously admitted by weaker checks are refused.
+No input is silently repaired. This consistency check is not source attestation
+and does not reconcile aggregates against their original records.
+
+Comparison requires the same adapter and record kind, at least five reference
+records (the existing candidate-analysis floor), and a nonempty current sample.
+Five records are a mechanical minimum, not statistical adequacy. Each sample
+is bounded to 10,000 records. Empty completed reports remain valid for dashboard
+display but cannot supply a current comparison denominator.
+
+| Receipt field | Meaning |
+| --- | --- |
+| `reference_records`, `current_records` | Exact separate denominators of accepted records |
+| `comparison_basis` | `accepted_record_share`; each row's count divided by its own sample's denominator |
+| `protocols` | Every represented protocol, its two counts, and exact share direction |
+| `changed_destination_ports` | Sorted protocol/port rows whose share differs; at most 256 |
+| `change` | `not_in_reference`, `not_in_current`, `share_increased`, `share_decreased`, or `share_unchanged` |
+| `quality_label` | Always `uncalibrated` |
+| `truncated` | Always false; more than 256 changed ports fails the whole comparison |
+| `network_access_performed`, `persistence_status`, `action_status` | False, `not_attempted`, `not_attempted` |
+
+Shares are compared by integer cross multiplication, without rounding. For
+example, 3 of 6 reference records and 2 of 4 current records have equal shares;
+the port is omitted from the changed list. Doubling a sample without changing
+its distribution does not create a distribution change. Original sample sizes
+remain visible. An unchanged list says nothing about absolute volume, byte
+volume, traffic per second, coverage, intent, or protection.
+
+The receipt contains no addresses, host labels, capture times, raw paths, model
+text, payload-derived identifiers, or selected-file hashes. It is limited to
+64 KiB including its newline. Success exits 0; input/comparison errors exit 1
+with a fixed non-echoing failure receipt on stdout; argument errors exit 2 with
+a fixed receipt on stderr. There are no successful partial receipts.
+
+`not_in_reference` means unobserved in the selected sample, not newly created
+on the network. Collection windows, producer/capture loss, independent sample
+quality, and provenance are absent from baseline v1. Relative minute bins do
+not supply source-hours or simultaneous coverage. No p-value, Bayesian
+posterior, confidence interval, maliciousness score, detection threshold,
+calibration, or action authority is produced. A later source-qualified run
+receipt would need to establish those missing measurement assumptions before
+statistical inference or a dashboard comparison surface is considered.
+
 ## Fixed limits and file boundary
 
 | Boundary | Default and hard ceiling |

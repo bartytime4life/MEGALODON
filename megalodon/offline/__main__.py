@@ -3,35 +3,17 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 import json
-import os
 
 from . import tshark, zeek
-from .common import Limits, OfflineError, open_input, require_unprivileged_linux
+from .common import Limits, OfflineError, require_unprivileged_linux
+from .baseline import read_reference
 from .reports import finish, manifest, output_directory
 
 
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         self.exit(2, 'INVALID_ARGUMENTS\n')  # Do not echo untrusted argument values.
-
-
-def read_reference(root: str, relative: str, limits: Limits) -> dict:
-    bounded = replace(limits, input_bytes=min(limits.input_bytes, 1024 * 1024))
-    data = bytearray()
-    with open_input(root, relative, bounded) as (fd, _):
-        while True:
-            chunk = os.read(fd, min(65536, bounded.input_bytes - len(data) + 1))
-            if not chunk:
-                break
-            if len(data) + len(chunk) > bounded.input_bytes:
-                raise OfflineError('BASELINE_SIZE_LIMIT')
-            data.extend(chunk)
-    try:
-        return zeek.json_object(data.decode('ascii'))
-    except UnicodeDecodeError:
-        raise OfflineError('INVALID_BASELINE_ENCODING') from None
 
 
 def main(argv: list[str] | None = None) -> int:
