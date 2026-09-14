@@ -66,7 +66,7 @@ record delivery state; they do not override the checked-in contracts.
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
-| Local Qwen advisory boundary | [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md) and [issue #145](https://github.com/bartytime4life/MEGALODON/issues/145) |
+| Local Qwen advisory boundary | [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md), and [issue #145](https://github.com/bartytime4life/MEGALODON/issues/145) |
 | Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
 | Suricata record and bounded-reader gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md) and [`reader`](contracts/suricata-eve/v1/reader/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
