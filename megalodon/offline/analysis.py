@@ -5,10 +5,9 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from statistics import median_low
 
-from .common import Batch, FlowRecord, OfflineError, uint
+from .common import Batch, FlowRecord, OfflineError
+from .baseline import BASELINE_SCHEMA, PROTOCOLS, validate_baseline
 
-BASELINE_SCHEMA = 'offline-baseline-v1'
-PROTOCOLS = {'TCP', 'UDP', 'ICMP', 'ICMPV6', 'OTHER'}
 MAX_CANDIDATES = 256
 
 
@@ -45,71 +44,12 @@ def baseline(batch: Batch) -> dict:
 
 
 def validate_reference(value: dict, batch: Batch) -> set[tuple[str, int]]:
-    expected = {'schema', 'adapter', 'record_kind', 'record_count', 'total_bytes',
-                'protocols', 'destination_ports', 'byte_bands', 'relative_minutes'}
-    if (set(value) != expected or value['schema'] != BASELINE_SCHEMA or
-            value['adapter'] != batch.adapter or value['record_kind'] != batch.kind):
+    summary = validate_baseline(value)
+    if summary.adapter != batch.adapter or summary.record_kind != batch.kind:
         raise OfflineError('INCOMPATIBLE_BASELINE')
-    size = uint(value['record_count'], 10_000)
-    if size < 5:
+    if summary.record_count < 5:
         raise OfflineError('REFERENCE_BASELINE_TOO_SMALL')
-    uint(value['total_bytes'], size * (2**41 - 2))
-    for field in ('protocols', 'destination_ports', 'relative_minutes'):
-        if not isinstance(value[field], list) or len(value[field]) > size:
-            raise OfflineError('INVALID_BASELINE')
-    protocols = set()
-    count = 0
-    for item in value['protocols']:
-        if (not isinstance(item, dict) or set(item) != {'protocol', 'count'} or
-                not isinstance(item['protocol'], str) or item['protocol'] not in PROTOCOLS or
-                item['protocol'] in protocols):
-            raise OfflineError('INVALID_BASELINE')
-        protocols.add(item['protocol'])
-        amount = uint(item['count'], size)
-        if amount == 0:
-            raise OfflineError('INVALID_BASELINE')
-        count += amount
-    if count != size:
-        raise OfflineError('INVALID_BASELINE')
-    known = set()
-    count = 0
-    for item in value['destination_ports']:
-        if (not isinstance(item, dict) or set(item) != {'protocol', 'port', 'count'} or
-                not isinstance(item['protocol'], str) or item['protocol'] not in {'TCP', 'UDP'}):
-            raise OfflineError('INVALID_BASELINE')
-        if item['protocol'] not in protocols:
-            raise OfflineError('INVALID_BASELINE')
-        pair = item['protocol'], uint(item['port'], 65535)
-        if pair in known:
-            raise OfflineError('INVALID_BASELINE')
-        known.add(pair)
-        amount = uint(item['count'], size)
-        if amount == 0:
-            raise OfflineError('INVALID_BASELINE')
-        count += amount
-    if count > size:
-        raise OfflineError('INVALID_BASELINE')
-    bands = value['byte_bands']
-    if not isinstance(bands, dict) or set(bands) != {'small', 'medium', 'large'}:
-        raise OfflineError('INVALID_BASELINE')
-    if sum(uint(v, size) for v in bands.values()) != size:
-        raise OfflineError('INVALID_BASELINE')
-    minutes = set()
-    count = 0
-    for item in value['relative_minutes']:
-        if not isinstance(item, dict) or set(item) != {'minute', 'count'}:
-            raise OfflineError('INVALID_BASELINE')
-        minute = uint(item['minute'], 68_374_080)
-        if minute in minutes:
-            raise OfflineError('INVALID_BASELINE')
-        minutes.add(minute)
-        amount = uint(item['count'], size)
-        if amount == 0:
-            raise OfflineError('INVALID_BASELINE')
-        count += amount
-    if count != size:
-        raise OfflineError('INVALID_BASELINE')
-    return known
+    return {(protocol, port) for protocol, port, _ in summary.destination_ports}
 
 
 def candidates(batch: Batch, reference: dict | None = None) -> list[dict]:

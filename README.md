@@ -63,6 +63,7 @@ record delivery state; they do not override the checked-in contracts.
 | Platform choices and installation evidence | [`docs/platform-baseline.md`](docs/platform-baseline.md) |
 | Native Windows core acceptance matrix | [`docs/windows-core-acceptance.md`](docs/windows-core-acceptance.md) |
 | Offline analyst operation and report semantics | [`docs/offline-analysis.md`](docs/offline-analysis.md) |
+| Resource-informed advancement decisions | [`docs/resource-informed-advancement.md`](docs/resource-informed-advancement.md) |
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
@@ -874,6 +875,15 @@ Use `--source zeek-json` or `--source zeek-tsv` with
 `--zeek-version X.Y.Z` for a separately produced `conn.log`. An optional reviewed
 `baseline.json` under the input root can be selected with
 `--reference-baseline RELATIVE_PATH`.
+
+Compare two existing baselines without running an analyzer or creating reports:
+`python -m megalodon.offline.compare --input-root /absolute/private/input --reference before.json --current after.json`.
+The bounded JSON receipt shows sample sizes, protocol shares, and changed
+destination-port shares using exact counts. Matching adapter and record units
+are required; contradictory per-protocol counts fail closed in comparison,
+candidate analysis, and the dashboard. The result is uncalibrated descriptive
+context, with no threat probability or network action. See the
+[comparison contract](docs/offline-analysis.md#read-only-baseline-comparison).
 
 The command accepts one nonempty regular input file up to 64 MiB, uses fixed
 adapter schemas and limits, and creates a new mode-0700 output directory with
