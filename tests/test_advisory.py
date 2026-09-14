@@ -193,6 +193,17 @@ def _set_path(value: object, path: list[object], replacement: object) -> None:
         target[final] = replacement  # type: ignore[index]
 
 
+def _json_input_bytes(value: object) -> bytes:
+    """Preserve member order so even order-only input mutation is observable."""
+
+    return json.dumps(
+        value,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("ascii")
+
+
 def _forbid_preflight_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
     def denied(*args, **kwargs):
         raise AssertionError("adversarial preflight attempted a forbidden side effect")
@@ -300,21 +311,25 @@ def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     if "max_input_bytes_override" in case:
         monkeypatch.setattr(advisory, "MAX_INPUT_BYTES", case["max_input_bytes_override"])
 
-    before = deepcopy(inputs)
+    before_bytes = _json_input_bytes(inputs)
+    second_inputs = deepcopy(inputs)
+    second_before_bytes = _json_input_bytes(second_inputs)
     _forbid_preflight_side_effects(monkeypatch)
     first = preflight_advisory(
         inputs["request"],
         local_model_registry=inputs["registry"],
         local_model_registry_sha256=inputs["registry_sha256"],
     )
+    assert _json_input_bytes(inputs) == before_bytes
+
     second = preflight_advisory(
-        inputs["request"],
-        local_model_registry=inputs["registry"],
-        local_model_registry_sha256=inputs["registry_sha256"],
+        second_inputs["request"],
+        local_model_registry=second_inputs["registry"],
+        local_model_registry_sha256=second_inputs["registry_sha256"],
     )
+    assert _json_input_bytes(second_inputs) == second_before_bytes
 
     expected = CORPUS["expected_receipts"][case["expected"]]
-    assert inputs == before
     assert first == second
     assert first.to_dict() == expected
     first_bytes = json.dumps(first.to_dict(), separators=(",", ":")).encode("ascii")
