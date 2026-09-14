@@ -125,12 +125,18 @@ def _valid_receipt(value: object) -> bool:
 
 
 def _valid_limits(value: object) -> bool:
-    return type(value) is dict and value == {
+    expected = {
         "max_input_bytes": MAX_INPUT_BYTES,
         "max_output_bytes": 4096,
         "timeout_seconds": 15,
         "max_concurrency": 1,
     }
+    return (
+        type(value) is dict
+        and set(value) == _LIMIT_FIELDS
+        and all(type(value[name]) is int for name in _LIMIT_FIELDS)
+        and value == expected
+    )
 
 
 def _canonical_prompt(projection: dict[str, object]) -> str:
