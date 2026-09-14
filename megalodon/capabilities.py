@@ -113,13 +113,13 @@ _COMPONENTS = (
     {
         "id": "qwen-ollama",
         "software": "Qwen via local Ollama",
-        "integration": "local_ai_advisory_contract",
+        "integration": "explicit_literal_loopback_advisory",
         "platforms": {
-            "linux": "contract_only",
+            "linux": "manual_only",
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "No runtime provider exists; a future model result is advisory only and cannot inspect traffic or apply actions.",
+        "boundary": "One explicitly enabled Python call can request a bounded advisory from 127.0.0.1:11434; no CLI, background run, traffic inspection, tool, or response authority exists.",
     },
     {
         "id": "nmap",

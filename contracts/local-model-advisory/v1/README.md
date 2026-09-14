@@ -66,3 +66,26 @@ tamper. Each case runs twice and must return the same exact serialized receipt
 without changing its inputs. HTTP/socket, subprocess, firewall, SQLite,
 filesystem read/write, tool-discovery, and command-entry sentinels fail on any
 attempted side effect.
+
+## Explicit Qwen provider adapter
+
+`megalodon.qwen_advisory.invoke_qwen_advisory` is a separate, library-only
+runtime boundary. It reruns the Airlock preflight, requires literal
+`enabled=True`, takes a non-blocking concurrency-one gate, and then makes at
+most one request to `127.0.0.1:11434/api/generate`. Its request fixes
+`stream=false`, `think=false`, and `raw=true`; it supplies no tools, credentials,
+URLs, arbitrary prompts, model discovery, retry, redirect, fallback, model pull,
+or process action.
+
+The adapter applies one 15-second deadline, reads a bounded JSON transport
+envelope, and accepts at most 4 KiB of UTF-8 model text. Its display value is the
+closed `advisoryResult` shape. The operator-recorded artifact digest is checked
+against the fingerprint-pinned registry before HTTP, but the generate response
+does not independently attest loaded model bytes. The fixtures remain synthetic
+and are not a model installation or approval.
+
+Run the adapter boundary tests with:
+
+~~~bash
+python -m pytest -q tests/test_qwen_advisory.py
+~~~
