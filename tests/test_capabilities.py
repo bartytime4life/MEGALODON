@@ -63,7 +63,7 @@ def test_critical_boundaries_are_explicit():
         "Plans are inert review evidence; live application is unsupported and refused."
     )
     assert items["qwen-ollama"]["selected_status"] == "contract_only"
-    assert "advisory only" in items["qwen-ollama"]["boundary"]
+    assert "no CLI" in items["qwen-ollama"]["boundary"]
     assert items["nmap"]["selected_status"] == "proposed"
     assert items["ossec"]["selected_status"] == "proposed"
     assert items["greenbone"]["selected_status"] == "guest_only"
@@ -81,10 +81,11 @@ def test_critical_boundaries_are_explicit():
 
 def test_planned_interface_slots_never_claim_runtime_authority():
     items = {item["id"]: item for item in catalog("linux")["components"]}
-    planned = {"qwen-ollama", "nmap", "ossec", "greenbone", "zabbix", "nagios-core"}
+    planned = {"nmap", "ossec", "greenbone", "zabbix", "nagios-core"}
     assert set(items) >= planned
     assert {items[item]["selected_status"] for item in planned} <= {"contract_only", "proposed"}
-    assert "cannot inspect traffic or apply actions" in items["qwen-ollama"]["boundary"]
+    assert items["qwen-ollama"]["selected_status"] == "manual_only"
+    assert "no CLI" in items["qwen-ollama"]["boundary"]
     assert "No scan launcher" in items["nmap"]["boundary"]
     assert "No daemon" in items["ossec"]["boundary"]
     assert "No scanner or feed control" in items["greenbone"]["boundary"]

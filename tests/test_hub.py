@@ -95,8 +95,9 @@ def test_workflow_contracts_match_their_owned_entry_points():
     )
 
     advisory = integration_plan("linux", "local-ai-advisory")["workflows"][0]
-    assert advisory["entry_point"] is None
-    assert advisory["launch_policy"] == "contract_only_no_runtime_provider"
+    assert advisory["selected_status"] == "manual_only"
+    assert advisory["entry_point"] == "Python API: invoke_qwen_advisory"
+    assert advisory["launch_policy"] == "explicit_library_call_only_no_scheduler"
     assert "no raw traffic" in advisory["data_boundary"]
     assert "cannot execute commands" in advisory["action_boundary"]
 

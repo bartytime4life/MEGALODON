@@ -38,7 +38,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
 | `endpoint-inventory` | osquery | Proposed | No arbitrary SQL, daemon, scheduler, remote enrollment, or importer |
-| `local-ai-advisory` | Qwen via local Ollama | Contract only | Completed bounded metadata only; no runtime provider, traffic inspection, background analysis, or action authority |
+| `local-ai-advisory` | Qwen via local Ollama | Manual library call | One Airlock-admitted request to literal IPv4 loopback; no CLI, traffic inspection, background analysis, tools, or action authority |
 | `network-inventory-import` | Nmap | Proposed | Completed XML report import only; no scan launch, targets, scripts, banners, or network activity |
 | `host-integrity-import` | OSSEC | Proposed | Completed alert import only; no agent enrollment, daemon control, configuration, or active response |
 | `vulnerability-report-import` | Greenbone Community Edition | Proposed | Completed GMP report import only; no scanner, feed, target, task, or remediation control |
