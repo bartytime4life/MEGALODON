@@ -1,0 +1,15 @@
+{
+  "schema": "advisoryResult",
+  "value": {
+    "outcome": "ABSTAIN",
+    "code": "INSUFFICIENT_ALLOWED_CONTEXT",
+    "summary": "The permitted metadata is insufficient for a useful explanation.",
+    "limitations": ["The model does not inspect raw evidence."],
+    "model_receipt": {
+      "provider_class": "local_loopback",
+      "model_id": "local:qwen-approved-v1",
+      "model_artifact_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "policy_version": "local-model-advisory-v1"
+    }
+  }
+}
