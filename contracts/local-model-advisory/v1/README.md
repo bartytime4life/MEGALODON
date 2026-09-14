@@ -15,6 +15,11 @@ endpoint, or grant an action capability.
 - an operator-recorded local model receipt and fixed v1 resource limits; and
 - one bounded, untrusted result with a closed outcome and fixed result code.
 
+`rejected_records` is a bounded integer for a completed run. A failed run may
+instead carry JSON `null` when the offline receipt could not determine the
+count. That unknown value is preserved as unknown; it is never rewritten to
+zero. The other counts always remain bounded integers.
+
 ## What is rejected
 
 Unknown fields, raw evidence, free-form prompts, provider addresses, credentials,

@@ -53,10 +53,25 @@
         "adapter_id": {"$ref": "#/$defs/logicalId"},
         "terminal_status": {"enum": ["complete", "failed"]},
         "accepted_records": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "rejected_records": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "rejected_records": {
+          "oneOf": [
+            {"type": "integer", "minimum": 0, "maximum": 1000000},
+            {"type": "null"}
+          ]
+        },
         "candidate_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "question_type": {"enum": ["explain_run", "explain_rule_limitations"]}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"terminal_status": {"const": "complete"}}},
+          "then": {
+            "properties": {
+              "rejected_records": {"type": "integer", "minimum": 0, "maximum": 1000000}
+            }
+          }
+        }
+      ]
     },
     "advisoryRequest": {
       "type": "object",

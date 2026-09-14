@@ -44,7 +44,7 @@ limits before prompt construction.
 | Allowed field class | Examples | Limit |
 | --- | --- | --- |
 | Run provenance | source kind, adapter version, terminal status, time basis | Fixed allowlist and bounded strings |
-| Aggregate counts | accepted/rejected records, detections by fixed rule, dropped/partial counts | Non-negative bounded integers |
+| Aggregate counts | accepted/rejected records, detections by fixed rule, dropped/partial counts | Non-negative bounded integers; a failed run may use JSON `null` only for an unknown rejected-record count |
 | Fixed detector context | rule name, severity, threshold, cooldown, explicit limitation | Repository-owned constants only |
 | Operator question | one explicit bounded question selected from an allowlisted purpose | Plain text, no tool instruction or data query language |
 | Model receipt | configured logical model ID, provider class, model artifact digest/version, timeout, result outcome | Metadata only; no provider secret or endpoint in output |
@@ -81,6 +81,12 @@ accepts only these repository-owned source/adapter pairs:
 The TShark and Zeek IDs match the implemented offline adapter constants. The
 sample, JSONL, and Scapy IDs name only the advisory projection shape; they do
 not add a new capture or ingestion path.
+
+A completed run must report `rejected_records` as a bounded integer. A failed
+run may preserve that field as JSON `null` when the offline receipt could not
+determine the count. `null` means unknown, not zero, and the canonical prompt
+retains that distinction. `accepted_records` and `candidate_count` are always
+bounded integers.
 
 ## Outcome envelope
 
@@ -163,12 +169,24 @@ change MEGALODON's static capability catalog.
 2. **Delivered in this contract slice:** data-only tests for closed fields,
    sensitive-field refusal, outcome bounds, and absent executable/provider
    authority.
-
+3. **Delivered in the no-network preflight slice:** closed repository-owned
+   source/adapter pairs, exact model ID and artifact-digest approval, canonical
+   prompt construction, a 4 KiB input gate, immutable ADMIT/DENY decisions, and
+   deterministic side-effect negative controls. ADMIT authorizes prompt
+   construction only; no request is made.
+4. Add an opt-in literal-loopback provider call only after separately reviewing
+   redirect, proxy, DNS, timeout, response-size, concurrency, and cancellation
+   controls. It must not start Ollama, download a model, or change Qwen
+   configuration.
+5. Add a read-only dashboard projection only after the adapter's data,
+   privacy, error, and browser bounds are proven.
+6. Consider any active host, network, file, or response integration only as a
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
 
 The existing Qwen identifiers in the automation fixtures remain placeholders.
-
+The v1 contract does not mean that Qwen is installed, configured, invoked, or
+allowed to perform any protective action. A runtime remains blocked on step 4.
 
 ## Verification target
 

@@ -157,9 +157,14 @@ def _valid_projection(value: object) -> bool:
         return False
     if type(question_type) is not str or question_type not in QUESTION_PURPOSES:
         return False
-    return all(
+    if not all(
         _valid_count(projection[name])
-        for name in ("accepted_records", "rejected_records", "candidate_count")
+        for name in ("accepted_records", "candidate_count")
+    ):
+        return False
+    rejected_records = projection["rejected_records"]
+    return _valid_count(rejected_records) or (
+        terminal_status == "failed" and rejected_records is None
     )
 
 
