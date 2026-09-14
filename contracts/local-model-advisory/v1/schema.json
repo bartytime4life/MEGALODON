@@ -44,6 +44,29 @@
         "max_concurrency": {"const": 1}
       }
     },
+    "localModelRegistry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "models", "tools"],
+      "properties": {
+        "schema": {"const": "local-model-registry-v1"},
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["model_receipt", "limits"],
+            "properties": {
+              "model_receipt": {"$ref": "#/$defs/modelReceipt"},
+              "limits": {"$ref": "#/$defs/limits"}
+            }
+          }
+        },
+        "tools": {"type": "array", "maxItems": 0}
+      }
+    },
     "projection": {
       "type": "object",
       "additionalProperties": false,

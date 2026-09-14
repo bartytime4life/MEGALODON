@@ -3,11 +3,14 @@
 **Status:** the proposed data-only contract boundary from
 [issue #145](https://github.com/bartytime4life/MEGALODON/issues/145) is joined
 by the no-network preflight from
-[issue #154](https://github.com/bartytime4life/MEGALODON/issues/154). The v1
+[issue #154](https://github.com/bartytime4life/MEGALODON/issues/154) and the
+fingerprint-pinned registry hardening from
+[issue #161](https://github.com/bartytime4life/MEGALODON/issues/161). The v1
 [schema and fixtures](../contracts/local-model-advisory/v1/README.md) validate
 the permitted shapes. [`megalodon/advisory.py`](../megalodon/advisory.py) can
-validate an exact operator-approved model identity and construct one canonical
-in-memory prompt. Neither surface adds a model runtime, Ollama request, API
+validate one closed local-model registry against an independently supplied
+SHA-256 pin and construct one canonical in-memory prompt. Neither surface adds a
+model runtime, Ollama request, API
 client, daemon, scheduler, monitor, detector, file scanner, sandbox, or
 response action.
 
@@ -47,7 +50,7 @@ limits before prompt construction.
 | Aggregate counts | accepted/rejected records, detections by fixed rule, dropped/partial counts | Non-negative bounded integers; a failed run may use JSON `null` only for an unknown rejected-record count |
 | Fixed detector context | rule name, severity, threshold, cooldown, explicit limitation | Repository-owned constants only |
 | Operator question | one explicit bounded question selected from an allowlisted purpose | Plain text, no tool instruction or data query language |
-| Model receipt | configured logical model ID, provider class, model artifact digest/version, timeout, result outcome | Metadata only; no provider secret or endpoint in output |
+| Model receipt | logical model ID, provider class, model artifact digest/version, and fixed limits copied from the pinned one-entry registry | Metadata only; no provider secret or endpoint in output |
 
 The projection must exclude:
 
@@ -133,8 +136,8 @@ any model request:
 
 1. explicit enablement for one invocation; the default is disabled;
 2. a literal loopback endpoint and a single configured provider path;
-3. a closed local model identifier bound to a recorded model artifact
-   identifier, version, or digest;
+3. a closed one-entry local model registry, canonically serialized and matched
+   to an independently supplied lowercase SHA-256 pin before request validation;
 4. a strict request timeout, input-byte cap, output-byte cap, token cap, and
    concurrency cap;
 5. no automatic model pull, model update, model discovery, fallback provider,
@@ -160,7 +163,7 @@ change MEGALODON's static capability catalog.
 | Data disclosure | Metadata-only projection, deny sensitive fields by schema, private local storage, and no egress. |
 | Endpoint redirection or cloud use | Accept only a validated literal loopback endpoint; no redirects, proxy settings, or fallback provider. |
 | Resource exhaustion | Fixed request, response, token, timeout, concurrency, and report-display bounds; cancellation and failure tests. |
-| Model/provider substitution | Record operator-approved logical ID and artifact identifier; reject unapproved values. |
+| Model/provider substitution | Require the request receipt and limits to match the sole entry in a structurally closed, fingerprint-pinned local registry. |
 
 ## Delivery sequence
 
@@ -169,11 +172,13 @@ change MEGALODON's static capability catalog.
 2. **Delivered in this contract slice:** data-only tests for closed fields,
    sensitive-field refusal, outcome bounds, and absent executable/provider
    authority.
-3. **Delivered in the no-network preflight slice:** closed repository-owned
-   source/adapter pairs, exact model ID and artifact-digest approval, canonical
-   prompt construction, a 4 KiB input gate, immutable ADMIT/DENY decisions, and
-   deterministic side-effect negative controls. ADMIT authorizes prompt
-   construction only; no request is made.
+3. **Delivered in the no-network preflight slices:** closed repository-owned
+   source/adapter pairs, one fingerprint-pinned local registry with exactly one
+   model receipt, fixed 4 KiB input/output limits, a 15-second timeout,
+   concurrency one, and no tools; canonical prompt construction; immutable
+   ADMIT/DENY decisions; a reusable adversarial denial corpus; and deterministic
+   side-effect negative controls. ADMIT authorizes prompt construction only; no
+   request is made.
 4. Add an opt-in literal-loopback provider call only after separately reviewing
    redirect, proxy, DNS, timeout, response-size, concurrency, and cancellation
    controls. It must not start Ollama, download a model, or change Qwen

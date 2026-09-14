@@ -12,7 +12,8 @@ endpoint, or grant an action capability.
 
 - one closed metadata projection describing a completed or failed bounded run;
 - one selected explanation purpose, not a free-form model prompt;
-- an operator-recorded local model receipt and fixed v1 resource limits; and
+- one fingerprint-pinned `local-model-registry-v1` containing exactly one local
+  model receipt, its fixed v1 resource limits, and an empty tool list; and
 - one bounded, untrusted result with a closed outcome and fixed result code.
 
 `rejected_records` is a bounded integer for a completed run. A failed run may
@@ -24,8 +25,10 @@ zero. The other counts always remain bounded integers.
 
 Unknown fields, raw evidence, free-form prompts, provider addresses, credentials,
 tool/action fields, URLs, paths, commands, and mutable host controls have no
-place in the schema.  A later runtime adapter must pass this contract **before**
-it makes any explicitly authorized, loopback-only local request.
+place in the schema or registry. A registry cannot carry an endpoint, URL,
+command, path, credential, prompt, or tool. A later runtime adapter must pass
+this contract **before** it makes any explicitly authorized, loopback-only local
+request.
 
 Run the contract suite with:
 
@@ -38,11 +41,15 @@ credentials, local paths, or provider configuration.
 
 ## No-network preflight
 
-Issue #154 adds a deterministic Python preflight around this contract. It uses
-repository-owned source/adapter pairs, checks one exact operator-approved model
-ID and artifact digest, and constructs one canonical in-memory prompt. An
-`ADMIT` decision authorizes prompt construction only. It is not a provider
-request, model result, detection, evidence item, or action authorization.
+Issue #154 adds a deterministic Python preflight around this contract. Issue
+#161 replaces its two loose model-approval arguments with one structurally
+closed registry and an independently supplied lowercase SHA-256 pin. The
+preflight validates and canonically fingerprints the registry before it validates
+the request, then requires the request receipt and limits to match the sole
+registry entry exactly. It uses repository-owned source/adapter pairs and
+constructs one canonical in-memory prompt. An `ADMIT` decision authorizes prompt
+construction only. It is not a provider request, model result, detection,
+evidence item, or action authorization.
 
 The preflight deliberately contains no provider client, endpoint, socket,
 subprocess, filesystem read, database access, capture path, tool call, or host
@@ -51,3 +58,8 @@ mutation. Run its negative controls with:
 ~~~bash
 python -m pytest -q tests/test_advisory.py
 ~~~
+
+The reusable adversarial denial corpus is
+`fixtures/adversarial/denials.json`. It covers every finite DENY class and the
+forbidden registry-field matrix. Each case is executed under HTTP/socket,
+subprocess, firewall, SQLite, filesystem-write, and command-entry sentinels.

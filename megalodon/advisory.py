@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import re
 from types import MappingProxyType
@@ -61,6 +62,9 @@ _MODEL_RECEIPT_KEYS = frozenset(
 )
 _LIMIT_KEYS = frozenset(FIXED_LIMITS)
 _REQUEST_KEYS = frozenset({"projection", "model_receipt", "limits"})
+_REGISTRY_ENTRY_KEYS = frozenset({"model_receipt", "limits"})
+_REGISTRY_KEYS = frozenset({"schema", "models", "tools"})
+_REGISTRY_SCHEMA = "local-model-registry-v1"
 
 _PROMPT_PREAMBLE = (
     "MEGALODON_LOCAL_ADVISORY_V1\n"
@@ -73,9 +77,11 @@ _PROMPT_PREAMBLE = (
 
 _DENIAL_SUMMARIES = MappingProxyType(
     {
-        "MODEL_APPROVAL_INVALID": "The operator model approval is invalid.",
+        "REGISTRY_PIN_INVALID": "The local model registry pin is invalid.",
+        "REGISTRY_INVALID": "The local model registry does not match the closed v1 shape.",
+        "REGISTRY_FINGERPRINT_MISMATCH": "The local model registry fingerprint does not match its pin.",
         "REQUEST_SHAPE_INVALID": "The advisory request does not match the closed v1 shape.",
-        "MODEL_NOT_APPROVED": "The request does not match the operator-approved model.",
+        "MODEL_NOT_APPROVED": "The request does not match the pinned local model registry.",
         "INPUT_LIMIT_EXCEEDED": "The canonical advisory input exceeds the v1 byte limit.",
     }
 )
@@ -93,6 +99,7 @@ class AirlockDecision:
     prompt_bytes: int
     model_id: str | None
     model_artifact_sha256: str | None
+    registry_sha256: str | None
     policy_version: str = POLICY_VERSION
     provider_request_performed: bool = False
 
@@ -107,13 +114,18 @@ class AirlockDecision:
             "prompt_bytes": self.prompt_bytes,
             "model_id": self.model_id,
             "model_artifact_sha256": self.model_artifact_sha256,
+            "registry_sha256": self.registry_sha256,
             "policy_version": self.policy_version,
             "provider_request_performed": self.provider_request_performed,
         }
 
 
 def _exact_object(value: object, keys: frozenset[str]) -> bool:
-    return type(value) is dict and set(value) == keys
+    return (
+        type(value) is dict
+        and len(value) == len(keys)
+        and all(type(key) is str and key in keys for key in value)
+    )
 
 
 def _valid_count(value: object) -> bool:
@@ -138,6 +150,7 @@ def _deny(reason_code: str) -> AirlockDecision:
         prompt_bytes=0,
         model_id=None,
         model_artifact_sha256=None,
+        registry_sha256=None,
     )
 
 
@@ -192,11 +205,39 @@ def _valid_limits(value: object) -> bool:
     )
 
 
+def _valid_registry(value: object) -> bool:
+    if not _exact_object(value, _REGISTRY_KEYS):
+        return False
+    registry = value
+    models = registry["models"]
+    tools = registry["tools"]
+    if type(registry["schema"]) is not str or registry["schema"] != _REGISTRY_SCHEMA:
+        return False
+    if type(models) is not list or len(models) != 1 or type(tools) is not list or tools:
+        return False
+    entry = models[0]
+    return (
+        _exact_object(entry, _REGISTRY_ENTRY_KEYS)
+        and _valid_model_receipt(entry["model_receipt"])
+        and _valid_limits(entry["limits"])
+    )
+
+
+def _registry_bytes(registry: dict[str, object]) -> bytes:
+    return json.dumps(
+        registry,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
 def preflight_advisory(
     request: object,
     *,
-    approved_model_id: object,
-    approved_model_artifact_sha256: object,
+    local_model_registry: object,
+    local_model_registry_sha256: object,
 ) -> AirlockDecision:
     """Admit canonical prompt construction or fail closed without side effects.
 
@@ -204,10 +245,14 @@ def preflight_advisory(
     by a separately reviewed future adapter. This function performs no provider
     request, discovery, file access, process launch, database access, or action.
     """
-    if not _valid_model_id(approved_model_id) or not _valid_digest(
-        approved_model_artifact_sha256
-    ):
-        return _deny("MODEL_APPROVAL_INVALID")
+    if not _valid_digest(local_model_registry_sha256):
+        return _deny("REGISTRY_PIN_INVALID")
+    if not _valid_registry(local_model_registry):
+        return _deny("REGISTRY_INVALID")
+    registry = local_model_registry
+    registry_sha256 = hashlib.sha256(_registry_bytes(registry)).hexdigest()
+    if registry_sha256 != local_model_registry_sha256:
+        return _deny("REGISTRY_FINGERPRINT_MISMATCH")
 
     if not _exact_object(request, _REQUEST_KEYS):
         return _deny("REQUEST_SHAPE_INVALID")
@@ -222,10 +267,8 @@ def preflight_advisory(
     ):
         return _deny("REQUEST_SHAPE_INVALID")
 
-    if (
-        receipt["model_id"] != approved_model_id
-        or receipt["model_artifact_sha256"] != approved_model_artifact_sha256
-    ):
+    registry_entry = registry["models"][0]
+    if receipt != registry_entry["model_receipt"] or limits != registry_entry["limits"]:
         return _deny("MODEL_NOT_APPROVED")
 
     safe_projection = {
@@ -258,4 +301,5 @@ def preflight_advisory(
         prompt_bytes=prompt_bytes,
         model_id=receipt["model_id"],
         model_artifact_sha256=receipt["model_artifact_sha256"],
+        registry_sha256=registry_sha256,
     )
