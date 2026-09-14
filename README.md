@@ -238,101 +238,37 @@ command fails.
   sudo apt-get install -y --no-install-recommends \
     ca-certificates curl gpg git \
     python3 python3-venv python3-pip \
-    sqlite3 tshark clamav nftables \
+    sqlite3 tshark nftables \
     cmake make gcc g++ flex libfl-dev bison libpcap-dev libssl-dev \
     python3-dev swig zlib1g-dev software-properties-common
 
   sqlite3 --version
   /usr/bin/tshark --version | sed -n '1p'
-  clamscan --version
   nft --version
 )
 ~~~
 
 Keep the TShark capture-permission answer at **No**. MEGALODON's offline
 adapter does not need live-capture permission, and installation should not
-grant it. The clamav package provides the manual command-line scanner; this
-guide does not add the daemon or signature-update service.
+grant it. ClamAV is a separate manual companion, not a prerequisite for this
+guide. Do not install it from this recipe: Ubuntu packaging can add its
+signature-update service, which exceeds MEGALODON's no-service/no-egress
+boundary.
 
-### 2. Add optional producer packages, still disabled
+### 2. External producer packages are not installed by this guide
 
-Suricata's official Ubuntu instructions use the OISF stable PPA. Add it only
-when you need to evaluate its separate EVE contract; an installed Suricata
-binary does not create a MEGALODON reader.
+Suricata and osquery remain **unintegrated** companion tools. This repository
+does not approve adding third-party APT repositories, signing keys, package
+sources, services, rule updaters, schedules, or configuration files for either
+tool. Their packages can create service units and other host state even when a
+service is not started.
 
-~~~bash
-(
-  set -euo pipefail
-
-  guard=/usr/sbin/policy-rc.d
-  if sudo test -e "$guard"; then
-    echo "An existing package service-start guard is present at $guard; review it and stop."
-    exit 1
-  fi
-
-  cleanup() { sudo rm -f "$guard"; }
-  trap cleanup EXIT HUP INT TERM
-
-  printf '%s\n' '#!/bin/sh' 'exit 101' | sudo tee "$guard" >/dev/null
-  sudo chmod 0755 "$guard"
-
-  sudo add-apt-repository -y ppa:oisf/suricata-stable
-  sudo apt-get update
-  sudo apt-get install -y --no-install-recommends suricata
-
-  sudo systemctl disable --now suricata.service 2>/dev/null || true
-)
-suricata --build-info | sed -n '1,12p'
-systemctl is-enabled suricata.service || true
-systemctl is-active suricata.service || true
-~~~
-
-Do **not** edit the Suricata YAML configuration, run its rule updater, or start
-the service for MEGALODON. Those operations would configure and activate a
-separate sensor; no current MEGALODON runtime consumes its output. See
-[Suricata's Ubuntu package guide](https://docs.suricata.io/en/suricata-8.0.4/install/ubuntu.html)
-for a separately approved Suricata deployment.
-
-osquery is similarly an unintegrated, future-facing companion. If a local
-interactive shell is wanted for separate evaluation, its repository can be
-added with a scoped signing key; osqueryd stays disabled and no configuration
-file is created.
-
-~~~bash
-(
-  set -euo pipefail
-
-  sudo install -d -m 0755 /etc/apt/keyrings
-  curl -fsSL https://pkg.osquery.io/deb/pubkey.gpg |
-    sudo gpg --dearmor --yes -o /etc/apt/keyrings/osquery.gpg
-  printf '%s\n' \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/osquery.gpg] https://pkg.osquery.io/deb deb main" |
-    sudo tee /etc/apt/sources.list.d/osquery.list >/dev/null
-
-  guard=/usr/sbin/policy-rc.d
-  if sudo test -e "$guard"; then
-    echo "An existing package service-start guard is present at $guard; review it and stop."
-    exit 1
-  fi
-
-  cleanup() { sudo rm -f "$guard"; }
-  trap cleanup EXIT HUP INT TERM
-
-  printf '%s\n' '#!/bin/sh' 'exit 101' | sudo tee "$guard" >/dev/null
-  sudo chmod 0755 "$guard"
-
-  sudo apt-get update
-  sudo apt-get install -y --no-install-recommends osquery
-  sudo systemctl disable --now osqueryd.service 2>/dev/null || true
-)
-osqueryi --version
-systemctl is-enabled osqueryd.service || true
-systemctl is-active osqueryd.service || true
-~~~
-
-The osquery package source is external to MEGALODON. Review the current
-[osquery Linux installation documentation](https://osquery.readthedocs.io/en/latest/installation/install-linux/)
-and its signing-key provenance before adding it to a production machine.
+If a separate, approved evaluation needs one of these tools, use that tool's
+current vendor documentation and a host-specific package/repository review.
+Record the exact repository, signing-key fingerprint, package version, service
+state, and removal/rollback plan outside MEGALODON. Do not infer runtime
+support from an installed binary: Suricata remains contract-only and osquery
+remains proposed with no MEGALODON reader, importer, scheduler, or enrollment.
 
 ### 3. Build Zeek as a private, non-service producer
 
@@ -351,6 +287,9 @@ Record the exact version and verification result with the case evidence.
   umask 077
 
   ZEEK_VERSION=8.0.10
+  # Set this to the exact SHA-256 published for the selected release by Zeek.
+  # Leave it empty to fail closed; never copy an unverified value from a mirror.
+  ZEEK_SHA256=''
   source_root="$HOME/src/zeek-build"
   prefix="$HOME/.local/zeek-$ZEEK_VERSION"
   archive="$source_root/zeek-$ZEEK_VERSION.tar.gz"
@@ -361,14 +300,19 @@ Record the exact version and verification result with the case evidence.
   [ ! -e "$source_dir" ] && [ ! -L "$source_dir" ] ||
     { echo "Zeek source directory already exists; do not overwrite it."; exit 1; }
 
+  case "$ZEEK_SHA256" in
+    [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*) ;;
+    *) echo "Set ZEEK_SHA256 to the reviewed 64-character release digest; stop."; exit 1 ;;
+  esac
+  [ "$(printf %s "$ZEEK_SHA256" | wc -c)" -eq 64 ] ||
+    { echo "ZEEK_SHA256 must contain exactly 64 hexadecimal characters; stop."; exit 1; }
+  [ ! -e "$archive" ] && [ ! -L "$archive" ] ||
+    { echo "Zeek archive already exists; verify or remove it deliberately."; exit 1; }
+
   install -d -m 700 "$source_root"
   curl -fL --proto '=https' --tlsv1.2 \
     -o "$archive" "https://download.zeek.org/zeek-$ZEEK_VERSION.tar.gz"
-
-  # Verify the release checksum/signature against the value obtained above
-  # before extracting. Do not treat this placeholder as verification.
-  sha256sum "$archive"
-
+  printf '%s  %s\n' "$ZEEK_SHA256" "$archive" | sha256sum -c -
   tar -xzf "$archive" -C "$source_root"
   cd "$source_dir"
   ./configure --prefix="$prefix"
