@@ -203,8 +203,9 @@ are checked again after arming and dispatched under the deadline handler as
 restore the observed pre-call mask, protected pending-signal inspection
 interruptions restore that mask, interrupted handler installation is restored,
 and interrupted arming calls are treated as live until teardown cancels them.
-Interrupted competing-timer restoration is treated as complete so cleanup does
-not cancel that timer. The CLI also
+Interrupted competing-timer restoration is read back; a confirmed competing
+timer is preserved, while an incomplete swap cancels the deadline and restores
+the displaced timer before handler restoration. The CLI also
 refuses before those operations when an interval timer is already active. It
 checks the timer returned by the arming call, restores a concurrently armed
 timer while `SIGALRM` is blocked across the handler/timer swap, and restores the
@@ -212,7 +213,10 @@ prior handler after timer inactivity is confirmed. Teardown blocks `SIGALRM`
 before cancellation and keeps the deadline handler installed until the original
 mask is restored, preventing a just-pending deadline from reaching the prior
 handler. Deadline dispatch at cleanup-mask entry is retained until cancellation
-and handler restoration complete, then re-raised. The
+and handler restoration complete, then re-raised. Dispatch as setup unmasking
+returns causes teardown to reblock before cancellation, and dispatch during
+post-cancel timer inspection is preserved until remaining cleanup decisions
+complete. The
 deadline does not establish portable Windows interruption, interrupt
 kernel-level uninterruptible sleep, or bound CLI setup/finalization outside the
 source-ownership region. Handler restoration after a cancellation error requires

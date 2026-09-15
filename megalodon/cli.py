@@ -12,6 +12,7 @@ from pathlib import Path
 import signal
 import sqlite3
 import sys
+import time
 
 from . import __version__
 from .capabilities import catalog
@@ -421,6 +422,7 @@ def _scoped_run_deadline(max_seconds: int | None):
     handler_installed = False
     timer_started = False
     mask_restored = False
+    competing_timer = None
     try:
         _require_single_threaded_run_deadline()
         try:
@@ -446,6 +448,8 @@ def _scoped_run_deadline(max_seconds: int | None):
                 "max-seconds could not arm the POSIX run deadline"
             ) from None
         if previous_timer != (0.0, 0.0):
+            competing_timer = previous_timer
+            restore_started = time.monotonic()
             try:
                 signal.setitimer(timer_kind, *previous_timer)
             except (OSError, ValueError):
@@ -453,12 +457,31 @@ def _scoped_run_deadline(max_seconds: int | None):
                     "max-seconds could not restore a competing POSIX process timer"
                 ) from None
             except BaseException:
-                # As above, Python dispatch follows the completed timer swap.
-                # Do not let cleanup cancel the competing timer just restored.
-                timer_started = False
+                # Dispatch can occur immediately before or after the timer
+                # syscall. Read back the process timer instead of assuming
+                # that the competing timer was restored. Cleanup will cancel
+                # our timer and restore the displaced timer when it was not.
+                try:
+                    active_timer = signal.getitimer(timer_kind)
+                except BaseException:
+                    pass
+                else:
+                    elapsed = max(0.0, time.monotonic() - restore_started)
+                    expected_delay, expected_interval = previous_timer
+                    active_delay, active_interval = active_timer
+                    tolerance = elapsed + 0.01
+                    if (
+                        active_interval == expected_interval
+                        and max(0.0, expected_delay - tolerance)
+                        <= active_delay
+                        <= expected_delay + tolerance
+                    ):
+                        timer_started = False
+                        competing_timer = None
                 raise
             else:
                 timer_started = False
+                competing_timer = None
             raise ValueError(
                 "max-seconds cannot replace an active POSIX process timer"
             )
@@ -472,11 +495,31 @@ def _scoped_run_deadline(max_seconds: int | None):
             # The protected boundary was clear immediately before arming. Keep
             # our handler installed while releasing a post-arm pending alarm so
             # an already-expired deadline remains a CaptureError.
-            mask_restored = True
-            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            try:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            except (OSError, ValueError):
+                raise ValueError(
+                    "max-seconds could not restore the POSIX signal mask"
+                ) from None
+            except BaseException:
+                mask_restored = True
+                raise
+            else:
+                mask_restored = True
             raise CaptureError("ingestion deadline exceeded")
-        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
-        mask_restored = True
+        try:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        except (OSError, ValueError):
+            raise ValueError(
+                "max-seconds could not restore the POSIX signal mask"
+            ) from None
+        except BaseException:
+            # Python dispatch occurs after the mask syscall returns. Record
+            # the unblocked state so teardown first blocks the alarm again.
+            mask_restored = True
+            raise
+        else:
+            mask_restored = True
         yield
     finally:
         try:
@@ -501,6 +544,8 @@ def _scoped_run_deadline(max_seconds: int | None):
                         cleanup_entry_error = exc
                 timer_inactive = not timer_started
                 cancellation_error = None
+                timer_inspection_error = None
+                competing_restore_error = None
                 try:
                     if timer_started:
                         signal.setitimer(timer_kind, 0.0)
@@ -513,6 +558,18 @@ def _scoped_run_deadline(max_seconds: int | None):
                         )
                     except (OSError, ValueError):
                         timer_inactive = False
+                    except BaseException as exc:
+                        # Preserve signal dispatch from the inspection, but do
+                        # not skip mask/handler restoration decisions.
+                        timer_inactive = False
+                        timer_inspection_error = exc
+                if competing_timer is not None and timer_inactive:
+                    try:
+                        signal.setitimer(timer_kind, *competing_timer)
+                    except BaseException as exc:
+                        competing_restore_error = exc
+                    else:
+                        competing_timer = None
                 try:
                     if cleanup_mask is not None:
                         # Keep the deadline handler installed while unblocking so
@@ -520,14 +577,18 @@ def _scoped_run_deadline(max_seconds: int | None):
                         # handler. Python dispatches it here as CaptureError.
                         signal.pthread_sigmask(signal.SIG_SETMASK, cleanup_mask)
                 finally:
-                    if timer_inactive and (
+                    if timer_inactive and competing_timer is None and (
                         not mask_restored or cleanup_mask is not None
                     ):
                         signal.signal(alarm_signal, previous_handler)
                 if cleanup_entry_error is not None:
                     raise cleanup_entry_error
+                if timer_inspection_error is not None:
+                    raise timer_inspection_error
                 if cancellation_error is not None:
                     raise cancellation_error
+                if competing_restore_error is not None:
+                    raise competing_restore_error
                 if cleanup_mask_error is not None:
                     raise cleanup_mask_error
         finally:
