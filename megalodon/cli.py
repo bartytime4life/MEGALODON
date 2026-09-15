@@ -384,6 +384,8 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise ValueError(
             "max-seconds could not protect POSIX run deadline setup"
         ) from None
+    if alarm_signal in previous_mask:
+        raise ValueError("max-seconds requires SIGALRM to be unblocked")
 
     handler_installed = False
     timer_started = False

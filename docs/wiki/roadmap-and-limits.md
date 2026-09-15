@@ -15,7 +15,9 @@ return. An optional Linux `--max-seconds` value from 1 through 86,400 bounds
 source acquisition, iteration, processing, and cleanup with a fixed failed
 receipt; unsupported runtimes, unavailable `/proc/self/task` or signal-mask
 inspection, blocked `SIGALRM`, and processes with more than one OS thread refuse
-the option before configuration or I/O because the timer/handler are process-wide. Existing and
+the option before configuration or I/O because the timer/handler are process-wide;
+the mask and OS-thread count are rechecked inside protected setup before handler
+or timer installation. Existing and
 concurrently armed process timers are preserved and refused while `SIGALRM` is
 blocked across the handler/timer swap, and prior-handler restoration remains
 conditional on confirmed timer inactivity when cancellation raises. Threaded

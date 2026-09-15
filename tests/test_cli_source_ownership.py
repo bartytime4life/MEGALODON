@@ -313,6 +313,33 @@ class SourceOwnershipTests(unittest.TestCase):
             if original_timer[0] > 0.0:
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_rechecks_blocked_alarm_at_protected_boundary(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError(
+                "blocked boundary must refuse before handler or timer setup"
+            )
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(
+                cli.signal,
+                "pthread_sigmask",
+                return_value={signal.SIGALRM},
+            ) as inspect_mask,
+            patch.object(cli.signal, "signal", side_effect=forbidden),
+            patch.object(cli.signal, "setitimer", side_effect=forbidden),
+            self.assertRaisesRegex(
+                ValueError, "^max-seconds requires SIGALRM to be unblocked$"
+            ),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("blocked boundary should refuse before entry")
+
+        inspect_mask.assert_called_once_with(signal.SIG_BLOCK, {signal.SIGALRM})
+
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
     def test_deadline_restores_timer_armed_after_preflight(self):
         original_handler = signal.getsignal(signal.SIGALRM)

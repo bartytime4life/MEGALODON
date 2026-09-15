@@ -694,7 +694,9 @@ prefix in a `failed/failed` receipt. Supplying the option on a runtime without
 `SIGALRM`, `ITIMER_REAL`, `pthread_sigmask`, and `/proc/self/task` inspection is
 refused before configuration, storage, or source work. A blocked `SIGALRM` or a
 process with more than one OS thread is refused at the same boundary because the
-timer and handler are process-wide while signal masks are thread-local.
+timer and handler are process-wide while signal masks are thread-local; both are
+checked again inside the signal-protected setup boundary before handler or timer
+installation.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
