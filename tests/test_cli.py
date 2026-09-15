@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -109,12 +110,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.refresh_seconds, 12)
         self.assertEqual(args.event_limit, 125)
 
+    def test_run_parser_accepts_bounded_elapsed_deadline(self):
+        args = build_parser().parse_args(["run", "--max-seconds", "120"])
+        self.assertEqual(args.max_seconds, 120)
+
     def test_cli_integer_options_reject_coercion_and_out_of_range_values(self):
         invalid_argv = (
             ["run", "--max-events", "0"],
             ["run", "--max-events", "-1"],
             ["run", "--max-events", "1.9"],
             ["run", "--max-events", "10000001"],
+            ["run", "--max-seconds", "0"],
+            ["run", "--max-seconds", "-1"],
+            ["run", "--max-seconds", "1.9"],
+            ["run", "--max-seconds", "86401"],
             ["dashboard", "--port", "0"],
             ["dashboard", "--port", "65536"],
             ["dashboard", "--refresh-seconds", "1"],
@@ -159,6 +168,118 @@ class CliTests(unittest.TestCase):
                     error.getvalue(),
                     "megalodon: jsonl and scapy sources require --max-events "
                     "between 1 and 10000000\n",
+                )
+
+    def test_unsupported_deadline_refuses_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("unsupported deadline must refuse before I/O")
+
+        patches = (
+            patch("megalodon.cli._run_deadline_supported", return_value=False),
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["run", "--source", "sample", "--max-seconds", "1"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            error.getvalue(),
+            "megalodon: max-seconds requires a POSIX runtime with SIGALRM "
+            "and ITIMER_REAL\n",
+        )
+
+    @unittest.skipUnless(
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "setitimer"),
+        "POSIX interval timers required",
+    )
+    def test_posix_deadline_interrupts_blocked_stdin_and_preserves_prefix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            root = Path(__file__).resolve().parents[1]
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "megalodon",
+                    "run",
+                    "--config",
+                    str(config),
+                    "--source",
+                    "jsonl",
+                    "--max-events",
+                    "100",
+                    "--max-seconds",
+                    "1",
+                ],
+                cwd=root,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertIsNotNone(process.stdin)
+                process.stdin.write(
+                    json.dumps(
+                        {
+                            "observed_at": "2026-01-01T00:00:00Z",
+                            "src_ip": "192.0.2.1",
+                            "dst_ip": "198.51.100.2",
+                            "protocol": "TCP",
+                        }
+                    )
+                    + "\n"
+                )
+                process.stdin.flush()
+                self.assertEqual(process.wait(timeout=5), 2)
+                output = process.stdout.read()
+                error = process.stderr.read()
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+                if process.stdin is not None:
+                    process.stdin.close()
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stderr is not None:
+                    process.stderr.close()
+
+            self.assertEqual(output, "")
+            self.assertEqual(
+                error, "megalodon: ingestion failed (CAPTURE_ERROR)\n"
+            )
+            with sqlite3.connect(database) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT status, processed_count, failure_code, "
+                        "termination_reason FROM ingestion_runs"
+                    ).fetchone(),
+                    ("failed", 1, "CAPTURE_ERROR", "failed"),
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM ingestion_run_events"
+                    ).fetchone()[0],
+                    1,
                 )
 
     def test_config_selected_non_sample_source_refuses_before_store(self):

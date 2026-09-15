@@ -183,11 +183,23 @@ across the stream. Internal callers may lower that nonnegative budget but
 cannot raise it. The first excess skipped line fails closed without reading its
 suffix. Errors expose only the line number, never the record. Valid prefixes
 retain the existing per-event transaction and failed-run semantics. The scan
-budget does not interrupt a blocking read or provide an elapsed-time deadline.
+budget alone does not interrupt a blocking read or provide an elapsed-time
+deadline.
 The operational CLI also requires an explicit positive accepted-event
 `--max-events` ceiling
 from 1 through 10,000,000 before opening a JSONL file/stdin source or Scapy
 capture. The finite repository-owned sample generator may omit that option.
+On POSIX runtimes, an optional `--max-seconds` value from 1 through 86,400 arms
+one `ITIMER_REAL` deadline before the event source is acquired and keeps it
+active through iteration, event processing, and owned-source cleanup. Expiry is
+a record-free `CaptureError`; committed evidence is retained and the run records
+`failed/failed` with `CAPTURE_ERROR` after cleanup is attempted. Unsupported
+runtimes refuse the option before configuration, storage, or source work. The
+CLI also refuses before those operations when an interval timer is already
+active, preserving its handler and countdown instead of replacing it. The
+deadline does not establish portable Windows interruption, interrupt
+kernel-level uninterruptible sleep, or bound CLI setup/finalization outside the
+source-ownership region.
 See [JSONL admission](docs/jsonl-admission.md) for compatibility details.
 
 ### IngestionRun receipt
