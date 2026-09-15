@@ -2212,10 +2212,24 @@ class DashboardStore:
     """Read-only, least-data view of an existing private audit database."""
 
     EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
+    INGESTION_RUN_FIELDS = (
+        "id",
+        "started_at",
+        "finished_at",
+        "source",
+        "status",
+        "processed_count",
+        "detection_count",
+        "action_count",
+        "receipt_version",
+        "failure_code",
+        "termination_reason",
+    )
     _AUTHORIZED_READS = {
         "events": frozenset({""}),
         "detections": frozenset({"", *EVENT_FIELDS}),
         "actions": frozenset({""}),
+        "ingestion_runs": frozenset({"", *INGESTION_RUN_FIELDS}),
     }
 
     def __init__(self, path: str | Path):
@@ -2571,6 +2585,52 @@ class DashboardStore:
                     for row in rows
                 ]
             except KeyError as exc:
+                raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from exc
+            finally:
+                if cursor is not None:
+                    cursor.close()
+            return result
+
+    def ingestion_runs(self, limit: int = 8) -> list[dict[str, Any]]:
+        """Return a bounded, receipt-only view of the newest ingestion runs."""
+
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 25
+        ):
+            raise ValueError("DASHBOARD_STORE:INVALID_LIMIT")
+        with self._bounded_read():
+            cursor: sqlite3.Cursor | None = None
+            try:
+                cursor = self._connection.execute(
+                    """
+                    SELECT id, started_at, finished_at, source, status,
+                           processed_count, detection_count, action_count,
+                           receipt_version, failure_code, termination_reason
+                    FROM ingestion_runs
+                    ORDER BY started_at DESC, id DESC LIMIT ?
+                    """,
+                    (limit,),
+                )
+                rows = cursor.fetchall()
+                result = [
+                    {
+                        "run_id": int(row["id"]),
+                        "started_at": row["started_at"],
+                        "finished_at": row["finished_at"],
+                        "source": row["source"],
+                        "status": row["status"],
+                        "processed_count": int(row["processed_count"]),
+                        "detection_count": int(row["detection_count"]),
+                        "action_count": int(row["action_count"]),
+                        "receipt_version": int(row["receipt_version"]),
+                        "failure_code": row["failure_code"],
+                        "termination_reason": row["termination_reason"],
+                    }
+                    for row in rows
+                ]
+            except (KeyError, TypeError, ValueError) as exc:
                 raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from exc
             finally:
                 if cursor is not None:

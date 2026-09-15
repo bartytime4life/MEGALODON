@@ -395,6 +395,50 @@ def test_summary_is_one_statement_and_recent_selects_only_public_fields(tmp_path
     assert "TEMP B-TREE" not in plan
 
 
+def test_ingestion_run_projection_is_bounded_receipt_only_and_newest_first(tmp_path):
+    path = tmp_path / "private" / "audit.db"
+    with Store(path) as writer:
+        first = writer.start_ingestion_run("sample", started_at=STAMP)
+        writer.finish_ingestion_run(first, "source_exhausted", finished_at=STAMP)
+        second = writer.start_ingestion_run("jsonl", started_at=STAMP)
+        writer.finish_ingestion_run(second, "event_limit_reached", finished_at=STAMP)
+
+    statements: list[str] = []
+    with DashboardStore(path) as reader:
+        reader._connection.set_trace_callback(statements.append)
+        runs = reader.ingestion_runs(2)
+
+    assert [run["run_id"] for run in runs] == [second, first]
+    assert runs[0] == {
+        "run_id": second,
+        "started_at": STAMP.isoformat(),
+        "finished_at": STAMP.isoformat(),
+        "source": "jsonl",
+        "status": "incomplete",
+        "processed_count": 0,
+        "detection_count": 0,
+        "action_count": 0,
+        "receipt_version": 3,
+        "failure_code": None,
+        "termination_reason": "event_limit_reached",
+    }
+    statement = " ".join(statements[-1].lower().split())
+    assert "from ingestion_runs" in statement
+    assert "order by started_at desc, id desc limit 2" in statement
+    for private_table in ("events", "detections", "actions"):
+        assert f"from {private_table}" not in statement
+
+
+@pytest.mark.parametrize("limit", [0, 26, True, 1.0, "1"])
+def test_ingestion_run_projection_rejects_invalid_limits(tmp_path, limit):
+    path = tmp_path / "private" / "audit.db"
+    with Store(path):
+        pass
+    with DashboardStore(path) as reader:
+        with pytest.raises(ValueError, match="^DASHBOARD_STORE:INVALID_LIMIT$"):
+            reader.ingestion_runs(limit)
+
+
 def test_summary_returns_consistent_counts_when_a_wal_commit_overlaps(tmp_path, monkeypatch):
     path = tmp_path / "private" / "audit.db"
     _seed(path)

@@ -33,7 +33,7 @@ from megalodon.offline.common import Batch, Limits, OfflineError
 from megalodon.offline import reports, tshark
 from megalodon import offline_projection
 from megalodon.offline_projection import MAX_PROJECTED_PORTS, load_offline_projection
-from megalodon.storage import Store
+from megalodon.storage import DashboardStore, Store
 
 
 # Keep the browserless dashboard harness bounded while allowing hosted sdist
@@ -1115,6 +1115,61 @@ def test_events_api_projects_only_fields_required_by_the_ui(tmp_path):
             assert "evidence" not in payload[0]
             assert "recommendation" not in payload[0]
             assert "suppressed_reason" not in payload[0]
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+def test_ingestion_runs_api_is_bounded_receipt_only_and_read_only(tmp_path):
+    path = tmp_path / "private" / "events.db"
+    stamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with Store(path) as writer:
+        run_id = writer.start_ingestion_run("jsonl", started_at=stamp)
+        writer.finish_ingestion_run(
+            run_id, "event_limit_reached", finished_at=stamp
+        )
+
+    with DashboardStore(path) as reader:
+        handler = type(
+            "TestIngestionRunsHandler", (DashboardHandler,), {"store": reader}
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(
+                f"{base}/api/ingestion-runs?limit=1", timeout=2
+            ) as response:
+                payload = json.loads(response.read())
+            assert payload["schema"] == "dashboard-ingestion-runs-v1"
+            assert payload["limit"] == 1
+            assert payload["runs"] == [
+                {
+                    "run_id": run_id,
+                    "started_at": stamp.isoformat(),
+                    "finished_at": stamp.isoformat(),
+                    "source": "jsonl",
+                    "status": "incomplete",
+                    "processed_count": 0,
+                    "detection_count": 0,
+                    "action_count": 0,
+                    "receipt_version": 3,
+                    "failure_code": None,
+                    "termination_reason": "event_limit_reached",
+                }
+            ]
+            for query in (
+                "limit=0",
+                "limit=26",
+                "limit=01",
+                "limit=1&limit=2",
+                "other=1",
+            ):
+                with pytest.raises(HTTPError) as raised:
+                    urlopen(f"{base}/api/ingestion-runs?{query}", timeout=2)
+                assert raised.value.code == 400
         finally:
             server.shutdown()
             server.server_close()
