@@ -66,6 +66,7 @@ record delivery state; they do not override the checked-in contracts.
 | Resource-informed advancement decisions | [`docs/resource-informed-advancement.md`](docs/resource-informed-advancement.md) |
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
+| Hypothetical alert workload and base-rate assumptions | [`docs/alert-workload-lab.md`](docs/alert-workload-lab.md) |
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
 | Local Qwen advisory boundary | [`megalodon/qwen_advisory.py`](megalodon/qwen_advisory.py), [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), and [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md) |
 | Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
@@ -665,6 +666,7 @@ last-success timestamp, and count baseline while marking the display stale.
 | `megalodon-evaluate reference port TRANSPORT PORT` | Return bounded registration context for one validated service/port key |
 | `megalodon-evaluate reference protocol NUMBER` | Return bounded registration context for one validated IP protocol number |
 | `megalodon-evaluate corpus [--scenario ID]` | Validate the complete bundled synthetic corpus and run the fixed detector in memory, optionally reporting one scenario |
+| `megalodon-evaluate base-rate --population N --unit UNIT --prevalence-ppm P --sensitivity-ppm S --false-positive-ppm F` | Project hypothetical true/false alert counts and exact PPV from explicit assumptions; no telemetry, model request or measured-accuracy claim |
 
 The operational main CLI subcommands accept optional `--config PATH`; omitting
 it uses the complete safe built-in settings and works from an installed wheel.
@@ -965,8 +967,11 @@ megalodon-evaluate reference protocol 6
 megalodon-evaluate corpus
 ```
 
-The evaluation commands validate all bundled data before performing bounded
-lookups or an in-memory detector run. They do not fetch updates, use SQLite,
+The reference and corpus commands validate their complete respective bundles
+before performing bounded lookups or an in-memory detector run. The separate
+[Alert Workload Lab](docs/alert-workload-lab.md) consumes only explicit numerical
+assumptions and a declared unit, returning hypothetical counts and exact ratios.
+These evaluation commands do not fetch updates, use SQLite,
 persist output, invoke a response action, or start a subprocess. The smoke
 commands use synthetic data and a non-mutating firewall plan. They do
 not prove live-capture compatibility, installed-TShark behavior, firewall safety
