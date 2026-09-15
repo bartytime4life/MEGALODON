@@ -388,11 +388,20 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise CaptureError("ingestion deadline exceeded")
 
     try:
+        setup_previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, ())
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not inspect POSIX run deadline setup"
+        ) from None
+    try:
         previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {alarm_signal})
     except (OSError, ValueError):
         raise ValueError(
             "max-seconds could not protect POSIX run deadline setup"
         ) from None
+    except BaseException:
+        signal.pthread_sigmask(signal.SIG_SETMASK, setup_previous_mask)
+        raise
     if alarm_signal in previous_mask:
         raise ValueError("max-seconds requires SIGALRM to be unblocked")
     try:
@@ -418,9 +427,11 @@ def _scoped_run_deadline(max_seconds: int | None):
                 "max-seconds requires the interpreter main thread"
             ) from None
         handler_installed = True
+        # Treat an interrupted arming call as live until cleanup proves
+        # otherwise; setitimer may have succeeded before Python dispatch.
+        timer_started = True
         try:
             previous_timer = signal.setitimer(timer_kind, max_seconds)
-            timer_started = True
         except (OSError, ValueError):
             raise ValueError(
                 "max-seconds could not arm the POSIX run deadline"

@@ -12,7 +12,7 @@ import signal
 import sqlite3
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -338,7 +338,56 @@ class SourceOwnershipTests(unittest.TestCase):
             with cli._scoped_run_deadline(10):
                 self.fail("blocked boundary should refuse before entry")
 
-        inspect_mask.assert_called_once_with(signal.SIG_BLOCK, {signal.SIGALRM})
+        self.assertEqual(
+            inspect_mask.call_args_list,
+            [
+                call(signal.SIG_BLOCK, ()),
+                call(signal.SIG_BLOCK, {signal.SIGALRM}),
+            ],
+        )
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_restores_mask_when_setup_masking_is_interrupted(self):
+        alarm_blocked = False
+        mask_calls = 0
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked, mask_calls
+            mask_calls += 1
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            if mask_calls == 2:
+                raise KeyboardInterrupt()
+            return previous
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(
+                cli.signal,
+                "signal",
+                side_effect=AssertionError("handler must not be installed"),
+            ),
+            patch.object(
+                cli.signal,
+                "setitimer",
+                side_effect=AssertionError("timer must not be armed"),
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted setup should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(mask_calls, 3)
 
     @unittest.skipUnless(
         cli._run_deadline_supported(), "POSIX interval timers required"
@@ -394,6 +443,57 @@ class SourceOwnershipTests(unittest.TestCase):
         )
         self.assertIs(handler_calls[-1][1], prior_handler)
         self.assertFalse(handler_calls[-1][2])
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_cancels_when_timer_arming_is_interrupted(self):
+        alarm_blocked = False
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            if seconds:
+                raise KeyboardInterrupt()
+            return (0.0, 0.0)
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted arming should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, blocked) for _, seconds, _, blocked in timer_calls],
+            [(10, True), (0.0, True)],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertTrue(handler_calls[-1][2])
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
     def test_deadline_restores_timer_armed_after_preflight(self):
@@ -454,6 +554,7 @@ class SourceOwnershipTests(unittest.TestCase):
             self.assertEqual(
                 mask_calls,
                 [
+                    (signal.SIG_BLOCK, set()),
                     (signal.SIG_BLOCK, set()),
                     (signal.SIG_BLOCK, {signal.SIGALRM}),
                     (signal.SIG_SETMASK, set()),
@@ -577,6 +678,7 @@ class SourceOwnershipTests(unittest.TestCase):
         self.assertEqual(
             mask_calls,
             [
+                (signal.SIG_BLOCK, set()),
                 (signal.SIG_BLOCK, {signal.SIGALRM}),
                 (signal.SIG_SETMASK, set()),
                 (signal.SIG_BLOCK, {signal.SIGALRM}),
@@ -607,7 +709,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 alarm_blocked = signal.SIGALRM in mask
             else:
                 self.fail("unexpected signal-mask operation")
-            if mask_calls == 3:
+            if mask_calls == 4:
                 raise CaptureError("ingestion deadline exceeded")
             return previous
 

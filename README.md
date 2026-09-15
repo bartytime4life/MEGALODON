@@ -698,6 +698,8 @@ timer and handler are process-wide while signal masks are thread-local; both are
 checked again inside the signal-protected setup boundary before handler or timer
 installation. A pending alarm is checked again after arming and delivered under
 the deadline handler as `CAPTURE_ERROR` if the new deadline already expired.
+An interruption while entering the setup mask restores the observed pre-call
+mask; an interrupted timer-arm call is conservatively cancelled during teardown.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
