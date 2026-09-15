@@ -423,21 +423,46 @@ def _scoped_run_deadline(max_seconds: int | None):
     finally:
         try:
             if handler_installed:
+                cleanup_mask = None
+                cleanup_mask_error = None
+                if mask_restored:
+                    try:
+                        cleanup_mask = signal.pthread_sigmask(
+                            signal.SIG_BLOCK, {alarm_signal}
+                        )
+                    except (OSError, ValueError):
+                        cleanup_mask_error = ValueError(
+                            "max-seconds could not protect POSIX run deadline cleanup"
+                        )
+                timer_inactive = not timer_started
+                cancellation_error = None
                 try:
                     if timer_started:
                         signal.setitimer(timer_kind, 0.0)
-                except BaseException:
+                        timer_inactive = True
+                except BaseException as exc:
+                    cancellation_error = exc
                     try:
                         timer_inactive = (
                             signal.getitimer(timer_kind) == (0.0, 0.0)
                         )
                     except (OSError, ValueError):
                         timer_inactive = False
-                    if timer_inactive:
+                try:
+                    if cleanup_mask is not None:
+                        # Keep the deadline handler installed while unblocking so
+                        # a just-pending MEGALODON alarm cannot reach the prior
+                        # handler. Python dispatches it here as CaptureError.
+                        signal.pthread_sigmask(signal.SIG_SETMASK, cleanup_mask)
+                finally:
+                    if timer_inactive and (
+                        not mask_restored or cleanup_mask is not None
+                    ):
                         signal.signal(alarm_signal, previous_handler)
-                    raise
-                else:
-                    signal.signal(alarm_signal, previous_handler)
+                if cancellation_error is not None:
+                    raise cancellation_error
+                if cleanup_mask_error is not None:
+                    raise cleanup_mask_error
         finally:
             if not mask_restored:
                 signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)

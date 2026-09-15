@@ -700,9 +700,11 @@ installation.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
-timer swap. Deadline cancellation restores the prior handler after cancellation
-succeeds or timer inactivity is confirmed; a failed disarm with a still-live or
-uninspectable timer retains the deadline handler. Threaded Scapy capture refuses
+timer swap. Teardown blocks `SIGALRM` before cancellation and keeps the deadline
+handler installed until the original mask is restored, so a just-pending alarm
+cannot reach the prior handler. Cancellation restores that handler only after
+cancellation succeeds or timer inactivity is confirmed; a failed disarm with a
+still-live or uninspectable timer retains the deadline handler. Threaded Scapy capture refuses
 the option because a worker created after setup cannot inherit the proven
 single-thread boundary. The option does not
 claim a Windows deadline, interrupt kernel-level
@@ -755,7 +757,7 @@ For optional Linux live capture (`eth0` is an example, not an assumed interface)
 
 ```bash
 python -m pip install -e ".[capture]"
-python -m megalodon run --source scapy --interface eth0 --max-events 100000 --max-seconds 3600
+python -m megalodon run --source scapy --interface eth0 --max-events 100000
 ```
 
 Live capture requires the normal Linux permissions for the selected interface.

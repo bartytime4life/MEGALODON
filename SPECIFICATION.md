@@ -201,7 +201,10 @@ the protected setup boundary before handler or timer installation. The CLI also
 refuses before those operations when an interval timer is already active. It
 checks the timer returned by the arming call, restores a concurrently armed
 timer while `SIGALRM` is blocked across the handler/timer swap, and restores the
-prior handler after timer inactivity is confirmed. The
+prior handler after timer inactivity is confirmed. Teardown blocks `SIGALRM`
+before cancellation and keeps the deadline handler installed until the original
+mask is restored, preventing a just-pending deadline from reaching the prior
+handler. The
 deadline does not establish portable Windows interruption, interrupt
 kernel-level uninterruptible sleep, or bound CLI setup/finalization outside the
 source-ownership region. Handler restoration after a cancellation error requires
