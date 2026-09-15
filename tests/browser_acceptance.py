@@ -307,10 +307,13 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         passed("failed peer retains refresh guard", await page.evaluate("state.refreshing") and
                await page.locator("#refresh-button").is_disabled())
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip stale")
+        expected_counts = dict(before)
+        expected_counts["summary"] += 1
+        expected_counts["events"] += 1
         passed("failed refresh preserves rows time and one request pair",
                await page.locator("#events").inner_text() == saved_rows and
                await page.locator("#updated").get_attribute("datetime") == saved_time and
-               counts == {key: value + 1 for key, value in before.items()})
+               counts == expected_counts)
         await page.unroute("**/api/summary", fail)
         await page.unroute("**/api/events?*", slow)
         await page.locator("#refresh-button").click()
