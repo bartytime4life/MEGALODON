@@ -33,6 +33,15 @@ existing dashboard separately reuses the IANA loader for bounded, manual
 Reference Library lookups. This is a read-only context connection, not a
 telemetry join, a corpus-execution endpoint, or evidence of an observed service.
 
+The separate [Alert Workload Lab](docs/alert-workload-lab.md) computes exact
+binary-classification expectations from explicit hypothetical assumptions.
+It does not load observed data or reference assets, invoke a model, or measure
+detector accuracy. Unit/denominator labels, `hypothetical-only` / `uncalibrated`
+quality, and an explicit undefined PPV when no alerts are expected prevent the
+calculator from silently presenting its assumptions as observed evidence.
+An external consumer can still misrepresent a copied result; no mathematical
+ratio establishes an incident verdict or authority to act.
+
 ## Findings and corrections
 
 | Severity | Original design issue | Consequence | MVP correction |

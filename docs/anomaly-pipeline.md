@@ -1,0 +1,85 @@
+# AI-assisted anomaly pipeline
+
+Status: offline candidate evidence implemented on this branch; operational
+integration and efficacy remain unproved. Initial base:
+`a9ab662a58adabe74c398ed08b37d91a2e34df4f` (2026-09-15 UTC).
+
+MEGALODON should generate reproducible metadata candidates first, then let a
+pinned local Qwen explain that evidence for an analyst. Qwen must never create
+a detection, suppress the deterministic evidence, or authorize a response.
+
+## Research and repository reconciliation
+
+[Hugging Face's July disclosure](https://huggingface.co/blog/security-incident-july-2026)
+reports that LLM triage correlated security telemetry to surface the intrusion.
+It also describes locally hosted open-weight models for subsequent analysis.
+This supports the design pattern; it is not a released MEGALODON-compatible
+detector, a benchmark for Qwen, or evidence of efficacy on this host. The
+[technical timeline](https://huggingface.co/blog/agent-intrusion-technical-timeline)
+motivates isolation between imported data, model interpretation and tools.
+No exploit payload or credential from that account is imported here.
+
+The supplied Advancement Blueprint and Local Command Center Integration
+Blueprint favor bounded evidence, separate read models and explicit integration
+gates. Their September 9 repository pins are historical. The supplied Repository
+Research Analysis Framework explicitly had no repository; its checklist is
+methodology, not evidence about current MEGALODON. Current code already has
+offline TShark/Zeek baselines, source-qualified comparison, the v1 Airlock and
+literal-loopback Qwen transport. Open PR #176 separately owns the immutable
+dashboard receipt display; do not duplicate it.
+
+The first scorer uses exact counts and fractions with explicit thresholds.
+Training a new model is deferred until representative, labeled, temporally
+separated local data exists. [Scikit-learn's distinction between novelty and
+outlier detection](https://scikit-learn.org/stable/modules/outlier_detection.html)
+explains why a contaminated reference cannot simply be labeled normal. No
+scikit-learn or model-training dependency is added.
+
+## Candidate evidence
+
+`megalodon.offline.anomaly.build_anomaly_dossier` takes a closed
+`offline-anomaly-input-v1` object with `reference`, `current`, and `as_of`.
+Each side contains an existing `offline-baseline-v1` plus a declared `window`:
+`source_id` (`source-0001` style pseudonym), canonical UTC `started_at` and
+`finished_at`, and `completeness` (`complete`, `incomplete`, `unknown`).
+
+Both adapters, record kinds and declared source IDs must match. Never combine
+packet and flow counts, infer cross-source identity, or silently deduplicate
+different sensors. Baseline membership, source identity and loss-free collection
+are not attested by these declarations; operators must verify them separately.
+Windows are nonoverlapping, equal-duration and at most 24 hours. The reference
+gap is at most seven days and current completion is within one hour of the
+explicit `as_of`. Baseline relative bins must fit within their window. At least
+20 accepted records per side are required. These are versioned eligibility
+rules, not a claim of statistical sufficiency or an operational latency target.
+
+Candidates include a destination port absent in the reference with at least
+five current records, changes of at least 20 percentage points in destination
+port or protocol shares, and changes in the large-record share. Comparisons
+use integer cross multiplication. Candidate rows retain counts and denominators;
+they have no probability, confidence, threat severity, or attribution field.
+Eight candidates is a hard limit: overflow abstains without returning a partial
+list. Cold start, incompleteness, stale windows and incompatible sources also
+abstain. No candidates never means safe. The dossier ID hashes only validated
+aggregate metadata; it is neither a packet-payload hash nor source attestation.
+
+The pure API performs no I/O. It does not change the existing live detectors,
+SQLite schema, actions, capture loop, dashboard or provider behavior.
+
+## Dependency order and acceptance
+
+| Slice | Deliverable | Required evidence |
+| --- | --- | --- |
+| 1 | Bounded source-qualified anomaly dossier | Exact threshold, cold-start, stale/incomplete, contradictory, overflow and no-side-effect tests |
+| 2 | Separately versioned Qwen anomaly explanation admission | Canonical evidence-only prompt; independent registry pin; old v1 rejects new shape; shared deadline/concurrency; malformed and injection-shaped input denied |
+| 3 | Explicit one-shot offline analyst command | Selected files only; non-root/capability-free gate; bounded read; evidence emitted with AI disabled, denied or failed; no retry or persistence |
+| 4, proposed | Integrate receipts with #176's read-only display | Current-main reconciliation; new policy/receipt validation; text sinks; missing/stale states; browser acceptance; no invocation endpoint |
+| 5, proposed | Temporal evaluation and optional repeated operation | Operator-selected representative data; immutable reference; time-separated holdout; false alerts per source-hour, precision/recall, abstention rate, coverage, p95 latency and peak memory; reviewed budget/queue/drop policy |
+
+TShark and Zeek contribute only their existing admitted baseline formats.
+Suricata, Wazuh, osquery, other catalog tools and external feeds need separate
+adapters and source contracts; a catalog connection is not an active input.
+There is no scheduler, monitor, model installation, automatic model update,
+cloud inference, external telemetry upload, firewall action, or deployment in
+these slices. Local provider readiness and representative detection accuracy
+must be measured on the operator's system before operational acceptance.
