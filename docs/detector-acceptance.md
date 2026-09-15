@@ -1,0 +1,233 @@
+# Fixed-detector synthetic acceptance receipt
+
+Status: adopted bounded synthetic acceptance receipt. Its delivery gate,
+[issue #26](https://github.com/bartytime4life/MEGALODON/issues/26), is closed.
+That closure records the specified detector and service-to-ledger evidence; it
+does not claim malware accuracy, prevention effectiveness, representative
+false-positive rates, independent approval, or production acceptance. No
+detector, threshold, configuration, response policy, or runtime reporting
+feature was introduced by this receipt.
+
+## Detector-only source and fixture identity
+
+Inspection base: `a177c13ade3b4a727a0514afac21575fd0f10e08`.
+The exact tested detector blob is `452906e830c509bc428ea7603308dee4f892a50a`;
+configuration implementation blob `663eb9f5d25ab71cbae1d492595d6ea32629bc7b`;
+shipped TOML blob `4ab57c7ea25fe57d3ac89a9259a074460df1e5e4`.
+The test reads the shipped TOML and checks parity with the evaluated defaults,
+including disabled blocking and sample input. Future receipts must re-pin code,
+configuration and the test file, not carry these hashes forward as current.
+
+Fixture version: `detector-acceptance-v1`, defined by the named `BOUNDARIES`
+cases in [tests/test_detector_acceptance.py](../tests/test_detector_acceptance.py).
+Each case starts with a new detector and one documentation-only source address.
+Events are constructed as typed metadata, never captured packets or payloads.
+SYN and port cases use millisecond-spaced observations; DNS cases use one event.
+No real addresses, query names, packet bytes, payload hashes or datasets are
+required. Changed-file hashes and execution environments belong in the PR receipt.
+
+## Boundary receipt
+
+The six below/at/above SYN and port cases plus three DNS cases matched the
+following independent expectations on the inspected implementation:
+
+| Fixture IDs | Input quantity below / at / above | Input events | Emitted detections below / at / above |
+| --- | --- | --- | --- |
+| syn-below / syn-at / syn-above | 99 / 100 / 101 SYN-without-ACK events | 99 / 100 / 101 | 0 / 1 / 1 |
+| ports-below / ports-at / ports-above | 19 / 20 / 21 distinct TCP destination ports | 19 / 20 / 21 | 0 / 1 / 1 |
+| dns-below / dns-at / dns-above | DNS query metadata lengths 49 / 50 / 51 | 1 / 1 / 1 | 0 / 1 / 1 |
+
+These are nine independent synthetic source/rule scenarios, 363 input metadata
+events and six emitted detections. Input events, scenario counts and emitted
+alerts are different denominators. They are not unique packets, network flows,
+external sensor alerts or an estimate of real-world malicious/benign prevalence.
+Above-threshold cases still emit once because the 30-second cooldown applies.
+Numeric evidence, rule IDs and ALERT recommendations are asserted as well.
+
+Legitimate load testing can match the SYN cases; legitimate multi-port
+administration can match the port cases; legitimate long-query metadata can
+match the DNS cases. These are benign-lookalike interpretations of synthetic
+inputs, not independently labeled representative traffic. A rule firing cannot
+distinguish those explanations from malicious activity. No confusion matrix or
+production false-positive percentage is claimed.
+
+## Further confirmed boundaries and limits
+
+The 39 tests cover inclusive time-window cutoffs, exact cooldown reopening,
+explicit-offset normalization, multi-source independence, expired-window reset,
+repeated events versus distinct ports, protocol/flag eligibility, LRU cooldown
+reset, finite event caps and shipped-configuration parity. The evaluation
+patches process-launch and socket entry points to fail on invocation; it calls
+the detector, not a firewall or service action adapter. No evaluation outcome
+is execution authority. Existing service action-state tests remain separate.
+
+Repeated SYN metadata is counted again: this detector does not deduplicate
+packets. Evicting a source discards its cooldown history. A configured event
+cap below the threshold can prevent that threshold ever being reached. These
+are interpretation limits, not evidence that an attack stopped or was blocked.
+
+The core now requires nondecreasing timestamps per normalized source and rejects
+records more than 60 seconds ahead of the detector's aware UTC clock. Rejection
+happens before service persistence and detector mutation; equal timestamps remain
+valid. This is a fail-closed online/core policy, not a claim that arbitrary late
+data has been reordered or that offline source chronology is trustworthy. Finite
+synthetic service-to-ledger coverage is recorded below; representative
+privacy-reviewed evaluation remains separate.
+
+## Reproduction and discriminating controls
+
+From the repository root in the supported test environment:
+
+```bash
+python -m compileall -q megalodon tests
+python -m pytest tests/test_detector.py tests/test_detector_acceptance.py
+```
+
+Before adding the configuration-parity case, all 38 detector cases passed.
+Five isolated local changes to the source were then detected: making the SYN,
+port or DNS threshold exclusive caused 10, 9 or 6 failures respectively;
+excluding the exact time-window cutoff caused 2 failures; keeping the exact
+cooldown boundary closed caused 3 failures. Each mutation was restored, never
+committed. The final 39-case suite passes against the original detector.
+These are negative-control experiments, not failures in the delivered source.
+
+Local reproduction used identity-verified partial source files and pytest 9,
+outside the repository's unchanged pytest constraint. Full supported-environment
+CI, exact-head independent review and representative operational interpretation
+must be recorded separately. Preserve the required Linux test gate. No capture,
+analyzer installation, scheduler, telemetry sharing or firewall apply is added.
+
+## Service-to-ledger receipt: service-acceptance-v1
+
+Inspection base: `16dc49b82aff43a29480f858b80ba4b703128f21`, after #34/#35.
+The detector-only inspection and execution receipts above retain their original
+scope. This extension adds [tests/test_service_acceptance.py](../tests/test_service_acceptance.py)
+without changing runtime code, thresholds, configuration, dependencies or CI.
+Tested service blob: `4a9665117c0f3ed8b388e1e9eac74bce5e637ced`;
+firewall blob: `8f40f8783af9b937c8ffbf5c495a5c47b2dcd8c3`;
+storage blob: `d15a7122a6877fa6ada720e9f006a1fb0a81a635`.
+The PR receipt separately pins the delivered test/documentation head and checks.
+
+The 48 policy scenarios cross three fixed rules, IPv4/IPv6 and eight named
+policy configurations. Each starts a fresh service and temporary SQLite store.
+Real typed events, detector, service, target validation, planner and audit writes
+are used. A spy observes planner calls without replacing its return values.
+After closing the store, a separate read-only connection checks exact detection
+and action rows, numeric evidence, event linkage, reasons and expiry.
+Every scenario adds one repeated event inside cooldown: it is stored as an
+input event, but adds no second detection, plan or action row.
+
+| Named policy fixtures | Scenarios | Expected and observed action status | Real planner calls per scenario |
+| --- | --- | --- | --- |
+| observe / disabled-auto / enabled-no-auto | 18 | not_attempted | 0 |
+| plan / direct-live-flags | 12 | planned | 1 |
+| allowlisted / allowlisted-non-global | 12 | suppressed | 0 |
+| non-global | 6 | failed | 1 (refused validation) |
+
+Those scenarios contain 1,984 input metadata events, 48 detections and 48
+persisted action rows. The fixture counts are not packet, flow or external-alert
+counts, and are not a production accuracy measure. `failed` here means a refused
+plan for a non-global source, not an attempted live block. Allowlisting takes
+precedence even for non-global sources. `direct-live-flags` bypasses TOML via
+programmatic settings only to prove the service still cannot apply; it does not
+make that configuration supported or recommend enabling it.
+
+Three further below-threshold cases produce no detection, action or plan. Three
+minimum-severity cases retain all detections but plan only the CRITICAL DNS
+case under the default minimum. Four synthetic SQLite stage failures propagate
+without a normal service return or successful action receipt. Every failing
+event/detection/action/link insertion leaves surviving row counts (0,0,0) and
+zero run counters. After the fault is removed, the identical event detects again,
+proving the failed bundle consumed neither cooldown nor source high-water state.
+These 58 cases exercise per-event service atomicity; they do not make the whole
+run one transaction or establish exactly-once replay.
+A separate refusal-logging case proves operator-visible error output is emitted
+only after the corresponding event, detection and action evidence commits.
+Six Counter-journal cases inject planner or SQLite failure after new-source,
+duplicate-expiry, and capacity mutations, then require exact deque/Counter
+restoration and a successful identical retry. Reentrant processing is refused
+while an outer preparation is unresolved, and a two-thread case proves the
+service lock carries one preparation through rollback before the next begins.
+An actual handled SIGTERM raised after `Detector.prepare()` returns proves the
+detector-owned pending handle closes the service handoff gap before persistence.
+They do not prove disk-full, native ACL, arbitrary interruption timing, or
+power-loss recovery; see
+[the storage failure policy](storage-failure-policy.md).
+
+Event time and audit time are distinct fixed UTC clocks. Every plan must contain
+the exact IPv4/IPv6 set argv, a 900-second timeout and matching finite expiry in
+both the action row and details JSON. No configuration values are changed.
+Global address literals are generated synthetic metadata, not observed hosts,
+contacted endpoints or threat claims. No query names, captures, payloads,
+payload-derived hashes or real telemetry are used. Test guards fail on block,
+install, apply-requirement, executor, executable probe, process or socket calls.
+This guards the exercised Python entry points; it is not an OS containment proof.
+
+From the repository root in the supported test environment:
+
+```bash
+python -m compileall -q megalodon tests
+python -m pytest tests/test_service.py tests/test_service_acceptance.py
+```
+
+The referenced integrated-tree focused execution passed 72 cases (68 acceptance
+cases and four service unit cases) with Python 3.12.14, SQLite 3.53.1, and
+then-supported pytest 8.4.2. It is historical test evidence, not a claim about
+the current dependency pin. Five earlier isolated negative controls were detected: invoking
+block instead of plan caused 20
+failures; skipping allowlist suppression 12; ignoring enabled policy 6; recording
+applied for a plan 13; omitting the detection audit 53. The block-entry guard
+stopped the first mutation before any operation. All experiments used disposable
+copies; no weakened source was committed. No new runtime defect is claimed.
+Those earlier mutation experiments used identity-checked partial sources,
+Python 3.13.5, SQLite 3.46.1 and pytest 9.0.2 with plugin autoload disabled;
+pytest 9 was outside the constraint at that historical checkpoint. Full hosted results
+belong in the exact-head PR receipt, not in an inferred pass here.
+
+Remaining gates: designated human review, GitHub approval/control handling under
+#3, reordered-time semantics and representative provenance/privacy-reviewed
+interpretation. Closing #26 does not authorize apply, scheduling, external data
+sharing, host changes, or deployment, and it does not turn the fixture counts
+into an effectiveness measurement.
+
+## Port-window resource slice
+
+The issue #68 detector slice retains the bounded chronological port deque and
+adds a bounded frequency index for each tracked source. Insertion, time expiry,
+per-source capacity eviction, and least-recently-used source eviction update both
+structures together. The distinct-port decision reads the index cardinality;
+it no longer rebuilds a set by traversing every retained port event for every
+eligible TCP record. Duplicate ports remain counted until each corresponding
+event expires or is evicted.
+
+Regression controls replace the deque with a variant that fails if Python asks
+to iterate it, exercise duplicate expiry across the inclusive window boundary,
+and assert exact queue/index agreement after capacity and source eviction. The
+integrated atomic-ingestion tests additionally inject interruption at deque
+append/removal bookkeeping and Counter increment/decrement boundaries, restore
+duplicate/time/cap mutations after planner or storage failure, and cover failed
+LRU changes. The existing below/at/above, cooldown, timestamp, multi-source, and
+configuration acceptance cases remain unchanged. This is a detector hot-path
+improvement, not a throughput service-level objective and not closure of #68's
+capture, storage, retention, notifier, or sustained-overload work.
+
+One local, single-process diagnostic on 2026-09-10 used Python 3.12.14 on
+Linux x86_64. It preconstructed fixed-time typed TCP metadata, disabled rule
+emission by setting the threshold above the workload, retained every event, and
+reported the median of three detector-only runs. No sockets, files, database,
+capture, action adapter, or payloads were involved.
+
+| Retained events | Baseline `a517a4b` | Counter-only `09c7fca` | Integrated journal | Baseline / integrated |
+| ---: | ---: | ---: | ---: | ---: |
+| 4,096 | 0.451 s | 0.0153 s | 0.0274 s | 16x |
+| 8,192 | 1.671 s | 0.0318 s | 0.0697 s | 24x |
+| 16,384 | 5.605 s | 0.0667 s | 0.1152 s | 49x |
+
+The baseline was `a517a4bbb838263d7b8e882e44b67450fdabfa9f`; the
+Counter-only comparison was `09c7fcad682b9b1ec22771ed095f429ada548f83`;
+the third column measures this integrated Counter-plus-journal implementation.
+Earlier 23x/57x/93x observations measured the pre-journal Counter slice and are
+not evidence for this tree. These timings are comparative diagnostics from one
+shared host, not portable capacity claims. Exact results depend on interpreter,
+hardware, load, configuration, protocol mix, and other service work. The source
+and acceptance tests, rather than those timings, define maintained behavior.

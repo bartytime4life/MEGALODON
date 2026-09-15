@@ -1,0 +1,25 @@
+{
+  "schema": "activatedDefinition",
+  "value": {
+    "id": "automation:health-summary",
+    "name": "Hourly local health summary",
+    "prompt": "Summarize bounded local metadata counts and state limitations.",
+    "rrule": "FREQ=HOURLY;INTERVAL=1",
+    "dtstart": "2026-09-07T16:00:00Z",
+    "schedule_timezone": "UTC",
+    "dst_policy": "reject",
+    "model_id": "local:qwen-approved-v1",
+    "folder_id": "reports:local-private",
+    "status": "active",
+    "revision": 1,
+    "policy": {
+      "timeout_seconds": 60,
+      "max_output_bytes": 65536,
+      "retry_max_attempts": 1,
+      "concurrency_policy": "skip_if_running",
+      "capabilities": ["observe_metadata", "write_local_report"],
+      "network_access": false,
+      "firewall_access": false
+    }
+  }
+}

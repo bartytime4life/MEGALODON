@@ -1,0 +1,11 @@
+{"description":"Siemens Licensing Server","modification_date":null,"port_end":29000,"port_start":29000,"record_kind":"named","registration_date":"2020-06-08","service_name":"saltd-licensing","source_row":12951,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":29000,"port_start":29000,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12952,"transport":"udp"}
+{"description":"SGsAP in 3GPP","modification_date":null,"port_end":29118,"port_start":29118,"record_kind":"named","registration_date":"2009-06-11","service_name":"sgsap","source_row":12956,"transport":"sctp"}
+{"description":"Reserved","modification_date":null,"port_end":29118,"port_start":29118,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12954,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":29118,"port_start":29118,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12955,"transport":"udp"}
+{"description":"ObTools Message Protocol","modification_date":null,"port_end":29167,"port_start":29167,"record_kind":"named","registration_date":"2006-02","service_name":"otmp","source_row":12958,"transport":"tcp"}
+{"description":"ObTools Message Protocol","modification_date":null,"port_end":29167,"port_start":29167,"record_kind":"named","registration_date":"2006-02","service_name":"otmp","source_row":12959,"transport":"udp"}
+{"description":"SBcAP in 3GPP","modification_date":null,"port_end":29168,"port_start":29168,"record_kind":"named","registration_date":"2009-06-11","service_name":"sbcap","source_row":12962,"transport":"sctp"}
+{"description":"Reserved","modification_date":null,"port_end":29168,"port_start":29168,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12960,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":29168,"port_start":29168,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12961,"transport":"udp"}
+{"description":"HNBAP and RUA Common Association","modification_date":"2026-01-23","port_end":29169,"port_start":29169,"record_kind":"named","registration_date":"2009-09-08","service_name":"iuhsctpassoc","source_row":12963,"transport":"sctp"}

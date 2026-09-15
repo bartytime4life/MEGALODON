@@ -1,0 +1,195 @@
+[
+  {
+    "id": "tcp-ipv4-allowed",
+    "input": {
+      "schema_version": "suricata-eve-alert-input-v1",
+      "source": {
+        "engine": "suricata",
+        "adapter_profile": "suricata-eve-alert-v1",
+        "declared_version": "8.0.1",
+        "version_basis": "operator_declared",
+        "sensor_id": "fixture-sensor",
+        "run_id": "fixture-run-a",
+        "ruleset_id": "synthetic-rules-v1",
+        "ruleset_basis": "operator_declared"
+      },
+      "source_record_index": 1,
+      "event": {
+        "timestamp": "2026-09-07T15:00:00.123456+0000",
+        "event_type": "alert",
+        "src_ip": "192.0.2.10",
+        "src_port": 45000,
+        "dest_ip": "198.51.100.20",
+        "dest_port": 443,
+        "proto": "TCP",
+        "alert": {
+          "gid": 1,
+          "signature_id": 9000001,
+          "rev": 1,
+          "severity": 2,
+          "action": "allowed",
+          "signature": "SYNTHETIC contract fixture, not a malware finding",
+          "category": "Synthetic fixture"
+        }
+      }
+    },
+    "normalized": {
+      "schema_version": "external-alert-v1",
+      "source": {
+        "engine": "suricata",
+        "adapter_profile": "suricata-eve-alert-v1",
+        "declared_version": "8.0.1",
+        "version_basis": "operator_declared",
+        "sensor_id": "fixture-sensor",
+        "run_id": "fixture-run-a",
+        "ruleset_id": "synthetic-rules-v1",
+        "ruleset_basis": "operator_declared"
+      },
+      "source_record_index": 1,
+      "observed_at": "2026-09-07T15:00:00.123456Z",
+      "src_ip": "192.0.2.10",
+      "src_port": 45000,
+      "dst_ip": "198.51.100.20",
+      "dst_port": 443,
+      "protocol": "TCP",
+      "rule": {
+        "gid": 1,
+        "signature_id": 9000001,
+        "rev": 1,
+        "severity": 2
+      },
+      "producer_reported_action": "allowed",
+      "evidence_kind": "signature_match",
+      "count_unit": "alert",
+      "action_status": "not_attempted"
+    }
+  },
+  {
+    "id": "udp-ipv6-blocked-still-not-attempted",
+    "input": {
+      "schema_version": "suricata-eve-alert-input-v1",
+      "source": {
+        "engine": "suricata",
+        "adapter_profile": "suricata-eve-alert-v1",
+        "declared_version": "8.0.1",
+        "version_basis": "operator_declared",
+        "sensor_id": "fixture-sensor",
+        "run_id": "fixture-run-a",
+        "ruleset_id": "synthetic-rules-v1",
+        "ruleset_basis": "operator_declared"
+      },
+      "source_record_index": 2,
+      "event": {
+        "timestamp": "2026-09-07T00:15:00-0500",
+        "event_type": "alert",
+        "src_ip": "2001:0DB8:0:0:0:0:0:1",
+        "src_port": 0,
+        "dest_ip": "2001:db8::2",
+        "dest_port": 65535,
+        "proto": "UDP",
+        "alert": {
+          "gid": 1,
+          "signature_id": 9000001,
+          "rev": 1,
+          "severity": 1,
+          "action": "blocked"
+        }
+      }
+    },
+    "normalized": {
+      "schema_version": "external-alert-v1",
+      "source": {
+        "engine": "suricata",
+        "adapter_profile": "suricata-eve-alert-v1",
+        "declared_version": "8.0.1",
+        "version_basis": "operator_declared",
+        "sensor_id": "fixture-sensor",
+        "run_id": "fixture-run-a",
+        "ruleset_id": "synthetic-rules-v1",
+        "ruleset_basis": "operator_declared"
+      },
+      "source_record_index": 2,
+      "observed_at": "2026-09-07T05:15:00.000000Z",
+      "src_ip": "2001:db8::1",
+      "src_port": 0,
+      "dst_ip": "2001:db8::2",
+      "dst_port": 65535,
+      "protocol": "UDP",
+      "rule": {
+        "gid": 1,
+        "signature_id": 9000001,
+        "rev": 1,
+        "severity": 1
+      },
+      "producer_reported_action": "blocked",
+      "evidence_kind": "signature_match",
+      "count_unit": "alert",
+      "action_status": "not_attempted"
+    }
+  },
+  {
+    "id": "observation-only-loopback-utc-day-rollover",
+    "input": {
+      "schema_version": "suricata-eve-alert-input-v1",
+      "source": {
+        "engine": "suricata",
+        "adapter_profile": "suricata-eve-alert-v1",
+        "declared_version": "8.0.1",
+        "version_basis": "operator_declared",
+        "sensor_id": "fixture-sensor",
+        "run_id": "fixture-run-a",
+        "ruleset_id": "synthetic-rules-v1",
+        "ruleset_basis": "operator_declared"
+      },
+      "source_record_index": 10000,
+      "event": {
+        "timestamp": "2026-09-07T00:05:00.1+14:00",
+        "event_type": "alert",
+        "src_ip": "127.0.0.1",
+        "src_port": 45000,
+        "dest_ip": "127.0.0.2",
+        "dest_port": 443,
+        "proto": "TCP",
+        "alert": {
+          "gid": 4294967295,
+          "signature_id": 4294967295,
+          "rev": 4294967295,
+          "severity": 255,
+          "action": "allowed",
+          "signature": "SYNTHETIC contract fixture, not a malware finding",
+          "category": "Synthetic fixture"
+        }
+      }
+    },
+    "normalized": {
+      "schema_version": "external-alert-v1",
+      "source": {
+        "engine": "suricata",
+        "adapter_profile": "suricata-eve-alert-v1",
+        "declared_version": "8.0.1",
+        "version_basis": "operator_declared",
+        "sensor_id": "fixture-sensor",
+        "run_id": "fixture-run-a",
+        "ruleset_id": "synthetic-rules-v1",
+        "ruleset_basis": "operator_declared"
+      },
+      "source_record_index": 10000,
+      "observed_at": "2026-09-06T10:05:00.100000Z",
+      "src_ip": "127.0.0.1",
+      "src_port": 45000,
+      "dst_ip": "127.0.0.2",
+      "dst_port": 443,
+      "protocol": "TCP",
+      "rule": {
+        "gid": 4294967295,
+        "signature_id": 4294967295,
+        "rev": 4294967295,
+        "severity": 255
+      },
+      "producer_reported_action": "allowed",
+      "evidence_kind": "signature_match",
+      "count_unit": "alert",
+      "action_status": "not_attempted"
+    }
+  }
+]

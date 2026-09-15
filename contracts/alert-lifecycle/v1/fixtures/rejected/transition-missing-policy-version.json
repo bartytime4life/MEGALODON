@@ -1,0 +1,15 @@
+{
+  "schema": "transition",
+  "value": {
+    "id": "transition-002",
+    "alert_id": "alert-001",
+    "sequence": 2,
+    "expected_revision": 1,
+    "from_state": "open",
+    "to_state": "acknowledged",
+    "actor_id": "operator-local-001",
+    "reason_code": "operator_acknowledged",
+    "idempotency_key": "alert-001.transition.2",
+    "occurred_at": "2026-09-12T18:35:02Z"
+  }
+}

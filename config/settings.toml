@@ -1,0 +1,50 @@
+[app]
+name = "MEGALODON"
+db_path = "data/megalodon.db"
+log_level = "INFO"
+
+[storage]
+# Stop event intake before the SQLite database and WAL/SHM sidecars cross
+# this private local high-water budget; this does not purge evidence.
+max_database_bytes = 268435456
+
+[capture]
+source = "sample"
+interface = ""
+
+[detection]
+syn_flood_window_seconds = 10
+syn_flood_threshold = 100
+port_scan_window_seconds = 5
+port_scan_distinct_ports = 20
+dns_query_length = 50
+alert_cooldown_seconds = 30
+max_tracked_sources = 4096
+max_events_per_source_window = 4096
+
+[blocking]
+# Keep this false; this evaluation-release candidate produces firewall plans only.
+enabled = false
+# Detection-driven policy is plan-only. Keep dry_run true when auto_block is
+# enabled; every live-apply route is explicitly refused.
+dry_run = true
+auto_block = false
+auto_block_min_severity = "CRITICAL"
+timeout_seconds = 900
+public_only = true
+allowlist = [
+  "127.0.0.0/8",
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "::1/128",
+  "fc00::/7",
+]
+
+[dashboard]
+enabled = true
+host = "127.0.0.1"
+port = 8787
+# UI-only polling controls. They do not enable writes or network egress.
+refresh_seconds = 5
+event_limit = 50

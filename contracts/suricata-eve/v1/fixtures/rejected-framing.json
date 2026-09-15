@@ -1,0 +1,15 @@
+[
+  {"id": "duplicate-top-level", "text": "{\"x\":1,\"x\":2}", "code": "DUPLICATE_KEY"},
+  {"id": "duplicate-nested", "text": "{\"event\":{\"alert\":{\"rev\":1,\"rev\":2}}}", "code": "DUPLICATE_KEY"},
+  {"id": "float-token", "text": "{\"port\":1.0}", "code": "JSON_NUMBER"},
+  {"id": "exponent-token", "text": "{\"port\":1e0}", "code": "JSON_NUMBER"},
+  {"id": "nan-token", "text": "{\"x\":NaN}", "code": "JSON_NUMBER"},
+  {"id": "infinity-token", "text": "{\"x\":Infinity}", "code": "JSON_NUMBER"},
+  {"id": "integer-token-limit", "text": "{\"x\":10000000000}", "code": "JSON_NUMBER"},
+  {"id": "depth-limit", "text": "[[[[[0]]]]]", "code": "DEPTH"},
+  {"id": "embedded-newline", "text": "{\"x\":\n1}", "code": "FRAMING"},
+  {"id": "two-json-values", "text": "{}{}", "code": "JSON"},
+  {"id": "truncated-json", "text": "{\"x\":", "code": "JSON"},
+  {"id": "utf8-bom", "text": "\ufeff{}", "code": "JSON"},
+  {"id": "empty-record", "text": "", "code": "JSON"}
+]

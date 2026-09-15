@@ -1,0 +1,22 @@
+# This file documents the fixed, typed MVP rules. The implementation does not
+# evaluate arbitrary expressions from configuration.
+
+[syn_flood]
+description = "A source sends too many TCP SYN packets in a short window."
+severity = "HIGH"
+window_seconds = 10
+threshold = 100
+action = "ALERT"
+
+[port_scan]
+description = "A source targets many distinct destination ports in a short window."
+severity = "MEDIUM"
+window_seconds = 5
+distinct_ports = 20
+action = "ALERT"
+
+[dns_tunneling]
+description = "A DNS query name exceeds the configured length threshold."
+severity = "CRITICAL"
+query_length = 50
+action = "ALERT"

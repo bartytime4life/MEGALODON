@@ -1,0 +1,1 @@
+{"schema":"draftCreate","value":{"name":"Ambiguous bounded schedule","prompt":"Summarize bounded local metadata counts.","rrule":"FREQ=HOURLY;COUNT=24;UNTIL=20260908T000000Z"}}

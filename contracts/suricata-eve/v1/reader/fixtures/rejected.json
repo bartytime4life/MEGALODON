@@ -1,0 +1,128 @@
+[
+  {
+    "id": "policy-total-bytes-weakened",
+    "seed": "policy",
+    "path": ["limits", "max_total_bytes"],
+    "operation": "set",
+    "value": 67108865,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "policy-record-quota-weakened",
+    "seed": "policy",
+    "path": ["limits", "max_records"],
+    "operation": "set",
+    "value": 10001,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "policy-claims-atomic-snapshot",
+    "seed": "policy",
+    "path": ["source_file", "atomic_snapshot_guaranteed"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "policy-allows-symlink-component",
+    "seed": "policy",
+    "path": ["source_file", "reject_symlink_components"],
+    "operation": "set",
+    "value": false,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "policy-enables-durable-write",
+    "seed": "policy",
+    "path": ["side_effects", "durable_writes"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "policy-retains-original-json",
+    "seed": "policy",
+    "path": ["stream", "retain_original_json"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-zero-record-completion",
+    "seed": "two-record-complete",
+    "path": ["record_count"],
+    "operation": "set",
+    "value": 0,
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-failed-completion",
+    "seed": "two-record-complete",
+    "path": ["status"],
+    "operation": "set",
+    "value": "failed",
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-action-upgrade",
+    "seed": "two-record-complete",
+    "path": ["action_status"],
+    "operation": "set",
+    "value": "applied",
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-durable-write-upgrade",
+    "seed": "two-record-complete",
+    "path": ["durable_write_status"],
+    "operation": "set",
+    "value": "complete",
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-replay-not-checked",
+    "seed": "two-record-complete",
+    "path": ["replay_status"],
+    "operation": "set",
+    "value": "not_checked",
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-leaks-diagnostic-context",
+    "seed": "two-record-complete",
+    "path": ["diagnostic"],
+    "operation": "set",
+    "value": "synthetic path or input",
+    "stage": "schema",
+    "code": "SCHEMA"
+  },
+  {
+    "id": "receipt-partial-normalized-count",
+    "seed": "two-record-complete",
+    "path": ["normalized_alert_count"],
+    "operation": "set",
+    "value": 1,
+    "stage": "semantic",
+    "code": "COUNT_MISMATCH"
+  },
+  {
+    "id": "receipt-blocked-count-exceeds-records",
+    "seed": "two-record-complete",
+    "path": ["producer_blocked_count"],
+    "operation": "set",
+    "value": 3,
+    "stage": "semantic",
+    "code": "COUNT_MISMATCH"
+  }
+]

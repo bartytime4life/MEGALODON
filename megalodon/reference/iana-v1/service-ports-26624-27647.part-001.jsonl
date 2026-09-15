@@ -1,0 +1,12 @@
+{"description":"A protocol for managing license services","modification_date":null,"port_end":27010,"port_start":27010,"record_kind":"named","registration_date":"2018-08-22","service_name":"flex-lmadmin","source_row":12903,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":27010,"port_start":27010,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12904,"transport":"udp"}
+{"description":"Cloud hosting environment network","modification_date":null,"port_end":27016,"port_start":27016,"record_kind":"named","registration_date":"2024-09-23","service_name":"chlenix","source_row":12906,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":27016,"port_start":27016,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12907,"transport":"udp"}
+{"description":"Mongo database system","modification_date":null,"port_end":27017,"port_start":27017,"record_kind":"named","registration_date":"2019-02-21","service_name":"mongodb","source_row":12908,"transport":"tcp"}
+{"description":"Reserved","modification_date":null,"port_end":27017,"port_start":27017,"record_kind":"reserved","registration_date":null,"service_name":null,"source_row":12909,"transport":"udp"}
+{"description":"ImagePump","modification_date":null,"port_end":27345,"port_start":27345,"record_kind":"named","registration_date":null,"service_name":"imagepump","source_row":12911,"transport":"tcp"}
+{"description":"ImagePump","modification_date":null,"port_end":27345,"port_start":27345,"record_kind":"named","registration_date":null,"service_name":"imagepump","source_row":12912,"transport":"udp"}
+{"description":"Job controller service","modification_date":null,"port_end":27442,"port_start":27442,"record_kind":"named","registration_date":"2010-10-15","service_name":"jesmsjc","source_row":12914,"transport":"tcp"}
+{"description":"Job controller service","modification_date":null,"port_end":27442,"port_start":27442,"record_kind":"named","registration_date":"2010-10-15","service_name":"jesmsjc","source_row":12915,"transport":"udp"}
+{"description":"Kopek HTTP Head Port","modification_date":null,"port_end":27504,"port_start":27504,"record_kind":"named","registration_date":"2002-07","service_name":"kopek-httphead","source_row":12917,"transport":"tcp"}
+{"description":"Kopek HTTP Head Port","modification_date":null,"port_end":27504,"port_start":27504,"record_kind":"named","registration_date":"2002-07","service_name":"kopek-httphead","source_row":12918,"transport":"udp"}

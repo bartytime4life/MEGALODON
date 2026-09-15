@@ -1,0 +1,71 @@
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+__pypackages__/
+
+# Builds, packaging, and coverage
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Local runtime data and SQLite sidecars/backups
+/data/
+*.db
+*.db-*
+*.db.*
+*.sqlite
+*.sqlite-*
+*.sqlite.*
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.*
+
+# Captures, analyzer logs, and generated report sets
+*.pcap
+*.pcap.*
+*.pcapng
+*.pcapng.*
+*.cap
+*.log
+*.log.*
+eve.json
+/captures/
+/logs/
+/reports/
+/offline-runs/
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+.secrets/
+secrets/
+credentials*.json
+secrets*.json
+.netrc
+.pypirc
+*.token
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
