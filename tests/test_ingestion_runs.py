@@ -489,11 +489,16 @@ def test_cli_records_event_limit_as_incomplete_and_emits_run_scoped_counts(tmp_p
         ).fetchone()[0] == 1
 
 
-def test_cli_records_a_bounded_failure_after_a_valid_jsonl_prefix(tmp_path):
+@pytest.mark.parametrize("invalid_suffix", [
+    "{not-json}",
+    json.dumps(_event().to_dict())[:-1] + ',"src_ip":"203.0.113.9"}',
+    json.dumps(_event().to_dict())[:-1] + ',"payload":"PRIVATE_MARKER"}',
+])
+def test_cli_records_a_bounded_failure_after_a_valid_jsonl_prefix(tmp_path, invalid_suffix):
     config, database = _config(tmp_path)
     source = tmp_path / "events.jsonl"
     source.write_text(
-        json.dumps(_event().to_dict()) + "\n{not-json}\n", encoding="utf-8"
+        json.dumps(_event().to_dict()) + "\n" + invalid_suffix + "\n", encoding="utf-8"
     )
     error = io.StringIO()
     with redirect_stderr(error), pytest.raises(SystemExit) as raised:

@@ -12,7 +12,7 @@ from typing import Iterable, Iterator, TextIO
 
 from .capabilities import runtime_platform
 from .models import PacketEvent
-from .validation import ValidationError
+from .validation import SQLITE_INTEGER_MAX, ValidationError
 
 
 class CaptureError(RuntimeError):
@@ -20,6 +20,10 @@ class CaptureError(RuntimeError):
 
 
 MAX_JSONL_LINE_BYTES = 64 * 1024
+_JSONL_FIELDS = frozenset({
+    "observed_at", "timestamp", "src_ip", "dst_ip", "protocol", "src_port",
+    "dst_port", "tcp_flags", "dns_query_length", "byte_count", "interface", "metadata",
+})
 MAX_SCAPY_QUEUE_EVENTS = 1024
 SCAPY_QUEUE_POLL_SECONDS = 0.25
 SCAPY_STARTUP_TIMEOUT_SECONDS = 5.0
@@ -173,20 +177,78 @@ def _stop_sniffer_bounded(sniffer: object) -> None:
         ) from None
 
 
+def _jsonl_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValidationError("duplicate JSONL field")
+        result[key] = value
+    return result
+
+
+def _jsonl_integer(text: str) -> int:
+    if len(text) > 19 or text.startswith("-"):
+        raise ValidationError("invalid JSONL integer")
+    value = int(text)
+    if value > SQLITE_INTEGER_MAX:
+        raise ValidationError("invalid JSONL integer")
+    return value
+
+
+def _jsonl_reject_number(_: str) -> None:
+    raise ValidationError("invalid JSONL number")
+
+
+def _jsonl_event(text: str) -> PacketEvent:
+    # The root object may contain only flat metadata or a flag array. Scan
+    # before decoding so recursion and discarded extension fields cost no more
+    # than the line bound. Brackets inside escaped strings are not structure.
+    depth, quoted, escaped = 0, False, False
+    for char in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "{[":
+            depth += 1
+            if depth > 2:
+                raise ValidationError("invalid JSONL depth")
+        elif char in "}]":
+            depth -= 1
+    value = json.loads(
+        text, object_pairs_hook=_jsonl_object, parse_int=_jsonl_integer,
+        parse_float=_jsonl_reject_number, parse_constant=_jsonl_reject_number,
+    )
+    if not isinstance(value, dict) or not value.keys() <= _JSONL_FIELDS:
+        raise ValidationError("invalid JSONL fields")
+    if "observed_at" in value and "timestamp" in value:
+        raise ValidationError("ambiguous JSONL timestamp")
+    return PacketEvent.from_mapping(value)
+
+
 def iter_jsonl(
     stream: TextIO,
     *,
     max_line_bytes: int = MAX_JSONL_LINE_BYTES,
 ) -> Iterator[PacketEvent]:
-    if max_line_bytes < 1:
-        raise ValueError("max_line_bytes must be positive")
+    if type(max_line_bytes) is not int or not 1 <= max_line_bytes <= MAX_JSONL_LINE_BYTES:
+        raise ValueError("max_line_bytes must be an integer between 1 and 65536")
     line_number = 0
     while True:
-        line = stream.readline(max_line_bytes + 1)
+        try:
+            line = stream.readline(max_line_bytes + 1)
+            encoded_size = len(line.encode("utf-8"))
+        except UnicodeError:
+            raise CaptureError(f"invalid JSONL event at line {line_number + 1}") from None
         if not line:
             break
         line_number += 1
-        if len(line) > max_line_bytes or len(line.encode("utf-8")) > max_line_bytes:
+        if len(line) > max_line_bytes or encoded_size > max_line_bytes:
             raise CaptureError(
                 f"JSONL event at line {line_number} exceeds {max_line_bytes} bytes"
             )
@@ -194,10 +256,7 @@ def iter_jsonl(
         if not stripped or stripped.startswith("#"):
             continue
         try:
-            value = json.loads(stripped)
-            if not isinstance(value, dict):
-                raise ValidationError("JSONL record must be an object")
-            yield PacketEvent.from_mapping(value)
+            yield _jsonl_event(stripped)
         except (
             json.JSONDecodeError,
             KeyError,
@@ -205,8 +264,8 @@ def iter_jsonl(
             RecursionError,
             TypeError,
             ValidationError,
-        ) as exc:
-            raise CaptureError(f"invalid JSONL event at line {line_number}") from exc
+        ):
+            raise CaptureError(f"invalid JSONL event at line {line_number}") from None
 
 
 def iter_sample(*, include_demo_threat: bool = False) -> Iterator[PacketEvent]:

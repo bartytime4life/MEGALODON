@@ -156,6 +156,18 @@ decisions. The `applied` value is reserved for schema compatibility and a
 future separately reviewed implementation. A refused evaluation-candidate apply
 request must not create an `applied` receipt.
 
+### JSONL admission
+
+The JSONL adapter accepts only PacketEvent fields and the legacy `timestamp`
+alias for `observed_at`. Supplying both time fields is refused. Repeated keys
+(including escaped spellings and nested metadata), unknown fields, JSON floats,
+non-finite constants, negative or out-of-range integers and nesting deeper than
+two containers are refused before domain construction. Lines are bounded to
+64 KiB including UTF-8 bytes and newline; callers may select a smaller positive
+integer limit. Errors expose only the line number, never the record. Valid
+prefixes retain the existing per-event transaction and failed-run semantics.
+See [JSONL admission](docs/jsonl-admission.md) for compatibility details.
+
 ### IngestionRun receipt
 
 Version-3 run receipts contain a closed source, UTC start/finish boundaries,
