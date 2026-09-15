@@ -164,8 +164,9 @@ lifecycle.
   iteration, event processing, and owned-source cleanup. Expiry attempts cleanup,
   preserves the committed prefix, and records `failed/failed` with
   `CAPTURE_ERROR`. Unsupported runtimes, unavailable signal-mask inspection, and
-  a blocked `SIGALRM` refuse the option before configuration, store, or source
-  work. An already active process interval timer produces the same pre-I/O
+  a blocked `SIGALRM`, and a multi-threaded process refuse the option before
+  configuration, store, or source work. An already active process interval timer
+  produces the same pre-I/O
   refusal. The arming return value detects and restores a timer installed after
   preflight while `SIGALRM` is blocked across the handler/timer swap;
   cancellation restores the prior handler even when disarming raises.
@@ -243,8 +244,8 @@ receipts also do not establish that this newer ownership boundary executed.
 `tests/test_cli_source_ownership.py` keeps explicit references to sources and
 checks close-before-finalization order, no read-ahead, primary-error identity,
 interruption, reconciliation, fixed errors, lazy file opening, nested generator
-close failures, borrowed stdin, deadline signal/close ordering, blocked-mask
-refusal, prior-handler restoration, cancellation failure, and preflight plus
+close failures, borrowed stdin, deadline signal/close ordering, blocked-mask and
+multi-threaded refusal, prior-handler restoration, cancellation failure, and preflight plus
 arm-time active-timer refusal. A real subprocess holds stdin open and
 verifies that the POSIX alarm
 interrupts the blocked read into a fixed failed SQLite receipt. Six additional

@@ -251,6 +251,46 @@ class CliTests(unittest.TestCase):
         and hasattr(signal, "pthread_sigmask"),
         "POSIX interval timers required",
     )
+    def test_multithreaded_deadline_refuses_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("multithreaded deadline must refuse before I/O")
+
+        patches = (
+            patch("megalodon.cli.threading.active_count", return_value=2),
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["run", "--source", "sample", "--max-seconds", "1"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            error.getvalue(),
+            "megalodon: max-seconds requires a single-threaded process\n",
+        )
+
+    @unittest.skipUnless(
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "setitimer")
+        and hasattr(signal, "pthread_sigmask"),
+        "POSIX interval timers required",
+    )
     def test_posix_deadline_interrupts_blocked_stdin_and_preserves_prefix(self):
         with tempfile.TemporaryDirectory() as directory:
             config, database = write_config(directory)

@@ -13,8 +13,9 @@ generator. JSONL iterators also refuse the first blank/comment line beyond a
 fixed 65,536-line skipped-input budget, bounding physical line work after reads
 return. An optional POSIX `--max-seconds` value from 1 through 86,400 bounds
 source acquisition, iteration, processing, and cleanup with a fixed failed
-receipt; unsupported runtimes, unavailable signal-mask inspection, and blocked
-`SIGALRM` refuse the option before configuration or I/O. Existing and
+receipt; unsupported runtimes, unavailable signal-mask inspection, blocked
+`SIGALRM`, and multi-threaded processes refuse the option before configuration
+or I/O because the timer/handler are process-wide. Existing and
 concurrently armed process timers are preserved and refused while `SIGALRM` is
 blocked across the handler/timer swap, and prior-handler restoration remains
 unconditional when timer cancellation raises.

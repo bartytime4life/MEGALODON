@@ -692,7 +692,9 @@ processing, and source cleanup. Expiry fails closed with the existing
 `CAPTURE_ERROR` class after cleanup is attempted and preserves the committed
 prefix in a `failed/failed` receipt. Supplying the option on a runtime without
 `SIGALRM`, `ITIMER_REAL`, and `pthread_sigmask` is refused before configuration,
-storage, or source work. A blocked `SIGALRM` is refused at the same boundary.
+storage, or source work. A blocked `SIGALRM` or multi-threaded process is refused
+at the same boundary because the timer and handler are process-wide while signal
+masks are thread-local.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and

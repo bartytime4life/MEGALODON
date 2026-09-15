@@ -11,6 +11,7 @@ from pathlib import Path
 import signal
 import sqlite3
 import sys
+import threading
 
 from . import __version__
 from .capabilities import catalog
@@ -294,6 +295,8 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
             "max-seconds requires a POSIX runtime with SIGALRM, ITIMER_REAL, "
             "and pthread_sigmask"
         )
+    if threading.active_count() != 1:
+        raise ValueError("max-seconds requires a single-threaded process")
     try:
         blocked_signals = signal.pthread_sigmask(signal.SIG_BLOCK, ())
     except (OSError, ValueError):
@@ -358,6 +361,8 @@ def _scoped_run_deadline(max_seconds: int | None):
     timer_started = False
     mask_restored = False
     try:
+        if threading.active_count() != 1:
+            raise ValueError("max-seconds requires a single-threaded process")
         try:
             signal.signal(alarm_signal, deadline_exceeded)
         except ValueError:
