@@ -20,6 +20,11 @@ malware labels. Evaluation results carry `synthetic-only` and `uncalibrated`
 labels because the corpus cannot establish real-world accuracy, prevalence,
 coverage, or false-positive and false-negative rates.
 
+The separate [Alert Workload Lab](alert-workload-lab.md) explores explicit
+hypothetical prevalence, sensitivity and false-positive assumptions without
+loading either bundle. It is not a way to turn synthetic regression counts
+into operational accuracy or calibrated probabilities.
+
 Both asset families are local package resources. Loading, lookup, and
 evaluation perform no runtime network access or update. The evaluator does not
 construct a `Store`, persist rows, plan or apply an action, launch a subprocess,

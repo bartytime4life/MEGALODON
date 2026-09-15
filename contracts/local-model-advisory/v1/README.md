@@ -62,10 +62,16 @@ python -m pytest -q tests/test_advisory.py
 The reusable adversarial denial corpus is
 `fixtures/adversarial/denials.json`. It covers every finite DENY class and the
 forbidden registry-field matrix, including a validly shaped artifact-digest
-tamper. Each case runs twice and must return the same exact serialized receipt
+tamper. Each case runs twice through both the pure preflight and the explicitly
+enabled provider API and must return the same exact serialized Airlock DENY
 without changing its inputs. HTTP/socket, subprocess, firewall, SQLite,
-filesystem read/write, tool-discovery, and command-entry sentinels fail on any
-attempted side effect.
+filesystem read/write, tool-discovery, command-entry, provider-construction and
+deadline-guard sentinels fail on any attempted side effect. Seven additional
+incident-shaped cases cover alternate package access, shared-cache/peer
+channels, credential sourcing, fallback permission, success claims and audit
+rewrites. These are inert denied inputs, not operational configuration.
+See [the incident-informed review](../../../docs/model-containment-review.md)
+for source provenance and the limits of this application-level proof.
 
 ## Explicit Qwen provider adapter
 

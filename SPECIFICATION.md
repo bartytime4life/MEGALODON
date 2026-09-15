@@ -227,6 +227,18 @@ one scenario narrows the report, not the prerequisite validation. These commands
 do not read runtime configuration, open the audit database, persist a result,
 start ingestion or the dashboard, trigger policy, or authorize response.
 
+### Hypothetical alert workload
+
+`megalodon-evaluate base-rate` accepts only an explicit bounded population,
+one declared evaluation unit and three integer PPM assumptions: prevalence,
+sensitivity and false-positive rate. It projects expected binary-classification
+counts and positive predictive value using exact rational arithmetic. Every
+result is labeled `hypothetical-only` and `uncalibrated`; a zero alert denominator
+produces an undefined ratio. It loads no telemetry, reference bundle or runtime
+configuration and invokes no detector, model, database, subprocess or action.
+Its unit and one-decision assumption do not model actual detector cooldown or
+multi-rule alert volume. See [the Alert Workload Lab contract](docs/alert-workload-lab.md).
+
 ### Local Qwen advisory (internal API only)
 
 `megalodon.qwen_advisory.invoke_qwen_advisory` is an optional Python API, not a
