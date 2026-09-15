@@ -51,6 +51,12 @@ claim a confirmed no-request from an untrusted or missing result. The dossier,
 its identity, candidates and limitations are preserved unchanged. No retry,
 alternate provider, indirect method call or response action follows.
 
+An answer's recorded raw UTF-8 output count must cover the normalized summary's
+UTF-8 size. Whitespace normalization can shorten the output, not produce more
+encoded text than was received. DENY and ERROR results cannot claim accepted
+output bytes. These are necessary consistency checks, not reconstruction of
+the discarded raw response.
+
 Validation proves structural consistency only. A registry/model digest is
 still an operator assertion about separately operated model bytes. Result
 validation does not bind a copied receipt cryptographically to a run, establish

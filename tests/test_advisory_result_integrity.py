@@ -109,6 +109,7 @@ def test_result_validation_owns_accounting_without_invoking_input_methods(monkey
                 _result(code=HostileText('ADVISORY_ANSWER')),
                 _result(outcome='ERROR', code='LOCAL_PROVIDER_ERROR', output_bytes=1),
                 _result(provider_request_performed=False),
+                _result(output_bytes=1), _result(summary='🙂', output_bytes=3),
                 _result(prompt_bytes=True), _result(output_bytes=True)]:
         with pytest.raises(ValueError, match='^Qwen advisory result is invalid$'):
             qwen.validated_qwen_result(bad)

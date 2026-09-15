@@ -313,6 +313,7 @@ def validated_qwen_result(value: object, *, policy_version: str = POLICY_VERSION
                 or type(result.provider_request_performed) is not bool
                 or (result.outcome in {"ANSWER", "ABSTAIN"} and not result.provider_request_performed)
                 or (result.outcome == "ANSWER" and result.output_bytes == 0)
+                or (result.outcome == "ANSWER" and len(result.summary.encode("utf-8")) > result.output_bytes)
                 or (result.outcome == "DENY" and result.provider_request_performed)
                 or (result.outcome in {"DENY", "ERROR"} and result.output_bytes != 0)):
             raise ValueError
