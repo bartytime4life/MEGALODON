@@ -317,21 +317,40 @@ class SourceOwnershipTests(unittest.TestCase):
         original_handler = signal.getsignal(signal.SIGALRM)
         original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
         calls = []
+        mask_calls = []
+        alarm_blocked = False
 
         def prior_handler(_signum, _frame):
             return None
 
         def setitimer(timer_kind, seconds, interval=0.0):
+            self.assertTrue(alarm_blocked)
             calls.append((timer_kind, seconds, interval))
             if len(calls) == 1:
                 return (30.0, 0.5)
             return (1.0, 0.0)
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            mask_calls.append((how, mask))
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
 
         try:
             signal.signal(signal.SIGALRM, prior_handler)
             with (
                 patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
                 patch.object(cli.signal, "setitimer", side_effect=setitimer),
+                patch.object(
+                    cli.signal, "pthread_sigmask", side_effect=pthread_sigmask
+                ),
                 self.assertRaisesRegex(
                     ValueError,
                     "^max-seconds cannot replace an active POSIX process timer$",
@@ -341,11 +360,20 @@ class SourceOwnershipTests(unittest.TestCase):
                     self.fail("concurrently armed timer should refuse before entry")
 
             self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertFalse(alarm_blocked)
             self.assertEqual(
                 calls,
                 [
                     (signal.ITIMER_REAL, 10, 0.0),
                     (signal.ITIMER_REAL, 30.0, 0.5),
+                ],
+            )
+            self.assertEqual(
+                mask_calls,
+                [
+                    (signal.SIG_BLOCK, set()),
+                    (signal.SIG_BLOCK, {signal.SIGALRM}),
+                    (signal.SIG_SETMASK, set()),
                 ],
             )
         finally:

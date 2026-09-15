@@ -167,7 +167,8 @@ lifecycle.
   a blocked `SIGALRM` refuse the option before configuration, store, or source
   work. An already active process interval timer produces the same pre-I/O
   refusal. The arming return value detects and restores a timer installed after
-  preflight; cancellation restores the prior handler even when disarming raises.
+  preflight while `SIGALRM` is blocked across the handler/timer swap;
+  cancellation restores the prior handler even when disarming raises.
 - `--max-events N` stops intake after the Nth accepted event, then records
   `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
   the next live event.

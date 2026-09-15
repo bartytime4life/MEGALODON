@@ -695,7 +695,8 @@ prefix in a `failed/failed` receipt. Supplying the option on a runtime without
 storage, or source work. A blocked `SIGALRM` is refused at the same boundary.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
-and refused rather than discarded. Deadline cancellation restores the prior
+and refused rather than discarded; `SIGALRM` is blocked across that handler and
+timer swap. Deadline cancellation restores the prior
 handler even when cancellation is interrupted or fails. The option does not
 claim a Windows deadline, interrupt kernel-level
 uninterruptible sleep, or bound configuration, store setup, final receipt, or

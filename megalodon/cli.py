@@ -279,6 +279,7 @@ def _run_deadline_supported() -> bool:
         hasattr(signal, "SIGALRM")
         and hasattr(signal, "ITIMER_REAL")
         and hasattr(signal, "SIG_BLOCK")
+        and hasattr(signal, "SIG_SETMASK")
         and callable(getattr(signal, "getitimer", None))
         and callable(getattr(signal, "setitimer", None))
         and callable(getattr(signal, "pthread_sigmask", None))
@@ -347,14 +348,26 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise CaptureError("ingestion deadline exceeded")
 
     try:
-        signal.signal(alarm_signal, deadline_exceeded)
-    except ValueError:
-        raise ValueError("max-seconds requires the interpreter main thread") from None
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {alarm_signal})
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not protect POSIX run deadline setup"
+        ) from None
 
+    handler_installed = False
+    timer_started = False
+    mask_restored = False
     try:
-        timer_restored = False
+        try:
+            signal.signal(alarm_signal, deadline_exceeded)
+        except ValueError:
+            raise ValueError(
+                "max-seconds requires the interpreter main thread"
+            ) from None
+        handler_installed = True
         try:
             previous_timer = signal.setitimer(timer_kind, max_seconds)
+            timer_started = True
         except (OSError, ValueError):
             raise ValueError(
                 "max-seconds could not arm the POSIX run deadline"
@@ -366,17 +379,24 @@ def _scoped_run_deadline(max_seconds: int | None):
                 raise ValueError(
                     "max-seconds could not restore a competing POSIX process timer"
                 ) from None
-            timer_restored = True
+            timer_started = False
             raise ValueError(
                 "max-seconds cannot replace an active POSIX process timer"
             )
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        mask_restored = True
         yield
     finally:
         try:
-            if not timer_restored:
-                signal.setitimer(timer_kind, 0.0)
+            if handler_installed:
+                try:
+                    if timer_started:
+                        signal.setitimer(timer_kind, 0.0)
+                finally:
+                    signal.signal(alarm_signal, previous_handler)
         finally:
-            signal.signal(alarm_signal, previous_handler)
+            if not mask_restored:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
 
 
 @contextmanager
