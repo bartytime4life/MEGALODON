@@ -631,6 +631,13 @@ The recent-events API projects only detection time, rule ID, severity, source IP
 and message. Destination IP, evidence, recommendation, and suppression details
 remain in the local audit store and are not served to the browser.
 
+The Deep analysis workspace also reads at most eight newest ingestion-run
+receipts from `/api/ingestion-runs`. Each item preserves the recorded source,
+status, counts, receipt version, terminal reason, failure code, and start/finish
+times without reading event rows or inventing missing values. This view is a
+bounded receipt inspector, not evidence that a sensor is live, the source was
+complete beyond its receipt, or protection is active.
+
 The dashboard also exposes a manual **Reference Library** panel backed by the
 installed, manifest-verified IANA snapshot. It accepts one normalized transport
 plus decimal port or one decimal IP protocol number, returns at most eight
