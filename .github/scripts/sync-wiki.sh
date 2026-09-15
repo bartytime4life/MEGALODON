@@ -44,7 +44,7 @@ if [[ ! -s "${content_dir}/Home.md" ]]; then
 fi
 
 # Wiki-local links omit .md; repository links point back to main explicitly.
-sed -i -E 's#\(([^:/)#]+)\.md(#[^)]+)?\)#(\1\2)#g' "${content_dir}"/*.md
+sed -i -E 's|\(([^:/)#]+)\.md(#[^)]+)?\)|(\1\2)|g' "${content_dir}"/*.md
 
 repo_blob_root="https://github.com/${GITHUB_REPOSITORY:-bartytime4life/MEGALODON}/blob/main"
 sed -i \
