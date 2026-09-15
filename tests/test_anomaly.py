@@ -17,7 +17,7 @@ from megalodon.offline.common import OfflineError
 def baseline(ports=((443, 20),), *, large=0):
     size = sum(count for _, count in ports)
     return {'schema': 'offline-baseline-v1', 'adapter': 'tshark-fields-v1',
-            'record_kind': 'packet', 'record_count': size, 'total_bytes': size * 64,
+            'record_kind': 'packet', 'record_count': size, 'total_bytes': (size - large) * 64 + large * 4096,
             'protocols': [{'protocol': 'TCP', 'count': size}] if size else [],
             'destination_ports': [{'protocol': 'TCP', 'port': port, 'count': count}
                                   for port, count in ports],
@@ -108,7 +108,8 @@ def test_old_reference_and_inconsistent_relative_bins_abstain():
         data['reference']['window'][key] = data['reference']['window'][key].replace('09-15', '09-01')
     assert build_anomaly_dossier(data)['reason_code'] == 'REFERENCE_TOO_OLD'
     data = sample()
-    data['current']['baseline']['relative_minutes'][0]['minute'] = 60
+    data['current']['baseline']['relative_minutes'] = [
+        {'minute': 0, 'count': 1}, {'minute': 60, 'count': 19}]
     assert build_anomaly_dossier(data)['reason_code'] == 'BASELINE_OUTSIDE_WINDOW'
 
 

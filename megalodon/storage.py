@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import errno
 import hashlib
@@ -12,6 +13,7 @@ from pathlib import Path
 import sqlite3
 import stat
 from threading import RLock
+from time import monotonic
 from typing import Any
 
 from .models import ActionRecord, DetectionResult, PacketEvent
@@ -27,6 +29,11 @@ from .validation import (
 SCHEMA_VERSION = 3
 MIGRATION_BACKUP_SUFFIX = ".pre-v3.bak"
 MINIMUM_READ_ONLY_WAL_SQLITE = (3, 22, 0)
+DASHBOARD_QUERY_SECONDS = 1.0
+DASHBOARD_QUERY_VM_STEPS = 1_000_000
+DASHBOARD_QUERY_PROGRESS_STEPS = 1_000
+DASHBOARD_READ_LOCK_SECONDS = 0.25
+DASHBOARD_SQLITE_BUSY_SECONDS = 0.25
 
 SCHEMA_V1_STATEMENTS = (
     """CREATE TABLE events (
@@ -2186,6 +2193,21 @@ class Store:
         }
 
 
+class _DashboardQueryBudget:
+    """Cooperative SQLite work budget, scoped to one serialized served read."""
+
+    def __init__(self) -> None:
+        self.deadline = monotonic() + DASHBOARD_QUERY_SECONDS
+        self.steps = 0
+
+    def expired(self) -> bool:
+        return self.steps >= DASHBOARD_QUERY_VM_STEPS or monotonic() >= self.deadline
+
+    def progress(self) -> int:
+        self.steps += DASHBOARD_QUERY_PROGRESS_STEPS
+        return int(self.expired())
+
+
 class DashboardStore:
     """Read-only, least-data view of an existing private audit database."""
 
@@ -2307,7 +2329,7 @@ class DashboardStore:
             connection = sqlite3.connect(
                 f"{self._sqlite_path.as_uri()}?{parameters}",
                 uri=True,
-                timeout=10,
+                timeout=DASHBOARD_SQLITE_BUSY_SECONDS,
                 isolation_level=None,
                 check_same_thread=False,
             )
@@ -2465,9 +2487,43 @@ class DashboardStore:
     def __exit__(self, *_: object) -> None:
         self.close()
 
-    def summary(self) -> dict[str, int]:
-        with self._lock:
+    @contextmanager
+    def _bounded_read(self):
+        if not self._lock.acquire(timeout=DASHBOARD_READ_LOCK_SECONDS):
+            raise StorageSchemaError("DASHBOARD_STORE:READ_BUSY")
+        try:
             self._assert_served_identity()
+            budget = _DashboardQueryBudget()
+            installed = False
+            try:
+                self._connection.set_progress_handler(
+                    budget.progress, DASHBOARD_QUERY_PROGRESS_STEPS
+                )
+                installed = True
+                yield
+                # Short statements may never reach a progress callback. Do not
+                # publish a result that completed after the cooperative deadline.
+                if budget.expired():
+                    raise StorageSchemaError("DASHBOARD_STORE:READ_BUDGET_EXCEEDED")
+            except sqlite3.Error as exc:
+                if budget.expired():
+                    raise StorageSchemaError(
+                        "DASHBOARD_STORE:READ_BUDGET_EXCEEDED"
+                    ) from None
+                raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from exc
+            finally:
+                try:
+                    if installed:
+                        self._connection.set_progress_handler(None, 0)
+                except sqlite3.Error:
+                    raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from None
+                finally:
+                    self._assert_served_identity()
+        finally:
+            self._lock.release()
+
+    def summary(self) -> dict[str, int]:
+        with self._bounded_read():
             cursor: sqlite3.Cursor | None = None
             try:
                 cursor = self._connection.execute(
@@ -2488,19 +2544,17 @@ class DashboardStore:
                     "actions": int(row["actions"]),
                     "high_or_critical": int(row["high_or_critical"]),
                 }
-            except (TypeError, ValueError, sqlite3.Error) as exc:
+            except (TypeError, ValueError) as exc:
                 raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from exc
             finally:
                 if cursor is not None:
                     cursor.close()
-                self._assert_served_identity()
             return result
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
             raise ValueError("DASHBOARD_STORE:INVALID_LIMIT")
-        with self._lock:
-            self._assert_served_identity()
+        with self._bounded_read():
             cursor: sqlite3.Cursor | None = None
             try:
                 cursor = self._connection.execute(
@@ -2516,10 +2570,9 @@ class DashboardStore:
                     {field: row[field] for field in self.EVENT_FIELDS}
                     for row in rows
                 ]
-            except (KeyError, sqlite3.Error) as exc:
+            except KeyError as exc:
                 raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from exc
             finally:
                 if cursor is not None:
                     cursor.close()
-                self._assert_served_identity()
             return result
