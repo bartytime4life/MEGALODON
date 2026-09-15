@@ -10,12 +10,14 @@ from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import json
+import re
 from threading import Lock
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .hub import integration_plan
+from .qwen_advisory import QwenAdvisoryResult
 from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
 
@@ -32,11 +34,20 @@ MAX_REFERENCE_QUERY_LENGTH = 256
 MAX_REFERENCE_RESPONSE_BYTES = 64 * 1024
 MAX_REFERENCE_CACHE_ENTRIES = 16
 MAX_REFERENCE_MATCHES = 8
+MAX_ADVISORY_RESPONSE_BYTES = 8 * 1024
 REFERENCE_BUNDLE_VERSION = "v1"
 REFERENCE_WARNING = (
     "Registration is analyst context, not proof of what was observed or whether an endpoint "
     "is safe or malicious."
 )
+_ADVISORY_CODES = {
+    "ANSWER": "ADVISORY_ANSWER",
+    "ABSTAIN": "INSUFFICIENT_ALLOWED_CONTEXT",
+    "DENY": "POLICY_DENIED",
+    "ERROR": "LOCAL_PROVIDER_ERROR",
+}
+_QWEN_MODEL_ID = re.compile(r"local:qwen-[A-Za-z0-9._-]{1,96}\Z")
+_SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 
 
 class DashboardReader(Protocol):
@@ -47,6 +58,96 @@ class DashboardReader(Protocol):
 
 class ReferenceLookupError(ValueError):
     """A fixed, path-free diagnostic for the dashboard reference surface."""
+
+
+def _bounded_advisory_text(value: object) -> bool:
+    return (
+        type(value) is str
+        and 1 <= len(value) <= 1200
+        and all(ord(character) >= 32 and ord(character) != 127 for character in value)
+    )
+
+
+def advisory_receipt_snapshot(
+    value: QwenAdvisoryResult | None,
+) -> dict[str, object] | None:
+    """Validate and own one display-only Qwen result before server startup."""
+    if value is None:
+        return None
+    if type(value) is not QwenAdvisoryResult:
+        raise ValueError("dashboard advisory receipt is invalid")
+    try:
+        outcome = value.outcome
+        code = value.code
+        summary = value.summary
+        limitations = value.limitations
+        if type(outcome) is not str or _ADVISORY_CODES.get(outcome) != code:
+            raise ValueError
+        if not _bounded_advisory_text(summary):
+            raise ValueError
+        if (
+            type(limitations) is not tuple
+            or not 1 <= len(limitations) <= 8
+            or any(not _bounded_advisory_text(item) for item in limitations)
+            or len(set(limitations)) != len(limitations)
+        ):
+            raise ValueError
+        if (
+            value.provider_class != "local_loopback"
+            or value.policy_version != "local-model-advisory-v1"
+            or type(value.model_id) is not str
+            or _QWEN_MODEL_ID.fullmatch(value.model_id) is None
+            or type(value.model_artifact_sha256) is not str
+            or _SHA256.fullmatch(value.model_artifact_sha256) is None
+            or type(value.reason_code) is not str
+            or re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", value.reason_code) is None
+            or type(value.prompt_bytes) is not int
+            or not 1 <= value.prompt_bytes <= 4096
+            or type(value.output_bytes) is not int
+            or not 0 <= value.output_bytes <= 4096
+            or type(value.provider_request_performed) is not bool
+            or (
+                outcome in {"ANSWER", "ABSTAIN"}
+                and value.provider_request_performed is not True
+            )
+            or (outcome == "ANSWER" and value.output_bytes == 0)
+            or (outcome == "DENY" and value.provider_request_performed is not False)
+        ):
+            raise ValueError
+        receipt = {
+            "outcome": outcome,
+            "code": code,
+            "summary": summary,
+            "limitations": list(limitations),
+            "model_receipt": {
+                "provider_class": value.provider_class,
+                "model_id": value.model_id,
+                "model_artifact_sha256": value.model_artifact_sha256,
+                "policy_version": value.policy_version,
+            },
+        }
+        owned = json.loads(
+            json.dumps(
+                receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+                allow_nan=False,
+            )
+        )
+        envelope = {
+            "schema": "dashboard-advisory-receipt-v1",
+            "available": True,
+            "receipt": owned,
+        }
+        encoded = json.dumps(
+            envelope, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+        if len(encoded) > MAX_ADVISORY_RESPONSE_BYTES:
+            raise ValueError
+    except (KeyError, MemoryError, OverflowError, TypeError, ValueError):
+        raise ValueError("dashboard advisory receipt is invalid") from None
+    return owned
 
 
 class ReferenceLibrary:
@@ -260,6 +361,7 @@ def _bounded_query(query: str, *, max_fields: int) -> dict[str, list[str]]:
 class DashboardHandler(BaseHTTPRequestHandler):
     store: DashboardReader
     offline_summary: dict[str, Any] | None = None
+    advisory_receipt: dict[str, object] | None = None
     reference_library: ReferenceLibrary | None = None
     refresh_seconds: int = 5
     event_limit: int = 50
@@ -285,7 +387,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", DASHBOARD_JS.encode())
             return
-        if route.path in {"/api/config", "/api/summary", "/api/offline-summary", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/config":
@@ -334,6 +436,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {"available": False} if self.offline_summary is None
                 else {"available": True, "snapshot": self.offline_summary}
+            )
+            return
+        if route.path == "/api/advisory-receipt":
+            self._send_json(
+                {
+                    "schema": "dashboard-advisory-receipt-v1",
+                    "available": False,
+                }
+                if self.advisory_receipt is None
+                else {
+                    "schema": "dashboard-advisory-receipt-v1",
+                    "available": True,
+                    "receipt": self.advisory_receipt,
+                }
             )
             return
         if route.path == "/api/integrations":
@@ -527,6 +643,7 @@ def loopback_host(host: str, *, allow_remote: bool = False) -> str:
 def serve(
     store: DashboardReader, host: str, port: int, *, enabled: bool = True,
     allow_remote: bool = False, offline_summary: dict[str, Any] | None = None,
+    advisory_receipt: QwenAdvisoryResult | None = None,
     reference_library: ReferenceLibrary | None = None,
     refresh_seconds: int = 5, event_limit: int = 50,
 ) -> None:
@@ -536,10 +653,12 @@ def serve(
         refresh_seconds, "dashboard refresh_seconds", MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS
     )
     event_limit = _bounded_dashboard_integer(event_limit, "dashboard event_limit", 1, MAX_EVENT_LIMIT)
+    advisory_snapshot = advisory_receipt_snapshot(advisory_receipt)
     host = loopback_host(host, allow_remote=allow_remote)
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
+            "advisory_receipt": advisory_snapshot,
             "reference_library": reference_library, "refresh_seconds": refresh_seconds,
             "event_limit": event_limit,
         },
