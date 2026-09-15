@@ -30,7 +30,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out documentation source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Validate Wiki projection
         run: bash .github/scripts/sync-wiki.sh --validate
@@ -42,7 +44,9 @@ jobs:
       contents: write
     steps:
       - name: Check out documentation source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Publish and verify Wiki
         env:
