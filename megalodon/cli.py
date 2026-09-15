@@ -294,6 +294,7 @@ def _run_deadline_supported() -> bool:
         and callable(getattr(signal, "getitimer", None))
         and callable(getattr(signal, "setitimer", None))
         and callable(getattr(signal, "pthread_sigmask", None))
+        and callable(getattr(signal, "sigpending", None))
         and callable(getattr(os, "scandir", None))
     )
 
@@ -322,7 +323,7 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
     if not _run_deadline_supported():
         raise ValueError(
             "max-seconds requires a Linux runtime with SIGALRM, ITIMER_REAL, "
-            "pthread_sigmask, and procfs thread inspection"
+            "pthread_sigmask, sigpending, and procfs thread inspection"
         )
     _require_single_threaded_run_deadline()
     try:
@@ -333,6 +334,14 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
         ) from None
     if signal.SIGALRM in blocked_signals:
         raise ValueError("max-seconds requires SIGALRM to be unblocked")
+    try:
+        pending_signals = signal.sigpending()
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not inspect pending POSIX signals"
+        ) from None
+    if signal.SIGALRM in pending_signals:
+        raise ValueError("max-seconds cannot start with a pending SIGALRM")
     try:
         active_timer = signal.getitimer(signal.ITIMER_REAL)
     except (OSError, ValueError):
@@ -386,6 +395,16 @@ def _scoped_run_deadline(max_seconds: int | None):
         ) from None
     if alarm_signal in previous_mask:
         raise ValueError("max-seconds requires SIGALRM to be unblocked")
+    try:
+        pending_signals = signal.sigpending()
+    except (OSError, ValueError):
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise ValueError(
+            "max-seconds could not inspect pending POSIX signals"
+        ) from None
+    if alarm_signal in pending_signals:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise ValueError("max-seconds cannot start with a pending SIGALRM")
 
     handler_installed = False
     timer_started = False
@@ -417,6 +436,14 @@ def _scoped_run_deadline(max_seconds: int | None):
             raise ValueError(
                 "max-seconds cannot replace an active POSIX process timer"
             )
+        try:
+            pending_signals = signal.sigpending()
+        except (OSError, ValueError):
+            raise ValueError(
+                "max-seconds could not inspect pending POSIX signals"
+            ) from None
+        if alarm_signal in pending_signals:
+            raise ValueError("max-seconds cannot start with a pending SIGALRM")
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         mask_restored = True
         yield

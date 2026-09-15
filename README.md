@@ -691,12 +691,12 @@ On supported Linux runtimes, `run --max-seconds N` adds an optional one-shot dea
 processing, and source cleanup. Expiry fails closed with the existing
 `CAPTURE_ERROR` class after cleanup is attempted and preserves the committed
 prefix in a `failed/failed` receipt. Supplying the option on a runtime without
-`SIGALRM`, `ITIMER_REAL`, `pthread_sigmask`, and `/proc/self/task` inspection is
-refused before configuration, storage, or source work. A blocked `SIGALRM` or a
-process with more than one OS thread is refused at the same boundary because the
+`SIGALRM`, `ITIMER_REAL`, `pthread_sigmask`, `sigpending`, and `/proc/self/task`
+inspection is refused before configuration, storage, or source work. A blocked
+or pending `SIGALRM`, or a process with more than one OS thread, is refused at the same boundary because the
 timer and handler are process-wide while signal masks are thread-local; both are
 checked again inside the signal-protected setup boundary before handler or timer
-installation.
+installation; pending alarms are checked there before and after arming.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and

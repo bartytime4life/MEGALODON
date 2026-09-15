@@ -163,11 +163,11 @@ lifecycle.
   arm one process alarm before source acquisition and keep it active through
   iteration, event processing, and owned-source cleanup. Expiry attempts cleanup,
   preserves the committed prefix, and records `failed/failed` with
-  `CAPTURE_ERROR`. Unsupported runtimes, unavailable `/proc/self/task` or
-  signal-mask inspection, a blocked `SIGALRM`, and more than one OS thread refuse
+  `CAPTURE_ERROR`. Unsupported runtimes, unavailable `/proc/self/task`, signal-mask,
+  or pending-signal inspection, a blocked or pending `SIGALRM`, and more than one OS thread refuse
   the option before configuration, store, or source work; the alarm mask and OS
   thread count are rechecked inside protected setup before handler or timer
-  installation. An already active
+  installation; pending alarms are checked there before and after arming. An already active
   process interval timer produces the same pre-I/O
   refusal. The arming return value detects and restores a timer installed after
   preflight while `SIGALRM` is blocked across the handler/timer swap;
