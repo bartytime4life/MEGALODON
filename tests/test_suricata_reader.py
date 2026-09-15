@@ -185,6 +185,8 @@ def test_owner_and_replay_view_types_are_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(suricata.os, "geteuid", lambda: os.stat(path).st_uid)
     with pytest.raises(suricata.ReaderError, match="REPLAY$"):
         suricata.read_completed_file(str(path), completed_run_keys=[])
+    with pytest.raises(suricata.ReaderError, match="REPLAY$"):
+        suricata.read_completed_file(str(path), completed_run_keys={("short",)})
 
 
 def test_post_read_change_and_deadline_fail_before_publication(tmp_path, monkeypatch):

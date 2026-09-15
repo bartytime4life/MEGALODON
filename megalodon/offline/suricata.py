@@ -464,11 +464,17 @@ def read_completed_file(
         require_unprivileged_linux()
     except OfflineError:
         _fail("SOURCE_PATH")
-    if type(completed_run_keys) not in {set, frozenset} or any(
+    if type(completed_run_keys) not in {set, frozenset}:
+        _fail("REPLAY")
+    try:
+        replay_view = frozenset(completed_run_keys)
+    except Exception:
+        _fail("REPLAY")
+    if any(
         type(key) is not tuple
         or len(key) != len(_RUN_KEY_FIELDS)
         or any(type(part) is not str for part in key)
-        for key in completed_run_keys
+        for key in replay_view
     ):
         _fail("REPLAY")
 
@@ -506,7 +512,7 @@ def read_completed_file(
         if identity is None:
             _fail("EMPTY_INPUT")
         try:
-            replayed = _run_key(identity) in completed_run_keys
+            replayed = _run_key(identity) in replay_view
         except Exception:
             _fail("REPLAY")
         if replayed:
