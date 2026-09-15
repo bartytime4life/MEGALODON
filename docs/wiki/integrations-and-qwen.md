@@ -11,7 +11,8 @@ Current workflow positions include:
 - Core Python and SQLite metadata intake.
 - Optional fixed-argument offline TShark metadata analysis.
 - Optional closed Zeek connection-log import.
-- Suricata contracts only; no runtime importer or sensor.
+- Linux-only Suricata completed contract-envelope file reader; no raw-EVE
+  converter, persistence, dashboard projection, sensor, or IPS.
 - Optional Scapy metadata capture under its separate boundary.
 - nftables planning only; live application refused.
 - Manual ClamAV companion; no file/scan integration.

@@ -107,12 +107,13 @@ SQLite, assistive-technology, or native-platform acceptance.
 Availability words are deliberately narrow:
 
 - **Implemented/optional** describe a repository path, not an installed or running
-  component. In particular, optional nftables support remains inert planning.
+  component. The Suricata status refers only to a completed contract-envelope
+  file reader, and optional nftables support remains inert planning.
 - **Evaluation only/guest only** preserve unproved or non-native platform status.
   They must not be promoted by a successful Linux test or by installing a tool.
 - **Contract only/manual only/proposed/unsupported** remain non-runtime or limited
-  relationships. Suricata has no runtime importer; Qwen/Ollama is limited to
-  one explicitly enabled library call with no dashboard invocation or CLI entry point;
+  relationships. Suricata has no dashboard or sensor integration; Qwen/Ollama is
+  limited to one explicitly enabled library call with no dashboard invocation or CLI entry point;
   its receipt can only be supplied programmatically at dashboard startup;
   ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone, Zabbix, and
   Nagios Core remain proposed.

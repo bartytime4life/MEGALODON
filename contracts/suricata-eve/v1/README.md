@@ -1,10 +1,11 @@
 # Suricata EVE alert contract v1
 
-**Status: ADOPTED NORMATIVE CONTRACT / SYNTHETIC FIXTURES AND TEST ORACLES ONLY.**
+**Status: ADOPTED NORMATIVE CONTRACT / BOUNDED LINUX READER AVAILABLE.**
 The record gate (#9) and bounded-reader design gate (#24) are closed on `main`.
-This directory does not implement a reader/importer, install or run Suricata,
-download rules, capture packets, start a scheduler, persist telemetry, modify
-the dashboard, or authorize a firewall action.
+The separate `megalodon.offline.suricata` module implements only the contracted
+completed-file reader. This directory does not install or run Suricata, download
+rules, capture packets, start a scheduler, persist telemetry, modify the
+dashboard, or authorize a firewall action.
 
 The historical authoring base was `dc35854a4bb9a4d353b3832cb18d5dee780d244c`
 in `bartytime4life/MEGALODON`; the checked-in schemas, fixtures, tests, and this
@@ -15,10 +16,10 @@ specification and security review remain authoritative for runtime safety.
 
 The first dependency-closed slice defines an input envelope, a separate
 `ExternalAlertRecord` representation, accepted pairs, rejected mutations, and
-byte-framing examples. The [`reader/`](reader/README.md) subdirectory adds an
-inert bounded-source/run contract, completed-run receipts, synthetic fixture
-mutations, and a test-only in-memory publish oracle; it still implements no
-runtime reader. All fixture addresses and rule labels are synthetic;
+byte-framing examples. The [`reader/`](reader/README.md) subdirectory adds the
+bounded-source/run contract, completed-run receipts, synthetic fixture mutations,
+and an independent in-memory publish oracle for the runtime reader. All fixture
+addresses and rule labels are synthetic;
 forbidden-content tests use null/empty markers, not packet payloads or hashes.
 
 `schema.json` uses JSON Schema Draft 2020-12 with local-only references:

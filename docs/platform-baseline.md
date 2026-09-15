@@ -40,7 +40,7 @@ and other Python versions need their own evidence before inclusion. [S1, S2]
 | Offline TShark packet metadata and Zeek connection-log import | Separate Linux-only command and private reports | Unsupported by the current offline implementation; use a validated L1 guest instead |
 | Firewall plans | Merged #72–#74 containment is plan-only; every retained live-apply route returns a fixed unsupported diagnostic before configuration, privilege, or subprocess work | No Windows firewall backend; an nftables plan is not a Windows rule |
 | Offline-run dashboard projection | Implemented for one complete private report set on loopback | Native core evaluation target; remote projection is refused |
-| Suricata EVE integration | Inert record and bounded-reader contracts/tests on main; no runtime reader/importer | Contract only; native Suricata availability does not change this |
+| Suricata EVE integration | Linux-only reader for one completed private contract-envelope file; no raw-EVE converter, persistence, dashboard, sensor, or IPS | Contract only; native Suricata availability does not change this |
 | Scheduling and automated response | Automation schema exists; no scheduler/executor | Not implemented; no Task Scheduler installation or automatic blocking |
 
 Implementation evidence: [package metadata](../pyproject.toml),

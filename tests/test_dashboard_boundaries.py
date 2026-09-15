@@ -282,10 +282,10 @@ process.stdin.on('end', async () => {
     assert.match(nodeFor('integrations-profile').textContent, /linux/);
     nodeFor('integrations-query').value = 'does-not-exist'; run('renderIntegrationMap()');
     assert.match(nodeFor('integrations-status').textContent, /0 of 14/);
-    nodeFor('integrations-query').value = ''; nodeFor('integrations-status-filter').value = 'contract_only'; run('renderIntegrationMap()');
+    nodeFor('integrations-query').value = 'Suricata'; nodeFor('integrations-status-filter').value = 'implemented'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
     assert.match(textOf(nodeFor('integrations-cards')), /Suricata/);
-    nodeFor('integrations-status-filter').value = 'manual_only'; run('renderIntegrationMap()');
+    nodeFor('integrations-query').value = ''; nodeFor('integrations-status-filter').value = 'manual_only'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 2);
     assert.match(textOf(nodeFor('integrations-cards')), /Qwen via local Ollama/);
     nodeFor('integrations-status-filter').value = 'ALL'; nodeFor('integrations-platform').value = 'windows'; run('renderIntegrationMap()');
