@@ -562,6 +562,7 @@ const advisoryCodes = Object.freeze({
 });
 const maxAdvisoryResponseBytes = 8 * 1024;
 const maxIngestionRunsResponseBytes = 32 * 1024;
+let ingestionRunsLoading = false;
 const ingestionRunFields = [
   'action_count', 'detection_count', 'failure_code', 'finished_at', 'processed_count',
   'receipt_version', 'run_id', 'source', 'started_at', 'status', 'termination_reason'
@@ -735,8 +736,22 @@ function renderAdvisoryReceipt(receipt) {
   );
 }
 function validRecordedTime(value) {
-  return typeof value === 'string' && value.length >= 1 && value.length <= 64
-    && !Number.isNaN(new Date(value).valueOf());
+  if (typeof value !== 'string' || value.length < 20 || value.length > 64) return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(Z|[+-]\d{2}:\d{2})(?![\s\S])/u.exec(value);
+  if (match === null) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offset = match[7];
+  if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day < 1 || day > daysInMonth[month - 1]) return false;
+  if (offset !== 'Z' && (Number(offset.slice(1, 3)) > 23 || Number(offset.slice(4, 6)) > 59)) return false;
+  return !Number.isNaN(new Date(value).valueOf());
 }
 function validIngestionRunSemantics(run) {
   const finished = run.finished_at !== null;
@@ -827,6 +842,9 @@ function renderIngestionRunsUnavailable() {
   );
 }
 async function loadIngestionRuns() {
+  if (ingestionRunsLoading) return;
+  ingestionRunsLoading = true;
+  const button = byId('ingestion-runs-retry'); button.disabled = true;
   const panel = byId('ingestion-runs-panel'); panel.setAttribute('aria-busy', 'true');
   byId('ingestion-runs-status').textContent = 'Loading receipts…';
   try {
@@ -834,6 +852,10 @@ async function loadIngestionRuns() {
       await requestBoundedJSON('/api/ingestion-runs?limit=8', maxIngestionRunsResponseBytes)
     ));
   } catch (_) { renderIngestionRunsUnavailable(); }
+  finally {
+    ingestionRunsLoading = false;
+    button.disabled = false;
+  }
 }
 async function loadAdvisoryReceipt() {
   try {

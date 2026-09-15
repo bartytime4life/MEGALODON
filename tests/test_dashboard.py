@@ -874,6 +874,92 @@ process.stdin.on('end', async () => {
     assert result.stdout == "no-overlap\n"
 
 
+def test_ingestion_receipt_browser_requires_exact_aware_times_and_serializes_reload():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for dashboard JavaScript behavior")
+
+    harness = r"""
+const vm = require('vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { code += chunk; });
+process.stdin.on('end', async () => {
+  try {
+    const withoutBootstrap = code.replace(/\nbootstrap\(\);\s*$/, '\n');
+    if (withoutBootstrap === code) throw new Error('dashboard bootstrap marker was not found');
+    code = withoutBootstrap;
+    const nodes = new Map();
+    function fakeNode(id = '') {
+      return {id, value: id === 'filter-severity' ? 'ALL' : '', textContent: '',
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0, children: [], attributes: new Map(),
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+        setAttribute(name, value) { this.attributes.set(name, String(value)); },
+        removeAttribute(name) { this.attributes.delete(name); }, addEventListener() {}};
+    }
+    const document = {hidden: false,
+      getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
+      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+    class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
+    const context = {document, AbortController: FakeAbortController,
+      Intl, Date, Number, String, Math, Set, Promise, Error, Array,
+      window: {setTimeout() { return 1; }, clearTimeout() {}}};
+    vm.createContext(context); vm.runInContext(code, context);
+
+    vm.runInContext(`
+      {
+        const accepted = [
+          '2024-02-29T23:59:59Z',
+          '2026-09-15T12:34:56.123456+00:00',
+          '2026-09-15T12:34:56-05:30'
+        ];
+        const rejected = [
+          '2026-09-15T12:34:56',
+          '2024-02-30T00:00:00+00:00',
+          '2023-02-29T00:00:00Z',
+          '2026-13-01T00:00:00Z',
+          '2026-09-15T24:00:00Z',
+          '2026-09-15T12:34:60Z',
+          '2026-09-15T12:34:56+24:00',
+          '2026-09-15T12:34:56.1234567Z',
+          '2026-09-15T12:34:56Z\\n'
+        ];
+        if (!accepted.every(validRecordedTime)) throw new Error('valid aware receipt time was rejected');
+        if (rejected.some(validRecordedTime)) throw new Error('ambiguous or impossible receipt time was accepted');
+      }
+      let ingestionRequestCount = 0;
+      let releaseIngestionRequest;
+      requestBoundedJSON = () => {
+        ingestionRequestCount += 1;
+        return new Promise(resolve => { releaseIngestionRequest = resolve; });
+      };
+    `, context);
+
+    const first = vm.runInContext('loadIngestionRuns()', context);
+    const overlapping = vm.runInContext('loadIngestionRuns()', context);
+    if (vm.runInContext('ingestionRequestCount', context) !== 1) throw new Error('overlapping reload started a second request');
+    if (!nodes.get('ingestion-runs-retry').disabled) throw new Error('reload control remained enabled during request');
+    vm.runInContext("releaseIngestionRequest({schema: 'dashboard-ingestion-runs-v1', limit: 8, runs: []})", context);
+    await Promise.all([first, overlapping]);
+    if (nodes.get('ingestion-runs-retry').disabled) throw new Error('reload control remained disabled after request');
+    if (vm.runInContext('ingestionRunsLoading', context)) throw new Error('reload guard remained active after request');
+    process.stdout.write('receipt-guarded\n');
+  } catch (error) { console.error(error.stack || error.message); process.exitCode = 1; }
+});
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=DASHBOARD_JS,
+        text=True,
+        capture_output=True,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "receipt-guarded\n"
+
+
 def test_dashboard_trust_status_distinguishes_api_freshness_pause_and_stale_data():
     node = shutil.which("node")
     if node is None:
