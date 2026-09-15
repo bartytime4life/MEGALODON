@@ -21,6 +21,7 @@ class CaptureError(RuntimeError):
 
 MAX_JSONL_LINE_BYTES = 64 * 1024
 MAX_JSONL_SKIPPED_LINES = 65_536
+MAX_JSONL_INPUT_BYTES = 256 * 1024 * 1024
 _JSONL_FIELDS = frozenset({
     "observed_at", "timestamp", "src_ip", "dst_ip", "protocol", "src_port",
     "dst_port", "tcp_flags", "dns_query_length", "byte_count", "interface", "metadata",
@@ -237,6 +238,7 @@ def iter_jsonl(
     *,
     max_line_bytes: int = MAX_JSONL_LINE_BYTES,
     max_skipped_lines: int = MAX_JSONL_SKIPPED_LINES,
+    max_input_bytes: int = MAX_JSONL_INPUT_BYTES,
 ) -> Iterator[PacketEvent]:
     if type(max_line_bytes) is not int or not 1 <= max_line_bytes <= MAX_JSONL_LINE_BYTES:
         raise ValueError("max_line_bytes must be an integer between 1 and 65536")
@@ -247,8 +249,16 @@ def iter_jsonl(
         raise ValueError(
             "max_skipped_lines must be an integer between 0 and 65536"
         )
+    if (
+        type(max_input_bytes) is not int
+        or not 1 <= max_input_bytes <= MAX_JSONL_INPUT_BYTES
+    ):
+        raise ValueError(
+            "max_input_bytes must be an integer between 1 and 268435456"
+        )
     line_number = 0
     skipped_lines = 0
+    input_bytes = 0
     while True:
         try:
             line = stream.readline(max_line_bytes + 1)
@@ -258,6 +268,11 @@ def iter_jsonl(
         if not line:
             break
         line_number += 1
+        input_bytes += encoded_size
+        if input_bytes > max_input_bytes:
+            raise CaptureError(
+                f"JSONL input-byte limit exceeded at line {line_number}"
+            ) from None
         if len(line) > max_line_bytes or encoded_size > max_line_bytes:
             raise CaptureError(
                 f"JSONL event at line {line_number} exceeds {max_line_bytes} bytes"

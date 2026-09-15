@@ -5,6 +5,7 @@ import unittest
 
 from megalodon.capture import (
     CaptureError,
+    MAX_JSONL_INPUT_BYTES,
     MAX_JSONL_SKIPPED_LINES,
     _BoundedCaptureQueue,
     _normalize_scapy_tcp_flags,
@@ -110,3 +111,31 @@ class CaptureTests(unittest.TestCase):
                 "^max_skipped_lines must be an integer between 0 and 65536$",
             ):
                 list(iter_jsonl(StringIO(self.EVENT + "\n"), max_skipped_lines=value))
+
+    def test_jsonl_input_byte_budget_counts_events_comments_and_blank_lines(self):
+        prefix = self.EVENT + "\n# note\n\n"
+        stream = StringIO(prefix + self.EVENT + "\n")
+        with self.assertRaisesRegex(
+            CaptureError, "^JSONL input-byte limit exceeded at line 4$"
+        ):
+            list(iter_jsonl(stream, max_input_bytes=len(prefix.encode("utf-8"))))
+
+    def test_jsonl_input_byte_budget_refuses_before_reading_suffix(self):
+        class Guarded(StringIO):
+            def readline(self, size=-1):
+                if self.tell() > 0:
+                    raise AssertionError("suffix was read")
+                return super().readline(size)
+
+        with self.assertRaisesRegex(
+            CaptureError, "^JSONL input-byte limit exceeded at line 1$"
+        ):
+            list(iter_jsonl(Guarded(self.EVENT + "\nSECRET"), max_input_bytes=1))
+
+    def test_jsonl_input_byte_budget_is_bounded(self):
+        for value in (0, -1, True, 1.5, MAX_JSONL_INPUT_BYTES + 1):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError,
+                "^max_input_bytes must be an integer between 1 and 268435456$",
+            ):
+                list(iter_jsonl(StringIO(self.EVENT + "\n"), max_input_bytes=value))

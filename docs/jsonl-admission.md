@@ -21,12 +21,15 @@ metadata object or flags array may be at most two containers deep.
 
 The 64 KiB line limit includes the newline and UTF-8 byte count. An API caller
 can lower but cannot raise this cap. Blank lines and comments retain their
-physical line numbers and the same size bound. One iterator accepts at most
+physical line numbers and the same size bound. Every physical line counts
+toward a 256 MiB aggregate UTF-8 input budget before classification or parsing;
+an API caller may lower but cannot raise it. One iterator accepts at most
 65,536 skipped blank/comment lines across the full stream; an internal caller
 may lower that budget to any nonnegative integer but cannot raise it. The first
-over-budget line raises a record-free capture error, and the suffix remains
-unread. Combined with the operational accepted-event limit, physical line work
-is finite after reads return. This is not an elapsed-time deadline and cannot
+over-budget skipped or aggregate-input line raises a record-free capture error,
+and the suffix remains unread. Combined with the operational accepted-event
+limit, physical line work and returned bytes are finite. This is not an
+elapsed-time deadline and cannot
 interrupt a blocking stream read. Malformed Unicode is reported as a capture
 error; decoder buffering means a decode failure identifies the next attempted
 line, not necessarily the precise physical byte location.
@@ -55,8 +58,8 @@ reproduces that incident nor claims a demonstrated model escape. Python's
 confirms the default repeated-name behavior being replaced. The implementation
 and synthetic fixtures are original; no book text or payload is redistributed.
 
-Synthetic boundary tests use reduced internal skipped-line budgets, plus one
-real CLI/SQLite case at the repository maximum. They prove counter enforcement,
+Synthetic boundary tests use reduced internal skipped-line and aggregate-byte
+budgets, plus real CLI/SQLite receipt cases. They prove counter enforcement,
 suffix non-consumption, fixed failure classification, and preservation of the
 committed prefix. They do not prove filesystem latency, pipe interruption,
 producer behavior, installed capture, or sustained native capacity.

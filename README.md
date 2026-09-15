@@ -750,9 +750,11 @@ cat examples/events.jsonl | python -m megalodon run --source jsonl --max-events 
 
 The adapter caps each JSONL record at 64 KiB and refuses the first blank or
 comment line beyond a fixed 65,536-line skipped-input budget. Internal callers
-may lower, but cannot raise, that budget. Together with the required
+may lower, but cannot raise, those limits. Every physical line, including blank
+and comment lines, counts toward a fixed 256 MiB aggregate input budget; the
+first line that crosses it is refused before classification or parsing. Together with the required
 accepted-event ceiling, this bounds the number of physical lines examined after
-reads return. Without the optional Linux `--max-seconds` control, it does not
+reads return and the cumulative bytes returned by them. Without the optional Linux `--max-seconds` control, it does not
 interrupt a blocking read or impose an elapsed-time deadline. IP addresses,
 ports, timestamps, flags, text, byte counts, detector
 evidence, action details, severities, and action statuses are typed and bounded

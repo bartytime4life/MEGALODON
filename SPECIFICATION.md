@@ -178,7 +178,8 @@ alias for `observed_at`. Supplying both time fields is refused. Repeated keys
 non-finite constants, negative or out-of-range integers and nesting deeper than
 two containers are refused before domain construction. Lines are bounded to
 64 KiB including UTF-8 bytes and newline; callers may select a smaller positive
-integer limit. Each iterator also permits at most 65,536 blank/comment lines
+integer limit. Each iterator permits at most 256 MiB across all physical lines
+and at most 65,536 blank/comment lines
 across the stream. Internal callers may lower that nonnegative budget but
 cannot raise it. The first excess skipped line fails closed without reading its
 suffix. Errors expose only the line number, never the record. Valid prefixes
