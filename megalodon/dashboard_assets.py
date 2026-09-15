@@ -158,6 +158,20 @@ INDEX_HTML = """<!doctype html>
     </dl>
   </section>
 
+  <section class="panel ingestion-runs-panel" id="ingestion-runs-panel" aria-labelledby="ingestion-runs-title" aria-busy="true">
+    <div class="panel-head">
+      <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
+      <span class="timestamp" id="ingestion-runs-status">Loading receipts…</span>
+    </div>
+    <div class="ingestion-runs-note" role="note">Source, terminal reason, counts, and recorded time basis remain separate. Missing values are shown as not recorded rather than inferred.</div>
+    <div class="ingestion-runs-list" id="ingestion-runs-list" role="list" aria-live="polite" aria-atomic="true">
+      <p class="ingestion-runs-empty">Loading bounded ingestion receipts…</p>
+    </div>
+    <div class="ingestion-runs-actions">
+      <button id="ingestion-runs-retry" type="button" class="button-secondary">Reload receipts</button>
+    </div>
+  </section>
+
   <section class="panel reference-panel" id="reference-panel" aria-labelledby="reference-title" aria-busy="true">
     <div class="panel-head">
       <div><h2 id="reference-title" tabindex="-1">Reference Library</h2><p>Manual context lookup against the installed, manifest-verified IANA snapshot. It never classifies traffic or changes stored records.</p></div>
@@ -315,6 +329,22 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
 .analysis-facts div { padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .42); }
 .analysis-facts dt { color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .analysis-facts dd { margin: 5px 0 0; color: #ffe5a1; font-size: .74rem; font-weight: 750; line-height: 1.35; }
+.ingestion-runs-panel { margin-bottom: 18px; }
+.ingestion-runs-note { margin: 16px 22px 0; padding: 12px 14px; border: 1px solid rgba(110, 216, 255, .2); border-radius: 12px; background: rgba(110, 216, 255, .045); color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.ingestion-runs-list { display: grid; gap: 10px; padding: 16px 22px 0; }
+.ingestion-run { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .34); }
+.ingestion-run-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ingestion-run h3 { margin: 0; font-size: .86rem; }
+.ingestion-run-status { padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.ingestion-run-status.completed { border-color: rgba(75, 227, 176, .35); color: var(--aqua); }
+.ingestion-run-status.incomplete, .ingestion-run-status.failed, .ingestion-run-status.reconciliation_required { border-color: rgba(255, 209, 102, .35); color: var(--amber); }
+.ingestion-run-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; }
+.ingestion-run-facts div { min-width: 0; padding: 9px 10px; border-radius: 10px; background: rgba(110, 216, 255, .035); }
+.ingestion-run-facts dt { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.ingestion-run-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: .75rem; }
+.ingestion-run-reason { margin: 10px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.ingestion-runs-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: .78rem; }
+.ingestion-runs-actions { padding: 14px 22px 20px; }
 .trust-strip {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .65fr); gap: 18px;
   align-items: center; margin: 24px 0 12px; padding: 16px 18px; border: 1px solid var(--line);
@@ -461,7 +491,9 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
   .toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
   #clear-filters { grid-column: 1 / -1; }
   .triage-summary, .timeline-section { padding-right: 14px; padding-left: 14px; }
-  .reference-warning, .reference-grid, .reference-status, .reference-result { margin-right: 14px; margin-left: 14px; }
+  .ingestion-runs-note, .reference-warning, .reference-grid, .reference-status, .reference-result { margin-right: 14px; margin-left: 14px; }
+  .ingestion-runs-list { padding-right: 14px; padding-left: 14px; }
+  .ingestion-run-facts { grid-template-columns: 1fr; }
   .reference-grid { padding-right: 0; padding-left: 0; }
   th, td { padding: 11px 12px; } .facts { grid-template-columns: 1fr; }
 }
@@ -492,7 +524,7 @@ const maxTimelineBins = 12;
 const workspaceIds = ['live', 'analysis', 'interfaces'];
 const workspaceTargets = {
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'live',
-  'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'reference-title': 'analysis',
+  'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces'
 };
@@ -529,6 +561,15 @@ const advisoryCodes = Object.freeze({
   DENY: 'POLICY_DENIED', ERROR: 'LOCAL_PROVIDER_ERROR'
 });
 const maxAdvisoryResponseBytes = 8 * 1024;
+const maxIngestionRunsResponseBytes = 32 * 1024;
+const ingestionRunFields = [
+  'action_count', 'detection_count', 'failure_code', 'finished_at', 'processed_count',
+  'receipt_version', 'run_id', 'source', 'started_at', 'status', 'termination_reason'
+];
+const ingestionRunSources = new Set(['sample', 'jsonl', 'scapy']);
+const ingestionRunStatuses = new Set(['running', 'completed', 'incomplete', 'failed', 'reconciliation_required']);
+const ingestionFailureCodes = new Set(['CAPTURE_ERROR', 'INTERRUPTED', 'IO_ERROR', 'STORAGE_ERROR', 'VALIDATION_ERROR']);
+const ingestionTerminationReasons = new Set(['source_exhausted', 'event_limit_reached', 'interrupted', 'failed', 'reconciliation_required']);
 
 function byId(value) { return document.getElementById(value); }
 function activateWorkspace(nextWorkspace, moveFocus = false) {
@@ -692,6 +733,107 @@ function renderAdvisoryReceipt(receipt) {
   byId('analysis-limitations').replaceChildren(
     ...receipt.limitations.map(value => textNode('li', value))
   );
+}
+function validRecordedTime(value) {
+  return typeof value === 'string' && value.length >= 1 && value.length <= 64
+    && !Number.isNaN(new Date(value).valueOf());
+}
+function validIngestionRunSemantics(run) {
+  const finished = run.finished_at !== null;
+  if (run.receipt_version === 2) {
+    if (run.termination_reason !== null || !['running', 'completed', 'failed'].includes(run.status)) return false;
+    if (run.status === 'running') return !finished && run.failure_code === null;
+    if (run.status === 'completed') return finished && run.failure_code === null;
+    return finished && ingestionFailureCodes.has(run.failure_code);
+  }
+  if (run.status === 'running') return !finished && run.failure_code === null && run.termination_reason === null;
+  if (run.status === 'completed') return finished && run.failure_code === null && run.termination_reason === 'source_exhausted';
+  if (run.status === 'incomplete') return finished && run.failure_code === null && run.termination_reason === 'event_limit_reached';
+  if (run.status === 'reconciliation_required') return !finished && run.failure_code === null && run.termination_reason === 'reconciliation_required';
+  if (!finished || !ingestionFailureCodes.has(run.failure_code)) return false;
+  return run.failure_code === 'INTERRUPTED'
+    ? run.termination_reason === 'interrupted'
+    : run.termination_reason === 'failed';
+}
+function validatedIngestionRuns(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || value.schema !== 'dashboard-ingestion-runs-v1'
+      || !Number.isSafeInteger(value.limit) || value.limit < 1 || value.limit > 25
+      || !Array.isArray(value.runs) || value.runs.length > value.limit
+      || Object.keys(value).sort().join(',') !== 'limit,runs,schema') {
+    throw new Error('invalid ingestion run response');
+  }
+  return Object.freeze(value.runs.map(run => {
+    if (!run || typeof run !== 'object' || Array.isArray(run)
+        || Object.keys(run).sort().join(',') !== ingestionRunFields.join(',')
+        || !Number.isSafeInteger(run.run_id) || run.run_id < 1
+        || ![run.processed_count, run.detection_count, run.action_count].every(item => Number.isSafeInteger(item) && item >= 0)
+        || ![2, 3].includes(run.receipt_version)
+        || !ingestionRunSources.has(run.source) || !ingestionRunStatuses.has(run.status)
+        || !validRecordedTime(run.started_at)
+        || (run.finished_at !== null && !validRecordedTime(run.finished_at))
+        || (run.failure_code !== null && !ingestionFailureCodes.has(run.failure_code))
+        || (run.termination_reason !== null && !ingestionTerminationReasons.has(run.termination_reason))
+        || !validIngestionRunSemantics(run)) {
+      throw new Error('invalid ingestion run response');
+    }
+    return Object.freeze({...run});
+  }));
+}
+function ingestionFact(label, value) {
+  const wrapper = document.createElement('div');
+  wrapper.append(textNode('dt', label), textNode('dd', value));
+  return wrapper;
+}
+function renderIngestionRuns(runs) {
+  const panel = byId('ingestion-runs-panel');
+  const list = byId('ingestion-runs-list');
+  panel.setAttribute('aria-busy', 'false');
+  byId('ingestion-runs-status').textContent = runs.length === 0
+    ? 'No recorded runs'
+    : `${formatNumber(runs.length)} newest receipt${runs.length === 1 ? '' : 's'}`;
+  if (runs.length === 0) {
+    list.replaceChildren(textNode('p', 'No ingestion run receipt is recorded in this database.', 'ingestion-runs-empty'));
+    return;
+  }
+  const cards = runs.map(run => {
+    const card = document.createElement('article'); card.className = 'ingestion-run'; card.setAttribute('role', 'listitem');
+    const head = document.createElement('div'); head.className = 'ingestion-run-head';
+    head.append(
+      textNode('h3', `Run ${run.run_id} · ${run.source}`),
+      textNode('span', run.status.replaceAll('_', ' '), `ingestion-run-status ${run.status}`)
+    );
+    const facts = document.createElement('dl'); facts.className = 'ingestion-run-facts';
+    facts.append(
+      ingestionFact('Processed', formatNumber(run.processed_count)),
+      ingestionFact('Detections', formatNumber(run.detection_count)),
+      ingestionFact('Actions', formatNumber(run.action_count)),
+      ingestionFact('Started', displayTime(new Date(run.started_at))),
+      ingestionFact('Finished', run.finished_at === null ? 'Not recorded' : displayTime(new Date(run.finished_at))),
+      ingestionFact('Receipt', `v${run.receipt_version}`)
+    );
+    const reason = run.termination_reason === null ? 'No terminal reason recorded' : run.termination_reason.replaceAll('_', ' ');
+    const failure = run.failure_code === null ? '' : ` · ${run.failure_code}`;
+    card.append(head, facts, textNode('p', `Recorded reason: ${reason}${failure}`, 'ingestion-run-reason'));
+    return card;
+  });
+  list.replaceChildren(...cards);
+}
+function renderIngestionRunsUnavailable() {
+  byId('ingestion-runs-panel').setAttribute('aria-busy', 'false');
+  byId('ingestion-runs-status').textContent = 'Unavailable';
+  byId('ingestion-runs-list').replaceChildren(
+    textNode('p', 'Ingestion receipts are unavailable or invalid. No partial receipt data is displayed.', 'ingestion-runs-empty')
+  );
+}
+async function loadIngestionRuns() {
+  const panel = byId('ingestion-runs-panel'); panel.setAttribute('aria-busy', 'true');
+  byId('ingestion-runs-status').textContent = 'Loading receipts…';
+  try {
+    renderIngestionRuns(validatedIngestionRuns(
+      await requestBoundedJSON('/api/ingestion-runs?limit=8', maxIngestionRunsResponseBytes)
+    ));
+  } catch (_) { renderIngestionRunsUnavailable(); }
 }
 async function loadAdvisoryReceipt() {
   try {
@@ -1357,6 +1499,7 @@ async function bootstrap() {
   try { renderOffline(await requestJSON('/api/offline-summary')); }
   catch (_) { renderOfflineError(); }
   loadAdvisoryReceipt();
+  loadIngestionRuns();
   loadReferenceStatus();
   await refresh(false); scheduleNext();
 }
@@ -1369,6 +1512,7 @@ byId('clear-filters').addEventListener('click', clearFilters);
 byId('clear-time-filter').addEventListener('click', () => { state.activeBin = null; state.timelineNotice = ''; applyFilters(); });
 byId('refresh-button').addEventListener('click', () => refresh(true));
 byId('pause-button').addEventListener('click', togglePause);
+byId('ingestion-runs-retry').addEventListener('click', loadIngestionRuns);
 byId('reference-port-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('port'); });
 byId('reference-protocol-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('protocol'); });
 byId('reference-retry').addEventListener('click', loadReferenceStatus);

@@ -349,6 +349,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "Qwen advisory receipt · checking" in INDEX_HTML
     assert "This page cannot start Qwen or request an analysis." in INDEX_HTML
     assert "AI advisory; not evidence or an action." in INDEX_HTML
+    assert "Ingestion run receipts" in INDEX_HTML
+    assert 'id="ingestion-runs-panel"' in INDEX_HTML
+    assert 'id="ingestion-runs-list" role="list" aria-live="polite"' in INDEX_HTML
+    assert 'id="ingestion-runs-retry" type="button"' in INDEX_HTML
     assert 'id="analysis-summary"' in INDEX_HTML
     assert 'id="analysis-limitations"' in INDEX_HTML
     assert 'role="tablist"' in INDEX_HTML
@@ -414,6 +418,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "navigator.clipboard" not in DASHBOARD_JS
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
+    assert "dashboard-ingestion-runs-v1" in DASHBOARD_JS
+    assert "'/api/ingestion-runs?limit=8'" in DASHBOARD_JS
+    assert "validatedIngestionRuns" in DASHBOARD_JS
+    assert "renderIngestionRuns" in DASHBOARD_JS
     assert "'/api/advisory-receipt'" in DASHBOARD_JS
     assert "requestBoundedJSON" in DASHBOARD_JS
     assert "new TextDecoder('utf-8', {fatal: true})" in DASHBOARD_JS
