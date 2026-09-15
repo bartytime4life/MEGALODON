@@ -457,6 +457,17 @@ DOM text nodes rather than raw HTML interpolation. Search, severity, refresh,
 and pause controls are labeled for keyboard and assistive-technology use, and
 timestamps use semantic `time` elements.
 
+### Dashboard database execution budget
+
+Served summary/recent reads use a fresh cooperative one-second monotonic and
+1,000,000-VM-instruction budget, checked every 1,000 instructions and before
+returning results. Reader lock acquisition and dashboard SQLite busy waits are
+limited to 250 ms each. Exceeded budgets return the existing HTTP 503 telemetry
+unavailable state, never partial results. Callbacks/cursors are cleared after
+failure; SQL authority, summary snapshot and writer timeouts are unchanged.
+These limits do not forcibly interrupt filesystem/native stalls or bound schema
+startup. See [dashboard query budgets](docs/dashboard-query-budget.md).
+
 ## 7. Retention and privacy
 
 The store keeps normalized metadata and evidence JSON. It must be assigned a
