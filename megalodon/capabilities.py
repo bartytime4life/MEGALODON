@@ -58,13 +58,13 @@ _COMPONENTS = (
     {
         "id": "suricata",
         "software": "Suricata",
-        "integration": "eve_alert_contract",
+        "integration": "completed_file_alert_reader",
         "platforms": {
-            "linux": "contract_only",
+            "linux": "implemented",
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "Schema and synthetic fixtures exist; no runtime importer, sensor, ruleset, or IPS path exists.",
+        "boundary": "Linux can read one completed private contract envelope file; no EVE converter, sensor, ruleset, persistence, dashboard, or IPS path exists.",
     },
     {
         "id": "scapy",

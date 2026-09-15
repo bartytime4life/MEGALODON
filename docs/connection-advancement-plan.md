@@ -69,6 +69,10 @@ protection. Use synthetic records until that boundary is reviewed.
 
 ## Phase B: one bounded completed-file reader
 
+Implementation status: `megalodon.offline.suricata.read_completed_file` now
+delivers this file-only read and validation boundary. Transactional persistence,
+durable replay prevention, and dashboard projection remain later gates.
+
 The first runtime sensor family should remain the already contracted Suricata
 EVE alert subset, not a broad multi-tool import framework. That choice leverages
 existing schema and negative fixtures. It does not permit a generic EVE firehose,

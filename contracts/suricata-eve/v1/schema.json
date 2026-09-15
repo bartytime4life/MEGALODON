@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:megalodon:contract:suricata-eve-alert:v1",
-  "title": "PROPOSED Suricata EVE alert contract v1 (inert)",
-  "$comment": "Conformance also requires README framing, semantic, and pair rules. No runtime consumer or engine compatibility is implemented.",
+  "title": "ADOPTED Suricata EVE alert contract v1",
+  "$comment": "Conformance also requires README framing, semantic, and pair rules. The bounded file reader consumes this envelope; no engine compatibility or producer is implemented.",
   "oneOf": [
     {
       "$ref": "#/$defs/inputEnvelope"

@@ -94,6 +94,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
 | Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
+| Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; immutable alert batch and receipt | Linux-only Python API; one private file, no raw-EVE conversion, persistence, dashboard projection, sensor launch, or IPS |
 | Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
@@ -150,7 +151,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
-| Suricata contract | Closed EVE-alert schema plus bounded-reader policy/receipt contract, synthetic fixtures, and deterministic contract tests; no runtime reader/importer or sensor operation |
+| Suricata completed-file reader | Linux-only Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
@@ -169,7 +170,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Qwen through a local Ollama provider | Optional manual advisory explanation only | Operator-installed and separately run; the adapter and one-shot anomaly command never configure a service, background monitor, remote endpoint, tool-use mode, or automatic response |
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
-| Suricata | Optional future EVE alert source | Contract and synthetic fixtures only; not invoked, imported, or required |
+| Suricata | Optional external producer for the closed alert envelope | The Linux file reader never invokes or requires the Suricata binary; it accepts only the separately prepared contract envelope |
 | ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
 | osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
 | nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
@@ -203,7 +204,7 @@ MEGALODON's capability status.
 | Scapy | Optional Linux live-metadata capture extra | Packet crafting/injection or unattended capture |
 | TShark | Implemented Linux-only offline packet adapter at /usr/bin/tshark | Live-capture permission or a public capture directory |
 | Zeek | Implemented offline importer for the closed conn.log profile | A service, cluster, or automatic producer |
-| Suricata | Contract-only EVE alert source; no runtime reader/importer | Rule updates, sensor mode, IPS mode, or its service |
+| Suricata | Implemented Linux reader for one completed private contract-envelope file; no raw-EVE converter | Rule updates, sensor mode, IPS mode, or its service |
 | ClamAV | Manual companion only; no file/result/quarantine integration | A daemon, automatic update, quarantine, or deletion |
 | osquery | Proposed endpoint-inventory work; no importer | A daemon, schedule, query pack, or remote enrollment |
 | nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
@@ -1052,11 +1053,11 @@ checks, and skips for every configuration claim.
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
 contracts/alert-lifecycle/v1/ inert alert lifecycle schema, fixtures, and contract notes
-contracts/suricata-eve/v1/   inert alert and bounded-reader contracts, fixtures, and tests
+contracts/suricata-eve/v1/   alert and bounded-reader contracts, fixtures, and tests
 docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI
-megalodon/offline/           isolated TShark/Zeek adapters and private reports
+megalodon/offline/           isolated TShark/Zeek adapters, Suricata file reader, and private reports
 megalodon/reference/         pinned offline IANA context and synthetic evaluation corpus
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls

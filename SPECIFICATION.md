@@ -611,14 +611,15 @@ admitted by adopting an external analyzer.
 [contracts/automation/v1](contracts/automation/v1/README.md) contains an inert
 normative-draft schema and fixtures. It is not scheduler execution, recurrence
 calculation, model access, or permission to use commands, endpoints, or tools.
-[contracts/suricata-eve/v1](contracts/suricata-eve/v1/README.md) contains an
-inert EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
+[contracts/suricata-eve/v1](contracts/suricata-eve/v1/README.md) contains the
+closed EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
 [bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). These
-closed contract gates specify record, filesystem, quota, replay, and completion
-requirements for later work. They remain contract-only: there is no production
-reader/importer, sensor operation, ruleset manager, durable consumer, or IPS
-path. The offline dashboard projection is implemented independently and does
-not accept or display Suricata alert records.
+gates specify record, filesystem, quota, replay, and completion requirements.
+`megalodon.offline.suricata.read_completed_file` implements one Linux-only,
+completed-private-file reader and returns an immutable in-memory batch and
+receipt. There is no raw-EVE converter, sensor operation, ruleset manager,
+durable consumer, dashboard projection, or IPS path. The offline dashboard
+projection remains independent and does not accept or display Suricata alerts.
 
 `megalodon capabilities` returns a deterministic static catalog of these
 boundaries for Linux, Windows, or another platform family. It performs no host

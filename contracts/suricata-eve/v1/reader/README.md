@@ -1,28 +1,27 @@
 # Bounded Suricata EVE reader contract v1
 
-**Status: ADOPTED / INERT CONTRACT, SYNTHETIC FIXTURES, AND TEST ORACLE ONLY.**
+**Status: ADOPTED CONTRACT WITH A BOUNDED LINUX FILE READER.**
 
-The design gate tracked in issue #24 is closed on `main`. That closure adopts
-these requirements for future work; it does not claim the runtime behavior
-exists. Capability and hub output must therefore remain `contract_only` and
-`no_runtime_importer`.
+The design gate tracked in issue #24 is closed on `main`.
+`megalodon.offline.suricata.read_completed_file` implements the deliberately
+narrow read boundary specified here. On Linux, capability and hub output report
+that file reader as implemented; other platform profiles are unchanged.
 
-This directory closes the design gate for a future local reader. It does not add
-a runtime importer, open a source file, run or configure Suricata, launch a
-process, use the network, write SQLite, update the dashboard, schedule work, or
-request or execute an action. Delivery of this contract did not change anything
-under `megalodon/`.
+The reader opens one operator-selected completed private file. It does not run
+or configure Suricata, launch a process, use the network, write SQLite, update
+the dashboard, schedule work, or request or execute an action.
 
 The parent [record contract](../README.md) remains authoritative for each
 `suricata-eve-alert-input-v1` envelope and its `external-alert-v1` normalized
 form. Ordinary Suricata EVE JSON is not this input contract. An operator must
-prepare the deliberately narrow, closed envelope before any future reader may
-accept it; this contract does not add a producer, scrubber, capture path, or
-compatibility claim.
+prepare the deliberately narrow, closed envelope before the reader may accept
+it; this slice does not add a producer, scrubber, capture path, or compatibility
+claim.
 
 `schema.json` closes the policy and completed-receipt shapes. The fixture and
-test oracle make the run rules executable without creating a production API.
-Schema validity alone is not reader conformance.
+test oracle define the run rules; the production API enforces the same closed
+record and receipt shapes without importing test code or a runtime JSON Schema
+dependency. Schema validity alone is not reader conformance.
 
 ## 1. Fixed resource budget
 
@@ -59,11 +58,11 @@ does not authorize partial output.
 
 ## 2. Source-file boundary
 
-Only Linux is proposed for v1. The caller supplies exactly one absolute path.
+Only Linux is implemented for v1. The caller supplies exactly one absolute path.
 There is no directory scan, glob, watcher, stdin mode, URL, named pipe, device,
 socket, archive, or recursive input.
 
-A future implementation must walk from a trusted root descriptor and open each
+The implementation walks from a trusted root descriptor and opens each
 path component with no-follow semantics. Ancestors must be directories and no
 component may be a symbolic link. The final component is opened read-only with
 close-on-exec, no-follow, and nonblocking flags before type validation so a FIFO
@@ -85,9 +84,8 @@ still enforces the total limit so metadata is not trusted as the only bound.
 These checks reduce path substitution and observable concurrent-change risk.
 They do **not** create or claim an atomic filesystem snapshot: a same-size write
 may evade portable metadata comparisons, and a file owner can mutate the file.
-The operator must supply a closed, quiescent private file. A later implementation
-must document the filesystem assumptions it actually relies on and must not call
-this contract atomic.
+The operator must supply a closed, quiescent private file. The implementation
+does not call this contract atomic.
 
 No pathname, descriptor number, device/inode value, mode, owner, timestamp, or
 exception text enters a receipt or diagnostic.
@@ -122,7 +120,7 @@ engine, adapter profile, declared version and basis, sensor ID, run ID, ruleset
 ID, and ruleset basis. It contains no path, file metadata, payload, rule label,
 or content hash. The provenance remains operator-declared, not authenticated.
 
-Before publishing a completed batch, a future coordinator supplies a read-only
+Before publishing a completed batch, a coordinator supplies a read-only
 set of previously completed run identities. An exact match fails with `REPLAY`.
 The reader does not mutate or persist that set. Relabeling identical content with
 a new run identity is considered a new operator claim; v1 neither hashes content
@@ -181,7 +179,7 @@ operator-visible output.
 `fixtures/rejected.json` applies data-only mutations that try to weaken resource,
 file, side-effect, completion, and action boundaries. All content is synthetic.
 
-`tests/test_suricata_reader_contract.py` is an in-memory conformance oracle. It
+`tests/test_suricata_reader_contract.py` remains the in-memory conformance oracle. It
 validates the new schema and fixtures, uses the parent record schema with local
 resolution and explicit format assertions, checks contiguous indexes and one run
 identity, models a read-only replay view, and verifies that a late failure
@@ -205,14 +203,15 @@ Passing these tests proves the inert artifacts in the tested revision only. It
 does not prove the future descriptor walk, filesystem race resistance, memory or
 deadline behavior under hostile load, durable transactionality, Suricata
 installation or compatibility, detection quality, privacy of arbitrary logs,
-or deployment safety. The capability and hub status must remain
-`contract_only`/`no_runtime_importer` after this change.
+or deployment safety. `tests/test_suricata_reader.py` adds descriptor, source
+policy, replay, immutability, timeout, and no-network/no-process coverage for the
+runtime implementation.
 
 ## 8. Still out of scope
 
-This contract does not add a runtime reader, sensor control, capture, rule
-download, source conversion or scrubbing, watcher, scheduler, root privilege,
-production input, SQLite integration, dashboard projection, endpoint mapping,
-severity-to-response logic, model call, firewall planning or execution, network
-egress, or automatic action. Those require separately authorized and reviewed
-changes after repository controls and the remaining project gates are satisfied.
+This reader does not add sensor control, capture, rule download, source conversion
+or scrubbing, watcher, scheduler, root privilege, SQLite integration, dashboard
+projection, endpoint mapping, severity-to-response logic, model call, firewall
+planning or execution, network egress, or automatic action. Those require
+separately authorized and reviewed changes after repository controls and the
+remaining project gates are satisfied.

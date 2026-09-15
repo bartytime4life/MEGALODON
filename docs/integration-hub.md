@@ -33,7 +33,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `core-metadata` | Python + SQLite | Implemented | Validated metadata to local audit; observe-only default |
 | `offline-packet-metadata` | TShark/Wireshark | Optional implemented adapter | Fixed TShark argv and fields; private reports; no payload or live capture |
 | `offline-flow-metadata` | Zeek | Optional implemented importer | Closed `conn.log` profile; external producer; flow and packet counts stay separate |
-| `alert-metadata` | Suricata | Contract only | Closed synthetic EVE envelope and bounded reader contract; no runtime importer, sensor, or IPS |
+| `alert-metadata` | Suricata | Linux file reader implemented | One completed private contract-envelope file; no raw-EVE converter, persistence, dashboard, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
@@ -45,11 +45,11 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `zabbix-availability-read` | Zabbix | Proposed | No endpoint, credential, client, poller, acknowledgement, or remote command |
 | `nagios-availability-read` | Nagios Core | Proposed | No CGI endpoint, credential, poller, command pipe, acknowledgement, or remote command |
 
-The Suricata record and reader contract gates are closed as documentation/test
-prerequisites ([#9](https://github.com/bartytime4life/MEGALODON/issues/9) and
-[#24](https://github.com/bartytime4life/MEGALODON/issues/24)). Their hub status
-remains `contract_only` with `no_runtime_importer`; issue closure is not a status
-promotion.
+The Suricata record and reader contract gates are closed as prerequisites
+([#9](https://github.com/bartytime4life/MEGALODON/issues/9) and
+[#24](https://github.com/bartytime4life/MEGALODON/issues/24)). The Linux profile
+now exposes the bounded Python file-reader API; Windows remains `contract_only`,
+and no platform gains producer, persistence, dashboard, or action authority.
 
 Each capability appears exactly once. Platform support status is derived from
 `megalodon.capabilities` instead of being copied into this registry. That
