@@ -246,6 +246,29 @@ def test_hard_deadline_interrupts_a_stalled_regular_file_read(tmp_path, monkeypa
     assert time.monotonic() - started < 0.5
 
 
+def test_timeout_remains_primary_when_descriptor_cleanup_fails(tmp_path, monkeypatch):
+    path = _write(tmp_path / "alerts.jsonl", [CASES[0]["input"]])
+
+    def timed_out(*args, **kwargs):
+        raise suricata.CaptureError("deadline expired")
+
+    original_close = os.close
+    failed = False
+
+    def close_then_fail(descriptor):
+        nonlocal failed
+        original_close(descriptor)
+        if not failed:
+            failed = True
+            raise OSError("interrupted close")
+
+    monkeypatch.setattr(suricata, "_records", timed_out)
+    monkeypatch.setattr(suricata.os, "close", close_then_fail)
+    with pytest.raises(suricata.ReaderError, match="TIME_LIMIT$"):
+        suricata.read_completed_file(str(path))
+    assert failed is True
+
+
 def test_fixed_diagnostics_suppress_low_level_exception_context(tmp_path):
     record = json.loads(json.dumps(CASES[0]["input"]))
     record["event"]["src_ip"] = "999.999.999.999"

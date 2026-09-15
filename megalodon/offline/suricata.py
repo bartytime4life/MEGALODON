@@ -518,7 +518,8 @@ def _read_publication(
             _freeze(receipt),
         )
         return publication
-    except CaptureError:
+    except CaptureError as exc:
+        primary = exc
         raise
     except ReaderError as exc:
         primary = exc
