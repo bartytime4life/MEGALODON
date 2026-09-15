@@ -20,6 +20,12 @@ See the [red, blue, and purple security practice](docs/red-blue-security-guide.m
 for authorized adversarial validation and future-AI gates. That guide adds no
 model runtime, tool authority, or firewall authorization.
 
+The [incident-informed model containment review](docs/model-containment-review.md)
+adds a source-pinned threat mapping and exact-denial regressions through the
+explicitly enabled Qwen provider entry point. Application-level refusal and
+literal-loopback transport do not establish containment of the separately
+operated provider, its shared services or its own outbound connections.
+
 The offline reference and synthetic evaluation commands are documented in
 [docs/reference-data.md](docs/reference-data.md). They do not start ingestion
 or the dashboard, populate the audit store, or invoke response policy. The
