@@ -44,6 +44,14 @@ ratio establishes an incident verdict or authority to act.
 
 ## Findings and corrections
 
+The separately versioned [offline anomaly pipeline](docs/anomaly-pipeline.md)
+adds descriptive candidate evidence and one explicit analyst command. Its
+Qwen policy is independently pinned, recomputes evidence before admission and
+shares the original transport limits. Model denial/failure preserves the
+deterministic dossier; unexpected provider exceptions mark request accounting
+unknown. It does not add live detection, persistence, automatic analysis or
+response authority. The original run-count API remains library-only.
+
 | Severity | Original design issue | Consequence | MVP correction |
 | --- | --- | --- | --- |
 | Critical | `subprocess.Popen(..., shell=True)` builds a capture command from interface/filter input | Shell injection and ambiguous tshark argument parsing | No shell; optional Scapy adapter and typed JSONL input |
@@ -57,7 +65,7 @@ ratio establishes an incident verdict or authority to act.
 | High | Raw payload hash/contents are part of the capture concept | Payload-derived identifiers can still disclose sensitive data; storage creates a forensic liability | Metadata-only event model; payloads are not represented or stored |
 | Medium | Promiscuous capture is treated as a convenience | Requires privilege and may capture traffic outside the operator’s authority | Optional live capture is explicit, interface-specific, and documented as privileged |
 | Medium | External feeds are called synchronously with no privacy contract | IP/domain disclosure, rate-limit failures, stale reputation, and API-key leakage | Feeds are out of MVP scope; later adapters must be cached, signed, rate-limited, and opt-in |
-| Medium | A local language-model integration can leak telemetry, follow redirects or proxies, hallucinate authority, or exhaust resources | Sensitive disclosure, accidental egress, misleading verdicts, and an action-confused UI | The optional internal adapter reruns the pinned metadata-only Airlock, connects only to literal `127.0.0.1:11434`, exposes no endpoint or raw-prompt option, follows no redirects, reads no proxy or DNS configuration, and bounds concurrency, deadline, cancellation, request, HTTP protocol framing, response body, generation, output, and display text. Its untrusted advisory result may be supplied at dashboard startup for one immutable, bounded, text-only receipt display; no CLI invocation, dashboard request/retry/poll path, storage, detection authority, or response authority exists |
+| Medium | A local language-model integration can leak telemetry, follow redirects or proxies, hallucinate authority, or exhaust resources | Sensitive disclosure, accidental egress, misleading verdicts, and an action-confused UI | The optional internal adapter reruns the pinned metadata-only Airlock, connects only to literal `127.0.0.1:11434`, exposes no endpoint or raw-prompt option, follows no redirects, reads no proxy or DNS configuration, and bounds concurrency, deadline, cancellation, request, HTTP protocol framing, response body, generation, output, and display text. The original run-count policy's untrusted result may be supplied at dashboard startup for one immutable, bounded, text-only receipt; the separate offline anomaly command requires explicit enablement and preserves evidence independently. Neither policy grants a dashboard request/retry/poll path, storage, detection authority, or response authority |
 | Medium | Registry assignments can be mistaken for observed services or threat verdicts | Analysts may overstate what a port implies and create false confidence or false positives | Bundled IANA service/port and protocol records are explicitly context hints only; they never establish observation, endorsement, safety, malicious intent, or a verdict |
 | Medium | Reference or evaluation assets can be truncated, substituted, or partially loaded | Lookup and detector receipts could silently describe different evidence | Versioned manifests pin every deterministic shard, count, byte length, and digest; all declared data and closed records validate before lookup or evaluation |
 | Medium | A synthetic detector suite can be presented as operational accuracy evidence | Deterministic expected counts may be confused with representative false-positive or efficacy measurement | The 12-scenario, 6,492-event corpus is metadata-only, documentation-address-only, and labeled `synthetic-only` / `uncalibrated`; its evaluator has no network, store, persistence, action, or subprocess path |
