@@ -1,0 +1,86 @@
+name: Publish GitHub Wiki
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/publish-wiki.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/publish-wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-github-wiki
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out documentation source
+        uses: actions/checkout@v4
+
+      - name: Publish docs/wiki to the repository Wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          wiki_dir="${RUNNER_TEMP}/megalodon-wiki"
+          wiki_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+
+          if git clone "${wiki_url}" "${wiki_dir}"; then
+            wiki_branch="$(git -C "${wiki_dir}" branch --show-current)"
+            wiki_branch="${wiki_branch:-master}"
+          else
+            rm -rf "${wiki_dir}"
+            mkdir -p "${wiki_dir}"
+            git -C "${wiki_dir}" init
+            git -C "${wiki_dir}" checkout -b master
+            git -C "${wiki_dir}" remote add origin "${wiki_url}"
+            wiki_branch=master
+          fi
+
+          cp docs/wiki/README.md "${wiki_dir}/Home.md"
+          cp docs/wiki/quick-start.md "${wiki_dir}/quick-start.md"
+          cp docs/wiki/security-boundaries.md "${wiki_dir}/security-boundaries.md"
+          cp docs/wiki/operator-guide.md "${wiki_dir}/operator-guide.md"
+          cp docs/wiki/integrations-and-qwen.md "${wiki_dir}/integrations-and-qwen.md"
+          cp docs/wiki/development-and-validation.md "${wiki_dir}/development-and-validation.md"
+          cp docs/wiki/roadmap-and-limits.md "${wiki_dir}/roadmap-and-limits.md"
+
+          cat > "${wiki_dir}/_Sidebar.md" <<'EOF'
+          * [Home](Home)
+          * [Quick Start](quick-start)
+          * [Security Boundaries](security-boundaries)
+          * [Operator Guide](operator-guide)
+          * [Integrations and Qwen](integrations-and-qwen)
+          * [Development and Validation](development-and-validation)
+          * [Roadmap and Limits](roadmap-and-limits)
+          EOF
+
+          cat > "${wiki_dir}/_Footer.md" <<'EOF'
+          This Wiki is generated from the version-controlled `docs/wiki` directory in the MEGALODON repository.
+          EOF
+
+          git -C "${wiki_dir}" config user.name 'github-actions[bot]'
+          git -C "${wiki_dir}" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "${wiki_dir}" add --all
+
+          if git -C "${wiki_dir}" diff --cached --quiet; then
+            echo 'Wiki is already current.'
+            exit 0
+          fi
+
+          git -C "${wiki_dir}" commit -m "docs: publish MEGALODON wiki from ${GITHUB_SHA}"
+          git -C "${wiki_dir}" push origin "HEAD:${wiki_branch}"
