@@ -346,9 +346,11 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "Recent detection triage" in INDEX_HTML
     assert "Live review" in INDEX_HTML
     assert "Deep analysis &amp; context" in INDEX_HTML
-    assert "Reserved analysis window · not active" in INDEX_HTML
-    assert "A future explicit local advisory may inspect one completed" in INDEX_HTML
-    assert "It cannot inspect raw traffic, contact the Internet, start background analysis, or apply a response." in INDEX_HTML
+    assert "Qwen advisory receipt · checking" in INDEX_HTML
+    assert "This page cannot start Qwen or request an analysis." in INDEX_HTML
+    assert "AI advisory; not evidence or an action." in INDEX_HTML
+    assert 'id="analysis-summary"' in INDEX_HTML
+    assert 'id="analysis-limitations"' in INDEX_HTML
     assert 'role="tablist"' in INDEX_HTML
     assert 'id="workspace-tab-live" type="button" role="tab"' in INDEX_HTML
     assert 'id="workspace-tab-analysis" type="button" role="tab"' in INDEX_HTML
@@ -411,12 +413,17 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "localStorage" not in DASHBOARD_JS
     assert "navigator.clipboard" not in DASHBOARD_JS
     assert "reference-library-lookup-v1" in DASHBOARD_JS
+    assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
+    assert "'/api/advisory-receipt'" in DASHBOARD_JS
+    assert "renderAdvisoryReceipt" in DASHBOARD_JS
     assert "integrity_failure" in DASHBOARD_JS
     assert "last successful reference result as stale" in DASHBOARD_JS
     for forbidden in ("Notification", "Audio(", "WebSocket", "EventSource"):
         assert forbidden not in INDEX_HTML + DASHBOARD_JS
     for private_field in ("dst_ip", "evidence", "recommendation", "suppressed_reason"):
-        assert private_field not in INDEX_HTML + DASHBOARD_JS
+        assert f"'{private_field}'" not in INDEX_HTML + DASHBOARD_JS
+        assert f'"{private_field}"' not in INDEX_HTML + DASHBOARD_JS
+        assert f".{private_field}" not in DASHBOARD_JS
     assert "method: 'POST'" not in DASHBOARD_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)

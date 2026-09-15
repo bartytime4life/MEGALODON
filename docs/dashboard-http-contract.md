@@ -38,6 +38,7 @@ server an Internet-facing production service.
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
+| `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
 | `/api/reference/status` | None | Verified reference status or explicit unavailability |
 | `/api/reference/port` | Exactly `transport` and `port` | One bounded registration-context lookup |
 | `/api/reference/protocol` | Exactly `number` | One bounded IP-protocol registration lookup |
@@ -46,6 +47,32 @@ server an Internet-facing production service.
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
 parameters. Never encode an action or secret in a query string.
+
+## Qwen advisory receipt projection
+
+The optional advisory value is supplied only through the programmatic
+`serve(..., advisory_receipt=...)` boundary as an exact frozen
+`QwenAdvisoryResult`. Before binding the server, the dashboard validates the
+closed outcome/code relationship, 1,200-character plain-text fields, finite
+unique limitations, literal local provider class, Qwen model ID, policy
+version, and lowercase artifact SHA-256. It then takes an owned JSON copy and
+bounds the complete response to 8 KiB. Later mutation of the source object
+cannot change the served receipt.
+
+The browser requests this route once during bootstrap. It does not include the
+receipt in periodic telemetry refresh, retain a stale prior value, offer a
+retry or invocation control, or fetch it from another origin. The browser
+revalidates the complete envelope, freezes its owned projection, and renders
+every value through `textContent`/created text nodes. Missing or invalid data
+has an explicit unavailable state and no partial model output is displayed.
+
+The route does not call `invoke_qwen_advisory`, inspect provider health, start
+or pull a model, read a file, query SQLite, execute a subprocess, change a
+firewall, or grant tool/action authority. A displayed ANSWER remains untrusted
+advice, not evidence, a detection, provider/artifact attestation, or a response
+decision. Supplying the result and coordinating its lifetime remain the
+embedding application's responsibility and require a separately reviewed
+phase.
 
 ## Finite query parsing and numeric compatibility
 
