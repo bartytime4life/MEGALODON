@@ -13,6 +13,7 @@ from threading import Barrier
 
 import pytest
 
+from megalodon.capture import MAX_JSONL_SKIPPED_LINES
 from megalodon.cli import main
 from megalodon.config import Settings
 from megalodon.models import ActionRecord, DetectionResult, PacketEvent
@@ -525,6 +526,46 @@ def test_cli_records_a_bounded_failure_after_a_valid_jsonl_prefix(tmp_path, inva
             "FROM ingestion_runs"
         ).fetchone()
         assert row == ("failed", 1, 0, "CAPTURE_ERROR", "failed")
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ingestion_run_events"
+        ).fetchone()[0] == 1
+
+
+def test_cli_records_skipped_line_budget_failure_after_committed_prefix(tmp_path):
+    config, database = _config(tmp_path)
+    source = tmp_path / "events.jsonl"
+    source.write_text(
+        json.dumps(_event().to_dict())
+        + "\n"
+        + "# skipped\n" * (MAX_JSONL_SKIPPED_LINES + 1)
+        + json.dumps(_event().to_dict())
+        + "\n",
+        encoding="utf-8",
+    )
+    error = io.StringIO()
+
+    with redirect_stderr(error), pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "run",
+                "--config",
+                str(config),
+                "--source",
+                "jsonl",
+                "--input",
+                str(source),
+                "--max-events",
+                "100",
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert error.getvalue() == "megalodon: ingestion failed (CAPTURE_ERROR)\n"
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT status, processed_count, detection_count, failure_code, "
+            "termination_reason FROM ingestion_runs"
+        ).fetchone() == ("failed", 1, 0, "CAPTURE_ERROR", "failed")
         assert connection.execute(
             "SELECT COUNT(*) FROM ingestion_run_events"
         ).fetchone()[0] == 1

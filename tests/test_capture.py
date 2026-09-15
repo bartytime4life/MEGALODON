@@ -5,6 +5,7 @@ import unittest
 
 from megalodon.capture import (
     CaptureError,
+    MAX_JSONL_SKIPPED_LINES,
     _BoundedCaptureQueue,
     _normalize_scapy_tcp_flags,
     iter_jsonl,
@@ -27,6 +28,12 @@ class FakeScapyFlagValue:
 
 
 class CaptureTests(unittest.TestCase):
+    EVENT = (
+        '{"observed_at":"2026-01-01T00:00:00Z",'
+        '"src_ip":"192.0.2.1","dst_ip":"198.51.100.2",'
+        '"protocol":"TCP"}'
+    )
+
     def test_capture_queue_fails_closed_after_first_overflow(self):
         events = _BoundedCaptureQueue(maximum=2)
         self.assertTrue(events.offer(object()))
@@ -72,3 +79,34 @@ class CaptureTests(unittest.TestCase):
         hostile = "[" * 1100 + "]" * 1100
         with self.assertRaisesRegex(CaptureError, "^invalid JSONL event at line 1$"):
             list(iter_jsonl(StringIO(hostile + "\n")))
+
+    def test_jsonl_skipped_line_budget_counts_blank_and_comment_lines(self):
+        stream = StringIO("\n# synthetic comment\n" + self.EVENT + "\n")
+
+        events = list(iter_jsonl(stream, max_skipped_lines=2))
+
+        self.assertEqual(len(events), 1)
+
+    def test_jsonl_skipped_line_budget_refuses_before_reading_the_suffix(self):
+        stream = StringIO("\n# second skip\n" + self.EVENT + "\n")
+
+        with self.assertRaisesRegex(
+            CaptureError, "^JSONL skipped-line limit exceeded at line 2$"
+        ):
+            list(iter_jsonl(stream, max_skipped_lines=1))
+
+        self.assertEqual(stream.readline(), self.EVENT + "\n")
+
+    def test_jsonl_skipped_line_budget_accepts_zero_but_refuses_first_skip(self):
+        with self.assertRaisesRegex(
+            CaptureError, "^JSONL skipped-line limit exceeded at line 1$"
+        ):
+            list(iter_jsonl(StringIO("# skip\n"), max_skipped_lines=0))
+
+    def test_jsonl_skipped_line_budget_is_bounded(self):
+        for value in (-1, True, 1.5, MAX_JSONL_SKIPPED_LINES + 1):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError,
+                "^max_skipped_lines must be an integer between 0 and 65536$",
+            ):
+                list(iter_jsonl(StringIO(self.EVENT + "\n"), max_skipped_lines=value))

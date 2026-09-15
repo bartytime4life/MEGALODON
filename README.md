@@ -709,9 +709,14 @@ python -m megalodon run --source jsonl --input examples/events.jsonl --max-event
 cat examples/events.jsonl | python -m megalodon run --source jsonl --max-events 100
 ```
 
-The adapter caps each JSONL record at 64 KiB. IP addresses, ports, timestamps,
-flags, text, byte counts, detector evidence, action details, severities, and action
-statuses are typed and bounded before persistence. SQLite-facing counts cannot
+The adapter caps each JSONL record at 64 KiB and refuses the first blank or
+comment line beyond a fixed 65,536-line skipped-input budget. Internal callers
+may lower, but cannot raise, that budget. Together with the required
+accepted-event ceiling, this bounds the number of physical lines examined after
+reads return; it does not interrupt a blocking read or impose an elapsed-time
+deadline. IP addresses, ports, timestamps, flags, text, byte counts, detector
+evidence, action details, severities, and action statuses are typed and bounded
+before persistence. SQLite-facing counts cannot
 exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
 at the storage boundary. Successful CLI output reports run-scoped `processed`
 and `detections` counts plus a separate `totals` object for the whole database.

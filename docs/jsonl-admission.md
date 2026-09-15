@@ -21,9 +21,15 @@ metadata object or flags array may be at most two containers deep.
 
 The 64 KiB line limit includes the newline and UTF-8 byte count. An API caller
 can lower but cannot raise this cap. Blank lines and comments retain their
-physical line numbers and the same size bound. Malformed Unicode is reported
-as a capture error; decoder buffering means a decode failure identifies the
-next attempted line, not necessarily the precise physical byte location.
+physical line numbers and the same size bound. One iterator accepts at most
+65,536 skipped blank/comment lines across the full stream; an internal caller
+may lower that budget to any nonnegative integer but cannot raise it. The first
+over-budget line raises a record-free capture error, and the suffix remains
+unread. Combined with the operational accepted-event limit, physical line work
+is finite after reads return. This is not an elapsed-time deadline and cannot
+interrupt a blocking stream read. Malformed Unicode is reported as a capture
+error; decoder buffering means a decode failure identifies the next attempted
+line, not necessarily the precise physical byte location.
 
 On refusal, the CLI retains committed prefix events, records a failed run with
 `CAPTURE_ERROR`, and emits its existing bounded diagnostic. The rejected record
@@ -48,3 +54,9 @@ reproduces that incident nor claims a demonstrated model escape. Python's
 [JSON decoder documentation](https://docs.python.org/3/library/json.html#repeated-names-within-an-object)
 confirms the default repeated-name behavior being replaced. The implementation
 and synthetic fixtures are original; no book text or payload is redistributed.
+
+Synthetic boundary tests use reduced internal skipped-line budgets, plus one
+real CLI/SQLite case at the repository maximum. They prove counter enforcement,
+suffix non-consumption, fixed failure classification, and preservation of the
+committed prefix. They do not prove filesystem latency, pipe interruption,
+producer behavior, installed capture, or sustained native capacity.
