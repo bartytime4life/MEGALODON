@@ -1,0 +1,54 @@
+name: Publish GitHub Wiki
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/wiki/**'
+      - '.github/scripts/sync-wiki.sh'
+      - '.github/workflows/publish-wiki.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/wiki/**'
+      - '.github/scripts/sync-wiki.sh'
+      - '.github/workflows/publish-wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-github-wiki-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Validate Wiki projection
+        run: bash .github/scripts/sync-wiki.sh --validate
+
+  publish:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Publish and verify Wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/sync-wiki.sh --publish
