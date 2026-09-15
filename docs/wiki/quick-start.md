@@ -13,7 +13,7 @@ From a reviewed checkout with no existing `.venv`:
   [ "$(id -u)" -ne 0 ] || { echo 'Use a non-root account.'; exit 1; }
   [ ! -e .venv ] && [ ! -L .venv ] || { echo '.venv already exists; stop.'; exit 1; }
   python3 -m venv .venv
-  .venv/bin/python -m pip install -e .
+  .venv/bin/python -m pip install -e ".[test]"
   .venv/bin/python -m megalodon run --source sample --max-events 13
   .venv/bin/python -m megalodon run --source sample --demo-threat --max-events 114
   .venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8787
