@@ -110,6 +110,27 @@ def test_derived_candidates_cannot_be_supplied_and_unusable_evidence_denies():
     assert admit(request).reason_code == 'ANOMALY_EVIDENCE_UNAVAILABLE'
 
 
+@pytest.mark.parametrize('field,value', [
+    ('byte_bands', {'small': 0, 'medium': 0, 'large': 20}),
+    ('relative_minutes', [{'minute': 1, 'count': 20}]),
+])
+def test_shared_baseline_hardening_denies_enabled_anomaly_requests(field, value, monkeypatch):
+    request = deepcopy(REQUEST)
+    request['input']['current']['baseline'][field] = value
+    saved = deepcopy(request)
+    def forbidden(*args, **kwargs):
+        pytest.fail('invalid baseline reached an I/O boundary')
+    for obj, name in [(builtins, 'open'), (Path, 'open'), (socket, 'socket'),
+                      (socket, 'getaddrinfo'), (sqlite3, 'connect'), (subprocess, 'Popen'),
+                      (qwen, '_LiteralLoopbackHTTPConnection')]:
+        monkeypatch.setattr(obj, name, forbidden)
+    result = invoke(request=request)
+    assert result.decision == 'DENY'
+    assert result.reason_code == 'ANOMALY_EVIDENCE_INVALID'
+    assert result.prompt is None and result.provider_request_performed is False
+    assert request == saved
+
+
 @pytest.mark.parametrize('value', [True, [], {}, 2, 'x'*64])
 def test_bad_pin_fails_closed(value):
     assert admit(fingerprint=value).reason_code == 'REGISTRY_PIN_INVALID'

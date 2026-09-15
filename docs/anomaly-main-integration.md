@@ -22,6 +22,13 @@ main changes are retained; the scorer and its repaired thresholds are not
 reimplemented. The integration PR targets `main` directly. No historical PR
 is reopened, relabeled as unmerged, or treated as a default-branch receipt.
 
+During publication, #185 landed on main as
+`56d74723df00bd1d62595e231ef50d3f47884410`, tree
+`e33d972ec28db7b8cce3fd4694fb4a29c290d88c`. The integration was refreshed
+against that revision without changing its baseline validator or tests.
+Additional enabled-provider regressions verify that impossible byte-band
+totals and timelines without minute zero are denied before any I/O.
+
 GitHub's [pull-request reference](https://docs.github.com/en/pull-requests/reference/pull-requests)
 distinguishes the proposal, head, base and temporary merge refs. Here, live
 PR metadata plus the actual default-branch file tree establish the gap;
@@ -66,6 +73,8 @@ registry pin. It does not install, inspect, start or call an actual model.
 - Recompute anomaly evidence from validated baselines before model admission.
 - Exercise malformed, indirect-resource and authority-spoofing fields at the
   explicitly enabled anomaly provider entry point with zero-I/O sentinels.
+- Carry #185's shared baseline arithmetic and timeline admission into the
+  recovered policy; invalid evidence must not reach a provider request.
 - Prove the repaired low-support port-churn case also keeps the command out
   of the registry/provider path even when `--qwen` was requested.
 - Preserve non-root/capability-free preflight, bounded selected-file reads,
