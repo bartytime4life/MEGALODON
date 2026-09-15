@@ -411,6 +411,9 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise ValueError(
             "max-seconds could not inspect pending POSIX signals"
         ) from None
+    except BaseException:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise
     if alarm_signal in pending_signals:
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         raise ValueError("max-seconds cannot start with a pending SIGALRM")

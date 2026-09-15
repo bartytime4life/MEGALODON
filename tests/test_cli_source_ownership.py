@@ -392,6 +392,48 @@ class SourceOwnershipTests(unittest.TestCase):
     @unittest.skipUnless(
         cli._run_deadline_supported(), "POSIX interval timers required"
     )
+    def test_deadline_restores_mask_when_pending_inspection_is_interrupted(self):
+        alarm_blocked = False
+        mask_calls = 0
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked, mask_calls
+            mask_calls += 1
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "sigpending", side_effect=KeyboardInterrupt()),
+            patch.object(
+                cli.signal,
+                "signal",
+                side_effect=AssertionError("handler must not be installed"),
+            ),
+            patch.object(
+                cli.signal,
+                "setitimer",
+                side_effect=AssertionError("timer must not be armed"),
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted inspection should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(mask_calls, 3)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
     def test_deadline_restores_handler_when_installation_is_interrupted(self):
         alarm_blocked = False
         handler_calls = []

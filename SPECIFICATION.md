@@ -200,7 +200,8 @@ storage, or source work; the alarm mask and OS-thread count are rechecked inside
 the protected setup boundary before handler or timer installation. Pending alarms
 are checked again after arming and dispatched under the deadline handler as
 `CaptureError` if the new deadline already expired. Setup-mask entry interruptions
-restore the observed pre-call mask, interrupted handler installation is restored,
+restore the observed pre-call mask, protected pending-signal inspection
+interruptions restore that mask, interrupted handler installation is restored,
 and interrupted arming calls are treated as live until teardown cancels them.
 Interrupted competing-timer restoration is treated as complete so cleanup does
 not cancel that timer. The CLI also
