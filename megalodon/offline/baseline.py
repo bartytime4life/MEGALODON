@@ -99,6 +99,15 @@ def validate_baseline(value: object) -> Baseline:
     byte_bands = tuple(_uint(bands[name], size) for name in ('small', 'medium', 'large'))
     if sum(byte_bands) != size:
         _invalid()
+    # Every admitted record must fit its declared size band. Counts that sum
+    # correctly can still describe an impossible byte total. Use each adapter's
+    # admitted per-record ceiling, not the much larger flow ceiling for packets.
+    small, medium, large = byte_bands
+    maximum_record_bytes = 262144 if value['record_kind'] == 'packet' else 2**41 - 2
+    minimum_bytes = medium * 512 + large * 4096
+    maximum_bytes = small * 511 + medium * 4095 + large * maximum_record_bytes
+    if not minimum_bytes <= total_bytes <= maximum_bytes:
+        _invalid()
 
     minutes = {}
     for item in _items(value['relative_minutes'], {'minute', 'count'}, size):
@@ -108,6 +117,10 @@ def validate_baseline(value: object) -> Baseline:
             _invalid()
         minutes[minute] = count
     if sum(minutes.values()) != size:
+        _invalid()
+    # Offsets are relative to the earliest admitted observation, so every
+    # nonempty generated baseline necessarily includes a minute-zero record.
+    if size and 0 not in minutes:
         _invalid()
 
     return Baseline(value['adapter'], value['record_kind'], size, total_bytes,
