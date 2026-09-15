@@ -11,10 +11,26 @@ positive accepted-event `--max-events` ceiling from 1 through 10,000,000. The
 built-in sample source may omit it because the repository owns its finite
 generator. JSONL iterators also refuse the first blank/comment line beyond a
 fixed 65,536-line skipped-input budget, bounding physical line work after reads
-return. An optional POSIX `--max-seconds` value from 1 through 86,400 bounds
+return. An optional Linux `--max-seconds` value from 1 through 86,400 bounds
 source acquisition, iteration, processing, and cleanup with a fixed failed
-receipt; unsupported runtimes refuse the option before configuration or I/O.
-An existing process timer is preserved by refusing the option before that work.
+receipt; unsupported runtimes, unavailable `/proc/self/task`, signal-mask, or
+pending-signal inspection, blocked or pre-existing pending `SIGALRM`, and processes with more than one OS thread refuse
+the option before configuration or I/O because the timer/handler are process-wide;
+the mask and OS-thread count are rechecked inside protected setup before handler
+or timer installation. A post-arm pending alarm is dispatched under the deadline
+handler as `CaptureError` if the new deadline already expired. Existing and
+concurrently armed process timers are preserved and refused while `SIGALRM` is
+blocked across the handler/timer swap, and prior-handler restoration remains
+conditional on confirmed timer inactivity when cancellation raises. Teardown
+blocks `SIGALRM` before cancellation and keeps the deadline handler until the
+original mask is restored; deadline dispatch at cleanup-mask entry is re-raised
+after teardown completes. Threaded
+Scapy capture refuses the deadline.
+Interrupted setup masking restores the observed pre-call mask, and an interrupted
+protected pending-signal inspection restores that mask. An interrupted handler
+installation is restored. An interrupted arming call is conservatively
+treated as live until teardown cancellation; an interrupted competing-timer
+restoration is not cancelled again.
 Without that option, blocking work remains unbounded. The deadline does not
 interrupt kernel-level uninterruptible sleep, supply a Windows control, or
 establish installed-capture loss handling, sustained native capacity, or

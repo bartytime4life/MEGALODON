@@ -159,13 +159,28 @@ lifecycle.
   full stream. Internal callers may lower this budget; the first excess line
   fails with `CAPTURE_ERROR`, preserves the committed prefix, and leaves the
   suffix unread.
-- On POSIX runtimes, optional `--max-seconds N` values from 1 through 86,400
+- On supported Linux runtimes, optional `--max-seconds N` values from 1 through 86,400
   arm one process alarm before source acquisition and keep it active through
   iteration, event processing, and owned-source cleanup. Expiry attempts cleanup,
   preserves the committed prefix, and records `failed/failed` with
-  `CAPTURE_ERROR`. Unsupported runtimes refuse the option before configuration,
-  store, or source work. An already active process interval timer produces the
-  same pre-I/O refusal without replacing its handler or countdown.
+  `CAPTURE_ERROR`. Unsupported runtimes, unavailable `/proc/self/task`, signal-mask,
+  or pending-signal inspection, a blocked or pre-existing pending `SIGALRM`, and more than one OS thread refuse
+  the option before configuration, store, or source work; the alarm mask and OS
+  thread count are rechecked inside protected setup before handler or timer
+  installation. A pending alarm is checked again after arming and dispatched under
+  the deadline handler as `CaptureError` if the new deadline already expired.
+  Interrupted setup masking or protected pending-signal inspection restores the
+  observed mask, interrupted handler installation is restored, and interrupted arming is treated as live until
+  teardown cancels it. Interrupted competing-timer restoration is not cancelled
+  again. An already active
+  process interval timer produces the same pre-I/O
+  refusal. The arming return value detects and restores a timer installed after
+  preflight while `SIGALRM` is blocked across the handler/timer swap;
+  teardown blocks the signal before cancellation and retains the deadline handler
+  until the original mask is restored. A deadline dispatched at cleanup-mask
+  entry is re-raised only after teardown completes. Cancellation restores the prior handler
+  only after disarming succeeds or timer inactivity is confirmed. A failed disarm with a still-live or uninspectable
+  timer retains the deadline handler. Threaded Scapy capture refuses the option.
 - `--max-events N` stops intake after the Nth accepted event, then records
   `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
   the next live event.
@@ -189,7 +204,7 @@ break, an input failure, a service/storage failure, or a handled interruption
 leaves the ingestion block through the same ownership boundary. Its `close()`
 method, when present, is invoked before any terminal run write or terminal JSON
 output. Closure stays inside the scoped SIGTERM handler and, when selected, the
-POSIX run-deadline alarm. An iterator without a close method remains supported;
+Linux run-deadline alarm. An iterator without a close method remains supported;
 this does not assert that an arbitrary producer has released native resources.
 
 The JSONL file path has two owners: the CLI owns the event iterator, and that
@@ -240,9 +255,11 @@ receipts also do not establish that this newer ownership boundary executed.
 `tests/test_cli_source_ownership.py` keeps explicit references to sources and
 checks close-before-finalization order, no read-ahead, primary-error identity,
 interruption, reconciliation, fixed errors, lazy file opening, nested generator
-close failures, borrowed stdin, deadline signal/close ordering, prior-handler
-restoration, and active-timer refusal. A real subprocess holds stdin open and
-verifies that the POSIX alarm
+close failures, borrowed stdin, deadline signal/close ordering, blocked-mask,
+OS-thread, and threaded-Scapy refusal, conditional prior-handler restoration,
+cancellation failure, and preflight plus
+arm-time active-timer refusal. A real subprocess holds stdin open and
+verifies that the Linux alarm
 interrupts the blocked read into a fixed failed SQLite receipt. Six additional
 real CLI/service/SQLite cases verify
 that committed prefix counts and links survive failure and that ordinary close
@@ -250,7 +267,7 @@ errors cannot produce either a completed or event-limit success receipt. Test
 producers are synthetic; no Scapy installation, live capture, socket, DNS lookup,
 or installed-environment execution is needed by these tests.
 
-This is deterministic ownership, finite returned-line work, and an opt-in POSIX
+This is deterministic ownership, finite returned-line work, and an opt-in Linux
 elapsed deadline—not a portable or native-shutdown receipt. Without
 `--max-seconds`, a blocking `next()` or `close()` can still block. Even with the
 option, kernel-level uninterruptible sleep and C/native work that prevents Python

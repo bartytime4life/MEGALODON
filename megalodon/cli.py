@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import logging
+import os
 from pathlib import Path
 import signal
 import sqlite3
@@ -103,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "fail closed after N seconds while acquiring, consuming, processing, "
-            "or closing the event source on POSIX runtimes "
+            "or closing the event source on supported Linux runtimes "
             f"(maximum {MAX_RUN_SECONDS})"
         ),
     )
@@ -274,13 +275,46 @@ def _require_finite_run_limit(source: str | None, max_events: int | None) -> Non
         )
 
 
+def _require_run_deadline_source(
+    source: str | None, max_seconds: int | None
+) -> None:
+    if source == "scapy" and max_seconds is not None:
+        raise ValueError(
+            "max-seconds is unavailable for threaded scapy capture"
+        )
+
+
 def _run_deadline_supported() -> bool:
     return (
-        hasattr(signal, "SIGALRM")
+        sys.platform.startswith("linux")
+        and hasattr(signal, "SIGALRM")
         and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "SIG_BLOCK")
+        and hasattr(signal, "SIG_SETMASK")
         and callable(getattr(signal, "getitimer", None))
         and callable(getattr(signal, "setitimer", None))
+        and callable(getattr(signal, "pthread_sigmask", None))
+        and callable(getattr(signal, "sigpending", None))
+        and callable(getattr(os, "scandir", None))
     )
+
+
+def _require_single_threaded_run_deadline() -> None:
+    try:
+        with os.scandir("/proc/self/task") as tasks:
+            task_count = 0
+            for _task in tasks:
+                task_count += 1
+                if task_count > 1:
+                    raise ValueError(
+                        "max-seconds requires a single-threaded process"
+                    )
+    except OSError:
+        raise ValueError(
+            "max-seconds could not inspect the OS thread set"
+        ) from None
+    if task_count != 1:
+        raise ValueError("max-seconds could not inspect the OS thread set")
 
 
 def _require_run_deadline_support(max_seconds: int | None) -> None:
@@ -288,8 +322,26 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
         return
     if not _run_deadline_supported():
         raise ValueError(
-            "max-seconds requires a POSIX runtime with SIGALRM and ITIMER_REAL"
+            "max-seconds requires a Linux runtime with SIGALRM, ITIMER_REAL, "
+            "pthread_sigmask, sigpending, and procfs thread inspection"
         )
+    _require_single_threaded_run_deadline()
+    try:
+        blocked_signals = signal.pthread_sigmask(signal.SIG_BLOCK, ())
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not inspect the POSIX signal mask"
+        ) from None
+    if signal.SIGALRM in blocked_signals:
+        raise ValueError("max-seconds requires SIGALRM to be unblocked")
+    try:
+        pending_signals = signal.sigpending()
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not inspect pending POSIX signals"
+        ) from None
+    if signal.SIGALRM in pending_signals:
+        raise ValueError("max-seconds cannot start with a pending SIGALRM")
     try:
         active_timer = signal.getitimer(signal.ITIMER_REAL)
     except (OSError, ValueError):
@@ -321,7 +373,7 @@ class _RunInterrupted(KeyboardInterrupt):
 
 @contextmanager
 def _scoped_run_deadline(max_seconds: int | None):
-    """Bound source ownership with a one-shot POSIX process alarm."""
+    """Bound single-threaded Linux source ownership with a process alarm."""
 
     if max_seconds is None:
         yield
@@ -336,21 +388,151 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise CaptureError("ingestion deadline exceeded")
 
     try:
-        signal.signal(alarm_signal, deadline_exceeded)
-    except ValueError:
-        raise ValueError("max-seconds requires the interpreter main thread") from None
-
+        setup_previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, ())
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not inspect POSIX run deadline setup"
+        ) from None
     try:
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {alarm_signal})
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not protect POSIX run deadline setup"
+        ) from None
+    except BaseException:
+        signal.pthread_sigmask(signal.SIG_SETMASK, setup_previous_mask)
+        raise
+    if alarm_signal in previous_mask:
+        raise ValueError("max-seconds requires SIGALRM to be unblocked")
+    try:
+        pending_signals = signal.sigpending()
+    except (OSError, ValueError):
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise ValueError(
+            "max-seconds could not inspect pending POSIX signals"
+        ) from None
+    except BaseException:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise
+    if alarm_signal in pending_signals:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise ValueError("max-seconds cannot start with a pending SIGALRM")
+
+    handler_installed = False
+    timer_started = False
+    mask_restored = False
+    try:
+        _require_single_threaded_run_deadline()
         try:
-            signal.setitimer(timer_kind, max_seconds)
+            signal.signal(alarm_signal, deadline_exceeded)
+        except ValueError:
+            raise ValueError(
+                "max-seconds requires the interpreter main thread"
+            ) from None
+        except BaseException:
+            # Python signal dispatch occurs after the handler swap returns from
+            # the OS. Restore conservatively during cleanup before re-raising.
+            handler_installed = True
+            raise
+        else:
+            handler_installed = True
+        # Treat an interrupted arming call as live until cleanup proves
+        # otherwise; setitimer may have succeeded before Python dispatch.
+        timer_started = True
+        try:
+            previous_timer = signal.setitimer(timer_kind, max_seconds)
         except (OSError, ValueError):
             raise ValueError(
                 "max-seconds could not arm the POSIX run deadline"
             ) from None
+        if previous_timer != (0.0, 0.0):
+            try:
+                signal.setitimer(timer_kind, *previous_timer)
+            except (OSError, ValueError):
+                raise ValueError(
+                    "max-seconds could not restore a competing POSIX process timer"
+                ) from None
+            except BaseException:
+                # As above, Python dispatch follows the completed timer swap.
+                # Do not let cleanup cancel the competing timer just restored.
+                timer_started = False
+                raise
+            else:
+                timer_started = False
+            raise ValueError(
+                "max-seconds cannot replace an active POSIX process timer"
+            )
+        try:
+            pending_signals = signal.sigpending()
+        except (OSError, ValueError):
+            raise ValueError(
+                "max-seconds could not inspect pending POSIX signals"
+            ) from None
+        if alarm_signal in pending_signals:
+            # The protected boundary was clear immediately before arming. Keep
+            # our handler installed while releasing a post-arm pending alarm so
+            # an already-expired deadline remains a CaptureError.
+            mask_restored = True
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            raise CaptureError("ingestion deadline exceeded")
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        mask_restored = True
         yield
     finally:
-        signal.setitimer(timer_kind, 0.0)
-        signal.signal(alarm_signal, previous_handler)
+        try:
+            if handler_installed:
+                cleanup_mask = None
+                cleanup_mask_error = None
+                cleanup_entry_error = None
+                if mask_restored:
+                    try:
+                        cleanup_mask = signal.pthread_sigmask(
+                            signal.SIG_BLOCK, {alarm_signal}
+                        )
+                    except (OSError, ValueError):
+                        cleanup_mask_error = ValueError(
+                            "max-seconds could not protect POSIX run deadline cleanup"
+                        )
+                    except BaseException as exc:
+                        # Python signal dispatch occurs after the masking syscall
+                        # completes. Preserve that interruption, finish teardown
+                        # under the now-blocked mask, then re-raise it.
+                        cleanup_mask = previous_mask
+                        cleanup_entry_error = exc
+                timer_inactive = not timer_started
+                cancellation_error = None
+                try:
+                    if timer_started:
+                        signal.setitimer(timer_kind, 0.0)
+                        timer_inactive = True
+                except BaseException as exc:
+                    cancellation_error = exc
+                    try:
+                        timer_inactive = (
+                            signal.getitimer(timer_kind) == (0.0, 0.0)
+                        )
+                    except (OSError, ValueError):
+                        timer_inactive = False
+                try:
+                    if cleanup_mask is not None:
+                        # Keep the deadline handler installed while unblocking so
+                        # a just-pending MEGALODON alarm cannot reach the prior
+                        # handler. Python dispatches it here as CaptureError.
+                        signal.pthread_sigmask(signal.SIG_SETMASK, cleanup_mask)
+                finally:
+                    if timer_inactive and (
+                        not mask_restored or cleanup_mask is not None
+                    ):
+                        signal.signal(alarm_signal, previous_handler)
+                if cleanup_entry_error is not None:
+                    raise cleanup_entry_error
+                if cancellation_error is not None:
+                    raise cancellation_error
+                if cleanup_mask_error is not None:
+                    raise cleanup_mask_error
+        finally:
+            if not mask_restored:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
 
 
 @contextmanager
@@ -387,10 +569,12 @@ def _run(args: argparse.Namespace) -> int:
         # source acquisition. A configuration-selected source is checked again
         # immediately after the one necessary configuration read.
         _require_finite_run_limit(args.source, args.max_events)
+        _require_run_deadline_source(args.source, args.max_seconds)
         _require_run_deadline_support(args.max_seconds)
         settings = _load(args.config)
         source = _source_for(args, settings)
         _require_finite_run_limit(source, args.max_events)
+        _require_run_deadline_source(source, args.max_seconds)
         with Store(
             settings.db_path,
             max_database_bytes=_storage_limit(settings),

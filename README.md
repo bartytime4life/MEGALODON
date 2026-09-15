@@ -658,9 +658,9 @@ last-success timestamp, and count baseline while marking the display stale.
 | --- | --- |
 | `capabilities [--platform linux\|windows\|other]` | Print a static support/free-software catalog without probing or changing the host |
 | `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
-| `run --source sample [--demo-threat] [--max-seconds N]` | Process built-in synthetic metadata; optionally apply the POSIX source-lifetime deadline |
-| `run --source jsonl --max-events N [--max-seconds N] [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling and optional POSIX source-lifetime deadline |
-| `run --source scapy --interface IFACE --max-events N [--max-seconds N]` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling and optional POSIX source-lifetime deadline |
+| `run --source sample [--demo-threat] [--max-seconds N]` | Process built-in synthetic metadata; optionally apply the Linux source-lifetime deadline |
+| `run --source jsonl --max-events N [--max-seconds N] [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling and optional Linux source-lifetime deadline |
+| `run --source scapy --interface IFACE --max-events N` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling; the threaded adapter refuses `--max-seconds` |
 | `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 or v2 audit database to v3; never overwrites its backup |
 | `database-reconciliation-status [--config PATH]` | Read bounded metadata for `running` or reconciliation-required run receipts; does not mutate them |
 | `database-reconcile RUN_ID --started-at UTC [--config PATH]` | After stopping ingestion, mark one exactly pinned running receipt as reconciliation-required while preserving evidence |
@@ -686,14 +686,35 @@ sources fail before the audit store or source is opened. Use `python -m megalodo
 `python -m megalodon.offline --help` for the complete operational argument
 surface, and `megalodon-evaluate --help` for the separate evaluation surface.
 
-On POSIX runtimes, `run --max-seconds N` adds an optional one-shot deadline from
+On supported Linux runtimes, `run --max-seconds N` adds an optional one-shot deadline from
 1 through 86,400 seconds around event-source acquisition, iteration, event
 processing, and source cleanup. Expiry fails closed with the existing
 `CAPTURE_ERROR` class after cleanup is attempted and preserves the committed
 prefix in a `failed/failed` receipt. Supplying the option on a runtime without
-`SIGALRM` and `ITIMER_REAL` is refused before configuration, storage, or source
-work. An already active process interval timer also causes a pre-I/O refusal so
-the CLI cannot replace or delay another component's alarm. The option does not
+`SIGALRM`, `ITIMER_REAL`, `pthread_sigmask`, `sigpending`, and `/proc/self/task`
+inspection is refused before configuration, storage, or source work. A blocked
+or pre-existing pending `SIGALRM`, or a process with more than one OS thread, is refused at the same boundary because the
+timer and handler are process-wide while signal masks are thread-local; both are
+checked again inside the signal-protected setup boundary before handler or timer
+installation. A pending alarm is checked again after arming and delivered under
+the deadline handler as `CAPTURE_ERROR` if the new deadline already expired.
+An interruption while entering the setup mask restores the observed pre-call
+mask; an interrupted protected pending-signal inspection restores that mask;
+interrupted handler installation is conservatively restored; and an
+interrupted timer-arm call is conservatively cancelled during teardown. An
+interrupted competing-timer restoration is not cancelled again.
+An already active process interval timer also causes a pre-I/O refusal; the
+timer value returned while arming is checked so a concurrent timer is restored
+and refused rather than discarded; `SIGALRM` is blocked across that handler and
+timer swap. Teardown blocks `SIGALRM` before cancellation and keeps the deadline
+handler installed until the original mask is restored, so a just-pending alarm
+cannot reach the prior handler. A deadline dispatched while cleanup masking begins
+is preserved, teardown completes, and the interruption is then re-raised.
+Cancellation restores that handler only after
+cancellation succeeds or timer inactivity is confirmed; a failed disarm with a
+still-live or uninspectable timer retains the deadline handler. Threaded Scapy capture refuses
+the option because a worker created after setup cannot inherit the proven
+single-thread boundary. The option does not
 claim a Windows deadline, interrupt kernel-level
 uninterruptible sleep, or bound configuration, store setup, final receipt, or
 summary work outside the source-ownership region.
@@ -725,7 +746,7 @@ The adapter caps each JSONL record at 64 KiB and refuses the first blank or
 comment line beyond a fixed 65,536-line skipped-input budget. Internal callers
 may lower, but cannot raise, that budget. Together with the required
 accepted-event ceiling, this bounds the number of physical lines examined after
-reads return. Without the optional POSIX `--max-seconds` control, it does not
+reads return. Without the optional Linux `--max-seconds` control, it does not
 interrupt a blocking read or impose an elapsed-time deadline. IP addresses,
 ports, timestamps, flags, text, byte counts, detector
 evidence, action details, severities, and action statuses are typed and bounded
@@ -744,7 +765,7 @@ For optional Linux live capture (`eth0` is an example, not an assumed interface)
 
 ```bash
 python -m pip install -e ".[capture]"
-python -m megalodon run --source scapy --interface eth0 --max-events 100000 --max-seconds 3600
+python -m megalodon run --source scapy --interface eth0 --max-events 100000
 ```
 
 Live capture requires the normal Linux permissions for the selected interface.

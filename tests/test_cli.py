@@ -200,14 +200,187 @@ class CliTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
         self.assertEqual(
             error.getvalue(),
-            "megalodon: max-seconds requires a POSIX runtime with SIGALRM "
-            "and ITIMER_REAL\n",
+            "megalodon: max-seconds requires a Linux runtime with SIGALRM, "
+            "ITIMER_REAL, pthread_sigmask, sigpending, and procfs thread "
+            "inspection\n",
         )
 
     @unittest.skipUnless(
         hasattr(signal, "SIGALRM")
         and hasattr(signal, "ITIMER_REAL")
-        and hasattr(signal, "setitimer"),
+        and hasattr(signal, "setitimer")
+        and hasattr(signal, "pthread_sigmask"),
+        "POSIX interval timers required",
+    )
+    def test_blocked_deadline_signal_refuses_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("blocked deadline signal must refuse before I/O")
+
+        patches = (
+            patch.object(signal, "pthread_sigmask", return_value={signal.SIGALRM}),
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["run", "--source", "sample", "--max-seconds", "1"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            error.getvalue(),
+            "megalodon: max-seconds requires SIGALRM to be unblocked\n",
+        )
+
+    @unittest.skipUnless(
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "setitimer")
+        and hasattr(signal, "pthread_sigmask")
+        and hasattr(signal, "sigpending"),
+        "POSIX interval timers required",
+    )
+    def test_pending_deadline_signal_refuses_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("pending deadline signal must refuse before I/O")
+
+        patches = (
+            patch.object(signal, "pthread_sigmask", return_value=set()),
+            patch.object(signal, "sigpending", return_value={signal.SIGALRM}),
+            patch("megalodon.cli._require_single_threaded_run_deadline"),
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["run", "--source", "sample", "--max-seconds", "1"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            error.getvalue(),
+            "megalodon: max-seconds cannot start with a pending SIGALRM\n",
+        )
+
+    @unittest.skipUnless(
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "setitimer")
+        and hasattr(signal, "pthread_sigmask"),
+        "POSIX interval timers required",
+    )
+    def test_multithreaded_deadline_refuses_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("multithreaded deadline must refuse before I/O")
+
+        patches = (
+            patch(
+                "megalodon.cli._require_single_threaded_run_deadline",
+                side_effect=ValueError(
+                    "max-seconds requires a single-threaded process"
+                ),
+            ),
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["run", "--source", "sample", "--max-seconds", "1"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            error.getvalue(),
+            "megalodon: max-seconds requires a single-threaded process\n",
+        )
+
+    def test_scapy_deadline_refuses_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("threaded scapy deadline must refuse before I/O")
+
+        patches = (
+            patch("megalodon.cli._require_run_deadline_support", side_effect=forbidden),
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(
+                    [
+                        "run",
+                        "--source",
+                        "scapy",
+                        "--max-events",
+                        "1",
+                        "--max-seconds",
+                        "1",
+                    ]
+                )
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            error.getvalue(),
+            "megalodon: max-seconds is unavailable for threaded scapy capture\n",
+        )
+
+    @unittest.skipUnless(
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "setitimer")
+        and hasattr(signal, "pthread_sigmask"),
         "POSIX interval timers required",
     )
     def test_posix_deadline_interrupts_blocked_stdin_and_preserves_prefix(self):

@@ -189,17 +189,35 @@ The operational CLI also requires an explicit positive accepted-event
 `--max-events` ceiling
 from 1 through 10,000,000 before opening a JSONL file/stdin source or Scapy
 capture. The finite repository-owned sample generator may omit that option.
-On POSIX runtimes, an optional `--max-seconds` value from 1 through 86,400 arms
+On supported Linux runtimes, an optional `--max-seconds` value from 1 through 86,400 arms
 one `ITIMER_REAL` deadline before the event source is acquired and keeps it
 active through iteration, event processing, and owned-source cleanup. Expiry is
 a record-free `CaptureError`; committed evidence is retained and the run records
 `failed/failed` with `CAPTURE_ERROR` after cleanup is attempted. Unsupported
-runtimes refuse the option before configuration, storage, or source work. The
-CLI also refuses before those operations when an interval timer is already
-active, preserving its handler and countdown instead of replacing it. The
+runtimes, unavailable `/proc/self/task`, signal-mask, or pending-signal inspection,
+a blocked or pre-existing pending `SIGALRM`, or more than one OS thread refuse the option before configuration,
+storage, or source work; the alarm mask and OS-thread count are rechecked inside
+the protected setup boundary before handler or timer installation. Pending alarms
+are checked again after arming and dispatched under the deadline handler as
+`CaptureError` if the new deadline already expired. Setup-mask entry interruptions
+restore the observed pre-call mask, protected pending-signal inspection
+interruptions restore that mask, interrupted handler installation is restored,
+and interrupted arming calls are treated as live until teardown cancels them.
+Interrupted competing-timer restoration is treated as complete so cleanup does
+not cancel that timer. The CLI also
+refuses before those operations when an interval timer is already active. It
+checks the timer returned by the arming call, restores a concurrently armed
+timer while `SIGALRM` is blocked across the handler/timer swap, and restores the
+prior handler after timer inactivity is confirmed. Teardown blocks `SIGALRM`
+before cancellation and keeps the deadline handler installed until the original
+mask is restored, preventing a just-pending deadline from reaching the prior
+handler. Deadline dispatch at cleanup-mask entry is retained until cancellation
+and handler restoration complete, then re-raised. The
 deadline does not establish portable Windows interruption, interrupt
 kernel-level uninterruptible sleep, or bound CLI setup/finalization outside the
-source-ownership region.
+source-ownership region. Handler restoration after a cancellation error requires
+confirmed timer inactivity; otherwise the deadline handler is retained. The
+threaded Scapy adapter refuses `--max-seconds`.
 See [JSONL admission](docs/jsonl-admission.md) for compatibility details.
 
 ### IngestionRun receipt

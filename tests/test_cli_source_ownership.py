@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import _thread
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 import io
@@ -11,7 +12,7 @@ import signal
 import sqlite3
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -242,7 +243,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
-    def test_deadline_restores_handler_when_alarm_fires_during_arming(self):
+    def test_deadline_delivers_alarm_pending_during_arming(self):
         original_handler = signal.getsignal(signal.SIGALRM)
         original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
         calls = []
@@ -265,7 +266,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 ),
             ):
                 with cli._scoped_run_deadline(1):
-                    self.fail("deadline should fire while the timer is armed")
+                    self.fail("pending deadline should fail before entry")
 
             self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
             self.assertEqual(
@@ -306,6 +307,641 @@ class SourceOwnershipTests(unittest.TestCase):
             self.assertLessEqual(after_delay, before_delay)
             self.assertGreater(after_delay, before_delay - 1.0)
             self.assertEqual(after_interval, before_interval)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_rechecks_blocked_alarm_at_protected_boundary(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError(
+                "blocked boundary must refuse before handler or timer setup"
+            )
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(
+                cli.signal,
+                "pthread_sigmask",
+                return_value={signal.SIGALRM},
+            ) as inspect_mask,
+            patch.object(cli.signal, "signal", side_effect=forbidden),
+            patch.object(cli.signal, "setitimer", side_effect=forbidden),
+            self.assertRaisesRegex(
+                ValueError, "^max-seconds requires SIGALRM to be unblocked$"
+            ),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("blocked boundary should refuse before entry")
+
+        self.assertEqual(
+            inspect_mask.call_args_list,
+            [
+                call(signal.SIG_BLOCK, ()),
+                call(signal.SIG_BLOCK, {signal.SIGALRM}),
+            ],
+        )
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_restores_mask_when_setup_masking_is_interrupted(self):
+        alarm_blocked = False
+        mask_calls = 0
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked, mask_calls
+            mask_calls += 1
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            if mask_calls == 2:
+                raise KeyboardInterrupt()
+            return previous
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(
+                cli.signal,
+                "signal",
+                side_effect=AssertionError("handler must not be installed"),
+            ),
+            patch.object(
+                cli.signal,
+                "setitimer",
+                side_effect=AssertionError("timer must not be armed"),
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted setup should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(mask_calls, 3)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_restores_mask_when_pending_inspection_is_interrupted(self):
+        alarm_blocked = False
+        mask_calls = 0
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked, mask_calls
+            mask_calls += 1
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "sigpending", side_effect=KeyboardInterrupt()),
+            patch.object(
+                cli.signal,
+                "signal",
+                side_effect=AssertionError("handler must not be installed"),
+            ),
+            patch.object(
+                cli.signal,
+                "setitimer",
+                side_effect=AssertionError("timer must not be armed"),
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted inspection should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(mask_calls, 3)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_restores_handler_when_installation_is_interrupted(self):
+        alarm_blocked = False
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+            if len(handler_calls) == 1:
+                raise KeyboardInterrupt()
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            patch.object(
+                cli.signal,
+                "setitimer",
+                side_effect=AssertionError("timer must not be armed"),
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted installation should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(len(handler_calls), 2)
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertTrue(handler_calls[-1][2])
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_delivers_alarm_pending_after_protected_arming(self):
+        alarm_blocked = False
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            return (0.0, 0.0)
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(
+                cli.signal,
+                "sigpending",
+                side_effect=[set(), {signal.SIGALRM}],
+            ),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            self.assertRaisesRegex(
+                CaptureError, "^ingestion deadline exceeded$"
+            ),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("pending deadline should fail before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, blocked) for _, seconds, _, blocked in timer_calls],
+            [(10, True), (0.0, True)],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertFalse(handler_calls[-1][2])
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_cancels_when_timer_arming_is_interrupted(self):
+        alarm_blocked = False
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            if seconds:
+                raise KeyboardInterrupt()
+            return (0.0, 0.0)
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted arming should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, blocked) for _, seconds, _, blocked in timer_calls],
+            [(10, True), (0.0, True)],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertTrue(handler_calls[-1][2])
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_timer_armed_after_preflight(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+        calls = []
+        mask_calls = []
+        alarm_blocked = False
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            self.assertTrue(alarm_blocked)
+            calls.append((timer_kind, seconds, interval))
+            if len(calls) == 1:
+                return (30.0, 0.5)
+            return (1.0, 0.0)
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            mask_calls.append((how, mask))
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
+                patch.object(cli.signal, "setitimer", side_effect=setitimer),
+                patch.object(
+                    cli.signal, "pthread_sigmask", side_effect=pthread_sigmask
+                ),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "^max-seconds cannot replace an active POSIX process timer$",
+                ),
+            ):
+                with cli._scoped_run_deadline(10):
+                    self.fail("concurrently armed timer should refuse before entry")
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertFalse(alarm_blocked)
+            self.assertEqual(
+                calls,
+                [
+                    (signal.ITIMER_REAL, 10, 0.0),
+                    (signal.ITIMER_REAL, 30.0, 0.5),
+                ],
+            )
+            self.assertEqual(
+                mask_calls,
+                [
+                    (signal.SIG_BLOCK, set()),
+                    (signal.SIG_BLOCK, set()),
+                    (signal.SIG_BLOCK, {signal.SIGALRM}),
+                    (signal.SIG_SETMASK, set()),
+                ],
+            )
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_does_not_cancel_interrupted_competing_timer_restore(self):
+        alarm_blocked = False
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            if len(timer_calls) == 1:
+                return (30.0, 0.5)
+            if len(timer_calls) == 2:
+                raise KeyboardInterrupt()
+            self.fail("cleanup must not cancel the restored competing timer")
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("competing timer should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, interval, blocked) for _, seconds, interval, blocked in timer_calls],
+            [(10, 0.0, True), (30.0, 0.5, True)],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertTrue(handler_calls[-1][2])
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "Linux interval timers required")
+    def test_deadline_refuses_unregistered_os_thread(self):
+        started = _thread.allocate_lock()
+        release = _thread.allocate_lock()
+        finished = _thread.allocate_lock()
+        started.acquire()
+        release.acquire()
+        finished.acquire()
+
+        def worker():
+            started.release()
+            release.acquire()
+            finished.release()
+
+        _thread.start_new_thread(worker, ())
+        self.assertTrue(started.acquire(timeout=5))
+        try:
+            with self.assertRaisesRegex(
+                ValueError, "^max-seconds requires a single-threaded process$"
+            ):
+                cli._require_run_deadline_support(1)
+        finally:
+            release.release()
+            self.assertTrue(finished.acquire(timeout=5))
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_handler_when_alarm_fires_during_cancellation(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+        calls = []
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            calls.append((timer_kind, seconds, interval))
+            if not seconds:
+                signal.raise_signal(signal.SIGALRM)
+            return (0.0, 0.0)
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(cli.signal, "setitimer", side_effect=setitimer),
+                self.assertRaisesRegex(CaptureError, "^ingestion deadline exceeded$"),
+            ):
+                with cli._scoped_run_deadline(10):
+                    pass
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertEqual(
+                calls,
+                [
+                    (signal.ITIMER_REAL, 10, 0.0),
+                    (signal.ITIMER_REAL, 0.0, 0.0),
+                ],
+            )
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_blocks_alarm_across_successful_cancellation(self):
+        alarm_blocked = False
+        mask_calls = []
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            mask_calls.append((how, mask))
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            return (0.0, 0.0)
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.assertFalse(alarm_blocked)
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, blocked) for _, seconds, _, blocked in timer_calls],
+            [(10, True), (0.0, True)],
+        )
+        self.assertEqual(
+            mask_calls,
+            [
+                (signal.SIG_BLOCK, set()),
+                (signal.SIG_BLOCK, {signal.SIGALRM}),
+                (signal.SIG_SETMASK, set()),
+                (signal.SIG_BLOCK, {signal.SIGALRM}),
+                (signal.SIG_SETMASK, set()),
+            ],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertFalse(handler_calls[-1][2])
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_preserves_mask_entry_alarm_when_cancel_fails(self):
+        alarm_blocked = False
+        mask_calls = 0
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked, mask_calls
+            mask_calls += 1
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            if mask_calls == 4:
+                raise CaptureError("ingestion deadline exceeded")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            if not seconds:
+                raise OSError("synthetic cancellation failure")
+            return (0.0, 0.0)
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            self.assertRaisesRegex(CaptureError, "^ingestion deadline exceeded$"),
+        ):
+            with cli._scoped_run_deadline(10):
+                pass
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, blocked) for _, seconds, _, blocked in timer_calls],
+            [(10, True), (0.0, True)],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertFalse(handler_calls[-1][2])
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_handler_when_failed_cancel_left_timer_inactive(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
+                patch.object(
+                    cli.signal,
+                    "setitimer",
+                    side_effect=[(0.0, 0.0), OSError("synthetic cancel failure")],
+                ),
+                self.assertRaisesRegex(OSError, "^synthetic cancel failure$"),
+            ):
+                with cli._scoped_run_deadline(10):
+                    pass
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "Linux interval timers required")
+    def test_deadline_retains_handler_when_failed_cancel_leaves_timer_active(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(
+                    cli.signal,
+                    "getitimer",
+                    side_effect=[(0.0, 0.0), (9.0, 0.0)],
+                ),
+                patch.object(
+                    cli.signal,
+                    "setitimer",
+                    side_effect=[(0.0, 0.0), OSError("synthetic cancel failure")],
+                ),
+                self.assertRaisesRegex(OSError, "^synthetic cancel failure$"),
+            ):
+                with cli._scoped_run_deadline(10):
+                    pass
+
+            self.assertIsNot(signal.getsignal(signal.SIGALRM), prior_handler)
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0.0)
             signal.signal(signal.SIGALRM, original_handler)
