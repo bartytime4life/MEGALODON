@@ -528,6 +528,7 @@ const advisoryCodes = Object.freeze({
   ANSWER: 'ADVISORY_ANSWER', ABSTAIN: 'INSUFFICIENT_ALLOWED_CONTEXT',
   DENY: 'POLICY_DENIED', ERROR: 'LOCAL_PROVIDER_ERROR'
 });
+const maxAdvisoryResponseBytes = 8 * 1024;
 
 function byId(value) { return document.getElementById(value); }
 function activateWorkspace(nextWorkspace, moveFocus = false) {
@@ -621,7 +622,7 @@ function validatedEvents(value) {
   return value;
 }
 function boundedAdvisoryText(value) {
-  return typeof value === 'string' && value.length >= 1 && value.length <= 1200
+  return typeof value === 'string' && [...value].length >= 1 && [...value].length <= 1200
     && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 function validatedAdvisoryEnvelope(value) {
@@ -693,7 +694,9 @@ function renderAdvisoryReceipt(receipt) {
 }
 async function loadAdvisoryReceipt() {
   try {
-    const receipt = validatedAdvisoryEnvelope(await requestJSON('/api/advisory-receipt'));
+    const receipt = validatedAdvisoryEnvelope(
+      await requestBoundedJSON('/api/advisory-receipt', maxAdvisoryResponseBytes)
+    );
     if (receipt === null) {
       renderAdvisoryUnavailable('No startup-supplied advisory receipt is available. This page cannot start Qwen or request an analysis.');
     } else {
@@ -701,6 +704,45 @@ async function loadAdvisoryReceipt() {
     }
   } catch (_) {
     renderAdvisoryUnavailable('The advisory receipt was unavailable or invalid. No partial model output is displayed, and no model request was made.');
+  }
+}
+async function requestBoundedJSON(path, maxBytes) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  let reader = null;
+  try {
+    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal});
+    if (!response.ok) throw new Error('bounded request failed');
+    if (!response.headers || typeof response.headers.get !== 'function') throw new Error('bounded response headers unavailable');
+    const declared = response.headers.get('Content-Length');
+    if (declared !== null
+        && (!/^[0-9]+$/.test(declared) || declared !== String(Number(declared))
+            || !Number.isSafeInteger(Number(declared)) || Number(declared) > maxBytes)) {
+      throw new Error('bounded response length invalid');
+    }
+    if (!response.body || typeof response.body.getReader !== 'function') throw new Error('bounded response body unavailable');
+    reader = response.body.getReader();
+    const chunks = []; let received = 0;
+    while (true) {
+      const part = await reader.read();
+      if (!part || typeof part.done !== 'boolean'
+          || (!part.done && !(part.value instanceof Uint8Array))) {
+        throw new Error('bounded response chunk invalid');
+      }
+      if (part.done) break;
+      received += part.value.byteLength;
+      if (received > maxBytes) throw new Error('bounded response exceeded limit');
+      chunks.push(part.value);
+    }
+    if (declared !== null && received !== Number(declared)) throw new Error('bounded response was partial');
+    const bytes = new Uint8Array(received); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+  } finally {
+    if (reader !== null) {
+      try { await reader.cancel(); } catch (_) {}
+    }
+    window.clearTimeout(timeout);
   }
 }
 async function requestJSON(path) {

@@ -190,15 +190,25 @@ process.stdin.on('end', async () => {
       limitations: ['AI text only.'], model_receipt: {provider_class: 'local_loopback',
         model_id: 'local:qwen-approved-v1', model_artifact_sha256: 'a'.repeat(64),
         policy_version: 'local-model-advisory-v1'}}};
+    function responseFor(bytes, declared = String(bytes.byteLength)) {
+      let sent = false;
+      return {ok: true, headers: {get: name => name === 'Content-Length' ? declared : null},
+        body: {getReader() { return {async read() {
+          if (sent) return {done: true, value: undefined}; sent = true; return {done: false, value: bytes};
+        }, async cancel() {}}; }}};
+    }
     const context = {document, AbortController, Intl, Date, Number, String, Math, Set, Promise, Error, Array,
+      TextDecoder, Uint8Array,
       window: {location: {hash: ''}, addEventListener() {}, setTimeout: setTimeout, clearTimeout: clearTimeout},
-      fetch: async path => { calls.push(path); return {ok: true, json: async () => value}; }};
+      fetch: async path => { calls.push(path); return responseFor(new Uint8Array(Buffer.from(JSON.stringify(value)))); }};
     vm.createContext(context);
     vm.runInContext(input.replace(/\nbootstrap\(\);\s*$/, '\n'), context, {timeout: 1000});
     const run = code => vm.runInContext(code, context, {timeout: 1000});
     context.value = value;
     const receipt = run('validatedAdvisoryEnvelope(value)');
     assert.equal(Object.isFrozen(receipt), true); assert.equal(Object.isFrozen(receipt.model_receipt), true);
+    assert.equal(run("boundedAdvisoryText('😀'.repeat(601))"), true);
+    assert.equal(run("boundedAdvisoryText('😀'.repeat(1201))"), false);
     run('renderAdvisoryReceipt(validatedAdvisoryEnvelope(value))');
     assert.equal(nodes.get('analysis-summary').textContent, '<img src=x onerror=alert(1)>');
     assert.equal(nodes.get('analysis-limitations').children.length, 1);
@@ -215,7 +225,14 @@ process.stdin.on('end', async () => {
     await run('loadAdvisoryReceipt()');
     assert.deepEqual(calls, ['/api/advisory-receipt']);
     assert.equal(nodes.get('analysis-window-title').textContent, 'Qwen advisory receipt · display only');
-    console.log('advisory receipt: closed validation, immutable copy, text sink, one load passed');
+    context.fetch = async path => { calls.push(path); return responseFor(new Uint8Array(8193)); };
+    await run('loadAdvisoryReceipt()');
+    assert.equal(nodes.get('analysis-window-title').textContent, 'Qwen advisory receipt · unavailable');
+    assert.match(nodes.get('analysis-summary').textContent, /No partial model output/);
+    context.fetch = async path => { calls.push(path); return responseFor(new Uint8Array([123, 125]), '0002'); };
+    await run('loadAdvisoryReceipt()');
+    assert.equal(nodes.get('analysis-window-title').textContent, 'Qwen advisory receipt · unavailable');
+    console.log('advisory receipt: closed validation, Unicode parity, byte cap, immutable copy, and text sink passed');
   } catch (error) { console.error(error); process.exitCode = 1; }
 });
 """
@@ -224,4 +241,4 @@ process.stdin.on('end', async () => {
         capture_output=True, timeout=10, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "one load passed" in result.stdout
+    assert "Unicode parity, byte cap" in result.stdout

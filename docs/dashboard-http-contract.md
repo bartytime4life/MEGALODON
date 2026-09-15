@@ -59,7 +59,11 @@ version, and lowercase artifact SHA-256. It then takes an owned JSON copy and
 bounds the complete response to 8 KiB. Later mutation of the source object
 cannot change the served receipt.
 
-The browser requests this route once during bootstrap. It does not include the
+The browser requests this route once during bootstrap. It checks a canonical
+content length when present, reads the response stream through an 8 KiB
+cumulative byte budget, and performs strict UTF-8 decoding before JSON parsing.
+Its text-length checks count Unicode code points to match Python's contract.
+It does not include the
 receipt in periodic telemetry refresh, retain a stale prior value, offer a
 retry or invocation control, or fetch it from another origin. The browser
 revalidates the complete envelope, freezes its owned projection, and renders

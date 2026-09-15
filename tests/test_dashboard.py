@@ -415,6 +415,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
     assert "'/api/advisory-receipt'" in DASHBOARD_JS
+    assert "requestBoundedJSON" in DASHBOARD_JS
+    assert "new TextDecoder('utf-8', {fatal: true})" in DASHBOARD_JS
     assert "renderAdvisoryReceipt" in DASHBOARD_JS
     assert "integrity_failure" in DASHBOARD_JS
     assert "last successful reference result as stale" in DASHBOARD_JS
