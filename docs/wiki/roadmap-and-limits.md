@@ -24,13 +24,16 @@ blocked across the handler/timer swap, and prior-handler restoration remains
 conditional on confirmed timer inactivity when cancellation raises. Teardown
 blocks `SIGALRM` before cancellation and keeps the deadline handler until the
 original mask is restored; deadline dispatch at cleanup-mask entry is re-raised
-after teardown completes. Threaded
+after teardown completes. Dispatch as setup unmasking returns re-enters protected
+teardown, and dispatch during post-cancel timer inspection is preserved until
+the remaining cleanup decisions complete. Threaded
 Scapy capture refuses the deadline.
 Interrupted setup masking restores the observed pre-call mask, and an interrupted
 protected pending-signal inspection restores that mask. An interrupted handler
 installation is restored. An interrupted arming call is conservatively
-treated as live until teardown cancellation; an interrupted competing-timer
-restoration is not cancelled again.
+treated as live until teardown cancellation; interrupted competing-timer
+restoration is read back so a confirmed competing timer is preserved, while an
+incomplete swap cancels the deadline and restores the displaced timer.
 Without that option, blocking work remains unbounded. The deadline does not
 interrupt kernel-level uninterruptible sleep, supply a Windows control, or
 establish installed-capture loss handling, sustained native capacity, or
