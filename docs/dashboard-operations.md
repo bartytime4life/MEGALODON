@@ -199,3 +199,12 @@ may remain available while the summary cannot complete within its budget.
 See [query budget limits and recovery](dashboard-query-budget.md). No data is
 purged or modified to recover a read, and the deadline is cooperative rather
 than a guarantee against filesystem or native stalls.
+
+## Contradictory offline candidate reports
+
+A complete offline report set can still contain contradictory candidate evidence.
+Startup projection now checks candidates against the full baseline and refuses
+absent-port claims, unsupported counts, duplicate identities and impossible
+host ranks. See [candidate support and remaining proof limits](offline-candidate-consistency.md).
+Regenerate a rejected report from source evidence; no automatic repair or partial
+successful snapshot is performed.
