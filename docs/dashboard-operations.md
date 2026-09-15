@@ -189,3 +189,13 @@ lifecycle/outbox design remains separate from the stored priority counter. A
 future real connector must first supply its own versioned input contract, bounded
 reader, privacy and completeness semantics, ownership, tests, and review. Adding
 a card is not source admission or permission to execute its entry point.
+
+## Expensive stored-telemetry reads
+
+A large ledger can exceed the dashboard's finite SQL work budget even when the
+returned count has only four fields. The API reports telemetry unavailable;
+existing browser values become stale rather than zero. An indexed recent list
+may remain available while the summary cannot complete within its budget.
+See [query budget limits and recovery](dashboard-query-budget.md). No data is
+purged or modified to recover a read, and the deadline is cooperative rather
+than a guarantee against filesystem or native stalls.

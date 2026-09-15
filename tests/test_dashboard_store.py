@@ -395,7 +395,7 @@ def test_summary_is_one_statement_and_recent_selects_only_public_fields(tmp_path
     assert "TEMP B-TREE" not in plan
 
 
-def test_summary_returns_consistent_counts_when_a_wal_commit_overlaps(tmp_path):
+def test_summary_returns_consistent_counts_when_a_wal_commit_overlaps(tmp_path, monkeypatch):
     path = tmp_path / "private" / "audit.db"
     _seed(path)
     entered = Event()
@@ -406,13 +406,16 @@ def test_summary_returns_consistent_counts_when_a_wal_commit_overlaps(tmp_path):
     with Store(path) as writer, DashboardStore(path) as reader:
         paused = False
 
-        def pause_statement() -> int:
+        original_progress = storage_module._DashboardQueryBudget.progress
+        monkeypatch.setattr(storage_module, "DASHBOARD_QUERY_PROGRESS_STEPS", 1)
+
+        def pause_statement(budget) -> int:
             nonlocal paused
             if not paused:
                 paused = True
                 entered.set()
                 release.wait(timeout=5)
-            return 0
+            return original_progress(budget)
 
         def read_summary() -> None:
             try:
@@ -420,7 +423,7 @@ def test_summary_returns_consistent_counts_when_a_wal_commit_overlaps(tmp_path):
             except BaseException as exc:  # pragma: no cover - reported below
                 failure.append(exc)
 
-        reader._connection.set_progress_handler(pause_statement, 1)
+        monkeypatch.setattr(storage_module._DashboardQueryBudget, "progress", pause_statement)
         thread = Thread(target=read_summary)
         thread.start()
         assert entered.wait(timeout=5)
@@ -460,7 +463,6 @@ def test_summary_returns_consistent_counts_when_a_wal_commit_overlaps(tmp_path):
         finally:
             release.set()
             thread.join(timeout=5)
-            reader._connection.set_progress_handler(None, 0)
 
     assert not thread.is_alive()
     assert failure == []
