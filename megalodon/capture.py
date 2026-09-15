@@ -20,6 +20,7 @@ class CaptureError(RuntimeError):
 
 
 MAX_JSONL_LINE_BYTES = 64 * 1024
+MAX_JSONL_SKIPPED_LINES = 65_536
 _JSONL_FIELDS = frozenset({
     "observed_at", "timestamp", "src_ip", "dst_ip", "protocol", "src_port",
     "dst_port", "tcp_flags", "dns_query_length", "byte_count", "interface", "metadata",
@@ -235,10 +236,19 @@ def iter_jsonl(
     stream: TextIO,
     *,
     max_line_bytes: int = MAX_JSONL_LINE_BYTES,
+    max_skipped_lines: int = MAX_JSONL_SKIPPED_LINES,
 ) -> Iterator[PacketEvent]:
     if type(max_line_bytes) is not int or not 1 <= max_line_bytes <= MAX_JSONL_LINE_BYTES:
         raise ValueError("max_line_bytes must be an integer between 1 and 65536")
+    if (
+        type(max_skipped_lines) is not int
+        or not 0 <= max_skipped_lines <= MAX_JSONL_SKIPPED_LINES
+    ):
+        raise ValueError(
+            "max_skipped_lines must be an integer between 0 and 65536"
+        )
     line_number = 0
+    skipped_lines = 0
     while True:
         try:
             line = stream.readline(max_line_bytes + 1)
@@ -254,6 +264,12 @@ def iter_jsonl(
             )
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
+            skipped_lines += 1
+            if skipped_lines > max_skipped_lines:
+                raise CaptureError(
+                    "JSONL skipped-line limit exceeded "
+                    f"at line {line_number}"
+                )
             continue
         try:
             yield _jsonl_event(stripped)

@@ -155,6 +155,10 @@ lifecycle.
 - JSONL/stdin and Scapy sources require an explicit positive `--max-events N`
   ceiling from 1 through 10,000,000 before the audit store or source is opened.
   The finite repository-owned sample generator may omit it.
+- A JSONL iterator accepts at most 65,536 skipped blank/comment lines across the
+  full stream. Internal callers may lower this budget; the first excess line
+  fails with `CAPTURE_ERROR`, preserves the committed prefix, and leaves the
+  suffix unread.
 - `--max-events N` stops intake after the Nth accepted event, then records
   `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
   the next live event.
@@ -235,8 +239,9 @@ errors cannot produce either a completed or event-limit success receipt. Test
 producers are synthetic; no Scapy installation, capture, socket, DNS lookup, or
 subprocess is needed by these tests.
 
-This is deterministic ownership, not a deadline or a native-shutdown receipt.
-A blocking `next()` or `close()` can still block. Async sniffer death, partial
+This is deterministic ownership and finite returned-line work, not an elapsed
+deadline or a native-shutdown receipt. A blocking `next()` or `close()` can
+still block. Async sniffer death, partial
 startup cleanup, bounded stop/join, kernel loss, repeated-signal resilience,
 physical disk/power loss, native Windows behavior, and continuous operation
 remain outside this correction under issue #68 and the existing acceptance

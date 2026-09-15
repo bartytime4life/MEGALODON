@@ -9,9 +9,11 @@ The project does not currently provide an authenticated remote UI, arbitrary rul
 Operational JSONL/stdin replay and optional Scapy capture require an explicit
 positive accepted-event `--max-events` ceiling from 1 through 10,000,000. The
 built-in sample source may omit it because the repository owns its finite
-generator. This bound does not cap elapsed time or skipped blank/comment JSONL
-lines, and it does not establish installed-capture loss handling, sustained
-native capacity, or continuous-monitoring acceptance.
+generator. JSONL iterators also refuse the first blank/comment line beyond a
+fixed 65,536-line skipped-input budget, bounding physical line work after reads
+return. These limits do not interrupt a blocking read or cap elapsed time, and
+they do not establish installed-capture loss handling, sustained native capacity,
+or continuous-monitoring acceptance.
 
 The bundled IANA reference data is not service discovery or a vulnerability feed. The synthetic corpus verifies deterministic boundary behavior; it is not representative production traffic, a product benchmark, or proof an alert is malicious.
 
