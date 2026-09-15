@@ -94,7 +94,7 @@ def test_event_projection_and_valid_limits_remain_compatible(http_dashboard, tar
     assert b"must not appear" not in body and b"198.51.100.1" not in body
 
 
-@pytest.mark.parametrize("path", ["/api/config", "/api/summary", "/api/offline-summary", "/api/reference/status"])
+@pytest.mark.parametrize("path", ["/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"])
 def test_no_query_routes_do_not_ignore_unknown_arguments(http_dashboard, path):
     server, reader = http_dashboard
     assert request(server, path + "?unknown=1")[0] == 400

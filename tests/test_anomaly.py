@@ -126,6 +126,16 @@ def test_candidate_overflow_abstains_instead_of_silent_truncation():
     assert result['candidates'] == [] and result['truncated'] is False
 
 
+def test_low_support_port_changes_are_filtered_before_candidate_limit():
+    data = sample()
+    data['reference']['baseline'] = baseline(tuple((port, 1) for port in range(1000, 1300)))
+    data['current']['baseline'] = baseline(tuple((port, 1) for port in range(2000, 2300)))
+    result = build_anomaly_dossier(data)
+    assert result['status'] == 'no_candidates'
+    assert result['reason_code'] == 'NO_THRESHOLD_CROSSING'
+    assert result['candidates'] == []
+
+
 @pytest.mark.parametrize('value', [None, [], True, 1.5, 'SECRET', {'schema': 'bad'}])
 def test_invalid_top_level_is_fixed_error(value):
     with pytest.raises(OfflineError, match='^ANOMALY_INPUT_INVALID$'):

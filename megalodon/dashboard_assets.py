@@ -145,13 +145,16 @@ INDEX_HTML = """<!doctype html>
   <section class="analysis-window" aria-labelledby="analysis-window-title">
     <div>
       <p class="eyebrow">AI advisory status</p>
-      <h3 id="analysis-window-title">Reserved analysis window · not active</h3>
-      <p>A future explicit local advisory may inspect one completed, privacy-bounded metadata projection for up to 15 seconds, one request at a time. It cannot inspect raw traffic, contact the Internet, start background analysis, or apply a response.</p>
+      <h3 id="analysis-window-title">Qwen advisory receipt · checking</h3>
+      <p id="analysis-summary">Checking for one startup-supplied, display-only advisory receipt. This page cannot start Qwen or request an analysis.</p>
+      <p class="analysis-trust" role="note">AI advisory; not evidence or an action.</p>
+      <ul class="analysis-limitations" id="analysis-limitations" aria-label="Advisory limitations"></ul>
     </div>
     <dl class="analysis-facts">
-      <div><dt>Current state</dt><dd>Not implemented</dd></div>
-      <div><dt>Allowed input</dt><dd>Completed metadata only</dd></div>
-      <div><dt>Result meaning</dt><dd>Advisory · not proof</dd></div>
+      <div><dt>Outcome</dt><dd id="analysis-outcome">Checking</dd></div>
+      <div><dt>Model</dt><dd id="analysis-model">Not supplied</dd></div>
+      <div><dt>Artifact SHA-256</dt><dd id="analysis-digest" class="receipt-digest">Not supplied</dd></div>
+      <div><dt>Policy</dt><dd id="analysis-policy">local-model-advisory-v1</dd></div>
     </dl>
   </section>
 
@@ -305,6 +308,9 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
 .analysis-window { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .7fr); gap: 18px; align-items: center; margin: 0 0 18px; padding: 18px 20px; border: 1px solid rgba(255, 209, 102, .28); border-radius: var(--radius); background: linear-gradient(145deg, rgba(65, 54, 23, .24), rgba(8, 24, 33, .88)); box-shadow: var(--shadow); }
 .analysis-window h3 { margin: 0; font-size: .94rem; }
 .analysis-window p:not(.eyebrow) { max-width: 720px; margin: 7px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.analysis-window .analysis-trust { color: var(--warning); font-weight: 700; }
+.analysis-limitations { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: .76rem; line-height: 1.5; }
+.receipt-digest { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .analysis-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 0; }
 .analysis-facts div { padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .42); }
 .analysis-facts dt { color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -516,6 +522,13 @@ const referenceState = {
 const referenceSourceFields = ['id', 'registry_url', 'registry_last_updated', 'retrieved_at', 'retrieved_at_basis'];
 const referencePortFields = ['service_name', 'transport', 'port_start', 'port_end', 'record_kind', 'description', 'registration_date', 'modification_date', 'source_row'];
 const referenceProtocolFields = ['keyword', 'protocol_name', 'decimal_start', 'decimal_end', 'record_kind', 'ipv6_extension_header', 'source_row'];
+const advisoryReceiptFields = ['code', 'limitations', 'model_receipt', 'outcome', 'summary'];
+const advisoryModelFields = ['model_artifact_sha256', 'model_id', 'policy_version', 'provider_class'];
+const advisoryCodes = Object.freeze({
+  ANSWER: 'ADVISORY_ANSWER', ABSTAIN: 'INSUFFICIENT_ALLOWED_CONTEXT',
+  DENY: 'POLICY_DENIED', ERROR: 'LOCAL_PROVIDER_ERROR'
+});
+const maxAdvisoryResponseBytes = 8 * 1024;
 
 function byId(value) { return document.getElementById(value); }
 function activateWorkspace(nextWorkspace, moveFocus = false) {
@@ -607,6 +620,130 @@ function validatedEvents(value) {
   });
   if (!valid) throw new Error('invalid events response');
   return value;
+}
+function boundedAdvisoryText(value) {
+  return typeof value === 'string' && [...value].length >= 1 && [...value].length <= 1200
+    && !/[\u0000-\u001f\u007f]/u.test(value);
+}
+function validatedAdvisoryEnvelope(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || value.schema !== 'dashboard-advisory-receipt-v1' || typeof value.available !== 'boolean') {
+    throw new Error('invalid advisory receipt');
+  }
+  const envelopeKeys = Object.keys(value).sort();
+  const expectedEnvelopeKeys = value.available ? ['available', 'receipt', 'schema'] : ['available', 'schema'];
+  if (envelopeKeys.length !== expectedEnvelopeKeys.length
+      || !expectedEnvelopeKeys.every((field, index) => envelopeKeys[index] === field)) {
+    throw new Error('invalid advisory receipt');
+  }
+  if (!value.available) return null;
+  const receipt = value.receipt;
+  if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) throw new Error('invalid advisory receipt');
+  const receiptKeys = Object.keys(receipt).sort();
+  if (receiptKeys.length !== advisoryReceiptFields.length
+      || !advisoryReceiptFields.every((field, index) => receiptKeys[index] === field)
+      || !Object.prototype.hasOwnProperty.call(advisoryCodes, receipt.outcome)
+      || advisoryCodes[receipt.outcome] !== receipt.code
+      || !boundedAdvisoryText(receipt.summary)
+      || !Array.isArray(receipt.limitations) || receipt.limitations.length < 1 || receipt.limitations.length > 8
+      || !receipt.limitations.every(boundedAdvisoryText)
+      || new Set(receipt.limitations).size !== receipt.limitations.length) {
+    throw new Error('invalid advisory receipt');
+  }
+  const model = receipt.model_receipt;
+  if (!model || typeof model !== 'object' || Array.isArray(model)) throw new Error('invalid advisory receipt');
+  const modelKeys = Object.keys(model).sort();
+  if (modelKeys.length !== advisoryModelFields.length
+      || !advisoryModelFields.every((field, index) => modelKeys[index] === field)
+      || model.provider_class !== 'local_loopback'
+      || model.policy_version !== 'local-model-advisory-v1'
+      || typeof model.model_id !== 'string'
+      || !/^local:qwen-[A-Za-z0-9._-]{1,96}$/.test(model.model_id)
+      || typeof model.model_artifact_sha256 !== 'string'
+      || !/^[a-f0-9]{64}$/.test(model.model_artifact_sha256)) {
+    throw new Error('invalid advisory receipt');
+  }
+  const ownedModel = Object.freeze({
+    provider_class: model.provider_class, model_id: model.model_id,
+    model_artifact_sha256: model.model_artifact_sha256, policy_version: model.policy_version
+  });
+  return Object.freeze({
+    outcome: receipt.outcome, code: receipt.code, summary: receipt.summary,
+    limitations: Object.freeze([...receipt.limitations]), model_receipt: ownedModel
+  });
+}
+function renderAdvisoryUnavailable(message) {
+  byId('analysis-window-title').textContent = 'Qwen advisory receipt · unavailable';
+  byId('analysis-summary').textContent = message;
+  byId('analysis-outcome').textContent = 'Unavailable';
+  byId('analysis-model').textContent = 'Not supplied';
+  byId('analysis-digest').textContent = 'Not supplied';
+  byId('analysis-policy').textContent = 'local-model-advisory-v1';
+  byId('analysis-limitations').replaceChildren();
+}
+function renderAdvisoryReceipt(receipt) {
+  byId('analysis-window-title').textContent = 'Qwen advisory receipt · display only';
+  byId('analysis-summary').textContent = receipt.summary;
+  byId('analysis-outcome').textContent = `${receipt.outcome} · ${receipt.code}`;
+  byId('analysis-model').textContent = receipt.model_receipt.model_id;
+  byId('analysis-digest').textContent = receipt.model_receipt.model_artifact_sha256;
+  byId('analysis-policy').textContent = receipt.model_receipt.policy_version;
+  byId('analysis-limitations').replaceChildren(
+    ...receipt.limitations.map(value => textNode('li', value))
+  );
+}
+async function loadAdvisoryReceipt() {
+  try {
+    const receipt = validatedAdvisoryEnvelope(
+      await requestBoundedJSON('/api/advisory-receipt', maxAdvisoryResponseBytes)
+    );
+    if (receipt === null) {
+      renderAdvisoryUnavailable('No startup-supplied advisory receipt is available. This page cannot start Qwen or request an analysis.');
+    } else {
+      renderAdvisoryReceipt(receipt);
+    }
+  } catch (_) {
+    renderAdvisoryUnavailable('The advisory receipt was unavailable or invalid. No partial model output is displayed, and no model request was made.');
+  }
+}
+async function requestBoundedJSON(path, maxBytes) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  let reader = null;
+  try {
+    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal});
+    if (!response.ok) throw new Error('bounded request failed');
+    if (!response.headers || typeof response.headers.get !== 'function') throw new Error('bounded response headers unavailable');
+    const declared = response.headers.get('Content-Length');
+    if (declared !== null
+        && (!/^[0-9]+$/.test(declared) || declared !== String(Number(declared))
+            || !Number.isSafeInteger(Number(declared)) || Number(declared) > maxBytes)) {
+      throw new Error('bounded response length invalid');
+    }
+    if (!response.body || typeof response.body.getReader !== 'function') throw new Error('bounded response body unavailable');
+    reader = response.body.getReader();
+    const chunks = []; let received = 0;
+    while (true) {
+      const part = await reader.read();
+      if (!part || typeof part.done !== 'boolean'
+          || (!part.done && !(part.value instanceof Uint8Array))) {
+        throw new Error('bounded response chunk invalid');
+      }
+      if (part.done) break;
+      received += part.value.byteLength;
+      if (received > maxBytes) throw new Error('bounded response exceeded limit');
+      chunks.push(part.value);
+    }
+    if (declared !== null && received !== Number(declared)) throw new Error('bounded response was partial');
+    const bytes = new Uint8Array(received); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+  } finally {
+    if (reader !== null) {
+      try { await reader.cancel(); } catch (_) {}
+    }
+    window.clearTimeout(timeout);
+  }
 }
 async function requestJSON(path) {
   const controller = new AbortController();
@@ -1218,6 +1355,7 @@ async function bootstrap() {
   }
   try { renderOffline(await requestJSON('/api/offline-summary')); }
   catch (_) { renderOfflineError(); }
+  loadAdvisoryReceipt();
   loadReferenceStatus();
   await refresh(false); scheduleNext();
 }
