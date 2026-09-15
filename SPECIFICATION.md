@@ -43,8 +43,16 @@ An optional internal Qwen advisory API can make one explicitly enabled,
 non-streaming request to a separately operated Ollama provider at the compiled
 literal IPv4 loopback tuple `127.0.0.1:11434`. It reruns the fingerprint-pinned
 Airlock before opening a socket and accepts only the canonical bounded metadata
-prompt. It is not connected to the service, CLI, dashboard, capture path,
+prompt. This original run-count policy is not connected to the service, CLI, dashboard, capture path,
 database, detector, policy, or action ledger.
+
+The separate [offline anomaly policy](docs/anomaly-advisory-contract.md) can
+explain recomputed, source-qualified baseline candidates through the same
+bounded transport. Its [one-shot analyst command](docs/anomaly-triage.md)
+requires explicit `--qwen` and an independently pinned anomaly registry; AI is
+disabled by default. Eligibility gaps abstain, model failures retain deterministic
+evidence, and neither model prose nor candidate thresholds become live detector
+or response authority. No repeated operation or dashboard invocation is added.
 
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event

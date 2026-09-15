@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Qwen anomaly admission v1 structural contract",
+  "description": "Runtime additionally verifies canonical registry fingerprint, exact primitive types, aggregate consistency, source pairing, eligible windows and complete evidence recomputation. Fixtures are synthetic, not an approved installed model.",
+  "$defs": {
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "started_at",
+        "finished_at",
+        "completeness"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^source-[0-9]{4}$",
+          "maxLength": 11
+        },
+        "started_at": {
+          "type": "string",
+          "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "maxLength": 20
+        },
+        "finished_at": {
+          "type": "string",
+          "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "maxLength": 20
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "incomplete",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "adapter",
+        "record_kind",
+        "record_count",
+        "total_bytes",
+        "protocols",
+        "destination_ports",
+        "byte_bands",
+        "relative_minutes"
+      ],
+      "properties": {
+        "schema": {
+          "const": "offline-baseline-v1"
+        },
+        "adapter": {
+          "enum": [
+            "tshark-fields-v1",
+            "zeek-conn-json-v1",
+            "zeek-conn-tsv-v1"
+          ]
+        },
+        "record_kind": {
+          "enum": [
+            "packet",
+            "flow"
+          ]
+        },
+        "record_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 21990232555500000
+        },
+        "protocols": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "protocol",
+              "count"
+            ],
+            "properties": {
+              "protocol": {
+                "enum": [
+                  "TCP",
+                  "UDP",
+                  "ICMP",
+                  "ICMPV6",
+                  "OTHER"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            }
+          }
+        },
+        "destination_ports": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "protocol",
+              "port",
+              "count"
+            ],
+            "properties": {
+              "protocol": {
+                "enum": [
+                  "TCP",
+                  "UDP"
+                ]
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            }
+          }
+        },
+        "byte_bands": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "properties": {
+            "small": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "large": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "relative_minutes": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "minute",
+              "count"
+            ],
+            "properties": {
+              "minute": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 68374080
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "reference",
+        "current",
+        "as_of"
+      ],
+      "properties": {
+        "schema": {
+          "const": "offline-anomaly-input-v1"
+        },
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "window",
+            "baseline"
+          ],
+          "properties": {
+            "window": {
+              "$ref": "#/$defs/window"
+            },
+            "baseline": {
+              "$ref": "#/$defs/baseline"
+            }
+          }
+        },
+        "current": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "window",
+            "baseline"
+          ],
+          "properties": {
+            "window": {
+              "$ref": "#/$defs/window"
+            },
+            "baseline": {
+              "$ref": "#/$defs/baseline"
+            }
+          }
+        },
+        "as_of": {
+          "type": "string",
+          "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "maxLength": 20
+        }
+      }
+    },
+    "modelReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_class",
+        "model_id",
+        "model_artifact_sha256",
+        "policy_version"
+      ],
+      "properties": {
+        "provider_class": {
+          "const": "local_loopback"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}$",
+          "maxLength": 107
+        },
+        "model_artifact_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "maxLength": 64
+        },
+        "policy_version": {
+          "const": "local-model-anomaly-advisory-v1"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_input_bytes",
+        "max_output_bytes",
+        "timeout_seconds",
+        "max_concurrency"
+      ],
+      "properties": {
+        "max_input_bytes": {
+          "const": 4096
+        },
+        "max_output_bytes": {
+          "const": 4096
+        },
+        "timeout_seconds": {
+          "const": 15
+        },
+        "max_concurrency": {
+          "const": 1
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "models",
+        "tools"
+      ],
+      "properties": {
+        "schema": {
+          "const": "qwen-anomaly-registry-v1"
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "model_receipt",
+              "limits"
+            ],
+            "properties": {
+              "model_receipt": {
+                "$ref": "#/$defs/modelReceipt"
+              },
+              "limits": {
+                "$ref": "#/$defs/limits"
+              }
+            }
+          }
+        },
+        "tools": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "question_type",
+        "input",
+        "model_receipt",
+        "limits"
+      ],
+      "properties": {
+        "schema": {
+          "const": "qwen-anomaly-request-v1"
+        },
+        "question_type": {
+          "enum": [
+            "explain_anomalies",
+            "explain_anomaly_limitations"
+          ]
+        },
+        "input": {
+          "$ref": "#/$defs/input"
+        },
+        "model_receipt": {
+          "$ref": "#/$defs/modelReceipt"
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        }
+      }
+    }
+  }
+}
