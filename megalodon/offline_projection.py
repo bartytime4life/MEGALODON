@@ -423,7 +423,59 @@ def _candidate(value: dict[str, Any], run: dict[str, Any]) -> str:
     return rule
 
 
-def _candidates(data: bytes, run: dict[str, Any]) -> list[dict[str, int | str]]:
+class _CandidateSupport:
+    """Necessary support checks against the full, already-validated baseline.
+
+    Each rule partitions records differently. Account within a rule only:
+    one observation can legitimately support several different candidate rules.
+    """
+
+    def __init__(self, baseline: dict[str, Any], accepted: int):
+        self.ports = {(item['protocol'], item['port']): item['count']
+                      for item in baseline['destination_ports']}
+        self.minutes = {item['minute']: item['count']
+                        for item in baseline['relative_minutes']}
+        self.max_host = 2 * accepted
+        self.seen: set[tuple] = set()
+        self.regular: Counter = Counter()
+        self.bursts: Counter = Counter()
+        self.burst_total = 0
+        self.port_53_total = sum(count for (_, port), count in self.ports.items() if port == 53)
+
+    def admit(self, candidate: dict[str, Any]) -> None:
+        rule, evidence = candidate['rule'], candidate['evidence']
+        # Syntax was checked by _candidate. Host labels are one-based ranks
+        # among at most two endpoints per admitted record, not external IDs.
+        for name in ('src', 'dst'):
+            if name in evidence and not 1 <= int(evidence[name][5:]) <= self.max_host:
+                _fail('INVALID_OFFLINE_CANDIDATE')
+        if rule == 'NEW_DESTINATION_PORT':
+            port = (evidence['protocol'], uint(evidence['port'], 65535))
+            identity = (rule, *port)
+            if uint(evidence['records'], 10000) != self.ports.get(port, 0):
+                _fail('INVALID_OFFLINE_CANDIDATE')
+        elif rule == 'REGULAR_INTERVAL':
+            port = (evidence['protocol'], uint(evidence['port'], 65535))
+            identity = (rule, evidence['src'], evidence['dst'], *port)
+            self.regular[port] += uint(evidence['unique_observations'], 10000)
+            if self.regular[port] > self.ports.get(port, 0):
+                _fail('INVALID_OFFLINE_CANDIDATE')
+        else:
+            minute = uint(evidence['relative_minute'], 68_374_080)
+            count = uint(evidence['records'], 10000)
+            identity = (rule, evidence['src'], minute)
+            self.bursts[minute] += count
+            self.burst_total += count
+            if (self.bursts[minute] > self.minutes.get(minute, 0) or
+                    self.burst_total > self.port_53_total):
+                _fail('INVALID_OFFLINE_CANDIDATE')
+        if identity in self.seen:
+            _fail('INVALID_OFFLINE_CANDIDATE')
+        self.seen.add(identity)
+
+
+def _candidates(data: bytes, run: dict[str, Any],
+                baseline: dict[str, Any]) -> list[dict[str, int | str]]:
     if not data:
         values: list[bytes] = []
     elif not data.endswith(b"\n"):
@@ -433,6 +485,7 @@ def _candidates(data: bytes, run: dict[str, Any]) -> list[dict[str, int | str]]:
     if len(values) != run["candidate_count"] or len(values) > MAX_CANDIDATES:
         _fail("INVALID_OFFLINE_CANDIDATES")
     counts: Counter[str] = Counter()
+    support = _CandidateSupport(baseline, run['accepted_records'])
     for line in values:
         if not line or len(line) > MAX_CANDIDATE_LINE_BYTES:
             _fail("INVALID_OFFLINE_CANDIDATES")
@@ -440,7 +493,9 @@ def _candidates(data: bytes, run: dict[str, Any]) -> list[dict[str, int | str]]:
             candidate = json_object(line.decode("ascii"))
         except (UnicodeDecodeError, OfflineError):
             _fail("INVALID_OFFLINE_CANDIDATES")
-        counts[_candidate(candidate, run)] += 1
+        rule = _candidate(candidate, run)
+        support.admit(candidate)
+        counts[rule] += 1
     return [
         {"rule": rule, "status": "candidate", "count": counts[rule]}
         for rule in _CANDIDATE_RULES
@@ -462,7 +517,8 @@ def load_offline_projection(path: str | Path) -> dict[str, Any]:
     if sum(sizes.values()) > limits.report_bytes:
         _fail("OFFLINE_REPORT_SIZE_LIMIT")
     summary = _baseline(baseline_value, run)
-    candidate_summary = _candidates(data["candidates.jsonl"], run)
+    # Use the full validated distribution, not the twelve-port UI projection.
+    candidate_summary = _candidates(data["candidates.jsonl"], run, baseline_value)
     return {
         "schema": "dashboard-offline-summary-v1",
         "run": run,
