@@ -209,9 +209,11 @@ local model, never a cloud model.
    provider call with redirect, proxy, DNS, timeout, response-size,
    concurrency, and cancellation controls. It does not start Ollama, download
    a model, discover models, or change Qwen configuration.
-5. **Third PR:** expose only the immutable read-only receipt in the existing
-   **Deep analysis & context** panel after the adapter's data, privacy, error,
-   and browser bounds are proven.
+5. **Delivered in the display-only receipt slice:** one startup-supplied
+   `QwenAdvisoryResult` is validated, copied, served through a bounded GET-only
+   route, and rendered as text in **Deep analysis & context**. The dashboard
+   cannot invoke Qwen, load a receipt from disk, poll the provider, or retry an
+   analysis; absence or invalid data produces an explicit unavailable state.
 6. Consider any active host, network, file, or response integration only as a
    separately authorized product phase with durable intent, authorization,
    readback, reconciliation, and independent security review.
