@@ -64,7 +64,7 @@ _COMPONENTS = (
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "Linux can read one completed private contract envelope file; no EVE converter, sensor, ruleset, persistence, dashboard, or IPS path exists.",
+        "boundary": "The single-threaded Linux main-thread API can read one completed private contract envelope file; no EVE converter, sensor, ruleset, persistence, dashboard, or IPS path exists.",
     },
     {
         "id": "scapy",

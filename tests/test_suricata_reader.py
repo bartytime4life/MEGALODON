@@ -8,6 +8,8 @@ from pathlib import Path
 import socket
 import stat
 import subprocess
+import time
+import traceback
 
 import pytest
 
@@ -130,6 +132,24 @@ def test_sequence_run_identity_and_replay_fail_closed(tmp_path):
         suricata.read_completed_file(str(path), completed_run_keys=replay_view)
 
 
+@pytest.mark.parametrize(
+    ("field_path", "value"),
+    [
+        (("event", "proto"), []),
+        (("event", "alert", "action"), {}),
+    ],
+)
+def test_unhashable_enums_are_schema_failures(tmp_path, field_path, value):
+    record = json.loads(json.dumps(CASES[0]["input"]))
+    target = record
+    for key in field_path[:-1]:
+        target = target[key]
+    target[field_path[-1]] = value
+    path = _write(tmp_path / "alerts.jsonl", [record])
+    with pytest.raises(suricata.ReaderError, match="SCHEMA$"):
+        suricata.read_completed_file(str(path))
+
+
 def test_file_policy_rejects_mode_symlink_and_fifo(tmp_path):
     path = _write(tmp_path / "mode.jsonl", [CASES[0]["input"]])
     path.chmod(0o644)
@@ -185,6 +205,8 @@ def test_owner_and_replay_view_types_are_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(suricata.os, "geteuid", lambda: os.stat(path).st_uid)
     with pytest.raises(suricata.ReaderError, match="REPLAY$"):
         suricata.read_completed_file(str(path), completed_run_keys=[])
+    with pytest.raises(suricata.ReaderError, match="REPLAY$"):
+        suricata.read_completed_file(str(path), completed_run_keys={("short",)})
 
 
 def test_post_read_change_and_deadline_fail_before_publication(tmp_path, monkeypatch):
@@ -207,6 +229,34 @@ def test_post_read_change_and_deadline_fail_before_publication(tmp_path, monkeyp
     monkeypatch.setattr(suricata.time, "monotonic", lambda: next(ticks))
     with pytest.raises(suricata.ReaderError, match="TIME_LIMIT$"):
         suricata.read_completed_file(str(path))
+
+
+def test_hard_deadline_interrupts_a_stalled_regular_file_read(tmp_path, monkeypatch):
+    path = _write(tmp_path / "alerts.jsonl", [CASES[0]["input"]])
+
+    def stalled_read(*args, **kwargs):
+        time.sleep(1)
+        return b""
+
+    monkeypatch.setattr(suricata, "MAX_ELAPSED_SECONDS", 0.02)
+    monkeypatch.setattr(suricata.os, "read", stalled_read)
+    started = time.monotonic()
+    with pytest.raises(suricata.ReaderError, match="TIME_LIMIT$"):
+        suricata.read_completed_file(str(path))
+    assert time.monotonic() - started < 0.5
+
+
+def test_fixed_diagnostics_suppress_low_level_exception_context(tmp_path):
+    record = json.loads(json.dumps(CASES[0]["input"]))
+    record["event"]["src_ip"] = "999.999.999.999"
+    path = _write(tmp_path / "alerts.jsonl", [record])
+    with pytest.raises(suricata.ReaderError) as caught:
+        suricata.read_completed_file(str(path))
+    rendered = "".join(traceback.format_exception(caught.value))
+    assert str(caught.value) == "SURICATA_READER_V1:SEMANTIC"
+    assert caught.value.__suppress_context__ is True
+    assert "999.999.999.999" not in rendered
+    assert str(path) not in rendered
 
 
 def test_reader_never_opens_network_or_launches_process(tmp_path, monkeypatch):

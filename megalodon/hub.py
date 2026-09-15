@@ -59,7 +59,7 @@ _WORKFLOWS = (
         "input_contract": "suricata-eve-alert-input-v1 envelope",
         "output_contract": "immutable external-alert-v1 batch plus completed-run receipt",
         "entry_point": "Python API: read_completed_file",
-        "launch_policy": "explicit_completed_file_read_only",
+        "launch_policy": "explicit_main_thread_completed_file_read_only",
         "data_boundary": "closed alert fields; no payload, file content, unrestricted protocol records, or ruleset updates",
         "action_boundary": "no sensor launch, persistence, dashboard projection, IPS path, blocking, or action attribution",
         "next_gate": "transactional replay registry and durable consumer in a separately reviewed slice",

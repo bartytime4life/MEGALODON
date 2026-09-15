@@ -82,7 +82,7 @@ def test_workflow_contracts_match_their_owned_entry_points():
     assert alert["output_contract"] == (
         "immutable external-alert-v1 batch plus completed-run receipt"
     )
-    assert alert["launch_policy"] == "explicit_completed_file_read_only"
+    assert alert["launch_policy"] == "explicit_main_thread_completed_file_read_only"
     assert "no sensor launch" in alert["action_boundary"]
 
     response = integration_plan("linux", "time-limited-response")["workflows"][0]

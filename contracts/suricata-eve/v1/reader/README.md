@@ -56,6 +56,16 @@ The deadline is checked before opening, during bounded reads and validation, and
 before completion. Crossing it fails the entire run with `TIME_LIMIT`; a timeout
 does not authorize partial output.
 
+The Python API runs only from the interpreter main thread in a single-threaded
+Linux process. It reuses the core ingestion deadline guard and requires
+`SIGALRM`, `ITIMER_REAL`, signal-mask and pending-signal inspection, and procfs
+thread inspection. `SIGALRM` must be unblocked and not pending, and no process
+timer may already be active. The guard arms one timer for the remaining budget
+before source-path operations and restores the prior handler and signal mask
+after verified cancellation. A failed precondition, setup/cleanup failure, or
+expiry maps to `TIME_LIMIT`. This is what makes a stalled regular-file `open` or
+`read` interruptible; `O_NONBLOCK` alone does not provide that guarantee.
+
 ## 2. Source-file boundary
 
 Only Linux is implemented for v1. The caller supplies exactly one absolute path.
@@ -199,9 +209,9 @@ python -m megalodon capabilities --platform linux
 python -m megalodon hub-plan --platform linux
 ```
 
-Passing these tests proves the inert artifacts in the tested revision only. It
-does not prove the future descriptor walk, filesystem race resistance, memory or
-deadline behavior under hostile load, durable transactionality, Suricata
+Passing these tests proves the tested implementation and artifacts in that
+revision only. It does not prove immunity to every filesystem race, kernel-level
+uninterruptible sleep, hostile-load memory behavior, durable transactionality, Suricata
 installation or compatibility, detection quality, privacy of arbitrary logs,
 or deployment safety. `tests/test_suricata_reader.py` adds descriptor, source
 policy, replay, immutability, timeout, and no-network/no-process coverage for the

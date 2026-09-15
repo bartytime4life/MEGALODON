@@ -15,6 +15,7 @@ import time
 from types import MappingProxyType
 from typing import AbstractSet, Any, Iterator, TypeAlias
 
+from ..capture import CaptureError
 from .common import OfflineError, _parts, require_unprivileged_linux
 
 
@@ -77,7 +78,7 @@ class ReaderError(ValueError):
 
 
 def _fail(code: str) -> None:
-    raise ReaderError(code)
+    raise ReaderError(code) from None
 
 
 def _deadline(started: float, clock: Any) -> None:
@@ -302,6 +303,7 @@ def _validate_input(value: Any) -> None:
         _fail("SCHEMA")
     if (
         event["event_type"] != "alert"
+        or not isinstance(event["proto"], str)
         or event["proto"] not in {"TCP", "UDP"}
         or not _bounded_int(event["src_port"], 0, 65535)
         or not _bounded_int(event["dest_port"], 0, 65535)
@@ -325,6 +327,7 @@ def _validate_input(value: Any) -> None:
     if (
         any(not _bounded_int(alert[key], 1, 4_294_967_295) for key in ("gid", "signature_id", "rev"))
         or not _bounded_int(alert["severity"], 1, 255)
+        or not isinstance(alert["action"], str)
         or alert["action"] not in {"allowed", "blocked"}
         or any(not _printable_label(alert[key]) for key in _ALERT_OPTIONAL if key in alert)
     ):
@@ -444,34 +447,12 @@ def _records(source: int, started: float, clock: Any) -> Iterator[bytes]:
         _fail("EMPTY_INPUT")
 
 
-def read_completed_file(
+def _read_publication(
     path: str,
-    *,
-    completed_run_keys: AbstractSet[RunKey] = frozenset(),
+    replay_view: frozenset[RunKey],
+    started: float,
+    clock: Any,
 ) -> Publication:
-    """Validate one private completed file and return one immutable publication.
-
-    The function performs no persistence, network access, process launch, sensor
-    control, logging, callback, dashboard update, or response action.
-    """
-    clock = time.monotonic
-    try:
-        started = clock()
-    except Exception:
-        _fail("TIME_LIMIT")
-    _deadline(started, clock)
-    try:
-        require_unprivileged_linux()
-    except OfflineError:
-        _fail("SOURCE_PATH")
-    if type(completed_run_keys) not in {set, frozenset} or any(
-        type(key) is not tuple
-        or len(key) != len(_RUN_KEY_FIELDS)
-        or any(type(part) is not str for part in key)
-        for key in completed_run_keys
-    ):
-        _fail("REPLAY")
-
     source: int | None = None
     descriptors: list[int] = []
     identities: list[tuple[int, ...]] = []
@@ -506,7 +487,7 @@ def read_completed_file(
         if identity is None:
             _fail("EMPTY_INPUT")
         try:
-            replayed = _run_key(identity) in completed_run_keys
+            replayed = _run_key(identity) in replay_view
         except Exception:
             _fail("REPLAY")
         if replayed:
@@ -537,6 +518,8 @@ def read_completed_file(
             _freeze(receipt),
         )
         return publication
+    except CaptureError:
+        raise
     except ReaderError as exc:
         primary = exc
         raise
@@ -549,3 +532,58 @@ def read_completed_file(
     finally:
         if descriptors:
             _close_all(descriptors, primary)
+
+
+def read_completed_file(
+    path: str,
+    *,
+    completed_run_keys: AbstractSet[RunKey] = frozenset(),
+) -> Publication:
+    """Validate one private completed file and return one immutable publication.
+
+    Call from the main thread of a single-threaded Linux process with SIGALRM
+    unblocked and not pending, and with no active ITIMER_REAL timer. The function
+    performs no persistence, network access, process launch, sensor control,
+    logging, callback, dashboard update, or response action.
+    """
+    clock = time.monotonic
+    try:
+        started = clock()
+    except Exception:
+        _fail("TIME_LIMIT")
+    _deadline(started, clock)
+    try:
+        require_unprivileged_linux()
+    except OfflineError:
+        _fail("SOURCE_PATH")
+    if type(completed_run_keys) not in {set, frozenset}:
+        _fail("REPLAY")
+    try:
+        replay_view = frozenset(completed_run_keys)
+    except Exception:
+        _fail("REPLAY")
+    if any(
+        type(key) is not tuple
+        or len(key) != len(_RUN_KEY_FIELDS)
+        or any(type(part) is not str for part in key)
+        for key in replay_view
+    ):
+        _fail("REPLAY")
+    try:
+        remaining = MAX_ELAPSED_SECONDS - (clock() - started)
+    except Exception:
+        _fail("TIME_LIMIT")
+    if remaining <= 0:
+        _fail("TIME_LIMIT")
+
+    try:
+        from ..cli import _scoped_run_deadline
+
+        with _scoped_run_deadline(remaining):
+            return _read_publication(path, replay_view, started, clock)
+    except ReaderError:
+        raise
+    except (CaptureError, OSError, ValueError):
+        _fail("TIME_LIMIT")
+    except Exception:
+        _fail("TIME_LIMIT")
