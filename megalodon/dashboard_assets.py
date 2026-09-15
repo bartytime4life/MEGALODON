@@ -623,7 +623,8 @@ function validatedEvents(value) {
 }
 function boundedAdvisoryText(value) {
   return typeof value === 'string' && [...value].length >= 1 && [...value].length <= 1200
-    && !/[\u0000-\u001f\u007f]/u.test(value);
+    && value.trim().length > 0
+    && !/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069\ud800-\udfff\ufeff]/u.test(value);
 }
 function validatedAdvisoryEnvelope(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -658,9 +659,9 @@ function validatedAdvisoryEnvelope(value) {
       || model.provider_class !== 'local_loopback'
       || model.policy_version !== 'local-model-advisory-v1'
       || typeof model.model_id !== 'string'
-      || !/^local:qwen-[A-Za-z0-9._-]{1,96}$/.test(model.model_id)
+      || !/^local:qwen-[A-Za-z0-9._-]{1,96}(?![\s\S])/u.test(model.model_id)
       || typeof model.model_artifact_sha256 !== 'string'
-      || !/^[a-f0-9]{64}$/.test(model.model_artifact_sha256)) {
+      || !/^[a-f0-9]{64}(?![\s\S])/u.test(model.model_artifact_sha256)) {
     throw new Error('invalid advisory receipt');
   }
   const ownedModel = Object.freeze({

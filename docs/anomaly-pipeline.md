@@ -1,14 +1,18 @@
 # AI-assisted anomaly pipeline
 
 Status: offline candidate evidence, separate Qwen admission, and the explicit
-[one-shot analyst command](anomaly-triage.md) are implemented on this branch.
-Operational efficacy and dashboard integration remain unproved. Initial base:
-`a9ab662a58adabe74c398ed08b37d91a2e34df4f` (2026-09-15 UTC).
+[one-shot analyst command](anomaly-triage.md) reached main through
+[#187](https://github.com/bartytime4life/MEGALODON/pull/187), merge
+`fa55906dc327c0bb0cde9366ac99a8f031d19484` on 2026-09-15 UTC.
+Operational efficacy and anomaly dashboard integration remain unproved.
 
 The [main-integration record](anomaly-main-integration.md) distinguishes code
 merged into a feature branch from code available on the default branch. The
-integration base is `45e841587095608b8bbc82415fe7eea21198cd2a`; a draft's
-checks and contents do not establish that it has landed on `main`.
+record retains the historical integration bases; the merge above establishes
+delivery, not deployment or independent approval. Shared baseline realizability
+and offline candidate coherence were also merged in #185 and #186.
+The [result-integrity contract](advisory-result-integrity.md) defines completion,
+display and failure-isolation checks without expanding model authority.
 
 MEGALODON should generate reproducible metadata candidates first, then let a
 pinned local Qwen explain that evidence for an analyst. Qwen must never create
