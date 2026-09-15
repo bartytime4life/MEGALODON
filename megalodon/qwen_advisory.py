@@ -455,6 +455,7 @@ def _result(
         prompt_bytes=admitted.prompt_bytes,
         output_bytes=output_bytes,
         provider_request_performed=provider_request_performed,
+        policy_version=admitted.policy_version,
     )
 
 
@@ -501,6 +502,31 @@ def invoke_qwen_advisory(
         local_model_registry=local_model_registry,
         local_model_registry_sha256=local_model_registry_sha256,
     )
+    return _invoke_admitted(admitted, enabled=enabled, cancel_event=cancel_event)
+
+
+def invoke_qwen_anomaly_advisory(
+    request: object, *, enabled: object, local_model_registry: object,
+    local_model_registry_sha256: object, cancel_event: object = None,
+) -> AirlockDecision | QwenAdvisoryResult:
+    """Explain recomputed offline candidates under the separate anomaly policy.
+
+    Shares the original literal-loopback transport, lock, deadline and response
+    parser. A v1 registry cannot opt into the richer projection implicitly.
+    """
+    from .anomaly_advisory import preflight_anomaly_advisory
+
+    admitted = preflight_anomaly_advisory(
+        request, local_model_registry=local_model_registry,
+        local_model_registry_sha256=local_model_registry_sha256,
+    )
+    return _invoke_admitted(admitted, enabled=enabled, cancel_event=cancel_event)
+
+
+def _invoke_admitted(
+    admitted: AirlockDecision, *, enabled: object, cancel_event: object,
+) -> AirlockDecision | QwenAdvisoryResult:
+    """Private transport shared only after repository-owned fresh admission."""
     if admitted.decision != "ADMIT":
         return admitted
     if enabled is not True:

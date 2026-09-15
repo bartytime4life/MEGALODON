@@ -1,5 +1,10 @@
 # Local Qwen advisory contract
 
+This document describes the original `local-model-advisory-v1` run-count
+policy. The separately versioned [anomaly explanation policy](anomaly-advisory-contract.md)
+and [one-shot analyst command](anomaly-triage.md) have their own registry and
+input contract; they do not expand this v1 policy or its two approved questions.
+
 The [incident-informed containment review](model-containment-review.md) maps
 shared-service escape and unauthorized recovery threats to the closed interface.
 Its reusable denial corpus exercises both preflight and explicitly enabled
