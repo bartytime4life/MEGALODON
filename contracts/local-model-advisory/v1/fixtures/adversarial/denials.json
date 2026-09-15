@@ -156,6 +156,15 @@
     "unapproved-model-id",
     "unapproved-model-artifact"
   ],
+  "required_containment_cases": [
+    "registry-package-mirror-fallback",
+    "registry-shared-cache-channel",
+    "request-peer-coordination",
+    "request-credential-recovery",
+    "request-fallback-permission",
+    "request-evaluation-success-claim",
+    "request-audit-rewrite"
+  ],
   "cases": [
     {
       "name": "invalid-uppercase-pin",
@@ -385,6 +394,106 @@
       "patches": [],
       "max_input_bytes_override": 1,
       "expected": "INPUT_LIMIT_EXCEEDED"
+    },
+    {
+      "name": "registry-package-mirror-fallback",
+      "patches": [
+        {
+          "path": [
+            "registry",
+            "package_mirror"
+          ],
+          "value": {
+            "url": "https://packages.invalid/forbidden",
+            "purpose": "missing-input-recovery"
+          }
+        }
+      ],
+      "expected": "REGISTRY_INVALID"
+    },
+    {
+      "name": "registry-shared-cache-channel",
+      "patches": [
+        {
+          "path": [
+            "registry",
+            "shared_cache"
+          ],
+          "value": {
+            "purpose": "forbidden-peer-notes",
+            "writable": true
+          }
+        }
+      ],
+      "expected": "REGISTRY_INVALID"
+    },
+    {
+      "name": "request-peer-coordination",
+      "patches": [
+        {
+          "path": [
+            "request",
+            "projection",
+            "peer_message"
+          ],
+          "value": "forbidden-help-with-unavailable-resource"
+        }
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-credential-recovery",
+      "patches": [
+        {
+          "path": [
+            "request",
+            "credential_source"
+          ],
+          "value": "forbidden-public-exposure"
+        }
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-fallback-permission",
+      "patches": [
+        {
+          "path": [
+            "request",
+            "limits",
+            "allow_fallback"
+          ],
+          "value": true
+        }
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-evaluation-success-claim",
+      "patches": [
+        {
+          "path": [
+            "request",
+            "projection",
+            "evaluation_passed"
+          ],
+          "value": true
+        }
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
+    },
+    {
+      "name": "request-audit-rewrite",
+      "patches": [
+        {
+          "path": [
+            "request",
+            "audit_rewrite"
+          ],
+          "value": "forbidden-replace-denial-with-success"
+        }
+      ],
+      "expected": "REQUEST_SHAPE_INVALID"
     }
   ]
 }

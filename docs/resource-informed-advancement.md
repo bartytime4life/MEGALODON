@@ -84,3 +84,57 @@ No subscription, vendor login, remote endpoint, or external console is required
 by this implementation. Validation results, exact branch head, hosted checks,
 and owner review belong in the delivery PR; a proposal or green test alone is
 not operational acceptance.
+
+## Alert Workload Lab follow-up
+
+Decision basis: September 15, 2026, pinned main
+[`a9ab662a58adabe74c398ed08b37d91a2e34df4f`](https://github.com/bartytime4life/MEGALODON/commit/a9ab662a58adabe74c398ed08b37d91a2e34df4f).
+The comparison work above is already present at this pin. Open draft PR #176
+owns the separate immutable Qwen dashboard receipt; this follow-up does not
+depend on that draft or change its lifecycle. Drive's canonical Project
+Coordination and PR Log was read at its September 14 checkpoint, which still
+pins earlier main `b4dc2fc4...`; it supplies history, not current code state.
+
+Selected implementation: the [Alert Workload Lab](alert-workload-lab.md), an
+original dependency-free, offline extension to `megalodon-evaluate`. It shows
+expected review burden and conditional PPV from explicit hypothetical rates.
+This advances analytical understanding while independently labeled local
+evaluation remains unproved. There is no automatic rate estimation, model
+training, threshold change, data ingest, dashboard invocation, or response path.
+
+The following supplied PDFs were inspected selectively. Page numbers are
+one-based PDF page indexes, not necessarily printed page numbers. The primary
+sections below were read directly; title-level leads are explicitly separated.
+No source book, chapter, exercise, dataset or implementation is copied into
+the repository.
+
+| Source and inspected section | Use in this delivery |
+| --- | --- |
+| *Artificial Intelligence: Foundations of Computational Agents*, third edition, PDF pp. 312-314 | Distinguish the denominators for sensitivity, false-positive rate and precision; expose TP, FP, FN and TN separately. No single score selects a detector or its error cost. |
+| *Artificial Intelligence: A Modern Approach*, supplied edition, PDF p. 528, exercises 13.13-13.15 | Motivate sensitivity to prevalence. The new example is an original hypothetical analyst-workload calculation, not medical guidance or a copied exercise. |
+| *Bayesian Methods for Hackers*, PDF pp. 23-24 | Keep prior assumptions visibly separate from observations. The implementation is exact conditional arithmetic, not posterior fitting or a claim of Bayesian learning. |
+| *Building Secure and Reliable Systems*, PDF p. 377 | Make potential false-alert burden inspectable before operational use. Exercise failure behavior on inert inputs; do not infer production reliability from the calculator. |
+| *Advanced Data Analysis from an Elementary Point of View*, PDF pp. 66-67 | Preserve the future held-out evaluation requirement; synthetic regression success cannot estimate generalization performance. No dataset splitting or training is implemented here. |
+| *AI Concepts Using Python*, PDF p. 166, metric discussion located | Supporting research lead for explicit confusion categories; the precise denominator rationale above is grounded in the Poole/Mackworth discussion. |
+| *Advanced SQL Concepts*, PDF pp. 23-24 and 55, topic passages located; *Data Analysis Using SQL and Excel*, PDF pp. 136 and 204, sampling passages located | Future lead: bound aggregate query work and preserve population selection. No SQL query, schema, audit-store access or sampling estimator changes in this delivery. |
+
+### Other supplied references: bounded research leads
+
+These were identified through extracted title/front matter only during this
+follow-up. They were not implementation authorities or audited in full.
+
+| Supplied references | Proposed use after a concrete prerequisite exists |
+| --- | --- |
+| *Bayesian Computational Methods*; *Artificial Neural Networks: An Introduction*; *Artificial Neural Networks in Real-Life Applications*; *Artificial Neural Networks Models and Applications* | Consider computational inference only after representative, independently labeled data, explicit uncertainty goals and measured improvement over fixed rules. No neural-network or MCMC dependency added. |
+| *Artificial Intelligence, Third Edition, Python Code (aipython)*; *A Practical Guide to Smarter Programming / Efficient R Programming* | Future algorithm and performance reading. Profile a demonstrated bottleneck before adopting a new algorithm, language or parallel execution. No example-code port. |
+| *Android UI Design*; *Create Graphical User Interfaces with Python*; *Build Your First Web App* | Future interface ideas for a reviewed read-only projection in the existing command center. No second UI, Android port, generic prompt box or external-console embedding. |
+| *Black Hat Python* | Future inert hostile-input fixture ideas under the existing defensive review boundary. No executable attack tool or packet-payload pipeline imported. |
+| *Practical Guide to Security in the AWS Cloud* | Future deployment threat-model reading only if a separately authorized cloud requirement appears. No cloud service or deployment proposed by this delivery. |
+| *Coding Freedom: The Ethics and Aesthetics of Hacking* | Future stewardship and contribution discussion. No license change or source redistribution inference. |
+
+The attached advancement and command-center blueprints remain planning lineage
+as assessed in the preceding checkpoint. Their older pins and the generic
+repository-not-yet-supplied framework are not reinterpreted as live authority.
+The next empirical step remains the independently labeled evaluation gate in
+the lab contract. A potential future read-only UI may display a verified
+projection, but this commit does not implement or authorize that integration.

@@ -20,12 +20,27 @@ See the [red, blue, and purple security practice](docs/red-blue-security-guide.m
 for authorized adversarial validation and future-AI gates. That guide adds no
 model runtime, tool authority, or firewall authorization.
 
+The [incident-informed model containment review](docs/model-containment-review.md)
+adds a source-pinned threat mapping and exact-denial regressions through the
+explicitly enabled Qwen provider entry point. Application-level refusal and
+literal-loopback transport do not establish containment of the separately
+operated provider, its shared services or its own outbound connections.
+
 The offline reference and synthetic evaluation commands are documented in
 [docs/reference-data.md](docs/reference-data.md). They do not start ingestion
 or the dashboard, populate the audit store, or invoke response policy. The
 existing dashboard separately reuses the IANA loader for bounded, manual
 Reference Library lookups. This is a read-only context connection, not a
 telemetry join, a corpus-execution endpoint, or evidence of an observed service.
+
+The separate [Alert Workload Lab](docs/alert-workload-lab.md) computes exact
+binary-classification expectations from explicit hypothetical assumptions.
+It does not load observed data or reference assets, invoke a model, or measure
+detector accuracy. Unit/denominator labels, `hypothetical-only` / `uncalibrated`
+quality, and an explicit undefined PPV when no alerts are expected prevent the
+calculator from silently presenting its assumptions as observed evidence.
+An external consumer can still misrepresent a copied result; no mathematical
+ratio establishes an incident verdict or authority to act.
 
 ## Findings and corrections
 
