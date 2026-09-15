@@ -13,7 +13,6 @@ import re
 
 from .baseline import validate_baseline
 from .common import OfflineError
-from .compare import compare_baselines
 
 INPUT_SCHEMA = 'offline-anomaly-input-v1'
 DOSSIER_SCHEMA = 'offline-anomaly-dossier-v1'
@@ -149,12 +148,6 @@ def build_anomaly_dossier(value: object) -> dict:
         if any(minute * 60 >= duration.total_seconds() for minute, _ in baseline.relative_minutes):
             return abstain('BASELINE_OUTSIDE_WINDOW')
 
-    try:
-        comparison = compare_baselines(data['reference']['baseline'], data['current']['baseline'])
-    except OfflineError as exc:
-        if str(exc) == 'COMPARISON_PORT_LIMIT':
-            return abstain('ANOMALY_CANDIDATE_LIMIT')
-        raise
     candidates = []
 
     def add(rule: str, reference_count: int, current_count: int,
@@ -171,15 +164,24 @@ def build_anomaly_dossier(value: object) -> dict:
                 SHARE_SHIFT_PERCENT * before.record_count * after.record_count)
 
     try:
-        for row in comparison['changed_destination_ports']:
-            x, y = row['reference_count'], row['current_count']
+        previous_ports = {(protocol, port): count
+                          for protocol, port, count in before.destination_ports}
+        current_ports = {(protocol, port): count
+                         for protocol, port, count in after.destination_ports}
+        for protocol, port in sorted(previous_ports.keys() | current_ports.keys()):
+            x = previous_ports.get((protocol, port), 0)
+            y = current_ports.get((protocol, port), 0)
             if x == 0 and y >= MIN_SUPPORT:
-                add('NEW_DESTINATION_PORT', x, y, row['protocol'], row['port'])
+                add('NEW_DESTINATION_PORT', x, y, protocol, port)
             elif shift(x, y):
-                add('PORT_SHARE_SHIFT', x, y, row['protocol'], row['port'])
-        for row in comparison['protocols']:
-            if shift(row['reference_count'], row['current_count']):
-                add('PROTOCOL_SHARE_SHIFT', row['reference_count'], row['current_count'], row['protocol'])
+                add('PORT_SHARE_SHIFT', x, y, protocol, port)
+        previous_protocols = dict(before.protocols)
+        current_protocols = dict(after.protocols)
+        for protocol in sorted(previous_protocols.keys() | current_protocols.keys()):
+            x = previous_protocols.get(protocol, 0)
+            y = current_protocols.get(protocol, 0)
+            if shift(x, y):
+                add('PROTOCOL_SHARE_SHIFT', x, y, protocol)
         x, y = before.byte_bands[2], after.byte_bands[2]
         if shift(x, y):
             add('LARGE_RECORD_SHARE_SHIFT', x, y)
