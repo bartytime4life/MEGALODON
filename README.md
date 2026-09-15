@@ -659,8 +659,8 @@ last-success timestamp, and count baseline while marking the display stale.
 | `capabilities [--platform linux\|windows\|other]` | Print a static support/free-software catalog without probing or changing the host |
 | `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
 | `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
-| `run --source jsonl [--input FILE]` | Replay validated JSONL from a file or stdin |
-| `run --source scapy --interface IFACE` | Perform optional Linux live metadata capture |
+| `run --source jsonl --max-events N [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling |
+| `run --source scapy --interface IFACE --max-events N` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling |
 | `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 or v2 audit database to v3; never overwrites its backup |
 | `database-reconciliation-status [--config PATH]` | Read bounded metadata for `running` or reconciliation-required run receipts; does not mutate them |
 | `database-reconcile RUN_ID --started-at UTC [--config PATH]` | After stopping ingestion, mark one exactly pinned running receipt as reconciliation-required while preserving evidence |
@@ -679,8 +679,10 @@ The operational main CLI subcommands accept optional `--config PATH`; omitting
 it uses the complete safe built-in settings and works from an installed wheel.
 The static
 `capabilities` and `hub-plan` commands do not read configuration.
-`run --max-events N` provides an operator stop limit from 1 through 10,000,000;
-zero retains the explicit no-limit mode. Use `python -m megalodon --help` and
+`run --max-events N` provides an accepted-event stop limit from 1 through 10,000,000.
+It is required for JSONL/stdin and Scapy sources; the repository-owned sample
+generator is finite and may omit it. Zero and missing limits on non-sample
+sources fail before the audit store or source is opened. Use `python -m megalodon --help` and
 `python -m megalodon.offline --help` for the complete operational argument
 surface, and `megalodon-evaluate --help` for the separate evaluation surface.
 
@@ -703,8 +705,8 @@ JSONL replay accepts one JSON object per line:
 ```
 
 ```bash
-python -m megalodon run --source jsonl --input examples/events.jsonl
-cat examples/events.jsonl | python -m megalodon run --source jsonl
+python -m megalodon run --source jsonl --input examples/events.jsonl --max-events 100
+cat examples/events.jsonl | python -m megalodon run --source jsonl --max-events 100
 ```
 
 The adapter caps each JSONL record at 64 KiB. IP addresses, ports, timestamps,
@@ -724,7 +726,7 @@ For optional Linux live capture (`eth0` is an example, not an assumed interface)
 
 ```bash
 python -m pip install -e ".[capture]"
-python -m megalodon run --source scapy --interface eth0
+python -m megalodon run --source scapy --interface eth0 --max-events 100000
 ```
 
 Live capture requires the normal Linux permissions for the selected interface.

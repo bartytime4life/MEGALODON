@@ -111,6 +111,7 @@ class CliTests(unittest.TestCase):
 
     def test_cli_integer_options_reject_coercion_and_out_of_range_values(self):
         invalid_argv = (
+            ["run", "--max-events", "0"],
             ["run", "--max-events", "-1"],
             ["run", "--max-events", "1.9"],
             ["run", "--max-events", "10000001"],
@@ -124,6 +125,60 @@ class CliTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as raised:
                     build_parser().parse_args(argv)
                 self.assertEqual(raised.exception.code, 2)
+
+    def test_non_sample_sources_require_limit_before_configuration_or_io(self):
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("unbounded source must refuse before I/O")
+
+        patches = (
+            patch("megalodon.cli._load", side_effect=forbidden),
+            patch("megalodon.cli.Store", side_effect=forbidden),
+            patch("megalodon.cli._events_for", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch("socket.create_connection", side_effect=forbidden),
+            patch("socket.getaddrinfo", side_effect=forbidden),
+            patch.object(subprocess, "run", side_effect=forbidden),
+            patch.object(subprocess, "Popen", side_effect=forbidden),
+        )
+        with ExitStack() as stack:
+            for context in patches:
+                stack.enter_context(context)
+            for source in ("jsonl", "scapy"):
+                output = io.StringIO()
+                error = io.StringIO()
+                with (
+                    self.subTest(source=source),
+                    redirect_stdout(output),
+                    redirect_stderr(error),
+                    self.assertRaises(SystemExit) as raised,
+                ):
+                    main(["run", "--source", source])
+                self.assertEqual(raised.exception.code, 2)
+                self.assertEqual(output.getvalue(), "")
+                self.assertEqual(
+                    error.getvalue(),
+                    "megalodon: jsonl and scapy sources require --max-events "
+                    "between 1 and 10000000\n",
+                )
+
+    def test_config_selected_non_sample_source_refuses_before_store(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "settings.toml"
+            config.write_text('[capture]\nsource = "jsonl"\n', encoding="utf-8")
+            output = io.StringIO()
+            error = io.StringIO()
+            with (
+                patch("megalodon.cli.Store", side_effect=AssertionError("store opened")),
+                patch("megalodon.cli._events_for", side_effect=AssertionError("source opened")),
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["run", "--config", str(config)])
+            self.assertEqual(raised.exception.code, 2)
+            self.assertEqual(output.getvalue(), "")
+            self.assertIn("require --max-events", error.getvalue())
+            self.assertFalse((Path(directory) / "data").exists())
 
     def test_firewall_plan_is_logged_without_subprocess(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -152,6 +152,9 @@ lifecycle.
 
 - Natural iterator exhaustion records `completed/source_exhausted` after
   owned-source cleanup returns without error.
+- JSONL/stdin and Scapy sources require an explicit positive `--max-events N`
+  ceiling from 1 through 10,000,000 before the audit store or source is opened.
+  The finite repository-owned sample generator may omit it.
 - `--max-events N` stops intake after the Nth accepted event, then records
   `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
   the next live event.

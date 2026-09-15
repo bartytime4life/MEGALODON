@@ -63,7 +63,7 @@ class SourceOwnershipTests(unittest.TestCase):
         ):
             self.enterContext(patch(target, side_effect=AssertionError("unexpected I/O")))
         self.args = SimpleNamespace(
-            config=None, source="sample", max_events=0, demo_threat=False,
+            config=None, source="sample", max_events=None, demo_threat=False,
             input=None, interface=None,
         )
         self.settings = SimpleNamespace(db_path=Path("unused.db"), capture_source="sample")
@@ -130,7 +130,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 store.finish_ingestion_run.assert_called_once_with(1, "source_exhausted")
 
     def test_close_failure_cannot_become_completed_or_event_limit_success(self):
-        for limit in (0, 1):
+        for limit in (None, 1):
             for error_type in (CaptureError, OSError, RuntimeError):
                 with self.subTest(limit=limit, error=error_type):
                     self.args.max_events = limit
@@ -328,11 +328,11 @@ class SourceOwnershipTests(unittest.TestCase):
 
 @pytest.mark.parametrize("limit,read_fails,close_fails,status,reason", [
     (1, False, False, "incomplete", "event_limit_reached"),
-    (0, False, False, "completed", "source_exhausted"),
+    (None, False, False, "completed", "source_exhausted"),
     (1, False, True, "failed", "failed"),
-    (0, False, True, "failed", "failed"),
-    (0, True, False, "failed", "failed"),
-    (0, True, True, "failed", "failed"),
+    (None, False, True, "failed", "failed"),
+    (None, True, False, "failed", "failed"),
+    (None, True, True, "failed", "failed"),
 ])
 def test_real_ledger_keeps_committed_prefix_and_terminalizes_after_close(
     tmp_path, monkeypatch, capsys, limit, read_fails, close_fails, status, reason
@@ -358,7 +358,10 @@ def test_real_ledger_keeps_committed_prefix_and_terminalizes_after_close(
     for target in ("socket.socket", "socket.create_connection", "socket.getaddrinfo", "subprocess.Popen"):
         monkeypatch.setattr(target, Mock(side_effect=AssertionError("unexpected I/O")))
     with pytest.raises(SystemExit) as caught:
-        cli.main(["run", "--source", "sample", "--config", str(config), "--max-events", str(limit)])
+        argv = ["run", "--source", "sample", "--config", str(config)]
+        if limit is not None:
+            argv.extend(["--max-events", str(limit)])
+        cli.main(argv)
     assert caught.value.code == (2 if status == "failed" else 0)
     out, err = capsys.readouterr()
     assert CANARY not in out + err
