@@ -5,7 +5,7 @@
 # Only the named wheels are admitted; source archives are deliberately excluded.
 # Publisher/signature verification and the rest of CI are separate gates.
 # build-1.6.0-py3-none-any.whl — https://pypi.org/project/build/1.6.0/#files
-build==1.6.0 --hash=sha256:f7aaf1ebbb79178a02ba248bb524f2176b256017e17e8e4bd4289c7b38cc2bad
+build==1.6.1 --hash=sha256:51cc11666391ab6f092070437ac747002ff46f3e4113a3622177ee6b488bfc53 --hash=sha256:ecd351a4be9d35a9eaaba244a7687143c9c7d4aea6ac964e7e7ddab20cbcf4e7
 # packaging-26.3-py3-none-any.whl — https://pypi.org/project/packaging/26.3/#files
 packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
 # pyproject_hooks-1.2.0-py3-none-any.whl — https://pypi.org/project/pyproject-hooks/1.2.0/#files

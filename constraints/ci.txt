@@ -8,7 +8,7 @@
 # runner image, Python, pip, operating system, and wheel hashes remain separate
 # evidence.
 attrs==26.1.0
-build==1.6.0
+build==1.6.1
 iniconfig==2.3.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
