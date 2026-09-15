@@ -189,3 +189,12 @@ lifecycle/outbox design remains separate from the stored priority counter. A
 future real connector must first supply its own versioned input contract, bounded
 reader, privacy and completeness semantics, ownership, tests, and review. Adding
 a card is not source admission or permission to execute its entry point.
+
+## Contradictory offline candidate reports
+
+A complete offline report set can still contain contradictory candidate evidence.
+Startup projection now checks candidates against the full baseline and refuses
+absent-port claims, unsupported counts, duplicate identities and impossible
+host ranks. See [candidate support and remaining proof limits](offline-candidate-consistency.md).
+Regenerate a rejected report from source evidence; no automatic repair or partial
+successful snapshot is performed.
