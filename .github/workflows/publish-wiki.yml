@@ -6,117 +6,45 @@ on:
       - main
     paths:
       - 'docs/wiki/**'
+      - '.github/scripts/sync-wiki.sh'
       - '.github/workflows/publish-wiki.yml'
   push:
     branches:
       - main
     paths:
       - 'docs/wiki/**'
+      - '.github/scripts/sync-wiki.sh'
       - '.github/workflows/publish-wiki.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: publish-github-wiki
+  group: publish-github-wiki-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
-  publish:
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Check out documentation source
         uses: actions/checkout@v4
 
-      - name: Publish docs/wiki to the repository Wiki
+      - name: Validate Wiki projection
+        run: bash .github/scripts/sync-wiki.sh --validate
+
+  publish:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out documentation source
+        uses: actions/checkout@v4
+
+      - name: Publish and verify Wiki
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          wiki_dir="${RUNNER_TEMP}/megalodon-wiki"
-          wiki_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
-
-          if git clone "${wiki_url}" "${wiki_dir}"; then
-            wiki_branch="$(git -C "${wiki_dir}" branch --show-current)"
-            wiki_branch="${wiki_branch:-master}"
-          else
-            rm -rf "${wiki_dir}"
-            mkdir -p "${wiki_dir}"
-            git -C "${wiki_dir}" init
-            git -C "${wiki_dir}" checkout -b master
-            git -C "${wiki_dir}" remote add origin "${wiki_url}"
-            wiki_branch=master
-          fi
-
-          cp docs/wiki/README.md "${wiki_dir}/Home.md"
-          cp docs/wiki/quick-start.md "${wiki_dir}/quick-start.md"
-          cp docs/wiki/security-boundaries.md "${wiki_dir}/security-boundaries.md"
-          cp docs/wiki/operator-guide.md "${wiki_dir}/operator-guide.md"
-          cp docs/wiki/integrations-and-qwen.md "${wiki_dir}/integrations-and-qwen.md"
-          cp docs/wiki/development-and-validation.md "${wiki_dir}/development-and-validation.md"
-          cp docs/wiki/roadmap-and-limits.md "${wiki_dir}/roadmap-and-limits.md"
-
-          sed -i -E 's#\((quick-start|security-boundaries|operator-guide|integrations-and-qwen|development-and-validation|roadmap-and-limits)\.md\)#(\1)#g' "${wiki_dir}/Home.md"
-
-          repo_blob_root="https://github.com/${GITHUB_REPOSITORY}/blob/main"
-          sed -i \
-            -e "s#(../../SPECIFICATION.md#(${repo_blob_root}/SPECIFICATION.md#g" \
-            -e "s#(../../SECURITY_REVIEW.md#(${repo_blob_root}/SECURITY_REVIEW.md#g" \
-            -e "s#(../../CONTRIBUTING.md#(${repo_blob_root}/CONTRIBUTING.md#g" \
-            -e "s#(../../README.md#(${repo_blob_root}/README.md#g" \
-            -e "s#(../platform-baseline.md#(${repo_blob_root}/docs/platform-baseline.md#g" \
-            -e "s#(../dashboard-operations.md#(${repo_blob_root}/docs/dashboard-operations.md#g" \
-            -e "s#(../integration-hub.md#(${repo_blob_root}/docs/integration-hub.md#g" \
-            -e "s#(../local-model-advisory-contract.md#(${repo_blob_root}/docs/local-model-advisory-contract.md#g" \
-            "${wiki_dir}"/*.md
-
-          cat > "${wiki_dir}/_Sidebar.md" <<'EOF'
-          * [Home](Home)
-          * [Quick Start](quick-start)
-          * [Security Boundaries](security-boundaries)
-          * [Operator Guide](operator-guide)
-          * [Integrations and Qwen](integrations-and-qwen)
-          * [Development and Validation](development-and-validation)
-          * [Roadmap and Limits](roadmap-and-limits)
-          EOF
-
-          cat > "${wiki_dir}/_Footer.md" <<'EOF'
-          This Wiki is generated from the version-controlled `docs/wiki` directory in the MEGALODON repository.
-          EOF
-
-          git -C "${wiki_dir}" config user.name 'github-actions[bot]'
-          git -C "${wiki_dir}" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C "${wiki_dir}" add --all
-
-          if git -C "${wiki_dir}" diff --cached --quiet; then
-            echo 'Wiki is already current.'
-            exit 0
-          fi
-
-          git -C "${wiki_dir}" commit -m "docs: publish MEGALODON wiki from ${GITHUB_SHA}"
-          git -C "${wiki_dir}" push origin "HEAD:${wiki_branch}"
-
-      - name: Verify the rendered Wiki home page
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          page_url="https://github.com/${GITHUB_REPOSITORY}/wiki/Home"
-          response_file="${RUNNER_TEMP}/wiki-home.html"
-
-          for attempt in {1..12}; do
-            status="$(curl --location --silent --show-error --output "${response_file}" --write-out '%{http_code}' "${page_url}" || true)"
-            if [[ "${status}" == '200' ]] && grep -Fq 'MEGALODON Documentation Wiki' "${response_file}"; then
-              echo "Verified ${page_url}"
-              exit 0
-            fi
-
-            echo "Wiki verification attempt ${attempt} returned HTTP ${status}; retrying."
-            sleep 5
-          done
-
-          echo "Failed to verify ${page_url}." >&2
-          exit 1
+        run: bash .github/scripts/sync-wiki.sh --publish
