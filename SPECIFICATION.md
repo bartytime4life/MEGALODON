@@ -615,9 +615,9 @@ calculation, model access, or permission to use commands, endpoints, or tools.
 closed EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
 [bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). These
 gates specify record, filesystem, quota, replay, and completion requirements.
-`megalodon.offline.suricata.read_completed_file` implements one Linux-only,
-completed-private-file reader and returns an immutable in-memory batch and
-receipt. There is no raw-EVE converter, sensor operation, ruleset manager,
+`megalodon.offline.suricata.read_completed_file` implements one single-threaded
+Linux main-thread, completed-private-file reader using the guarded `SIGALRM` deadline
+and returns an immutable in-memory batch and receipt. There is no raw-EVE converter, sensor operation, ruleset manager,
 durable consumer, dashboard projection, or IPS path. The offline dashboard
 projection remains independent and does not accept or display Suricata alerts.
 

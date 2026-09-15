@@ -33,7 +33,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `core-metadata` | Python + SQLite | Implemented | Validated metadata to local audit; observe-only default |
 | `offline-packet-metadata` | TShark/Wireshark | Optional implemented adapter | Fixed TShark argv and fields; private reports; no payload or live capture |
 | `offline-flow-metadata` | Zeek | Optional implemented importer | Closed `conn.log` profile; external producer; flow and packet counts stay separate |
-| `alert-metadata` | Suricata | Linux file reader implemented | One completed private contract-envelope file; no raw-EVE converter, persistence, dashboard, sensor, or IPS |
+| `alert-metadata` | Suricata | Single-threaded Linux main-thread file reader implemented | One completed private contract-envelope file using the guarded `SIGALRM` deadline; no raw-EVE converter, persistence, dashboard, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |

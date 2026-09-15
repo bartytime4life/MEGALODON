@@ -94,7 +94,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
 | Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
-| Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; immutable alert batch and receipt | Linux-only Python API; one private file, no raw-EVE conversion, persistence, dashboard projection, sensor launch, or IPS |
+| Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; immutable alert batch and receipt | Main thread of a single-threaded Linux process, reusing the guarded `SIGALRM` deadline; one private file, no raw-EVE conversion, persistence, dashboard projection, sensor launch, or IPS |
 | Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
@@ -151,7 +151,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
-| Suricata completed-file reader | Linux-only Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
+| Suricata completed-file reader | Single-threaded Linux main-thread Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |

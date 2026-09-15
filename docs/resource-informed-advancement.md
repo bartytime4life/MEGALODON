@@ -78,7 +78,7 @@ remains the broader integration sequence.
 | 3 | Project accepted comparisons into the existing Deep analysis panel | Bounded read-only receipt, text rendering, stale/malformed states and real-browser acceptance. Preserve one local command center and its live/deep distinction. |
 | 4 | Reconcile the Qwen implementation and overlapping review surfaces | Exact current-main/provider review plus operator-owned model identity and compatibility evidence before any new UI invocation. Advisory output remains separate from evidence. |
 | 5 | Establish an independently labeled local evaluation corpus | Privacy-approved metadata, explicit benign alternatives, units and observation coverage, reproducible detector evaluation, and uncertainty. This is the prerequisite for evaluating Bayesian scoring, not a promise to enable it. |
-| 6 | Deliver one contracted completed-file sensor adapter | Implemented as the Linux-only `read_completed_file` Python API. Durable consumption and presentation remain separate gates; no generic executor or provider-console embedding is introduced. |
+| 6 | Deliver one contracted completed-file sensor adapter | Implemented as the single-threaded Linux main-thread `read_completed_file` Python API. Durable consumption and presentation remain separate gates; no generic executor or provider-console embedding is introduced. |
 
 No subscription, vendor login, remote endpoint, or external console is required
 by this implementation. Validation results, exact branch head, hosted checks,
