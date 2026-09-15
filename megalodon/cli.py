@@ -32,6 +32,7 @@ from .validation import parse_timestamp, safe_text, ValidationError
 
 
 MAX_RUN_EVENTS = 10_000_000
+MAX_RUN_SECONDS = 86_400
 _LIMITED_RUN_SOURCES = frozenset({"jsonl", "scapy"})
 
 
@@ -94,6 +95,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "stop after N events; required for jsonl and scapy sources "
             f"(maximum {MAX_RUN_EVENTS})"
+        ),
+    )
+    run.add_argument(
+        "--max-seconds",
+        type=_bounded_cli_integer("max-seconds", 1, MAX_RUN_SECONDS),
+        default=None,
+        help=(
+            "fail closed after N seconds while acquiring, consuming, processing, "
+            "or closing the event source on POSIX runtimes "
+            f"(maximum {MAX_RUN_SECONDS})"
         ),
     )
 
@@ -263,6 +274,30 @@ def _require_finite_run_limit(source: str | None, max_events: int | None) -> Non
         )
 
 
+def _run_deadline_supported() -> bool:
+    return (
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "ITIMER_REAL")
+        and callable(getattr(signal, "getitimer", None))
+        and callable(getattr(signal, "setitimer", None))
+    )
+
+
+def _require_run_deadline_support(max_seconds: int | None) -> None:
+    if max_seconds is None:
+        return
+    if not _run_deadline_supported():
+        raise ValueError(
+            "max-seconds requires a POSIX runtime with SIGALRM and ITIMER_REAL"
+        )
+    try:
+        active_timer = signal.getitimer(signal.ITIMER_REAL)
+    except (OSError, ValueError):
+        raise ValueError("max-seconds could not inspect the POSIX run timer") from None
+    if active_timer != (0.0, 0.0):
+        raise ValueError("max-seconds cannot replace an active POSIX process timer")
+
+
 def _storage_limit(settings) -> int:
     storage = getattr(settings, "storage", None)
     return getattr(storage, "max_database_bytes", DEFAULT_MAX_DATABASE_BYTES)
@@ -282,6 +317,40 @@ class _RunInterrupted(KeyboardInterrupt):
     def __init__(self, signum: int):
         super().__init__()
         self.signum = signum
+
+
+@contextmanager
+def _scoped_run_deadline(max_seconds: int | None):
+    """Bound source ownership with a one-shot POSIX process alarm."""
+
+    if max_seconds is None:
+        yield
+        return
+    _require_run_deadline_support(max_seconds)
+
+    alarm_signal = signal.SIGALRM
+    timer_kind = signal.ITIMER_REAL
+    previous_handler = signal.getsignal(alarm_signal)
+
+    def deadline_exceeded(_signum, _frame):
+        raise CaptureError("ingestion deadline exceeded")
+
+    try:
+        signal.signal(alarm_signal, deadline_exceeded)
+    except ValueError:
+        raise ValueError("max-seconds requires the interpreter main thread") from None
+
+    try:
+        signal.setitimer(timer_kind, max_seconds)
+    except (OSError, ValueError):
+        signal.signal(alarm_signal, previous_handler)
+        raise ValueError("max-seconds could not arm the POSIX run deadline") from None
+
+    try:
+        yield
+    finally:
+        signal.setitimer(timer_kind, 0.0)
+        signal.signal(alarm_signal, previous_handler)
 
 
 @contextmanager
@@ -318,6 +387,7 @@ def _run(args: argparse.Namespace) -> int:
         # source acquisition. A configuration-selected source is checked again
         # immediately after the one necessary configuration read.
         _require_finite_run_limit(args.source, args.max_events)
+        _require_run_deadline_support(args.max_seconds)
         settings = _load(args.config)
         source = _source_for(args, settings)
         _require_finite_run_limit(source, args.max_events)
@@ -330,9 +400,11 @@ def _run(args: argparse.Namespace) -> int:
             processed = 0
             termination_reason = "source_exhausted"
             try:
-                with _scoped_sigterm_interrupt(), _owned_source(
-                    _events_for(args, settings)
-                ) as events:
+                with (
+                    _scoped_sigterm_interrupt(),
+                    _scoped_run_deadline(args.max_seconds),
+                    _owned_source(_events_for(args, settings)) as events,
+                ):
                     for event in events:
                         service.process(event, run_id=run_id)
                         processed += 1

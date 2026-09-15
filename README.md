@@ -658,9 +658,9 @@ last-success timestamp, and count baseline while marking the display stale.
 | --- | --- |
 | `capabilities [--platform linux\|windows\|other]` | Print a static support/free-software catalog without probing or changing the host |
 | `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
-| `run --source sample [--demo-threat]` | Process built-in synthetic metadata |
-| `run --source jsonl --max-events N [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling |
-| `run --source scapy --interface IFACE --max-events N` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling |
+| `run --source sample [--demo-threat] [--max-seconds N]` | Process built-in synthetic metadata; optionally apply the POSIX source-lifetime deadline |
+| `run --source jsonl --max-events N [--max-seconds N] [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling and optional POSIX source-lifetime deadline |
+| `run --source scapy --interface IFACE --max-events N [--max-seconds N]` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling and optional POSIX source-lifetime deadline |
 | `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 or v2 audit database to v3; never overwrites its backup |
 | `database-reconciliation-status [--config PATH]` | Read bounded metadata for `running` or reconciliation-required run receipts; does not mutate them |
 | `database-reconcile RUN_ID --started-at UTC [--config PATH]` | After stopping ingestion, mark one exactly pinned running receipt as reconciliation-required while preserving evidence |
@@ -685,6 +685,18 @@ generator is finite and may omit it. Zero and missing limits on non-sample
 sources fail before the audit store or source is opened. Use `python -m megalodon --help` and
 `python -m megalodon.offline --help` for the complete operational argument
 surface, and `megalodon-evaluate --help` for the separate evaluation surface.
+
+On POSIX runtimes, `run --max-seconds N` adds an optional one-shot deadline from
+1 through 86,400 seconds around event-source acquisition, iteration, event
+processing, and source cleanup. Expiry fails closed with the existing
+`CAPTURE_ERROR` class after cleanup is attempted and preserves the committed
+prefix in a `failed/failed` receipt. Supplying the option on a runtime without
+`SIGALRM` and `ITIMER_REAL` is refused before configuration, storage, or source
+work. An already active process interval timer also causes a pre-I/O refusal so
+the CLI cannot replace or delay another component's alarm. The option does not
+claim a Windows deadline, interrupt kernel-level
+uninterruptible sleep, or bound configuration, store setup, final receipt, or
+summary work outside the source-ownership region.
 
 The bundled reference snapshot contains 12,577 normalized IANA service/port
 records and 152 protocol-number records in deterministic data shards no larger
@@ -713,8 +725,9 @@ The adapter caps each JSONL record at 64 KiB and refuses the first blank or
 comment line beyond a fixed 65,536-line skipped-input budget. Internal callers
 may lower, but cannot raise, that budget. Together with the required
 accepted-event ceiling, this bounds the number of physical lines examined after
-reads return; it does not interrupt a blocking read or impose an elapsed-time
-deadline. IP addresses, ports, timestamps, flags, text, byte counts, detector
+reads return. Without the optional POSIX `--max-seconds` control, it does not
+interrupt a blocking read or impose an elapsed-time deadline. IP addresses,
+ports, timestamps, flags, text, byte counts, detector
 evidence, action details, severities, and action statuses are typed and bounded
 before persistence. SQLite-facing counts cannot
 exceed its signed 64-bit integer range, and mutable JSON fields are revalidated
@@ -731,7 +744,7 @@ For optional Linux live capture (`eth0` is an example, not an assumed interface)
 
 ```bash
 python -m pip install -e ".[capture]"
-python -m megalodon run --source scapy --interface eth0 --max-events 100000
+python -m megalodon run --source scapy --interface eth0 --max-events 100000 --max-seconds 3600
 ```
 
 Live capture requires the normal Linux permissions for the selected interface.
@@ -952,6 +965,7 @@ because branches, checks, reviews, and remaining evidence can change.
 | [#66 — dashboard read isolation](https://github.com/bartytime4life/MEGALODON/issues/66) | Closed `completed`: a least-data reader validates private storage and constrains SQL to the dashboard projection | Native Windows ACL evidence or remote dashboard authority |
 | [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Closed `completed`: per-event evidence commits, terminal reasons, rollback behavior, and bounded orphan reconciliation are on `main` | Exactly-once intake, native power-loss recovery, alert lifecycle, or delivery |
 | [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Closed `completed`: detector accounting, storage high-water refusal, Scapy lifecycle bounds, and finite retention batches are on `main` | Installed-Scapy loss evidence, native long-running exhaustion results, selected retention values, or notifier behavior |
+| [#196 — POSIX ingestion deadline](https://github.com/bartytime4life/MEGALODON/issues/196) | Open: the current bounded slice adds an optional source-lifetime alarm, fixed failure receipt, blocking-stdin proof, cleanup-order tests, and refusal to replace an active process timer | Windows/portable interruption, uninterruptible native/kernel stalls, whole-command deadlines, installed-capture loss evidence, and sustained native capacity |
 | [#69 — CI dependency and artifact hygiene](https://github.com/bartytime4life/MEGALODON/issues/69) | Closed `completed`: repository hygiene, hashed constrained CI inputs, isolated-build constraints, and exact-tree checks are on `main` | Automatic update trust, release provenance, or independent approval |
 | [#154 — Qwen Airlock preflight](https://github.com/bartytime4life/MEGALODON/issues/154) and [#165 — literal-loopback provider boundary](https://github.com/bartytime4life/MEGALODON/issues/165) | Closed `completed`: pinned metadata-only admission and the bounded internal `127.0.0.1:11434` provider adapter are on `main` | An operator-verified model artifact/Ollama lifecycle, CLI or dashboard exposure, persistence, background execution, or action authority |
 

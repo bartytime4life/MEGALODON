@@ -159,6 +159,13 @@ lifecycle.
   full stream. Internal callers may lower this budget; the first excess line
   fails with `CAPTURE_ERROR`, preserves the committed prefix, and leaves the
   suffix unread.
+- On POSIX runtimes, optional `--max-seconds N` values from 1 through 86,400
+  arm one process alarm before source acquisition and keep it active through
+  iteration, event processing, and owned-source cleanup. Expiry attempts cleanup,
+  preserves the committed prefix, and records `failed/failed` with
+  `CAPTURE_ERROR`. Unsupported runtimes refuse the option before configuration,
+  store, or source work. An already active process interval timer produces the
+  same pre-I/O refusal without replacing its handler or countdown.
 - `--max-events N` stops intake after the Nth accepted event, then records
   `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
   the next live event.
@@ -181,9 +188,9 @@ The CLI holds its selected event iterator explicitly. Exhaustion, an event-limit
 break, an input failure, a service/storage failure, or a handled interruption
 leaves the ingestion block through the same ownership boundary. Its `close()`
 method, when present, is invoked before any terminal run write or terminal JSON
-output. Closure stays inside the scoped SIGTERM handler. An iterator without a
-close method remains supported; this does not assert that an arbitrary producer
-has released native resources.
+output. Closure stays inside the scoped SIGTERM handler and, when selected, the
+POSIX run-deadline alarm. An iterator without a close method remains supported;
+this does not assert that an arbitrary producer has released native resources.
 
 The JSONL file path has two owners: the CLI owns the event iterator, and that
 iterator owns the text stream it opens. The file is opened lazily on first
@@ -233,15 +240,21 @@ receipts also do not establish that this newer ownership boundary executed.
 `tests/test_cli_source_ownership.py` keeps explicit references to sources and
 checks close-before-finalization order, no read-ahead, primary-error identity,
 interruption, reconciliation, fixed errors, lazy file opening, nested generator
-close failures, and borrowed stdin. Six real CLI/service/SQLite cases verify
+close failures, borrowed stdin, deadline signal/close ordering, prior-handler
+restoration, and active-timer refusal. A real subprocess holds stdin open and
+verifies that the POSIX alarm
+interrupts the blocked read into a fixed failed SQLite receipt. Six additional
+real CLI/service/SQLite cases verify
 that committed prefix counts and links survive failure and that ordinary close
 errors cannot produce either a completed or event-limit success receipt. Test
-producers are synthetic; no Scapy installation, capture, socket, DNS lookup, or
-subprocess is needed by these tests.
+producers are synthetic; no Scapy installation, live capture, socket, DNS lookup,
+or installed-environment execution is needed by these tests.
 
-This is deterministic ownership and finite returned-line work, not an elapsed
-deadline or a native-shutdown receipt. A blocking `next()` or `close()` can
-still block. Async sniffer death, partial
+This is deterministic ownership, finite returned-line work, and an opt-in POSIX
+elapsed deadline—not a portable or native-shutdown receipt. Without
+`--max-seconds`, a blocking `next()` or `close()` can still block. Even with the
+option, kernel-level uninterruptible sleep and C/native work that prevents Python
+signal handling remain outside the proof. Async sniffer death, partial
 startup cleanup, bounded stop/join, kernel loss, repeated-signal resilience,
 physical disk/power loss, native Windows behavior, and continuous operation
 remain outside this correction under issue #68 and the existing acceptance

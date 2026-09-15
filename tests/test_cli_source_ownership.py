@@ -64,7 +64,7 @@ class SourceOwnershipTests(unittest.TestCase):
             self.enterContext(patch(target, side_effect=AssertionError("unexpected I/O")))
         self.args = SimpleNamespace(
             config=None, source="sample", max_events=None, demo_threat=False,
-            input=None, interface=None,
+            input=None, interface=None, max_seconds=None,
         )
         self.settings = SimpleNamespace(db_path=Path("unused.db"), capture_source="sample")
 
@@ -172,6 +172,105 @@ class SourceOwnershipTests(unittest.TestCase):
         self.assertEqual(source.journal, ["close", "finish"])
         self.assertEqual(error.__notes__, [CLEANUP_ERROR])
         store.finish_ingestion_run.assert_called_once_with(1, "failed", failure_code="CAPTURE_ERROR")
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_signal_closes_before_failed_receipt(self):
+        class DeadlineSource(Source):
+            def __next__(inner_self):
+                inner_self.next_calls += 1
+                signal.raise_signal(signal.SIGALRM)
+                raise AssertionError("deadline handler did not interrupt source read")
+
+        self.args.max_seconds = 60
+        source = DeadlineSource([])
+
+        code, store, out, err = self.run_source(source)
+
+        self.assertEqual((code, out), (2, ""))
+        self.assertEqual(err, "megalodon: ingestion failed (CAPTURE_ERROR)\n")
+        self.assertEqual(source.journal, ["close", "finish"])
+        store.finish_ingestion_run.assert_called_once_with(
+            1, "failed", failure_code="CAPTURE_ERROR"
+        )
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_keeps_alarm_active_through_source_close(self):
+        class DeadlineOnClose(Source):
+            def close(inner_self):
+                inner_self.close_calls += 1
+                inner_self.journal.append("close")
+                signal.raise_signal(signal.SIGALRM)
+
+        self.args.max_events = 1
+        self.args.max_seconds = 60
+        source = DeadlineOnClose([], rows=(object(),))
+
+        code, store, out, err = self.run_source(source)
+
+        self.assertEqual((code, out), (2, ""))
+        self.assertEqual(err, "megalodon: ingestion failed (CAPTURE_ERROR)\n")
+        self.assertEqual(source.journal, ["process", "close", "finish"])
+        store.finish_ingestion_run.assert_called_once_with(
+            1, "failed", failure_code="CAPTURE_ERROR"
+        )
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_prior_handler_when_timer_is_inactive(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with cli._scoped_run_deadline(10):
+                active_delay, active_interval = signal.getitimer(signal.ITIMER_REAL)
+                self.assertGreater(active_delay, 9.0)
+                self.assertEqual(active_interval, 0.0)
+
+            restored_delay, restored_interval = signal.getitimer(
+                signal.ITIMER_REAL
+            )
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertEqual(restored_delay, 0.0)
+            self.assertEqual(restored_interval, 0.0)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_refuses_without_replacing_active_process_timer(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            signal.setitimer(signal.ITIMER_REAL, 30.0)
+            before_delay, before_interval = signal.getitimer(signal.ITIMER_REAL)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "^max-seconds cannot replace an active POSIX process timer$",
+            ):
+                with cli._scoped_run_deadline(10):
+                    self.fail("conflicting timer should refuse before entry")
+
+            after_delay, after_interval = signal.getitimer(signal.ITIMER_REAL)
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertLessEqual(after_delay, before_delay)
+            self.assertGreater(after_delay, before_delay - 1.0)
+            self.assertEqual(after_interval, before_interval)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
     def test_interrupt_keeps_exit_code_after_failed_close(self):
         for error, expected in ((KeyboardInterrupt(), 130), (cli._RunInterrupted(signal.SIGTERM), 143)):

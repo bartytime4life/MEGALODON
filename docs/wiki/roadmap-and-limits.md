@@ -11,9 +11,14 @@ positive accepted-event `--max-events` ceiling from 1 through 10,000,000. The
 built-in sample source may omit it because the repository owns its finite
 generator. JSONL iterators also refuse the first blank/comment line beyond a
 fixed 65,536-line skipped-input budget, bounding physical line work after reads
-return. These limits do not interrupt a blocking read or cap elapsed time, and
-they do not establish installed-capture loss handling, sustained native capacity,
-or continuous-monitoring acceptance.
+return. An optional POSIX `--max-seconds` value from 1 through 86,400 bounds
+source acquisition, iteration, processing, and cleanup with a fixed failed
+receipt; unsupported runtimes refuse the option before configuration or I/O.
+An existing process timer is preserved by refusing the option before that work.
+Without that option, blocking work remains unbounded. The deadline does not
+interrupt kernel-level uninterruptible sleep, supply a Windows control, or
+establish installed-capture loss handling, sustained native capacity, or
+continuous-monitoring acceptance.
 
 The bundled IANA reference data is not service discovery or a vulnerability feed. The synthetic corpus verifies deterministic boundary behavior; it is not representative production traffic, a product benchmark, or proof an alert is malicious.
 
