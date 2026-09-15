@@ -18,7 +18,8 @@ inspection, blocked `SIGALRM`, and processes with more than one OS thread refuse
 the option before configuration or I/O because the timer/handler are process-wide. Existing and
 concurrently armed process timers are preserved and refused while `SIGALRM` is
 blocked across the handler/timer swap, and prior-handler restoration remains
-unconditional when timer cancellation raises.
+conditional on confirmed timer inactivity when cancellation raises. Threaded
+Scapy capture refuses the deadline.
 Without that option, blocking work remains unbounded. The deadline does not
 interrupt kernel-level uninterruptible sleep, supply a Windows control, or
 establish installed-capture loss handling, sustained native capacity, or

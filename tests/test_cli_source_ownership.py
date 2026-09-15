@@ -447,7 +447,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
-    def test_deadline_restores_handler_when_cancellation_fails(self):
+    def test_deadline_restores_handler_when_failed_cancel_left_timer_inactive(self):
         original_handler = signal.getsignal(signal.SIGALRM)
         original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
 
@@ -457,6 +457,7 @@ class SourceOwnershipTests(unittest.TestCase):
         try:
             signal.signal(signal.SIGALRM, prior_handler)
             with (
+                patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
                 patch.object(
                     cli.signal,
                     "setitimer",
@@ -468,6 +469,39 @@ class SourceOwnershipTests(unittest.TestCase):
                     pass
 
             self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "Linux interval timers required")
+    def test_deadline_retains_handler_when_failed_cancel_leaves_timer_active(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(
+                    cli.signal,
+                    "getitimer",
+                    side_effect=[(0.0, 0.0), (9.0, 0.0)],
+                ),
+                patch.object(
+                    cli.signal,
+                    "setitimer",
+                    side_effect=[(0.0, 0.0), OSError("synthetic cancel failure")],
+                ),
+                self.assertRaisesRegex(OSError, "^synthetic cancel failure$"),
+            ):
+                with cli._scoped_run_deadline(10):
+                    pass
+
+            self.assertIsNot(signal.getsignal(signal.SIGALRM), prior_handler)
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0.0)
             signal.signal(signal.SIGALRM, original_handler)

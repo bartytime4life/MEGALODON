@@ -275,6 +275,15 @@ def _require_finite_run_limit(source: str | None, max_events: int | None) -> Non
         )
 
 
+def _require_run_deadline_source(
+    source: str | None, max_seconds: int | None
+) -> None:
+    if source == "scapy" and max_seconds is not None:
+        raise ValueError(
+            "max-seconds is unavailable for threaded scapy capture"
+        )
+
+
 def _run_deadline_supported() -> bool:
     return (
         sys.platform.startswith("linux")
@@ -355,7 +364,7 @@ class _RunInterrupted(KeyboardInterrupt):
 
 @contextmanager
 def _scoped_run_deadline(max_seconds: int | None):
-    """Bound source ownership with a one-shot POSIX process alarm."""
+    """Bound single-threaded Linux source ownership with a process alarm."""
 
     if max_seconds is None:
         yield
@@ -415,7 +424,17 @@ def _scoped_run_deadline(max_seconds: int | None):
                 try:
                     if timer_started:
                         signal.setitimer(timer_kind, 0.0)
-                finally:
+                except BaseException:
+                    try:
+                        timer_inactive = (
+                            signal.getitimer(timer_kind) == (0.0, 0.0)
+                        )
+                    except (OSError, ValueError):
+                        timer_inactive = False
+                    if timer_inactive:
+                        signal.signal(alarm_signal, previous_handler)
+                    raise
+                else:
                     signal.signal(alarm_signal, previous_handler)
         finally:
             if not mask_restored:
@@ -456,10 +475,12 @@ def _run(args: argparse.Namespace) -> int:
         # source acquisition. A configuration-selected source is checked again
         # immediately after the one necessary configuration read.
         _require_finite_run_limit(args.source, args.max_events)
+        _require_run_deadline_source(args.source, args.max_seconds)
         _require_run_deadline_support(args.max_seconds)
         settings = _load(args.config)
         source = _source_for(args, settings)
         _require_finite_run_limit(source, args.max_events)
+        _require_run_deadline_source(source, args.max_seconds)
         with Store(
             settings.db_path,
             max_database_bytes=_storage_limit(settings),

@@ -169,7 +169,9 @@ lifecycle.
   process interval timer produces the same pre-I/O
   refusal. The arming return value detects and restores a timer installed after
   preflight while `SIGALRM` is blocked across the handler/timer swap;
-  cancellation restores the prior handler even when disarming raises.
+  cancellation restores the prior handler only after disarming succeeds or timer
+  inactivity is confirmed. A failed disarm with a still-live or uninspectable
+  timer retains the deadline handler. Threaded Scapy capture refuses the option.
 - `--max-events N` stops intake after the Nth accepted event, then records
   `incomplete/event_limit_reached` after cleanup. It does not peek at or discard
   the next live event.
@@ -244,8 +246,9 @@ receipts also do not establish that this newer ownership boundary executed.
 `tests/test_cli_source_ownership.py` keeps explicit references to sources and
 checks close-before-finalization order, no read-ahead, primary-error identity,
 interruption, reconciliation, fixed errors, lazy file opening, nested generator
-close failures, borrowed stdin, deadline signal/close ordering, blocked-mask and
-OS-thread refusal, prior-handler restoration, cancellation failure, and preflight plus
+close failures, borrowed stdin, deadline signal/close ordering, blocked-mask,
+OS-thread, and threaded-Scapy refusal, conditional prior-handler restoration,
+cancellation failure, and preflight plus
 arm-time active-timer refusal. A real subprocess holds stdin open and
 verifies that the Linux alarm
 interrupts the blocked read into a fixed failed SQLite receipt. Six additional

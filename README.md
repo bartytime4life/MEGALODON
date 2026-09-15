@@ -660,7 +660,7 @@ last-success timestamp, and count baseline while marking the display stale.
 | `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
 | `run --source sample [--demo-threat] [--max-seconds N]` | Process built-in synthetic metadata; optionally apply the Linux source-lifetime deadline |
 | `run --source jsonl --max-events N [--max-seconds N] [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling and optional Linux source-lifetime deadline |
-| `run --source scapy --interface IFACE --max-events N [--max-seconds N]` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling and optional source-lifetime deadline |
+| `run --source scapy --interface IFACE --max-events N` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling; the threaded adapter refuses `--max-seconds` |
 | `database-migrate [--config PATH]` | Explicitly back up and migrate an exact v1 or v2 audit database to v3; never overwrites its backup |
 | `database-reconciliation-status [--config PATH]` | Read bounded metadata for `running` or reconciliation-required run receipts; does not mutate them |
 | `database-reconcile RUN_ID --started-at UTC [--config PATH]` | After stopping ingestion, mark one exactly pinned running receipt as reconciliation-required while preserving evidence |
@@ -698,8 +698,11 @@ timer and handler are process-wide while signal masks are thread-local.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
-timer swap. Deadline cancellation restores the prior
-handler even when cancellation is interrupted or fails. The option does not
+timer swap. Deadline cancellation restores the prior handler after cancellation
+succeeds or timer inactivity is confirmed; a failed disarm with a still-live or
+uninspectable timer retains the deadline handler. Threaded Scapy capture refuses
+the option because a worker created after setup cannot inherit the proven
+single-thread boundary. The option does not
 claim a Windows deadline, interrupt kernel-level
 uninterruptible sleep, or bound configuration, store setup, final receipt, or
 summary work outside the source-ownership region.
