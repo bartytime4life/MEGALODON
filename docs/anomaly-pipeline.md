@@ -1,8 +1,14 @@
 # AI-assisted anomaly pipeline
 
-Status: offline candidate evidence implemented on this branch; operational
-integration and efficacy remain unproved. Initial base:
+Status: offline candidate evidence, separate Qwen admission, and the explicit
+[one-shot analyst command](anomaly-triage.md) are implemented on this branch.
+Operational efficacy and dashboard integration remain unproved. Initial base:
 `a9ab662a58adabe74c398ed08b37d91a2e34df4f` (2026-09-15 UTC).
+
+The [main-integration record](anomaly-main-integration.md) distinguishes code
+merged into a feature branch from code available on the default branch. The
+integration base is `45e841587095608b8bbc82415fe7eea21198cd2a`; a draft's
+checks and contents do not establish that it has landed on `main`.
 
 MEGALODON should generate reproducible metadata candidates first, then let a
 pinned local Qwen explain that evidence for an analyst. Qwen must never create
@@ -25,8 +31,9 @@ gates. Their September 9 repository pins are historical. The supplied Repository
 Research Analysis Framework explicitly had no repository; its checklist is
 methodology, not evidence about current MEGALODON. Current code already has
 offline TShark/Zeek baselines, source-qualified comparison, the v1 Airlock and
-literal-loopback Qwen transport. Open PR #176 separately owns the immutable
-dashboard receipt display; do not duplicate it.
+literal-loopback Qwen transport. Merged PR #176 supplies the immutable v1
+dashboard receipt display. It does not accept the separate anomaly policy;
+do not treat it as anomaly integration.
 
 The first scorer uses exact counts and fractions with explicit thresholds.
 Training a new model is deferred until representative, labeled, temporally
@@ -34,6 +41,18 @@ separated local data exists. [Scikit-learn's distinction between novelty and
 outlier detection](https://scikit-learn.org/stable/modules/outlier_detection.html)
 explains why a contaminated reference cannot simply be labeled normal. No
 scikit-learn or model-training dependency is added.
+
+Merged PR #177's offline Alert Workload Lab is complementary evaluation work;
+its hypothetical base-rate projections are not measurements of this scorer.
+Merged PR #179 strengthens the original Qwen denial corpus at the enabled
+provider boundary. The integration preserves both changes and adds enabled
+anomaly-policy denial checks without expanding either policy's authority.
+
+Hugging Face's technical timeline reports that AI correlation identified an
+attack signal but failed to raise its criticality and call the on-call team.
+Detection, model explanation, severity, and delivery therefore need separate
+acceptance. This command implements only evidence and optional explanation;
+it does not notify, assign severity, or replace an incident-response process.
 
 ## Candidate evidence
 
