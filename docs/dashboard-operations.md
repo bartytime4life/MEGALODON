@@ -12,7 +12,8 @@ The command center stays pinned to one browser viewport. Its persistent tabs
 switch among three internally scrolling workspaces without reloading the page:
 **Live review** leads with the trust strip, stored counters, and detection
 triage; **Analysis** contains the Reference Library, offline snapshot, and
-reserved AI boundary; **Interfaces** contains every closed application slot.
+display-only Qwen receipt boundary; **Interfaces** contains every closed
+application slot.
 Switching workspaces preserves local filters and never fetches external data or
 starts an analysis.
 
@@ -21,15 +22,16 @@ This includes live-review/detection, deep-analysis/reference/offline, and
 integration-map fragments; browser back/forward fragment changes use the same
 closed mapping and never choose an arbitrary selector or route.
 
-The Analysis workspace also shows a **Reserved analysis window · not active**
-card. This is an honest capability boundary, not a button or a model-health
-claim. A separate library-only adapter can make one explicitly enabled,
-Airlock-admitted request to literal IPv4 loopback, but the dashboard does not
-invoke it or read its result. The adapter may receive one completed
-privacy-bounded metadata projection for at most 15 seconds with concurrency one.
-It must not inspect raw traffic, run in the background, or apply a response.
-Until a separately reviewed read-only receipt projection exists, the panel state
-remains **Not implemented**.
+The Analysis workspace shows one **Qwen advisory receipt** card. An embedding
+caller may supply one already-produced frozen result when starting the server;
+the dashboard validates and copies it before listening, then the browser reads
+it once. If none is supplied, or the response is invalid, the card says
+unavailable and shows no partial model output. This is a display boundary, not
+a button, file loader, provider-health claim, or model invocation path. The
+separate library-only adapter can still make only one explicitly enabled,
+Airlock-admitted request to literal IPv4 loopback. The dashboard cannot start
+that call, poll Qwen, inspect raw traffic, run analysis in the background, or
+apply a response.
 
 There are five distinct surfaces. Do not combine their meanings:
 
@@ -39,7 +41,7 @@ There are five distinct surfaces. Do not combine their meanings:
 | Offline snapshot | One explicitly selected, validated report projection loaded at startup | A live analyzer connection or automatically refreshed run |
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |
 | Application interfaces | Fourteen repository-defined capability slots, workflow contracts, and next gates for one profile | Embedded vendor consoles, installed programs, live connections, active sensors, or platform acceptance |
-| Reserved AI advisory window | A visible future dashboard boundary for one read-only bounded advisory receipt | An installed/reachable model, an invocation control, live traffic analysis, an evidence source, or a response authority |
+| Qwen advisory receipt | One startup-supplied, validated, display-only bounded result | An installed/reachable model, an invocation control, live traffic analysis, an evidence source, or a response authority |
 
 The high/critical counter compares sequential stored counts. An increase is not a
 unique new incident; a decrease is not proof that a threat was remediated. The
@@ -110,7 +112,8 @@ Availability words are deliberately narrow:
   They must not be promoted by a successful Linux test or by installing a tool.
 - **Contract only/manual only/proposed/unsupported** remain non-runtime or limited
   relationships. Suricata has no runtime importer; Qwen/Ollama is limited to
-  one explicitly enabled library call with no dashboard or CLI entry point;
+  one explicitly enabled library call with no dashboard invocation or CLI entry point;
+  its receipt can only be supplied programmatically at dashboard startup;
   ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone, Zabbix, and
   Nagios Core remain proposed.
 
