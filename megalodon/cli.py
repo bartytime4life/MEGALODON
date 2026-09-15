@@ -278,8 +278,10 @@ def _run_deadline_supported() -> bool:
     return (
         hasattr(signal, "SIGALRM")
         and hasattr(signal, "ITIMER_REAL")
+        and hasattr(signal, "SIG_BLOCK")
         and callable(getattr(signal, "getitimer", None))
         and callable(getattr(signal, "setitimer", None))
+        and callable(getattr(signal, "pthread_sigmask", None))
     )
 
 
@@ -288,8 +290,17 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
         return
     if not _run_deadline_supported():
         raise ValueError(
-            "max-seconds requires a POSIX runtime with SIGALRM and ITIMER_REAL"
+            "max-seconds requires a POSIX runtime with SIGALRM, ITIMER_REAL, "
+            "and pthread_sigmask"
         )
+    try:
+        blocked_signals = signal.pthread_sigmask(signal.SIG_BLOCK, ())
+    except (OSError, ValueError):
+        raise ValueError(
+            "max-seconds could not inspect the POSIX signal mask"
+        ) from None
+    if signal.SIGALRM in blocked_signals:
+        raise ValueError("max-seconds requires SIGALRM to be unblocked")
     try:
         active_timer = signal.getitimer(signal.ITIMER_REAL)
     except (OSError, ValueError):
@@ -341,16 +352,31 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise ValueError("max-seconds requires the interpreter main thread") from None
 
     try:
+        timer_restored = False
         try:
-            signal.setitimer(timer_kind, max_seconds)
+            previous_timer = signal.setitimer(timer_kind, max_seconds)
         except (OSError, ValueError):
             raise ValueError(
                 "max-seconds could not arm the POSIX run deadline"
             ) from None
+        if previous_timer != (0.0, 0.0):
+            try:
+                signal.setitimer(timer_kind, *previous_timer)
+            except (OSError, ValueError):
+                raise ValueError(
+                    "max-seconds could not restore a competing POSIX process timer"
+                ) from None
+            timer_restored = True
+            raise ValueError(
+                "max-seconds cannot replace an active POSIX process timer"
+            )
         yield
     finally:
-        signal.setitimer(timer_kind, 0.0)
-        signal.signal(alarm_signal, previous_handler)
+        try:
+            if not timer_restored:
+                signal.setitimer(timer_kind, 0.0)
+        finally:
+            signal.signal(alarm_signal, previous_handler)
 
 
 @contextmanager

@@ -312,6 +312,114 @@ class SourceOwnershipTests(unittest.TestCase):
             if original_timer[0] > 0.0:
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_timer_armed_after_preflight(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+        calls = []
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            calls.append((timer_kind, seconds, interval))
+            if len(calls) == 1:
+                return (30.0, 0.5)
+            return (1.0, 0.0)
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
+                patch.object(cli.signal, "setitimer", side_effect=setitimer),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "^max-seconds cannot replace an active POSIX process timer$",
+                ),
+            ):
+                with cli._scoped_run_deadline(10):
+                    self.fail("concurrently armed timer should refuse before entry")
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertEqual(
+                calls,
+                [
+                    (signal.ITIMER_REAL, 10, 0.0),
+                    (signal.ITIMER_REAL, 30.0, 0.5),
+                ],
+            )
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_handler_when_alarm_fires_during_cancellation(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+        calls = []
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            calls.append((timer_kind, seconds, interval))
+            if not seconds:
+                signal.raise_signal(signal.SIGALRM)
+            return (0.0, 0.0)
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(cli.signal, "setitimer", side_effect=setitimer),
+                self.assertRaisesRegex(CaptureError, "^ingestion deadline exceeded$"),
+            ):
+                with cli._scoped_run_deadline(10):
+                    pass
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertEqual(
+                calls,
+                [
+                    (signal.ITIMER_REAL, 10, 0.0),
+                    (signal.ITIMER_REAL, 0.0, 0.0),
+                ],
+            )
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_handler_when_cancellation_fails(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(
+                    cli.signal,
+                    "setitimer",
+                    side_effect=[(0.0, 0.0), OSError("synthetic cancel failure")],
+                ),
+                self.assertRaisesRegex(OSError, "^synthetic cancel failure$"),
+            ):
+                with cli._scoped_run_deadline(10):
+                    pass
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
     def test_interrupt_keeps_exit_code_after_failed_close(self):
         for error, expected in ((KeyboardInterrupt(), 130), (cli._RunInterrupted(signal.SIGTERM), 143)):
             with self.subTest(code=expected):

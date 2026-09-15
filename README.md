@@ -691,9 +691,12 @@ On POSIX runtimes, `run --max-seconds N` adds an optional one-shot deadline from
 processing, and source cleanup. Expiry fails closed with the existing
 `CAPTURE_ERROR` class after cleanup is attempted and preserves the committed
 prefix in a `failed/failed` receipt. Supplying the option on a runtime without
-`SIGALRM` and `ITIMER_REAL` is refused before configuration, storage, or source
-work. An already active process interval timer also causes a pre-I/O refusal so
-the CLI cannot replace or delay another component's alarm. The option does not
+`SIGALRM`, `ITIMER_REAL`, and `pthread_sigmask` is refused before configuration,
+storage, or source work. A blocked `SIGALRM` is refused at the same boundary.
+An already active process interval timer also causes a pre-I/O refusal; the
+timer value returned while arming is checked so a concurrent timer is restored
+and refused rather than discarded. Deadline cancellation restores the prior
+handler even when cancellation is interrupted or fails. The option does not
 claim a Windows deadline, interrupt kernel-level
 uninterruptible sleep, or bound configuration, store setup, final receipt, or
 summary work outside the source-ownership region.
