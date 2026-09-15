@@ -13,6 +13,8 @@ from threading import Barrier
 
 import pytest
 
+import megalodon.capture as capture
+import megalodon.cli as cli
 from megalodon.capture import MAX_JSONL_SKIPPED_LINES
 from megalodon.cli import main
 from megalodon.config import Settings
@@ -541,6 +543,47 @@ def test_cli_records_skipped_line_budget_failure_after_committed_prefix(tmp_path
         + json.dumps(_event().to_dict())
         + "\n",
         encoding="utf-8",
+    )
+    error = io.StringIO()
+
+    with redirect_stderr(error), pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "run",
+                "--config",
+                str(config),
+                "--source",
+                "jsonl",
+                "--input",
+                str(source),
+                "--max-events",
+                "100",
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert error.getvalue() == "megalodon: ingestion failed (CAPTURE_ERROR)\n"
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT status, processed_count, detection_count, failure_code, "
+            "termination_reason FROM ingestion_runs"
+        ).fetchone() == ("failed", 1, 0, "CAPTURE_ERROR", "failed")
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ingestion_run_events"
+        ).fetchone()[0] == 1
+
+
+def test_cli_records_input_byte_budget_failure_after_committed_prefix(
+    tmp_path, monkeypatch
+):
+    config, database = _config(tmp_path)
+    source = tmp_path / "events.jsonl"
+    first = json.dumps(_event().to_dict()) + "\n"
+    source.write_text(first + "# exceeds remaining bytes\n", encoding="utf-8")
+    monkeypatch.setattr(
+        cli,
+        "iter_jsonl",
+        lambda stream: capture.iter_jsonl(stream, max_input_bytes=len(first.encode("utf-8"))),
     )
     error = io.StringIO()
 
