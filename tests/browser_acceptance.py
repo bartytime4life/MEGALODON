@@ -408,14 +408,20 @@ async def run() -> None:
             missing, missing_db = config(root, "missing")
             unsafe_startup(missing, missing_db)
             empty, empty_db = config(root, "empty")
-            result = cli("run", "--config", str(empty), "--source", "jsonl", stdin="")
+            result = cli(
+                "run", "--config", str(empty), "--source", "jsonl",
+                "--max-events", "100", stdin="",
+            )
             passed("empty fixture writer completed", result["status"] == "completed")
             populated, populated_db = config(root, "populated")
             events = [{"observed_at": "2026-01-01T00:00:00+00:00", "src_ip": f"192.0.2.{n}",
                        "dst_ip": "198.51.100.20", "protocol": "UDP", "src_port": 40000,
                        "dst_port": 53, "dns_query_length": 90, "byte_count": 100} for n in (10, 11)]
-            result = cli("run", "--config", str(populated), "--source", "jsonl",
-                         stdin="".join(json.dumps(event) + "\n" for event in events))
+            result = cli(
+                "run", "--config", str(populated), "--source", "jsonl",
+                "--max-events", "100",
+                stdin="".join(json.dumps(event) + "\n" for event in events),
+            )
             passed("real ingestion produced complete synthetic evidence", result["status"] == "completed"
                    and result["processed"] == 2 and result["detections"] == 2 and result["actions"] == 2)
             offline = offline_fixture(root)
