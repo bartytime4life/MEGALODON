@@ -209,6 +209,19 @@ process.stdin.on('end', async () => {
     assert.equal(Object.isFrozen(receipt), true); assert.equal(Object.isFrozen(receipt.model_receipt), true);
     assert.equal(run("boundedAdvisoryText('😀'.repeat(601))"), true);
     assert.equal(run("boundedAdvisoryText('😀'.repeat(1201))"), false);
+    const controls = [...Array(32).keys(), ...Array.from({length: 33}, (_, i) => i + 127),
+      0x61c, 0x200e, 0x200f, ...Array.from({length: 7}, (_, i) => i + 0x2028),
+      ...Array.from({length: 4}, (_, i) => i + 0x2066), 0xd800, 0xdfff, 0xfeff];
+    for (const code of controls) {
+      context.controlText = 'claim' + String.fromCodePoint(code) + 'counterclaim';
+      assert.equal(run('boundedAdvisoryText(controlText)'), false, String(code));
+      const bad = JSON.parse(JSON.stringify(value)); bad.receipt.summary = context.controlText;
+      context.bad = bad; assert.throws(() => run('validatedAdvisoryEnvelope(bad)'));
+    }
+    for (const text of ['Café 中文 العربية', '👩\u200d💻', '<b>inert text</b>']) {
+      context.goodText = text; assert.equal(run('boundedAdvisoryText(goodText)'), true);
+    }
+    assert.equal(run("boundedAdvisoryText('\\u00a0')"), false);
     run('renderAdvisoryReceipt(validatedAdvisoryEnvelope(value))');
     assert.equal(nodes.get('analysis-summary').textContent, '<img src=x onerror=alert(1)>');
     assert.equal(nodes.get('analysis-limitations').children.length, 1);
@@ -217,6 +230,8 @@ process.stdin.on('end', async () => {
       v => v.receipt.summary = 'line\nbreak', v => v.receipt.limitations = [],
       v => v.receipt.model_receipt.model_id = 'cloud:qwen',
       v => v.receipt.model_receipt.model_artifact_sha256 = 'A'.repeat(64),
+      v => v.receipt.model_receipt.model_id += '\n',
+      v => v.receipt.model_receipt.model_artifact_sha256 += '\n',
       v => { v.available = false; },
     ]) {
       const bad = JSON.parse(JSON.stringify(value)); mutate(bad); context.bad = bad;

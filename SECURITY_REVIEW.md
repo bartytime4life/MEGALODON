@@ -52,6 +52,14 @@ deterministic dossier; unexpected provider exceptions mark request accounting
 unknown. It does not add live detection, persistence, automatic analysis or
 response authority. The original run-count API remains library-only.
 
+The [result-integrity repair](docs/advisory-result-integrity.md) addresses
+non-normal completions being accepted as answers, invisible control text
+reaching consumers, and malformed provider returns escaping triage's evidence
+preservation boundary. Shared validation replaces duplicate dashboard rules;
+unknown completion is distinct from a verified no-request. These consistency
+checks do not authenticate model bytes, verify generated claims, remove Unicode
+homoglyph risks or attest provider egress containment.
+
 | Severity | Original design issue | Consequence | MVP correction |
 | --- | --- | --- | --- |
 | Critical | `subprocess.Popen(..., shell=True)` builds a capture command from interface/filter input | Shell injection and ambiguous tshark argument parsing | No shell; optional Scapy adapter and typed JSONL input |

@@ -183,6 +183,16 @@ uses temperature zero and a 512-token generation ceiling, and has no tool
 field. The adapter fails closed on partial, late, redirected, encoded,
 malformed, duplicate-key, tool-bearing, or oversized responses.
 
+The [result-integrity contract](advisory-result-integrity.md) closes the
+completion-to-display handoff. An explicit `done_reason` must equal `stop`;
+token-limited, cancelled, lifecycle or unknown reasons are errors, not answers.
+Legacy omission remains accepted and is not proof of natural completion.
+Present optional response fields must retain their declared types, not null.
+Control and bidirectional-format characters cannot reach model summaries,
+the result contract or the dashboard; ordinary Unicode and emoji remain valid.
+The dashboard and anomaly command share owned result/accounting validation
+but retain separate policy admission and unchanged endpoint authority.
+
 Ollama's generate response does not attest the loaded artifact digest, so this
 one-call slice cannot independently prove that the separately operated provider
 loaded those exact bytes. The operator must verify the local model before

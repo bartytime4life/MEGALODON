@@ -1,8 +1,9 @@
 # Qwen anomaly explanation contract
 
-This branch adds `local-model-anomaly-advisory-v1`, a separately admitted
-evidence explanation policy. The original `local-model-advisory-v1`, its two
-questions, registry and fixtures remain valid and unchanged. Neither policy's
+`local-model-anomaly-advisory-v1` is a separately admitted evidence explanation
+policy delivered to main in #187. The original `local-model-advisory-v1`, its
+two questions and registry remain separate. Both policies share the tightened
+[completion and result-text checks](advisory-result-integrity.md). Neither policy's
 registry implicitly authorizes the other.
 
 `preflight_anomaly_advisory` accepts one `qwen-anomaly-request-v1`: the original
@@ -38,8 +39,8 @@ candidate IDs and benign alternatives, but generated citations and reasoning
 are not independently verified. The deterministic dossier is retained
 separately and cannot be changed or suppressed by an answer, refusal or error.
 The result retains the new policy version, so an old dashboard must reject it
-until an explicit consumer compatibility change is reviewed. This PR does not
-modify or supersede #176's separate v1 receipt display work.
+until an explicit consumer compatibility change is reviewed. Shared result
+validation does not authorize the v1 dashboard to accept anomaly receipts.
 
 Runtime model bytes, the independent provider's egress controls, useful answer
 quality on the installed Qwen and operational anomaly detection accuracy remain

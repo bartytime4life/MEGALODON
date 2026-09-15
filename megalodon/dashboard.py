@@ -10,14 +10,13 @@ from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import json
-import re
 from threading import Lock
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .hub import integration_plan
-from .qwen_advisory import QwenAdvisoryResult
+from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
 
@@ -40,14 +39,6 @@ REFERENCE_WARNING = (
     "Registration is analyst context, not proof of what was observed or whether an endpoint "
     "is safe or malicious."
 )
-_ADVISORY_CODES = {
-    "ANSWER": "ADVISORY_ANSWER",
-    "ABSTAIN": "INSUFFICIENT_ALLOWED_CONTEXT",
-    "DENY": "POLICY_DENIED",
-    "ERROR": "LOCAL_PROVIDER_ERROR",
-}
-_QWEN_MODEL_ID = re.compile(r"local:qwen-[A-Za-z0-9._-]{1,96}\Z")
-_SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 
 
 class DashboardReader(Protocol):
@@ -60,72 +51,14 @@ class ReferenceLookupError(ValueError):
     """A fixed, path-free diagnostic for the dashboard reference surface."""
 
 
-def _bounded_advisory_text(value: object) -> bool:
-    return (
-        type(value) is str
-        and 1 <= len(value) <= 1200
-        and all(ord(character) >= 32 and ord(character) != 127 for character in value)
-    )
-
-
 def advisory_receipt_snapshot(
     value: QwenAdvisoryResult | None,
 ) -> dict[str, object] | None:
     """Validate and own one display-only Qwen result before server startup."""
     if value is None:
         return None
-    if type(value) is not QwenAdvisoryResult:
-        raise ValueError("dashboard advisory receipt is invalid")
     try:
-        outcome = value.outcome
-        code = value.code
-        summary = value.summary
-        limitations = value.limitations
-        if type(outcome) is not str or _ADVISORY_CODES.get(outcome) != code:
-            raise ValueError
-        if not _bounded_advisory_text(summary):
-            raise ValueError
-        if (
-            type(limitations) is not tuple
-            or not 1 <= len(limitations) <= 8
-            or any(not _bounded_advisory_text(item) for item in limitations)
-            or len(set(limitations)) != len(limitations)
-        ):
-            raise ValueError
-        if (
-            value.provider_class != "local_loopback"
-            or value.policy_version != "local-model-advisory-v1"
-            or type(value.model_id) is not str
-            or _QWEN_MODEL_ID.fullmatch(value.model_id) is None
-            or type(value.model_artifact_sha256) is not str
-            or _SHA256.fullmatch(value.model_artifact_sha256) is None
-            or type(value.reason_code) is not str
-            or re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", value.reason_code) is None
-            or type(value.prompt_bytes) is not int
-            or not 1 <= value.prompt_bytes <= 4096
-            or type(value.output_bytes) is not int
-            or not 0 <= value.output_bytes <= 4096
-            or type(value.provider_request_performed) is not bool
-            or (
-                outcome in {"ANSWER", "ABSTAIN"}
-                and value.provider_request_performed is not True
-            )
-            or (outcome == "ANSWER" and value.output_bytes == 0)
-            or (outcome == "DENY" and value.provider_request_performed is not False)
-        ):
-            raise ValueError
-        receipt = {
-            "outcome": outcome,
-            "code": code,
-            "summary": summary,
-            "limitations": list(limitations),
-            "model_receipt": {
-                "provider_class": value.provider_class,
-                "model_id": value.model_id,
-                "model_artifact_sha256": value.model_artifact_sha256,
-                "policy_version": value.policy_version,
-            },
-        }
+        receipt = validated_qwen_result(value).to_dict()
         owned = json.loads(
             json.dumps(
                 receipt,

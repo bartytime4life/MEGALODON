@@ -84,13 +84,22 @@ The new-policy receipt is not yet wired into #176's v1 dashboard display.
 | 3 | Evidence retained, but the requested AI explanation was denied or failed. |
 
 `provider_request_performed` is false/true from the provider accounting, or null
-if an unexpected provider exception makes completion unknown. Unknown is never
+if an unexpected provider exception or malformed return makes completion unknown. Unknown is never
 reported as a confirmed no-request. There is no retry. JSON escapes model text
 for terminal safety. Baseline reads are limited to 1 MiB each, windows/registry
 to 8 KiB each, and the complete emitted receipt to 32 KiB. Descriptor-relative
 reads reject traversal, symlinks, devices and multi-link files; input-change
 checks are not an atomic multi-file snapshot. The command does not enforce OS
 isolation or the egress policy of the separately operated provider.
+
+The [shared result validator](advisory-result-integrity.md) checks the returned
+type, outcome/code, separate anomaly policy, model identity, bounded display
+text and request accounting before serialization. Validation and serialization
+stay inside the provider failure boundary. A malformed result produces the
+fixed `PROVIDER_COMPLETION_UNKNOWN` error, exit 3 and the unchanged dossier;
+its claimed request flag and arbitrary methods are not trusted. A valid
+provider error, including an explicit non-normal completion reason, retains
+the provider's known request flag instead of converting it to unknown.
 
 Synthetic acceptance covers the real non-root/capability-free command plus
 mocked Qwen transport. Installed model behavior, live sensor coverage, useful

@@ -54,6 +54,12 @@ disabled by default. Eligibility gaps abstain, model failures retain determinist
 evidence, and neither model prose nor candidate thresholds become live detector
 or response authority. No repeated operation or dashboard invocation is added.
 
+The shared [advisory result contract](docs/advisory-result-integrity.md) checks
+normal explicit completion, owned result fields, request accounting and safe
+display text. Invalid returned objects or serialization failures cannot discard
+the command's completed dossier. The original dashboard remains v1-only and
+does not gain an anomaly consumer or invocation endpoint from this validation.
+
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
 metadata queue. The callback does not block; the first overflow makes the
