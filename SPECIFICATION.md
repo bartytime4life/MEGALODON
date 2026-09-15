@@ -205,7 +205,8 @@ timer while `SIGALRM` is blocked across the handler/timer swap, and restores the
 prior handler after timer inactivity is confirmed. Teardown blocks `SIGALRM`
 before cancellation and keeps the deadline handler installed until the original
 mask is restored, preventing a just-pending deadline from reaching the prior
-handler. The
+handler. Deadline dispatch at cleanup-mask entry is retained until cancellation
+and handler restoration complete, then re-raised. The
 deadline does not establish portable Windows interruption, interrupt
 kernel-level uninterruptible sleep, or bound CLI setup/finalization outside the
 source-ownership region. Handler restoration after a cancellation error requires

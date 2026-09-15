@@ -172,7 +172,8 @@ lifecycle.
   refusal. The arming return value detects and restores a timer installed after
   preflight while `SIGALRM` is blocked across the handler/timer swap;
   teardown blocks the signal before cancellation and retains the deadline handler
-  until the original mask is restored. Cancellation restores the prior handler
+  until the original mask is restored. A deadline dispatched at cleanup-mask
+  entry is re-raised only after teardown completes. Cancellation restores the prior handler
   only after disarming succeeds or timer inactivity is confirmed. A failed disarm with a still-live or uninspectable
   timer retains the deadline handler. Threaded Scapy capture refuses the option.
 - `--max-events N` stops intake after the Nth accepted event, then records

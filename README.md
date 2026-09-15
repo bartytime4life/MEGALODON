@@ -702,7 +702,9 @@ timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
 timer swap. Teardown blocks `SIGALRM` before cancellation and keeps the deadline
 handler installed until the original mask is restored, so a just-pending alarm
-cannot reach the prior handler. Cancellation restores that handler only after
+cannot reach the prior handler. A deadline dispatched while cleanup masking begins
+is preserved, teardown completes, and the interruption is then re-raised.
+Cancellation restores that handler only after
 cancellation succeeds or timer inactivity is confirmed; a failed disarm with a
 still-live or uninspectable timer retains the deadline handler. Threaded Scapy capture refuses
 the option because a worker created after setup cannot inherit the proven

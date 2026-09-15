@@ -452,6 +452,7 @@ def _scoped_run_deadline(max_seconds: int | None):
             if handler_installed:
                 cleanup_mask = None
                 cleanup_mask_error = None
+                cleanup_entry_error = None
                 if mask_restored:
                     try:
                         cleanup_mask = signal.pthread_sigmask(
@@ -461,6 +462,12 @@ def _scoped_run_deadline(max_seconds: int | None):
                         cleanup_mask_error = ValueError(
                             "max-seconds could not protect POSIX run deadline cleanup"
                         )
+                    except BaseException as exc:
+                        # Python signal dispatch occurs after the masking syscall
+                        # completes. Preserve that interruption, finish teardown
+                        # under the now-blocked mask, then re-raise it.
+                        cleanup_mask = previous_mask
+                        cleanup_entry_error = exc
                 timer_inactive = not timer_started
                 cancellation_error = None
                 try:
@@ -490,6 +497,8 @@ def _scoped_run_deadline(max_seconds: int | None):
                     raise cancellation_error
                 if cleanup_mask_error is not None:
                     raise cleanup_mask_error
+                if cleanup_entry_error is not None:
+                    raise cleanup_entry_error
         finally:
             if not mask_restored:
                 signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)

@@ -22,7 +22,8 @@ concurrently armed process timers are preserved and refused while `SIGALRM` is
 blocked across the handler/timer swap, and prior-handler restoration remains
 conditional on confirmed timer inactivity when cancellation raises. Teardown
 blocks `SIGALRM` before cancellation and keeps the deadline handler until the
-original mask is restored. Threaded
+original mask is restored; deadline dispatch at cleanup-mask entry is re-raised
+after teardown completes. Threaded
 Scapy capture refuses the deadline.
 Without that option, blocking work remains unbounded. The deadline does not
 interrupt kernel-level uninterruptible sleep, supply a Windows control, or
