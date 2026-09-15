@@ -702,7 +702,9 @@ An interruption while entering the setup mask restores the observed pre-call
 mask; an interrupted protected pending-signal inspection restores that mask;
 interrupted handler installation is conservatively restored; and an
 interrupted timer-arm call is conservatively cancelled during teardown. An
-interrupted competing-timer restoration is not cancelled again.
+interrupted competing-timer restoration is read back: a confirmed restored
+timer is preserved, while an incomplete swap cancels the MEGALODON timer and
+restores the displaced timer before the prior handler returns.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
@@ -710,6 +712,10 @@ timer swap. Teardown blocks `SIGALRM` before cancellation and keeps the deadline
 handler installed until the original mask is restored, so a just-pending alarm
 cannot reach the prior handler. A deadline dispatched while cleanup masking begins
 is preserved, teardown completes, and the interruption is then re-raised.
+An interruption dispatched as setup unmasking returns is recorded so teardown
+reblocks before cancellation. An interruption during post-cancel timer
+inspection is also preserved until the remaining mask and handler decisions
+complete.
 Cancellation restores that handler only after
 cancellation succeeds or timer inactivity is confirmed; a failed disarm with a
 still-live or uninspectable timer retains the deadline handler. Threaded Scapy capture refuses
