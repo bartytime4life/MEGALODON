@@ -457,3 +457,10 @@ extends this receipt.
 
 These define external formats/tool behavior, not MEGALODON compatibility
 certification, review approval, isolation enforcement, or deployment status.
+
+## Baseline aggregate consistency
+
+All baseline consumers enforce adapter-specific byte totals consistent with
+small/medium/large band counts and a minute-zero origin for nonempty relative
+time distributions. See [exact limits and evidence boundaries](baseline-realizability.md).
+These checks reject impossible metadata without claiming source authenticity.
