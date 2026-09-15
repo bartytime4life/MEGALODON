@@ -169,8 +169,10 @@ lifecycle.
   thread count are rechecked inside protected setup before handler or timer
   installation. A pending alarm is checked again after arming and dispatched under
   the deadline handler as `CaptureError` if the new deadline already expired.
-  Interrupted setup masking restores the observed mask; interrupted arming is
-  treated as live until teardown cancels it. An already active
+  Interrupted setup masking restores the observed mask, interrupted handler
+  installation is restored, and interrupted arming is treated as live until
+  teardown cancels it. Interrupted competing-timer restoration is not cancelled
+  again. An already active
   process interval timer produces the same pre-I/O
   refusal. The arming return value detects and restores a timer installed after
   preflight while `SIGALRM` is blocked across the handler/timer swap;

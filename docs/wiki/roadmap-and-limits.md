@@ -27,7 +27,9 @@ original mask is restored; deadline dispatch at cleanup-mask entry is re-raised
 after teardown completes. Threaded
 Scapy capture refuses the deadline.
 Interrupted setup masking restores the observed pre-call mask, and an interrupted
-arming call is conservatively treated as live until teardown cancellation.
+handler installation is restored. An interrupted arming call is conservatively
+treated as live until teardown cancellation; an interrupted competing-timer
+restoration is not cancelled again.
 Without that option, blocking work remains unbounded. The deadline does not
 interrupt kernel-level uninterruptible sleep, supply a Windows control, or
 establish installed-capture loss handling, sustained native capacity, or

@@ -392,6 +392,53 @@ class SourceOwnershipTests(unittest.TestCase):
     @unittest.skipUnless(
         cli._run_deadline_supported(), "POSIX interval timers required"
     )
+    def test_deadline_restores_handler_when_installation_is_interrupted(self):
+        alarm_blocked = False
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+            if len(handler_calls) == 1:
+                raise KeyboardInterrupt()
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            patch.object(
+                cli.signal,
+                "setitimer",
+                side_effect=AssertionError("timer must not be armed"),
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("interrupted installation should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(len(handler_calls), 2)
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertTrue(handler_calls[-1][2])
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
     def test_deadline_delivers_alarm_pending_after_protected_arming(self):
         alarm_blocked = False
         timer_calls = []
@@ -565,6 +612,59 @@ class SourceOwnershipTests(unittest.TestCase):
             signal.signal(signal.SIGALRM, original_handler)
             if original_timer[0] > 0.0:
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(
+        cli._run_deadline_supported(), "POSIX interval timers required"
+    )
+    def test_deadline_does_not_cancel_interrupted_competing_timer_restore(self):
+        alarm_blocked = False
+        timer_calls = []
+        handler_calls = []
+        prior_handler = object()
+
+        def pthread_sigmask(how, mask):
+            nonlocal alarm_blocked
+            mask = set(mask)
+            previous = {signal.SIGALRM} if alarm_blocked else set()
+            if how == signal.SIG_BLOCK:
+                alarm_blocked = alarm_blocked or signal.SIGALRM in mask
+            elif how == signal.SIG_SETMASK:
+                alarm_blocked = signal.SIGALRM in mask
+            else:
+                self.fail("unexpected signal-mask operation")
+            return previous
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            if len(timer_calls) == 1:
+                return (30.0, 0.5)
+            if len(timer_calls) == 2:
+                raise KeyboardInterrupt()
+            self.fail("cleanup must not cancel the restored competing timer")
+
+        def install_handler(alarm_signal, handler):
+            handler_calls.append((alarm_signal, handler, alarm_blocked))
+
+        with (
+            patch.object(cli, "_require_run_deadline_support"),
+            patch.object(cli, "_require_single_threaded_run_deadline"),
+            patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "sigpending", return_value=set()),
+            patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
+            patch.object(cli.signal, "setitimer", side_effect=setitimer),
+            patch.object(cli.signal, "signal", side_effect=install_handler),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            with cli._scoped_run_deadline(10):
+                self.fail("competing timer should refuse before entry")
+
+        self.assertFalse(alarm_blocked)
+        self.assertEqual(
+            [(seconds, interval, blocked) for _, seconds, interval, blocked in timer_calls],
+            [(10, 0.0, True), (30.0, 0.5, True)],
+        )
+        self.assertIs(handler_calls[-1][1], prior_handler)
+        self.assertTrue(handler_calls[-1][2])
 
     @unittest.skipUnless(cli._run_deadline_supported(), "Linux interval timers required")
     def test_deadline_refuses_unregistered_os_thread(self):

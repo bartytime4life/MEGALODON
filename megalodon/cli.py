@@ -426,7 +426,13 @@ def _scoped_run_deadline(max_seconds: int | None):
             raise ValueError(
                 "max-seconds requires the interpreter main thread"
             ) from None
-        handler_installed = True
+        except BaseException:
+            # Python signal dispatch occurs after the handler swap returns from
+            # the OS. Restore conservatively during cleanup before re-raising.
+            handler_installed = True
+            raise
+        else:
+            handler_installed = True
         # Treat an interrupted arming call as live until cleanup proves
         # otherwise; setitimer may have succeeded before Python dispatch.
         timer_started = True
@@ -443,7 +449,13 @@ def _scoped_run_deadline(max_seconds: int | None):
                 raise ValueError(
                     "max-seconds could not restore a competing POSIX process timer"
                 ) from None
-            timer_started = False
+            except BaseException:
+                # As above, Python dispatch follows the completed timer swap.
+                # Do not let cleanup cancel the competing timer just restored.
+                timer_started = False
+                raise
+            else:
+                timer_started = False
             raise ValueError(
                 "max-seconds cannot replace an active POSIX process timer"
             )

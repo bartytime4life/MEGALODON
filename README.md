@@ -699,7 +699,9 @@ checked again inside the signal-protected setup boundary before handler or timer
 installation. A pending alarm is checked again after arming and delivered under
 the deadline handler as `CAPTURE_ERROR` if the new deadline already expired.
 An interruption while entering the setup mask restores the observed pre-call
-mask; an interrupted timer-arm call is conservatively cancelled during teardown.
+mask; interrupted handler installation is conservatively restored, and an
+interrupted timer-arm call is conservatively cancelled during teardown. An
+interrupted competing-timer restoration is not cancelled again.
 An already active process interval timer also causes a pre-I/O refusal; the
 timer value returned while arming is checked so a concurrent timer is restored
 and refused rather than discarded; `SIGALRM` is blocked across that handler and
