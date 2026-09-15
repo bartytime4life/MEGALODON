@@ -511,6 +511,8 @@ def test_cli_records_a_bounded_failure_after_a_valid_jsonl_prefix(tmp_path, inva
                 "jsonl",
                 "--input",
                 str(source),
+                "--max-events",
+                "100",
             ]
         )
 
@@ -544,6 +546,8 @@ def test_cli_records_deep_json_recursion_as_a_bounded_failure(tmp_path):
                 "jsonl",
                 "--input",
                 str(source),
+                "--max-events",
+                "100",
             ]
         )
 

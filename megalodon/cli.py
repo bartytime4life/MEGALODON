@@ -32,6 +32,7 @@ from .validation import parse_timestamp, safe_text, ValidationError
 
 
 MAX_RUN_EVENTS = 10_000_000
+_LIMITED_RUN_SOURCES = frozenset({"jsonl", "scapy"})
 
 
 def _bounded_cli_integer(name: str, minimum: int, maximum: int):
@@ -88,9 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--demo-threat", action="store_true", help="add synthetic detections to sample data")
     run.add_argument(
         "--max-events",
-        type=_bounded_cli_integer("max-events", 0, MAX_RUN_EVENTS),
-        default=0,
-        help=f"stop after N events (0 means no limit; maximum {MAX_RUN_EVENTS})",
+        type=_bounded_cli_integer("max-events", 1, MAX_RUN_EVENTS),
+        default=None,
+        help=(
+            "stop after N events; required for jsonl and scapy sources "
+            f"(maximum {MAX_RUN_EVENTS})"
+        ),
     )
 
     migrate = sub.add_parser(
@@ -251,6 +255,14 @@ def _source_for(args: argparse.Namespace, settings) -> str:
     return args.source or settings.capture_source
 
 
+def _require_finite_run_limit(source: str | None, max_events: int | None) -> None:
+    if source in _LIMITED_RUN_SOURCES and max_events is None:
+        raise ValueError(
+            "jsonl and scapy sources require --max-events between "
+            f"1 and {MAX_RUN_EVENTS}"
+        )
+
+
 def _storage_limit(settings) -> int:
     storage = getattr(settings, "storage", None)
     return getattr(storage, "max_database_bytes", DEFAULT_MAX_DATABASE_BYTES)
@@ -302,13 +314,19 @@ def _reconciliation_message() -> str:
 
 def _run(args: argparse.Namespace) -> int:
     try:
+        # Refuse an explicit unbounded source before configuration, store, or
+        # source acquisition. A configuration-selected source is checked again
+        # immediately after the one necessary configuration read.
+        _require_finite_run_limit(args.source, args.max_events)
         settings = _load(args.config)
+        source = _source_for(args, settings)
+        _require_finite_run_limit(source, args.max_events)
         with Store(
             settings.db_path,
             max_database_bytes=_storage_limit(settings),
         ) as store:
             service = MegalodonService(settings, store)
-            run_id = store.start_ingestion_run(_source_for(args, settings))
+            run_id = store.start_ingestion_run(source)
             processed = 0
             termination_reason = "source_exhausted"
             try:
@@ -318,7 +336,10 @@ def _run(args: argparse.Namespace) -> int:
                     for event in events:
                         service.process(event, run_id=run_id)
                         processed += 1
-                        if args.max_events and processed >= args.max_events:
+                        if (
+                            args.max_events is not None
+                            and processed >= args.max_events
+                        ):
                             termination_reason = "event_limit_reached"
                             break
             except KeyboardInterrupt as exc:
