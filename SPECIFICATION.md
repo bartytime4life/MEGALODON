@@ -180,6 +180,10 @@ two containers are refused before domain construction. Lines are bounded to
 64 KiB including UTF-8 bytes and newline; callers may select a smaller positive
 integer limit. Errors expose only the line number, never the record. Valid
 prefixes retain the existing per-event transaction and failed-run semantics.
+The operational CLI also requires an explicit positive accepted-event
+`--max-events` ceiling
+from 1 through 10,000,000 before opening a JSONL file/stdin source or Scapy
+capture. The finite repository-owned sample generator may omit that option.
 See [JSONL admission](docs/jsonl-admission.md) for compatibility details.
 
 ### IngestionRun receipt
