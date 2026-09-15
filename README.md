@@ -916,31 +916,32 @@ command, path, endpoint, or tool field exists. See
 [`docs/automation-contract.md`](docs/automation-contract.md) for the proposed
 staged design.
 
-## Development status and open issues
+## Development status and remaining evidence
 
-This selected, non-exhaustive table is a repository checkpoint, not a substitute
-for the live issue. Closed design/test gates can still leave runtime and
-operational work unbuilt.
+Every historical delivery ticket in this selected table is closed. Closure
+records the ticket's bounded disposition; it does not prove every operational
+property named in the original issue. Review live GitHub state before acting
+because branches, checks, reviews, and remaining evidence can change.
 
-| Issue | Current repository meaning |
-| --- | --- |
-| [#3 — independent-review enforcement](https://github.com/bartytime4life/MEGALODON/issues/3) | Open governance gate; do not treat green CI or a merge as independent approval |
-| [#7 — offline dashboard and operator controls](https://github.com/bartytime4life/MEGALODON/issues/7) | Tracks this implementation and its remaining review and compatibility evidence |
-| [#9 — Suricata EVE contract and fixtures](https://github.com/bartytime4life/MEGALODON/issues/9) | Closed contract gate; record schema/tests are on `main`, without a runtime importer |
-| [#24 — bounded Suricata reader](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed contract gate; fixed reader policy, receipt, fixtures, and oracle are on `main`, without filesystem/runtime implementation |
-| [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Open evidence gate for the optional system analyzer |
-| [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed bounded synthetic acceptance gate; representative accuracy and operational interpretation are not established |
-| [#27 — native Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Open platform gate; machine-readable matrix and Linux-run unsupported-operation controls exist, but native Windows/NTFS/browser receipts remain unperformed |
-| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed documentation/test gate; separate data-class and failure matrices plus synthetic transaction/exhaustion/permission/interruption tests exist, but no retention values or automatic cleanup are selected |
-| [#65 — contain live firewall application](https://github.com/bartytime4life/MEGALODON/issues/65) | Open containment gate; executor removal and fail-closed apply refusal are on `main`; independent review and any separately designed restoration gate remain required |
-| [#66 — isolate dashboard reads](https://github.com/bartytime4life/MEGALODON/issues/66) | This revision separates dashboard reads from the writer, validates private database identity/schema, and constrains SQL to the five-field projection; independent review and native Windows ACL evidence remain open |
-| [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Per-event atomic event/detection/action/link/counter commits, explicit terminal reasons, detector rollback behavior, and pinned orphan reconciliation are implemented in this slice; exact-head review and issue disposition remain separate, and no alert lifecycle or delivery follows |
-| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Open availability gate; incremental bounded port accounting, fail-closed storage high-water intake, Scapy startup/death/queue/shutdown bounds, and preview-bound retention batches are implemented. Installed-Scapy/native resource and loss evidence, operator retention values, sustained-capacity evidence, and notifier behavior remain unproved |
-| [#69 — CI dependency drift and artifact hygiene](https://github.com/bartytime4life/MEGALODON/issues/69) | Repository hygiene, hashed constrained CI inputs, isolated-build constraint propagation, and exact-tree checks are on `main`; update automation, authorized required-check decisions, and independent review remain open |
+| Issue | Delivered or closed disposition | Still not established |
+| --- | --- | --- |
+| [#3 — independent-review enforcement](https://github.com/bartytime4life/MEGALODON/issues/3) | Closed `not planned`: the owner-directed, AI-reviewed workflow retains strict CI and explicit PR-numbered owner merge decisions | A server-enforced independent-human approval floor |
+| [#7 — dashboard acceptance](https://github.com/bartytime4life/MEGALODON/issues/7) | Closed `completed`: loopback, privacy, read-only, HTTP, and headed-browser acceptance are on `main` | Native Windows and screen-reader acceptance |
+| [#9 — Suricata EVE contract](https://github.com/bartytime4life/MEGALODON/issues/9) and [#24 — bounded reader contract](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed `completed`: closed record schemas, bounded-reader policy, fixtures, receipts, and oracles are on `main` | A filesystem/runtime importer, sensor operation, IPS, or response |
+| [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Closed `completed`: one prepared-host UID-1000 header-only probe passed at [`main@7ad539c`](https://github.com/bartytime4life/MEGALODON/commit/7ad539ccd33687725d18ee8a8cedcc84073c3609) with `/usr/bin/tshark` from Wireshark 4.2.2 package `4.2.2-1.1build3` | Arbitrary-capture containment, live capture, installation authority, or compatibility of another release/revision |
+| [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed `completed`: deterministic bounded synthetic evaluation and evidence-quality reporting are on `main` | Representative accuracy, calibrated thresholds, or operational interpretation |
+| [#27 — Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Closed `completed`: the Linux-preserving Windows capability and acceptance handoff is recorded | Native Windows, NTFS ACL, browser, and exact-platform execution receipts |
+| [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed `completed`: data-class/failure matrices and bounded preview-bound retention transactions are on `main` | Selected operator retention values, automatic cleanup, secure erasure, or native failure recovery |
+| [#65 — firewall containment](https://github.com/bartytime4life/MEGALODON/issues/65) | Closed `completed`: retained apply routes fail closed before host inspection or subprocess creation; plan-only receipts remain | A live backend or crash-consistent restoration design |
+| [#66 — dashboard read isolation](https://github.com/bartytime4life/MEGALODON/issues/66) | Closed `completed`: a least-data reader validates private storage and constrains SQL to the dashboard projection | Native Windows ACL evidence or remote dashboard authority |
+| [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Closed `completed`: per-event evidence commits, terminal reasons, rollback behavior, and bounded orphan reconciliation are on `main` | Exactly-once intake, native power-loss recovery, alert lifecycle, or delivery |
+| [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Closed `completed`: detector accounting, storage high-water refusal, Scapy lifecycle bounds, and finite retention batches are on `main` | Installed-Scapy loss evidence, native long-running exhaustion results, selected retention values, or notifier behavior |
+| [#69 — CI dependency and artifact hygiene](https://github.com/bartytime4life/MEGALODON/issues/69) | Closed `completed`: repository hygiene, hashed constrained CI inputs, isolated-build constraints, and exact-tree checks are on `main` | Automatic update trust, release provenance, or independent approval |
+| [#154 — Qwen Airlock preflight](https://github.com/bartytime4life/MEGALODON/issues/154) and [#165 — literal-loopback provider boundary](https://github.com/bartytime4life/MEGALODON/issues/165) | Closed `completed`: pinned metadata-only admission and the bounded internal `127.0.0.1:11434` provider adapter are on `main` | An operator-verified model artifact/Ollama lifecycle, CLI or dashboard exposure, persistence, background execution, or action authority |
 
-Open issues and branches are coordination/evidence records, not shipped features
-or deployment approval. Review the current issue readback before acting because
-heads, validation evidence, and governance state can change after this document.
+Issue and branch records are coordination and evidence surfaces, not release or
+deployment approval. A closed ticket must not be read as broader authority than
+its recorded acceptance and non-effects.
 
 ## Validation
 
