@@ -33,7 +33,7 @@ from megalodon.offline.common import Batch, Limits, OfflineError
 from megalodon.offline import reports, tshark
 from megalodon import offline_projection
 from megalodon.offline_projection import MAX_PROJECTED_PORTS, load_offline_projection
-from megalodon.storage import Store
+from megalodon.storage import DashboardStore, Store
 
 
 # Keep the browserless dashboard harness bounded while allowing hosted sdist
@@ -349,6 +349,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "Qwen advisory receipt · checking" in INDEX_HTML
     assert "This page cannot start Qwen or request an analysis." in INDEX_HTML
     assert "AI advisory; not evidence or an action." in INDEX_HTML
+    assert "Ingestion run receipts" in INDEX_HTML
+    assert 'id="ingestion-runs-panel"' in INDEX_HTML
+    assert 'id="ingestion-runs-list" role="list" aria-live="polite"' in INDEX_HTML
+    assert 'id="ingestion-runs-retry" type="button"' in INDEX_HTML
     assert 'id="analysis-summary"' in INDEX_HTML
     assert 'id="analysis-limitations"' in INDEX_HTML
     assert 'role="tablist"' in INDEX_HTML
@@ -414,6 +418,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "navigator.clipboard" not in DASHBOARD_JS
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
+    assert "dashboard-ingestion-runs-v1" in DASHBOARD_JS
+    assert "'/api/ingestion-runs?limit=8'" in DASHBOARD_JS
+    assert "validatedIngestionRuns" in DASHBOARD_JS
+    assert "renderIngestionRuns" in DASHBOARD_JS
     assert "'/api/advisory-receipt'" in DASHBOARD_JS
     assert "requestBoundedJSON" in DASHBOARD_JS
     assert "new TextDecoder('utf-8', {fatal: true})" in DASHBOARD_JS
@@ -866,6 +874,92 @@ process.stdin.on('end', async () => {
     assert result.stdout == "no-overlap\n"
 
 
+def test_ingestion_receipt_browser_requires_exact_aware_times_and_serializes_reload():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for dashboard JavaScript behavior")
+
+    harness = r"""
+const vm = require('vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { code += chunk; });
+process.stdin.on('end', async () => {
+  try {
+    const withoutBootstrap = code.replace(/\nbootstrap\(\);\s*$/, '\n');
+    if (withoutBootstrap === code) throw new Error('dashboard bootstrap marker was not found');
+    code = withoutBootstrap;
+    const nodes = new Map();
+    function fakeNode(id = '') {
+      return {id, value: id === 'filter-severity' ? 'ALL' : '', textContent: '',
+        className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0, children: [], attributes: new Map(),
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+        setAttribute(name, value) { this.attributes.set(name, String(value)); },
+        removeAttribute(name) { this.attributes.delete(name); }, addEventListener() {}};
+    }
+    const document = {hidden: false,
+      getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
+      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+    class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
+    const context = {document, AbortController: FakeAbortController,
+      Intl, Date, Number, String, Math, Set, Promise, Error, Array,
+      window: {setTimeout() { return 1; }, clearTimeout() {}}};
+    vm.createContext(context); vm.runInContext(code, context);
+
+    vm.runInContext(`
+      {
+        const accepted = [
+          '2024-02-29T23:59:59Z',
+          '2026-09-15T12:34:56.123456+00:00',
+          '2026-09-15T12:34:56-05:30'
+        ];
+        const rejected = [
+          '2026-09-15T12:34:56',
+          '2024-02-30T00:00:00+00:00',
+          '2023-02-29T00:00:00Z',
+          '2026-13-01T00:00:00Z',
+          '2026-09-15T24:00:00Z',
+          '2026-09-15T12:34:60Z',
+          '2026-09-15T12:34:56+24:00',
+          '2026-09-15T12:34:56.1234567Z',
+          '2026-09-15T12:34:56Z\\n'
+        ];
+        if (!accepted.every(validRecordedTime)) throw new Error('valid aware receipt time was rejected');
+        if (rejected.some(validRecordedTime)) throw new Error('ambiguous or impossible receipt time was accepted');
+      }
+      let ingestionRequestCount = 0;
+      let releaseIngestionRequest;
+      requestBoundedJSON = () => {
+        ingestionRequestCount += 1;
+        return new Promise(resolve => { releaseIngestionRequest = resolve; });
+      };
+    `, context);
+
+    const first = vm.runInContext('loadIngestionRuns()', context);
+    const overlapping = vm.runInContext('loadIngestionRuns()', context);
+    if (vm.runInContext('ingestionRequestCount', context) !== 1) throw new Error('overlapping reload started a second request');
+    if (!nodes.get('ingestion-runs-retry').disabled) throw new Error('reload control remained enabled during request');
+    vm.runInContext("releaseIngestionRequest({schema: 'dashboard-ingestion-runs-v1', limit: 8, runs: []})", context);
+    await Promise.all([first, overlapping]);
+    if (nodes.get('ingestion-runs-retry').disabled) throw new Error('reload control remained disabled after request');
+    if (vm.runInContext('ingestionRunsLoading', context)) throw new Error('reload guard remained active after request');
+    process.stdout.write('receipt-guarded\n');
+  } catch (error) { console.error(error.stack || error.message); process.exitCode = 1; }
+});
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=DASHBOARD_JS,
+        text=True,
+        capture_output=True,
+        timeout=NODE_DASHBOARD_HARNESS_TIMEOUT_SECONDS,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "receipt-guarded\n"
+
+
 def test_dashboard_trust_status_distinguishes_api_freshness_pause_and_stale_data():
     node = shutil.which("node")
     if node is None:
@@ -1115,6 +1209,61 @@ def test_events_api_projects_only_fields_required_by_the_ui(tmp_path):
             assert "evidence" not in payload[0]
             assert "recommendation" not in payload[0]
             assert "suppressed_reason" not in payload[0]
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+def test_ingestion_runs_api_is_bounded_receipt_only_and_read_only(tmp_path):
+    path = tmp_path / "private" / "events.db"
+    stamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with Store(path) as writer:
+        run_id = writer.start_ingestion_run("jsonl", started_at=stamp)
+        writer.finish_ingestion_run(
+            run_id, "event_limit_reached", finished_at=stamp
+        )
+
+    with DashboardStore(path) as reader:
+        handler = type(
+            "TestIngestionRunsHandler", (DashboardHandler,), {"store": reader}
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(
+                f"{base}/api/ingestion-runs?limit=1", timeout=2
+            ) as response:
+                payload = json.loads(response.read())
+            assert payload["schema"] == "dashboard-ingestion-runs-v1"
+            assert payload["limit"] == 1
+            assert payload["runs"] == [
+                {
+                    "run_id": run_id,
+                    "started_at": stamp.isoformat(),
+                    "finished_at": stamp.isoformat(),
+                    "source": "jsonl",
+                    "status": "incomplete",
+                    "processed_count": 0,
+                    "detection_count": 0,
+                    "action_count": 0,
+                    "receipt_version": 3,
+                    "failure_code": None,
+                    "termination_reason": "event_limit_reached",
+                }
+            ]
+            for query in (
+                "limit=0",
+                "limit=26",
+                "limit=01",
+                "limit=1&limit=2",
+                "other=1",
+            ):
+                with pytest.raises(HTTPError) as raised:
+                    urlopen(f"{base}/api/ingestion-runs?{query}", timeout=2)
+                assert raised.value.code == 400
         finally:
             server.shutdown()
             server.server_close()
