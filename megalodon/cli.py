@@ -7,11 +7,11 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import logging
+import os
 from pathlib import Path
 import signal
 import sqlite3
 import sys
-import threading
 
 from . import __version__
 from .capabilities import catalog
@@ -104,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "fail closed after N seconds while acquiring, consuming, processing, "
-            "or closing the event source on POSIX runtimes "
+            "or closing the event source on supported Linux runtimes "
             f"(maximum {MAX_RUN_SECONDS})"
         ),
     )
@@ -277,14 +277,34 @@ def _require_finite_run_limit(source: str | None, max_events: int | None) -> Non
 
 def _run_deadline_supported() -> bool:
     return (
-        hasattr(signal, "SIGALRM")
+        sys.platform.startswith("linux")
+        and hasattr(signal, "SIGALRM")
         and hasattr(signal, "ITIMER_REAL")
         and hasattr(signal, "SIG_BLOCK")
         and hasattr(signal, "SIG_SETMASK")
         and callable(getattr(signal, "getitimer", None))
         and callable(getattr(signal, "setitimer", None))
         and callable(getattr(signal, "pthread_sigmask", None))
+        and callable(getattr(os, "scandir", None))
     )
+
+
+def _require_single_threaded_run_deadline() -> None:
+    try:
+        with os.scandir("/proc/self/task") as tasks:
+            task_count = 0
+            for _task in tasks:
+                task_count += 1
+                if task_count > 1:
+                    raise ValueError(
+                        "max-seconds requires a single-threaded process"
+                    )
+    except OSError:
+        raise ValueError(
+            "max-seconds could not inspect the OS thread set"
+        ) from None
+    if task_count != 1:
+        raise ValueError("max-seconds could not inspect the OS thread set")
 
 
 def _require_run_deadline_support(max_seconds: int | None) -> None:
@@ -292,11 +312,10 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
         return
     if not _run_deadline_supported():
         raise ValueError(
-            "max-seconds requires a POSIX runtime with SIGALRM, ITIMER_REAL, "
-            "and pthread_sigmask"
+            "max-seconds requires a Linux runtime with SIGALRM, ITIMER_REAL, "
+            "pthread_sigmask, and procfs thread inspection"
         )
-    if threading.active_count() != 1:
-        raise ValueError("max-seconds requires a single-threaded process")
+    _require_single_threaded_run_deadline()
     try:
         blocked_signals = signal.pthread_sigmask(signal.SIG_BLOCK, ())
     except (OSError, ValueError):
@@ -361,8 +380,7 @@ def _scoped_run_deadline(max_seconds: int | None):
     timer_started = False
     mask_restored = False
     try:
-        if threading.active_count() != 1:
-            raise ValueError("max-seconds requires a single-threaded process")
+        _require_single_threaded_run_deadline()
         try:
             signal.signal(alarm_signal, deadline_exceeded)
         except ValueError:

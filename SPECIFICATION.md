@@ -189,14 +189,14 @@ The operational CLI also requires an explicit positive accepted-event
 `--max-events` ceiling
 from 1 through 10,000,000 before opening a JSONL file/stdin source or Scapy
 capture. The finite repository-owned sample generator may omit that option.
-On POSIX runtimes, an optional `--max-seconds` value from 1 through 86,400 arms
+On supported Linux runtimes, an optional `--max-seconds` value from 1 through 86,400 arms
 one `ITIMER_REAL` deadline before the event source is acquired and keeps it
 active through iteration, event processing, and owned-source cleanup. Expiry is
 a record-free `CaptureError`; committed evidence is retained and the run records
 `failed/failed` with `CAPTURE_ERROR` after cleanup is attempted. Unsupported
-runtimes, an unavailable signal-mask inspection API, a blocked `SIGALRM`, or a
-multi-threaded process refuse the option before configuration, storage, or
-source work. The CLI also
+runtimes, unavailable `/proc/self/task` or signal-mask inspection, a blocked
+`SIGALRM`, or more than one OS thread refuse the option before configuration,
+storage, or source work. The CLI also
 refuses before those operations when an interval timer is already active. It
 checks the timer returned by the arming call, restores a concurrently armed
 timer while `SIGALRM` is blocked across the handler/timer swap, and restores the

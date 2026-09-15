@@ -200,8 +200,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
         self.assertEqual(
             error.getvalue(),
-            "megalodon: max-seconds requires a POSIX runtime with SIGALRM, "
-            "ITIMER_REAL, and pthread_sigmask\n",
+            "megalodon: max-seconds requires a Linux runtime with SIGALRM, "
+            "ITIMER_REAL, pthread_sigmask, and procfs thread inspection\n",
         )
 
     @unittest.skipUnless(
@@ -256,7 +256,12 @@ class CliTests(unittest.TestCase):
             raise AssertionError("multithreaded deadline must refuse before I/O")
 
         patches = (
-            patch("megalodon.cli.threading.active_count", return_value=2),
+            patch(
+                "megalodon.cli._require_single_threaded_run_deadline",
+                side_effect=ValueError(
+                    "max-seconds requires a single-threaded process"
+                ),
+            ),
             patch("megalodon.cli._load", side_effect=forbidden),
             patch("megalodon.cli.Store", side_effect=forbidden),
             patch("megalodon.cli._events_for", side_effect=forbidden),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import _thread
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 import io
@@ -381,6 +382,31 @@ class SourceOwnershipTests(unittest.TestCase):
             signal.signal(signal.SIGALRM, original_handler)
             if original_timer[0] > 0.0:
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "Linux interval timers required")
+    def test_deadline_refuses_unregistered_os_thread(self):
+        started = _thread.allocate_lock()
+        release = _thread.allocate_lock()
+        finished = _thread.allocate_lock()
+        started.acquire()
+        release.acquire()
+        finished.acquire()
+
+        def worker():
+            started.release()
+            release.acquire()
+            finished.release()
+
+        _thread.start_new_thread(worker, ())
+        self.assertTrue(started.acquire(timeout=5))
+        try:
+            with self.assertRaisesRegex(
+                ValueError, "^max-seconds requires a single-threaded process$"
+            ):
+                cli._require_run_deadline_support(1)
+        finally:
+            release.release()
+            self.assertTrue(finished.acquire(timeout=5))
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
     def test_deadline_restores_handler_when_alarm_fires_during_cancellation(self):
