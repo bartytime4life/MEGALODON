@@ -14,7 +14,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 1200,
-      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+      "pattern": "^(?=\\s*\\S)[^\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200E\\u200F\\u2028-\\u202E\\u2066-\\u2069\\uD800-\\uDFFF\\uFEFF]+$"
     },
     "boundedCode": {
       "type": "string",
@@ -28,8 +28,8 @@
       "required": ["provider_class", "model_id", "model_artifact_sha256", "policy_version"],
       "properties": {
         "provider_class": {"const": "local_loopback"},
-        "model_id": {"type": "string", "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}$"},
-        "model_artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "model_id": {"type": "string", "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}(?![\\s\\S])"},
+        "model_artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}(?![\\s\\S])"},
         "policy_version": {"const": "local-model-advisory-v1"}
       }
     },

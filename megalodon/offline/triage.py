@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 
 from ..advisory import AirlockDecision, FIXED_LIMITS
 from ..anomaly_advisory import POLICY_VERSION, REQUEST_SCHEMA
-from ..qwen_advisory import invoke_qwen_anomaly_advisory
+from ..qwen_advisory import invoke_qwen_anomaly_advisory, validated_qwen_result
 from .anomaly import build_anomaly_dossier
 from .baseline import read_reference
 from .common import Limits, OfflineError, open_input, require_unprivileged_linux
@@ -74,16 +75,30 @@ def _explain(args, data: dict) -> tuple[dict, bool | None, int]:
             request, enabled=True, local_model_registry=registry,
             local_model_registry_sha256=args.registry_sha256,
         )
+        if type(result) is AirlockDecision:
+            if (type(result.decision) is not str or result.decision != 'DENY'
+                    or type(result.code) is not str or result.code != 'POLICY_DENIED'
+                    or type(result.policy_version) is not str or result.policy_version != POLICY_VERSION
+                    or type(result.reason_code) is not str
+                    or re.fullmatch(r'[A-Z][A-Z0-9_]{0,63}', result.reason_code) is None
+                    or result.provider_request_performed is not False or result.prompt is not None):
+                raise ValueError('invalid preflight denial')
+            return {'outcome': 'DENY', 'reason_code': result.reason_code,
+                    'policy_version': POLICY_VERSION}, False, 3
+        result = validated_qwen_result(result, policy_version=POLICY_VERSION)
+        projection = result.to_dict()
+        if projection['model_receipt'] != receipt:
+            raise ValueError('provider receipt identity mismatch')
+        ai = dict(projection, reason_code=result.reason_code)
+        # Serialization is also inside the provider isolation boundary. No
+        # malformed return may discard the already constructed dossier.
+        _json(ai)
+        return ai, result.provider_request_performed, (3 if result.outcome in {'DENY', 'ERROR'} else 0)
     except Exception:
         # An unexpected escape from the provider boundary cannot prove that
         # no request started. Preserve evidence and record unknown, never retry.
         return {'outcome': 'ERROR', 'reason_code': 'PROVIDER_COMPLETION_UNKNOWN',
                 'policy_version': POLICY_VERSION}, None, 3
-    if type(result) is AirlockDecision:
-        return {'outcome': 'DENY', 'reason_code': result.reason_code,
-                'policy_version': POLICY_VERSION}, False, 3
-    return dict(result.to_dict(), reason_code=result.reason_code), result.provider_request_performed, (
-        3 if result.outcome in {'DENY', 'ERROR'} else 0)
 
 
 def main(argv: list[str] | None = None) -> int:

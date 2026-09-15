@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import http.client
 import json
+import re
 import socket
 import threading
 import time
@@ -68,6 +69,19 @@ _LIMITATIONS = (
     "This is an AI advisory, not evidence or an action.",
     "Qwen received only the approved aggregate projection and cannot execute tools or responses.",
 )
+_DISPLAY_CONTROLS = re.compile(
+    r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069\ud800-\udfff\ufeff]"
+)
+_RESULT_CODES = {
+    "ANSWER": "ADVISORY_ANSWER", "ABSTAIN": "INSUFFICIENT_ALLOWED_CONTEXT",
+    "DENY": "POLICY_DENIED", "ERROR": "LOCAL_PROVIDER_ERROR",
+}
+
+
+def bounded_advisory_text(value: object) -> bool:
+    """One visible text field, with explicit controls shared by the browser."""
+    return (type(value) is str and 1 <= len(value) <= MAX_SUMMARY_CHARACTERS
+            and bool(value.strip()) and _DISPLAY_CONTROLS.search(value) is None)
 
 
 class _ProviderResponseInvalid(ValueError):
@@ -268,6 +282,46 @@ class QwenAdvisoryResult:
         }
 
 
+def validated_qwen_result(value: object, *, policy_version: str = POLICY_VERSION) -> QwenAdvisoryResult:
+    """Own and check runtime accounting before a consumer displays a result.
+
+    This validates consistency, not model authenticity or statement accuracy.
+    It invokes no methods on arbitrary result objects or field subclasses.
+    """
+    if type(value) is not QwenAdvisoryResult:
+        raise ValueError("Qwen advisory result is invalid")
+    try:
+        result = replace(value)
+        if (type(policy_version) is not str
+                or policy_version not in (POLICY_VERSION, "local-model-anomaly-advisory-v1")
+                or type(result.outcome) is not str or type(result.code) is not str
+                or _RESULT_CODES.get(result.outcome) != result.code
+                or not bounded_advisory_text(result.summary)
+                or type(result.limitations) is not tuple or not 1 <= len(result.limitations) <= 8
+                or any(not bounded_advisory_text(item) for item in result.limitations)
+                or len(set(result.limitations)) != len(result.limitations)
+                or type(result.provider_class) is not str or result.provider_class != PROVIDER_CLASS
+                or type(result.policy_version) is not str or result.policy_version != policy_version
+                or type(result.model_id) is not str
+                or re.fullmatch(r"local:qwen-[A-Za-z0-9._-]{1,96}", result.model_id) is None
+                or type(result.model_artifact_sha256) is not str
+                or re.fullmatch(r"[a-f0-9]{64}", result.model_artifact_sha256) is None
+                or type(result.reason_code) is not str
+                or re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", result.reason_code) is None
+                or type(result.prompt_bytes) is not int or not 1 <= result.prompt_bytes <= 4096
+                or type(result.output_bytes) is not int or not 0 <= result.output_bytes <= 4096
+                or type(result.provider_request_performed) is not bool
+                or (result.outcome in {"ANSWER", "ABSTAIN"} and not result.provider_request_performed)
+                or (result.outcome == "ANSWER" and result.output_bytes == 0)
+                or (result.outcome == "ANSWER" and len(result.summary.encode("utf-8")) > result.output_bytes)
+                or (result.outcome == "DENY" and result.provider_request_performed)
+                or (result.outcome in {"DENY", "ERROR"} and result.output_bytes != 0)):
+            raise ValueError
+        return result
+    except (AttributeError, KeyError, MemoryError, OverflowError, TypeError, ValueError):
+        raise ValueError("Qwen advisory result is invalid") from None
+
+
 def _remaining_seconds(deadline: float) -> float:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
@@ -381,27 +435,25 @@ def _parse_provider_output(body: bytes, model_id: str) -> tuple[str, int]:
     ):
         raise _ProviderResponseInvalid("provider response identity or shape mismatch")
     thinking = value.get("thinking")
-    if thinking is not None and (type(thinking) is not str or thinking.strip()):
+    if "thinking" in keys and (type(thinking) is not str or thinking.strip()):
         raise _ProviderResponseInvalid("provider returned a thinking trace")
     created_at = value.get("created_at")
-    if created_at is not None and (
+    if "created_at" in keys and (
         type(created_at) is not str
         or not 1 <= len(created_at) <= 64
         or any(not character.isprintable() for character in created_at)
     ):
         raise _ProviderResponseInvalid("provider timestamp is invalid")
     done_reason = value.get("done_reason")
-    if done_reason is not None and (
-        type(done_reason) is not str
-        or not 1 <= len(done_reason) <= 64
-        or any(not character.isprintable() for character in done_reason)
-    ):
+    # A finished request can still contain a token-limited partial answer.
+    # Keep legacy omission compatible; an explicit reason must be normal stop.
+    if "done_reason" in keys and (type(done_reason) is not str or done_reason != "stop"):
         raise _ProviderResponseInvalid("provider completion reason is invalid")
     for key in _RESPONSE_COUNT_KEYS & keys:
         if type(value[key]) is not int or value[key] < 0:
             raise _ProviderResponseInvalid("provider accounting is invalid")
     context = value.get("context")
-    if context is not None and (
+    if "context" in keys and (
         type(context) is not list
         or any(type(item) is not int or item < 0 for item in context)
     ):
@@ -418,12 +470,13 @@ def _parse_provider_output(body: bytes, model_id: str) -> tuple[str, int]:
 
 
 def _plain_summary(output: str) -> str:
+    # Check before normalization so split() cannot erase disallowed controls.
+    if _DISPLAY_CONTROLS.search(output.replace("\t", "").replace("\r", "").replace("\n", "")):
+        raise _ProviderResponseInvalid("model output violates the display contract")
     summary = " ".join(output.split())
     if not summary:
         return ""
-    if len(summary) > MAX_SUMMARY_CHARACTERS or any(
-        ord(character) < 32 or ord(character) == 127 for character in summary
-    ):
+    if not bounded_advisory_text(summary):
         raise _ProviderResponseInvalid("model output violates the display contract")
     return summary
 

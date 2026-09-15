@@ -27,6 +27,12 @@ malicious activity.
 
 ## Safety defaults
 
+The [offline anomaly pipeline](docs/anomaly-pipeline.md) is available with
+optional, explicitly enabled Qwen explanations. Its [result-integrity checks](docs/advisory-result-integrity.md)
+reject non-normal completions and misleading text controls, while preserving
+deterministic evidence on malformed AI results. Anomaly dashboard display,
+installed-model acceptance and measured detection accuracy remain separate gates.
+
 - observe only: a fresh configuration does not mutate the firewall;
 - metadata only: packet payloads and payload-derived hashes are not represented;
 - closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
