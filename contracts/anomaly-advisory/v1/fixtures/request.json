@@ -1,0 +1,103 @@
+{
+  "schema": "qwen-anomaly-request-v1",
+  "question_type": "explain_anomalies",
+  "input": {
+    "schema": "offline-anomaly-input-v1",
+    "as_of": "2026-09-15T02:01:00Z",
+    "reference": {
+      "window": {
+        "source_id": "source-0001",
+        "started_at": "2026-09-15T00:00:00Z",
+        "finished_at": "2026-09-15T01:00:00Z",
+        "completeness": "complete"
+      },
+      "baseline": {
+        "schema": "offline-baseline-v1",
+        "adapter": "tshark-fields-v1",
+        "record_kind": "packet",
+        "record_count": 20,
+        "total_bytes": 1280,
+        "protocols": [
+          {
+            "protocol": "TCP",
+            "count": 20
+          }
+        ],
+        "destination_ports": [
+          {
+            "protocol": "TCP",
+            "port": 443,
+            "count": 20
+          }
+        ],
+        "byte_bands": {
+          "small": 20,
+          "medium": 0,
+          "large": 0
+        },
+        "relative_minutes": [
+          {
+            "minute": 0,
+            "count": 20
+          }
+        ]
+      }
+    },
+    "current": {
+      "window": {
+        "source_id": "source-0001",
+        "started_at": "2026-09-15T01:00:00Z",
+        "finished_at": "2026-09-15T02:00:00Z",
+        "completeness": "complete"
+      },
+      "baseline": {
+        "schema": "offline-baseline-v1",
+        "adapter": "tshark-fields-v1",
+        "record_kind": "packet",
+        "record_count": 20,
+        "total_bytes": 1280,
+        "protocols": [
+          {
+            "protocol": "TCP",
+            "count": 20
+          }
+        ],
+        "destination_ports": [
+          {
+            "protocol": "TCP",
+            "port": 443,
+            "count": 15
+          },
+          {
+            "protocol": "TCP",
+            "port": 8443,
+            "count": 5
+          }
+        ],
+        "byte_bands": {
+          "small": 20,
+          "medium": 0,
+          "large": 0
+        },
+        "relative_minutes": [
+          {
+            "minute": 0,
+            "count": 20
+          }
+        ]
+      }
+    }
+  },
+  "model_receipt": {
+    "provider_class": "local_loopback",
+    "model_id": "local:qwen-approved-v1",
+    "model_artifact_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "policy_version": "local-model-anomaly-advisory-v1"
+  },
+  "limits": {
+    "max_input_bytes": 4096,
+    "max_output_bytes": 4096,
+    "timeout_seconds": 15,
+    "max_concurrency": 1
+  }
+}
