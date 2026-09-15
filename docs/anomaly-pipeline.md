@@ -1,7 +1,8 @@
 # AI-assisted anomaly pipeline
 
-Status: offline candidate evidence implemented on this branch; operational
-integration and efficacy remain unproved. Initial base:
+Status: offline candidate evidence, separate Qwen admission, and the explicit
+[one-shot analyst command](anomaly-triage.md) are implemented on this branch.
+Operational efficacy and dashboard integration remain unproved. Initial base:
 `a9ab662a58adabe74c398ed08b37d91a2e34df4f` (2026-09-15 UTC).
 
 MEGALODON should generate reproducible metadata candidates first, then let a
@@ -34,6 +35,11 @@ separated local data exists. [Scikit-learn's distinction between novelty and
 outlier detection](https://scikit-learn.org/stable/modules/outlier_detection.html)
 explains why a contaminated reference cannot simply be labeled normal. No
 scikit-learn or model-training dependency is added.
+
+Concurrent PR #177's offline Alert Workload Lab is complementary evaluation
+work; use its reviewed base-rate projections where appropriate instead of
+duplicating them. PR #179 strengthens the original Qwen denial corpus at the
+enabled provider boundary. Reconcile both with current main before integration.
 
 ## Candidate evidence
 
