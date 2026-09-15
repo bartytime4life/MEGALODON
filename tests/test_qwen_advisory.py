@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import builtins
 from copy import deepcopy
+import io
 import json
 import os
 from pathlib import Path
 import socket
 import sqlite3
 import subprocess
+import threading
+import time
 
 from jsonschema import Draft202012Validator
 import pytest
@@ -45,9 +48,16 @@ def result_validator() -> Draft202012Validator:
 class FakeSocket:
     def __init__(self) -> None:
         self.timeouts: list[float] = []
+        self.closed = False
 
     def settimeout(self, value: float) -> None:
         self.timeouts.append(value)
+
+    def shutdown(self, how: int) -> None:
+        self.closed = True
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class FakeResponse:
@@ -107,6 +117,7 @@ class FakeConnection:
         self.requests: list[tuple[str, str, bytes, dict[str, str]]] = []
         self.getresponse_calls = 0
         self.closed = False
+        self.aborted = False
         type(self).instances.append(self)
 
     def request(
@@ -122,6 +133,11 @@ class FakeConnection:
 
     def close(self) -> None:
         self.closed = True
+
+    def abort(self) -> None:
+        self.aborted = True
+        self.closed = True
+        self.sock.close()
 
 
 @pytest.fixture(autouse=True)
@@ -180,8 +196,11 @@ def test_one_exact_qwen_request_returns_closed_advisory_result(monkeypatch) -> N
         "Host": "127.0.0.1:11434",
     }
     provider_request = json.loads(body)
+    assert len(body) <= qwen.MAX_PROVIDER_REQUEST_BYTES
     assert provider_request == {
+        "keep_alive": 0,
         "model": MODEL_ID,
+        "options": {"num_predict": 512, "temperature": 0},
         "prompt": provider_request["prompt"],
         "raw": True,
         "stream": False,
@@ -191,6 +210,45 @@ def test_one_exact_qwen_request_returns_closed_advisory_result(monkeypatch) -> N
     assert "tools" not in provider_request
     assert DIGEST not in body.decode("ascii")
     assert "198.51.100.10" not in body.decode("ascii")
+
+
+def test_oversized_canonical_request_fails_before_http(monkeypatch) -> None:
+    def oversized(*args, **kwargs) -> bytes:
+        return b"x" * (qwen.MAX_PROVIDER_REQUEST_BYTES + 1)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("oversized provider request attempted HTTP")
+
+    monkeypatch.setattr(qwen, "_request_bytes", oversized)
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", forbidden)
+
+    result = invoke()
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "PROVIDER_REQUEST_INVALID"
+    assert result.provider_request_performed is False
+
+
+def test_cancellation_during_request_construction_performs_zero_http(monkeypatch) -> None:
+    cancellation = threading.Event()
+    real_request_bytes = qwen._request_bytes
+
+    def build_then_cancel(model_id: str, prompt: str) -> bytes:
+        body = real_request_bytes(model_id, prompt)
+        cancellation.set()
+        return body
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("post-construction cancellation attempted HTTP")
+
+    monkeypatch.setattr(qwen, "_request_bytes", build_then_cancel)
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", forbidden)
+
+    result = invoke(cancel_event=cancellation)
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "CANCELLED_BEFORE_REQUEST"
+    assert result.provider_request_performed is False
 
 
 @pytest.mark.parametrize("invalid", ("pin", "digest", "request"))
@@ -232,6 +290,57 @@ def test_explicit_enablement_is_required_without_http(enabled: object, monkeypat
     assert result.code == "POLICY_DENIED"
     assert result.reason_code == "EXPLICIT_ENABLEMENT_REQUIRED"
     assert result.provider_request_performed is False
+
+
+def test_invalid_cancellation_control_performs_zero_http(monkeypatch) -> None:
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid cancellation control attempted HTTP")
+
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", forbidden)
+
+    result = invoke(cancel_event=object())
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.outcome == "DENY"
+    assert result.reason_code == "INVOCATION_CONTROL_INVALID"
+    assert result.provider_request_performed is False
+
+
+def test_pre_request_cancellation_performs_zero_http(monkeypatch) -> None:
+    def forbidden(*args, **kwargs):
+        raise AssertionError("cancelled invocation attempted HTTP")
+
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", forbidden)
+    cancellation = threading.Event()
+    cancellation.set()
+
+    result = invoke(cancel_event=cancellation)
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.outcome == "DENY"
+    assert result.reason_code == "CANCELLED_BEFORE_REQUEST"
+    assert result.provider_request_performed is False
+
+
+def test_cancellation_after_connection_construction_performs_zero_request(
+    monkeypatch,
+) -> None:
+    cancellation = threading.Event()
+
+    class CancellingConnection(FakeConnection):
+        def __init__(self, host: str, port: int, *, timeout: float) -> None:
+            super().__init__(host, port, timeout=timeout)
+            cancellation.set()
+
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", CancellingConnection)
+
+    result = invoke(cancel_event=cancellation)
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "CANCELLED_BEFORE_REQUEST"
+    assert result.provider_request_performed is False
+    assert CancellingConnection.instances[-1].requests == []
+    assert CancellingConnection.instances[-1].closed is True
 
 
 def test_concurrency_one_fails_closed_without_http(monkeypatch) -> None:
@@ -288,7 +397,15 @@ def test_qwen_path_has_no_file_process_database_firewall_dns_or_tool_call(monkey
     assert result.outcome == "ANSWER"
     assert "shell command" in result.summary
     body = FakeConnection.instances[0].requests[0][2]
-    assert set(json.loads(body)) == {"model", "prompt", "raw", "stream", "think"}
+    assert set(json.loads(body)) == {
+        "keep_alive",
+        "model",
+        "options",
+        "prompt",
+        "raw",
+        "stream",
+        "think",
+    }
 
 
 @pytest.mark.parametrize(
@@ -373,6 +490,15 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
             "PROVIDER_RESPONSE_INVALID",
         ),
         (FakeResponse(body=b"{"), "PROVIDER_RESPONSE_INVALID"),
+        (
+            FakeResponse(
+                body=(
+                    b'{"model":"local:qwen-approved-v1","response":"first",'
+                    b'"response":"second","done":true}'
+                )
+            ),
+            "PROVIDER_RESPONSE_INVALID",
+        ),
         (FakeResponse(payload=[]), "PROVIDER_RESPONSE_INVALID"),
         (
             FakeResponse(payload={"model": "local:qwen-other", "response": "x", "done": True}),
@@ -398,6 +524,39 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
             "PROVIDER_RESPONSE_INVALID",
         ),
         (
+            FakeResponse(
+                payload={
+                    "model": MODEL_ID,
+                    "response": "answer",
+                    "done": True,
+                    "eval_count": True,
+                }
+            ),
+            "PROVIDER_RESPONSE_INVALID",
+        ),
+        (
+            FakeResponse(
+                payload={
+                    "model": MODEL_ID,
+                    "response": "answer",
+                    "done": True,
+                    "context": [-1],
+                }
+            ),
+            "PROVIDER_RESPONSE_INVALID",
+        ),
+        (
+            FakeResponse(
+                payload={
+                    "model": MODEL_ID,
+                    "response": "answer",
+                    "done": True,
+                    "tool_calls": [{"function": {"name": "forbidden"}}],
+                }
+            ),
+            "PROVIDER_RESPONSE_INVALID",
+        ),
+        (
             FakeResponse(payload={"model": MODEL_ID, "response": "x" * 1201, "done": True}),
             "PROVIDER_RESPONSE_INVALID",
         ),
@@ -412,11 +571,15 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
         "content-encoding",
         "content-length",
         "malformed-json",
+        "duplicate-json-key",
         "non-object",
         "model-substitution",
         "partial-generation",
         "non-string-output",
         "thinking-trace",
+        "tool-call-field",
+        "invalid-accounting",
+        "invalid-context",
         "display-limit",
         "output-byte-limit",
     ),
@@ -459,6 +622,80 @@ def test_provider_envelope_and_partial_body_are_bounded() -> None:
     assert isinstance(second, QwenAdvisoryResult)
     assert second.reason_code == "PROVIDER_RESPONSE_INVALID"
     assert max(partial.read_sizes) <= 4096
+
+
+def test_status_and_headers_are_bounded_before_stdlib_parsing() -> None:
+    class MemorySocket:
+        def __init__(self, payload: bytes) -> None:
+            self.stream = io.BytesIO(payload)
+
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return self.stream
+
+    oversized_headers = (
+        b"HTTP/1.1 200 OK\r\n"
+        + b"X-Padding: "
+        + b"a" * qwen.MAX_PROVIDER_PROTOCOL_BYTES
+        + b"\r\n\r\n"
+    )
+    response = qwen._BoundedHTTPResponse(MemorySocket(oversized_headers))
+
+    with pytest.raises(qwen._ProviderResponseInvalid):
+        response.begin()
+
+
+def test_chunk_framing_and_trailers_share_the_protocol_budget() -> None:
+    class MemorySocket:
+        def __init__(self, payload: bytes) -> None:
+            self.stream = io.BytesIO(payload)
+
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return self.stream
+
+    response_bytes = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n"
+        b"2\r\n{}\r\n"
+        b"0\r\n"
+        b"X-Padding: "
+        + b"a" * qwen.MAX_PROVIDER_PROTOCOL_BYTES
+        + b"\r\n\r\n"
+    )
+    response = qwen._BoundedHTTPResponse(MemorySocket(response_bytes))
+    response.begin()
+
+    with pytest.raises(qwen._ProviderResponseInvalid):
+        while response.read1(4096):
+            pass
+
+
+def test_highly_fragmented_chunks_cannot_bypass_the_protocol_budget() -> None:
+    class MemorySocket:
+        def __init__(self, payload: bytes) -> None:
+            self.stream = io.BytesIO(payload)
+
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return self.stream
+
+    json_body = b'{}' + b" " * 1998
+    fragmented = b"".join(b"1\r\n" + bytes([byte]) + b"\r\n" for byte in json_body)
+    response_bytes = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n"
+        + fragmented
+        + b"0\r\n\r\n"
+    )
+    response = qwen._BoundedHTTPResponse(MemorySocket(response_bytes))
+    response.begin()
+
+    with pytest.raises(qwen._ProviderResponseInvalid):
+        while response.read1(4096):
+            pass
 
 
 def test_exact_four_kibibyte_utf8_output_is_accepted() -> None:
@@ -509,6 +746,17 @@ def test_request_failures_are_fixed_non_sensitive_errors(error: BaseException) -
 
 
 def test_total_deadline_does_not_restart_between_http_phases(monkeypatch) -> None:
+    class PassiveGuard:
+        def __init__(self, connection, cancel_event, deadline) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+        def finish(self) -> None:
+            return None
+
+    monkeypatch.setattr(qwen, "_InvocationGuard", PassiveGuard)
     moments = iter((0.0, 0.0, 0.0, 16.0))
     monkeypatch.setattr(qwen.time, "monotonic", lambda: next(moments))
 
@@ -521,12 +769,113 @@ def test_total_deadline_does_not_restart_between_http_phases(monkeypatch) -> Non
     assert connection.getresponse_calls == 0
 
 
+def test_guard_enforces_deadline_during_blocked_response_headers(monkeypatch) -> None:
+    class BlockingConnection(FakeConnection):
+        def __init__(self, host: str, port: int, *, timeout: float) -> None:
+            super().__init__(host, port, timeout=timeout)
+            self.released = threading.Event()
+
+        def getresponse(self) -> FakeResponse:
+            self.getresponse_calls += 1
+            if not self.released.wait(1):
+                raise AssertionError("deadline guard did not abort header wait")
+            raise OSError("loopback transport aborted")
+
+        def abort(self) -> None:
+            super().abort()
+            self.released.set()
+
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", BlockingConnection)
+    monkeypatch.setattr(qwen, "TIMEOUT_SECONDS", 0.05)
+    started = time.monotonic()
+
+    result = invoke()
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "PROVIDER_TIMEOUT"
+    assert time.monotonic() - started < 1
+    assert BlockingConnection.instances[-1].aborted is True
+
+
+def test_explicit_cancellation_interrupts_blocked_response_headers(monkeypatch) -> None:
+    entered = threading.Event()
+
+    class BlockingConnection(FakeConnection):
+        def __init__(self, host: str, port: int, *, timeout: float) -> None:
+            super().__init__(host, port, timeout=timeout)
+            self.released = threading.Event()
+
+        def getresponse(self) -> FakeResponse:
+            self.getresponse_calls += 1
+            entered.set()
+            if not self.released.wait(1):
+                raise AssertionError("cancellation guard did not abort header wait")
+            raise OSError("loopback transport aborted")
+
+        def abort(self) -> None:
+            super().abort()
+            self.released.set()
+
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", BlockingConnection)
+    cancellation = threading.Event()
+
+    def cancel_after_wait_starts() -> None:
+        assert entered.wait(1)
+        cancellation.set()
+
+    canceller = threading.Thread(target=cancel_after_wait_starts)
+    canceller.start()
+    result = invoke(cancel_event=cancellation)
+    canceller.join(1)
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.reason_code == "CANCELLED_DURING_RESPONSE"
+    assert result.provider_request_performed is True
+    assert BlockingConnection.instances[-1].aborted is True
+    assert not canceller.is_alive()
+
+
 def test_cancellation_propagates_after_cleanup_and_releases_slot() -> None:
     FakeConnection.request_error = KeyboardInterrupt()
 
     with pytest.raises(KeyboardInterrupt):
         invoke()
 
+    assert FakeConnection.instances[0].closed is True
+    assert qwen._INVOCATION_LOCK.acquire(blocking=False)
+    qwen._INVOCATION_LOCK.release()
+
+
+def test_cleanup_base_exception_still_closes_connection_and_releases_slot() -> None:
+    class InterruptingCloseResponse(FakeResponse):
+        def close(self) -> None:
+            self.closed = True
+            raise KeyboardInterrupt()
+
+    FakeConnection.next_response = InterruptingCloseResponse()
+
+    with pytest.raises(KeyboardInterrupt):
+        invoke()
+
+    assert FakeConnection.instances[0].closed is True
+    assert qwen._INVOCATION_LOCK.acquire(blocking=False)
+    qwen._INVOCATION_LOCK.release()
+
+
+def test_cleanup_exception_returns_fixed_error_and_releases_slot() -> None:
+    class FailingCloseResponse(FakeResponse):
+        def close(self) -> None:
+            self.closed = True
+            raise RuntimeError("sensitive cleanup detail")
+
+    FakeConnection.next_response = FailingCloseResponse()
+
+    result = invoke()
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.outcome == "ERROR"
+    assert result.reason_code == "PROVIDER_CLOSE_FAILED"
+    assert "sensitive" not in str(result.to_dict())
     assert FakeConnection.instances[0].closed is True
     assert qwen._INVOCATION_LOCK.acquire(blocking=False)
     qwen._INVOCATION_LOCK.release()

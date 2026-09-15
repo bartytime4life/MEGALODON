@@ -39,6 +39,13 @@ The dashboard independently reuses the IANA loader for manual, read-only
 Reference Library lookups described in section 6. That connection supplies
 registration context, not telemetry enrichment or corpus execution.
 
+An optional internal Qwen advisory API can make one explicitly enabled,
+non-streaming request to a separately operated Ollama provider at the compiled
+literal IPv4 loopback tuple `127.0.0.1:11434`. It reruns the fingerprint-pinned
+Airlock before opening a socket and accepts only the canonical bounded metadata
+prompt. It is not connected to the service, CLI, dashboard, capture path,
+database, detector, policy, or action ledger.
+
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
 metadata queue. The callback does not block; the first overflow makes the
@@ -103,6 +110,12 @@ capture-buffer sizing or loss-free operation under production load.
     command validates the manifest, complete declared shard set, counts,
     digests, and records before lookup or in-memory detector execution. It has
     no runtime network/update, `Store`, persistence, action, or subprocess path.
+16. **Local AI is explicit, literal-loopback, and advisory only.** The optional
+    provider API exposes no endpoint or raw-prompt parameter, uses no
+    DNS/proxy/redirect/fallback path, and enforces one request with a shared
+    monotonic deadline, active cancellation, bounded HTTP protocol framing and body,
+    fixed inference options, and token/text limits. Model output cannot become
+    a detection, evidence item, command, target, query, or response action.
 
 ## 3. Data contracts
 
@@ -213,6 +226,18 @@ entire corpus before passing events to the fixed detector in memory. Selecting
 one scenario narrows the report, not the prerequisite validation. These commands
 do not read runtime configuration, open the audit database, persist a result,
 start ingestion or the dashboard, trigger policy, or authorize response.
+
+### Local Qwen advisory (internal API only)
+
+`megalodon.qwen_advisory.invoke_qwen_advisory` is an optional Python API, not a
+CLI or dashboard feature. A caller must provide one closed advisory request,
+its closed one-entry registry and independent pin, and exact per-call
+enablement. The function reruns Airlock preflight, then may issue one POST to
+literal `127.0.0.1:11434/api/generate` with the admitted prompt, exact registry
+model ID, non-streaming and reasoning-off modes, immediate unload policy, and
+fixed inference options. It never starts or configures Ollama, discovers or
+pulls a model, follows a redirect, reads proxy settings, resolves a host, or
+persists a result.
 
 ### Plan
 

@@ -73,16 +73,20 @@ attempted side effect.
 runtime boundary. It reruns the Airlock preflight, requires literal
 `enabled=True`, takes a non-blocking concurrency-one gate, and then makes at
 most one request to `127.0.0.1:11434/api/generate`. Its request fixes
-`stream=false`, `think=false`, and `raw=true`; it supplies no tools, credentials,
-URLs, arbitrary prompts, model discovery, retry, redirect, fallback, model pull,
-or process action.
+`stream=false`, `think=false`, `raw=true`, `keep_alive=0`, temperature zero,
+and a 512-token generation ceiling; it supplies no tools, credentials, URLs,
+arbitrary prompts, model discovery, retry, redirect, fallback, model pull, or
+process action.
 
-The adapter applies one 15-second deadline, reads a bounded JSON transport
-envelope, and accepts at most 4 KiB of UTF-8 model text. Its display value is the
-closed `advisoryResult` shape. The operator-recorded artifact digest is checked
-against the fingerprint-pinned registry before HTTP, but the generate response
-does not independently attest loaded model bytes. The fixtures remain synthetic
-and are not a model installation or approval.
+The adapter applies one actively enforced 15-second deadline, accepts an
+optional per-invocation cancellation event, gives the status line, headers,
+chunk framing, and trailers one cumulative 8 KiB budget, bounds the JSON body
+to 32 KiB, and accepts at most 4 KiB of UTF-8 model text. Provider JSON has a closed field set;
+duplicate keys, tool-call fields, and non-empty thinking traces fail closed. Its
+display value is the closed `advisoryResult` shape. The operator-recorded
+artifact digest is checked against the fingerprint-pinned registry before HTTP,
+but the generate response does not independently attest loaded model bytes. The
+fixtures remain synthetic and are not a model installation or approval.
 
 Run the adapter boundary tests with:
 

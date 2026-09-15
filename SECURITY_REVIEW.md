@@ -42,6 +42,7 @@ telemetry join, a corpus-execution endpoint, or evidence of an observed service.
 | High | Raw payload hash/contents are part of the capture concept | Payload-derived identifiers can still disclose sensitive data; storage creates a forensic liability | Metadata-only event model; payloads are not represented or stored |
 | Medium | Promiscuous capture is treated as a convenience | Requires privilege and may capture traffic outside the operator’s authority | Optional live capture is explicit, interface-specific, and documented as privileged |
 | Medium | External feeds are called synchronously with no privacy contract | IP/domain disclosure, rate-limit failures, stale reputation, and API-key leakage | Feeds are out of MVP scope; later adapters must be cached, signed, rate-limited, and opt-in |
+| Medium | A local language-model integration can leak telemetry, follow redirects or proxies, hallucinate authority, or exhaust resources | Sensitive disclosure, accidental egress, misleading verdicts, and an action-confused UI | The optional internal adapter reruns the pinned metadata-only Airlock, connects only to literal `127.0.0.1:11434`, exposes no endpoint or raw-prompt option, follows no redirects, reads no proxy or DNS configuration, and bounds concurrency, deadline, cancellation, request, HTTP protocol framing, response body, generation, output, and display text. Its result is untrusted advisory text and is not wired to CLI, dashboard, storage, detection, or response |
 | Medium | Registry assignments can be mistaken for observed services or threat verdicts | Analysts may overstate what a port implies and create false confidence or false positives | Bundled IANA service/port and protocol records are explicitly context hints only; they never establish observation, endorsement, safety, malicious intent, or a verdict |
 | Medium | Reference or evaluation assets can be truncated, substituted, or partially loaded | Lookup and detector receipts could silently describe different evidence | Versioned manifests pin every deterministic shard, count, byte length, and digest; all declared data and closed records validate before lookup or evaluation |
 | Medium | A synthetic detector suite can be presented as operational accuracy evidence | Deterministic expected counts may be confused with representative false-positive or efficacy measurement | The 12-scenario, 6,492-event corpus is metadata-only, documentation-address-only, and labeled `synthetic-only` / `uncalibrated`; its evaluator has no network, store, persistence, action, or subprocess path |
@@ -134,6 +135,12 @@ It does not yet protect against a compromised kernel, a malicious root user,
 kernel-level packet forgery, an attacker who can write directly to the database,
 or a distributed sensor fleet. Those require a separate trust-boundary design.
 
+The literal-loopback Qwen boundary also does not attest the bytes behind an
+operator-created Ollama model alias. It checks the registry pin and exact model
+ID in the terminal provider response without performing model discovery or a
+second provider request. A malicious local process already able to bind or
+interpose on port 11434 remains outside this slice's trust proof.
+
 ## Required controls before production use
 
 1. Threat-feed adapters need a written data-sharing policy, cache freshness,
@@ -157,6 +164,12 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
    false-positive measurement before operational interpretation. Neither a
    passing corpus result, a detection, nor a quality label authorizes automated
    response.
+6. Before a real Qwen invocation is treated as accepted operator capability,
+   bind the registry model ID to an operator-verified local Ollama alias and
+   artifact receipt, validate installed-provider compatibility and cancellation
+   behavior, and obtain independent security review. Dashboard projection,
+   persistence, background execution, and model-driven action remain separate
+   gates.
 
 ## Open control register
 
@@ -172,6 +185,7 @@ or a distributed sensor fleet. Those require a separate trust-boundary design.
 | Native Windows ([#27](https://github.com/bartytime4life/MEGALODON/issues/27)) | Static acceptance matrix and Linux-run unsupported-operation controls exist | Native core, NTFS ACL, loopback UI/browser, and exact-platform execution receipts |
 | Retention/storage ([#28](https://github.com/bartytime4life/MEGALODON/issues/28)) | Per-write rollback coverage, a storage high-water stop, and preview-bound finite deletion batches exist | Select finite policy values and validate native operational failure/recovery; no cleanup job or secure-erasure claim exists |
 | Reference/evaluation integrity | Privacy-minimized IANA data is manifest-pinned in deterministic shards no larger than 76 KiB; the complete 12-scenario synthetic corpus validates before an in-memory detector run | Establish a reviewed maintenance cadence and provenance receipt for each future snapshot; use representative authorized replay before any accuracy or operational-efficacy claim |
+| Local Qwen advisory ([#165](https://github.com/bartytime4life/MEGALODON/issues/165)) | Fingerprint-pinned Airlock plus an internal literal-loopback, non-streaming, concurrency-one provider boundary with finite non-echoing outcomes and adversarial fake-provider tests | Verify a real operator-owned model alias/artifact and installed Ollama lifecycle on an authorized host; complete independent review before user-facing exposure; keep dashboard, persistence, background operation, and action authority absent |
 
 Suricata issues [#9](https://github.com/bartytime4life/MEGALODON/issues/9)
 and [#24](https://github.com/bartytime4life/MEGALODON/issues/24) closed their
