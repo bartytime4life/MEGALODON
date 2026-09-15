@@ -164,10 +164,11 @@ lifecycle.
   iteration, event processing, and owned-source cleanup. Expiry attempts cleanup,
   preserves the committed prefix, and records `failed/failed` with
   `CAPTURE_ERROR`. Unsupported runtimes, unavailable `/proc/self/task`, signal-mask,
-  or pending-signal inspection, a blocked or pending `SIGALRM`, and more than one OS thread refuse
+  or pending-signal inspection, a blocked or pre-existing pending `SIGALRM`, and more than one OS thread refuse
   the option before configuration, store, or source work; the alarm mask and OS
   thread count are rechecked inside protected setup before handler or timer
-  installation; pending alarms are checked there before and after arming. An already active
+  installation. A pending alarm is checked again after arming and dispatched under
+  the deadline handler as `CaptureError` if the new deadline already expired. An already active
   process interval timer produces the same pre-I/O
   refusal. The arming return value detects and restores a timer installed after
   preflight while `SIGALRM` is blocked across the handler/timer swap;

@@ -443,7 +443,12 @@ def _scoped_run_deadline(max_seconds: int | None):
                 "max-seconds could not inspect pending POSIX signals"
             ) from None
         if alarm_signal in pending_signals:
-            raise ValueError("max-seconds cannot start with a pending SIGALRM")
+            # The protected boundary was clear immediately before arming. Keep
+            # our handler installed while releasing a post-arm pending alarm so
+            # an already-expired deadline remains a CaptureError.
+            mask_restored = True
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            raise CaptureError("ingestion deadline exceeded")
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         mask_restored = True
         yield
@@ -493,12 +498,12 @@ def _scoped_run_deadline(max_seconds: int | None):
                         not mask_restored or cleanup_mask is not None
                     ):
                         signal.signal(alarm_signal, previous_handler)
+                if cleanup_entry_error is not None:
+                    raise cleanup_entry_error
                 if cancellation_error is not None:
                     raise cancellation_error
                 if cleanup_mask_error is not None:
                     raise cleanup_mask_error
-                if cleanup_entry_error is not None:
-                    raise cleanup_entry_error
         finally:
             if not mask_restored:
                 signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)

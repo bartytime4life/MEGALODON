@@ -243,7 +243,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
-    def test_deadline_refuses_alarm_pending_during_arming(self):
+    def test_deadline_delivers_alarm_pending_during_arming(self):
         original_handler = signal.getsignal(signal.SIGALRM)
         original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
         calls = []
@@ -262,12 +262,11 @@ class SourceOwnershipTests(unittest.TestCase):
             with (
                 patch.object(cli.signal, "setitimer", side_effect=setitimer),
                 self.assertRaisesRegex(
-                    ValueError,
-                    "^max-seconds cannot start with a pending SIGALRM$",
+                    CaptureError, "^ingestion deadline exceeded$"
                 ),
             ):
                 with cli._scoped_run_deadline(1):
-                    self.fail("pending alarm should refuse before entry")
+                    self.fail("pending deadline should fail before entry")
 
             self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
             self.assertEqual(
@@ -344,7 +343,7 @@ class SourceOwnershipTests(unittest.TestCase):
     @unittest.skipUnless(
         cli._run_deadline_supported(), "POSIX interval timers required"
     )
-    def test_deadline_refuses_alarm_pending_during_protected_setup(self):
+    def test_deadline_delivers_alarm_pending_after_protected_arming(self):
         alarm_blocked = False
         timer_calls = []
         handler_calls = []
@@ -382,11 +381,11 @@ class SourceOwnershipTests(unittest.TestCase):
             patch.object(cli.signal, "setitimer", side_effect=setitimer),
             patch.object(cli.signal, "signal", side_effect=install_handler),
             self.assertRaisesRegex(
-                ValueError, "^max-seconds cannot start with a pending SIGALRM$"
+                CaptureError, "^ingestion deadline exceeded$"
             ),
         ):
             with cli._scoped_run_deadline(10):
-                self.fail("pending alarm should refuse before entry")
+                self.fail("pending deadline should fail before entry")
 
         self.assertFalse(alarm_blocked)
         self.assertEqual(
@@ -394,7 +393,7 @@ class SourceOwnershipTests(unittest.TestCase):
             [(10, True), (0.0, True)],
         )
         self.assertIs(handler_calls[-1][1], prior_handler)
-        self.assertTrue(handler_calls[-1][2])
+        self.assertFalse(handler_calls[-1][2])
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
     def test_deadline_restores_timer_armed_after_preflight(self):
@@ -590,7 +589,7 @@ class SourceOwnershipTests(unittest.TestCase):
     @unittest.skipUnless(
         cli._run_deadline_supported(), "POSIX interval timers required"
     )
-    def test_deadline_finishes_cleanup_when_mask_entry_dispatches_alarm(self):
+    def test_deadline_preserves_mask_entry_alarm_when_cancel_fails(self):
         alarm_blocked = False
         mask_calls = 0
         timer_calls = []
@@ -614,6 +613,8 @@ class SourceOwnershipTests(unittest.TestCase):
 
         def setitimer(timer_kind, seconds, interval=0.0):
             timer_calls.append((timer_kind, seconds, interval, alarm_blocked))
+            if not seconds:
+                raise OSError("synthetic cancellation failure")
             return (0.0, 0.0)
 
         def install_handler(alarm_signal, handler):
@@ -623,6 +624,7 @@ class SourceOwnershipTests(unittest.TestCase):
             patch.object(cli, "_require_run_deadline_support"),
             patch.object(cli, "_require_single_threaded_run_deadline"),
             patch.object(cli.signal, "getsignal", return_value=prior_handler),
+            patch.object(cli.signal, "getitimer", return_value=(0.0, 0.0)),
             patch.object(cli.signal, "sigpending", return_value=set()),
             patch.object(cli.signal, "pthread_sigmask", side_effect=pthread_sigmask),
             patch.object(cli.signal, "setitimer", side_effect=setitimer),

@@ -195,10 +195,11 @@ active through iteration, event processing, and owned-source cleanup. Expiry is
 a record-free `CaptureError`; committed evidence is retained and the run records
 `failed/failed` with `CAPTURE_ERROR` after cleanup is attempted. Unsupported
 runtimes, unavailable `/proc/self/task`, signal-mask, or pending-signal inspection,
-a blocked or pending `SIGALRM`, or more than one OS thread refuse the option before configuration,
+a blocked or pre-existing pending `SIGALRM`, or more than one OS thread refuse the option before configuration,
 storage, or source work; the alarm mask and OS-thread count are rechecked inside
-the protected setup boundary before handler or timer installation, and pending
-alarms are checked there before and after arming. The CLI also
+the protected setup boundary before handler or timer installation. Pending alarms
+are checked again after arming and dispatched under the deadline handler as
+`CaptureError` if the new deadline already expired. The CLI also
 refuses before those operations when an interval timer is already active. It
 checks the timer returned by the arming call, restores a concurrently armed
 timer while `SIGALRM` is blocked across the handler/timer swap, and restores the

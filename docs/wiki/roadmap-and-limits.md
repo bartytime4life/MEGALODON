@@ -14,10 +14,11 @@ fixed 65,536-line skipped-input budget, bounding physical line work after reads
 return. An optional Linux `--max-seconds` value from 1 through 86,400 bounds
 source acquisition, iteration, processing, and cleanup with a fixed failed
 receipt; unsupported runtimes, unavailable `/proc/self/task`, signal-mask, or
-pending-signal inspection, blocked or pending `SIGALRM`, and processes with more than one OS thread refuse
+pending-signal inspection, blocked or pre-existing pending `SIGALRM`, and processes with more than one OS thread refuse
 the option before configuration or I/O because the timer/handler are process-wide;
 the mask and OS-thread count are rechecked inside protected setup before handler
-or timer installation, with pending alarms checked before and after arming. Existing and
+or timer installation. A post-arm pending alarm is dispatched under the deadline
+handler as `CaptureError` if the new deadline already expired. Existing and
 concurrently armed process timers are preserved and refused while `SIGALRM` is
 blocked across the handler/timer swap, and prior-handler restoration remains
 conditional on confirmed timer inactivity when cancellation raises. Teardown
