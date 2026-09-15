@@ -341,12 +341,12 @@ def _scoped_run_deadline(max_seconds: int | None):
         raise ValueError("max-seconds requires the interpreter main thread") from None
 
     try:
-        signal.setitimer(timer_kind, max_seconds)
-    except (OSError, ValueError):
-        signal.signal(alarm_signal, previous_handler)
-        raise ValueError("max-seconds could not arm the POSIX run deadline") from None
-
-    try:
+        try:
+            signal.setitimer(timer_kind, max_seconds)
+        except (OSError, ValueError):
+            raise ValueError(
+                "max-seconds could not arm the POSIX run deadline"
+            ) from None
         yield
     finally:
         signal.setitimer(timer_kind, 0.0)

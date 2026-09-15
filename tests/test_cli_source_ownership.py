@@ -242,6 +242,46 @@ class SourceOwnershipTests(unittest.TestCase):
                 signal.setitimer(signal.ITIMER_REAL, *original_timer)
 
     @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
+    def test_deadline_restores_handler_when_alarm_fires_during_arming(self):
+        original_handler = signal.getsignal(signal.SIGALRM)
+        original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+        calls = []
+
+        def prior_handler(_signum, _frame):
+            return None
+
+        def setitimer(timer_kind, seconds, interval=0.0):
+            calls.append((timer_kind, seconds, interval))
+            if seconds:
+                signal.raise_signal(signal.SIGALRM)
+            return (0.0, 0.0)
+
+        try:
+            signal.signal(signal.SIGALRM, prior_handler)
+            with (
+                patch.object(cli.signal, "setitimer", side_effect=setitimer),
+                self.assertRaisesRegex(
+                    CaptureError, "^ingestion deadline exceeded$"
+                ),
+            ):
+                with cli._scoped_run_deadline(1):
+                    self.fail("deadline should fire while the timer is armed")
+
+            self.assertIs(signal.getsignal(signal.SIGALRM), prior_handler)
+            self.assertEqual(
+                calls,
+                [
+                    (signal.ITIMER_REAL, 1, 0.0),
+                    (signal.ITIMER_REAL, 0.0, 0.0),
+                ],
+            )
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, original_handler)
+            if original_timer[0] > 0.0:
+                signal.setitimer(signal.ITIMER_REAL, *original_timer)
+
+    @unittest.skipUnless(cli._run_deadline_supported(), "POSIX interval timers required")
     def test_deadline_refuses_without_replacing_active_process_timer(self):
         original_handler = signal.getsignal(signal.SIGALRM)
         original_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
