@@ -1,5 +1,12 @@
 # Local Qwen advisory contract
 
+The [incident-informed containment review](model-containment-review.md) maps
+shared-service escape and unauthorized recovery threats to the closed interface.
+Its reusable denial corpus exercises both preflight and explicitly enabled
+provider entry points. Those tests establish application refusal behavior;
+provider-process isolation and direct/transitive egress containment require
+separate evidence.
+
 **Status:** the proposed data-only contract boundary from
 [issue #145](https://github.com/bartytime4life/MEGALODON/issues/145) is joined
 by the no-network preflight from
