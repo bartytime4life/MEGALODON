@@ -176,7 +176,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
                                         reduced_motion="reduce", service_workers="block")
     violations: list[str] = []
     errors: list[str] = []
-    counts = {"summary": 0, "events": 0}
+    counts = {"summary": 0, "events": 0, "advisory": 0}
 
     async def allow_local(route):
         parsed = urlsplit(route.request.url)
@@ -203,6 +203,8 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             counts["summary"] += 1
         elif path == "/api/events":
             counts["events"] += 1
+        elif path == "/api/advisory-receipt":
+            counts["advisory"] += 1
 
     page.on("request", count)
     try:
@@ -218,6 +220,11 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             await expect(page.locator("#workspace-live")).to_be_visible()
             await expect(page.locator("#workspace-analysis")).to_be_hidden()
         await expect(page.locator("#workspace-interfaces")).to_be_hidden()
+        await page.locator("#workspace-tab-analysis").click()
+        await expect(page.locator("#analysis-window-title")).to_contain_text("unavailable")
+        passed("display-only Qwen receipt is loaded once and remains unavailable when not supplied",
+               counts["advisory"] == 1)
+        await page.locator("#workspace-tab-live").click()
         await page.locator("#pause-button").click()
         await expect(page.locator("#pause-button")).to_have_attribute("aria-pressed", "true")
         passed("real HTTP bootstrap " + ("nonempty" if nonempty else "empty"), response.status == 200)
@@ -300,10 +307,13 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         passed("failed peer retains refresh guard", await page.evaluate("state.refreshing") and
                await page.locator("#refresh-button").is_disabled())
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip stale")
+        expected_counts = dict(before)
+        expected_counts["summary"] += 1
+        expected_counts["events"] += 1
         passed("failed refresh preserves rows time and one request pair",
                await page.locator("#events").inner_text() == saved_rows and
                await page.locator("#updated").get_attribute("datetime") == saved_time and
-               counts == {key: value + 1 for key, value in before.items()})
+               counts == expected_counts)
         await page.unroute("**/api/summary", fail)
         await page.unroute("**/api/events?*", slow)
         await page.locator("#refresh-button").click()

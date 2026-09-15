@@ -127,7 +127,7 @@ _WORKFLOWS = (
         "launch_policy": "explicit_library_call_only_no_scheduler",
         "data_boundary": "no raw traffic, payload, packet capture, background feed, or Internet access",
         "action_boundary": "model output cannot execute commands, modify the host, or apply a response",
-        "next_gate": "read-only receipt projection in the Deep analysis & context panel",
+        "next_gate": "independent review before any invocation-to-dashboard orchestration",
     },
     {
         "id": "network-inventory-import",
