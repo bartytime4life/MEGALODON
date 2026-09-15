@@ -22,6 +22,7 @@ import pytest
 import megalodon.advisory as advisory
 import megalodon.cli as cli
 import megalodon.firewall as firewall
+import megalodon.qwen_advisory as qwen
 from megalodon.advisory import (
     FIXED_LIMITS,
     MAX_INPUT_BYTES,
@@ -236,6 +237,8 @@ def _forbid_preflight_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(firewall.NftablesFirewall, "plan_block", denied)
     monkeypatch.setattr(firewall.NftablesFirewall, "block", denied)
     monkeypatch.setattr(cli, "main", denied)
+    monkeypatch.setattr(qwen, "_LiteralLoopbackHTTPConnection", denied)
+    monkeypatch.setattr(qwen, "_InvocationGuard", denied)
 
 
 @pytest.mark.parametrize("value", (None, [], "request", 1, True))
@@ -263,6 +266,20 @@ def test_adversarial_corpus_covers_every_denial_class_and_forbidden_registry_fie
     for field in ("endpoint", "url", "command", "path", "credential", "prompt"):
         assert ("registry", field) in paths
     assert ("registry", "tools", 0) in paths
+
+
+def test_incident_containment_cases_cannot_silently_disappear() -> None:
+    required = {
+        "registry-package-mirror-fallback",
+        "registry-shared-cache-channel",
+        "request-peer-coordination",
+        "request-credential-recovery",
+        "request-fallback-permission",
+        "request-evaluation-success-claim",
+        "request-audit-rewrite",
+    }
+    assert set(CORPUS["required_containment_cases"]) == required
+    assert required <= {case["name"] for case in CORPUS["cases"]}
 
 
 def test_non_string_registry_schema_is_denied_without_invoking_equality() -> None:
@@ -404,8 +421,9 @@ def test_admitted_prompt_uses_the_validated_request_snapshot(monkeypatch) -> Non
 
 
 @pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda case: case["name"])
+@pytest.mark.parametrize("entrypoint", ["preflight", "enabled-provider"])
 def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
-    monkeypatch: pytest.MonkeyPatch, case: dict[str, object]
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, object], entrypoint: str
 ) -> None:
     inputs = {
         "registry": deepcopy(CORPUS["registry"]),
@@ -422,16 +440,21 @@ def test_adversarial_denial_corpus_is_exact_and_side_effect_free(
     first_before = _json_input_bytes(first_inputs)
     second_before = _json_input_bytes(second_inputs)
     _forbid_preflight_side_effects(monkeypatch)
-    first = preflight_advisory(
+    boundary = preflight_advisory if entrypoint == "preflight" else qwen.invoke_qwen_advisory
+    # True is deliberate: disabled invocation would test the wrong gate.
+    invocation_options = {} if entrypoint == "preflight" else {"enabled": True}
+    first = boundary(
         first_inputs["request"],
         local_model_registry=first_inputs["registry"],
         local_model_registry_sha256=first_inputs["registry_sha256"],
+        **invocation_options,
     )
     assert _json_input_bytes(first_inputs) == first_before
-    second = preflight_advisory(
+    second = boundary(
         second_inputs["request"],
         local_model_registry=second_inputs["registry"],
         local_model_registry_sha256=second_inputs["registry_sha256"],
+        **invocation_options,
     )
     assert _json_input_bytes(second_inputs) == second_before
 
