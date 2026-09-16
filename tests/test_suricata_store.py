@@ -129,6 +129,47 @@ def test_initializer_refuses_sidecar_created_during_exclusive_open(
     assert path.with_name(path.name + "-wal").read_bytes() == b"raced"
 
 
+def test_initializer_keeps_existing_database_classification_with_wal_sidecars(
+    tmp_path,
+):
+    path = tmp_path / "durable.db"
+    initialize_suricata_store(path)
+    writer = _connect(path)
+    try:
+        assert writer.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        writer.execute("CREATE TABLE live_marker (value INTEGER)")
+        writer.commit()
+        assert path.with_name(path.name + "-wal").exists()
+        assert path.with_name(path.name + "-shm").exists()
+
+        with pytest.raises(SuricataStoreError, match="EXISTING_DATABASE"):
+            initialize_suricata_store(path)
+    finally:
+        writer.close()
+
+
+def test_initializer_refuses_sidecar_created_during_sqlite_connect(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "durable.db"
+    sidecar = path.with_name(path.name + "-shm")
+    original = suricata_store.sqlite3.connect
+
+    def connect_with_sidecar(*args, **kwargs):
+        connection = original(*args, **kwargs)
+        sidecar.write_bytes(b"raced-during-connect")
+        if os.name == "posix":
+            sidecar.chmod(0o600)
+        return connection
+
+    monkeypatch.setattr(suricata_store.sqlite3, "connect", connect_with_sidecar)
+    with pytest.raises(SuricataStoreError, match="ORPHANED_SIDECAR_REFUSED"):
+        initialize_suricata_store(path)
+
+    assert not path.exists()
+    assert sidecar.read_bytes() == b"raced-during-connect"
+
+
 def test_validation_is_read_only_and_initializer_refuses_existing_store(tmp_path):
     path = tmp_path / "durable.db"
     initialize_suricata_store(path)
