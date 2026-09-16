@@ -22,7 +22,8 @@ merged; none remain open. `megalodon-evaluate base-rate` (#177) and the
 anomaly-evidence/Qwen-policy/triage stack (#178, #180, #181) ship as
 `megalodon/alert_workload.py`, `megalodon/offline/anomaly.py`,
 `megalodon/anomaly_advisory.py` and `megalodon/offline/triage.py`; #179's
-enabled-provider denial corpus is exercised in `tests/test_anomaly_advisory.py`.
+enabled-provider denial corpus (`contracts/local-model-advisory/v1/fixtures/adversarial/denials.json`
+and its `required_containment_cases`) is exercised in `tests/test_advisory.py`.
 This paragraph is a documentation-currentness correction only; it changes no
 runtime, schema, dependency, or review-control behavior.
 
