@@ -13,7 +13,6 @@ import argparse
 import csv
 from datetime import datetime, timedelta, timezone
 import hashlib
-import ipaddress
 import io
 import json
 import os
