@@ -17,6 +17,16 @@ PR #176 is now on main. Open #177 covers hypothetical workload arithmetic; #179
 covers enabled-provider denials; #178, #180 and #181 form the anomaly evidence,
 Qwen-policy and triage stack. Those changes should not be duplicated here.
 
+**Resolved as of current `main`.** #177, #178, #179, #180 and #181 are all
+merged; none remain open. `megalodon-evaluate base-rate` (#177) and the
+anomaly-evidence/Qwen-policy/triage stack (#178, #180, #181) ship as
+`megalodon/alert_workload.py`, `megalodon/offline/anomaly.py`,
+`megalodon/anomaly_advisory.py` and `megalodon/offline/triage.py`; #179's
+enabled-provider denial corpus (`contracts/local-model-advisory/v1/fixtures/adversarial/denials.json`
+and its `required_containment_cases`) is exercised in `tests/test_advisory.py`.
+This paragraph is a documentation-currentness correction only; it changes no
+runtime, schema, dependency, or review-control behavior.
+
 Two independent gaps remained open at this document's `caf7e4bd` basis:
 
 1. **JSONL admission:** repeated keys silently replace prior values and unknown
