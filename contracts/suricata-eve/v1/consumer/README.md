@@ -1,11 +1,13 @@
 # Transactional Suricata durable-consumer contract v1
 
-**Status: PROPOSED CONTRACT AND SYNTHETIC ORACLE ONLY.**
+**Status: PROPOSED CONTRACT, SYNTHETIC ORACLE, AND EXPLICIT STORE INITIALIZER.**
 
-This directory defines the next gate after the implemented bounded Linux reader.
-It does not add a production consumer, SQLite migration, command, dashboard
-projection, watcher, scheduler, sensor process, network access, or response
-action. The future runtime described here is not implemented.
+This directory defines the next gates after the implemented bounded Linux
+reader. `megalodon.suricata_store` now explicitly creates and validates
+the dedicated v1 SQLite layout, but it exposes no alert-write or consumer API.
+There is still no production consumer, migration of an existing store, command,
+dashboard projection, watcher, scheduler, sensor process, network access, or
+response action.
 
 The reader publishes one immutable `external-alert-v1` batch and one
 `suricata-eve-reader-receipt-v1`. Its replay view is caller supplied and is not
@@ -72,12 +74,31 @@ The v1 policy inherits the reader publication ceiling: 10,000 alerts and
 readback have a fixed 30,000 ms monotonic budget. These are contract limits, not
 caller-tunable settings.
 
-The contract requires a capacity check before `BEGIN IMMEDIATE`, but this slice
-does not choose a production database schema version, migration number, page
-budget, or retention policy. Those belong to the later runtime/migration review.
-Ordinary application startup must not create or repair a migration implicitly.
+The contract requires a capacity check before `BEGIN IMMEDIATE`. The separate
+store-initializer slice reserves production schema version 1, but it does not
+choose a page budget or retention policy and does not migrate an existing file.
+Ordinary application startup must not create, initialize, or repair this store
+implicitly.
 
-## 5. Synthetic conformance oracle
+## 5. Explicit production schema initializer
+
+`megalodon.suricata_store.initialize_suricata_store` is the only writer
+in the production module. An operator must call it explicitly with a new path.
+It creates an owner-private database and atomically reserves:
+
+- one run table with unique complete eight-field run identity and attempt ID;
+- one alert table keyed by run and positive source-record index; and
+- one terminal-receipt table keyed by run with a unique attempt ID.
+
+`validate_suricata_store` opens an existing file read-only and query-only, then
+checks the exact version, SQL, columns, indexes, foreign keys, uniqueness,
+foreign-key integrity, and SQLite quick check. Missing, partial, future, or
+weakened layouts fail closed. Initialization refuses every existing database;
+there is no implicit upgrade or ordinary-startup hook. This is storage
+reservation evidence, not a consumer transaction, replay decision, retention
+policy, or operational migration.
+
+## 6. Synthetic conformance oracle
 
 `tests/test_suricata_consumer_contract.py` validates the closed schema and
 fixtures with local-only references. Its in-memory SQLite oracle models the
@@ -104,15 +125,16 @@ python -m pytest -q \
   tests/test_suricata_contract.py \
   tests/test_suricata_formats.py \
   tests/test_suricata_reader_contract.py \
-  tests/test_suricata_consumer_contract.py
+  tests/test_suricata_consumer_contract.py \
+  tests/test_suricata_store.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 ```
 
-## 6. Next gate
+## 7. Next gate
 
-A runtime consumer requires a separate issue and PR. That work must reserve and
-migrate the production schema explicitly, implement fixed diagnostics and
-capacity/deadline behavior, prove rollback and commit-unknown reconciliation
-under injected failures, preserve database identity and private permissions, and
-pass exact-head review. Dashboard projection remains a later read-only slice.
+A runtime consumer requires a separate issue and PR. That work must use this
+exact reserved schema, implement fixed diagnostics and capacity/deadline
+behavior, prove rollback and commit-unknown reconciliation under injected
+failures, preserve database identity and private permissions, and pass
+exact-head review. Dashboard projection remains a later read-only slice.

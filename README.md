@@ -152,7 +152,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata completed-file reader | Single-threaded Linux main-thread Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
-| Suricata durable-consumer design | Proposed closed transaction, replay-registry, receipt, and reconciliation contract with a synthetic in-memory SQLite oracle; no production consumer, migration, or dashboard projection |
+| Suricata durable storage foundation | Proposed closed transaction, replay-registry, receipt, and reconciliation contract; synthetic oracle; and explicit create-only, exact-schema SQLite initializer/validator. No production consumer, existing-store migration, startup hook, or dashboard projection |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
@@ -279,7 +279,8 @@ current vendor documentation and a host-specific package/repository review.
 Record the exact repository, signing-key fingerprint, package version, service
 state, and removal/rollback plan outside MEGALODON. Do not infer runtime
 support from an installed binary: MEGALODON has only a completed contract-envelope
-file reader for Suricata, with no sensor integration or durable consumer;
+file reader and an explicit create-only durable-store schema initializer for
+Suricata, with no sensor integration or durable consumer;
 osquery remains proposed with no MEGALODON reader, importer, scheduler, or enrollment.
 
 ### 3. Build Zeek as a private, non-service producer
@@ -997,6 +998,7 @@ because branches, checks, reviews, and remaining evidence can change.
 | [#7 — dashboard acceptance](https://github.com/bartytime4life/MEGALODON/issues/7) | Closed `completed`: loopback, privacy, read-only, HTTP, and headed-browser acceptance are on `main` | Native Windows and screen-reader acceptance |
 | [#9 — Suricata EVE contract](https://github.com/bartytime4life/MEGALODON/issues/9) and [#24 — bounded reader contract](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed `completed`: closed record schemas, bounded-reader policy, fixtures, receipts, oracles, and the narrow Linux completed-file reader are on `main` | Raw-EVE conversion, durable persistence, sensor operation, IPS, or response |
 | [#212 — durable-consumer contract](https://github.com/bartytime4life/MEGALODON/issues/212) | Contract delivery: proposed transactional policy and receipts, accepted/rejected fixtures, and synthetic SQLite rollback/reconciliation oracle in this revision | A production migration or consumer, ordinary-startup migration, dashboard projection, sensor operation, IPS, or response |
+| [#215 — durable-store schema](https://github.com/bartytime4life/MEGALODON/issues/215) | This revision adds an explicit create-only production schema initializer and read-only exact-layout validator | Consumer writes, replay decisions, existing-store migration, retention, dashboard projection, sensor operation, IPS, or response |
 | [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Closed `completed`: one prepared-host UID-1000 header-only probe passed at [`main@7ad539c`](https://github.com/bartytime4life/MEGALODON/commit/7ad539ccd33687725d18ee8a8cedcc84073c3609) with `/usr/bin/tshark` from Wireshark 4.2.2 package `4.2.2-1.1build3` | Arbitrary-capture containment, live capture, installation authority, or compatibility of another release/revision |
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed `completed`: deterministic bounded synthetic evaluation and evidence-quality reporting are on `main` | Representative accuracy, calibrated thresholds, or operational interpretation |
 | [#27 — Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Closed `completed`: the Linux-preserving Windows capability and acceptance handoff is recorded | Native Windows, NTFS ACL, browser, and exact-platform execution receipts |
