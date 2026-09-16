@@ -5,7 +5,7 @@ const integrations = [
     dataKind: "audit metadata", contract: "PacketEvent → local SQLite audit", owner: "megalodon.service",
     boundary: "No payload model, public listener, automatic action, or cloud dependency.",
     nextGate: "Representative replay and operator-owned retention policy.", ui: ["Event feed", "Detection linkage", "Run receipts"],
-    metricA: "12.4k", metricALabel: "preview events", metricB: "0", metricBLabel: "write APIs"
+    metricA: "12.4k", metricALabel: "preview events", metricB: "0", metricBLabel: "public write APIs"
   },
   {
     id: "tshark", name: "Wireshark / TShark", monogram: "TS", category: "network", status: "implemented", statusLabel: "Implemented",
@@ -24,12 +24,13 @@ const integrations = [
     metricA: "318", metricALabel: "preview flows", metricB: "27", metricBLabel: "active pairs"
   },
   {
-    id: "suricata", name: "Suricata", monogram: "SU", category: "network", status: "bounded", statusLabel: "Bounded",
-    summary: "Reads one completed alert envelope and can persist one immutable validated publication atomically.",
+    id: "suricata", name: "Suricata", monogram: "SU", category: "network", status: "implemented", statusLabel: "Gate complete",
+    summary: "Reads one completed alert envelope, applies a fixed consumer-owned 512 MiB capacity gate, and persists exactly one immutable publication atomically.",
     dataKind: "alert metadata", contract: "suricata-eve-alert-input-v1", owner: "megalodon.offline.suricata",
-    boundary: "No raw EVE conversion, ruleset update, watcher, sensor launch, IPS path, blocking, or dashboard write.",
-    nextGate: "Commit-unknown reconciliation API and installed-producer acceptance.", ui: ["Alert lane", "Severity", "Terminal receipt"],
-    metricA: "4", metricALabel: "preview alerts", metricB: "0", metricBLabel: "sensor controls"
+    boundary: "Linux, non-root, and capability-free; existing owner-private store only. No permission repair, migration, retention deletion, network, sensor or IPS control, or dashboard write.",
+    nextGate: "Explicit commit-unknown reconciliation API, then installed-producer acceptance.", ui: ["Alert lane", "Severity", "Terminal receipt"],
+    evidence: { label: "Issue #221 · durable-consumer capacity gate", url: "https://github.com/bartytime4life/MEGALODON/issues/221" },
+    metricA: "512 MiB", metricALabel: "hard store ceiling", metricB: "30 s", metricBLabel: "shared deadline"
   },
   {
     id: "scapy", name: "Scapy", monogram: "SC", category: "network", status: "bounded", statusLabel: "Optional",
@@ -296,12 +297,12 @@ const workflows = {
     boundary: "Fixed /usr/bin/tshark, bounded output and time; Windows desktop Wireshark is separate."
   },
   suricata: {
-    status: "Implemented / bounded", statusClass: "bounded", platform: "Linux API", title: "Atomic Suricata publication",
-    summary: "Validate one immutable completed publication, enforce the fixed-capacity policy before its transaction, and commit alerts, replay identity, and terminal receipt together.",
-    command: "consume_publication(publication, store_path=private_store)",
-    produces: ["Durable replay identity", "Atomic alert batch", "Exact commit readback"],
-    refuses: ["Raw EVE conversion", "Existing-store migration", "Watcher, sensor, or IPS control"],
-    boundary: "512 MiB ceiling with no freelist credit; operator-owned retention and no network access."
+    status: "Capacity gate complete", statusClass: "implemented", platform: "Linux · non-root · capability-free", title: "Atomic Suricata publication",
+    summary: "Validate one immutable completed publication, refuse excess capacity before BEGIN IMMEDIATE, and commit run identity, alerts, and terminal receipt in one transaction.",
+    command: "consume_publication(private_store, publication, consumer_attempt_id=\"operator-issued-id\")",
+    produces: ["Deterministic capacity preflight", "Atomic run + alert + receipt rows", "Exact post-commit readback"],
+    refuses: ["Public or replaced stores", "Permission repair or schema migration", "Automatic retention or blind retry"],
+    boundary: "Fixed 512 MiB no-freelist-credit ceiling and shared 30-second deadline; refusal writes zero rows."
   },
   plans: {
     status: "Implemented / non-executing", statusClass: "implemented", platform: "Static catalog", title: "Capability and integration plans",
@@ -569,6 +570,7 @@ function renderToolInspector() {
     <div class="inspector-section"><span>MEGALODON contract</span><p>${item.contract}</p></div>
     <div class="inspector-section"><span>Integration owner</span><p>${item.owner}</p></div>
     <div class="inspector-section"><span>HUD surfaces</span><div class="hud-slots">${item.ui.map((slot) => `<span>${slot}</span>`).join("")}</div></div>
+    ${item.evidence ? `<div class="inspector-section"><span>Acceptance evidence</span><p><a class="evidence-link" href="${item.evidence.url}" target="_blank" rel="noopener noreferrer">${item.evidence.label} <span aria-hidden="true">↗</span></a></p></div>` : ""}
     <div class="inspector-section acquire-section">
       <div class="acquire-heading"><span>Setup source</span><em>Operator managed</em></div>
       <p class="acquire-source">Official source · <strong>${acquire.source}</strong></p>

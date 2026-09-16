@@ -219,6 +219,9 @@ select { color: var(--ink); }
 .panel-kicker { color: var(--dim); font-size: 0.6rem; }
 .panel-meta { color: var(--amber); font-size: 0.62rem; letter-spacing: 0.11em; }
 
+.evidence-link { color: var(--green); text-decoration: none; }
+.evidence-link:hover { text-decoration: underline; text-underline-offset: 0.24rem; }
+
 .chart-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.8rem; color: var(--dim); font-size: 0.67rem; }
 .chart-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
 .legend-line { width: 17px; height: 2px; background: var(--cyan); }
