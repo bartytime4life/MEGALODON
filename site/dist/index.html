@@ -4,11 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050b11" />
-    <meta name="description" content="MEGALODON source-aware network activity, detection, evidence, and integration HUD." />
+    <meta name="description" content="MEGALODON companion-tool guidance and local evidence workflow. No hosted network feed is connected." />
     <title>MEGALODON — Defensive operations HUD</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="./readiness.js" defer></script>
+    <script src="./lifecycle.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
@@ -22,10 +23,10 @@
       <div class="topbar-posture" aria-label="Current operating posture">
         <span><i class="status-dot cyan"></i>LOCAL-FIRST</span>
         <span><i class="status-dot green"></i>OBSERVE-ONLY</span>
-        <span><i class="status-dot amber"></i>SYNTHETIC INPUT</span>
+        <span><i class="status-dot amber"></i>NO TELEMETRY</span>
       </div>
       <div class="topbar-actions">
-        <span class="source-pin">main@5583ac1</span>
+        <span class="source-pin">baseline@0e71cd4</span>
         <a href="https://github.com/bartytime4life/MEGALODON" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a>
       </div>
     </header>
@@ -42,7 +43,7 @@
         <section class="rail-summary" aria-labelledby="rail-summary-title">
           <p id="rail-summary-title">INSTRUMENT MAP</p>
           <div><span>14</span><small>tool surfaces</small></div>
-          <div><span>5</span><small>active demo lanes</small></div>
+          <div><span>—</span><small>network measurements</small></div>
           <div><span>0</span><small>live connectors</small></div>
         </section>
         <div class="rail-boundary"><span>NO RUNTIME ACCESS</span><p>This Site does not read your host, network, database, or tools.</p></div>
@@ -58,25 +59,20 @@
               <div>
                 <p class="eyebrow">Unified telemetry surface</p>
                 <h1 id="hud-title">Network activity HUD</h1>
-                <p>Source-qualified activity, detections, and metadata in one review surface.</p>
+                <p>No network feed is connected to this hosted console. Use your local dashboard to review actual stored evidence.</p>
               </div>
             </div>
-            <div class="hud-controls" aria-label="Synthetic preview controls">
-              <div class="mode-badge"><span class="pulse-dot" aria-hidden="true"></span><span><strong>SYNTHETIC PREVIEW</strong><small>Browser-only · no live intake</small></span></div>
-              <button id="toggle-stream" class="control-button" type="button" aria-pressed="false">Pause feed</button>
-              <select id="time-window" aria-label="Activity time window">
-                <option value="60">Last 60 seconds</option>
-                <option value="300">Last 5 minutes</option>
-                <option value="900">Last 15 minutes</option>
-              </select>
+            <div class="hud-controls" aria-label="Connection status">
+              <div class="mode-badge"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NOT CONNECTED</strong><small>No network observations received</small></span></div>
+              <button class="control-button" type="button" data-jump="missions">Open local workflow</button>
             </div>
           </div>
 
-          <section class="kpi-grid" aria-label="Synthetic activity summary">
-            <article class="kpi-card cyan-accent"><div><span>METADATA EVENTS</span><small>validated / browser preview</small></div><strong id="metric-events">12,480</strong><span class="metric-delta">illustrative cohort total</span></article>
-            <article class="kpi-card blue-accent"><div><span>FLOW RECORDS</span><small>Zeek lane</small></div><strong id="metric-flows">318</strong><span class="metric-delta">flow units · not packet counts</span></article>
-            <article class="kpi-card amber-accent"><div><span>DETECTIONS</span><small>fixed heuristics + alert metadata</small></div><strong id="metric-detections">7</strong><span class="metric-delta caution">7 synthetic candidate findings</span></article>
-            <article class="kpi-card green-accent"><div><span>ACTIONS APPLIED</span><small>authority boundary</small></div><strong>0</strong><span class="metric-delta safe">plan-only remains intact</span></article>
+          <section class="kpi-grid" aria-label="Network measurements unavailable">
+            <article class="kpi-card cyan-accent"><div><span>METADATA EVENTS</span><small>no input</small></div><strong id="metric-events">—</strong><span class="metric-delta">unavailable</span></article>
+            <article class="kpi-card blue-accent"><div><span>FLOW RECORDS</span><small>no input</small></div><strong id="metric-flows">—</strong><span class="metric-delta">unavailable</span></article>
+            <article class="kpi-card amber-accent"><div><span>DETECTIONS</span><small>no input</small></div><strong id="metric-detections">—</strong><span class="metric-delta">not assessed</span></article>
+            <article class="kpi-card green-accent"><div><span>HOST ACTIONS</span><small>no host connection</small></div><strong>—</strong><span class="metric-delta">not observed by this Site</span></article>
           </section>
 
           <div class="hud-grid">
@@ -85,65 +81,50 @@
                 <div><p class="panel-kicker">AGGREGATE ACTIVITY</p><h2 id="traffic-title">Network metadata rate</h2></div>
                 <div class="chart-legend" aria-label="Chart legend"><span><i class="legend-line inbound"></i>Ingress metadata</span><span><i class="legend-line outbound"></i>Egress metadata</span><span><i class="legend-mark"></i>Detection</span></div>
               </div>
-              <div class="chart-wrap">
-                <div class="chart-scale" aria-hidden="true"><span>900/s</span><span>600/s</span><span>300/s</span><span>0</span></div>
-                <svg id="traffic-chart" viewBox="0 0 900 250" role="img" aria-labelledby="traffic-chart-title traffic-chart-desc">
-                  <title id="traffic-chart-title">Synthetic network metadata rate</title>
-                  <desc id="traffic-chart-desc">Ingress and egress metadata rates over the selected preview window with detection markers.</desc>
-                  <g class="chart-grid" aria-hidden="true"><line x1="0" y1="25" x2="900" y2="25"></line><line x1="0" y1="92" x2="900" y2="92"></line><line x1="0" y1="159" x2="900" y2="159"></line><line x1="0" y1="226" x2="900" y2="226"></line></g>
-                  <path id="traffic-area" class="traffic-area" d=""></path>
-                  <path id="traffic-ingress" class="traffic-line ingress" d=""></path>
-                  <path id="traffic-egress" class="traffic-line egress" d=""></path>
-                  <g id="detection-markers"></g>
-                </svg>
-                <div class="chart-time" aria-hidden="true"><span>-60s</span><span>-45s</span><span>-30s</span><span>-15s</span><span>now</span></div>
-              </div>
-              <div class="protocol-strip" aria-label="Synthetic protocol distribution">
-                <span style="--share: 41%"><strong>TCP</strong><small>41%</small></span><span style="--share: 28%"><strong>TLS</strong><small>28%</small></span><span style="--share: 17%"><strong>DNS</strong><small>17%</small></span><span style="--share: 9%"><strong>UDP</strong><small>9%</small></span><span style="--share: 5%"><strong>OTHER</strong><small>5%</small></span>
-              </div>
+              <div class="telemetry-empty"><strong>No ingress or egress measurements</strong><p>No sensor is connected here. An empty chart cannot establish that your network is idle or safe.</p><button class="control-button" type="button" data-jump="missions">Review local dashboard setup →</button></div>
             </section>
 
             <section class="panel posture-panel" aria-labelledby="posture-title">
-              <div class="panel-heading"><div><p class="panel-kicker">CONTROL STATE</p><h2 id="posture-title">Safety posture</h2></div><span class="posture-seal">INTACT</span></div>
+              <div class="panel-heading"><div><p class="panel-kicker">CONTROL STATE</p><h2 id="posture-title">Site capabilities</h2></div><span class="posture-seal">STATIC</span></div>
               <div class="posture-ring" aria-label="No host control is exposed"><div><strong>0</strong><span>host control paths</span></div></div>
-              <ul class="posture-list"><li><span>Payload intake</span><strong>OFF</strong></li><li><span>External egress</span><strong>OFF</strong></li><li><span>Firewall apply</span><strong>REFUSED</strong></li><li><span>Model authority</span><strong>NONE</strong></li></ul>
+              <ul class="posture-list"><li><span>Network feed</span><strong>NOT CONNECTED</strong></li><li><span>Host health</span><strong>UNKNOWN</strong></li><li><span>Command execution</span><strong>NONE</strong></li><li><span>Model requests</span><strong>NONE</strong></li></ul>
             </section>
 
             <section class="panel event-panel" aria-labelledby="event-title">
               <div class="panel-heading event-heading"><div><p class="panel-kicker">SOURCE-QUALIFIED FEED</p><h2 id="event-title">Recent metadata</h2></div><div class="source-filter" id="source-filter" role="group" aria-label="Filter recent metadata by source"></div></div>
-              <div class="feed-toolbar"><label>Find metadata<input id="event-search" type="search" maxlength="120" placeholder="Source, type, or subject…" /></label><label>Disposition<select id="event-disposition"><option value="all">All dispositions</option><option value="accepted">Accepted</option><option value="context">Context</option><option value="review">Review</option></select></label><button id="reset-feed" class="text-button" type="button">Reset filters</button></div>
+              <div class="feed-toolbar"><label>Find metadata<input id="event-search" type="search" maxlength="120" placeholder="No network input connected" disabled /></label><label>Disposition<select id="event-disposition" disabled><option value="all">All dispositions</option><option value="accepted">Accepted</option><option value="context">Context</option><option value="review">Review</option></select></label><button id="reset-feed" disabled class="text-button" type="button">Reset filters</button></div>
               <p id="feed-count" class="panel-footnote"></p>
-              <div class="table-scroll"><table><thead><tr><th>Demo time (UTC)</th><th>Source</th><th>Metadata type</th><th>Route / subject</th><th>Disposition</th><th>Evidence</th></tr></thead><tbody id="event-feed"></tbody></table></div>
+              <div class="table-scroll"><table><thead><tr><th>Observed time (UTC)</th><th>Source</th><th>Metadata type</th><th>Route / subject</th><th>Disposition</th><th>Evidence</th></tr></thead><tbody id="event-feed"></tbody></table></div>
               <article id="event-inspector" class="event-inspector" hidden aria-labelledby="event-inspector-title"></article>
               <div id="feed-announcement" class="sr-only" aria-live="polite"></div>
             </section>
 
             <section class="panel detection-panel" aria-labelledby="detection-title">
-              <div class="panel-heading"><div><p class="panel-kicker">REVIEW QUEUE</p><h2 id="detection-title">Detection lanes</h2></div><span class="panel-meta">SYNTHETIC</span></div>
+              <div class="panel-heading"><div><p class="panel-kicker">REVIEW QUEUE</p><h2 id="detection-title">Detection lanes</h2></div><span class="panel-meta">UNAVAILABLE</span></div>
               <div id="detection-lanes" class="detection-lanes"></div>
             </section>
 
             <section class="panel source-panel" aria-labelledby="source-title">
               <div class="panel-heading"><div><p class="panel-kicker">INSTRUMENT CONTRIBUTION</p><h2 id="source-title">Metadata by source</h2></div><button class="text-button" type="button" data-jump="integrations">Inspect tools</button></div>
               <div id="source-bars" class="source-bars"></div>
-              <p class="panel-footnote">Values are deterministic preview samples, not observations from your network.</p>
+              <p class="panel-footnote">Packet, flow and alert units must remain separate. No measurements have been received.</p>
             </section>
           </div>
         </section>
 
         <section class="view" data-view-panel="evidence" aria-labelledby="evidence-title" hidden>
-          <div class="view-heading"><div><p class="eyebrow">Follow the evidence</p><h1 id="evidence-title" tabindex="-1">Evidence desk</h1><p>Trace a demo record to its source, run, completeness, and remaining proof. These examples illustrate review states; they are not runtime receipts.</p></div><div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>SYNTHETIC EXAMPLES</strong><small>No imported network evidence</small></span></div></div>
-          <div class="evidence-summary" aria-label="Example run quality"><article><strong>3</strong><span>Complete examples</span></article><article><strong>1</strong><span>Incomplete example</span></article><article><strong>1</strong><span>Unknown commit example</span></article><article><strong>0</strong><span>Live sources connected</span></article></div>
-          <div class="evidence-layout"><section class="panel"><div class="panel-heading"><div><p class="panel-kicker">RUN HISTORY</p><h2>Quality before quantity</h2></div></div><div id="run-list" class="run-list" aria-label="Select an example run"></div><p class="panel-footnote">A missing or incomplete source is never a clean bill of health. Counts are scoped to each example and are not added across packet, flow, and alert records.</p></section><article id="run-inspector" class="panel run-inspector" aria-live="polite"></article></div>
+          <div class="view-heading"><div><p class="eyebrow">Follow the evidence</p><h1 id="evidence-title" tabindex="-1">Evidence desk</h1><p>Review actual source, run and completeness information in your local MEGALODON dashboard. This hosted page has received no network evidence.</p></div><div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO RUNTIME RECEIPTS</strong><small>No imported network evidence</small></span></div></div>
+          <div class="evidence-summary" aria-label="Evidence availability"><article><strong>—</strong><span>Completeness unknown</span></article><article><strong>—</strong><span>Source health unknown</span></article><article><strong>—</strong><span>Commit state unknown</span></article><article><strong>0</strong><span>Site runtime connectors</span></article></div>
+          <div class="evidence-layout"><section class="panel"><div class="panel-heading"><div><p class="panel-kicker">RUN HISTORY</p><h2>Quality before quantity</h2></div></div><div id="run-list" class="run-list" aria-label="Runtime receipts unavailable"></div><p class="panel-footnote">A missing or incomplete source is never a clean bill of health. Packet, flow, and alert counts are different units.</p></section><article id="run-inspector" class="panel run-inspector" aria-live="polite"></article></div>
         </section>
 
         <section class="view" data-view-panel="integrations" aria-labelledby="integrations-title" hidden>
           <div class="view-heading">
-            <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Integration control room</h1><p>See whether each integration is installed, not installed, stale, or not checked. Inspect its reviewed setup source and copy commands to verify, uninstall, or reinstall it. MEGALODON receives only a bounded, source-qualified result where a contract exists.</p></div>
-            <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>UI contract preview</small></span></div>
+            <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Integration control room</h1><p>Record your installation notes and inspect a separately imported presence report. Review installation-specific diagnostics and lifecycle guidance. MEGALODON receives only a bounded, source-qualified result where a contract exists.</p></div>
+            <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>Operator reference</small></span></div>
           </div>
           <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
-          <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card exposes installed/not-installed status plus copy-only verify, uninstall, and reinstall commands. Setup links open reviewed project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Status: 0 installed · 0 not installed · 0 need recheck · 14 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
+          <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card separates self-reported installed/not-installed notes from imported PATH findings. Copyable commands are scoped to an installation method; unknown methods require vendor guidance. Setup links open project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Manual notes: 0 reported installed · 0 reported not installed · 0 need recheck · 14 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
           <section class="readiness-import panel" aria-labelledby="readiness-title"><div><p class="panel-kicker">LOCAL READINESS REPORT</p><h2 id="readiness-title">Bring a presence check into view</h2><p>Open a bounded report generated on your Linux host. It stays in this page's memory and is never uploaded. An executable found on PATH does not establish compatibility, service health, or permission to run it.</p></div><div class="readiness-actions"><label class="control-button" for="readiness-file">Choose JSON report</label><input id="readiness-file" type="file" accept="application/json,.json" /><button id="clear-readiness" class="text-button" type="button" disabled>Forget report</button></div><p class="readiness-candidate"><strong>Delivered in <a href="https://github.com/bartytime4life/MEGALODON/pull/241" target="_blank" rel="noopener noreferrer">PR #241</a>.</strong> On main@5583ac1 or later, run <code>python -m megalodon readiness &gt; megalodon-readiness.json</code>. This checks executable presence only; it does not start a tool or establish compatibility.</p><p id="readiness-feedback" role="status">No readiness report loaded.</p></section>
           <div class="integration-layout"><div id="integration-grid" class="integration-grid" aria-label="Companion tool interfaces"></div><aside id="tool-inspector" class="tool-inspector" aria-live="polite"></aside></div>
         </section>
@@ -152,7 +133,7 @@
           <div class="view-heading"><div><p class="eyebrow">Bounded workflows</p><h1 id="missions-title">Choose the work. See the boundary.</h1><p>Review an entry point, its evidence output, and the authority it deliberately does not receive.</p></div></div>
           <div class="mission-deck">
             <nav class="mission-list" aria-label="Select a MEGALODON workflow">
-              <button class="mission active" data-workflow="synthetic" aria-pressed="true"><span>01</span><strong>Synthetic core</strong><small>No capture tool or privilege</small></button>
+              <button class="mission active" data-workflow="dashboard" aria-pressed="true"><span>01</span><strong>Local dashboard</strong><small>Read your actual stored evidence</small></button>
               <button class="mission" data-workflow="replay" aria-pressed="false"><span>02</span><strong>Bounded replay</strong><small>JSONL into audit evidence</small></button>
               <button class="mission" data-workflow="offline" aria-pressed="false"><span>03</span><strong>Saved capture</strong><small>Isolated TShark adapter</small></button>
               <button class="mission" data-workflow="suricata" aria-pressed="false"><span>04</span><strong>Suricata review</strong><small>Optional local startup snapshot</small></button>
@@ -173,19 +154,19 @@
           <div class="boundary-grid">
             <article><span>01</span><h2>Metadata only</h2><p>No packet payloads or payload-derived hashes enter the core event model.</p></article>
             <article><span>02</span><h2>Loopback by default</h2><p>The read-only dashboard stays on <code>127.0.0.1:8787</code>; there is no write API.</p></article>
-            <article><span>03</span><h2>No egress</h2><p>No threat feed, cloud analytics, SIEM, SOAR, or external-model traffic is required.</p></article>
+            <article><span>03</span><h2>Local core operation</h2><p>The local core requires no cloud account. This hosted Site uses hosting/sign-in services; external setup links leave the Site.</p></article>
             <article><span>04</span><h2>Plan, do not apply</h2><p>Firewall proposals are inert. Live application remains explicitly refused.</p></article>
-            <article><span>05</span><h2>Bounded local AI</h2><p>Optional Qwen output is display-only, single-request, and carries no action authority.</p></article>
-            <article><span>06</span><h2>Finite evidence</h2><p>Input, time, state, storage, result, and retention operations use explicit ceilings.</p></article>
+            <article><span>05</span><h2>Bounded local AI</h2><p>The optional client allows one bounded loopback request with no action authority. The separately operated model process is not confined by those client checks.</p></article>
+            <article><span>06</span><h2>Finite evidence</h2><p>Implemented operations have documented bounds. The Suricata 512 MiB logical store ceiling is not a whole-disk or retention budget; retention remains operator-owned.</p></article>
           </div>
-          <section class="evidence-flow" aria-labelledby="evidence-flow-title"><div><p class="eyebrow">Evidence flow</p><h2 id="evidence-flow-title">One-way by design</h2></div><ol><li><span>01</span><strong>Bounded input</strong><small>Synthetic, JSONL, or approved adapter</small></li><li><span>02</span><strong>Fixed detection</strong><small>SYN flood, port scan, DNS tunneling</small></li><li><span>03</span><strong>Atomic evidence</strong><small>Audit ledger and terminal receipts</small></li><li><span>04</span><strong>Read-only review</strong><small>Local dashboard and private reports</small></li></ol></section>
+          <section class="evidence-flow" aria-labelledby="evidence-flow-title"><div><p class="eyebrow">Evidence flow</p><h2 id="evidence-flow-title">One-way by design</h2></div><ol><li><span>01</span><strong>Bounded input</strong><small>JSONL or a supported bounded adapter</small></li><li><span>02</span><strong>Fixed detection</strong><small>SYN flood, port scan, DNS tunneling</small></li><li><span>03</span><strong>Atomic evidence</strong><small>Audit ledger and terminal receipts</small></li><li><span>04</span><strong>Read-only review</strong><small>Local dashboard and private reports</small></li></ol></section>
         </section>
       </main>
     </div>
 
     <footer>
       <span><strong>MEGALODON</strong> · Malware Elimination Gateway And Layered Operations Defense Online Network</span>
-      <span>This Site is a read-only interface prototype. Repository contracts remain authoritative. All network examples are synthetic.</span>
+      <span>Hosted reference console; no network feed connected. Repository implementation and local runtime evidence remain separate.</span>
       <nav aria-label="Project documents"><a href="https://github.com/bartytime4life/MEGALODON/blob/main/README.md" target="_blank" rel="noreferrer">README</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/integration-hub.md" target="_blank" rel="noreferrer">Integration hub</a></nav>
     </footer>
   </body>

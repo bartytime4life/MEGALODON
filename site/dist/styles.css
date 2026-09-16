@@ -596,3 +596,12 @@ button:disabled { opacity: 0.5; cursor: default; }
   .evidence-fields dd { margin-bottom: 0.5rem; }
   .readiness-actions input { max-width: 100%; }
 }
+
+.telemetry-empty { min-height: 245px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 1rem; padding: 2rem; color: var(--muted, #b1c1d1); }
+.telemetry-empty strong { font-size: 1.25rem; color: #e0eef8; }
+.telemetry-empty p { max-width: 52ch; line-height: 1.6; }
+.lifecycle-choice { display: grid; gap: .6rem; margin-block: 1rem; font-size: .9rem; }
+.lifecycle-choice select { color: #e0eef8; background: #101e2b; border: 1px solid #456079; padding: .75rem; border-radius: .4rem; }
+.lifecycle-command p { padding: .7rem; font-size: .9rem; line-height: 1.5; }
+#detection-lanes, #source-bars, #run-list { padding: 1rem; line-height: 1.6; }
+button:disabled, input:disabled, select:disabled { opacity: .65; cursor: not-allowed; }

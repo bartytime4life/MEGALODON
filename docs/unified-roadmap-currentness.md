@@ -1,7 +1,7 @@
 # Unified roadmap: repository reconciliation
 
-Status: **OBSERVED baseline and PROPOSED sequence**, reviewed 2026-09-16.
-Repository basis: [`main@98a708ae7b7fece400f529acc70bbf9f4b48c4fb`](https://github.com/bartytime4life/MEGALODON/commit/98a708ae7b7fece400f529acc70bbf9f4b48c4fb).
+Status: **OBSERVED implementation baseline with remaining acceptance gates**, reviewed 2026-09-16.
+Repository basis: [`main@0e71cd41627fe2d2bffde7c2ddd222b475f73bc1`](https://github.com/bartytime4life/MEGALODON/commit/0e71cd41627fe2d2bffde7c2ddd222b475f73bc1).
 This record reconciles the supplied *MEGALODON — Unified Architecture, Safety,
 and Roadmap* with code, contracts, and live GitHub issue dispositions. It does
 not adopt the supplied document wholesale or replace the specification and
@@ -39,20 +39,22 @@ preserves the distinction between supplied bytes and publisher authenticity.
 
 ## Dependency-ordered delivery
 
-The following are **selected candidate slices**, not claims that their code is
-on this baseline. Each is delivered and reviewed separately.
+Slices 1–3 were delivered by merged PRs #239/#241/#243. Their presence is not
+installed-producer, visual or operational acceptance. This alignment pass removes
+the hosted demonstration data and corrects lifecycle guidance; its PR/deployment
+state is recorded separately in the source-alignment receipt.
 
 | Priority | Candidate | Acceptance boundary |
 | --- | --- | --- |
-| 1 | Read-only Suricata evidence projection | Read one existing private exact-schema store, preserve descriptor identity and snapshot locks, bound query and output work, validate source-qualified run/receipt/alert data, and return unavailable without partial rows on ambiguity. Never invoke a consumer or migrate/repair a store. |
-| 2 | Local tool-readiness report | Explicit operator command, fixed executable names, bounded PATH inspection, no execution/network. Executable presence is neither an installation attestation, compatibility proof, nor running-service health. Unchecked is distinct from missing. |
-| 3 | Defense Console evidence and readiness UX | Label synthetic preview records and their receipts, apply real filters to demo data, and accept only a bounded locally selected readiness report in browser memory. No upload, host probe, tool launch, control endpoint, or backend connection. Preserve the existing private Site identity. |
+| 1 | **Delivered #239:** read-only Suricata evidence projection | Read one existing private exact-schema store, preserve descriptor identity and snapshot locks, bound query and output work, validate source-qualified run/receipt/alert data, and return unavailable without partial rows on ambiguity. Never invoke a consumer or migrate/repair a store. |
+| 2 | **Delivered #241:** local tool-readiness report | Explicit operator command, fixed executable names, bounded PATH inspection, no execution/network. Executable presence is neither an installation attestation, compatibility proof, nor running-service health. Unchecked is distinct from missing. |
+| 3 | **Delivered #241/#243; corrected in this pass:** Defense Console readiness and lifecycle guidance | Hosted telemetry stays unavailable with no generated observations. Accept only a bounded locally selected readiness report in page memory; manual notes persist separately in browser storage. No upload, host probe, command execution or runtime data connection. Preserve private Site identity. |
 | 4 | Installed-producer acceptance | Operator-supplied authorized completed evidence, exact producer/version/platform, representative negative cases and timing/resource receipts. A green synthetic parser test or PATH presence report cannot satisfy this gate. |
 | 5 | Next adapter or AI field expansion | One closed versioned input proposal, privacy review, explicit source/count units, hostile fixtures, and independent review before broader operational claims. Keep Q2/Q4 and automation side effects proposed. |
 
 The local dashboard and hosted Defense Console are separate products. The
 dashboard may read bounded local evidence through explicit operator startup;
-the Site is a static interface prototype. A Site update or matching GitHub
+the Site is a static reference console with no runtime feed. A Site update or matching GitHub
 source mirror cannot establish local sensor liveness or operational acceptance.
 
 ## Evidence and ownership handoff

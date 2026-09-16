@@ -343,16 +343,16 @@ acceptance.
 
 | Stage | Smallest deliverable | Required exit evidence |
 | --- | --- | --- |
-| P0: review and baseline | Review this document and reconcile issue #3's independent-review control | Current ruleset and independent review evidence; retain strict required `test` gate and historical lifecycle receipts |
-| P1: Windows core | Complete #27 bounded platform capability/error handling and synthetic core tests; retain Linux behavior | Static catalog is prerequisite evidence only; exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
-| P2: analyzer compatibility | Complete #25 for a maintained Linux TShark package; separately review Windows offline design | Installed-tool synthetic fixtures; Windows design covers handle identity, reparse points, UNC/device/alternate-stream rejection, private ACLs, process-tree termination, pipe/resource bounds, no-egress containment; never remove Linux guards as a shortcut |
-| P3: optional sensor intake | **IMPLEMENTED BOUNDED SLICE:** closed #9/#24 envelope reader, operator-invoked atomic publication transaction, and explicit read-only commit reconciliation against the dedicated v1 store; no raw-EVE watcher or sensor control | Exact-head hosted review remains; next gates are installed-producer acceptance and separately reviewed read-only projection. Packet/flow/alert counts stay distinct |
+| P0: review and baseline | Review the current implementation and owner-adopted review workflow recorded in closed issue #3 | Current ruleset and independent review evidence; retain strict required `test` gate and historical lifecycle receipts |
+| P1: Windows core | Delivered: #27 platform capability/error handling and synthetic core handoff; obtain native Windows proof while retaining Linux behavior | Static catalog is prerequisite evidence only; exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
+| P2: analyzer compatibility | Obtain installed compatibility evidence for a maintained Linux TShark package; separately review Windows offline design | Installed-tool synthetic fixtures; Windows design covers handle identity, reparse points, UNC/device/alternate-stream rejection, private ACLs, process-tree termination, pipe/resource bounds, no-egress containment; never remove Linux guards as a shortcut |
+| P3: optional sensor intake | **IMPLEMENTED BOUNDED SLICE:** closed #9/#24 envelope reader, operator-invoked atomic publication transaction, and explicit read-only commit reconciliation against the dedicated v1 store; no raw-EVE watcher or sensor control | The separate bounded local-dashboard startup projection was delivered in #239. Installed-producer and operator acceptance remain; source delivery is not current sensor health. Packet/flow/alert counts stay distinct |
 | P4: response restoration decision | Separate design only if explicitly requested | Durable intent and terminal outcome, startup reconciliation, expiry and operator recovery, validated absolute executable and fixed environment, plus disposable-namespace failure, rollback, conflict, and PATH-hijack tests; no implementation until these are resolved |
 | P5: packaging/operations | Optional service/installer work after supported-platform evidence | Least-privilege account, update/retention/uninstall contracts and reproducible artifacts; no silent firewall/driver changes |
 
 A Windows scheduled cleanup is not automatically equivalent to nftables timeout
 sets. Until reliable finite expiry and recovery are proven, Windows response
-remains unavailable. Scheduling, model execution, SIEM/SOAR/cloud export,
+remains unavailable. Scheduling, background model execution, SIEM/SOAR/cloud export,
 remote dashboards, permanent blocks, and autonomous response are not authorized
 by any stage here. Green CI is not independent approval or deployment authority.
 

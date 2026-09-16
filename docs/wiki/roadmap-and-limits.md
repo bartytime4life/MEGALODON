@@ -2,8 +2,8 @@
 
 MEGALODON is a defensive MVP, not a finished enterprise IDS/IPS.
 
-See the [unified roadmap reconciliation](https://github.com/bartytime4life/MEGALODON/blob/1e9fb1a672573d2a64c6e205fd37e3f938390410/docs/unified-roadmap-currentness.md)
-for the 2026-09-16 source-document dispositions and dependency-ordered candidate
+See the [unified roadmap reconciliation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/unified-roadmap-currentness.md)
+for source-document dispositions, delivered slices and remaining acceptance
 work. Proposed AI/automation stages and licensing recommendations are not
 implemented capabilities or owner decisions.
 

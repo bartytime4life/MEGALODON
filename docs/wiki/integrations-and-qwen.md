@@ -14,7 +14,8 @@ Current workflow positions include:
 - Single-threaded Linux main-thread Suricata completed contract-envelope file
   reader, an explicit atomic transaction into one pre-created private store,
   and explicit read-only unknown-commit reconciliation; no raw-EVE converter,
-  watcher, dashboard projection, sensor, or IPS.
+  watcher, sensor, or IPS. A separate optional local-dashboard startup snapshot
+  is available through `dashboard --suricata-db`; it never invokes the consumer.
 - Optional Scapy metadata capture under its separate boundary.
 - nftables planning only; live application refused.
 - Manual ClamAV companion; no file/scan integration.
@@ -27,9 +28,9 @@ Adding a utility requires a capability status, one closed workflow, explicit inp
 The optional local-model path is an advisory feature, not an analyst replacement or autonomous defensive agent.
 
 - The provider boundary is the fixed numeric loopback address `127.0.0.1:11434`.
-- Application code must explicitly call the library with enablement; there is no CLI, startup call, polling loop, scheduler, or background worker.
+- The original run-count policy is an explicitly enabled library API. The separately versioned offline anomaly command can request one Qwen explanation with opt-in flags. Neither path starts a provider, polls it, schedules work or runs a background worker. See the [anomaly command](https://github.com/bartytime4life/MEGALODON/blob/0e71cd41627fe2d2bffde7c2ddd222b475f73bc1/docs/anomaly-triage.md).
 - Input is a closed, size-limited projection of already validated local metadata and receipts.
 - Outcomes are bounded: `ANSWER`, `ABSTAIN`, `DENY`, or `ERROR`.
-- The model cannot create evidence or detections, invoke tools, write the database, launch a process, inspect traffic, change the firewall, quarantine files, or remediate a host.
+- MEGALODON does not route model output into evidence, detections, tools, database writes, process launches, capture, firewall changes, quarantine or remediation. These application controls do not sandbox the separately operated Ollama/model process; provider filesystem access, egress and loaded-artifact identity require separate proof.
 
 See the [integration hub contract](../integration-hub.md) and [local Qwen advisory contract](../local-model-advisory-contract.md).
