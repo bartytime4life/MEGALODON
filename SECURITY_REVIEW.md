@@ -42,6 +42,22 @@ calculator from silently presenting its assumptions as observed evidence.
 An external consumer can still misrepresent a copied result; no mathematical
 ratio establishes an incident verdict or authority to act.
 
+## Read-only Suricata evidence view
+
+The optional `dashboard --suricata-db` path loads one bounded startup snapshot
+from the explicitly selected existing private v1 store. It preserves Linux
+non-root capability-free admission, descriptor identity, sidecar/WAL refusal and
+the OFD read lock. Recent runs are validated completely before any of their
+metadata is exposed; arbitrary stored text is bounded before Python decoding.
+The query-only authorizer, cooperative five-second budget and 64 KiB response
+ceiling fail closed with no partial rows. HTTP serves immutable owned bytes,
+so browser refresh cannot reread, migrate, repair, reconcile or write the store.
+A startup snapshot is not sensor liveness; stored totals are not validation of
+all historical rows, and producer-reported blocking is not a MEGALODON action.
+The budget cannot interrupt a stalled filesystem. Native producer acceptance
+and independent operational review remain separate. See the
+[projection contract](docs/suricata-evidence-projection.md).
+
 ## Findings and corrections
 
 The separately versioned [offline anomaly pipeline](docs/anomaly-pipeline.md)

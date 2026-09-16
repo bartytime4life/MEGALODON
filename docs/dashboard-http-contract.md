@@ -39,6 +39,7 @@ server an Internet-facing production service.
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
 | `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
+| `/api/suricata` | None | Not configured, unavailable, or one startup snapshot of the separate Suricata store |
 | `/api/reference/status` | None | Verified reference status or explicit unavailability |
 | `/api/reference/port` | Exactly `transport` and `port` | One bounded registration-context lookup |
 | `/api/reference/protocol` | Exactly `number` | One bounded IP-protocol registration lookup |
@@ -47,6 +48,47 @@ server an Internet-facing production service.
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
 parameters. Never encode an action or secret in a query string.
+
+## Optional Suricata evidence snapshot
+
+`megalodon dashboard --suricata-db /absolute/private/suricata.db` selects an
+existing dedicated Suricata store at process startup. The programmatic boundary
+is `serve(..., suricata_db=...)`. No browser query, form, refresh control, or
+endpoint can select another path, initialize a store, migrate it, ingest data,
+or request a new database snapshot. Unsafe dashboard binds are refused before
+this optional read.
+
+The bounded reader fully validates at most the five newest committed
+publications and their receipts, then projects at most 50 alerts in descending
+publication/record order into a response of at most 65,536 bytes. It uses a
+five-second cooperative deadline and fails closed when the safe read-only
+snapshot cannot be obtained. See [Suricata evidence projection](suricata-evidence-projection.md)
+for store, query, and evidence validation limits. Counts of older stored rows
+do not constitute full validation of those older publications.
+
+Before binding HTTP, the dashboard owns the result as immutable JSON bytes.
+`GET /api/suricata` serves those bytes without opening SQLite or holding a
+database lock. This route returns HTTP 200 for all three valid envelope
+statuses: `not_configured`, `unavailable`, and `available`; the status describes
+the optional evidence surface, not overall dashboard health. Missing or invalid
+optional evidence does not disable core telemetry. Nonempty query strings are
+rejected before route handling, including path, limit, and refresh parameters.
+Host, origin-form request, GET-only, no-store, and CSP controls remain in force.
+
+The browser requests the snapshot once during bootstrap through the existing
+bounded UTF-8 response reader. It revalidates the closed response, finite row
+counts, provenance references, numeric types and limits, timestamps, and action
+boundaries before rendering text nodes. Failure clears the optional panel;
+partial data is never displayed. This request does not join periodic telemetry
+refresh. A browser reload reads the same startup bytes; restart the dashboard
+under ordinary operator authority to obtain a new snapshot.
+
+The Analysis panel identifies these as external Suricata signature alerts.
+Every displayed row refers to its sensor, publication run, source record, and
+declared ruleset/version provenance. Suricata's producer-reported `blocked`
+value does not indicate a MEGALODON action; `action_status` remains
+`not_attempted`. These alerts never contribute to core detection/action
+counters, prove maliciousness, or attest that a sensor is installed or running.
 
 ## Qwen advisory receipt projection
 

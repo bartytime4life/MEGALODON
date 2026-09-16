@@ -33,7 +33,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `core-metadata` | Python + SQLite | Implemented | Validated metadata to local audit; observe-only default |
 | `offline-packet-metadata` | TShark/Wireshark | Optional implemented adapter | Fixed TShark argv and fields; private reports; no payload or live capture |
 | `offline-flow-metadata` | Zeek | Optional implemented importer | Closed `conn.log` profile; external producer; flow and packet counts stay separate |
-| `alert-metadata` | Suricata | Completed-file reader, durable transaction, and read-only reconciliation implemented | One completed private contract-envelope file can be validated, atomically written, and exactly reconciled after an unknown commit in one pre-created private store; no raw-EVE converter, watcher, dashboard, sensor, or IPS |
+| `alert-metadata` | Suricata | Completed-file reader, durable transaction, reconciliation, and startup evidence view implemented | One completed private contract-envelope file can be validated, atomically written, and exactly reconciled; an explicit read-only dashboard startup snapshot displays bounded stored external alerts. No raw-EVE converter, watcher, dashboard control, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
@@ -50,9 +50,11 @@ The Suricata record and reader contract gates are closed as prerequisites
 [#24](https://github.com/bartytime4life/MEGALODON/issues/24)). The Linux profile
 exposes the bounded Python file-reader API, an explicit transaction for its
 immutable publication, and an explicit read-only unknown-commit reconciliation
-API. Windows remains `contract_only`, and no platform gains
-producer management, raw-EVE conversion, background ingestion, dashboard, or
-action authority. `hub-plan` itself remains static and writes nothing.
+API. An optional [read-only startup projection](suricata-evidence-projection.md)
+serves bounded stored external-alert evidence through the local dashboard.
+Windows remains `contract_only`; no platform gains producer management, raw-EVE
+conversion, background ingestion, dashboard control, or action authority.
+`hub-plan` itself remains static and writes nothing.
 
 Each capability appears exactly once. Platform support status is derived from
 `megalodon.capabilities` instead of being copied into this registry. That
