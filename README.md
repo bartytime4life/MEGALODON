@@ -88,6 +88,10 @@ record delivery state; they do not override the checked-in contracts.
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
 | Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
+| Repository hygiene guard (tracked-file/secret-marker scan) | [`docs/repository-hygiene.md`](docs/repository-hygiene.md) |
+| Real-browser Linux dashboard acceptance evidence | [`docs/dashboard-browser-acceptance.md`](docs/dashboard-browser-acceptance.md) |
+| Optional Scapy capture failure reporting | [`docs/capture-failure-policy.md`](docs/capture-failure-policy.md) |
+| `python -m megalodon posture` command output | [`docs/local-posture.md`](docs/local-posture.md) |
 
 ## Choose a configuration
 
