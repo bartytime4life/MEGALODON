@@ -89,10 +89,14 @@ indexes and receipts, SQLite page amplification, and transaction side effects;
 they are an admission budget, not a claim that every filesystem write is
 predictable.
 
-The preflight must read `page_size`, `page_count`, `freelist_count`, and
-`max_page_count` before beginning a transaction. `page_size` must be 4,096 and
-`max_page_count` must be 131,072; a mismatch is `SCHEMA_INCOMPATIBLE`. Counts
-must be internally valid, and
+The preflight must use the same future consumer connection to require
+`page_size=4096`, set `PRAGMA max_page_count=131072`, verify that the returned
+limit is exactly 131,072, and then read `page_count` and `freelist_count`, all
+before beginning a transaction. SQLite does not persist `max_page_count` for a
+future connection, so relying on the initializer or a prior connection is
+forbidden. A page-size mismatch is `SCHEMA_INCOMPATIBLE`; failure to bind the
+fixed ceiling, an already-oversized store, invalid counts, or insufficient
+headroom is `STORAGE_CAPACITY`. Counts must be internally valid, and
 `131072 - (page_count - freelist_count)` must be at least
 `reservation_pages`. The containing filesystem must also report at least
 `reservation_bytes` available. Insufficient or unavailable capacity evidence is
@@ -100,8 +104,8 @@ must be internally valid, and
 The checks remain advisory against a concurrent filesystem race, so SQLite
 write failures still fail closed under the transaction rules.
 
-This contract does not alter the explicit initializer, migrate an existing
-file, reserve operating-system disk space, or select a purge schedule. Retention
+This contract does not alter the explicit initializer, persist a page ceiling,
+migrate an existing file, reserve operating-system disk space, or select a purge schedule. Retention
 and capacity admission are separate gates; reaching the ceiling stops new
 consumption rather than deleting evidence. Ordinary application startup must
 not create, initialize, repair, resize, or purge this store implicitly.

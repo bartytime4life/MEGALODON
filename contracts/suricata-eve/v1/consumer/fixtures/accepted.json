@@ -27,6 +27,7 @@
       "unknown_commit_requires_reconciliation": true,
       "blind_retry_after_unknown": false,
       "capacity_check_before_begin": true,
+      "capacity_limit_set_and_verified_each_connection": true,
       "ordinary_startup_migration": false,
       "runtime_schema_migration_included": false
     },

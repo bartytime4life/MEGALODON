@@ -121,6 +121,7 @@
         "unknown_commit_requires_reconciliation",
         "blind_retry_after_unknown",
         "capacity_check_before_begin",
+        "capacity_limit_set_and_verified_each_connection",
         "ordinary_startup_migration",
         "runtime_schema_migration_included"
       ],
@@ -150,6 +151,9 @@
           "const": false
         },
         "capacity_check_before_begin": {
+          "const": true
+        },
+        "capacity_limit_set_and_verified_each_connection": {
           "const": true
         },
         "ordinary_startup_migration": {

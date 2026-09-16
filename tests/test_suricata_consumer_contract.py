@@ -489,6 +489,7 @@ def test_policy_is_exact_transactional_and_not_runtime():
         "unknown_commit_requires_reconciliation": True,
         "blind_retry_after_unknown": False,
         "capacity_check_before_begin": True,
+        "capacity_limit_set_and_verified_each_connection": True,
         "ordinary_startup_migration": False,
         "runtime_schema_migration_included": False,
     }
@@ -520,6 +521,30 @@ def test_capacity_contract_is_fixed_bounded_and_separate_from_retention():
     policy = ACCEPTED["policy"]
     assert "retention" not in policy
     assert "purge" not in policy
+
+
+def test_capacity_page_limit_is_bound_on_every_sqlite_connection(tmp_path):
+    path = tmp_path / "capacity.db"
+    first = sqlite3.connect(path)
+    try:
+        assert first.execute("PRAGMA page_size").fetchone()[0] == STORE_PAGE_SIZE_BYTES
+        assert first.execute(
+            f"PRAGMA max_page_count={STORE_MAX_PAGES}"
+        ).fetchone()[0] == STORE_MAX_PAGES
+        first.execute("CREATE TABLE fixture (value INTEGER)")
+        first.commit()
+    finally:
+        first.close()
+
+    reopened = sqlite3.connect(path)
+    try:
+        assert reopened.execute("PRAGMA page_size").fetchone()[0] == STORE_PAGE_SIZE_BYTES
+        assert reopened.execute("PRAGMA max_page_count").fetchone()[0] != STORE_MAX_PAGES
+        assert reopened.execute(
+            f"PRAGMA max_page_count={STORE_MAX_PAGES}"
+        ).fetchone()[0] == STORE_MAX_PAGES
+    finally:
+        reopened.close()
 
 
 @pytest.mark.parametrize("case", ACCEPTED["receipts"], ids=lambda c: c["id"])

@@ -81,6 +81,15 @@
     "code": "INPUT_CONTRACT"
   },
   {
+    "id": "capacity-limit-not-bound-per-connection",
+    "seed": "policy",
+    "path": ["transaction", "capacity_limit_set_and_verified_each_connection"],
+    "operation": "set",
+    "value": false,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
     "id": "committed-count-mismatch",
     "seed": "two-record-committed",
     "path": ["normalized_alert_count"],
