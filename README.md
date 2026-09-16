@@ -998,7 +998,7 @@ staged design.
 ## Development status and remaining evidence
 
 Historical tickets in this selected table retain their closed dispositions;
-issue #221 is the active durable-consumer delivery record for this revision.
+issues #196, #221, and #231 were read back as closed/completed on 2026-09-16.
 Closure records a bounded disposition, not every operational property named in
 an original issue. Review live GitHub state before acting because branches,
 checks, reviews, and remaining evidence can change.
@@ -1011,7 +1011,7 @@ checks, reviews, and remaining evidence can change.
 | [#212 — durable-consumer contract](https://github.com/bartytime4life/MEGALODON/issues/212) | Closed contract delivery: transactional policy and receipts, accepted/rejected fixtures, and synthetic SQLite rollback/reconciliation oracle | Operational acceptance, migration, dashboard projection, sensor operation, IPS, or response |
 | [#215 — durable-store schema](https://github.com/bartytime4life/MEGALODON/issues/215) | Closed delivery: explicit create-only production schema initializer and read-only exact-layout validator | Existing-store migration, retention, dashboard projection, sensor operation, IPS, or response |
 | [#221 — durable-consumer capacity and transaction](https://github.com/bartytime4life/MEGALODON/issues/221) | Fixed 512 MiB/no-freelist-credit capacity policy and one atomic publication transaction with replay checks and exact commit readback | CLI/background entry point, dashboard projection, installed-producer and operational acceptance |
-| [#231 — commit-unknown reconciliation](https://github.com/bartytime4life/MEGALODON/issues/231) | This revision adds an explicit read-only API with exact committed/absence proof and fail-closed indeterminate results | CLI/background entry point, dashboard projection, installed-producer and operational acceptance |
+| [#231 — commit-unknown reconciliation](https://github.com/bartytime4life/MEGALODON/issues/231) | Closed delivery: explicit read-only API with exact committed/absence proof, fail-closed indeterminate results, and descriptor-pinned OFD snapshot locking | CLI/background entry point, dashboard projection, installed-producer and operational acceptance |
 | [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Closed `completed`: one prepared-host UID-1000 header-only probe passed at [`main@7ad539c`](https://github.com/bartytime4life/MEGALODON/commit/7ad539ccd33687725d18ee8a8cedcc84073c3609) with `/usr/bin/tshark` from Wireshark 4.2.2 package `4.2.2-1.1build3` | Arbitrary-capture containment, live capture, installation authority, or compatibility of another release/revision |
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed `completed`: deterministic bounded synthetic evaluation and evidence-quality reporting are on `main` | Representative accuracy, calibrated thresholds, or operational interpretation |
 | [#27 — Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Closed `completed`: the Linux-preserving Windows capability and acceptance handoff is recorded | Native Windows, NTFS ACL, browser, and exact-platform execution receipts |
@@ -1020,13 +1020,18 @@ checks, reviews, and remaining evidence can change.
 | [#66 — dashboard read isolation](https://github.com/bartytime4life/MEGALODON/issues/66) | Closed `completed`: a least-data reader validates private storage and constrains SQL to the dashboard projection | Native Windows ACL evidence or remote dashboard authority |
 | [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Closed `completed`: per-event evidence commits, terminal reasons, rollback behavior, and bounded orphan reconciliation are on `main` | Exactly-once intake, native power-loss recovery, alert lifecycle, or delivery |
 | [#68 — whole-service resource bounds](https://github.com/bartytime4life/MEGALODON/issues/68) | Closed `completed`: detector accounting, storage high-water refusal, Scapy lifecycle bounds, and finite retention batches are on `main` | Installed-Scapy loss evidence, native long-running exhaustion results, selected retention values, or notifier behavior |
-| [#196 — POSIX ingestion deadline](https://github.com/bartytime4life/MEGALODON/issues/196) | Open: the current bounded slice adds an optional source-lifetime alarm, fixed failure receipt, blocking-stdin proof, cleanup-order tests, and refusal to replace an active process timer | Windows/portable interruption, uninterruptible native/kernel stalls, whole-command deadlines, installed-capture loss evidence, and sustained native capacity |
+| [#196 — POSIX ingestion deadline](https://github.com/bartytime4life/MEGALODON/issues/196) | Closed delivery: optional source-lifetime alarm, fixed failure receipt, blocking-stdin proof, cleanup-order tests, and refusal to replace an active process timer | Windows/portable interruption, uninterruptible native/kernel stalls, whole-command deadlines, installed-capture loss evidence, and sustained native capacity |
 | [#69 — CI dependency and artifact hygiene](https://github.com/bartytime4life/MEGALODON/issues/69) | Closed `completed`: repository hygiene, hashed constrained CI inputs, isolated-build constraints, and exact-tree checks are on `main` | Automatic update trust, release provenance, or independent approval |
 | [#154 — Qwen Airlock preflight](https://github.com/bartytime4life/MEGALODON/issues/154) and [#165 — literal-loopback provider boundary](https://github.com/bartytime4life/MEGALODON/issues/165) | Closed `completed`: pinned metadata-only admission and the bounded internal `127.0.0.1:11434` provider adapter are on `main` | An operator-verified model artifact/Ollama lifecycle, CLI or dashboard exposure, persistence, background execution, or action authority |
 
 Issue and branch records are coordination and evidence surfaces, not release or
 deployment approval. A closed ticket must not be read as broader authority than
 its recorded acceptance and non-effects.
+
+The [unified roadmap reconciliation](docs/unified-roadmap-currentness.md)
+separates supplied architecture proposals from this pinned implementation,
+including capacity versus retention, provider containment, and native-platform
+acceptance.
 
 ## Validation
 

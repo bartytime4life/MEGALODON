@@ -69,9 +69,19 @@ beyond the isolated report.
 | Capture permission | Declined at install (`wireshark-common/install-setuid boolean false`) | Not requested; this adapter never touches `/dev/bpf*` |
 | First-run friction | None | Homebrew-installed binaries can carry a quarantine attribute; record the exact Gatekeeper/notarization state observed rather than instructing operators to disable Gatekeeper |
 
-No change to the adapter's parsing or validation logic should be needed —
-this is a path-resolution and packaging acceptance question, not a new
-adapter. The existing bounded-input, fail-closed behavior applies as-is.
+This is not only a path-resolution or packaging change. The current adapter
+explicitly requires Linux and verifies capability state through
+`/proc/self/status` in `megalodon/offline/common.py`; TShark receives its pinned
+input as `/proc/self/fd/<fd>` in `megalodon/offline/tshark.py`. Those interfaces
+are not a macOS admission or descriptor-identity contract.
+
+M2 first requires a separately reviewed native design for unprivileged
+admission, private descriptor-bound input, child-process ownership and cleanup,
+timeouts, and output/resource limits. Reusing the closed metadata parser may be
+possible, but neither its reuse nor a Homebrew executable proves those controls.
+Do not weaken the Linux gate or substitute an unpinned pathname to make a macOS
+probe pass. Until exact-platform negative fixtures and installed-tool receipts
+exist, M2 remains not started and the adapter must refuse macOS.
 
 ## M3 — native live capture (deferred, not proposed)
 
