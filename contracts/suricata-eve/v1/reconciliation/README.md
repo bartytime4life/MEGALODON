@@ -16,6 +16,11 @@ transaction, complete partial evidence, retain or delete rows, launch Suricata
 or another process, use a network or model, mutate a dashboard, or execute a
 response action.
 
+Reconciliation requires the initialized rollback-journal database header and no
+coordination sidecars before SQLite opens the file. A persistent-WAL header is
+refused from the pinned descriptor before SQLite can create `-wal` or `-shm` in
+the writable owner directory.
+
 ## Result invariant
 
 The result vocabulary is closed:

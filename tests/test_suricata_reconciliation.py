@@ -333,6 +333,114 @@ def test_sidecar_is_indeterminate_and_not_removed(tmp_path):
     assert sidecar.read_bytes() == b"synthetic"
 
 
+def test_persistent_wal_mode_is_refused_before_sqlite_can_create_sidecars(tmp_path):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+    finally:
+        connection.close()
+    wal = Path(f"{path}-wal")
+    shm = Path(f"{path}-shm")
+    assert path.read_bytes()[18:20] == b"\x02\x02"
+    assert not wal.exists()
+    assert not shm.exists()
+
+    result = _reconcile(path, publication)
+
+    assert result["disposition"] == "indeterminate"
+    assert result["failure_code"] == "DATABASE_IDENTITY"
+    assert not wal.exists()
+    assert not shm.exists()
+
+
+@pytest.mark.parametrize("committed", [False, True])
+def test_success_requires_deadline_check_after_final_identity_verification(
+    tmp_path, monkeypatch, committed
+):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+    if committed:
+        assert suricata_consumer.consume_publication(
+            path, publication, consumer_attempt_id="unknown-attempt"
+        )["status"] == "committed"
+    events = []
+    real_open = suricata_consumer._open_suricata_store_reader
+
+    @contextmanager
+    def observed(*args, **kwargs):
+        with real_open(*args, **kwargs) as reader:
+            real_verify = reader.verify_identity
+
+            def verify():
+                events.append("verify")
+                real_verify()
+
+            reader.verify_identity = verify
+            yield reader
+
+    def remaining(_started):
+        events.append("remaining")
+        return 30_000
+
+    monkeypatch.setattr(suricata_consumer, "_open_suricata_store_reader", observed)
+    monkeypatch.setattr(suricata_consumer, "_remaining_milliseconds", remaining)
+
+    result = _reconcile(path, publication)
+
+    assert result["disposition"] == ("committed" if committed else "not_committed")
+    assert events[-2:] == ["verify", "remaining"]
+
+
+@pytest.mark.parametrize("committed", [False, True])
+def test_identity_verification_returning_after_deadline_is_indeterminate(
+    tmp_path, monkeypatch, committed
+):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+    if committed:
+        assert suricata_consumer.consume_publication(
+            path, publication, consumer_attempt_id="unknown-attempt"
+        )["status"] == "committed"
+    real_open = suricata_consumer._open_suricata_store_reader
+    expired = False
+    verify_calls = 0
+    final_verify_call = 4 if committed else 3
+
+    @contextmanager
+    def delayed_final_verify(*args, **kwargs):
+        with real_open(*args, **kwargs) as reader:
+            real_verify = reader.verify_identity
+
+            def verify():
+                nonlocal expired, verify_calls
+                verify_calls += 1
+                real_verify()
+                if verify_calls == final_verify_call:
+                    expired = True
+
+            reader.verify_identity = verify
+            yield reader
+
+    real_remaining = suricata_consumer._remaining_milliseconds
+
+    def remaining(started):
+        if expired:
+            raise suricata_consumer._TransactionTimeout
+        return real_remaining(started)
+
+    monkeypatch.setattr(
+        suricata_consumer, "_open_suricata_store_reader", delayed_final_verify
+    )
+    monkeypatch.setattr(suricata_consumer, "_remaining_milliseconds", remaining)
+
+    result = _reconcile(path, publication)
+
+    assert result["disposition"] == "indeterminate"
+    assert result["failure_code"] == "TRANSACTION_TIMEOUT"
+
+
 def test_read_error_is_indeterminate_not_absent(tmp_path, monkeypatch):
     path = _store(tmp_path)
     publication = _publication(tmp_path)

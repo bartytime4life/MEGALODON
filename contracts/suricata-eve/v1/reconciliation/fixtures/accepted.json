@@ -8,6 +8,7 @@
     "read_only": true,
     "max_reconciliation_ms": 30000,
     "caller_tunable_limits": false,
+    "sqlite_journal_mode": "rollback",
     "automatic_retry": false,
     "store_creation": false,
     "schema_migration": false,
