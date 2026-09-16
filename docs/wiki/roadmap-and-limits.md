@@ -2,6 +2,11 @@
 
 MEGALODON is a defensive MVP, not a finished enterprise IDS/IPS.
 
+See the [unified roadmap reconciliation](../unified-roadmap-currentness.md)
+for the 2026-09-16 source-document dispositions and dependency-ordered candidate
+work. Proposed AI/automation stages and licensing recommendations are not
+implemented capabilities or owner decisions.
+
 ## Current limits
 
 The project does not currently provide an authenticated remote UI, arbitrary rule authoring, threat-feed or SIEM/SOAR integration, distributed sensor management, automatic retention, production rollback orchestration, active scheduler, unattended response, a Suricata sensor/raw-EVE watcher, or a reconciliation CLI/background worker. It does provide explicit operator-invoked APIs to transact one validated immutable Suricata publication and read-only reconcile an unknown commit.

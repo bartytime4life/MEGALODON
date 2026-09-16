@@ -74,8 +74,10 @@ delivers this file-only read and validation boundary.
 `megalodon.offline.suricata_consumer.consume_publication` now supplies the next
 operator-invoked step: an owned immutable snapshot, durable complete-run replay
 identity, atomic alert/receipt commit, and exact readback in one pre-created v1
-store. Commit-unknown reconciliation and dashboard projection remain later
-gates.
+store. `reconcile_publication` now provides explicit read-only unknown-commit
+classification with exact evidence readback and a descriptor-pinned OFD snapshot
+lock. Dashboard projection remains a later gate at the
+[2026-09-16 reconciliation baseline](unified-roadmap-currentness.md).
 
 The first runtime sensor family should remain the already contracted Suricata
 EVE alert subset, not a broad multi-tool import framework. That choice leverages
