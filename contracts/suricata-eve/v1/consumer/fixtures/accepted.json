@@ -1,8 +1,8 @@
 {
   "policy": {
     "schema_version": "suricata-eve-consumer-policy-v1",
-    "status": "proposed_contract_only",
-    "runtime_implemented": false,
+    "status": "implemented",
+    "runtime_implemented": true,
     "input_record_contract": "external-alert-v1",
     "input_receipt_contract": "suricata-eve-reader-receipt-v1",
     "output_receipt_contract": "suricata-eve-consumer-receipt-v1",
@@ -142,6 +142,37 @@
         "transaction_status": "rolled_back",
         "reconciliation_status": "not_required",
         "failure_code": "STORAGE_ERROR"
+      }
+    },
+    {
+      "id": "duplicate-detected-after-begin-rolled-back",
+      "receipt": {
+        "schema_version": "suricata-eve-consumer-receipt-v1",
+        "consumer_policy_version": "suricata-eve-consumer-policy-v1",
+        "reader_receipt_version": "suricata-eve-reader-receipt-v1",
+        "consumer_attempt_id": "fixture-attempt-replay-race",
+        "status": "rejected",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "8.0.1",
+          "version_basis": "operator_declared",
+          "sensor_id": "fixture-sensor",
+          "run_id": "fixture-run-a",
+          "ruleset_id": "synthetic-rules-v1",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 2,
+        "normalized_alert_count": 2,
+        "producer_blocked_count": 1,
+        "normalized_batch_bytes": 1291,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "rolled_back",
+        "replay_status": "duplicate",
+        "transaction_status": "rolled_back",
+        "reconciliation_status": "not_required",
+        "failure_code": "REPLAY"
       }
     },
     {

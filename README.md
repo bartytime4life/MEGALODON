@@ -76,7 +76,7 @@ record delivery state; they do not override the checked-in contracts.
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
 | Local Qwen advisory boundary | [`megalodon/qwen_advisory.py`](megalodon/qwen_advisory.py), [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), and [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md) |
 | Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
-| Suricata record, bounded-reader, and proposed durable-consumer gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), and [`consumer`](contracts/suricata-eve/v1/consumer/README.md) |
+| Suricata record, bounded-reader, and durable-consumer gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), and [`consumer`](contracts/suricata-eve/v1/consumer/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 
@@ -95,6 +95,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
 | Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
 | Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; immutable alert batch and receipt | Main thread of a single-threaded Linux process, reusing the guarded `SIGALRM` deadline; one private file, no raw-EVE conversion, persistence, dashboard projection, sensor launch, or IPS |
+| Persist one validated Suricata publication | `megalodon.offline.suricata_consumer.consume_publication`; explicit pre-created private store | One fixed-capacity local transaction with durable replay identity, terminal receipt, and exact commit readback. No migration, retention, watcher, CLI, dashboard projection, sensor launch, model call, network access, or response action |
 | Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
@@ -152,7 +153,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata completed-file reader | Single-threaded Linux main-thread Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
-| Suricata durable storage foundation | Proposed closed transaction, replay-registry, receipt, and reconciliation contract; synthetic oracle; and explicit create-only, exact-schema SQLite initializer/validator. No production consumer, existing-store migration, startup hook, or dashboard projection |
+| Suricata durable evidence | Closed transaction/replay/receipt contract; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; and exact readback. No existing-store migration, reconciliation command, startup hook, watcher, retention, or dashboard projection |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
@@ -171,7 +172,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Qwen through a local Ollama provider | Optional manual advisory explanation only | Operator-installed and separately run; the adapter and one-shot anomaly command never configure a service, background monitor, remote endpoint, tool-use mode, or automatic response |
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
-| Suricata | Optional external producer for the closed alert envelope | The Linux file reader never invokes or requires the Suricata binary; it accepts only the separately prepared contract envelope |
+| Suricata | Optional external producer for the closed alert envelope | The Linux file reader and durable consumer never invoke or require the Suricata binary; they accept only the separately prepared contract envelope/publication |
 | ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
 | osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
 | nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
@@ -205,7 +206,7 @@ MEGALODON's capability status.
 | Scapy | Optional Linux live-metadata capture extra | Packet crafting/injection or unattended capture |
 | TShark | Implemented Linux-only offline packet adapter at /usr/bin/tshark | Live-capture permission or a public capture directory |
 | Zeek | Implemented offline importer for the closed conn.log profile | A service, cluster, or automatic producer |
-| Suricata | Implemented Linux reader for one completed private contract-envelope file; no raw-EVE converter | Rule updates, sensor mode, IPS mode, or its service |
+| Suricata | Implemented Linux reader plus explicit transaction into one pre-created private durable store; no raw-EVE converter | Rule updates, sensor mode, IPS mode, watcher, or its service |
 | ClamAV | Manual companion only; no file/result/quarantine integration | A daemon, automatic update, quarantine, or deletion |
 | osquery | Proposed endpoint-inventory work; no importer | A daemon, schedule, query pack, or remote enrollment |
 | nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
@@ -266,9 +267,9 @@ guide. Do not install it from this recipe: Ubuntu packaging can add its
 signature-update service, which exceeds MEGALODON's no-service/no-egress
 boundary.
 
-### 2. External producer packages are not installed by this guide
+### 2. External producer packages remain operator-managed
 
-Suricata and osquery remain **unintegrated** companion tools. This repository
+Suricata and osquery remain **unmanaged** companion tools. This repository
 does not approve adding third-party APT repositories, signing keys, package
 sources, services, rule updaters, schedules, or configuration files for either
 tool. Their packages can create service units and other host state even when a
@@ -278,9 +279,10 @@ If a separate, approved evaluation needs one of these tools, use that tool's
 current vendor documentation and a host-specific package/repository review.
 Record the exact repository, signing-key fingerprint, package version, service
 state, and removal/rollback plan outside MEGALODON. Do not infer runtime
-support from an installed binary: MEGALODON has only a completed contract-envelope
-file reader and an explicit create-only durable-store schema initializer for
-Suricata, with no sensor integration or durable consumer;
+support from an installed binary: MEGALODON has a completed contract-envelope
+file reader, an explicit create-only durable-store schema initializer, and an
+operator-invoked transaction for one immutable publication. It still has no
+sensor integration, raw-EVE conversion, watcher, scheduler, or IPS path;
 osquery remains proposed with no MEGALODON reader, importer, scheduler, or enrollment.
 
 ### 3. Build Zeek as a private, non-service producer
@@ -987,18 +989,20 @@ staged design.
 
 ## Development status and remaining evidence
 
-Every historical delivery ticket in this selected table is closed. Closure
-records the ticket's bounded disposition; it does not prove every operational
-property named in the original issue. Review live GitHub state before acting
-because branches, checks, reviews, and remaining evidence can change.
+Historical tickets in this selected table retain their closed dispositions;
+issue #221 is the active durable-consumer delivery record for this revision.
+Closure records a bounded disposition, not every operational property named in
+an original issue. Review live GitHub state before acting because branches,
+checks, reviews, and remaining evidence can change.
 
 | Issue | Delivered or closed disposition | Still not established |
 | --- | --- | --- |
 | [#3 — independent-review enforcement](https://github.com/bartytime4life/MEGALODON/issues/3) | Closed `not planned`: the owner-directed, AI-reviewed workflow retains strict CI and explicit PR-numbered owner merge decisions | A server-enforced independent-human approval floor |
 | [#7 — dashboard acceptance](https://github.com/bartytime4life/MEGALODON/issues/7) | Closed `completed`: loopback, privacy, read-only, HTTP, and headed-browser acceptance are on `main` | Native Windows and screen-reader acceptance |
-| [#9 — Suricata EVE contract](https://github.com/bartytime4life/MEGALODON/issues/9) and [#24 — bounded reader contract](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed `completed`: closed record schemas, bounded-reader policy, fixtures, receipts, oracles, and the narrow Linux completed-file reader are on `main` | Raw-EVE conversion, durable persistence, sensor operation, IPS, or response |
-| [#212 — durable-consumer contract](https://github.com/bartytime4life/MEGALODON/issues/212) | Contract delivery: proposed transactional policy and receipts, accepted/rejected fixtures, and synthetic SQLite rollback/reconciliation oracle in this revision | A production migration or consumer, ordinary-startup migration, dashboard projection, sensor operation, IPS, or response |
-| [#215 — durable-store schema](https://github.com/bartytime4life/MEGALODON/issues/215) | This revision adds an explicit create-only production schema initializer and read-only exact-layout validator | Consumer writes, replay decisions, existing-store migration, retention, dashboard projection, sensor operation, IPS, or response |
+| [#9 — Suricata EVE contract](https://github.com/bartytime4life/MEGALODON/issues/9) and [#24 — bounded reader contract](https://github.com/bartytime4life/MEGALODON/issues/24) | Closed `completed`: closed record schemas, bounded-reader policy, fixtures, receipts, oracles, and the narrow Linux completed-file reader are on `main` | Raw-EVE conversion, installed-producer compatibility, sensor operation, IPS, or response |
+| [#212 — durable-consumer contract](https://github.com/bartytime4life/MEGALODON/issues/212) | Closed contract delivery: transactional policy and receipts, accepted/rejected fixtures, and synthetic SQLite rollback/reconciliation oracle | Operational acceptance, migration, dashboard projection, sensor operation, IPS, or response |
+| [#215 — durable-store schema](https://github.com/bartytime4life/MEGALODON/issues/215) | Closed delivery: explicit create-only production schema initializer and read-only exact-layout validator | Existing-store migration, retention, dashboard projection, sensor operation, IPS, or response |
+| [#221 — durable-consumer capacity and transaction](https://github.com/bartytime4life/MEGALODON/issues/221) | This revision binds the fixed 512 MiB/no-freelist-credit capacity policy and implements one atomic publication transaction with replay checks and exact commit readback | Separate commit-unknown reconciliation API, CLI/background entry point, dashboard projection, installed-producer and operational acceptance |
 | [#25 — installed TShark compatibility](https://github.com/bartytime4life/MEGALODON/issues/25) | Closed `completed`: one prepared-host UID-1000 header-only probe passed at [`main@7ad539c`](https://github.com/bartytime4life/MEGALODON/commit/7ad539ccd33687725d18ee8a8cedcc84073c3609) with `/usr/bin/tshark` from Wireshark 4.2.2 package `4.2.2-1.1build3` | Arbitrary-capture containment, live capture, installation authority, or compatibility of another release/revision |
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed `completed`: deterministic bounded synthetic evaluation and evidence-quality reporting are on `main` | Representative accuracy, calibrated thresholds, or operational interpretation |
 | [#27 — Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Closed `completed`: the Linux-preserving Windows capability and acceptance handoff is recorded | Native Windows, NTFS ACL, browser, and exact-platform execution receipts |
@@ -1058,11 +1062,11 @@ checks, and skips for every configuration claim.
 config/                      conservative typed defaults and fixed-rule reference
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
 contracts/alert-lifecycle/v1/ inert alert lifecycle schema, fixtures, and contract notes
-contracts/suricata-eve/v1/   alert, bounded-reader, and proposed durable-consumer contracts
+contracts/suricata-eve/v1/   alert, bounded-reader, and durable-consumer contracts
 docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI
-megalodon/offline/           isolated TShark/Zeek adapters, Suricata file reader, and private reports
+megalodon/offline/           isolated TShark/Zeek adapters, Suricata reader/consumer, and private reports
 megalodon/reference/         pinned offline IANA context and synthetic evaluation corpus
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls
@@ -1075,9 +1079,9 @@ This is a defensive MVP, not a finished enterprise IDS/IPS. The fixed detections
 are simple heuristics. There is no authenticated remote UI, arbitrary rule
 authoring, threat-feed or SIEM/SOAR integration, distributed sensor management,
 automatic retention job, production rollback orchestration, model execution,
-active scheduler, Suricata durable-consumer runtime, alert acknowledgement/resolution/
-escalation lifecycle, notification dispatcher, or continuous capture-health
-monitor on `main`.
+active scheduler, Suricata watcher/sensor control or commit-reconciliation
+command, alert acknowledgement/resolution/escalation lifecycle, notification
+dispatcher, or continuous capture-health monitor on `main`.
 
 The bundled IANA snapshot is not runtime service discovery or a vulnerability
 feed, and it has no automatic update path. The synthetic corpus tests deterministic

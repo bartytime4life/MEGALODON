@@ -1,10 +1,10 @@
 [
   {
-    "id": "runtime-not-implemented",
+    "id": "runtime-disabled",
     "seed": "policy",
     "path": ["runtime_implemented"],
     "operation": "set",
-    "value": true,
+    "value": false,
     "stage": "schema",
     "code": "INPUT_CONTRACT"
   },

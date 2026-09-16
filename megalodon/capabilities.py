@@ -58,13 +58,13 @@ _COMPONENTS = (
     {
         "id": "suricata",
         "software": "Suricata",
-        "integration": "completed_file_alert_reader",
+        "integration": "completed_file_alert_reader_and_durable_consumer",
         "platforms": {
             "linux": "implemented",
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The single-threaded Linux main-thread API can read one completed private contract envelope file; no EVE converter, sensor, ruleset, persistence, dashboard, or IPS path exists.",
+        "boundary": "The single-threaded Linux main-thread API reads one completed private contract envelope file, and an explicit API can atomically persist that validated publication to one pre-created private store; no EVE converter, sensor, ruleset manager, watcher, dashboard, or IPS path exists.",
     },
     {
         "id": "scapy",

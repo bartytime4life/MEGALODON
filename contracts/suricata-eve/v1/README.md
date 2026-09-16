@@ -1,16 +1,18 @@
 # Suricata EVE alert contract v1
 
 **Status: ADOPTED RECORD CONTRACT / BOUNDED LINUX READER AVAILABLE /
-PROPOSED DURABLE-CONSUMER CONTRACT / EXPLICIT STORE INITIALIZER.**
+BOUNDED DURABLE CONSUMER IMPLEMENTED / EXPLICIT STORE INITIALIZER.**
 The record gate (#9) and bounded-reader design gate (#24) are closed on `main`.
 The separate `megalodon.offline.suricata` module implements only the contracted
-completed-file reader. This directory does not install or run Suricata, download
-rules, capture packets, start a scheduler, persist Suricata telemetry in the
-production store, modify the dashboard, or authorize a firewall action. The
-[`consumer/`](consumer/README.md) subdirectory is a proposed contract and
-synthetic SQLite oracle. The separate production-owned
-`megalodon.suricata_store` module can explicitly create and validate the
-reserved SQLite layout, but provides no consumer writes or migration.
+completed-file reader. This directory does not install or run Suricata,
+download rules, capture packets, start a scheduler, modify the dashboard, or
+authorize a firewall action. The [`consumer/`](consumer/README.md) subdirectory
+is the adopted transaction contract and synthetic SQLite oracle. The
+production-owned `megalodon.suricata_store` module explicitly creates and
+validates the reserved SQLite layout, and
+`megalodon.offline.suricata_consumer` writes one validated immutable
+publication through the fixed transaction. Neither path migrates an existing
+store.
 
 The historical authoring base was `dc35854a4bb9a4d353b3832cb18d5dee780d244c`
 in `bartytime4life/MEGALODON`; the checked-in schemas, fixtures, tests, and this
@@ -24,11 +26,10 @@ The first dependency-closed slice defines an input envelope, a separate
 byte-framing examples. The [`reader/`](reader/README.md) subdirectory adds the
 bounded-source/run contract, completed-run receipts, synthetic fixture mutations,
 and an independent in-memory publish oracle for the runtime reader. The
-[`consumer/`](consumer/README.md) subdirectory separately closes a proposed
-transaction, replay-registry, terminal-receipt, and reconciliation contract for
-a future durable consumer. Its explicit store initializer reserves the exact
-tables and uniqueness constraints without implementing that consumer. All fixture
-addresses and rule labels are synthetic;
+[`consumer/`](consumer/README.md) subdirectory closes and implements the
+transaction, replay-registry, terminal-receipt, and commit-readback boundary.
+Its explicit store initializer reserves the exact tables and uniqueness
+constraints. All fixture addresses and rule labels are synthetic;
 forbidden-content tests use null/empty markers, not packet payloads or hashes.
 
 `schema.json` uses JSON Schema Draft 2020-12 with local-only references:
@@ -55,14 +56,14 @@ The repository's test-only `_validator()` in `tests/test_suricata_contract.py`
 passes an explicit checker with IPv4/IPv6 validation and a calendar checker for
 the already shape-constrained UTC timestamps. That checker is not a standalone
 RFC 3339 validator: the timestamp shape and additional section 3 semantics remain
-mandatory. Runtime code MUST NOT import test helpers. A future runtime consumer
-must independently implement and review its configuration and failure boundary.
+mandatory. Runtime code MUST NOT import test helpers. The implemented consumer
+uses its own closed validation and failure boundary.
 
 `tests/test_suricata_formats.py` checks required checker presence and behavior,
 positive/negative IPv4/IPv6 and calendar values, both complete positive-envelope
 entry points, annotation-only behavior, and deterministic missing/no-op checker
 negative controls. Run it alongside the existing conformance suite. Passing
-these tests neither implements a production consumer nor validates a sensor.
+these format tests alone neither validates the durable consumer nor a sensor.
 
 The documentary field baseline is the Suricata **8.0.1** EVE documentation [1,2],
 read September 7, 2026. This is not an installation recommendation or a claim
@@ -144,10 +145,11 @@ Schemas cannot enforce run-wide uniqueness, file ownership, permissions,
 symlink safety, immutable snapshots, total input size, bounded streaming, or
 failure atomicity. The adopted [bounded reader contract](reader/README.md) fixes
 the filesystem, quota, and publication requirements, and the implemented Linux
-reader enforces that narrow completed-file boundary. The proposed
-[durable-consumer contract](consumer/README.md) fixes a later transactional
-boundary without implementing it. The ordinal bound still does not prove
-enforcement of the independent 10,000-record run limit.
+reader enforces that narrow completed-file boundary. The
+[durable-consumer contract](consumer/README.md) fixes and implements the
+explicit transactional boundary. The ordinal bound still does not prove
+enforcement of the independent 10,000-record run limit outside that reader and
+consumer path.
 
 ## 4. Normalization and action separation
 
@@ -177,10 +179,10 @@ expiry, command, endpoint, policy object, or execution capability exists here.
 The profile does not add an automatic planning or enforcement path.
 
 Repeated alerts may be replays or multiple matches on the same traffic. The
-schema intentionally does not claim deduplication, idempotent persistence, or
-independent evidence. Source/run/ordinal equality alone is not proof of
-non-duplication across runs. A later importer must define run-level identity and
-replay behavior before writing any durable store; no content hash is introduced.
+schema intentionally does not claim content-level deduplication or independent
+evidence. The durable consumer prevents replay of an exact complete eight-field
+run identity; relabeling the same content as a new run remains a new operator
+claim. No content hash is introduced.
 Raw addresses and provenance can be sensitive: accepting this local record is
 not anonymization, report-sharing approval, or permission for external egress.
 
@@ -198,36 +200,36 @@ From the repository root, with the existing test extra installed:
 
 ```bash
 python -m pytest -q tests/test_suricata_contract.py tests/test_suricata_formats.py \\
-  tests/test_suricata_reader_contract.py tests/test_suricata_consumer_contract.py
+  tests/test_suricata_reader_contract.py tests/test_suricata_consumer_contract.py \\
+  tests/test_suricata_consumer_preflight.py tests/test_suricata_consumer_runtime.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 ```
 
 The focused tests refuse socket creation and subprocess launch, keep schema
 resolution local, assert closed objects, and exercise the record, reader, and
-proposed consumer conformance examples.
+consumer conformance/runtime examples.
 Passing them proves these fixtures and guards in the tested environment only.
 It does not prove a production ingestion boundary, sensor detection quality,
 rule authenticity, compatibility, privacy on arbitrary EVE logs, or deployment
 safety. The existing full suite and safe CI smoke checks remain required and
 unchanged; green tests are not independent human review.
 
-## 6. Next gate, not enabled by these contracts
+## 6. Remaining gates
 
 The record and reader schemas, fixtures, tests, and Linux reader are present on
-`main`; issues #9 and #24 are closed as their bounded gates. Issue #212 tracks
-the separate durable-consumer contract slice in `consumer/`. These artifacts
-do not supply the independent review or repository-control evidence still tracked in
-issue #3, and they grant no installation, capture, ruleset, or enforcement
+`main`; issues #9 and #24 are closed as their bounded gates. Issue #212
+delivered the contract slice; issue #221 tracks capacity and transaction
+delivery. This revision implements the bounded transaction without supplying
+independent review, installed-producer compatibility, or operational
+acceptance, and it grants no installation, capture, ruleset, or enforcement
 authority.
 
-A later, separately authorized change may implement the durable consumer only
-by conforming to the adopted reader and proposed consumer contracts and
-supplying a reviewed production migration, failure-atomicity, capacity,
-deadline, replay, commit-unknown, and reconciliation evidence. A pinned
-supported producer profile and the source-file/privacy boundary also remain
-required. Installed-tool compatibility, rule acquisition, dashboard projection,
-host context, scheduler execution, and response remain out of scope.
+The next consumer gate is a separate explicit reconciliation API for unknown
+commit disposition. A pinned supported producer profile and the
+source-file/privacy boundary also remain required. Rule acquisition, dashboard
+projection, host context, scheduler execution, sensor operation, and response
+remain out of scope.
 Existing dashboard work tracked by issue #7 is not a dependency of this contract.
 
 ## References

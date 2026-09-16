@@ -68,6 +68,7 @@ These are repository controls, not instructions for attacking a live system.
 | Storage and run integrity | Confirm failed writes, interruption, full-disk behavior, incompatible schemas, and partial runs cannot be mistaken for reconciled success | Per-event event/detection/action/link/counter commits, post-commit detector state, explicit exhaustion/limit/interruption/failure reasons, uncertain-commit poisoning, bounded orphan readback, pinned reconciliation, and verified v1/v2 backup migration are implemented; power-loss, exactly-once, capacity, and independent-review claims remain open | `tests/test_service_acceptance.py`, `tests/test_storage_failures.py`, `tests/test_storage_schema.py`, `tests/test_ingestion_runs.py` |
 | Offline evidence | Confirm hostile files, links, path replacement, analyzer output, and resource pressure cannot escape the offline boundary | Fixed executable and arguments, descriptor-relative validation, finite file/record/pipe/runtime limits, private redacted atomic reports, no egress or firewall path | `tests/test_offline.py`, `tests/test_dashboard.py` |
 | External alert file reader | Confirm hostile paths, record framing, schema mutations, replay, stalled reads, time/resource pressure, and source changes cannot publish partial or over-authoritative results | Descriptor-retained no-follow open, private-file ownership/mode checks, main-thread alarm deadline, closed fields, fixed quotas/diagnostics, immutable all-or-nothing publication, no network/process/persistence/action path | `tests/test_suricata_reader.py`, `tests/test_suricata_reader_contract.py` |
+| External alert durable consumer | Confirm caller-backed proxy mutation, duplicate identity, attempt collision, store replacement, schema drift, capacity pressure, timeout, partial write, lost commit acknowledgement, or false readback cannot claim a clean commit | Consumer-owned closed snapshot, descriptor-pinned exact existing store, no-freelist-credit 512 MiB ceiling, one `BEGIN IMMEDIATE`, in-transaction replay checks, atomic run/alert/receipt rows, cooperative deadline, and exact post-commit readback; uncertainty requires reconciliation | `tests/test_suricata_consumer_preflight.py`, `tests/test_suricata_consumer_runtime.py`, `tests/test_suricata_store.py` |
 | Resource pressure | Confirm configured counts, windows, state, files, subprocess output, API results, and reports fail closed at their limits | Existing finite validation and per-component caps; whole-service storage and overload acceptance remains open in [#68](https://github.com/bartytime4life/MEGALODON/issues/68) | `tests/test_detector.py`, `tests/test_detector_acceptance.py`, `tests/test_config.py`, `tests/test_offline.py` |
 | Future integrations | Confirm a contract cannot silently become runtime execution or new authority | Static capabilities and hub plans; automation and remaining proposed integrations stay inert until separate runtime gates pass | `tests/test_capabilities.py`, `tests/test_hub.py`, `tests/test_automation_contract.py` |
 
@@ -75,7 +76,9 @@ The blueprint dependency order still applies: finish the trust kernel—firewall
 containment, dashboard read isolation, transaction integrity, and resource
 bounds—before adding broader runtime integrations. The first bounded Suricata
 file-reader slice does not authorize persistence, UI projection, sensor control,
-or response. AI integration is not an earlier shortcut.
+or response. The separate durable consumer now authorizes only the exact local
+transaction described above; it grants no watcher, sensor, UI, or response
+authority. AI integration is not an earlier shortcut.
 
 ## Future AI integration gates
 

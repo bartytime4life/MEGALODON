@@ -292,7 +292,7 @@ operational acceptance for MEGALODON.
 ## Deliberate limits
 
 This slice does not add a scheduler, notifier, alert acknowledgement/resolution
-lifecycle, Suricata runtime importer, network lookup, firewall application,
+lifecycle, Suricata sensor or raw-EVE watcher, network lookup, firewall application,
 automatic retry, process lease, storage quota, retention job, or distributed
 coordination. A crash after the SQLite commit but before detector-state commit
 can cause a fresh process to rebuild state only from later inputs; the database

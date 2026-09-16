@@ -1,19 +1,22 @@
 # Transactional Suricata durable-consumer contract v1
 
-**Status: PROPOSED CONTRACT, SYNTHETIC ORACLE, AND EXPLICIT STORE INITIALIZER.**
+**Status: IMPLEMENTED BOUNDED TRANSACTION, SYNTHETIC ORACLE, AND EXPLICIT
+STORE INITIALIZER. RECONCILIATION API AND DASHBOARD PROJECTION REMAIN DEFERRED.**
 
-This directory defines the next gates after the implemented bounded Linux
-reader. `megalodon.suricata_store` now explicitly creates and validates
-the dedicated v1 SQLite layout, but it exposes no alert-write or consumer API.
-There is still no production consumer, migration of an existing store, command,
-dashboard projection, watcher, scheduler, sensor process, network access, or
-response action.
+This directory defines the durable boundary after the bounded Linux reader.
+`megalodon.suricata_store` explicitly creates and validates the dedicated v1
+SQLite layout. `megalodon.offline.suricata_consumer.consume_publication`
+validates one immutable reader publication, opens one explicitly selected
+existing store, applies the fixed capacity gate, and atomically commits its run
+identity, normalized alerts, and terminal receipt. There is no migration of an
+existing store, command, dashboard projection, watcher, scheduler, sensor
+process, network access, model request, retention action, or response action.
 
 The reader publishes one immutable `external-alert-v1` batch and one
 `suricata-eve-reader-receipt-v1`. Its replay view is caller supplied and is not
-durable. A future consumer may close that gap only by committing the validated
-batch, the complete run identity, and one terminal consumer receipt in a single
-local SQLite transaction.
+durable. The consumer closes that gap by committing the validated batch, the
+complete run identity, and one terminal consumer receipt in a single local
+SQLite transaction.
 
 ## 1. Input boundary
 
@@ -33,7 +36,7 @@ hashes, rule labels, credentials, and low-level exception text are forbidden.
 
 ## 2. Transaction and replay invariant
 
-The future implementation must use one `BEGIN IMMEDIATE` transaction to insert:
+The implementation uses one `BEGIN IMMEDIATE` transaction to insert:
 
 1. the complete eight-field run identity under a uniqueness constraint;
 2. every normalized alert, keyed by that run and its record index; and
@@ -58,7 +61,8 @@ uniqueness constraint remains the final replay backstop.
 | Receipt status | Transaction | Durable write | Replay | Meaning |
 | --- | --- | --- | --- | --- |
 | `committed` | `committed` | `committed` | `recorded` | Exact batch, registry identity, and receipt passed readback |
-| `rejected` | `not_started` | `not_attempted` | `duplicate` | Complete run identity already exists |
+| `rejected` | `not_started` | `not_attempted` | `duplicate` | Pre-transaction replay check found the complete run identity |
+| `rejected` | `rolled_back` | `rolled_back` | `duplicate` | Authoritative in-transaction replay check found a race |
 | `failed` | `not_started` | `not_attempted` | `not_recorded` | Preflight failure wrote no durable rows |
 | `failed` | `rolled_back` | `rolled_back` | `not_recorded` | Post-begin, pre-commit failure left no durable rows |
 | `reconciliation_required` | `unknown` | `unknown` | `unknown` | Commit disposition cannot yet be claimed |
@@ -70,12 +74,18 @@ source data or storage details, and are at most 64 ASCII bytes.
 ## 4. Fixed limits
 
 The v1 policy inherits the reader publication ceiling: 10,000 alerts and
-16,777,216 compact normalized UTF-8 bytes. A future transaction and its required
-readback have a fixed 30,000 ms monotonic budget. These are contract limits, not
-caller-tunable settings.
+16,777,216 compact normalized UTF-8 bytes. Store validation, preflight, lock
+wait, transaction, and required readback share a fixed 30,000 ms monotonic
+cooperative deadline. The connection uses the remaining time as its SQLite busy
+timeout, installs a VM progress handler, and checks the deadline before and
+after transaction stages. A single SQLite or kernel filesystem call can return
+after the deadline under uninterruptible I/O; such a late return never becomes
+a verified success. It rolls back before commit or returns
+`reconciliation_required` after commit uncertainty. This is a bounded consumer
+policy, not a hard process-termination SLA. Limits are not caller tunable.
 
 The v1 logical store ceiling is 131,072 pages of exactly 4,096 bytes, or
-536,870,912 bytes. Before `BEGIN IMMEDIATE`, a future consumer must compute the
+536,870,912 bytes. Before `BEGIN IMMEDIATE`, the consumer computes the
 batch reservation as:
 
 ```text
@@ -89,16 +99,17 @@ indexes and receipts, SQLite page amplification, and transaction side effects;
 they are an admission budget, not a claim that every filesystem write is
 predictable.
 
-The preflight must use the same future consumer connection to require
+The preflight uses the same consumer connection to require
 `page_size=4096`, set `PRAGMA max_page_count=131072`, verify that the returned
 limit is exactly 131,072, and then read `page_count` and `freelist_count`, all
 before beginning a transaction. SQLite does not persist `max_page_count` for a
 future connection, so relying on the initializer or a prior connection is
 forbidden. A page-size mismatch is `SCHEMA_INCOMPATIBLE`; failure to bind the
 fixed ceiling, an already-oversized store, invalid counts, or insufficient
-headroom is `STORAGE_CAPACITY`. Counts must be internally valid, and
-`131072 - (page_count - freelist_count)` must be at least
-`reservation_pages`. The containing filesystem must also report at least
+headroom is `STORAGE_CAPACITY`. Counts must be internally valid. Freelist pages
+are recorded for diagnosis but receive no admission credit:
+`131072 - page_count` must be at least `reservation_pages`. The containing
+filesystem must also report at least
 `reservation_bytes` available. Insufficient or unavailable capacity evidence is
 `STORAGE_CAPACITY`, writes nothing, and reports `not_started`/`not_attempted`.
 The checks remain advisory against a concurrent filesystem race, so SQLite
@@ -112,9 +123,9 @@ not create, initialize, repair, resize, or purge this store implicitly.
 
 ## 5. Explicit production schema initializer
 
-`megalodon.suricata_store.initialize_suricata_store` is the only writer
-in the production module. An operator must call it explicitly with a new path.
-It creates an owner-private database and atomically reserves:
+`megalodon.suricata_store.initialize_suricata_store` remains the only schema
+writer. An operator must call it explicitly with a new path. It creates an
+owner-private database and atomically reserves:
 
 - one run table with unique complete eight-field run identity and attempt ID;
 - one alert table keyed by run and positive source-record index; and
@@ -130,11 +141,12 @@ there is no implicit upgrade or ordinary-startup hook. This is storage
 reservation evidence, not a consumer transaction, replay decision, retention
 policy, or operational migration.
 
-## 6. Synthetic conformance oracle
+## 6. Runtime and synthetic conformance
 
 `tests/test_suricata_consumer_contract.py` validates the closed schema and
 fixtures with local-only references. Its in-memory SQLite oracle models the
-future transaction boundary and proves:
+transaction boundary. `tests/test_suricata_consumer_runtime.py` exercises the
+production implementation against the explicit store. Together they prove:
 
 - an exact two-record publication commits once;
 - the implemented reader's immutable publication is accepted directly;
@@ -146,9 +158,9 @@ future transaction boundary and proves:
   `reconciliation_required` until explicit readback; and
 - a retry before reconciliation cannot duplicate the batch.
 
-The oracle is test code, not a reusable database layer. Production code must not
-import it, and its passing tests are not runtime, migration, installed-Suricata,
-operational, release, or deployment evidence.
+The oracle is test code, not a reusable database layer, and production code does
+not import it. Passing local tests is not installed-Suricata, operational,
+release, deployment, or independent-review evidence.
 
 From the repository root:
 
@@ -158,15 +170,17 @@ python -m pytest -q \
   tests/test_suricata_formats.py \
   tests/test_suricata_reader_contract.py \
   tests/test_suricata_consumer_contract.py \
+  tests/test_suricata_consumer_preflight.py \
+  tests/test_suricata_consumer_runtime.py \
   tests/test_suricata_store.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 ```
 
-## 7. Next gate
+## 7. Remaining gates
 
-A runtime consumer requires a separate issue and PR. That work must use this
-exact reserved schema, implement fixed diagnostics and capacity/deadline
-behavior, prove rollback and commit-unknown reconciliation under injected
-failures, preserve database identity and private permissions, and pass
-exact-head review. Dashboard projection remains a later read-only slice.
+The runtime transaction does not supply the separate reconciliation API needed
+to resolve an unknown commit, and it intentionally has no CLI or background
+entry point. Exact-head hosted checks and independent review remain required.
+After those gates, the next dependency-ordered implementation is an explicit
+reconciliation API; dashboard projection remains a later read-only slice.
