@@ -398,6 +398,13 @@ td:nth-child(4) { font-family: "SFMono-Regular", Consolas, monospace; }
 .presence-controls .missing.active { color: var(--red); border-color: rgba(255,142,136,0.45); background: rgba(255,142,136,0.07); }
 .presence-controls .unchecked.active { color: var(--ink); border-color: var(--line-strong); }
 .verification-panel > small { display: block; margin-top: 0.5rem; color: var(--dim); font-size: 0.7rem; }
+.lifecycle-panel { display: grid; gap: 0.55rem; margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--line); }
+.lifecycle-panel > p { margin: 0; color: var(--muted); font-size: 0.72rem; }
+.lifecycle-command { display: grid; grid-template-columns: 5.8rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0.6rem; border: 1px solid var(--line); background: #02080c; }
+.lifecycle-command > span { color: var(--dim); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.lifecycle-command code { min-width: 0; overflow-wrap: anywhere; color: #c7f7ff; font: 0.66rem/1.45 "SFMono-Regular", Consolas, monospace; }
+.lifecycle-command button { padding: 0.38rem 0.5rem; color: var(--cyan); border: 1px solid rgba(78,220,243,0.28); background: rgba(78,220,243,0.05); font-size: 0.68rem; cursor: pointer; }
+.lifecycle-panel > small { color: var(--dim); font-size: 0.7rem; line-height: 1.45; }
 .acquire-boundary { margin-top: 0.65rem !important; padding: 0.55rem; color: var(--amber) !important; border-left: 2px solid var(--amber); background: rgba(244,196,105,0.035); font-size: 0.64rem !important; }
 .acquire-boundary strong { color: var(--amber); }
 .clipboard-fallback { position: fixed; top: -1000px; left: -1000px; width: 1px; height: 1px; opacity: 0; }
@@ -583,6 +590,8 @@ button:disabled { opacity: 0.5; cursor: default; }
   .evidence-summary { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
   .evidence-summary article { padding: 0.8rem; }
   .install-trustline { flex-wrap: wrap; }
+  .lifecycle-command { grid-template-columns: 1fr auto; }
+  .lifecycle-command > span { grid-column: 1 / -1; }
   .evidence-fields { grid-template-columns: 1fr; gap: 0.15rem; }
   .evidence-fields dd { margin-bottom: 0.5rem; }
   .readiness-actions input { max-width: 100%; }

@@ -271,6 +271,95 @@ const toolAcquisition = {
   }
 };
 
+// Lifecycle commands are displayed for operator review only. The Site never
+// executes them, inspects the host, or infers that a package manager is safe.
+const lifecycleCommands = {
+  core: {
+    verify: "python3 -c 'import megalodon, sqlite3; print(\"MEGALODON core installed\")'",
+    uninstall: "python3 -m pip uninstall -y megalodon-defense",
+    reinstall: "python3 -m pip install --force-reinstall --no-deps .",
+    note: "Run from the MEGALODON checkout, preferably inside an operator-owned virtual environment."
+  },
+  tshark: {
+    verify: "test -x /usr/bin/tshark && /usr/bin/tshark --version",
+    uninstall: "sudo apt-get remove --purge -y tshark",
+    reinstall: "sudo apt-get install --reinstall -y tshark",
+    note: "Ubuntu package path; confirm the package source and capture-permission policy first."
+  },
+  zeek: {
+    verify: "if command -v zeek >/dev/null; then zeek --version; elif test -x /opt/zeek/bin/zeek; then /opt/zeek/bin/zeek --version; else exit 1; fi",
+    uninstall: "sudo apt-get remove --purge -y zeek",
+    reinstall: "sudo apt-get install --reinstall -y zeek",
+    note: "Ubuntu package path. Source or /opt/zeek installs require the matching vendor removal procedure."
+  },
+  suricata: {
+    verify: "command -v suricata >/dev/null && suricata --build-info",
+    uninstall: "sudo apt-get remove --purge -y suricata suricata-update",
+    reinstall: "sudo apt-get install --reinstall -y suricata suricata-update",
+    note: "Ubuntu package path; preserve and review external configuration and rule-data retention separately."
+  },
+  scapy: {
+    verify: "python3 -c 'import scapy; print(scapy.__version__)'",
+    uninstall: "python3 -m pip uninstall -y scapy",
+    reinstall: "python3 -m pip install --upgrade --force-reinstall 'scapy>=2.5,<3'",
+    note: "Use the same operator-owned Python environment as MEGALODON. This does not grant capture privilege."
+  },
+  nftables: {
+    verify: "if command -v nft >/dev/null; then nft --version; elif test -x /usr/sbin/nft; then /usr/sbin/nft --version; else exit 1; fi",
+    uninstall: "sudo apt-get remove --purge -y nftables",
+    reinstall: "sudo apt-get install --reinstall -y nftables",
+    note: "Package lifecycle only; do not treat installation as permission to apply MEGALODON plans."
+  },
+  clamav: {
+    verify: "command -v clamscan >/dev/null && clamscan --version",
+    uninstall: "sudo apt-get remove --purge -y clamav clamav-daemon clamav-freshclam",
+    reinstall: "sudo apt-get install --reinstall -y clamav clamav-daemon clamav-freshclam",
+    note: "Ubuntu package path. Review daemon and signature-update behavior before accepting service changes."
+  },
+  osquery: {
+    verify: "command -v osqueryi >/dev/null && osqueryi --version",
+    uninstall: "sudo apt-get remove --purge -y osquery",
+    reinstall: "sudo apt-get install --reinstall -y osquery",
+    note: "Package names and repository provenance vary; confirm the signed vendor package first."
+  },
+  qwen: {
+    verify: "command -v ollama >/dev/null && ollama list | grep -Eiq '^qwen[^[:space:]]*[[:space:]]' && echo 'Ollama + Qwen installed'",
+    uninstall: "ollama rm qwen",
+    reinstall: "ollama pull qwen2.5:7b",
+    note: "Model lifecycle only. Pin and verify the model artifact digest before any advisory acceptance; the Site never contacts Ollama."
+  },
+  nmap: {
+    verify: "command -v nmap >/dev/null && nmap --version",
+    uninstall: "sudo apt-get remove --purge -y nmap",
+    reinstall: "sudo apt-get install --reinstall -y nmap",
+    note: "Ubuntu package path. MEGALODON still does not launch scans or select targets."
+  },
+  ossec: {
+    verify: "if test -x /var/ossec/bin/ossec-control || test -x /var/ossec/bin/ossec-agentd; then echo 'OSSEC installed'; else exit 1; fi",
+    uninstall: "sudo apt-get remove --purge -y ossec-hids ossec-hids-server ossec-hids-agent",
+    reinstall: "sudo apt-get install --reinstall -y ossec-hids ossec-hids-server ossec-hids-agent",
+    note: "Package names vary by OSSEC role and repository. Do not enroll an agent or enable active response from this Site."
+  },
+  greenbone: {
+    verify: "docker image ls --format '{{.Repository}}' | grep -Eq 'greenbone|openvas' && echo 'Greenbone images present'",
+    uninstall: "docker compose down --remove-orphans",
+    reinstall: "docker compose pull",
+    note: "Run only from the reviewed Greenbone compose project. Reinstall refreshes images; starting services remains an explicit operator decision."
+  },
+  zabbix: {
+    verify: "if command -v zabbix_server >/dev/null || command -v zabbix_agent2 >/dev/null || command -v zabbix_agentd >/dev/null || test -x /usr/sbin/zabbix_server || test -x /usr/sbin/zabbix_agent2 || test -x /usr/sbin/zabbix_agentd; then echo 'Zabbix installed'; else exit 1; fi",
+    uninstall: "sudo apt-get remove --purge -y zabbix-agent2 zabbix-agent zabbix-server-mysql",
+    reinstall: "sudo apt-get install --reinstall -y zabbix-agent2 zabbix-agent zabbix-server-mysql",
+    note: "Select the intended server or agent package before running; credentials, polling, and acknowledgements remain external."
+  },
+  nagios: {
+    verify: "if command -v nagios >/dev/null; then nagios --version; elif test -x /usr/local/nagios/bin/nagios; then /usr/local/nagios/bin/nagios --version; else exit 1; fi",
+    uninstall: "sudo apt-get remove --purge -y nagios4 nagios-plugins-basic",
+    reinstall: "sudo apt-get install --reinstall -y nagios4 nagios-plugins-basic",
+    note: "Ubuntu package path. Confirm the intended Core/plugin package and service policy before changing the host."
+  }
+};
+
 const workflows = {
   synthetic: {
     status: "Implemented", statusClass: "implemented", platform: "Linux reference · Windows evaluation", title: "Synthetic core demonstration",
@@ -347,7 +436,7 @@ const sourceOptions = [["all", "All"], ["core", "Core"], ["tshark", "TShark"], [
 const sourceToolIds = new Set(["core", "tshark", "zeek", "suricata", "scapy"]);
 const toolPresenceKey = "megalodon-tool-presence-v2";
 const toolPresenceValues = new Set(["unchecked", "installed", "missing"]);
-const toolPresenceLabels = { unchecked: "Not checked", installed: "Reported present", missing: "Reported missing", stale: "Recheck note" };
+const toolPresenceLabels = { unchecked: "Not checked", installed: "Installed · self-reported", missing: "Not installed · self-reported", stale: "Recheck required" };
 const presenceMaxAge = 7 * 24 * 60 * 60 * 1000;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const runExamples = [
@@ -389,6 +478,7 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const svgNS = "http://www.w3.org/2000/svg";
+const escapeHtml = (value) => String(value).replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
 
 function presenceFor(id) {
   const note = state.toolPresence[id];
@@ -416,7 +506,7 @@ function renderVerificationSummary() {
   const unchecked = integrations.length - installed - missing;
   const summary = $("#verification-summary");
   const stale = integrations.filter((item) => presenceFor(item.id) === "stale").length;
-  if (summary) summary.textContent = `Manual notes: ${installed} reported present · ${missing} reported missing · ${stale} need recheck · ${unchecked - stale} not checked`;
+  if (summary) summary.textContent = `Status: ${installed} installed · ${missing} not installed · ${stale} need recheck · ${unchecked - stale} not checked`;
 }
 
 function readinessLabel(id) {
@@ -651,7 +741,7 @@ function renderIntegrationGrid() {
     button.type = "button";
     button.className = `tool-card${state.selectedTool === item.id ? " active" : ""}`;
     button.setAttribute("aria-pressed", String(state.selectedTool === item.id));
-    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Manual note: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><span class="readiness-card-status">${readinessLabel(item.id)}</span><footer><span>${item.dataKind}</span><span>Inspect + get →</span></footer>`;
+    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Installation status: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><span class="readiness-card-status">${readinessLabel(item.id)}</span><footer><span>${item.dataKind}</span><span>Inspect + lifecycle →</span></footer>`;
     button.addEventListener("click", () => {
       state.selectedTool = item.id;
       renderIntegrationGrid();
@@ -665,6 +755,7 @@ function renderIntegrationGrid() {
 function renderToolInspector() {
   const item = integrations.find((candidate) => candidate.id === state.selectedTool) ?? integrations[0];
   const acquire = toolAcquisition[item.id];
+  const lifecycle = lifecycleCommands[item.id];
   const presence = presenceFor(item.id);
   const hasHudLane = sourceToolIds.has(item.id);
   $("#tool-inspector").innerHTML = `
@@ -691,7 +782,7 @@ function renderToolInspector() {
       <div class="verification-panel">
         <div class="verification-heading"><strong>Manual presence note</strong><span>${acquire.verificationLabel}</span></div>
         <p>Review and run this read-only command yourself. A successful result only supports this specific check; it does not verify compatibility or service health.</p>
-        <div class="verify-command"><code>${acquire.verificationCommand}</code><button type="button" data-copy-verify>Copy verify</button></div>
+      <div class="verify-command"><code>${acquire.verificationCommand}</code><button type="button" data-copy-verify>Copy verify</button></div>
         <div class="presence-controls" role="group" aria-label="Record ${item.name} manual presence note">
           <button type="button" class="installed${presence === "installed" ? " active" : ""}" data-set-presence="installed" aria-pressed="${presence === "installed"}">I found it</button>
           <button type="button" class="missing${presence === "missing" ? " active" : ""}" data-set-presence="missing" aria-pressed="${presence === "missing"}">Not found by me</button>
@@ -699,7 +790,13 @@ function renderToolInspector() {
         </div>
         <small>${state.toolPresence[item.id] ? `Self-reported ${new Date(state.toolPresence[item.id].checkedAt).toISOString()}. ` : ""}Saved only in this browser; recheck after 7 days. Manual notes are not verified installation evidence.</small>
       </div>
-      <p class="acquire-boundary"><strong>Operator action:</strong> this HUD opens setup guidance and copies verification text. It never probes the host or executes an installer.</p>
+      <div class="lifecycle-panel" aria-labelledby="lifecycle-title-${item.id}">
+        <div class="verification-heading"><strong id="lifecycle-title-${item.id}">Lifecycle commands</strong><span>Copy only · never executed here</span></div>
+        <p>Use these operator-reviewed reference commands to verify, uninstall, or reinstall this integration. Confirm the OS, package source, permissions, and data-retention impact before running one.</p>
+        ${["verify", "uninstall", "reinstall"].map((kind) => `<div class="lifecycle-command"><span>${kind === "verify" ? "Verify installed" : kind === "uninstall" ? "Uninstall" : "Reinstall"}</span><code>${escapeHtml(lifecycle[kind])}</code><button type="button" data-copy-lifecycle="${kind}">Copy</button></div>`).join("")}
+        <small>${escapeHtml(lifecycle.note)}</small>
+      </div>
+      <p class="acquire-boundary"><strong>Operator action:</strong> this HUD opens setup guidance and copies lifecycle text. It never probes the host or executes an installer, uninstaller, service command, or package manager.</p>
     </div>
     <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
     <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
@@ -714,6 +811,9 @@ function renderToolInspector() {
   if (copyVerify) copyVerify.addEventListener("click", async () => {
     await copyText(acquire.verificationCommand, copyVerify, "Copied");
   });
+  $$('[data-copy-lifecycle]').forEach((button) => button.addEventListener("click", async () => {
+    await copyText(lifecycle[button.dataset.copyLifecycle], button, "Copied");
+  }));
   $$('[data-set-presence]').forEach((button) => button.addEventListener('click', () => {
     setToolPresence(item.id, button.dataset.setPresence);
   }));
