@@ -164,11 +164,14 @@ def _create_private_database(
     except FileExistsError as exc:
         raise SuricataStoreError("SURICATA_STORE:EXISTING_DATABASE") from exc
     try:
+        if os.name == "posix":
+            os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
         _validate_private_database_stat(
             os.fstat(descriptor), writable=False, prefix="SURICATA_STORE"
         )
         return descriptor
     except Exception:
+        _discard_created_database(path, descriptor, directory_descriptor)
         _close_descriptor(descriptor)
         raise
 
