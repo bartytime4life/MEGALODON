@@ -219,14 +219,13 @@ unchanged; green tests are not independent human review.
 
 The record and reader schemas, fixtures, tests, and Linux reader are present on
 `main`; issues #9 and #24 are closed as their bounded gates. Issue #212
-delivered the contract slice; issue #221 tracks capacity and transaction
-delivery. This revision implements the bounded transaction without supplying
-independent review, installed-producer compatibility, or operational
+delivered the contract slice, issue #221 delivered capacity and transaction
+behavior, and issue #231 adds explicit read-only unknown-commit reconciliation.
+This revision does not supply installed-producer compatibility or operational
 acceptance, and it grants no installation, capture, ruleset, or enforcement
 authority.
 
-The next consumer gate is a separate explicit reconciliation API for unknown
-commit disposition. A pinned supported producer profile and the
+A pinned supported producer profile and the
 source-file/privacy boundary also remain required. Rule acquisition, dashboard
 projection, host context, scheduler execution, sensor operation, and response
 remain out of scope.

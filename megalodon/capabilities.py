@@ -58,13 +58,13 @@ _COMPONENTS = (
     {
         "id": "suricata",
         "software": "Suricata",
-        "integration": "completed_file_alert_reader_and_durable_consumer",
+        "integration": "completed_file_alert_reader_durable_consumer_and_reconciliation",
         "platforms": {
             "linux": "implemented",
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The single-threaded Linux main-thread API reads one completed private contract envelope file, and an explicit Linux non-root capability-free API can atomically persist that validated publication to one pre-created private store that is already owner-private, without permission repair; no EVE converter, sensor, ruleset manager, watcher, dashboard, or IPS path exists.",
+        "boundary": "The single-threaded Linux main-thread API reads one completed private contract envelope file; explicit Linux non-root capability-free APIs can atomically persist that validated publication and read-only reconcile an unknown commit in one pre-created private store that is already owner-private, without permission repair; no EVE converter, sensor, ruleset manager, watcher, dashboard, or IPS path exists.",
     },
     {
         "id": "scapy",

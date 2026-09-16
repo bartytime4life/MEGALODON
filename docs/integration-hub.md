@@ -33,7 +33,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `core-metadata` | Python + SQLite | Implemented | Validated metadata to local audit; observe-only default |
 | `offline-packet-metadata` | TShark/Wireshark | Optional implemented adapter | Fixed TShark argv and fields; private reports; no payload or live capture |
 | `offline-flow-metadata` | Zeek | Optional implemented importer | Closed `conn.log` profile; external producer; flow and packet counts stay separate |
-| `alert-metadata` | Suricata | Completed-file reader and explicit durable transaction implemented | One completed private contract-envelope file can be validated and then atomically written to one pre-created private store; no raw-EVE converter, watcher, dashboard, sensor, or IPS |
+| `alert-metadata` | Suricata | Completed-file reader, durable transaction, and read-only reconciliation implemented | One completed private contract-envelope file can be validated, atomically written, and exactly reconciled after an unknown commit in one pre-created private store; no raw-EVE converter, watcher, dashboard, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
@@ -48,8 +48,9 @@ it is descriptive data, not an argv builder or authorization to run it.
 The Suricata record and reader contract gates are closed as prerequisites
 ([#9](https://github.com/bartytime4life/MEGALODON/issues/9) and
 [#24](https://github.com/bartytime4life/MEGALODON/issues/24)). The Linux profile
-exposes the bounded Python file-reader API and an explicit transaction for its
-immutable publication. Windows remains `contract_only`, and no platform gains
+exposes the bounded Python file-reader API, an explicit transaction for its
+immutable publication, and an explicit read-only unknown-commit reconciliation
+API. Windows remains `contract_only`, and no platform gains
 producer management, raw-EVE conversion, background ingestion, dashboard, or
 action authority. `hub-plan` itself remains static and writes nothing.
 
@@ -80,9 +81,9 @@ they do not certify MEGALODON or any installed tool.
 - Suricata documents that EVE can emit alerts, anomalies, file information,
   metadata, and protocol-specific records. MEGALODON therefore keeps its
   Suricata relationship narrower than stock EVE: the completed-file reader
-  accepts only the repository envelope, and the durable consumer accepts only
-  that reader's immutable publication. Neither path accepts raw EVE or controls
-  a producer.
+  accepts only the repository envelope, and the durable consumer and
+  reconciler accept only that reader's immutable publication. Neither path
+  accepts raw EVE or controls a producer.
 - Zeek documents both TSV and JSON logs and their usefulness in pipelines.
   MEGALODON accepts only its versioned connection profile rather than arbitrary
   Zeek log streams.

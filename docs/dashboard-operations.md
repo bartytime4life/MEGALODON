@@ -108,8 +108,8 @@ Availability words are deliberately narrow:
 
 - **Implemented/optional** describe a repository path, not an installed or running
   component. The Suricata status covers a completed contract-envelope reader and
-  a separate operator-invoked durable transaction; neither is dashboard
-  integration. Optional nftables support remains inert planning.
+  separate operator-invoked durable transaction and read-only reconciliation;
+  none is dashboard integration. Optional nftables support remains inert planning.
 - **Evaluation only/guest only** preserve unproved or non-native platform status.
   They must not be promoted by a successful Linux test or by installing a tool.
 - **Contract only/manual only/proposed/unsupported** remain non-runtime or limited

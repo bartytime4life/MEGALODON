@@ -1,0 +1,22 @@
+[
+  {
+    "description": "committed cannot be based on absence",
+    "patch": {"disposition":"committed","evidence_status":"exact_absence"}
+  },
+  {
+    "description": "not committed cannot hide a storage error",
+    "patch": {"disposition":"not_committed","failure_code":"STORAGE_ERROR"}
+  },
+  {
+    "description": "caller cannot choose a deadline",
+    "patch": {"max_reconciliation_ms":1}
+  },
+  {
+    "description": "reconciliation cannot gain write authority",
+    "patch": {"read_only":false}
+  },
+  {
+    "description": "unknown fields are rejected",
+    "patch": {"retry":true}
+  }
+]
