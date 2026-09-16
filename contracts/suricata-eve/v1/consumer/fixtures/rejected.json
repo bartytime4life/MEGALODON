@@ -54,6 +54,33 @@
     "code": "INPUT_CONTRACT"
   },
   {
+    "id": "store-page-size-weakened",
+    "seed": "policy",
+    "path": ["limits", "store_page_size_bytes"],
+    "operation": "set",
+    "value": 8192,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "store-page-budget-expanded",
+    "seed": "policy",
+    "path": ["limits", "store_max_pages"],
+    "operation": "set",
+    "value": 262144,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "capacity-reservation-weakened",
+    "seed": "policy",
+    "path": ["limits", "capacity_reservation_multiplier"],
+    "operation": "set",
+    "value": 3,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
     "id": "committed-count-mismatch",
     "seed": "two-record-committed",
     "path": ["normalized_alert_count"],

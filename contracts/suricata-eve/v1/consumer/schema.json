@@ -71,7 +71,12 @@
         "max_records",
         "max_normalized_batch_bytes",
         "max_transaction_and_readback_ms",
-        "max_diagnostic_bytes"
+        "max_diagnostic_bytes",
+        "store_page_size_bytes",
+        "store_max_pages",
+        "store_max_bytes",
+        "capacity_reservation_multiplier",
+        "capacity_reservation_overhead_bytes"
       ],
       "properties": {
         "max_records": {
@@ -85,6 +90,21 @@
         },
         "max_diagnostic_bytes": {
           "const": 64
+        },
+        "store_page_size_bytes": {
+          "const": 4096
+        },
+        "store_max_pages": {
+          "const": 131072
+        },
+        "store_max_bytes": {
+          "const": 536870912
+        },
+        "capacity_reservation_multiplier": {
+          "const": 4
+        },
+        "capacity_reservation_overhead_bytes": {
+          "const": 8388608
         }
       }
     },
