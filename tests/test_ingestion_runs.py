@@ -573,17 +573,20 @@ def test_cli_records_skipped_line_budget_failure_after_committed_prefix(tmp_path
         ).fetchone()[0] == 1
 
 
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
 def test_cli_records_input_byte_budget_failure_after_committed_prefix(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, ending
 ):
     config, database = _config(tmp_path)
     source = tmp_path / "events.jsonl"
-    first = json.dumps(_event().to_dict()) + "\n"
-    source.write_text(first + "# exceeds remaining bytes\n", encoding="utf-8")
+    first = json.dumps(_event().to_dict()) + ending
+    comment = "# exceeds remaining bytes é" + ending
+    raw = (first + comment).encode("utf-8")
+    source.write_bytes(raw)
     monkeypatch.setattr(
         cli,
         "iter_jsonl",
-        lambda stream: capture.iter_jsonl(stream, max_input_bytes=len(first.encode("utf-8"))),
+        lambda stream: capture.iter_jsonl(stream, max_input_bytes=len(raw) - 1),
     )
     error = io.StringIO()
 
