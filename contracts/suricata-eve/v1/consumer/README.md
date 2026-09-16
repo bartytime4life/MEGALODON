@@ -74,11 +74,41 @@ The v1 policy inherits the reader publication ceiling: 10,000 alerts and
 readback have a fixed 30,000 ms monotonic budget. These are contract limits, not
 caller-tunable settings.
 
-The contract requires a capacity check before `BEGIN IMMEDIATE`. The separate
-store-initializer slice reserves production schema version 1, but it does not
-choose a page budget or retention policy and does not migrate an existing file.
-Ordinary application startup must not create, initialize, or repair this store
-implicitly.
+The v1 logical store ceiling is 131,072 pages of exactly 4,096 bytes, or
+536,870,912 bytes. Before `BEGIN IMMEDIATE`, a future consumer must compute the
+batch reservation as:
+
+```text
+reservation_bytes = (4 * normalized_batch_bytes) + 8,388,608
+reservation_pages = ceil(reservation_bytes / 4,096)
+```
+
+At the maximum admitted batch, this reserves 75,497,472 bytes, or 18,432 pages.
+The multiplier and fixed overhead conservatively cover normalized alert rows,
+indexes and receipts, SQLite page amplification, and transaction side effects;
+they are an admission budget, not a claim that every filesystem write is
+predictable.
+
+The preflight must use the same future consumer connection to require
+`page_size=4096`, set `PRAGMA max_page_count=131072`, verify that the returned
+limit is exactly 131,072, and then read `page_count` and `freelist_count`, all
+before beginning a transaction. SQLite does not persist `max_page_count` for a
+future connection, so relying on the initializer or a prior connection is
+forbidden. A page-size mismatch is `SCHEMA_INCOMPATIBLE`; failure to bind the
+fixed ceiling, an already-oversized store, invalid counts, or insufficient
+headroom is `STORAGE_CAPACITY`. Counts must be internally valid, and
+`131072 - (page_count - freelist_count)` must be at least
+`reservation_pages`. The containing filesystem must also report at least
+`reservation_bytes` available. Insufficient or unavailable capacity evidence is
+`STORAGE_CAPACITY`, writes nothing, and reports `not_started`/`not_attempted`.
+The checks remain advisory against a concurrent filesystem race, so SQLite
+write failures still fail closed under the transaction rules.
+
+This contract does not alter the explicit initializer, persist a page ceiling,
+migrate an existing file, reserve operating-system disk space, or select a purge schedule. Retention
+and capacity admission are separate gates; reaching the ceiling stops new
+consumption rather than deleting evidence. Ordinary application startup must
+not create, initialize, repair, resize, or purge this store implicitly.
 
 ## 5. Explicit production schema initializer
 

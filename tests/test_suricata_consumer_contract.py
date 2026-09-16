@@ -43,6 +43,13 @@ MAX_RECORDS = LIMITS["max_records"]
 MAX_OUTPUT_BYTES = LIMITS["max_normalized_batch_bytes"]
 MAX_ELAPSED_MS = LIMITS["max_transaction_and_readback_ms"]
 MAX_DIAGNOSTIC_BYTES = LIMITS["max_diagnostic_bytes"]
+STORE_PAGE_SIZE_BYTES = LIMITS["store_page_size_bytes"]
+STORE_MAX_PAGES = LIMITS["store_max_pages"]
+STORE_MAX_BYTES = LIMITS["store_max_bytes"]
+CAPACITY_RESERVATION_MULTIPLIER = LIMITS["capacity_reservation_multiplier"]
+CAPACITY_RESERVATION_OVERHEAD_BYTES = LIMITS[
+    "capacity_reservation_overhead_bytes"
+]
 ERROR_CODES = frozenset(CONSUMER_SCHEMA["$defs"]["errorCode"]["enum"])
 EXPECTED_ERROR_CODES = frozenset({
     "INPUT_CONTRACT", "COUNT_MISMATCH", "BATCH_BYTES", "REPLAY",
@@ -120,6 +127,17 @@ def _plain_json(value):
     if isinstance(value, tuple):
         return [_plain_json(item) for item in value]
     return value
+
+
+def _capacity_reservation(normalized_batch_bytes):
+    reservation_bytes = (
+        CAPACITY_RESERVATION_MULTIPLIER * normalized_batch_bytes
+        + CAPACITY_RESERVATION_OVERHEAD_BYTES
+    )
+    reservation_pages = (
+        reservation_bytes + STORE_PAGE_SIZE_BYTES - 1
+    ) // STORE_PAGE_SIZE_BYTES
+    return reservation_bytes, reservation_pages
 
 
 def _validate_contract_value(value):
@@ -455,6 +473,11 @@ def test_policy_is_exact_transactional_and_not_runtime():
         "max_normalized_batch_bytes": 16777216,
         "max_transaction_and_readback_ms": 30000,
         "max_diagnostic_bytes": 64,
+        "store_page_size_bytes": 4096,
+        "store_max_pages": 131072,
+        "store_max_bytes": 536870912,
+        "capacity_reservation_multiplier": 4,
+        "capacity_reservation_overhead_bytes": 8388608,
     }
     assert policy["transaction"] == {
         "database": "sqlite",
@@ -466,6 +489,7 @@ def test_policy_is_exact_transactional_and_not_runtime():
         "unknown_commit_requires_reconciliation": True,
         "blind_retry_after_unknown": False,
         "capacity_check_before_begin": True,
+        "capacity_limit_set_and_verified_each_connection": True,
         "ordinary_startup_migration": False,
         "runtime_schema_migration_included": False,
     }
@@ -487,6 +511,40 @@ def test_policy_is_exact_transactional_and_not_runtime():
         "action_execution": False,
         "firewall_mutation": False,
     }
+
+
+def test_capacity_contract_is_fixed_bounded_and_separate_from_retention():
+    assert STORE_MAX_BYTES == STORE_PAGE_SIZE_BYTES * STORE_MAX_PAGES
+    assert _capacity_reservation(1) == (8388612, 2049)
+    assert _capacity_reservation(MAX_OUTPUT_BYTES) == (75497472, 18432)
+    assert _capacity_reservation(MAX_OUTPUT_BYTES)[1] < STORE_MAX_PAGES
+    policy = ACCEPTED["policy"]
+    assert "retention" not in policy
+    assert "purge" not in policy
+
+
+def test_capacity_page_limit_is_bound_on_every_sqlite_connection(tmp_path):
+    path = tmp_path / "capacity.db"
+    first = sqlite3.connect(path)
+    try:
+        assert first.execute("PRAGMA page_size").fetchone()[0] == STORE_PAGE_SIZE_BYTES
+        assert first.execute(
+            f"PRAGMA max_page_count={STORE_MAX_PAGES}"
+        ).fetchone()[0] == STORE_MAX_PAGES
+        first.execute("CREATE TABLE fixture (value INTEGER)")
+        first.commit()
+    finally:
+        first.close()
+
+    reopened = sqlite3.connect(path)
+    try:
+        assert reopened.execute("PRAGMA page_size").fetchone()[0] == STORE_PAGE_SIZE_BYTES
+        assert reopened.execute("PRAGMA max_page_count").fetchone()[0] != STORE_MAX_PAGES
+        assert reopened.execute(
+            f"PRAGMA max_page_count={STORE_MAX_PAGES}"
+        ).fetchone()[0] == STORE_MAX_PAGES
+    finally:
+        reopened.close()
 
 
 @pytest.mark.parametrize("case", ACCEPTED["receipts"], ids=lambda c: c["id"])
