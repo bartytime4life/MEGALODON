@@ -65,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="show one documented profile; defaults to the current runtime family",
     )
 
+    sub.add_parser(
+        "readiness",
+        help="print a bounded local executable-presence receipt without running tools",
+    )
+
     posture = sub.add_parser(
         "posture",
         help="print a bounded package-level posture receipt without probing the host",
@@ -197,6 +202,13 @@ def _configure_logging(level: str) -> None:
 
 def _capabilities(args: argparse.Namespace) -> int:
     print(json.dumps(catalog(args.platform), sort_keys=True))
+    return 0
+
+
+def _readiness(args: argparse.Namespace) -> int:
+    from .readiness import readiness_json
+
+    print(readiness_json())
     return 0
 
 
@@ -877,6 +889,8 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(raw_argv)
     if args.command == "capabilities":
         code = _capabilities(args)
+    elif args.command == "readiness":
+        code = _readiness(args)
     elif args.command == "posture":
         code = _posture(args)
     elif args.command == "hub-plan":

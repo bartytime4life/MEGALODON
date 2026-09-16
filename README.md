@@ -143,6 +143,11 @@ python -m megalodon hub-plan --platform windows
 portability test, or permission to execute a tool. The default follows the Python
 runtime's platform family, so a Linux guest describes Linux, not its host.
 See [`docs/integration-hub.md`](docs/integration-hub.md) for the closed workflow map.
+For an explicit Linux executable-presence check, run
+`python -m megalodon readiness`. Its bounded JSON report can be selected locally
+in the Defense Console. It executes no companion tool and reports presence,
+not installation integrity, compatibility, or running status. See
+[`docs/tool-readiness.md`](docs/tool-readiness.md) for exact bounds and limitations.
 The baseline excludes Npcap from its open-source dependencies and omits native
 Windows live capture; manual saved-capture analysis is a different workflow.
 
