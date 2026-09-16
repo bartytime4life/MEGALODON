@@ -1,4 +1,4 @@
-"""Production-owned Suricata store schema tests; no consumer writes exist."""
+"""Production-owned Suricata store schema and private writer-open tests."""
 
 from __future__ import annotations
 

@@ -463,11 +463,11 @@ def test_schema_fixture_inventory_and_local_resolution():
     assert len(ERROR_CODES) == len(CONSUMER_SCHEMA["$defs"]["errorCode"]["enum"])
 
 
-def test_policy_is_exact_transactional_and_not_runtime():
+def test_policy_is_exact_transactional_and_runtime_bounded():
     policy = ACCEPTED["policy"]
     _validate_contract_value(policy)
-    assert policy["status"] == "proposed_contract_only"
-    assert policy["runtime_implemented"] is False
+    assert policy["status"] == "implemented"
+    assert policy["runtime_implemented"] is True
     assert policy["limits"] == {
         "max_records": 10000,
         "max_normalized_batch_bytes": 16777216,

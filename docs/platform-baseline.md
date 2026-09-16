@@ -40,7 +40,7 @@ and other Python versions need their own evidence before inclusion. [S1, S2]
 | Offline TShark packet metadata and Zeek connection-log import | Separate Linux-only command and private reports | Unsupported by the current offline implementation; use a validated L1 guest instead |
 | Firewall plans | Merged #72–#74 containment is plan-only; every retained live-apply route returns a fixed unsupported diagnostic before configuration, privilege, or subprocess work | No Windows firewall backend; an nftables plan is not a Windows rule |
 | Offline-run dashboard projection | Implemented for one complete private report set on loopback | Native core evaluation target; remote projection is refused |
-| Suricata EVE integration | Single-threaded Linux main-thread reader for one completed private contract-envelope file using the guarded `SIGALRM` deadline; no raw-EVE converter, persistence, dashboard, sensor, or IPS | Contract only; native Suricata availability does not change this |
+| Suricata EVE integration | Single-threaded Linux main-thread reader for one completed private contract-envelope file plus an explicit atomic transaction into one pre-created private store; no raw-EVE converter, watcher, dashboard, sensor, or IPS | Contract only; native Suricata availability does not change this |
 | Scheduling and automated response | Automation schema exists; no scheduler/executor | Not implemented; no Task Scheduler installation or automatic blocking |
 
 Implementation evidence: [package metadata](../pyproject.toml),
@@ -70,7 +70,7 @@ required by this baseline.
 | Python, Git, SQLite | Distribution Python/venv and Git; Python `sqlite3` | Official CPython and Git for Windows; Python `sqlite3` | Core development/runtime tools; no separate `pip install sqlite3` [S2, S3] |
 | Wireshark / TShark | Reviewed distribution packages; adapter requires `/usr/bin/tshark` | Official signed x64 installer; desktop/TShark offline use | Open-source analyzer; Windows desktop use is separate from the Linux-only MEGALODON adapter [S4] |
 | Scapy | Repository `capture` extra only when capture is approved | Omit from W1 | Open-source Python tool; upstream Windows support does not validate MEGALODON capture [S5] |
-| Suricata | Maintained upstream-supported Linux package | Official x64 Windows installer for separately reviewed offline analysis | Open-source signature IDS; EVE alert contract/tests are present, but runtime import is not implemented [S6] |
+| Suricata | Maintained upstream-supported Linux package | Official x64 Windows installer for separately reviewed offline analysis | Open-source signature IDS; the closed-envelope reader and explicit publication transaction are implemented on Linux, but MEGALODON does not consume stock EVE or manage the sensor [S6] |
 | Zeek | Linux producer of separately scoped `conn.log` | Use the Linux guest for this baseline | Open-source network metadata producer; this is a baseline choice, not a claim that no Windows build exists [S7] |
 | ClamAV | Optional separate manual file scanner | Optional separate manual file scanner | Open-source supplementary file scanning; no MEGALODON file-content intake, quarantine, or antivirus replacement claim [S8] |
 | osquery | Later optional local host-inventory evaluation | Later optional local host-inventory evaluation | Open-source endpoint metadata tool; no importer, daemon, scheduled query pack, or remote enrollment in this slice [S9] |
@@ -300,7 +300,7 @@ and Windows/Hyper-V firewall behavior require explicit checks. Never infer
 that a WSL capture sees all Windows-host traffic, that guest nftables protects
 the Windows host, or that a working guest UI authorizes remote binding. [S11]
 
-**Suricata/Zeek:** installing either does not create a MEGALODON input source.
+**Suricata/Zeek:** installing either alone does not create a MEGALODON input source.
 Keep their producer configuration, rule updates, retention, and raw logs in the
 separate analyst environment. Select passive/offline operation only; do not
 install IPS, diversion, or packet-modification paths. Zeek import accepts only
@@ -337,14 +337,16 @@ A producer reporting a blocked event does not mean MEGALODON applied a rule.
 
 ## 8. Dependency-ordered implementation plan
 
-All entries below are **PROPOSED**, not changes made by this documentation.
+This table preserves the dependency order and marks delivered versus remaining
+work. A delivered repository slice is not deployment or installed-tool
+acceptance.
 
 | Stage | Smallest deliverable | Required exit evidence |
 | --- | --- | --- |
 | P0: review and baseline | Review this document and reconcile issue #3's independent-review control | Current ruleset and independent review evidence; retain strict required `test` gate and historical lifecycle receipts |
 | P1: Windows core | Complete #27 bounded platform capability/error handling and synthetic core tests; retain Linux behavior | Static catalog is prerequisite evidence only; exact-head Linux full suite plus Windows core tests and install/UI/ACL receipts; explicit failures for unsupported paths, no new privileges |
 | P2: analyzer compatibility | Complete #25 for a maintained Linux TShark package; separately review Windows offline design | Installed-tool synthetic fixtures; Windows design covers handle identity, reparse points, UNC/device/alternate-stream rejection, private ACLs, process-tree termination, pipe/resource bounds, no-egress containment; never remove Linux guards as a shortcut |
-| P3: optional sensor intake | Treat closed #9 record and #24 reader contracts as prerequisites, then propose one bounded runtime Suricata slice; handle #7 UI independently | Production descriptor/resource/replay tests, source/version/framing/field rejection, transactional persistence and privacy review; packet/flow/alert counts stay distinct |
+| P3: optional sensor intake | **IMPLEMENTED BOUNDED SLICE:** closed #9/#24 envelope reader plus an operator-invoked atomic publication transaction into the dedicated v1 store; no raw-EVE watcher or sensor control | Exact-head hosted review remains; next gate is explicit commit-unknown reconciliation, then separately reviewed read-only projection. Packet/flow/alert counts stay distinct |
 | P4: response restoration decision | Separate design only if explicitly requested | Durable intent and terminal outcome, startup reconciliation, expiry and operator recovery, validated absolute executable and fixed environment, plus disposable-namespace failure, rollback, conflict, and PATH-hijack tests; no implementation until these are resolved |
 | P5: packaging/operations | Optional service/installer work after supported-platform evidence | Least-privilege account, update/retention/uninstall contracts and reproducible artifacts; no silent firewall/driver changes |
 

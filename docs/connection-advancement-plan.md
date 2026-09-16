@@ -70,8 +70,12 @@ protection. Use synthetic records until that boundary is reviewed.
 ## Phase B: one bounded completed-file reader
 
 Implementation status: `megalodon.offline.suricata.read_completed_file` now
-delivers this file-only read and validation boundary. Transactional persistence,
-durable replay prevention, and dashboard projection remain later gates.
+delivers this file-only read and validation boundary.
+`megalodon.offline.suricata_consumer.consume_publication` now supplies the next
+operator-invoked step: an owned immutable snapshot, durable complete-run replay
+identity, atomic alert/receipt commit, and exact readback in one pre-created v1
+store. Commit-unknown reconciliation and dashboard projection remain later
+gates.
 
 The first runtime sensor family should remain the already contracted Suricata
 EVE alert subset, not a broad multi-tool import framework. That choice leverages
@@ -85,10 +89,10 @@ finite processing, producer version basis, partial-final-record handling, and a
 truthful terminal receipt. Unknown keys and unsupported event types must not be
 silently passed through or interpreted as successful clean traffic.
 
-Before persistence, decide the batch semantics explicitly. A malformed suffix
-must not create a completed receipt for an unread file. A prior committed prefix,
-where the selected contract allows one, must remain distinguishable from a
-complete batch. An uncertain commit cannot be blindly retried. A later dashboard
+The persistence boundary fixes the batch semantics explicitly. A malformed
+suffix cannot create a completed reader receipt, and the consumer accepts only
+that complete immutable publication. It commits all rows and its receipt or
+rolls back; an uncertain commit cannot be blindly retried. A later dashboard
 projection must not collapse different source units into a shared total.
 
 Required negative controls include path replacement, symlink/device/FIFO input,

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:megalodon:contract:suricata-eve-consumer:v1",
-  "title": "PROPOSED transactional Suricata durable-consumer contract v1",
-  "$comment": "The adjacent README supplies semantic and transaction requirements. This inert contract does not implement a database migration or runtime consumer.",
+  "title": "Transactional Suricata durable-consumer contract v1",
+  "$comment": "The adjacent README supplies semantic and transaction requirements. The runtime implements one explicit local transaction but no migration, reconciliation command, dashboard projection, sensor control, or response action.",
   "oneOf": [
     {
       "$ref": "#/$defs/consumerPolicy"
@@ -86,7 +86,8 @@
           "const": 16777216
         },
         "max_transaction_and_readback_ms": {
-          "const": 30000
+          "const": 30000,
+          "description": "Cooperative monotonic deadline shared by store validation, preflight, lock wait, transaction, and readback. SQLite VM work and lock waits are interrupted; one uninterruptible filesystem call may return late but cannot produce verified success."
         },
         "max_diagnostic_bytes": {
           "const": 64
@@ -256,10 +257,10 @@
           "const": "suricata-eve-consumer-policy-v1"
         },
         "status": {
-          "const": "proposed_contract_only"
+          "const": "implemented"
         },
         "runtime_implemented": {
-          "const": false
+          "const": true
         },
         "input_record_contract": {
           "const": "external-alert-v1"
@@ -286,6 +287,7 @@
     },
     "errorCode": {
       "type": "string",
+      "$comment": "RECONCILIATION_REQUIRED is reserved for the separate reconciliation operation's fixed diagnostic; closed v1 consumer receipts use COMMIT_UNKNOWN while reconciliation is required.",
       "enum": [
         "INPUT_CONTRACT",
         "COUNT_MISMATCH",
@@ -451,6 +453,28 @@
                 },
                 "transaction_status": {
                   "const": "not_started"
+                },
+                "reconciliation_status": {
+                  "const": "not_required"
+                },
+                "failure_code": {
+                  "const": "REPLAY"
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "rejected"
+                },
+                "durable_write_status": {
+                  "const": "rolled_back"
+                },
+                "replay_status": {
+                  "const": "duplicate"
+                },
+                "transaction_status": {
+                  "const": "rolled_back"
                 },
                 "reconciliation_status": {
                   "const": "not_required"

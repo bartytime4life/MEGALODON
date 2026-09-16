@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
+from types import MappingProxyType
 
 import pytest
 
@@ -44,7 +45,10 @@ def test_preflight_admits_one_immutable_publication_without_writes(tmp_path):
             connection, publication, database_path=path,
         )
         assert result.publication is not publication
-        assert result.publication[0] is publication[0]
+        assert result.publication == publication
+        assert result.publication[0] is not publication[0]
+        assert result.publication[0][0] is not publication[0][0]
+        assert result.publication[1] is not publication[1]
         assert result.transaction_status == "not_started"
         assert result.action_status == "not_attempted"
         assert result.capacity["max_pages"] == 131_072
@@ -123,5 +127,61 @@ def test_rejects_mutable_or_wrong_store_publication_evidence(tmp_path):
         wrong.touch()
         with pytest.raises(suricata_consumer.ConsumerPreflightError, match="STORAGE_CAPACITY$"):
             suricata_consumer.preflight_publication(connection, publication, database_path=wrong)
+    finally:
+        connection.close()
+
+
+def test_rejects_frozen_but_contract_invalid_records(tmp_path):
+    publication = _publication(tmp_path)
+    path, connection = _store(tmp_path)
+    malformed = ((MappingProxyType({"garbage": "accepted-before-review"}),), publication[1])
+    try:
+        with pytest.raises(
+            suricata_consumer.ConsumerPreflightError,
+            match="INPUT_CONTRACT$",
+        ):
+            suricata_consumer.preflight_publication(
+                connection, malformed, database_path=path,
+            )
+    finally:
+        connection.close()
+
+
+def test_rejects_memory_and_unnamed_databases(tmp_path):
+    publication = _publication(tmp_path)
+    connection = sqlite3.connect(":memory:")
+    try:
+        with pytest.raises(
+            suricata_consumer.ConsumerPreflightError,
+            match="STORAGE_CAPACITY$",
+        ):
+            suricata_consumer.preflight_publication(
+                connection, publication, database_path=tmp_path,
+            )
+    finally:
+        connection.close()
+
+
+def test_freelist_pages_are_observed_but_never_credited(tmp_path, monkeypatch):
+    publication = _publication(tmp_path)
+    path, connection = _store(tmp_path)
+    real_query = suricata_consumer._query_integer
+
+    def fixed_query(selected, statement):
+        if statement == "PRAGMA page_count":
+            return 130_000
+        if statement == "PRAGMA freelist_count":
+            return 10_000
+        return real_query(selected, statement)
+
+    monkeypatch.setattr(suricata_consumer, "_query_integer", fixed_query)
+    try:
+        with pytest.raises(
+            suricata_consumer.ConsumerPreflightError,
+            match="STORAGE_CAPACITY$",
+        ):
+            suricata_consumer.preflight_publication(
+                connection, publication, database_path=path,
+            )
     finally:
         connection.close()

@@ -619,16 +619,25 @@ calculation, model access, or permission to use commands, endpoints, or tools.
 closed EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
 [bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). The
 separate [durable-consumer contract](contracts/suricata-eve/v1/consumer/README.md)
-proposes closed transaction, replay-registry, terminal-receipt, and
-commit-reconciliation requirements with a synthetic SQLite oracle. The
-production-owned `megalodon.suricata_store` module explicitly creates a
-new owner-private v1 database and validates its exact layout read-only; it has no
-consumer-write or existing-store migration API. These gates specify record,
-filesystem, quota, replay, completion, and future persistence requirements.
+defines the implemented closed transaction, replay-registry, terminal-receipt,
+and commit-uncertainty requirements. The production-owned
+`megalodon.suricata_store` module creates a new owner-private v1 database,
+validates its exact layout read-only, and privately opens that exact existing
+layout for the consumer; the consumer has no implicit store-creation or
+migration path.
+These gates specify record, filesystem, quota, replay, and completion
+requirements.
 `megalodon.offline.suricata.read_completed_file` implements one single-threaded
 Linux main-thread, completed-private-file reader using the guarded `SIGALRM` deadline
-and returns an immutable in-memory batch and receipt. There is no raw-EVE converter, sensor operation, ruleset manager,
-production durable consumer, existing-store migration, dashboard projection, or IPS path. The offline dashboard
+and returns an immutable in-memory batch and receipt.
+`megalodon.offline.suricata_consumer.consume_publication` validates that frozen
+publication, applies the fixed no-freelist-credit 512 MiB admission policy, and
+commits the run identity, canonical alert rows, and receipt in one bounded
+`BEGIN IMMEDIATE` transaction followed by exact readback. Commit or readback
+uncertainty returns `reconciliation_required`; the separate reconciliation API
+remains the next gate. There is no raw-EVE converter, sensor operation, ruleset
+manager, existing-store migration, background watcher, dashboard projection, or
+IPS path. The offline dashboard
 projection remains independent and does not accept or display Suricata alerts.
 
 `megalodon capabilities` returns a deterministic static catalog of these

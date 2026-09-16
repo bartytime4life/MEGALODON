@@ -70,7 +70,9 @@ def test_workflow_filter_returns_one_fresh_plan():
     first = integration_plan("linux", "alert-metadata")
     assert [item["id"] for item in first["workflows"]] == ["alert-metadata"]
     assert first["workflows"][0]["selected_status"] == "implemented"
-    assert first["workflows"][0]["entry_point"] == "Python API: read_completed_file"
+    assert first["workflows"][0]["entry_point"] == (
+        "Python APIs: read_completed_file then consume_publication"
+    )
 
     first["workflows"][0]["selected_status"] = "unsupported"
     assert integration_plan("linux", "alert-metadata")["workflows"][0]["selected_status"] == "implemented"
@@ -80,10 +82,13 @@ def test_workflow_contracts_match_their_owned_entry_points():
     alert = integration_plan("linux", "alert-metadata")["workflows"][0]
     assert alert["input_contract"] == "suricata-eve-alert-input-v1 envelope"
     assert alert["output_contract"] == (
-        "immutable external-alert-v1 batch plus completed-run receipt"
+        "immutable external-alert-v1 publication plus optional terminal consumer receipt"
     )
-    assert alert["launch_policy"] == "explicit_main_thread_completed_file_read_only"
+    assert alert["launch_policy"] == (
+        "explicit_completed_file_read_then_explicit_local_transaction"
+    )
     assert "no sensor launch" in alert["action_boundary"]
+    assert "explicit existing store" in alert["action_boundary"]
 
     response = integration_plan("linux", "time-limited-response")["workflows"][0]
     assert response["entry_point"] == "megalodon firewall-plan or block"

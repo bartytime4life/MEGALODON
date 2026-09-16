@@ -79,13 +79,16 @@ def test_critical_boundaries_are_explicit():
     ]
 
 
-def test_suricata_runtime_status_matches_the_linux_only_file_reader():
+def test_suricata_runtime_status_matches_reader_and_explicit_consumer():
     linux = {item["id"]: item for item in catalog("linux")["components"]}
     windows = {item["id"]: item for item in catalog("windows")["components"]}
     assert linux["suricata"]["selected_status"] == "implemented"
-    assert linux["suricata"]["integration"] == "completed_file_alert_reader"
+    assert linux["suricata"]["integration"] == (
+        "completed_file_alert_reader_and_durable_consumer"
+    )
     assert "main-thread API" in linux["suricata"]["boundary"]
     assert "one completed private contract envelope file" in linux["suricata"]["boundary"]
+    assert "pre-created private store" in linux["suricata"]["boundary"]
     assert windows["suricata"]["selected_status"] == "contract_only"
 
 

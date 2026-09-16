@@ -136,13 +136,13 @@ The reader does not mutate or persist that set. Relabeling identical content wit
 a new run identity is considered a new operator claim; v1 neither hashes content
 nor claims content-level deduplication.
 
-The proposed [durable-consumer contract](../consumer/README.md) requires a later
-runtime to commit the normalized batch, complete run identity, and terminal
-receipt in one transaction with a uniqueness constraint. That transaction and
-registry remain outside this reader slice and are not implemented. Until they
-exist, a successful reader receipt means only that the bounded read completed
-against the supplied replay view; it is not evidence of durable replay
-prevention across processes or time.
+The implemented [durable-consumer contract](../consumer/README.md) provides a
+separate operator-invoked runtime that commits the normalized batch, complete
+run identity, and terminal receipt in one transaction with a uniqueness
+constraint. It remains outside this reader slice: the reader still performs no
+write. A successful reader receipt by itself means only that the bounded read
+completed against the supplied replay view; durable replay prevention begins
+only after `consume_publication` returns a verified committed receipt.
 
 ## 5. All-or-nothing completion
 
@@ -222,9 +222,11 @@ runtime implementation.
 
 ## 8. Still out of scope
 
-This reader does not add sensor control, capture, rule download, source conversion
-or scrubbing, watcher, scheduler, root privilege, production SQLite integration,
-dashboard projection, endpoint mapping, severity-to-response logic, model call, firewall
-planning or execution, network egress, or automatic action. Those require
+This reader does not itself add sensor control, capture, rule download, source
+conversion or scrubbing, watcher, scheduler, root privilege, SQLite writes,
+dashboard projection, endpoint mapping, severity-to-response logic, model call,
+firewall planning or execution, network egress, or automatic action. The
+separate durable-consumer API can persist only a completed immutable reader
+publication to an explicitly initialized store. All other capabilities require
 separately authorized and reviewed changes after repository controls and the
 remaining project gates are satisfied.
