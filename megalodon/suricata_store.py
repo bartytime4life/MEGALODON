@@ -189,6 +189,45 @@ class _SuricataReaderHandle:
         )
 
 
+def _lock_suricata_read_snapshot(database_descriptor: int) -> None:
+    """Hold a Linux OFD read lock across SQLite's complete locking region."""
+
+    try:
+        import ctypes
+        import fcntl
+    except ImportError as exc:
+        raise SuricataStoreError(
+            "SURICATA_STORE:SNAPSHOT_LOCK_UNAVAILABLE"
+        ) from exc
+    # Linux defines F_OFD_SETLK as 37. Python exposed the name only in newer
+    # runtimes, so retain the kernel ABI value for supported older CPython.
+    command = getattr(fcntl, "F_OFD_SETLK", 37)
+
+    class _Flock(ctypes.Structure):
+        _fields_ = (
+            ("l_type", ctypes.c_short),
+            ("l_whence", ctypes.c_short),
+            ("l_start", ctypes.c_longlong),
+            ("l_len", ctypes.c_longlong),
+            ("l_pid", ctypes.c_int),
+        )
+
+    # SQLite's POSIX VFS reserves these 512 bytes for PENDING, RESERVED, and
+    # SHARED locks. A read lock over the whole region remains compatible with
+    # readers and conflicts with every writer, including journal-mode changes.
+    lock = _Flock(
+        fcntl.F_RDLCK,
+        os.SEEK_SET,
+        0x40000000,
+        512,
+        0,
+    )
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.fcntl.restype = ctypes.c_int
+    if libc.fcntl(database_descriptor, command, ctypes.byref(lock)) != 0:
+        raise SuricataStoreError("SURICATA_STORE:SNAPSHOT_LOCKED")
+
+
 @contextmanager
 def _open_suricata_store_reader(
     path: str | Path,
@@ -222,6 +261,8 @@ def _open_suricata_store_reader(
             _assert_path_identity(
                 database_path, database_descriptor, directory_descriptor
             )
+            if require_sidecar_free:
+                _lock_suricata_read_snapshot(database_descriptor)
             sidecars = _validate_sqlite_sidecars(
                 database_path,
                 directory_descriptor,

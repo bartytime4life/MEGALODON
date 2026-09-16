@@ -16,6 +16,7 @@ from types import MappingProxyType
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
+from megalodon import suricata_store
 from megalodon.offline import suricata, suricata_consumer
 from megalodon.suricata_store import initialize_suricata_store
 
@@ -247,7 +248,9 @@ def test_active_lock_is_indeterminate_without_writes(tmp_path, monkeypatch):
         blocker.close()
 
     assert result["disposition"] == "indeterminate"
-    assert result["failure_code"] in {"STORAGE_ERROR", "TRANSACTION_TIMEOUT"}
+    assert result["failure_code"] in {
+        "DATABASE_IDENTITY", "STORAGE_ERROR", "TRANSACTION_TIMEOUT",
+    }
     assert _counts(path) == before
 
 
@@ -351,6 +354,46 @@ def test_persistent_wal_mode_is_refused_before_sqlite_can_create_sidecars(tmp_pa
 
     assert result["disposition"] == "indeterminate"
     assert result["failure_code"] == "DATABASE_IDENTITY"
+    assert not wal.exists()
+    assert not shm.exists()
+
+
+def test_snapshot_lock_prevents_wal_conversion_race_before_sqlite_open(
+    tmp_path, monkeypatch
+):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+    wal = Path(f"{path}-wal")
+    shm = Path(f"{path}-shm")
+    real_connect = suricata_store.sqlite3.connect
+    attempted = False
+    observed_mode = None
+
+    def racing_connect(database, *args, **kwargs):
+        nonlocal attempted, observed_mode
+        if not attempted and "mode=ro" in str(database):
+            attempted = True
+            competitor = real_connect(path, timeout=0, isolation_level=None)
+            try:
+                competitor.execute("PRAGMA busy_timeout=0")
+                try:
+                    observed_mode = competitor.execute(
+                        "PRAGMA journal_mode=WAL"
+                    ).fetchone()
+                except sqlite3.OperationalError:
+                    observed_mode = ("locked",)
+            finally:
+                competitor.close()
+        return real_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(suricata_store.sqlite3, "connect", racing_connect)
+
+    result = _reconcile(path, publication)
+
+    assert attempted is True
+    assert observed_mode != ("wal",)
+    assert result["disposition"] == "not_committed"
+    assert path.read_bytes()[18:20] == b"\x01\x01"
     assert not wal.exists()
     assert not shm.exists()
 
