@@ -11,6 +11,10 @@ existing store, applies the fixed capacity gate, and atomically commits its run
 identity, normalized alerts, and terminal receipt. There is no migration of an
 existing store, command, dashboard projection, watcher, scheduler, sensor
 process, network access, model request, retention action, or response action.
+The consumer refuses before store access unless it is running on Linux as an
+unprivileged, capability-free process. On POSIX it requires the pre-created
+database to already be owner-private mode `0600`; it never repairs a public
+store or coordination sidecar into apparent compliance.
 
 The reader publishes one immutable `external-alert-v1` batch and one
 `suricata-eve-reader-receipt-v1`. Its replay view is caller supplied and is not
@@ -76,9 +80,12 @@ source data or storage details, and are at most 64 ASCII bytes.
 The v1 policy inherits the reader publication ceiling: 10,000 alerts and
 16,777,216 compact normalized UTF-8 bytes. Store validation, preflight, lock
 wait, transaction, and required readback share a fixed 30,000 ms monotonic
-cooperative deadline. The connection uses the remaining time as its SQLite busy
-timeout, installs a VM progress handler, and checks the deadline before and
-after transaction stages. A single SQLite or kernel filesystem call can return
+cooperative deadline. Store validation and the advisory pre-transaction replay
+probes use a zero SQLite busy timeout; `BEGIN IMMEDIATE`, commit, and post-commit
+readback bind a fresh busy timeout from the remaining shared budget immediately
+before each possible lock wait. The connection also installs a VM progress
+handler and checks the deadline before and after transaction stages. A single
+SQLite or kernel filesystem call can return
 after the deadline under uninterruptible I/O; such a late return never becomes
 a verified success. It rolls back before commit or returns
 `reconciliation_required` after commit uncertainty. This is a bounded consumer

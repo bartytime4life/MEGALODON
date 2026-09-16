@@ -257,6 +257,23 @@ def test_validation_rechecks_path_identity_after_schema_scan(tmp_path, monkeypat
         validate_suricata_store(path)
 
 
+def test_writer_validation_never_inherits_a_fresh_lock_wait(tmp_path, monkeypatch):
+    path = tmp_path / "durable.db"
+    initialize_suricata_store(path)
+    observed = []
+    real_validate = suricata_store._validate_current
+
+    def validate_without_wait(connection):
+        observed.append(connection.execute("PRAGMA busy_timeout").fetchone()[0])
+        real_validate(connection)
+
+    monkeypatch.setattr(suricata_store, "_validate_current", validate_without_wait)
+    with suricata_store._open_suricata_store_writer(path) as writer:
+        assert writer.connection.execute("PRAGMA busy_timeout").fetchone() == (0,)
+
+    assert observed == [0]
+
+
 def test_schema_enforces_run_attempt_and_record_identity(tmp_path):
     path = tmp_path / "durable.db"
     initialize_suricata_store(path)

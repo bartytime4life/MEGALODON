@@ -651,6 +651,7 @@ def _open_private_database(
     writable: bool,
     create: bool,
     prefix: str,
+    normalize_writable_mode: bool = True,
 ) -> tuple[int, bool]:
     flags = (os.O_RDWR if writable else os.O_RDONLY) | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NONBLOCK", 0)
@@ -677,7 +678,8 @@ def _open_private_database(
         info = os.fstat(descriptor)
         _validate_private_database_stat(info, writable=writable, prefix=prefix)
         if writable and os.name == "posix":
-            os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
+            if normalize_writable_mode:
+                os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
             _validate_private_database_stat(
                 os.fstat(descriptor), writable=False, prefix=prefix
             )

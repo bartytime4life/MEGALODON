@@ -61,7 +61,7 @@ _WORKFLOWS = (
         "entry_point": "Python APIs: read_completed_file then consume_publication",
         "launch_policy": "explicit_completed_file_read_then_explicit_local_transaction",
         "data_boundary": "closed alert fields; no payload, file content, unrestricted protocol records, or ruleset updates",
-        "action_boundary": "persistence is limited to one validated publication in an explicit existing store; no sensor launch, dashboard projection, IPS path, blocking, or action attribution",
+        "action_boundary": "persistence is limited to one validated publication in an explicit existing store that is already private, from a Linux non-root capability-free process; no permission repair and no sensor launch, dashboard projection, IPS path, blocking, or action attribution",
         "next_gate": "commit-unknown reconciliation API and installed-producer acceptance",
     },
     {

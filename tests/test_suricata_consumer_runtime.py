@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import inspect
 import json
+import os
 from pathlib import Path
 import socket
 import sqlite3
@@ -267,6 +268,81 @@ def test_lost_commit_acknowledgement_requires_reconciliation(tmp_path, monkeypat
     assert _counts(path) == (1, 2, 1)
 
 
+def test_commit_failure_with_active_transaction_is_proven_rolled_back(
+    tmp_path, monkeypatch
+):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+
+    def fail_before_commit(connection):
+        assert connection.in_transaction is True
+        raise sqlite3.OperationalError("synthetic lock failure")
+
+    monkeypatch.setattr(suricata_consumer, "_commit", fail_before_commit)
+    receipt = suricata_consumer.consume_publication(
+        path, publication, consumer_attempt_id="rolled-back-commit"
+    )
+
+    assert receipt["status"] == "failed"
+    assert receipt["failure_code"] == "STORAGE_ERROR"
+    assert receipt["transaction_status"] == "rolled_back"
+    assert receipt["durable_write_status"] == "rolled_back"
+    assert receipt["reconciliation_status"] == "not_required"
+    _assert_contract(receipt)
+    assert _counts(path) == (0, 0, 0)
+
+
+def test_each_possible_lock_wait_rebinds_the_remaining_budget(tmp_path, monkeypatch):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+    observed = []
+    real_set_timeout = suricata_consumer._set_remaining_busy_timeout
+
+    def record_stage(connection, started):
+        result = real_set_timeout(connection, started)
+        observed.append((connection.in_transaction, result))
+        return result
+
+    monkeypatch.setattr(
+        suricata_consumer, "_set_remaining_busy_timeout", record_stage
+    )
+    receipt = suricata_consumer.consume_publication(
+        path, publication, consumer_attempt_id="deadline-rebind"
+    )
+
+    assert receipt["status"] == "committed"
+    assert [active for active, _ in observed] == [False, True, False]
+    assert all(1 <= milliseconds <= 30_000 for _, milliseconds in observed)
+
+
+def test_deadline_expiring_before_commit_rolls_back(tmp_path, monkeypatch):
+    path = _store(tmp_path)
+    publication = _publication(tmp_path)
+    calls = 0
+    real_set_timeout = suricata_consumer._set_remaining_busy_timeout
+
+    def expire_at_commit(connection, started):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise suricata_consumer._TransactionTimeout
+        return real_set_timeout(connection, started)
+
+    monkeypatch.setattr(
+        suricata_consumer, "_set_remaining_busy_timeout", expire_at_commit
+    )
+    receipt = suricata_consumer.consume_publication(
+        path, publication, consumer_attempt_id="commit-deadline"
+    )
+
+    assert receipt["status"] == "failed"
+    assert receipt["failure_code"] == "TRANSACTION_TIMEOUT"
+    assert receipt["transaction_status"] == "rolled_back"
+    assert receipt["reconciliation_status"] == "not_required"
+    _assert_contract(receipt)
+    assert _counts(path) == (0, 0, 0)
+
+
 def test_authoritative_replay_check_after_begin_rolls_back(tmp_path, monkeypatch):
     path = _store(tmp_path)
     publication = _publication(tmp_path)
@@ -341,6 +417,53 @@ def test_missing_store_is_not_created_and_schema_is_not_migrated(tmp_path):
     assert incompatible["status"] == "failed"
     assert incompatible["failure_code"] == "SCHEMA_INCOMPATIBLE"
     assert path.read_bytes() == before
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX mode boundary")
+def test_public_store_is_refused_without_permission_repair(tmp_path):
+    publication = _publication(tmp_path)
+    path = _store(tmp_path)
+    before = path.read_bytes()
+    path.chmod(0o644)
+
+    receipt = suricata_consumer.consume_publication(
+        path, publication, consumer_attempt_id="public-store"
+    )
+
+    assert receipt["status"] == "failed"
+    assert receipt["failure_code"] == "DATABASE_IDENTITY"
+    assert receipt["transaction_status"] == "not_started"
+    assert receipt["durable_write_status"] == "not_attempted"
+    _assert_contract(receipt)
+    assert path.stat().st_mode & 0o777 == 0o644
+    assert path.read_bytes() == before
+    assert _counts(path) == (0, 0, 0)
+
+
+def test_unsupported_runtime_refuses_before_store_access(tmp_path, monkeypatch):
+    publication = _publication(tmp_path)
+    path = _store(tmp_path)
+
+    def unsupported():
+        raise suricata.OfflineError("LINUX_REQUIRED")
+
+    def opened_store(*args, **kwargs):
+        raise AssertionError("unsupported runtime must not open the store")
+
+    monkeypatch.setattr(suricata, "require_unprivileged_linux", unsupported)
+    monkeypatch.setattr(
+        suricata_consumer, "_open_suricata_store_writer", opened_store
+    )
+    receipt = suricata_consumer.consume_publication(
+        path, publication, consumer_attempt_id="unsupported-runtime"
+    )
+
+    assert receipt["status"] == "failed"
+    assert receipt["failure_code"] == "STORAGE_ERROR"
+    assert receipt["transaction_status"] == "not_started"
+    assert receipt["durable_write_status"] == "not_attempted"
+    _assert_contract(receipt)
+    assert _counts(path) == (0, 0, 0)
 
 
 def test_constructed_frozen_garbage_and_mutable_input_fail_before_store(tmp_path):
