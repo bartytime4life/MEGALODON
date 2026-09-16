@@ -1,0 +1,119 @@
+[
+  {
+    "id": "runtime-not-implemented",
+    "seed": "policy",
+    "path": ["runtime_implemented"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "network-enabled",
+    "seed": "policy",
+    "path": ["side_effects", "network_access"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "non-atomic-write",
+    "seed": "policy",
+    "path": ["transaction", "atomic_batch_registry_receipt"],
+    "operation": "set",
+    "value": false,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "run-identity-not-unique",
+    "seed": "policy",
+    "path": ["transaction", "complete_run_identity_unique"],
+    "operation": "set",
+    "value": false,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "blind-retry-enabled",
+    "seed": "policy",
+    "path": ["transaction", "blind_retry_after_unknown"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "payload-hash-retained",
+    "seed": "policy",
+    "path": ["data", "retain_payload_derived_hash"],
+    "operation": "set",
+    "value": true,
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "committed-count-mismatch",
+    "seed": "two-record-committed",
+    "path": ["normalized_alert_count"],
+    "operation": "set",
+    "value": 1,
+    "stage": "semantic",
+    "code": "COUNT_MISMATCH"
+  },
+  {
+    "id": "committed-blocked-over-count",
+    "seed": "two-record-committed",
+    "path": ["producer_blocked_count"],
+    "operation": "set",
+    "value": 3,
+    "stage": "semantic",
+    "code": "COUNT_MISMATCH"
+  },
+  {
+    "id": "committed-byte-mismatch",
+    "seed": "two-record-committed",
+    "path": ["normalized_batch_bytes"],
+    "operation": "set",
+    "value": 1290,
+    "stage": "semantic",
+    "code": "BATCH_BYTES"
+  },
+  {
+    "id": "committed-action-attempted",
+    "seed": "two-record-committed",
+    "path": ["action_status"],
+    "operation": "set",
+    "value": "applied",
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "unknown-claimed-committed",
+    "seed": "commit-acknowledgement-unknown",
+    "path": ["transaction_status"],
+    "operation": "set",
+    "value": "committed",
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "replay-misclassified-storage-error",
+    "seed": "duplicate-rejected",
+    "path": ["failure_code"],
+    "operation": "set",
+    "value": "STORAGE_ERROR",
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
+    "id": "raw-exception-field",
+    "seed": "precommit-failure-rolled-back",
+    "path": ["exception"],
+    "operation": "add",
+    "value": "database path and low-level exception",
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  }
+]

@@ -613,12 +613,16 @@ normative-draft schema and fixtures. It is not scheduler execution, recurrence
 calculation, model access, or permission to use commands, endpoints, or tools.
 [contracts/suricata-eve/v1](contracts/suricata-eve/v1/README.md) contains the
 closed EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
-[bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). These
-gates specify record, filesystem, quota, replay, and completion requirements.
+[bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). The
+separate [durable-consumer contract](contracts/suricata-eve/v1/consumer/README.md)
+proposes closed transaction, replay-registry, terminal-receipt, and
+commit-reconciliation requirements with a synthetic SQLite oracle. These gates
+specify record, filesystem, quota, replay, completion, and future persistence
+requirements.
 `megalodon.offline.suricata.read_completed_file` implements one single-threaded
 Linux main-thread, completed-private-file reader using the guarded `SIGALRM` deadline
 and returns an immutable in-memory batch and receipt. There is no raw-EVE converter, sensor operation, ruleset manager,
-durable consumer, dashboard projection, or IPS path. The offline dashboard
+production durable consumer or migration, dashboard projection, or IPS path. The offline dashboard
 projection remains independent and does not accept or display Suricata alerts.
 
 `megalodon capabilities` returns a deterministic static catalog of these
