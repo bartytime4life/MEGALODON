@@ -38,7 +38,7 @@ installed-model acceptance and measured detection accuracy remain separate gates
 - closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
   provenance and cannot carry arbitrary payload-like fields;
 - local only: the dashboard defaults to `127.0.0.1:8787` and has no write API;
-- isolated dashboard storage: on POSIX, serving requires an existing compatible private
+- isolated dashboard storage: on POSIX, reading telemetry requires an existing compatible private
   database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
   authorizer; it cannot create or migrate the audit database;
 - no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
@@ -161,7 +161,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
-| Dashboard | Read-only loopback UI pinned to one viewport with persistent **Live review**, **Analysis**, and **Interfaces** workspace tabs. The internally scrolling workspaces separate stored telemetry/triage, Reference Library/offline context, and 14 static application-interface slots. No vendor console is embedded. **Deep analysis & context** may display one startup-supplied, immutable Qwen advisory receipt through a bounded same-origin GET; the dashboard cannot request analysis, poll the provider, load a receipt from disk, or perform host/network action |
+| Dashboard | Read-only loopback UI pinned to one viewport with persistent **Live review**, **Analysis**, and **Tools & consoles** workspace tabs. The internally scrolling workspaces separate stored telemetry/triage, Reference Library/offline context, and 14 static application-interface slots. No vendor console is embedded. **Deep analysis & context** may display one startup-supplied, immutable Qwen advisory receipt through a bounded same-origin GET; the dashboard cannot request analysis, poll the provider, load a receipt from disk, or perform host/network action |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
@@ -523,6 +523,36 @@ the selected virtual environment's interpreter: `.venv/bin/python` on Linux or
 `& .\.venv\Scripts\python.exe` in Windows PowerShell. A virtual environment can
 be used without activation; see the [Python venv documentation](https://docs.python.org/3/library/venv.html).
 Bash pipelines and Linux-only adapter/firewall examples are not Windows recipes.
+
+### Start the HUD with one command
+
+From the environment where this MEGALODON revision is installed:
+
+```bash
+python -m megalodon hud
+```
+
+Open **http://127.0.0.1:8787** on the same computer. No account, subscription,
+configuration file, companion installation, or readiness-report export is needed
+to open the workspace. Existing default audit data is read automatically. If
+that store does not exist, the HUD opens with **unavailable** measurements and
+working tool controls and reference lookup; it creates no database or demo data.
+Real network evidence still requires a separately operated supported input.
+
+**Tools & consoles** shows one startup executable-presence snapshot, official
+setup links, optional saved companion-console addresses, and the same reviewed
+copy-only maintenance controls as the hosted Site. Console links open the real
+companion app in another tab; they do not connect its data or grant MEGALODON
+control. Commands remain visible for review and execution in your terminal.
+Qwen invocation, sensor startup, package changes and firewall application are
+not HUD actions.
+
+The optional **Choose existing data for the next launch** form prepares a quoted
+command for a settings file, completed offline run, or Suricata store. It never
+opens a path or launches the command. Stop with **Ctrl+C**, then restart when you
+change inputs or want a new presence snapshot. The original `dashboard` command
+keeps its strict existing-store requirement and performs no presence check.
+See [HUD operation](docs/dashboard-operations.md) for details.
 
 ### Local dashboard and storage
 

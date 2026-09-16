@@ -6,13 +6,46 @@ capture, analyzer installation, or response action. See the
 [HTTP contract](dashboard-http-contract.md) for exact request semantics and the
 [integration hub contract](integration-hub.md) for workflow ownership.
 
+## Open the HUD
+
+Run `python -m megalodon hud` from the installed environment and open
+`http://127.0.0.1:8787` on that computer. There is no local cloud login or
+subscription. Companion installations and a configuration file are optional.
+The default store is `data/megalodon.db`, relative to the launch directory;
+use the same working directory/configuration as your ingestion workflow.
+An absent store opens an unconfigured workspace instead of creating a database
+or sample data. The source notice explains the missing input; measurements
+remain unavailable. Unsafe or invalid existing data is still refused.
+
+Tool presence is checked once at launch, with no executable run, version probe
+or service connection. Restart to recheck. Readiness describes the dashboard
+process's PATH, not every installed package or other user's environment. The
+original `dashboard` command still requires a store and omits tool checks.
+
+Use **Tools & consoles** to find a tool, open its official setup guide, inspect
+copy-only verification/maintenance commands, or save its existing web-console
+address once. Saved console links open the companion app in another tab, where
+that app retains its own authentication and controls. Desktop-only tools still
+use their normal application launcher or the displayed terminal commands.
+MEGALODON does not install/start tools or embed their admin interfaces.
+Addresses persist only in this browser and origin; the hosted Site and local HUD
+have separate bookmarks. Remove a link from its editor. No credentials belong
+in a saved address. No background connection test is performed.
+
+The home **Choose existing data for the next launch** form prepares a command
+for optional settings, completed offline evidence and a Suricata store. Fields
+remain in page memory; editing invalidates the previous copy action until the
+command is prepared again. Absolute Linux paths are shell-quoted. Stop with
+Ctrl+C and run the prepared command; the form itself opens no path. Data ingestion
+and sensor operation remain explicit separate workflows.
+
 ## Read the interface in evidence order
 
 The command center stays pinned to one browser viewport. Its persistent tabs
 switch among three internally scrolling workspaces without reloading the page:
 **Live review** leads with the trust strip, stored counters, and detection
 triage; **Analysis** contains the Reference Library, offline snapshot, optional
-Suricata evidence, and display-only Qwen receipt boundary; **Interfaces** contains every closed
+Suricata evidence, and display-only Qwen receipt boundary; **Tools & consoles** contains every closed
 application slot.
 Switching workspaces preserves local filters and never fetches external data or
 starts an analysis.
@@ -82,7 +115,7 @@ filters apply only to the returned view, not the entire history.
 
 ## Operate the Integration Map
 
-Opening **Interfaces** loads the selected **Linux** profile once through a
+Opening **Tools & consoles** loads the selected **Linux** profile once through a
 same-origin GET for static repository constants. Choose **Windows evaluation**
 or **Other platforms**, then select **Load integration map** to request that
 profile. A failed first load requires an explicit retry. None of these steps
@@ -91,9 +124,9 @@ installs software, launches an adapter, embeds a vendor console, or writes to
 SQLite.
 
 The profile selector is an explicit documentation choice, not operating-system
-detection. Each successful map contains the 14 closed hub workflows. Cards show
-an interface zone, software, documented availability, input, output, and the
-next acceptance gate. Expand a card to inspect its workflow ID, source kind, implementation
+detection. Each successful map contains the 14 closed hub workflows. Cards show software, documented support, a separately labeled startup presence
+result when available, evidence shortcuts and companion controls. Data connection
+details contain input, output and the next acceptance gate. Expand a card to inspect its workflow ID, source kind, implementation
 owner, launch policy, data boundary, action boundary, and inert command template.
 A command displayed as text is not an executable control or a complete install
 instruction for the selected profile.

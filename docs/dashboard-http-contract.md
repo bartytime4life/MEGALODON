@@ -35,6 +35,7 @@ server an Internet-facing production service.
 | `/assets/dashboard.css` | No application query contract | Composed local stylesheet |
 | `/assets/dashboard.js` | No application query contract | Composed local script, one final bootstrap |
 | `/api/config` | None | Read-only flag, refresh interval, event limit, offline-selection availability |
+| `/api/setup` | None | Startup source-selection state and optional executable-presence snapshot |
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
@@ -48,6 +49,35 @@ server an Internet-facing production service.
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
 parameters. Never encode an action or secret in a query string.
+
+## First-launch HUD and companion controls
+
+`python -m megalodon hud` accepts the same configuration and read-view options
+as `dashboard`. It additionally runs the existing readiness metadata check once
+before listening. `/api/setup` returns immutable `dashboard-setup-v1` bytes:
+`source_status` is `connected` or `not_configured`, and `readiness` is either a
+closed `megalodon-tool-readiness-v1` report or null. The encoded envelope is
+bounded to 8,704 bytes. Query arguments and POST are refused. Repeated GETs and
+browser refresh never inspect executables. The client uses the same strict
+readiness validator as the hosted Site; no report import is needed locally.
+
+Only `DASHBOARD_STORE:NO_DIRECTORY` and `DASHBOARD_STORE:NO_DATABASE` can produce
+the unconfigured first-launch reader. It returns no telemetry; summary, events
+and ingestion receipts remain unavailable. Existing unsafe/invalid stores refuse
+startup, and ordinary `dashboard` retains its strict missing-store behavior.
+No database, sample record, migration, sensor, model request or service is created.
+
+The local and hosted HUDs share canonical controls, lifecycle text and parser in
+`megalodon/dashboard_tool_assets.py`. `scripts/sync-hud-assets.py` materializes
+the exact Site copies, with a byte-parity regression. Console bookmarks persist
+only explicit validated HTTP(S) addresses for fourteen fixed tools in browser
+localStorage; storage failure uses page memory and says so. Credentials, queries,
+fragments, executable protocols and malformed saved values are rejected. No
+telemetry, readiness report, command-builder path or filter is persisted there.
+Links open a separate tab with no opener/referrer; they do not prove connectivity.
+The optional startup form builds quoted Linux commands without path access or
+execution. Clipboard operations require a user click and expose a manual-copy
+fallback message.
 
 ## Optional Suricata evidence snapshot
 
@@ -234,7 +264,7 @@ source-admission, connection, or health receipt.
 
 ## UI state and safe rendering
 
-The Integration Map is loaded on first entry to the **Interfaces** workspace or
+The Integration Map is loaded on first entry to the **Tools & consoles** workspace or
 by the explicit load button; it is not added to telemetry polling or the startup
 critical path. It has one in-flight request, the
 existing five-second browser abort budget, bounded in-memory filters, explicit

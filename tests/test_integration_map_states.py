@@ -7,6 +7,8 @@ import subprocess
 import unittest
 
 from megalodon.dashboard_connections import INTEGRATIONS_JS
+from megalodon.dashboard_setup import SETUP_JS
+from megalodon.dashboard_tool_assets import LIFECYCLE_JS, CONTROLS_JS
 
 
 HARNESS = r"""
@@ -23,6 +25,7 @@ process.stdin.on('end', async () => {
       append(...nodes) { this.children.push(...nodes); }
       replaceChildren(...nodes) { this.children = nodes; }
       setAttribute(name, value) { this.attrs[name] = value; }
+      removeAttribute(name) { delete this.attrs[name]; }
       addEventListener(name, handler) { this.listeners[name] = handler; }
       set innerHTML(_) { throw new Error('HTML interpolation is not permitted'); }
     }
@@ -161,7 +164,7 @@ class IntegrationMapStateTests(unittest.TestCase):
     def run_case(self, scenario: str) -> None:
         result = subprocess.run(
             [shutil.which("node"), "-e", HARNESS],
-            input=json.dumps({"asset": INTEGRATIONS_JS, "scenario": scenario}),
+            input=json.dumps({"asset": LIFECYCLE_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS, "scenario": scenario}),
             text=True, capture_output=True, timeout=10, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

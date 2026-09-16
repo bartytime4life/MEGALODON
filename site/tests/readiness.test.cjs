@@ -188,7 +188,7 @@ test('whole application initializes and navigates without a feed or browser netw
   const document={querySelector(s){ if(!nodes.has(s)) nodes.set(s,new Element()); return nodes.get(s); }, querySelectorAll(){ return []; }, createElement(){ return new Element(); }};
   const context={document, window:{matchMedia(){return {matches:true};},scrollTo(){}}, localStorage:{getItem(){return null;}}, Date, console};
   vm.createContext(context);
-  for(const path of ['../dist/lifecycle.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
+  for(const path of ['../dist/lifecycle.js','../dist/controls.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
   for(const view of ['hud','evidence','integrations','missions','boundaries']) vm.runInContext(`switchView('${view}')`,context);
   for(const id of Object.keys(lifecycleCommands)) vm.runInContext(`state.selectedTool='${id}'; renderToolInspector()`,context);
   assert.match(nodes.get('#feed-count').textContent, /No network records/);

@@ -7,6 +7,8 @@ constants to preserve the existing public/test interface.
 
 from .dashboard_connections import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
+from .dashboard_setup import SETUP_HTML, SETUP_JS
+from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
 
 
 INDEX_HTML = """<!doctype html>
@@ -34,7 +36,7 @@ INDEX_HTML = """<!doctype html>
   <nav class="section-nav" aria-label="Command center workspaces" role="tablist">
     <button id="workspace-tab-live" type="button" role="tab" aria-controls="workspace-live" aria-selected="true" tabindex="0">Live review</button>
     <button id="workspace-tab-analysis" type="button" role="tab" aria-controls="workspace-analysis" aria-selected="false" tabindex="-1">Analysis</button>
-    <button id="workspace-tab-interfaces" type="button" role="tab" aria-controls="workspace-interfaces" aria-selected="false" tabindex="-1">Interfaces</button>
+    <button id="workspace-tab-interfaces" type="button" role="tab" aria-controls="workspace-interfaces" aria-selected="false" tabindex="-1">Tools &amp; consoles</button>
   </nav>
 
   <div class="workspace-scroll" id="workspace-content">
@@ -42,11 +44,13 @@ INDEX_HTML = """<!doctype html>
   <section class="hero" aria-labelledby="page-title">
     <div>
       <p class="eyebrow">Live review</p>
-      <h1 id="page-title" tabindex="-1">Start with the signal you can act on.</h1>
-      <p class="lede">Review the latest bounded local metadata summary first, then move into deeper context only when it helps. A dashboard refresh is not proof that capture, ingestion, or a model analysis is running.</p>
+      <h1 id="page-title" tabindex="-1">Network activity</h1>
+      <p class="lede">Your stored detections, evidence and companion tools in one place.</p>
     </div>
     <div class="read-only">HTTP read only · loopback only</div>
   </section>
+
+  <!-- HUD_SETUP -->
 
   <section class="section-intro" aria-labelledby="live-review-title">
     <p class="eyebrow">First layer</p>
@@ -528,6 +532,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
 
 
 DASHBOARD_CSS += INTEGRATIONS_CSS
+DASHBOARD_CSS += CONTROLS_CSS + "\n.hero {padding: 18px 0;} .hero h1 {font-size: 2rem;} .integration-card h3 {font-size: 1.1rem;} .integration-card dd, .integration-gate {font-size: .875rem;}\n"
 
 DASHBOARD_JS = r"""
 'use strict';
@@ -548,7 +553,7 @@ const workspaceTargets = {
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'live',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
-  'workspace-interfaces': 'interfaces'
+  'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis'
 };
 const state = {
   events: [],
@@ -1665,6 +1670,7 @@ async function bootstrap() {
   loadSuricataEvidence();
   loadIngestionRuns();
   loadReferenceStatus();
+  loadSetup();
   await refresh(false); scheduleNext();
 }
 
@@ -1694,4 +1700,5 @@ document.addEventListener('visibilitychange', () => {
 """
 
 DASHBOARD_CSS += REFERENCE_CONTRACT_CSS
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + INTEGRATIONS_JS + "\nbootstrap();\n"
+INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + "\nbootstrap();\n"

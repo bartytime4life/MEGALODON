@@ -2,6 +2,24 @@
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 
+## Quick-start controls
+
+The first view leads with `python -m megalodon hud`, a direct link to the local
+HUD and tool search. The command requires installation of the HUD update. It
+opens a local workspace before data exists, includes startup presence checks,
+and does not create sample evidence or start a sensor. Disconnected hosted
+measurements are collapsed under an explicit status disclosure.
+
+Local and hosted tool controls share the canonical Python asset constants in
+`megalodon/dashboard_tool_assets.py`. The repository's
+`scripts/sync-hud-assets.py` regenerates `controls.js`, `controls.css`,
+`lifecycle.js` and `readiness.js`; parity is tested. Fourteen fixed tools support
+official setup links and copy-only maintenance commands. Optional saved console
+addresses persist per browser origin; they open the actual companion app in a
+separate tab. No embedding, probing, credential storage or host execution occurs.
+Tool search includes local evidence paths and saved-console filters. Manual
+presence-report import remains optional for this hosted page.
+
 ## Actual behavior
 
 - No network feed is connected. The HUD shows unavailable measurements, not zeros, generated rates, detections, protocol shares or example receipts. Workflows points to the local dashboard for actual stored evidence; this does not start a sensor or establish liveness.
@@ -14,9 +32,9 @@ The existing private [Defense Console](https://megalodon-defense-console.blackba
 
 ## Source and verification
 
-Implementation baseline: `0e71cd41627fe2d2bffde7c2ddd222b475f73bc1` (merged PR #243). Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/readiness.test.cjs`; README/tests stay outside the deployed archive.
+Implementation baseline: `73d2a2e36ed4e110b7ecbdc138359ebc9b06c23c` (merged PR #244), with the HUD update on `agent/intuitive-hud-20260916`. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive.
 
-Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/readiness.test.cjs`. The current suite has 32 checks for the actual parser, lifecycle semantics, empty telemetry and application initialization/navigation. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
+Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites have 37 checks for the actual parser, lifecycle semantics, empty telemetry and application initialization/navigation. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 
 The managed preview service has no compatible server for this plain-static Site. No current visual walkthrough is claimed. Deployment, matching source bytes, tests, native producer acceptance and human review are distinct evidence.
 

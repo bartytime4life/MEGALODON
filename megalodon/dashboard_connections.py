@@ -3,10 +3,10 @@
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
-      <div><h2 id="integrations-title" tabindex="-1">Application interfaces</h2><p>See every current or planned MEGALODON interface slot, then follow its documented input, output, ownership boundary, and next acceptance gate.</p></div>
+      <div><h2 id="integrations-title" tabindex="-1">Tools &amp; consoles</h2><p>Find a tool, open its console, or review its data in MEGALODON. Installation and maintenance commands are available in each card.</p></div>
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
-    <p class="reference-warning" id="integrations-boundary">View-only MEGALODON slots — never embedded vendor consoles. This static map is not installed-tool detection, live connectivity, or health monitoring; loading it does not install, start, connect, or configure anything.</p>
+    <p class="reference-warning" id="integrations-boundary">Console links open your companion apps directly. Startup executable checks, when available, appear separately from integration support. Neither establishes a running sensor or service.</p>
     <div class="integration-controls">
       <label class="field" for="integrations-platform"><span>Documentation profile</span>
         <select id="integrations-platform"><option value="linux">Linux</option><option value="windows">Windows evaluation</option><option value="other">Other platforms</option></select>
@@ -133,12 +133,19 @@ function integrationCard(item) {
     textNode('h3', item.software),
     textNode('span', integrationStatuses[item.selected_status], 'summary-chip')
   );
+  const toolIndex = integrationIds.indexOf(item.id);
+  const toolId = workflowToolIds[toolIndex];
+  card.append(textNode('p', toolPresenceText(toolIndex), 'summary-chip'));
+  const reviewTargets = {core: '#detections-title', tshark: '#offline-title', zeek: '#offline-title', suricata: '#suricata-title', qwen: '#analysis-window-title'};
+  if (reviewTargets[toolId]) {
+    const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; card.append(review);
+  }
+  MegalodonControls.mount(card, toolId, item.software);
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);
-  card.append(flow, textNode('p', `Next gate: ${item.next_gate}`, 'integration-gate'));
   const details = document.createElement('details');
-  details.append(textNode('summary', 'Inspect contract and boundaries'));
+  details.append(textNode('summary', 'Data connection details'), flow, textNode('p', `Next gate: ${item.next_gate}`, 'integration-gate'));
   const facts = document.createElement('dl');
   [
     ['Workflow', item.id], ['Source kind', item.source_kind], ['Integration owner', item.integration_owner],
@@ -157,7 +164,7 @@ function integrationViewStatus(visibleCount) {
       : 'No successful integration map is available. Choose a profile and load the static map.';
   } else {
     const chosen = byId('integrations-platform').value;
-    message = `${visibleCount} of ${snapshot.workflows.length} workflows shown for the loaded ${snapshot.selected_platform} documentation profile. No host has been inspected.`;
+    message = `${visibleCount} of ${snapshot.workflows.length} workflows shown for the loaded ${snapshot.selected_platform} documentation profile. This map request does not inspect the host.`;
     if (chosen !== snapshot.selected_platform) message += ` Selected profile ${integrationPlatforms.includes(chosen) ? chosen : 'invalid'} is not loaded; the previous profile remains visible.`;
     if (integrationState.failed) message = 'Load failed. Preserved map is stale. ' + message;
   }

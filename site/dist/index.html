@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="./styles.css" />
     <script src="./readiness.js" defer></script>
     <script src="./lifecycle.js" defer></script>
+    <link rel="stylesheet" href="./controls.css" />
+    <script src="./controls.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
@@ -57,9 +59,9 @@
                 <img src="./megalodon-github-hero-compact.png" width="960" height="640" alt="MEGALODON shark and shield emblem" />
               </figure>
               <div>
-                <p class="eyebrow">Unified telemetry surface</p>
-                <h1 id="hud-title">Network activity HUD</h1>
-                <p>No network feed is connected to this hosted console. Use your local dashboard to review actual stored evidence.</p>
+                <p class="eyebrow">Your local workspace</p>
+                <h1 id="hud-title">MEGALODON control desk</h1>
+                <p>Launch your local HUD, find your tools, and review your evidence. Your data stays on your computer.</p>
               </div>
             </div>
             <div class="hud-controls" aria-label="Connection status">
@@ -68,6 +70,11 @@
             </div>
           </div>
 
+          <section class="hud-start" aria-labelledby="hud-start-title">
+            <div><h2 id="hud-start-title">One command. Your own computer.</h2><p>From your installed MEGALODON environment, start the local HUD. It checks tool presence at launch and works even before you have a data store. Companion tools are optional.</p><div class="start-actions"><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a><button type="button" data-jump="integrations">Find a tool</button></div><p class="panel-footnote">The local link works after launch on this computer. This hosted page does not test or connect to your machine.</p></div>
+            <div><code>python -m megalodon hud</code><button id="copy-hud-start" type="button">Copy launch command</button><details><summary>First launch or need help?</summary><p>Activate the virtual environment where MEGALODON is installed, then run the command. Keep that terminal open. Stop with Ctrl+C. Use Tools &amp; consoles inside the local HUD; no report export or cloud login is required.</p><p>If the command is unavailable, review and install the <a href="https://github.com/bartytime4life/MEGALODON/tree/agent/intuitive-hud-20260916" target="_blank" rel="noopener noreferrer">HUD update</a> first. An empty HUD does not start a sensor or generate data.</p></details></div>
+          </section>
+          <details class="disconnected-details"><summary>Hosted network feed · not connected</summary><p>Actual measurements are available only in your local HUD after real evidence is ingested.</p>
           <section class="kpi-grid" aria-label="Network measurements unavailable">
             <article class="kpi-card cyan-accent"><div><span>METADATA EVENTS</span><small>no input</small></div><strong id="metric-events">—</strong><span class="metric-delta">unavailable</span></article>
             <article class="kpi-card blue-accent"><div><span>FLOW RECORDS</span><small>no input</small></div><strong id="metric-flows">—</strong><span class="metric-delta">unavailable</span></article>
@@ -110,6 +117,7 @@
               <p class="panel-footnote">Packet, flow and alert units must remain separate. No measurements have been received.</p>
             </section>
           </div>
+          </details>
         </section>
 
         <section class="view" data-view-panel="evidence" aria-labelledby="evidence-title" hidden>
@@ -120,12 +128,14 @@
 
         <section class="view" data-view-panel="integrations" aria-labelledby="integrations-title" hidden>
           <div class="view-heading">
-            <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Integration control room</h1><p>Record your installation notes and inspect a separately imported presence report. Review installation-specific diagnostics and lifecycle guidance. MEGALODON receives only a bounded, source-qualified result where a contract exists.</p></div>
+            <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Tools &amp; consoles</h1><p>Find a tool and open its controls. Save the address of an existing web console once, or use its setup guide. The local HUD provides startup presence checks automatically.</p></div>
             <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>Operator reference</small></span></div>
           </div>
+          <div class="hud-tool-search"><label>Find a tool<input id="tool-search" type="search" maxlength="120" placeholder="Name, task, or data type" /></label><label>Show<select id="tool-quick-filter"><option value="all">All tools</option><option value="data">Local evidence paths</option><option value="saved">My saved consoles</option></select></label><p id="tool-result-count" role="status"></p></div>
           <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
           <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card separates self-reported installed/not-installed notes from imported PATH findings. Copyable commands are scoped to an installation method; unknown methods require vendor guidance. Setup links open project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Manual notes: 0 reported installed · 0 reported not installed · 0 need recheck · 14 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
-          <section class="readiness-import panel" aria-labelledby="readiness-title"><div><p class="panel-kicker">LOCAL READINESS REPORT</p><h2 id="readiness-title">Bring a presence check into view</h2><p>Open a bounded report generated on your Linux host. It stays in this page's memory and is never uploaded. An executable found on PATH does not establish compatibility, service health, or permission to run it.</p></div><div class="readiness-actions"><label class="control-button" for="readiness-file">Choose JSON report</label><input id="readiness-file" type="file" accept="application/json,.json" /><button id="clear-readiness" class="text-button" type="button" disabled>Forget report</button></div><p class="readiness-candidate"><strong>Delivered in <a href="https://github.com/bartytime4life/MEGALODON/pull/241" target="_blank" rel="noopener noreferrer">PR #241</a>.</strong> On main@5583ac1 or later, run <code>python -m megalodon readiness &gt; megalodon-readiness.json</code>. This checks executable presence only; it does not start a tool or establish compatibility.</p><p id="readiness-feedback" role="status">No readiness report loaded.</p></section>
+          <details class="manual-import"><summary>Optional: view a presence report in this hosted page</summary>          <section class="readiness-import panel" aria-labelledby="readiness-title"><div><p class="panel-kicker">LOCAL READINESS REPORT</p><h2 id="readiness-title">Bring a presence check into view</h2><p>Open a bounded report generated on your Linux host. It stays in this page's memory and is never uploaded. An executable found on PATH does not establish compatibility, service health, or permission to run it.</p></div><div class="readiness-actions"><label class="control-button" for="readiness-file">Choose JSON report</label><input id="readiness-file" type="file" accept="application/json,.json" /><button id="clear-readiness" class="text-button" type="button" disabled>Forget report</button></div><p class="readiness-candidate"><strong>Delivered in <a href="https://github.com/bartytime4life/MEGALODON/pull/241" target="_blank" rel="noopener noreferrer">PR #241</a>.</strong> On main@5583ac1 or later, run <code>python -m megalodon readiness &gt; megalodon-readiness.json</code>. This checks executable presence only; it does not start a tool or establish compatibility.</p><p id="readiness-feedback" role="status">No readiness report loaded.</p></section>
+          </details>
           <div class="integration-layout"><div id="integration-grid" class="integration-grid" aria-label="Companion tool interfaces"></div><aside id="tool-inspector" class="tool-inspector" aria-live="polite"></aside></div>
         </section>
 
