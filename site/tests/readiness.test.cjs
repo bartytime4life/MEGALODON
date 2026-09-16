@@ -119,3 +119,78 @@ test('the HTML declares unique evidence controls and loads its local validator f
   assert.match(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
 });
+
+const {lifecycleCommands, resolveLifecycle} = require('../dist/lifecycle.js');
+
+test('lifecycle choices cover the exact fourteen tools without inventing unknown installations', () => {
+  assert.deepEqual(Object.keys(lifecycleCommands).sort(), ['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','ossec','greenbone','zabbix','nagios'].sort());
+  for (const id of ['zeek','ossec','nagios','zabbix']) {
+    assert.equal(resolveLifecycle(id).uninstall, null);
+    assert.equal(resolveLifecycle(id).reinstall, null);
+  }
+});
+
+test('Qwen inspect, removal and download use the same example model and literal local provider', () => {
+  const qwen = resolveLifecycle('qwen');
+  for (const action of ['verify','uninstall','reinstall']) {
+    assert.match(qwen[action], /OLLAMA_HOST=127\.0\.0\.1:11434/);
+    assert.match(qwen[action], /qwen2\.5:7b/);
+  }
+  assert.match(qwen.note, /mutable tag.*not the approved registry/);
+});
+
+test('Zabbix selection scopes package operations to exactly one role', () => {
+  for (const [role, pkg] of [['agent2','zabbix-agent2'], ['agent','zabbix-agent'], ['mysql','zabbix-server-mysql']]) {
+    const choice = resolveLifecycle('zabbix', role);
+    assert.equal(choice.uninstall, `sudo apt-get remove ${pkg}`);
+    assert.equal(choice.reinstall, `sudo apt-get install --reinstall ${pkg}`);
+  }
+  for (const invalid of [undefined, '', 'all', '__proto__']) {
+    assert.equal(resolveLifecycle('zabbix', invalid).reinstall, null);
+  }
+});
+
+test('Greenbone labels report container and image effects, not a complete uninstall or running scanner', () => {
+  const greenbone = resolveLifecycle('greenbone');
+  assert.equal(greenbone.verify, 'docker compose images');
+  assert.equal(greenbone.uninstall, 'docker compose down');
+  assert.match(greenbone.labels.uninstall, /retain data\/images/);
+  assert.match(greenbone.labels.reinstall, /do not start/);
+  assert.match(greenbone.note, /Neither is a complete uninstall\/reinstall/);
+});
+
+test('scanner reference does not silently add daemon/update roles or purge configuration', () => {
+  assert.equal(resolveLifecycle('clamav').reinstall, 'sudo apt-get install --reinstall clamav');
+  assert.equal(resolveLifecycle('suricata').reinstall, 'sudo apt-get install --reinstall suricata');
+  assert.doesNotMatch(JSON.stringify(lifecycleCommands), /--purge|\s-y\b|remove-orphans/);
+});
+
+test('disconnected HUD has no generated observations, fixtures or refresh timer', () => {
+  const fs = require('node:fs');
+  const app = fs.readFileSync(require.resolve('../dist/app.js'), 'utf8');
+  const html = fs.readFileSync(require.resolve('../dist/index.html'), 'utf8');
+  assert.doesNotMatch(app, /eventTemplates|runExamples|addSyntheticEvent|chartSeries|setInterval|Math\.sin|demo-event/);
+  assert.doesNotMatch(html, /SYNTHETIC PREVIEW|12,480|7 synthetic|41%|INTACT/);
+  for (const id of ['metric-events','metric-flows','metric-detections']) assert.ok(html.includes(`id="${id}">—</strong>`));
+  assert.match(html, /NOT CONNECTED/);
+  assert.ok(html.indexOf('src="./lifecycle.js"') < html.indexOf('src="./app.js"'));
+});
+
+test('whole application initializes and navigates without a feed or browser network API', () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  class Element {
+    constructor() { this.children=[]; this.dataset={}; this.textContent=''; this.value=''; this.classList={toggle(){}}; }
+    setAttribute() {} removeAttribute() {} addEventListener() {} focus() {}
+    replaceChildren(...children) { this.children=children; } append(...children) { this.children.push(...children); }
+    querySelector() { return new Element(); }
+  }
+  const nodes=new Map();
+  const document={querySelector(s){ if(!nodes.has(s)) nodes.set(s,new Element()); return nodes.get(s); }, querySelectorAll(){ return []; }, createElement(){ return new Element(); }};
+  const context={document, window:{matchMedia(){return {matches:true};},scrollTo(){}}, localStorage:{getItem(){return null;}}, Date, console};
+  vm.createContext(context);
+  for(const path of ['../dist/lifecycle.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
+  for(const view of ['hud','evidence','integrations','missions','boundaries']) vm.runInContext(`switchView('${view}')`,context);
+  for(const id of Object.keys(lifecycleCommands)) vm.runInContext(`state.selectedTool='${id}'; renderToolInspector()`,context);
+  assert.match(nodes.get('#feed-count').textContent, /No network records/);
+  assert.match(nodes.get('#tool-inspector').innerHTML, /Manual presence note/);
+});

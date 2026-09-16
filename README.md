@@ -56,7 +56,9 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 production-readiness gaps.
 
 The private [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site)
-is a static, synthetic, read-only review surface. Its deployable source and
+is a hosted reference surface with no network feed connected. It shows unavailable
+telemetry until a separately reviewed real-data connection exists; it does not
+substitute generated traffic or zeros for missing observations. Its deployable source and
 alignment record are versioned under [`site/`](site/README.md); the repository
 contracts remain authoritative.
 
@@ -84,6 +86,7 @@ record delivery state; they do not override the checked-in contracts.
 | Suricata record, reader, durable-consumer, and reconciliation gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), [`consumer`](contracts/suricata-eve/v1/consumer/README.md), and [`reconciliation`](contracts/suricata-eve/v1/reconciliation/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
+| Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
 | Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
 
 ## Choose a configuration
@@ -571,7 +574,8 @@ one SQLite statement, and recent detections select and order only by public data
 `detected_at`, `rule_id`, `severity`, `src_ip`, and `message`. Compatible WAL
 reads may create or update private `-wal`/`-shm` coordination files inside the
 verified mode-`0700` directory; they do not change the main database, schema,
-`user_version`, or journal mode. Windows ACL enforcement remains issue #27.
+`user_version`, or journal mode. Native Windows ACL enforcement remains unproved; closed issue #27 delivered
+the acceptance handoff, not native execution evidence.
 
 For an existing POSIX installation, stop every MEGALODON process before the
 first post-upgrade open. Inspect the literal configured directory, database, and
@@ -1098,7 +1102,7 @@ SPECIFICATION.md             implemented MVP contract and acceptance boundary
 This is a defensive MVP, not a finished enterprise IDS/IPS. The fixed detections
 are simple heuristics. There is no authenticated remote UI, arbitrary rule
 authoring, threat-feed or SIEM/SOAR integration, distributed sensor management,
-automatic retention job, production rollback orchestration, model execution,
+automatic retention job, production rollback orchestration, background model execution,
 active scheduler, Suricata watcher/sensor control or reconciliation CLI/background
 command, alert acknowledgement/resolution/escalation lifecycle, notification
 dispatcher, or continuous capture-health monitor on `main`.

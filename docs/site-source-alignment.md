@@ -1,59 +1,61 @@
 # Defense Console source alignment
 
-Readback date: 2026-09-16. This record distinguishes the deployed static Site
-from local Python runtime implementation and operational acceptance.
+Readback date: 2026-09-16. This receipt separates the hosted reference console,
+local Python implementation and native operational acceptance.
 
 | Identity | Observed value |
 | --- | --- |
 | Existing Site | [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) |
-| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
-| Slug | `megalodon-defense-console` |
-| Version | 11 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_f6bc47bdef348191a01fff8994f86945` |
-| Source commit | `c0865c0cec760f66a694c04d1108e061bf739358` in the existing Sites source repository |
-| Deployment | `appgdep_6aaaf2b73774819196049947252ea3fb`, succeeded at `2026-09-16T19:49:30.321770Z` |
+| Project / slug | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` / `megalodon-defense-console` |
+| Version | 14 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_b7c5ddfa657081918be5b6584f557006` |
+| Source commit | `875b63b661f297c35162303f621349e727587f85` in the existing Sites source repository |
+| Deployment | `appgdep_6aab03cd3be48191b3bb20f52330c894`, succeeded at `2026-09-16T21:02:27.150283Z` |
 | Access | Owner-private, access revision 1; no viewer/editor groups or external shares |
-| Server archive digest | `sha256:f97c25aa7e46920c03fae14a2156158789c159ae6e98bdd3305d5355c8f72c1d` |
-| Product baseline summarized | `5583ac1d7f465757a0375d64cf1c18ee7c47ade9` |
-| Retained rollback | Version 10; source `bcdb20cd1458b8fcfa6a43a89163d77a02f36367` (version 9 also retained) |
+| Server archive digest | `sha256:7968558e55f9b5f2e1b7893475292ffb842f30f1f6da98a7cb1b7e4ee29230d1` |
+| Product baseline inspected | `0e71cd41627fe2d2bffde7c2ddd222b475f73bc1` |
+| Retained rollback | Version 13; source `463c9d7e411ceaa86666babe1e24426cb88877f1`; contains the older demonstration and lifecycle defects |
 
-## Mirror and boundaries
+## Exact source and artifact scope
 
-`site/` mirrors the nine source files byte-for-byte: `README.md`,
-`.openai/hosting.json`, the six files under `dist/`, and the source-owned
-`tests/readiness.test.cjs`. The deployed archive
-contains seven files (hosting manifest and six assets), excluding README and
-tests. The importer regressions live under `site/tests/readiness.test.cjs` and
-`tests/test_site_readiness.py`, outside the deployable Site. Python source
-distributions do not bundle the independent Site mirror; those two Site tests
-explicitly skip when its assets are absent.
+`site/` matches all ten tracked Sites source files byte-for-byte: README,
+`.openai/hosting.json`, seven `dist/` assets including the new `lifecycle.js`, and
+`tests/readiness.test.cjs`. The archive contains eight files: the normalized
+hosting manifest plus seven deployable assets. README and tests are not deployed.
+The Python source distribution still excludes the independent Site mirror; its
+two interoperability tests explicitly skip when those assets are absent.
 
-The Site remains a browser-only prototype. Its activity and linked evidence
-records are labeled synthetic. The optional readiness report stays in page
-memory and is never uploaded. Executable presence and manual notes do not prove
-installation integrity, compatibility, a running sensor, or host protection.
-The readiness command was merged in [#241](https://github.com/bartytime4life/MEGALODON/pull/241);
-the local Suricata startup view was merged in
-[#239](https://github.com/bartytime4life/MEGALODON/pull/239). Version 11 updates
-only guidance, labels and provenance to reflect those deliveries. The hosted
-Site is not connected to the local dashboard or Suricata store.
+Version 14 removes all generated network observations, charts, detection counts,
+protocol shares, fixture receipts and the refresh interval. Missing telemetry
+is **unavailable**, not zero, clean or healthy. Real stored evidence remains in
+the local dashboard. No hosted connector or live sensor has been added.
 
-## Verification limits
+The integration registry separates self-reported installation notes (persistent
+browser `localStorage`) from unauthenticated readiness imports (page memory only).
+Command identity, role selection, installation method and container lifecycle
+labels were corrected. Copying a command neither executes it nor updates the
+installation note. See [findings](evidence-alignment-review.md).
 
-JavaScript syntax, asset references, 25 Node contract tests, Python-to-Site
-schema compatibility, and independent adversarial review passed. The Site
-service confirmed successful deployment, exact source version and unchanged
-access. This is not rendered-browser acceptance: Chromium download failed and
-the available browser rejected local preview access. The normal deployed URL was also checked and showed the ChatGPT sign-in gate;
-the app was not accessible in that browser session. No current app screenshot
-was obtained; an older cached screenshot is not evidence for this version.
-Complete an owner-visible walkthrough before claiming visual acceptance.
+## Validation and limits
 
-Historical checkpoint: v10 deployed at `2026-09-16T19:34:14.399205Z` from
-`bcdb20cd1458b8fcfa6a43a89163d77a02f36367` as
-`appgdep_6aaaef2587f0819185b323ad8af3923d`. Version 11 preserves its behavior
-and removes the now-stale pending-merge wording after the owner-account merges.
-This engineering run created draft PRs; it did not mark ready or merge them.
+- Full repository pytest run passed: 2,240 tests, with three native/installed-tool
+  skips; 2,243 tests collected. The unchanged parametrized subtest cases ran within
+  that suite. No displayed lifecycle operation was executed.
+- 32 Node checks passed, covering the parser, asynchronous import races, lifecycle
+  identity/roles, empty telemetry and application startup/navigation with a DOM stub.
+- Real Python readiness output parsed successfully through the Site validator.
+- JavaScript syntax, ten-file parity, diff checks and nine-page Wiki validation passed.
+- Sites confirmed successful deployment. This plain-static project has no compatible
+  managed preview server. No current screenshot or rendered-browser acceptance is
+  claimed; a DOM stub and the local Python dashboard's browser CI are different proof.
 
-A public GitHub source mirror does not change private Site access. No repository
-merge, software release, remote local-dashboard exposure, sensor launch, model
-request, installer, or host-control path is authorized by this record.
+GitHub PR delivery and a successful Site deploy are distinct. This run uses a draft
+PR and does not mark it ready, merge it, release software, change sharing, expose
+the local dashboard or authorize host/model operations.
+
+## Earlier checkpoints
+
+Version 13/source `463c9d7e411ceaa86666babe1e24426cb88877f1` added lifecycle controls
+through merged PR #243. Its three automated review findings are corrected here.
+Version 11/source `c0865c0cec760f66a694c04d1108e061bf739358` was mirrored by merged
+PR #242; the Wiki link repair #240 is also merged. Those are historical source
+states, not the current Site. Older versions remain available in Site history.
