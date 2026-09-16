@@ -234,6 +234,21 @@ def _open_suricata_store_reader(
                 raise SuricataStoreError("SURICATA_STORE:INCOMPLETE_WAL_STATE")
             if "-journal" in sidecars:
                 raise SuricataStoreError("SURICATA_STORE:ACTIVE_JOURNAL_REFUSED")
+            if require_sidecar_free:
+                try:
+                    header = os.pread(database_descriptor, 20, 0)
+                except OSError as exc:
+                    raise SuricataStoreError(
+                        "SURICATA_STORE:HEADER_READ_FAILED"
+                    ) from exc
+                if (
+                    len(header) != 20
+                    or header[:16] != b"SQLite format 3\x00"
+                    or header[18:20] != b"\x01\x01"
+                ):
+                    raise SuricataStoreError(
+                        "SURICATA_STORE:ROLLBACK_JOURNAL_REQUIRED"
+                    )
             sqlite_path = _anchored_database_path(
                 database_descriptor, database_path, "SURICATA_STORE"
             )
