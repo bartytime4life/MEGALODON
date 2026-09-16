@@ -241,6 +241,21 @@ interpose on port 11434 remains outside this slice's trust proof.
 
 ## Open control register
 
+**Currentness note.** Every GitHub issue cited by number in this register
+(#3, #7, #25, #65, #66, #67, #68, #191, #194, #196, #198, #203, and the
+others linked below) is now closed. A closed issue is a lifecycle event,
+not a claim that its row's "Remaining control" text is satisfied — some
+rows' remaining work landed in the closing pull request (for example #7's
+browser-acceptance evidence now runs as this repository's
+`browser-acceptance` CI job), while others were closed without the
+described control existing (#3 was closed `not_planned`: the repository
+owner adopted the fast, AI-reviewed, owner-directed merge workflow instead
+of building a server-enforced independent-review floor, so this table's
+"Enforce and evidence an independent approval path" remains not built by
+owner decision, not merely unfinished). Treat each row's evidence and
+remaining-control text on its own merits; do not infer resolution from
+issue closure alone.
+
 | Gate | Repository evidence | Remaining control |
 | --- | --- | --- |
 | Aggregate JSONL input budget ([#203](https://github.com/bartytime4life/MEGALODON/issues/203)) | Every returned JSONL line counts toward a fixed 256 MiB UTF-8 budget before classification or parsing; owned UTF-8 files preserve LF/CRLF/CR bytes; the first excess line fails with a record-free capture error and no further logical line read | Borrowed text streams must preserve newlines for original-byte accounting; decoder read-ahead is not bounded by this counter. Revalidate exact-head behavior on intended Linux files and pipes; retain the separate event, skipped-line, elapsed-deadline, storage, and cleanup controls |
