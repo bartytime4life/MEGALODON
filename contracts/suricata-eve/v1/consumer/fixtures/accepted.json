@@ -10,7 +10,12 @@
       "max_records": 10000,
       "max_normalized_batch_bytes": 16777216,
       "max_transaction_and_readback_ms": 30000,
-      "max_diagnostic_bytes": 64
+      "max_diagnostic_bytes": 64,
+      "store_page_size_bytes": 4096,
+      "store_max_pages": 131072,
+      "store_max_bytes": 536870912,
+      "capacity_reservation_multiplier": 4,
+      "capacity_reservation_overhead_bytes": 8388608
     },
     "transaction": {
       "database": "sqlite",
