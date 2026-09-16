@@ -1,14 +1,16 @@
 # Suricata EVE alert contract v1
 
 **Status: ADOPTED RECORD CONTRACT / BOUNDED LINUX READER AVAILABLE /
-PROPOSED DURABLE-CONSUMER CONTRACT.**
+PROPOSED DURABLE-CONSUMER CONTRACT / EXPLICIT STORE INITIALIZER.**
 The record gate (#9) and bounded-reader design gate (#24) are closed on `main`.
 The separate `megalodon.offline.suricata` module implements only the contracted
 completed-file reader. This directory does not install or run Suricata, download
 rules, capture packets, start a scheduler, persist Suricata telemetry in the
 production store, modify the dashboard, or authorize a firewall action. The
 [`consumer/`](consumer/README.md) subdirectory is a proposed contract and
-synthetic SQLite oracle only; it is not runtime code or a migration.
+synthetic SQLite oracle. The separate production-owned
+`megalodon.suricata_store` module can explicitly create and validate the
+reserved SQLite layout, but provides no consumer writes or migration.
 
 The historical authoring base was `dc35854a4bb9a4d353b3832cb18d5dee780d244c`
 in `bartytime4life/MEGALODON`; the checked-in schemas, fixtures, tests, and this
@@ -24,7 +26,8 @@ bounded-source/run contract, completed-run receipts, synthetic fixture mutations
 and an independent in-memory publish oracle for the runtime reader. The
 [`consumer/`](consumer/README.md) subdirectory separately closes a proposed
 transaction, replay-registry, terminal-receipt, and reconciliation contract for
-a future durable consumer. All fixture
+a future durable consumer. Its explicit store initializer reserves the exact
+tables and uniqueness constraints without implementing that consumer. All fixture
 addresses and rule labels are synthetic;
 forbidden-content tests use null/empty markers, not packet payloads or hashes.
 

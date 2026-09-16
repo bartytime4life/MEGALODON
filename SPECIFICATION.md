@@ -616,13 +616,15 @@ closed EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
 [bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). The
 separate [durable-consumer contract](contracts/suricata-eve/v1/consumer/README.md)
 proposes closed transaction, replay-registry, terminal-receipt, and
-commit-reconciliation requirements with a synthetic SQLite oracle. These gates
-specify record, filesystem, quota, replay, completion, and future persistence
-requirements.
+commit-reconciliation requirements with a synthetic SQLite oracle. The
+production-owned `megalodon.suricata_store` module explicitly creates a
+new owner-private v1 database and validates its exact layout read-only; it has no
+consumer-write or existing-store migration API. These gates specify record,
+filesystem, quota, replay, completion, and future persistence requirements.
 `megalodon.offline.suricata.read_completed_file` implements one single-threaded
 Linux main-thread, completed-private-file reader using the guarded `SIGALRM` deadline
 and returns an immutable in-memory batch and receipt. There is no raw-EVE converter, sensor operation, ruleset manager,
-production durable consumer or migration, dashboard projection, or IPS path. The offline dashboard
+production durable consumer, existing-store migration, dashboard projection, or IPS path. The offline dashboard
 projection remains independent and does not accept or display Suricata alerts.
 
 `megalodon capabilities` returns a deterministic static catalog of these
