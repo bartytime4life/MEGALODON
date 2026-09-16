@@ -228,6 +228,19 @@ def _discard_created_database(
         pass
 
 
+def _refuse_orphaned_sidecars(
+    path: Path, directory_descriptor: int | None
+) -> None:
+    sidecars = _validate_sqlite_sidecars(
+        path,
+        directory_descriptor,
+        writable=False,
+        prefix="SURICATA_STORE",
+    )
+    if sidecars:
+        raise SuricataStoreError("SURICATA_STORE:ORPHANED_SIDECAR_REFUSED")
+
+
 def initialize_suricata_store(path: str | Path) -> dict[str, object]:
     """Explicitly create the exact v1 store; never open an existing database."""
 
@@ -241,6 +254,7 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
             database_path.parent, create=True, prefix="SURICATA_STORE"
         )
         _assert_path_identity(database_path, None, directory_descriptor)
+        _refuse_orphaned_sidecars(database_path, directory_descriptor)
         database_descriptor = _create_private_database(
             database_path, directory_descriptor
         )
@@ -248,12 +262,7 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
         _assert_path_identity(
             database_path, database_descriptor, directory_descriptor
         )
-        _validate_sqlite_sidecars(
-            database_path,
-            directory_descriptor,
-            writable=True,
-            prefix="SURICATA_STORE",
-        )
+        _refuse_orphaned_sidecars(database_path, directory_descriptor)
         sqlite_path = _anchored_database_path(
             database_descriptor, database_path, "SURICATA_STORE"
         )
