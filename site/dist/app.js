@@ -25,11 +25,11 @@ const integrations = [
   },
   {
     id: "suricata", name: "Suricata", monogram: "SU", category: "network", status: "implemented", statusLabel: "Gate complete",
-    summary: "Reads one completed alert envelope, applies a fixed consumer-owned 512 MiB capacity gate, and persists exactly one immutable publication atomically.",
+    summary: "Capacity-gates and atomically publishes one immutable alert envelope, then reconciles an unknown commit from one locked read-only evidence snapshot.",
     dataKind: "alert metadata", contract: "suricata-eve-alert-input-v1", owner: "megalodon.offline.suricata",
-    boundary: "Linux, non-root, and capability-free; existing owner-private store only. No permission repair, migration, retention deletion, network, sensor or IPS control, dashboard projection, blocking, action attribution, or response path.",
-    nextGate: "Explicit commit-unknown reconciliation API, then installed-producer and dashboard-projection acceptance.", ui: ["Alert lane", "Severity", "Terminal receipt"],
-    evidence: { label: "Issue #221 · durable-consumer capacity gate", url: "https://github.com/bartytime4life/MEGALODON/issues/221" },
+    boundary: "Linux, non-root, and capability-free; existing owner-private store only. The reconciler pins O_RDONLY, holds an OFD lock, refuses WAL/sidecars, and never repairs, retries, migrates, retains/deletes, starts sensors, projects dashboards, blocks, attributes, or responds.",
+    nextGate: "Installed-producer acceptance, followed by a separately authorized read-only dashboard projection.", ui: ["Alert lane", "Severity", "Terminal receipt"],
+    evidence: { label: "Issue #231 · read-only commit reconciliation", url: "https://github.com/bartytime4life/MEGALODON/issues/231" },
     metricA: "512 MiB", metricALabel: "logical consumer ceiling", metricB: "30 s", metricBLabel: "cooperative deadline"
   },
   {
@@ -297,12 +297,12 @@ const workflows = {
     boundary: "Fixed /usr/bin/tshark, bounded output and time; Windows desktop Wireshark is separate."
   },
   suricata: {
-    status: "Capacity gate complete", statusClass: "implemented", platform: "Linux · non-root · capability-free", title: "Atomic Suricata publication",
-    summary: "Validate one immutable completed publication, refuse excess capacity before BEGIN IMMEDIATE, and commit run identity, alerts, and terminal receipt in one transaction.",
-    command: "consume_publication(private_store, publication, consumer_attempt_id=\"operator-issued-id\")",
-    produces: ["Deterministic capacity preflight", "Atomic run + alert + receipt rows", "Exact post-commit readback"],
-    refuses: ["Public or replaced stores", "Permission repair or schema migration", "Automatic retention or blind retry"],
-    boundary: "Fixed 512 MiB logical no-freelist-credit ceiling and shared 30-second cooperative deadline; refusal writes zero rows. Neither is a physical-disk or hard real-time SLA."
+    status: "Reconciliation gate complete", statusClass: "implemented", platform: "Linux · non-root · capability-free", title: "Atomic Suricata publication + exact reconciliation",
+    summary: "Publish once behind the durable capacity gate. If the commit outcome is unknown, inspect the exact run, attempt, alerts, and receipt in one locked read-only snapshot.",
+    command: "reconcile_publication(private_store, publication, consumer_attempt_id=\"operator-issued-id\")",
+    produces: ["Exact committed evidence", "Dual-absence not_committed evidence", "Conservative indeterminate receipt"],
+    refuses: ["Database, schema, permission, or evidence writes", "WAL/sidecar creation and concurrent writer races", "Retry, repair, retention, producer, dashboard, or response authority"],
+    boundary: "Pinned O_RDONLY descriptor + full SQLite OFD read lock + rollback-journal header + no sidecars + query_only; one cooperative 30-second deadline covers validation, query, readback, and final identity verification."
   },
   plans: {
     status: "Implemented / non-executing", statusClass: "implemented", platform: "Static catalog", title: "Capability and integration plans",
