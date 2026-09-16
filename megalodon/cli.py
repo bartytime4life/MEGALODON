@@ -157,6 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="absolute path to one complete private offline run; loaded read-only at startup",
     )
+    dashboard.add_argument(
+        "--suricata-db",
+        type=Path,
+        help="existing private Suricata store; bounded read-only startup snapshot",
+    )
 
     plan = sub.add_parser("firewall-plan", help="print a non-mutating nftables plan")
     plan.add_argument("ip")
@@ -739,6 +744,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                 enabled=enabled,
                 allow_remote=args.allow_remote,
                 offline_summary=offline_summary,
+                suricata_db=getattr(args, "suricata_db", None),
                 refresh_seconds=(
                     args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
                 ),

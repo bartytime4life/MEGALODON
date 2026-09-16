@@ -158,6 +158,26 @@ INDEX_HTML = """<!doctype html>
     </dl>
   </section>
 
+  <section class="panel" id="suricata-panel" aria-labelledby="suricata-title" aria-busy="true">
+    <div class="panel-head">
+      <div><h2 id="suricata-title" tabindex="-1">Suricata evidence</h2><p>Startup snapshot of the separately selected durable alert store. Signature matches remain external evidence and never increase MEGALODON’s detection or action counters.</p></div>
+      <span class="timestamp" id="suricata-status">Checking startup snapshot…</span>
+    </div>
+    <p class="ingestion-runs-note" id="suricata-message" role="status" aria-live="polite" aria-atomic="true">Checking for an explicitly selected Suricata store.</p>
+    <div id="suricata-content" hidden>
+      <dl class="ingestion-run-facts suricata-summary" id="suricata-summary"></dl>
+      <p class="ingestion-runs-note">Newest 5 publications, at most 50 signature alerts in publication order. Producer-reported “blocked” is a Suricata observation; MEGALODON performed no response. Restart the dashboard to take a new snapshot.</p>
+      <div class="table-scroll" role="region" aria-label="Scrollable Suricata signature alerts" tabindex="0">
+        <table><caption>External signature evidence · startup snapshot</caption>
+          <thead><tr><th scope="col">Observed time</th><th scope="col">Endpoints</th><th scope="col">Rule</th><th scope="col">Producer action</th><th scope="col">Source provenance</th></tr></thead>
+          <tbody id="suricata-alerts"></tbody>
+        </table>
+      </div>
+      <div class="panel-head"><div><h3 id="suricata-provenance" tabindex="-1">Publication provenance</h3><p>Sensor, run, ruleset, and version are recorded operator declarations. They do not establish a live sensor, independent verification, or maliciousness.</p></div></div>
+      <div class="ingestion-runs-list" id="suricata-runs" role="list"></div>
+    </div>
+  </section>
+
   <section class="panel ingestion-runs-panel" id="ingestion-runs-panel" aria-labelledby="ingestion-runs-title" aria-busy="true">
     <div class="panel-head">
       <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
@@ -464,6 +484,8 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .reference-record dt { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .reference-record dd { margin: 0; overflow-wrap: anywhere; font-size: .78rem; }
 .reference-record dd + dt { margin-top: 6px; }
+.suricata-summary { margin: 16px 22px; }
+#suricata-alerts td { overflow-wrap: anywhere; }
 code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: rgba(0, 0, 0, .2); color: #c8f7ef; font-size: .85em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 [hidden] { display: none !important; }
@@ -524,7 +546,7 @@ const maxTimelineBins = 12;
 const workspaceIds = ['live', 'analysis', 'interfaces'];
 const workspaceTargets = {
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'live',
-  'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
+  'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces'
 };
@@ -562,6 +584,7 @@ const advisoryCodes = Object.freeze({
 });
 const maxAdvisoryResponseBytes = 8 * 1024;
 const maxIngestionRunsResponseBytes = 32 * 1024;
+const maxSuricataResponseBytes = 64 * 1024;
 let ingestionRunsLoading = false;
 const ingestionRunFields = [
   'action_count', 'detection_count', 'failure_code', 'finished_at', 'processed_count',
@@ -856,6 +879,124 @@ async function loadIngestionRuns() {
     ingestionRunsLoading = false;
     button.disabled = false;
   }
+}
+function suricataInteger(value, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) {
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum;
+}
+function suricataIdentifier(value) {
+  return typeof value === 'string' && value.length <= 64 && /^[A-Za-z][A-Za-z0-9_-]*$(?![\s\S])/u.test(value);
+}
+function validatedSuricataEnvelope(value) {
+  const top = ['schema_version', 'status', 'failure_code', 'provenance', 'action_status', 'limits', 'summary', 'recent_runs', 'recent_alerts'];
+  if (!referenceExactKeys(value, top)
+      || value.schema_version !== 'suricata-evidence-projection-v1'
+      || value.provenance !== 'external_suricata_signature_alerts'
+      || value.action_status !== 'not_attempted'
+      || !referenceExactKeys(value.limits, ['max_recent_runs', 'max_recent_alerts', 'max_query_ms', 'max_response_bytes'])
+      || value.limits.max_recent_runs !== 5 || value.limits.max_recent_alerts !== 50
+      || value.limits.max_query_ms !== 5000 || value.limits.max_response_bytes !== maxSuricataResponseBytes
+      || !Array.isArray(value.recent_runs) || value.recent_runs.length > 5
+      || !Array.isArray(value.recent_alerts) || value.recent_alerts.length > 50) {
+    throw new Error('invalid Suricata response');
+  }
+  if (value.status !== 'available') {
+    const validFailure = value.status === 'not_configured' ? value.failure_code === null
+      : value.status === 'unavailable' && ['UNSUPPORTED_RUNTIME', 'STORE_UNAVAILABLE', 'INVALID_EVIDENCE', 'QUERY_TIMEOUT', 'RESPONSE_LIMIT'].includes(value.failure_code);
+    if (!validFailure || value.summary !== null || value.recent_runs.length || value.recent_alerts.length) throw new Error('invalid Suricata refusal');
+    return Object.freeze({...value, limits: Object.freeze({...value.limits}), recent_runs: Object.freeze([]), recent_alerts: Object.freeze([])});
+  }
+  const summaryFields = ['stored_runs', 'stored_alerts', 'validated_recent_runs', 'validated_recent_alerts', 'shown_alerts'];
+  if (value.failure_code !== null || !referenceExactKeys(value.summary, summaryFields)
+      || !summaryFields.every(key => suricataInteger(value.summary[key]))) throw new Error('invalid Suricata counts');
+  const runs = value.recent_runs.map(run => {
+    if (!referenceExactKeys(run, ['run_row_id', 'run_id', 'sensor_id', 'ruleset_id', 'declared_version', 'version_basis', 'ruleset_basis', 'consumer_attempt_id', 'alert_count', 'producer_reported_blocked_count'])
+        || !suricataInteger(run.run_row_id, 1)
+        || !['run_id', 'sensor_id', 'ruleset_id', 'consumer_attempt_id'].every(key => suricataIdentifier(run[key]))
+        || typeof run.declared_version !== 'string' || run.declared_version.length > 11 || !/^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})$(?![\s\S])/u.test(run.declared_version)
+        || run.version_basis !== 'operator_declared' || run.ruleset_basis !== 'operator_declared'
+        || !suricataInteger(run.alert_count, 1, 10000) || !suricataInteger(run.producer_reported_blocked_count, 0, run.alert_count)) {
+      throw new Error('invalid Suricata publication');
+    }
+    return Object.freeze({...run});
+  });
+  if (new Set(runs.map(run => run.run_row_id)).size !== runs.length
+      || runs.some((run, index) => index && run.run_row_id >= runs[index - 1].run_row_id)) throw new Error('invalid Suricata publication order');
+  const runMap = new Map(runs.map(run => [run.run_row_id, run]));
+  const addresses = value => typeof value === 'string' && value.length >= 2 && value.length <= 39 && /^[0-9a-f:.]+$(?![\s\S])/u.test(value);
+  const alerts = value.recent_alerts.map(alert => {
+    const run = alert && runMap.get(alert.run_row_id);
+    if (!referenceExactKeys(alert, ['run_row_id', 'run_id', 'sensor_id', 'source_record_index', 'observed_at', 'src_ip', 'src_port', 'dst_ip', 'dst_port', 'protocol', 'rule', 'producer_reported_action', 'action_status', 'evidence_kind'])
+        || !run || run.run_id !== alert.run_id || run.sensor_id !== alert.sensor_id
+        || !suricataInteger(alert.source_record_index, 1, run.alert_count)
+        || typeof alert.observed_at !== 'string' || alert.observed_at.length !== 27 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$(?![\s\S])/u.test(alert.observed_at) || !validRecordedTime(alert.observed_at)
+        || !addresses(alert.src_ip) || !addresses(alert.dst_ip)
+        || !suricataInteger(alert.src_port, 0, 65535) || !suricataInteger(alert.dst_port, 0, 65535)
+        || !['TCP', 'UDP'].includes(alert.protocol)
+        || !referenceExactKeys(alert.rule, ['gid', 'signature_id', 'rev', 'severity'])
+        || !['gid', 'signature_id', 'rev'].every(key => suricataInteger(alert.rule[key], 1, 4294967295))
+        || !suricataInteger(alert.rule.severity, 1, 255)
+        || !['allowed', 'blocked'].includes(alert.producer_reported_action)
+        || alert.action_status !== 'not_attempted' || alert.evidence_kind !== 'signature_match') throw new Error('invalid Suricata alert');
+    return Object.freeze({...alert, rule: Object.freeze({...alert.rule})});
+  });
+  if (new Set(alerts.map(alert => `${alert.run_row_id}:${alert.source_record_index}`)).size !== alerts.length
+      || alerts.some((alert, index) => index && (alert.run_row_id > alerts[index - 1].run_row_id
+        || (alert.run_row_id === alerts[index - 1].run_row_id && alert.source_record_index >= alerts[index - 1].source_record_index)))
+      || value.summary.validated_recent_runs !== runs.length || Math.min(5, value.summary.stored_runs) !== runs.length
+      || value.summary.validated_recent_alerts !== runs.reduce((sum, run) => sum + run.alert_count, 0)
+      || value.summary.stored_alerts < value.summary.validated_recent_alerts
+      || value.summary.shown_alerts !== alerts.length || alerts.length !== Math.min(50, value.summary.validated_recent_alerts)
+      || runs.some(run => alerts.filter(alert => alert.run_row_id === run.run_row_id).length > run.alert_count
+        || alerts.filter(alert => alert.run_row_id === run.run_row_id && alert.producer_reported_action === 'blocked').length > run.producer_reported_blocked_count)) throw new Error('inconsistent Suricata counts');
+  return Object.freeze({...value, limits: Object.freeze({...value.limits}), summary: Object.freeze({...value.summary}), recent_runs: Object.freeze(runs), recent_alerts: Object.freeze(alerts)});
+}
+function renderSuricataUnavailable(notConfigured = false) {
+  byId('suricata-panel').setAttribute('aria-busy', 'false');
+  byId('suricata-status').textContent = notConfigured ? 'Not configured' : 'Unavailable';
+  byId('suricata-content').hidden = true;
+  byId('suricata-summary').replaceChildren(); byId('suricata-runs').replaceChildren(); byId('suricata-alerts').replaceChildren();
+  byId('suricata-message').textContent = notConfigured
+    ? 'No Suricata store was selected at startup. Use dashboard --suricata-db with an existing private store to inspect its evidence.'
+    : 'The selected Suricata snapshot is unavailable or invalid. No partial alert evidence is displayed. Core telemetry remains separate.';
+}
+function renderSuricataEvidence(value) {
+  if (value.status !== 'available') { renderSuricataUnavailable(value.status === 'not_configured'); return; }
+  byId('suricata-panel').setAttribute('aria-busy', 'false');
+  byId('suricata-status').textContent = 'Startup snapshot · read only';
+  byId('suricata-message').textContent = value.summary.stored_runs === 0
+    ? 'The selected store contains no committed publications. This does not establish sensor health or an absence of threats.'
+    : 'Validated recent publications from the separate Suricata store. Older publications contribute stored counts only; they were not fully revalidated.';
+  byId('suricata-summary').replaceChildren(
+    ingestionFact('Stored publications', formatNumber(value.summary.stored_runs)),
+    ingestionFact('Stored external alerts', formatNumber(value.summary.stored_alerts)),
+    ingestionFact('Validated recent alerts', formatNumber(value.summary.validated_recent_alerts)),
+    ingestionFact('Shown alerts', formatNumber(value.summary.shown_alerts))
+  );
+  byId('suricata-runs').replaceChildren(...value.recent_runs.map(run => {
+    const card = document.createElement('article'); card.className = 'ingestion-run'; card.setAttribute('role', 'listitem');
+    const facts = document.createElement('dl'); facts.className = 'ingestion-run-facts';
+    facts.append(ingestionFact('Sensor', run.sensor_id), ingestionFact('Ruleset', run.ruleset_id),
+      ingestionFact('Declared version', run.declared_version), ingestionFact('Consumer attempt', run.consumer_attempt_id),
+      ingestionFact('Committed alerts', formatNumber(run.alert_count)), ingestionFact('Producer-reported blocked', formatNumber(run.producer_reported_blocked_count)));
+    card.append(textNode('h3', `Publication ${run.run_row_id} · ${run.run_id}`), facts);
+    return card;
+  }));
+  const rows = value.recent_alerts.map(alert => {
+    const row = document.createElement('tr');
+    const endpoint = (address, port) => `${address.includes(':') ? `[${address}]` : address}:${port}`;
+    const endpoints = `${endpoint(alert.src_ip, alert.src_port)} → ${endpoint(alert.dst_ip, alert.dst_port)} · ${alert.protocol}`;
+    row.append(textNode('td', alert.observed_at), textNode('td', endpoints),
+      textNode('td', `${alert.rule.gid}:${alert.rule.signature_id}:${alert.rule.rev} · producer severity ${alert.rule.severity}`),
+      textNode('td', `${alert.producer_reported_action} · MEGALODON not attempted`));
+    const source = document.createElement('td'); const link = textNode('a', `${alert.sensor_id} / ${alert.run_id} / record ${alert.source_record_index}`);
+    link.setAttribute('href', '#suricata-provenance'); source.append(link); row.append(source); return row;
+  });
+  if (!rows.length) { const row = document.createElement('tr'); const cell = textNode('td', 'No committed signature alerts in the selected recent publications.', 'empty'); cell.setAttribute('colspan', '5'); row.append(cell); rows.push(row); }
+  byId('suricata-alerts').replaceChildren(...rows); byId('suricata-content').hidden = false;
+}
+async function loadSuricataEvidence() {
+  try { renderSuricataEvidence(validatedSuricataEnvelope(await requestBoundedJSON('/api/suricata', maxSuricataResponseBytes))); }
+  catch (_) { renderSuricataUnavailable(); }
 }
 async function loadAdvisoryReceipt() {
   try {
@@ -1521,6 +1662,7 @@ async function bootstrap() {
   try { renderOffline(await requestJSON('/api/offline-summary')); }
   catch (_) { renderOfflineError(); }
   loadAdvisoryReceipt();
+  loadSuricataEvidence();
   loadIngestionRuns();
   loadReferenceStatus();
   await refresh(false); scheduleNext();
