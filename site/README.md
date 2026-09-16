@@ -8,9 +8,10 @@ The Site is a static, browser-only interface prototype. It has no backend, conne
 
 - Site project: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3`
 - Public project repository: https://github.com/bartytime4life/MEGALODON
-- Repository baseline represented by this revision: `main@ef688cb26a9cdbc251b0219fb8f5f3e763a70e34`
+- Repository baseline represented by this revision: `main@f7509ce3bc03222ace31dba5069c1b615c0d6c24`
 - Public mirror path: `site/`
 - Deployable static assets: `dist/`
+- Brand asset: `assets/megalodon-github-hero-compact.png` from the repository README
 
 The MEGALODON repository root remains authoritative for product behavior, security contracts, tests, and implementation status. This Site summarizes those contracts for human review; it does not expand runtime authority.
 
