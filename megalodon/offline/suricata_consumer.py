@@ -16,6 +16,8 @@ import time
 from types import MappingProxyType
 from typing import Any, NamedTuple
 
+from . import suricata
+from .common import OfflineError
 from ..suricata_store import (
     SuricataStoreError,
     _STORE_MAX_BYTES as STORE_MAX_BYTES,
@@ -607,6 +609,18 @@ def _commit(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
+def _set_remaining_busy_timeout(
+    connection: sqlite3.Connection, started: float
+) -> int:
+    """Bind the next SQLite lock wait to the remaining shared deadline."""
+
+    busy_ms = _remaining_milliseconds(started)
+    connection.execute(f"PRAGMA busy_timeout={busy_ms}")
+    if connection.execute("PRAGMA busy_timeout").fetchone() != (busy_ms,):
+        raise sqlite3.DatabaseError
+    return busy_ms
+
+
 def _readback_matches(
     connection: sqlite3.Connection,
     facts: _PublicationFacts,
@@ -685,8 +699,7 @@ def _consume_open_store(
             return _receipt(
                 facts, attempt_id, "preflight_failed", "DATABASE_IDENTITY"
             )
-        busy_ms = _remaining_milliseconds(started)
-        connection.execute(f"PRAGMA busy_timeout={busy_ms}")
+        _set_remaining_busy_timeout(connection, started)
         connection.execute("BEGIN IMMEDIATE")
     except _TransactionTimeout:
         return _receipt(
@@ -775,11 +788,25 @@ def _consume_open_store(
         )
 
     try:
+        _set_remaining_busy_timeout(connection, started)
         _commit(connection)
+    except _TransactionTimeout:
+        if connection.in_transaction and _rollback(connection):
+            return _receipt(
+                facts, attempt_id, "rolled_back", "TRANSACTION_TIMEOUT"
+            )
+        return _receipt(facts, attempt_id, "unknown")
     except (sqlite3.Error, OSError):
+        if connection.in_transaction and _rollback(connection):
+            return _receipt(
+                facts,
+                attempt_id,
+                "rolled_back",
+                _deadline_failure_code(started, "STORAGE_ERROR"),
+            )
         return _receipt(facts, attempt_id, "unknown")
     try:
-        _remaining_milliseconds(started)
+        _set_remaining_busy_timeout(connection, started)
         writer.verify_identity()
         if not _readback_matches(
             connection, facts, attempt_id, committed_json,
@@ -802,14 +829,21 @@ def consume_publication(
 ) -> Mapping[str, Any]:
     """Atomically persist one exact reader publication in an existing store.
 
-    This performs one local durable write. It does not create or migrate a
-    store, reopen source data, run a sensor, access a network, launch a process,
-    invoke a model, update a dashboard, purge evidence, or execute an action. A
-    ``reconciliation_required`` result must not be blindly retried.
+    This performs one local durable write from a Linux, unprivileged,
+    capability-free process. It does not create, migrate, or permission-repair
+    a store, reopen source data, run a sensor, access a network, launch a
+    process, invoke a model, update a dashboard, purge evidence, or execute an
+    action. A ``reconciliation_required`` result must not be blindly retried.
     """
 
     facts = _validate_publication(publication)
     attempt_id = _validate_attempt_id(consumer_attempt_id)
+    try:
+        suricata.require_unprivileged_linux()
+    except OfflineError:
+        return _receipt(
+            facts, attempt_id, "preflight_failed", "STORAGE_ERROR"
+        )
     try:
         started = time.monotonic()
     except Exception:

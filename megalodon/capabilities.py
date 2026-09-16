@@ -64,7 +64,7 @@ _COMPONENTS = (
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The single-threaded Linux main-thread API reads one completed private contract envelope file, and an explicit API can atomically persist that validated publication to one pre-created private store; no EVE converter, sensor, ruleset manager, watcher, dashboard, or IPS path exists.",
+        "boundary": "The single-threaded Linux main-thread API reads one completed private contract envelope file, and an explicit Linux non-root capability-free API can atomically persist that validated publication to one pre-created private store that is already owner-private, without permission repair; no EVE converter, sensor, ruleset manager, watcher, dashboard, or IPS path exists.",
     },
     {
         "id": "scapy",

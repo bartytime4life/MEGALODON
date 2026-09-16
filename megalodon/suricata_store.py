@@ -15,6 +15,7 @@ from typing import Callable, Iterator
 
 from .storage import (
     PRIVATE_DATABASE_MODE,
+    StorageSchemaError,
     _absolute_database_path,
     _anchored_database_path,
     _open_private_database,
@@ -189,6 +190,7 @@ def _open_suricata_store_writer(
                 writable=True,
                 create=False,
                 prefix="SURICATA_STORE",
+                normalize_writable_mode=False,
             )
             if created:
                 raise SuricataStoreError("SURICATA_STORE:UNEXPECTED_CREATION")
@@ -198,7 +200,7 @@ def _open_suricata_store_writer(
             if _validate_sqlite_sidecars(
                 database_path,
                 directory_descriptor,
-                writable=True,
+                writable=False,
                 prefix="SURICATA_STORE",
             ):
                 raise SuricataStoreError("SURICATA_STORE:RECOVERY_REQUIRED")
@@ -208,9 +210,10 @@ def _open_suricata_store_writer(
             connection = sqlite3.connect(
                 f"{sqlite_path.as_uri()}?mode=rw&cache=private",
                 uri=True,
-                timeout=30,
+                timeout=0,
                 isolation_level=None,
             )
+            connection.execute("PRAGMA busy_timeout=0")
             _validate_connection_path(connection, database_path, "SURICATA_STORE")
             _assert_path_identity(
                 database_path, database_descriptor, directory_descriptor
@@ -242,6 +245,8 @@ def _open_suricata_store_writer(
             handle.verify_identity()
         except SuricataStoreError:
             raise
+        except StorageSchemaError as exc:
+            raise SuricataStoreError(str(exc)) from exc
         except (OSError, sqlite3.Error, ValueError) as exc:
             raise SuricataStoreError("SURICATA_STORE:WRITER_OPEN_FAILED") from exc
         yield handle

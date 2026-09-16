@@ -87,7 +87,7 @@
         },
         "max_transaction_and_readback_ms": {
           "const": 30000,
-          "description": "Cooperative monotonic deadline shared by store validation, preflight, lock wait, transaction, and readback. SQLite VM work and lock waits are interrupted; one uninterruptible filesystem call may return late but cannot produce verified success."
+          "description": "Cooperative monotonic deadline shared by store validation, preflight, transaction, and readback. Validation and advisory replay probes do not wait on SQLite locks; BEGIN IMMEDIATE, commit, and readback bind the remaining budget immediately before each lock wait. SQLite VM work is interrupted; one uninterruptible filesystem call may return late but cannot produce verified success."
         },
         "max_diagnostic_bytes": {
           "const": 64
