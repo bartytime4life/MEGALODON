@@ -24,6 +24,7 @@ from .models import ActionRecord
 from .service import MegalodonService
 from .storage import (
     DashboardStore,
+    StorageSchemaError,
     IngestionRunError,
     migrate_database,
     RECONCILIATION_REQUIRED,
@@ -142,7 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconcile.add_argument("--config")
 
-    dashboard = sub.add_parser("dashboard", help="serve the read-only local dashboard")
+    dashboard = sub.add_parser("dashboard", aliases=["hud"], help="serve the local dashboard; hud also checks tool presence and supports first launch")
     dashboard.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=_bounded_cli_integer("port", 1, 65535))
@@ -736,7 +737,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _dashboard(args: argparse.Namespace) -> int:
-    from .dashboard import loopback_host, serve
+    from .dashboard import loopback_host, serve, UnconfiguredDashboardReader
     from .offline_projection import load_offline_projection
 
     try:
@@ -748,7 +749,8 @@ def _dashboard(args: argparse.Namespace) -> int:
         if not enabled:
             raise ValueError("dashboard is disabled by configuration")
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
-        with DashboardStore(settings.db_path) as store:
+        first_launch = getattr(args, "command", "dashboard") == "hud"
+        with _dashboard_reader(settings.db_path, allow_missing=first_launch) as store:
             serve(
                 store,
                 host,
@@ -757,6 +759,8 @@ def _dashboard(args: argparse.Namespace) -> int:
                 allow_remote=args.allow_remote,
                 offline_summary=offline_summary,
                 suricata_db=getattr(args, "suricata_db", None),
+                inspect_tools=first_launch,
+                source_available=not isinstance(store, UnconfiguredDashboardReader),
                 refresh_seconds=(
                     args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
                 ),
@@ -766,6 +770,24 @@ def _dashboard(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     return 0
+
+
+@contextmanager
+def _dashboard_reader(path: Path, *, allow_missing: bool = False):
+    """First launch may lack a store; an unsafe or invalid store still refuses."""
+    from .dashboard import UnconfiguredDashboardReader
+
+    try:
+        store = DashboardStore(path)
+    except StorageSchemaError as exc:
+        if not allow_missing or str(exc) not in {
+            "DASHBOARD_STORE:NO_DIRECTORY", "DASHBOARD_STORE:NO_DATABASE",
+        }:
+            raise
+        yield UnconfiguredDashboardReader()
+        return
+    with store:
+        yield store
 
 
 def _database_migrate(args: argparse.Namespace) -> int:
@@ -897,7 +919,7 @@ def main(argv: list[str] | None = None) -> None:
         code = _hub_plan(args)
     elif args.command == "run":
         code = _run(args)
-    elif args.command == "dashboard":
+    elif args.command in {"dashboard", "hud"}:
         code = _dashboard(args)
     elif args.command == "database-migrate":
         code = _database_migrate(args)

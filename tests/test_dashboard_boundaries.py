@@ -202,7 +202,9 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert "overflow: hidden" in DASHBOARD_CSS
     assert ".workspace-scroll" in DASHBOARD_CSS
     assert "<iframe" not in INDEX_HTML.lower()
-    assert "innerHTML" not in DASHBOARD_JS and "localStorage" not in DASHBOARD_JS
+    from megalodon.dashboard_tool_assets import CONTROLS_JS
+    assert "innerHTML" not in DASHBOARD_JS
+    assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
 
 
 def test_integration_map_javascript_contract_and_recovery():

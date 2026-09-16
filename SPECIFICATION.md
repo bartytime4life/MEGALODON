@@ -377,6 +377,11 @@ loading an offline report; `serve()` independently enforces the same boundary.
 This does not authorize a proxy, tunnel or port-forwarding workaround.
 
 A disabled dashboard is refused before offline-projection or database access.
+The explicit `hud` launch alias adds one bounded startup executable-presence
+snapshot and permits only `NO_DIRECTORY`/`NO_DATABASE` to open an unconfigured
+workspace. Its telemetry endpoints return 503, never fabricated zero counters.
+Unsafe, corrupt or incompatible existing stores still refuse startup. The
+original `dashboard` command retains its existing-store/no-probe behavior.
 An enabled dashboard never creates a parent, database, or schema; runs a
 migration; changes `user_version` or journal mode; or exposes the writer API.
 On POSIX it requires an owner-controlled mode-`0700` leaf directory and an
@@ -422,6 +427,8 @@ The dashboard exposes only:
 - `GET /assets/dashboard.css` and `GET /assets/dashboard.js` — same-origin,
   no-store presentation assets;
 - `GET /api/config` — a non-sensitive `dashboard-config-v1` view contract;
+- `GET /api/setup` — immutable `dashboard-setup-v1` startup source-selection
+  status and optional bounded readiness report; no request-triggered probe;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
 - `GET /api/events?limit=N` — recent detections, with one decimal integer from
   1 through 200; malformed, repeated, out-of-range, and unknown query fields
@@ -567,7 +574,8 @@ The MVP is acceptable for local experimentation when:
   subprocess or host mutation and produces no `applied` receipt;
 - dashboard rejects unsafe binds and legacy overrides before socket creation;
 - dashboard refuses disabled, missing, unsafe, replaced, linked, or incompatible
-  stores before serving; one summary statement supplies a single SQLite read
+  stores before serving (the explicit `hud` first-launch path tolerates only a
+  missing source and serves telemetry as unavailable); one summary statement supplies a single SQLite read
   snapshot and recent rows select only the five public fields;
 - offline summaries reject incomplete, public, linked, mismatched, or tampered
   report sets and remain unavailable on remote binds;

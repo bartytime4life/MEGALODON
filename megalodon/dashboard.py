@@ -55,6 +55,34 @@ class DashboardReader(Protocol):
     ) -> list[dict[str, Any]]: ...
 
 
+class UnconfiguredDashboardReader:
+    """A missing source is unavailable, never an empty/healthy database."""
+
+    def summary(self) -> dict[str, Any]:
+        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+
+    def recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+
+    def ingestion_runs(self, limit: int = DEFAULT_INGESTION_RUN_LIMIT) -> list[dict[str, Any]]:
+        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+
+
+def setup_snapshot(*, inspect_tools: bool = False, source_available: bool = True) -> bytes:
+    """One startup check, never a request-triggered probe or tool execution."""
+    from .readiness import readiness_report, MAX_REPORT_BYTES
+
+    report = readiness_report() if inspect_tools else None
+    payload = json.dumps({
+        "schema": "dashboard-setup-v1",
+        "source_status": "connected" if source_available else "not_configured",
+        "readiness": report,
+    }, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    if len(payload) > MAX_REPORT_BYTES + 512:
+        raise ValueError("dashboard setup response exceeds limit")
+    return payload
+
+
 class ReferenceLookupError(ValueError):
     """A fixed, path-free diagnostic for the dashboard reference surface."""
 
@@ -324,6 +352,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     suricata_evidence: bytes | None = None
     refresh_seconds: int = 5
     event_limit: int = 50
+    setup_evidence: bytes | None = None
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -346,8 +375,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", DASHBOARD_JS.encode())
             return
-        if route.path in {"/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path == "/api/setup":
+            self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
             return
         if route.path == "/api/config":
             self._send_json({
@@ -659,6 +691,7 @@ def serve(
     advisory_receipt: QwenAdvisoryResult | None = None,
     reference_library: ReferenceLibrary | None = None,
     suricata_db: str | Path | None = None,
+    inspect_tools: bool = False, source_available: bool = True,
     refresh_seconds: int = 5, event_limit: int = 50,
 ) -> None:
     if not enabled:
@@ -669,6 +702,7 @@ def serve(
     event_limit = _bounded_dashboard_integer(event_limit, "dashboard event_limit", 1, MAX_EVENT_LIMIT)
     advisory_snapshot = advisory_receipt_snapshot(advisory_receipt)
     host = loopback_host(host, allow_remote=allow_remote)
+    setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
@@ -677,6 +711,7 @@ def serve(
             "suricata_evidence": suricata_evidence,
             "reference_library": reference_library, "refresh_seconds": refresh_seconds,
             "event_limit": event_limit,
+            "setup_evidence": setup_evidence,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)

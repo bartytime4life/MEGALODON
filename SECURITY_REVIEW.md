@@ -1,5 +1,26 @@
 # MEGALODON architecture security review
 
+## HUD usability boundary
+
+The `hud` launch alias inspects bounded executable metadata once before listening,
+using the existing readiness contract. HTTP only returns that cached snapshot;
+there is no probe, installation, service-control or model-invocation endpoint.
+PATH entries can refer to mounts/symlinks, so the finite probe count is not a
+filesystem-latency guarantee. Ordinary `dashboard` startup does not inspect tools.
+The first-launch exception tolerates only a missing audit source, with 503
+telemetry responses. Unsafe or invalid existing stores remain refused.
+
+Companion-console bookmarks are explicit browser navigation, not embedded
+consoles or backend connections. A fixed fourteen-tool registry restricts storage;
+only HTTP(S) addresses without userinfo, query strings or fragments are accepted.
+Stored values are validated again when loaded. Addresses stay in browser
+localStorage for that origin, or page memory if storage is unavailable. They
+must not contain credentials. Clicking a console or official guide leaves the
+dashboard and may access the network; that does not change backend egress policy.
+Terminal commands are copied only after a click, never executed. Optional startup
+paths are quoted as single POSIX shell arguments and are not stored or opened by
+the browser. These controls do not assert installation, health or authority.
+
 ## Executive result
 
 The supplied architecture is a useful decomposition for a defensive product,

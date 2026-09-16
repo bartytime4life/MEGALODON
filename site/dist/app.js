@@ -100,154 +100,11 @@ const integrations = [
   }
 ];
 
-const toolAcquisition = {
-  core: {
-    source: "MEGALODON repository",
-    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup",
-    linkLabel: "Open bounded Ubuntu setup",
-    platforms: ["Ubuntu 24.04 reference", "Windows evaluation"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "The repository recipe uses a temporary service-start guard and preserves the Linux-first evaluation boundary."
-  },
-  tshark: {
-    source: "MEGALODON repository",
-    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup",
-    linkLabel: "Open guarded TShark setup",
-    platforms: ["Linux adapter", "Windows desktop separate"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "MEGALODON Linux path check",
-    note: "Keep Wireshark capture permission disabled. The adapter expects /usr/bin/tshark and analyzes saved captures only."
-  },
-  zeek: {
-    source: "MEGALODON repository + Zeek Project",
-    url: "https://github.com/bartytime4life/MEGALODON#3-build-zeek-as-a-private-non-service-producer",
-    linkLabel: "Open private Zeek build guide",
-    platforms: ["Linux", "Containers", "macOS", "BSD"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Native Linux verification",
-    note: "The reviewed path requires a pinned release digest and a private non-service prefix. MEGALODON never starts Zeek."
-  },
-  suricata: {
-    source: "Open Information Security Foundation",
-    url: "https://suricata.io/download/",
-    linkLabel: "Open Suricata downloads",
-    platforms: ["Linux", "Windows", "macOS / source", "BSD"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "Suricata is operator-managed. Review repository, signing key, package, service state, and rollback before installation."
-  },
-  scapy: {
-    source: "Scapy Project",
-    url: "https://scapy.readthedocs.io/en/latest/installation.html",
-    linkLabel: "Open Scapy install guide",
-    platforms: ["Windows", "macOS", "Linux"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Active Python verification",
-    note: "Use the repository's optional capture extra. Live capture still requires separately approved interface privileges."
-  },
-  nftables: {
-    source: "MEGALODON repository",
-    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup",
-    linkLabel: "Open guarded Ubuntu setup",
-    platforms: ["Linux only"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "The repository setup suppresses service starts. MEGALODON renders inert plans and refuses live rule application."
-  },
-  clamav: {
-    source: "Cisco Talos / ClamAV",
-    url: "https://www.clamav.net/downloads",
-    linkLabel: "Open official ClamAV downloads",
-    platforms: ["Windows", "macOS", "Linux"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "Manual companion only. Do not add it to the base recipe: packaging can create a signature-update service and egress."
-  },
-  osquery: {
-    source: "osquery Project",
-    url: "https://github.com/osquery/osquery/releases/latest",
-    linkLabel: "Open official releases",
-    platforms: ["Windows", "macOS", "Linux"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "Choose the signed package for the target OS. MEGALODON has no query pack, scheduler, enrollment, or result importer yet."
-  },
-  qwen: {
-    source: "Ollama",
-    url: "https://ollama.com/download",
-    linkLabel: "Download Ollama",
-    platforms: ["Windows", "macOS", "Linux"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Local provider + model check",
-    note: "A mutable model pull is not authorization. The advisory path requires an operator-supplied local registry and validated artifact digest."
-  },
-  nmap: {
-    source: "Nmap Project",
-    url: "https://nmap.org/download",
-    linkLabel: "Open official Nmap downloads",
-    platforms: ["Windows", "macOS", "Linux", "BSD"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "MEGALODON does not launch scans. The reserved boundary is a future completed XML report import only."
-  },
-  ossec: {
-    source: "OSSEC Project",
-    url: "https://www.ossec.net/ossec-downloads/",
-    linkLabel: "Open OSSEC downloads",
-    platforms: ["Windows agents", "macOS", "Linux", "Unix"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Default-path verification",
-    note: "Use the vendor's package and role-specific instructions. Agent enrollment and active response stay outside MEGALODON."
-  },
-  greenbone: {
-    source: "Greenbone Community",
-    url: "https://greenbone.github.io/docs/latest/22.4/container/",
-    linkLabel: "Open container install guide",
-    platforms: ["Linux containers"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Container image verification",
-    note: "Greenbone is a multi-service deployment with substantial resource and privilege requirements; follow the complete official guide."
-  },
-  zabbix: {
-    source: "Zabbix LLC",
-    url: "https://www.zabbix.com/download",
-    linkLabel: "Open Zabbix install selector",
-    platforms: ["Linux server", "Windows agents", "Containers", "Cloud"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Server or agent verification",
-    note: "Select the OS, release, database, and web server on the official page. No MEGALODON endpoint or credential contract exists yet."
-  },
-  nagios: {
-    source: "Nagios Enterprises",
-    url: "https://www.nagios.org/projects/nagios-core/",
-    linkLabel: "Open Nagios Core downloads",
-    platforms: ["Linux server"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "Nagios Core needs a host-specific installation and plugin plan. MEGALODON has no CGI, credential, or command-pipe access."
-  }
-};
-
 const workflows = {
   dashboard: {
     status: "Implemented", statusClass: "implemented", platform: "Local Linux reference", title: "Open your local evidence dashboard",
-    summary: "Run this from your configured MEGALODON environment with an existing private audit store. Then open http://127.0.0.1:8787 on that same machine. This hosted page does not connect to it.",
-    command: "python -m megalodon dashboard",
+    summary: "Run from your installed MEGALODON environment. The HUD opens with or without an audit store, checks executable presence once, and provides tool controls. Open the local address on the same computer. No cloud account or readiness-file export is needed locally.",
+    command: "python -m megalodon hud",
     produces: ["Read-only view of your stored events", "Source-qualified detection links", "Available run receipts"],
     refuses: ["Remote exposure", "Host control", "Automatic sensor startup"],
     boundary: "Stored evidence is not proof of a currently running sensor. Check run timestamps and terminal outcomes."
@@ -309,7 +166,8 @@ function loadToolPresence() {
 const state = {
   activeView: "hud",
   readiness: null,
-  lifecycleVariants: {},
+  toolQuery: "",
+  toolFilter: "all",
   categoryFilter: "all",
   selectedTool: "core",
   toolPresence: loadToolPresence()
@@ -432,14 +290,20 @@ function renderCategoryFilters() {
 }
 
 function renderIntegrationGrid() {
-  const visible = integrations.filter((item) => state.categoryFilter === "all" || item.category === state.categoryFilter);
+  const visible = integrations.filter(item =>
+    (state.categoryFilter === 'all' || item.category === state.categoryFilter)
+    && (!state.toolQuery || `${item.name} ${item.summary} ${item.dataKind}`.toLowerCase().includes(state.toolQuery))
+    && (state.toolFilter === 'all' || (state.toolFilter === 'data' ? sourceToolIds.has(item.id) : !!MegalodonControls.links()[item.id])));
+  $('#tool-result-count').textContent = `${visible.length} of ${integrations.length} tools shown`;
+  $('#tool-inspector').hidden = visible.length === 0;
+  if (visible.length && !visible.some(item => item.id === state.selectedTool)) state.selectedTool = visible[0].id;
   $("#integration-grid").replaceChildren(...visible.map((item) => {
     const presence = presenceFor(item.id);
     const button = document.createElement("button");
     button.type = "button";
     button.className = `tool-card${state.selectedTool === item.id ? " active" : ""}`;
     button.setAttribute("aria-pressed", String(state.selectedTool === item.id));
-    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Installation status: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><span class="readiness-card-status">${readinessLabel(item.id)}</span><footer><span>${item.dataKind}</span><span>Inspect + lifecycle →</span></footer>`;
+    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Installation status: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><span class="readiness-card-status">${readinessLabel(item.id)}</span><footer><span>${item.dataKind}</span><span>Open controls →</span></footer>`;
     button.addEventListener("click", () => {
       state.selectedTool = item.id;
       renderIntegrationGrid();
@@ -453,7 +317,7 @@ function renderIntegrationGrid() {
 function renderToolInspector() {
   const item = integrations.find((candidate) => candidate.id === state.selectedTool) ?? integrations[0];
   const acquire = toolAcquisition[item.id];
-  const lifecycle = resolveLifecycle(item.id, state.lifecycleVariants[item.id]);
+  const lifecycle = resolveLifecycle(item.id);
   const presence = presenceFor(item.id);
   const hasHudLane = sourceToolIds.has(item.id);
   $("#tool-inspector").innerHTML = `
@@ -461,11 +325,14 @@ function renderToolInspector() {
       <div><span class="tool-monogram">${item.monogram}</span><div><h2>${item.name}</h2><small>${item.dataKind}</small></div></div>
       <div class="inspector-statuses"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div>
     </div>
+    <div id="shared-tool-controls"></div>
+    <details class="tool-technical"><summary>Data connection &amp; technical details</summary>
     <div class="inspector-section"><span>MEGALODON contract</span><p>${item.contract}</p></div>
     <div class="inspector-section"><span>Imported presence report · self-reported</span><p>${readinessLabel(item.id)}</p><small class="panel-footnote">${state.readiness ? `Claimed check: ${state.readiness.checked_at} · ${state.readiness.platform} · path_presence_only` : "No report loaded. The browser has not inspected this device."}</small>${item.id === "qwen" ? "<p class=\"panel-footnote\">The report checks the Ollama executable only. It does not check a Qwen model or its digest.</p>" : ""}</div>
     <div class="inspector-section"><span>Integration owner</span><p>${item.owner}</p></div>
     <div class="inspector-section"><span>Local or planned review surfaces</span><div class="hud-slots">${item.ui.map((slot) => `<span>${slot}</span>`).join("")}</div></div>
     ${item.evidence ? `<div class="inspector-section"><span>Implementation reference</span><p><a class="evidence-link" href="${item.evidence.url}" target="_blank" rel="noopener noreferrer">${item.evidence.label} <span aria-hidden="true">↗</span></a></p></div>` : ""}
+    </details>
     <div class="inspector-section acquire-section">
       <div class="acquire-heading"><span>Setup source</span><em>Operator managed</em></div>
       <p class="acquire-source">Official source · <strong>${acquire.source}</strong></p>
@@ -484,19 +351,12 @@ function renderToolInspector() {
         </div>
         <small>${state.toolPresence[item.id] ? `Self-reported ${new Date(state.toolPresence[item.id].checkedAt).toISOString()}. ` : ""}Saved only in this browser; recheck after 7 days. Manual notes are not verified installation evidence.</small>
       </div>
-      <div class="lifecycle-panel" aria-labelledby="lifecycle-title-${item.id}">
-        <div class="verification-heading"><strong id="lifecycle-title-${item.id}">Lifecycle commands</strong><span>Copy only · never executed here</span></div>
-        <p>These are reference diagnostics and lifecycle operations, not evidence they were run or accepted on your host. Confirm the installation method, package source, role and service effects. Package removal retains configuration; it is not a data purge.</p>
-        ${lifecycle.variants ? `<label class="lifecycle-choice">Choose the installed role<select id="lifecycle-variant"><option value="">Select one role…</option>${Object.entries(lifecycle.variants).map(([id, role]) => `<option value="${id}"${state.lifecycleVariants[item.id] === id ? " selected" : ""}>${escapeHtml(role.label)}</option>`).join("")}</select></label>` : ""}
-        ${["verify", "uninstall", "reinstall"].map((kind) => `<div class="lifecycle-command"><span>${escapeHtml(lifecycle.labels?.[kind] || {verify: "Inspect presence", uninstall: "Uninstall package", reinstall: "Reinstall package"}[kind])}</span>${lifecycle[kind] ? `<code>${escapeHtml(lifecycle[kind])}</code><button type="button" data-copy-lifecycle="${kind}">Copy</button>` : '<p>No generic command. Select a role above when available, or follow the installation-specific guide.</p>'}</div>`).join("")}
-        <small>${escapeHtml(lifecycle.note)}</small>
-      </div>
       <p class="acquire-boundary"><strong>Operator action:</strong> this HUD opens setup guidance and copies lifecycle text. It never probes the host or executes an installer, uninstaller, service command, or package manager.</p>
     </div>
     <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
     <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
     <div class="inspector-warning">${hasHudLane ? "A local MEGALODON evidence path exists for this tool. This hosted Site has no connection to it." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
-    ${hasHudLane ? `<button class="control-button inspector-jump" type="button" data-source-jump="${item.id}">View local workflow</button>` : ""}
+    ${hasHudLane ? `<button class="control-button inspector-jump" type="button" data-source-jump="${item.id}">Review evidence locally</button>` : ""}
   `;
   const copyInstall = $("[data-copy-install]");
   if (copyInstall) copyInstall.addEventListener("click", async () => {
@@ -506,14 +366,10 @@ function renderToolInspector() {
   if (copyVerify) copyVerify.addEventListener("click", async () => {
     await copyText(lifecycle.verify, copyVerify, "Copied");
   });
-  $$('[data-copy-lifecycle]').forEach((button) => button.addEventListener("click", async () => {
-    await copyText(lifecycle[button.dataset.copyLifecycle], button, "Copied");
-  }));
   $$('[data-set-presence]').forEach((button) => button.addEventListener('click', () => {
     setToolPresence(item.id, button.dataset.setPresence);
   }));
-  const roleSelector = $("#lifecycle-variant");
-  if (roleSelector) roleSelector.addEventListener("change", () => { state.lifecycleVariants[item.id] = roleSelector.value; renderToolInspector(); $("#lifecycle-variant").focus(); });
+  MegalodonControls.mount($('#shared-tool-controls'), item.id, item.name);
   const jump = $("[data-source-jump]");
   if (jump) jump.addEventListener("click", () => {
     renderWorkflow(item.id === "suricata" ? "suricata" : "dashboard");
@@ -586,3 +442,7 @@ renderCategoryFilters();
 renderIntegrationGrid();
 renderToolInspector();
 renderWorkflow("dashboard");
+
+$('#copy-hud-start').addEventListener('click', () => copyText('python -m megalodon hud', $('#copy-hud-start')));
+$('#tool-search').addEventListener('input', () => { state.toolQuery = $('#tool-search').value.slice(0, 120).trim().toLowerCase(); renderIntegrationGrid(); renderToolInspector(); });
+$('#tool-quick-filter').addEventListener('change', () => { state.toolFilter = $('#tool-quick-filter').value; renderIntegrationGrid(); renderToolInspector(); });

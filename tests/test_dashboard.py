@@ -414,8 +414,11 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "timeCell.append(timeNode(event.detected_at));" in DASHBOARD_JS
     assert "setInterval" not in DASHBOARD_JS
     assert "innerHTML" not in DASHBOARD_JS
-    assert "localStorage" not in DASHBOARD_JS
-    assert "navigator.clipboard" not in DASHBOARD_JS
+    # Browser persistence is restricted to explicit companion-console bookmarks.
+    from megalodon.dashboard_tool_assets import CONTROLS_JS
+    assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
+    from megalodon.dashboard_setup import SETUP_JS
+    assert "navigator.clipboard" not in DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "")
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
     assert "dashboard-ingestion-runs-v1" in DASHBOARD_JS

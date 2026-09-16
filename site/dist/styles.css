@@ -605,3 +605,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .lifecycle-command p { padding: .7rem; font-size: .9rem; line-height: 1.5; }
 #detection-lanes, #source-bars, #run-list { padding: 1rem; line-height: 1.6; }
 button:disabled, input:disabled, select:disabled { opacity: .65; cursor: not-allowed; }
+/* Everyday controls first; evidence and setup details remain close at hand. */
+.disconnected-details, .manual-import, .tool-technical { margin: 1rem 0; border: 1px solid #294353; border-radius: .7rem; padding: 1rem; }
+.disconnected-details > summary, .manual-import > summary, .tool-technical > summary { cursor: pointer; color: #bcdbe7; font-size: .95rem; min-height: 44px; padding: .6rem 0; }
+.disconnected-details > p { color: #adc1d0; line-height: 1.6; }
+.tool-technical .inspector-section { padding: .7rem 0; }
+.tool-card p { font-size: .875rem; }
+.tool-card footer, .readiness-card-status { font-size: .875rem; }
+.integration-layout { align-items: start; }
+.tool-inspector { position: static; max-height: none; }
