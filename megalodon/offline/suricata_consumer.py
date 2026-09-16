@@ -701,8 +701,8 @@ def _store_failure_code(error: SuricataStoreError) -> str:
     if "CAPACITY" in diagnostic:
         return "STORAGE_CAPACITY"
     if any(token in diagnostic for token in (
-        "DATABASE", "DIRECTORY", "SIDECAR", "JOURNAL", "HEADER", "PATH",
-        "CREATION", "RECOVERY",
+        "DATABASE", "DIRECTORY", "SIDECAR", "JOURNAL", "HEADER", "LOCK",
+        "PATH", "CREATION", "RECOVERY",
     )):
         return "DATABASE_IDENTITY"
     return "STORAGE_ERROR"

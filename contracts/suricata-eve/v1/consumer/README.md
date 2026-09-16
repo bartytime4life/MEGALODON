@@ -62,9 +62,11 @@ uniqueness constraint remains the final replay backstop.
 The separate [`reconciliation`](../reconciliation/README.md) contract implements
 that readback as an explicit `reconcile_publication` API. It accepts the exact
 immutable publication and attempt ID and never runs automatically from this
-transaction. Its stricter reader refuses persistent WAL mode and every existing
-coordination sidecar before SQLite access so the query-only API cannot create a
-`-wal` or `-shm` file.
+transaction. Its stricter reader first holds a nonblocking Linux OFD read lock
+across SQLite's complete locking region, then refuses persistent WAL mode and
+every existing coordination sidecar before SQLite access. The lock prevents a
+writer or journal-mode transition from racing the checks, so the query-only API
+cannot create a `-wal` or `-shm` file.
 
 ## 3. Receipt states
 

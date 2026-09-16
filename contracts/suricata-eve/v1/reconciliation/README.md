@@ -16,10 +16,14 @@ transaction, complete partial evidence, retain or delete rows, launch Suricata
 or another process, use a network or model, mutate a dashboard, or execute a
 response action.
 
-Reconciliation requires the initialized rollback-journal database header and no
-coordination sidecars before SQLite opens the file. A persistent-WAL header is
-refused from the pinned descriptor before SQLite can create `-wal` or `-shm` in
-the writable owner directory.
+Reconciliation first holds a nonblocking Linux open-file-description read lock
+over SQLite's complete PENDING, RESERVED, and SHARED locking region on the
+pinned read-only descriptor. Existing writers fail closed, and no writer or
+journal-mode transition can start before the descriptor closes. While that lock
+is held, reconciliation requires the initialized rollback-journal database
+header and no coordination sidecars before SQLite opens the file. A persistent-
+WAL header is refused before SQLite can create `-wal` or `-shm` in the writable
+owner directory.
 
 ## Result invariant
 
