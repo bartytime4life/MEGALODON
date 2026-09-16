@@ -34,6 +34,13 @@ The original checkpoint below is preserved unchanged as historical evidence.
 Its draft, unmerged, base and validation-scope language describes preparation,
 not later lifecycle. Issue #3 remains open; refresh exact refs before action.
 
+**Currentness note (added later).** Issue #3 was subsequently closed
+`not_planned` on 2026-09-14: the repository owner formally adopted the
+fast, AI-reviewed, owner-directed merge workflow described in the issue's
+own resolution instead of a server-enforced independent-review floor. This
+note only tracks that issue's lifecycle state; it changes nothing else in
+this checkpoint.
+
 ## Historical preparation checkpoint
 
 Status: **dated engineering checkpoint, not independent approval or a release**.
