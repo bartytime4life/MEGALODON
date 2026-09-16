@@ -1,6 +1,7 @@
 """Synthetic durable-consumer oracle; not a production database layer."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import datetime
 import json
@@ -10,9 +11,11 @@ import sqlite3
 import subprocess
 
 import pytest
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, validators
 from referencing import Registry
 from referencing.exceptions import NoSuchResource
+
+from megalodon.offline import suricata as suricata_runtime
 
 
 ROOT = Path(__file__).parents[1] / "contracts" / "suricata-eve" / "v1"
@@ -28,6 +31,9 @@ READER_ACCEPTED = json.loads(
 ACCEPTED = json.loads(
     (CONSUMER_ROOT / "fixtures" / "accepted.json").read_text(encoding="utf-8")
 )
+ACCEPTED_RECEIPTS = {
+    case["id"]: case["receipt"] for case in ACCEPTED["receipts"]
+}
 REJECTED = json.loads(
     (CONSUMER_ROOT / "fixtures" / "rejected.json").read_text(encoding="utf-8")
 )
@@ -78,12 +84,18 @@ def _calendar_time(value):
 
 
 LOCAL_REGISTRY = Registry(retrieve=_no_retrieval)
-ALERT_VALIDATOR = Draft202012Validator(
+MAPPING_TYPE_CHECKER = Draft202012Validator.TYPE_CHECKER.redefine(
+    "object", lambda checker, instance: isinstance(instance, Mapping)
+)
+MappingDraft202012Validator = validators.extend(
+    Draft202012Validator, type_checker=MAPPING_TYPE_CHECKER
+)
+ALERT_VALIDATOR = MappingDraft202012Validator(
     {"$ref": "#/$defs/externalAlert", "$defs": RECORD_SCHEMA["$defs"]},
     format_checker=CHECKER,
     registry=LOCAL_REGISTRY,
 )
-READER_RECEIPT_VALIDATOR = Draft202012Validator(
+READER_RECEIPT_VALIDATOR = MappingDraft202012Validator(
     {"$ref": "#/$defs/completedRunReceipt", "$defs": READER_SCHEMA["$defs"]},
     registry=LOCAL_REGISTRY,
 )
@@ -98,8 +110,16 @@ def _run_key(identity):
 
 def _normalized_bytes(batch):
     return sum(len(json.dumps(
-        item, sort_keys=True, separators=(",", ":")
+        _plain_json(item), sort_keys=True, separators=(",", ":")
     ).encode("utf-8")) for item in batch)
+
+
+def _plain_json(value):
+    if isinstance(value, Mapping):
+        return {key: _plain_json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_plain_json(item) for item in value]
+    return value
 
 
 def _validate_contract_value(value):
@@ -199,30 +219,37 @@ def _new_database():
     return database
 
 
-def _receipt(attempt_id, identity, count, blocked, output_bytes, status):
+def _receipt(attempt_id, identity, count, blocked, output_bytes, outcome,
+             failure_code=None):
     states = {
         "committed": (
-            "committed", "recorded", "committed", "not_required", None,
+            "committed", "committed", "recorded", "committed", "not_required", None,
         ),
         "rejected": (
-            "not_attempted", "duplicate", "not_started", "not_required", "REPLAY",
+            "rejected", "not_attempted", "duplicate", "not_started",
+            "not_required", "REPLAY",
+        ),
+        "preflight_failed": (
+            "failed", "not_attempted", "not_recorded", "not_started",
+            "not_required", failure_code,
         ),
         "failed": (
-            "rolled_back", "not_recorded", "rolled_back", "not_required",
-            "STORAGE_ERROR",
+            "failed", "rolled_back", "not_recorded", "rolled_back",
+            "not_required", failure_code or "STORAGE_ERROR",
         ),
         "reconciliation_required": (
-            "unknown", "unknown", "unknown", "required", "COMMIT_UNKNOWN",
+            "reconciliation_required", "unknown", "unknown", "unknown",
+            "required", "COMMIT_UNKNOWN",
         ),
     }
-    durable, replay, transaction, reconciliation, failure = states[status]
+    status, durable, replay, transaction, reconciliation, failure = states[outcome]
     value = {
         "schema_version": "suricata-eve-consumer-receipt-v1",
         "consumer_policy_version": "suricata-eve-consumer-policy-v1",
         "reader_receipt_version": "suricata-eve-reader-receipt-v1",
         "consumer_attempt_id": attempt_id,
         "status": status,
-        "run_identity": deepcopy(identity),
+        "run_identity": _plain_json(identity),
         "record_count": count,
         "normalized_alert_count": count,
         "producer_blocked_count": blocked,
@@ -249,18 +276,36 @@ def _find_run(database, identity):
     ).fetchone()
 
 
+def _find_attempt(database, attempt_id):
+    return database.execute(
+        "SELECT id FROM consumer_runs WHERE consumer_attempt_id=?", (attempt_id,)
+    ).fetchone()
+
+
 def _consume(database, batch, reader_receipt, *, attempt_id,
              fail_before_commit=False, lose_commit_acknowledgement=False,
-             elapsed_ms=0):
+             capacity_available=True, elapsed_ms=0):
     identity, count, blocked, output_bytes = _validate_publication(
         batch, reader_receipt
     )
-    if elapsed_ms > MAX_ELAPSED_MS:
-        _fail("TRANSACTION_TIMEOUT")
-
     if _find_run(database, identity) is not None:
         return _receipt(
             attempt_id, identity, count, blocked, output_bytes, "rejected"
+        )
+    if _find_attempt(database, attempt_id) is not None:
+        return _receipt(
+            attempt_id, identity, count, blocked, output_bytes,
+            "preflight_failed", "DATABASE_IDENTITY",
+        )
+    if not capacity_available:
+        return _receipt(
+            attempt_id, identity, count, blocked, output_bytes,
+            "preflight_failed", "STORAGE_CAPACITY",
+        )
+    if elapsed_ms > MAX_ELAPSED_MS:
+        return _receipt(
+            attempt_id, identity, count, blocked, output_bytes,
+            "preflight_failed", "TRANSACTION_TIMEOUT",
         )
 
     committed = _receipt(
@@ -285,7 +330,9 @@ def _consume(database, batch, reader_receipt, *, attempt_id,
                 (
                     row_id,
                     alert["source_record_index"],
-                    json.dumps(alert, sort_keys=True, separators=(",", ":")),
+                    json.dumps(
+                        _plain_json(alert), sort_keys=True, separators=(",", ":")
+                    ),
                 ),
             )
         if fail_before_commit:
@@ -303,8 +350,13 @@ def _consume(database, batch, reader_receipt, *, attempt_id,
         database.commit()
     except sqlite3.IntegrityError:
         database.rollback()
+        if _find_run(database, identity) is not None:
+            return _receipt(
+                attempt_id, identity, count, blocked, output_bytes, "rejected"
+            )
         return _receipt(
-            attempt_id, identity, count, blocked, output_bytes, "rejected"
+            attempt_id, identity, count, blocked, output_bytes,
+            "failed", "DATABASE_IDENTITY",
         )
     except sqlite3.DatabaseError:
         database.rollback()
@@ -347,6 +399,7 @@ def no_network_or_process(monkeypatch):
         raise AssertionError("Consumer contract tests must not use network or processes")
     monkeypatch.setattr(socket, "socket", denied)
     monkeypatch.setattr(subprocess, "Popen", denied)
+    monkeypatch.setattr(suricata_runtime, "require_unprivileged_linux", lambda: None)
 
 
 @pytest.fixture
@@ -459,7 +512,7 @@ def test_two_record_publication_commits_once_and_matches_fixture(publication):
         database, batch, reader_receipt,
         attempt_id="fixture-attempt-committed",
     )
-    assert actual == ACCEPTED["receipts"][0]["receipt"]
+    assert actual == ACCEPTED_RECEIPTS["two-record-committed"]
     assert database.execute("SELECT COUNT(*) FROM consumer_runs").fetchone()[0] == 1
     assert database.execute("SELECT COUNT(*) FROM consumer_alerts").fetchone()[0] == 2
     assert database.execute("SELECT COUNT(*) FROM consumer_receipts").fetchone()[0] == 1
@@ -468,8 +521,30 @@ def test_two_record_publication_commits_once_and_matches_fixture(publication):
         database, batch, reader_receipt,
         attempt_id="fixture-attempt-replay",
     )
-    assert replay == ACCEPTED["receipts"][1]["receipt"]
+    assert replay == ACCEPTED_RECEIPTS["duplicate-rejected"]
     assert database.execute("SELECT COUNT(*) FROM consumer_alerts").fetchone()[0] == 2
+
+
+def test_implemented_reader_immutable_publication_is_accepted(tmp_path):
+    source = tmp_path / "alerts.jsonl"
+    source.write_bytes(b"\n".join(
+        json.dumps(case["input"], separators=(",", ":")).encode("utf-8")
+        for case in RECORD_CASES[:2]
+    ) + b"\n")
+    source.chmod(0o600)
+    batch, reader_receipt = suricata_runtime.read_completed_file(str(source))
+
+    database = _new_database()
+    actual = _consume(
+        database, batch, reader_receipt,
+        attempt_id="fixture-attempt-committed",
+    )
+
+    assert actual == ACCEPTED_RECEIPTS["two-record-committed"]
+    with pytest.raises(TypeError):
+        batch[0]["src_ip"] = "203.0.113.1"
+    with pytest.raises(TypeError):
+        reader_receipt["status"] = "partial"
 
 
 def test_precommit_failure_rolls_back_registry_alerts_and_receipt(publication):
@@ -480,7 +555,7 @@ def test_precommit_failure_rolls_back_registry_alerts_and_receipt(publication):
         attempt_id="fixture-attempt-rolled-back",
         fail_before_commit=True,
     )
-    assert actual == ACCEPTED["receipts"][2]["receipt"]
+    assert actual == ACCEPTED_RECEIPTS["precommit-failure-rolled-back"]
     for table in ("consumer_runs", "consumer_alerts", "consumer_receipts"):
         assert database.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
 
@@ -493,7 +568,7 @@ def test_unknown_commit_requires_exact_reconciliation_before_success(publication
         attempt_id="fixture-attempt-unknown",
         lose_commit_acknowledgement=True,
     )
-    assert unknown == ACCEPTED["receipts"][3]["receipt"]
+    assert unknown == ACCEPTED_RECEIPTS["commit-acknowledgement-unknown"]
 
     blind_retry = _consume(
         database, batch, reader_receipt,
@@ -507,7 +582,7 @@ def test_unknown_commit_requires_exact_reconciliation_before_success(publication
     reconciled = _reconcile(
         database, reader_receipt["run_identity"], "fixture-attempt-unknown"
     )
-    expected = deepcopy(ACCEPTED["receipts"][0]["receipt"])
+    expected = deepcopy(ACCEPTED_RECEIPTS["two-record-committed"])
     expected["consumer_attempt_id"] = "fixture-attempt-unknown"
     assert reconciled == expected
 
@@ -536,16 +611,53 @@ def test_publication_counts_identity_sequence_and_bytes_are_recomputed(publicati
         _validate_publication(changed_batch, reader_receipt)
 
 
-def test_transaction_budget_fails_before_a_write(publication):
+@pytest.mark.parametrize(
+    ("options", "attempt_id", "code"),
+    [
+        ({"capacity_available": False}, "fixture-attempt-capacity", "STORAGE_CAPACITY"),
+        ({"elapsed_ms": MAX_ELAPSED_MS + 1}, "over-time-budget", "TRANSACTION_TIMEOUT"),
+    ],
+)
+def test_preflight_failures_do_not_start_a_write(publication, options, attempt_id, code):
     batch, reader_receipt = publication
     database = _new_database()
-    with pytest.raises(ConsumerError, match="TRANSACTION_TIMEOUT$"):
-        _consume(
-            database, batch, reader_receipt,
-            attempt_id="over-time-budget",
-            elapsed_ms=MAX_ELAPSED_MS + 1,
-        )
+    actual = _consume(
+        database, batch, reader_receipt, attempt_id=attempt_id, **options
+    )
+    assert actual["status"] == "failed"
+    assert actual["durable_write_status"] == "not_attempted"
+    assert actual["transaction_status"] == "not_started"
+    assert actual["failure_code"] == code
+    if code == "STORAGE_CAPACITY":
+        assert actual == ACCEPTED_RECEIPTS["capacity-refused-before-begin"]
     assert database.execute("SELECT COUNT(*) FROM consumer_runs").fetchone()[0] == 0
+
+
+def test_attempt_id_collision_for_a_distinct_run_is_not_replay(publication):
+    batch, reader_receipt = publication
+    database = _new_database()
+    committed = _consume(
+        database, batch, reader_receipt, attempt_id="shared-attempt-id"
+    )
+    assert committed["status"] == "committed"
+
+    distinct_batch = _plain_json(batch)
+    distinct_receipt = _plain_json(reader_receipt)
+    for alert in distinct_batch:
+        alert["source"]["run_id"] = "fixture-run-b"
+    distinct_receipt["run_identity"]["run_id"] = "fixture-run-b"
+    distinct_receipt["normalized_batch_bytes"] = _normalized_bytes(distinct_batch)
+
+    collision = _consume(
+        database, distinct_batch, distinct_receipt,
+        attempt_id="shared-attempt-id",
+    )
+    assert collision["status"] == "failed"
+    assert collision["failure_code"] == "DATABASE_IDENTITY"
+    assert collision["replay_status"] == "not_recorded"
+    assert collision["transaction_status"] == "not_started"
+    assert database.execute("SELECT COUNT(*) FROM consumer_runs").fetchone()[0] == 1
+    assert database.execute("SELECT COUNT(*) FROM consumer_alerts").fetchone()[0] == 2
 
 
 def test_test_oracle_schema_stores_only_normalized_contract_data():

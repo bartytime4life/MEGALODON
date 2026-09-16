@@ -99,6 +99,15 @@
     "code": "INPUT_CONTRACT"
   },
   {
+    "id": "preflight-claimed-rolled-back",
+    "seed": "capacity-refused-before-begin",
+    "path": ["transaction_status"],
+    "operation": "set",
+    "value": "rolled_back",
+    "stage": "schema",
+    "code": "INPUT_CONTRACT"
+  },
+  {
     "id": "replay-misclassified-storage-error",
     "seed": "duplicate-rejected",
     "path": ["failure_code"],
