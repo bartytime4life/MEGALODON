@@ -8,11 +8,13 @@ The Site is a static, browser-only interface prototype. It has no backend, conne
 
 - Site project: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3`
 - Public project repository: https://github.com/bartytime4life/MEGALODON
-- Repository baseline represented by this revision: `main@a0fa34fd9d7688fdd299751eeb3dc039ceb560b3`
+- Repository baseline represented by this revision: `main@ef688cb26a9cdbc251b0219fb8f5f3e763a70e34`
 - Public mirror path: `site/`
 - Deployable static assets: `dist/`
 
 The MEGALODON repository root remains authoritative for product behavior, security contracts, tests, and implementation status. This Site summarizes those contracts for human review; it does not expand runtime authority.
+
+The Suricata surface reflects the accepted durable-consumer capacity gate: a fixed consumer-owned 512 MiB ceiling is checked before runtime writes, refusal leaves no rows, and the single atomic writer remains Linux-only, non-root, capability-free, and limited to an already-private pre-created store. Retention, deletion, migration, reconciliation, producer orchestration, and dashboard writes remain separate authority gates.
 
 ## Validation
 
