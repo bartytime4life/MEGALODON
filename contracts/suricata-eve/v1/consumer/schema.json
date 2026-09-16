@@ -1,0 +1,497 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:megalodon:contract:suricata-eve-consumer:v1",
+  "title": "PROPOSED transactional Suricata durable-consumer contract v1",
+  "$comment": "The adjacent README supplies semantic and transaction requirements. This inert contract does not implement a database migration or runtime consumer.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/consumerPolicy"
+    },
+    {
+      "$ref": "#/$defs/consumerReceipt"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}(?![\\s\\S])"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 11,
+      "pattern": "^(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})(?![\\s\\S])"
+    },
+    "runIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "adapter_profile",
+        "declared_version",
+        "version_basis",
+        "sensor_id",
+        "run_id",
+        "ruleset_id",
+        "ruleset_basis"
+      ],
+      "properties": {
+        "engine": {
+          "const": "suricata"
+        },
+        "adapter_profile": {
+          "const": "suricata-eve-alert-v1"
+        },
+        "declared_version": {
+          "$ref": "#/$defs/version"
+        },
+        "version_basis": {
+          "const": "operator_declared"
+        },
+        "sensor_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "run_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ruleset_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ruleset_basis": {
+          "const": "operator_declared"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_records",
+        "max_normalized_batch_bytes",
+        "max_transaction_and_readback_ms",
+        "max_diagnostic_bytes"
+      ],
+      "properties": {
+        "max_records": {
+          "const": 10000
+        },
+        "max_normalized_batch_bytes": {
+          "const": 16777216
+        },
+        "max_transaction_and_readback_ms": {
+          "const": 30000
+        },
+        "max_diagnostic_bytes": {
+          "const": 64
+        }
+      }
+    },
+    "transactionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "database",
+        "begin_mode",
+        "single_writer",
+        "atomic_batch_registry_receipt",
+        "complete_run_identity_unique",
+        "commit_readback_required",
+        "unknown_commit_requires_reconciliation",
+        "blind_retry_after_unknown",
+        "capacity_check_before_begin",
+        "ordinary_startup_migration",
+        "runtime_schema_migration_included"
+      ],
+      "properties": {
+        "database": {
+          "const": "sqlite"
+        },
+        "begin_mode": {
+          "const": "immediate"
+        },
+        "single_writer": {
+          "const": true
+        },
+        "atomic_batch_registry_receipt": {
+          "const": true
+        },
+        "complete_run_identity_unique": {
+          "const": true
+        },
+        "commit_readback_required": {
+          "const": true
+        },
+        "unknown_commit_requires_reconciliation": {
+          "const": true
+        },
+        "blind_retry_after_unknown": {
+          "const": false
+        },
+        "capacity_check_before_begin": {
+          "const": true
+        },
+        "ordinary_startup_migration": {
+          "const": false
+        },
+        "runtime_schema_migration_included": {
+          "const": false
+        }
+      }
+    },
+    "dataPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retain_normalized_alerts",
+        "retain_original_eve_json",
+        "retain_source_path",
+        "retain_payload",
+        "retain_payload_derived_hash",
+        "retain_rule_labels",
+        "retain_low_level_exception_text"
+      ],
+      "properties": {
+        "retain_normalized_alerts": {
+          "const": true
+        },
+        "retain_original_eve_json": {
+          "const": false
+        },
+        "retain_source_path": {
+          "const": false
+        },
+        "retain_payload": {
+          "const": false
+        },
+        "retain_payload_derived_hash": {
+          "const": false
+        },
+        "retain_rule_labels": {
+          "const": false
+        },
+        "retain_low_level_exception_text": {
+          "const": false
+        }
+      }
+    },
+    "sideEffectPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durable_local_write",
+        "network_access",
+        "process_launch",
+        "sensor_control",
+        "dashboard_projection",
+        "action_execution",
+        "firewall_mutation"
+      ],
+      "properties": {
+        "durable_local_write": {
+          "const": true
+        },
+        "network_access": {
+          "const": false
+        },
+        "process_launch": {
+          "const": false
+        },
+        "sensor_control": {
+          "const": false
+        },
+        "dashboard_projection": {
+          "const": false
+        },
+        "action_execution": {
+          "const": false
+        },
+        "firewall_mutation": {
+          "const": false
+        }
+      }
+    },
+    "consumerPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "runtime_implemented",
+        "input_record_contract",
+        "input_receipt_contract",
+        "output_receipt_contract",
+        "limits",
+        "transaction",
+        "data",
+        "side_effects"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "suricata-eve-consumer-policy-v1"
+        },
+        "status": {
+          "const": "proposed_contract_only"
+        },
+        "runtime_implemented": {
+          "const": false
+        },
+        "input_record_contract": {
+          "const": "external-alert-v1"
+        },
+        "input_receipt_contract": {
+          "const": "suricata-eve-reader-receipt-v1"
+        },
+        "output_receipt_contract": {
+          "const": "suricata-eve-consumer-receipt-v1"
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        },
+        "transaction": {
+          "$ref": "#/$defs/transactionPolicy"
+        },
+        "data": {
+          "$ref": "#/$defs/dataPolicy"
+        },
+        "side_effects": {
+          "$ref": "#/$defs/sideEffectPolicy"
+        }
+      }
+    },
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "INPUT_CONTRACT",
+        "COUNT_MISMATCH",
+        "BATCH_BYTES",
+        "REPLAY",
+        "DATABASE_IDENTITY",
+        "SCHEMA_INCOMPATIBLE",
+        "STORAGE_CAPACITY",
+        "TRANSACTION_TIMEOUT",
+        "STORAGE_ERROR",
+        "COMMIT_UNKNOWN",
+        "RECONCILIATION_REQUIRED"
+      ]
+    },
+    "consumerReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "consumer_policy_version",
+        "reader_receipt_version",
+        "consumer_attempt_id",
+        "status",
+        "run_identity",
+        "record_count",
+        "normalized_alert_count",
+        "producer_blocked_count",
+        "normalized_batch_bytes",
+        "count_unit",
+        "action_status",
+        "durable_write_status",
+        "replay_status",
+        "transaction_status",
+        "reconciliation_status",
+        "failure_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "suricata-eve-consumer-receipt-v1"
+        },
+        "consumer_policy_version": {
+          "const": "suricata-eve-consumer-policy-v1"
+        },
+        "reader_receipt_version": {
+          "const": "suricata-eve-reader-receipt-v1"
+        },
+        "consumer_attempt_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "status": {
+          "enum": [
+            "committed",
+            "rejected",
+            "failed",
+            "reconciliation_required"
+          ]
+        },
+        "run_identity": {
+          "$ref": "#/$defs/runIdentity"
+        },
+        "record_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "normalized_alert_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "producer_blocked_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "normalized_batch_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "count_unit": {
+          "const": "alert"
+        },
+        "action_status": {
+          "const": "not_attempted"
+        },
+        "durable_write_status": {
+          "enum": [
+            "committed",
+            "not_attempted",
+            "rolled_back",
+            "unknown"
+          ]
+        },
+        "replay_status": {
+          "enum": [
+            "recorded",
+            "duplicate",
+            "not_recorded",
+            "unknown"
+          ]
+        },
+        "transaction_status": {
+          "enum": [
+            "committed",
+            "not_started",
+            "rolled_back",
+            "unknown"
+          ]
+        },
+        "reconciliation_status": {
+          "enum": [
+            "not_required",
+            "required"
+          ]
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/errorCode"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "status": {
+                  "const": "committed"
+                },
+                "durable_write_status": {
+                  "const": "committed"
+                },
+                "replay_status": {
+                  "const": "recorded"
+                },
+                "transaction_status": {
+                  "const": "committed"
+                },
+                "reconciliation_status": {
+                  "const": "not_required"
+                },
+                "failure_code": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "rejected"
+                },
+                "durable_write_status": {
+                  "const": "not_attempted"
+                },
+                "replay_status": {
+                  "const": "duplicate"
+                },
+                "transaction_status": {
+                  "const": "not_started"
+                },
+                "reconciliation_status": {
+                  "const": "not_required"
+                },
+                "failure_code": {
+                  "const": "REPLAY"
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "failed"
+                },
+                "durable_write_status": {
+                  "const": "rolled_back"
+                },
+                "replay_status": {
+                  "const": "not_recorded"
+                },
+                "transaction_status": {
+                  "const": "rolled_back"
+                },
+                "reconciliation_status": {
+                  "const": "not_required"
+                },
+                "failure_code": {
+                  "enum": [
+                    "INPUT_CONTRACT",
+                    "COUNT_MISMATCH",
+                    "BATCH_BYTES",
+                    "DATABASE_IDENTITY",
+                    "SCHEMA_INCOMPATIBLE",
+                    "STORAGE_CAPACITY",
+                    "TRANSACTION_TIMEOUT",
+                    "STORAGE_ERROR"
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "reconciliation_required"
+                },
+                "durable_write_status": {
+                  "const": "unknown"
+                },
+                "replay_status": {
+                  "const": "unknown"
+                },
+                "transaction_status": {
+                  "const": "unknown"
+                },
+                "reconciliation_status": {
+                  "const": "required"
+                },
+                "failure_code": {
+                  "const": "COMMIT_UNKNOWN"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

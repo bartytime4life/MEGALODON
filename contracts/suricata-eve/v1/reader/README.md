@@ -136,11 +136,13 @@ The reader does not mutate or persist that set. Relabeling identical content wit
 a new run identity is considered a new operator claim; v1 neither hashes content
 nor claims content-level deduplication.
 
-A later durable consumer must commit the normalized batch and its run identity
-in one transaction with a uniqueness constraint. That transaction and registry
-are explicitly outside this slice. Until they exist, a successful receipt means
-only that the bounded read completed against the supplied replay view; it is not
-evidence of durable replay prevention across processes or time.
+The proposed [durable-consumer contract](../consumer/README.md) requires a later
+runtime to commit the normalized batch, complete run identity, and terminal
+receipt in one transaction with a uniqueness constraint. That transaction and
+registry remain outside this reader slice and are not implemented. Until they
+exist, a successful reader receipt means only that the bounded read completed
+against the supplied replay view; it is not evidence of durable replay
+prevention across processes or time.
 
 ## 5. All-or-nothing completion
 
@@ -202,7 +204,8 @@ From the repository root:
 python -m pytest -q \
   tests/test_suricata_contract.py \
   tests/test_suricata_formats.py \
-  tests/test_suricata_reader_contract.py
+  tests/test_suricata_reader_contract.py \
+  tests/test_suricata_consumer_contract.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 python -m megalodon capabilities --platform linux
@@ -220,8 +223,8 @@ runtime implementation.
 ## 8. Still out of scope
 
 This reader does not add sensor control, capture, rule download, source conversion
-or scrubbing, watcher, scheduler, root privilege, SQLite integration, dashboard
-projection, endpoint mapping, severity-to-response logic, model call, firewall
+or scrubbing, watcher, scheduler, root privilege, production SQLite integration,
+dashboard projection, endpoint mapping, severity-to-response logic, model call, firewall
 planning or execution, network egress, or automatic action. Those require
 separately authorized and reviewed changes after repository controls and the
 remaining project gates are satisfied.

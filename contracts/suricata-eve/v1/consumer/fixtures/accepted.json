@@ -1,0 +1,173 @@
+{
+  "policy": {
+    "schema_version": "suricata-eve-consumer-policy-v1",
+    "status": "proposed_contract_only",
+    "runtime_implemented": false,
+    "input_record_contract": "external-alert-v1",
+    "input_receipt_contract": "suricata-eve-reader-receipt-v1",
+    "output_receipt_contract": "suricata-eve-consumer-receipt-v1",
+    "limits": {
+      "max_records": 10000,
+      "max_normalized_batch_bytes": 16777216,
+      "max_transaction_and_readback_ms": 30000,
+      "max_diagnostic_bytes": 64
+    },
+    "transaction": {
+      "database": "sqlite",
+      "begin_mode": "immediate",
+      "single_writer": true,
+      "atomic_batch_registry_receipt": true,
+      "complete_run_identity_unique": true,
+      "commit_readback_required": true,
+      "unknown_commit_requires_reconciliation": true,
+      "blind_retry_after_unknown": false,
+      "capacity_check_before_begin": true,
+      "ordinary_startup_migration": false,
+      "runtime_schema_migration_included": false
+    },
+    "data": {
+      "retain_normalized_alerts": true,
+      "retain_original_eve_json": false,
+      "retain_source_path": false,
+      "retain_payload": false,
+      "retain_payload_derived_hash": false,
+      "retain_rule_labels": false,
+      "retain_low_level_exception_text": false
+    },
+    "side_effects": {
+      "durable_local_write": true,
+      "network_access": false,
+      "process_launch": false,
+      "sensor_control": false,
+      "dashboard_projection": false,
+      "action_execution": false,
+      "firewall_mutation": false
+    }
+  },
+  "receipts": [
+    {
+      "id": "two-record-committed",
+      "receipt": {
+        "schema_version": "suricata-eve-consumer-receipt-v1",
+        "consumer_policy_version": "suricata-eve-consumer-policy-v1",
+        "reader_receipt_version": "suricata-eve-reader-receipt-v1",
+        "consumer_attempt_id": "fixture-attempt-committed",
+        "status": "committed",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "8.0.1",
+          "version_basis": "operator_declared",
+          "sensor_id": "fixture-sensor",
+          "run_id": "fixture-run-a",
+          "ruleset_id": "synthetic-rules-v1",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 2,
+        "normalized_alert_count": 2,
+        "producer_blocked_count": 1,
+        "normalized_batch_bytes": 1291,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "committed",
+        "replay_status": "recorded",
+        "transaction_status": "committed",
+        "reconciliation_status": "not_required",
+        "failure_code": null
+      }
+    },
+    {
+      "id": "duplicate-rejected",
+      "receipt": {
+        "schema_version": "suricata-eve-consumer-receipt-v1",
+        "consumer_policy_version": "suricata-eve-consumer-policy-v1",
+        "reader_receipt_version": "suricata-eve-reader-receipt-v1",
+        "consumer_attempt_id": "fixture-attempt-replay",
+        "status": "rejected",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "8.0.1",
+          "version_basis": "operator_declared",
+          "sensor_id": "fixture-sensor",
+          "run_id": "fixture-run-a",
+          "ruleset_id": "synthetic-rules-v1",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 2,
+        "normalized_alert_count": 2,
+        "producer_blocked_count": 1,
+        "normalized_batch_bytes": 1291,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "not_attempted",
+        "replay_status": "duplicate",
+        "transaction_status": "not_started",
+        "reconciliation_status": "not_required",
+        "failure_code": "REPLAY"
+      }
+    },
+    {
+      "id": "precommit-failure-rolled-back",
+      "receipt": {
+        "schema_version": "suricata-eve-consumer-receipt-v1",
+        "consumer_policy_version": "suricata-eve-consumer-policy-v1",
+        "reader_receipt_version": "suricata-eve-reader-receipt-v1",
+        "consumer_attempt_id": "fixture-attempt-rolled-back",
+        "status": "failed",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "8.0.1",
+          "version_basis": "operator_declared",
+          "sensor_id": "fixture-sensor",
+          "run_id": "fixture-run-a",
+          "ruleset_id": "synthetic-rules-v1",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 2,
+        "normalized_alert_count": 2,
+        "producer_blocked_count": 1,
+        "normalized_batch_bytes": 1291,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "rolled_back",
+        "replay_status": "not_recorded",
+        "transaction_status": "rolled_back",
+        "reconciliation_status": "not_required",
+        "failure_code": "STORAGE_ERROR"
+      }
+    },
+    {
+      "id": "commit-acknowledgement-unknown",
+      "receipt": {
+        "schema_version": "suricata-eve-consumer-receipt-v1",
+        "consumer_policy_version": "suricata-eve-consumer-policy-v1",
+        "reader_receipt_version": "suricata-eve-reader-receipt-v1",
+        "consumer_attempt_id": "fixture-attempt-unknown",
+        "status": "reconciliation_required",
+        "run_identity": {
+          "engine": "suricata",
+          "adapter_profile": "suricata-eve-alert-v1",
+          "declared_version": "8.0.1",
+          "version_basis": "operator_declared",
+          "sensor_id": "fixture-sensor",
+          "run_id": "fixture-run-a",
+          "ruleset_id": "synthetic-rules-v1",
+          "ruleset_basis": "operator_declared"
+        },
+        "record_count": 2,
+        "normalized_alert_count": 2,
+        "producer_blocked_count": 1,
+        "normalized_batch_bytes": 1291,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": "unknown",
+        "replay_status": "unknown",
+        "transaction_status": "unknown",
+        "reconciliation_status": "required",
+        "failure_code": "COMMIT_UNKNOWN"
+      }
+    }
+  ]
+}

@@ -1,11 +1,14 @@
 # Suricata EVE alert contract v1
 
-**Status: ADOPTED NORMATIVE CONTRACT / BOUNDED LINUX READER AVAILABLE.**
+**Status: ADOPTED RECORD CONTRACT / BOUNDED LINUX READER AVAILABLE /
+PROPOSED DURABLE-CONSUMER CONTRACT.**
 The record gate (#9) and bounded-reader design gate (#24) are closed on `main`.
 The separate `megalodon.offline.suricata` module implements only the contracted
 completed-file reader. This directory does not install or run Suricata, download
-rules, capture packets, start a scheduler, persist telemetry, modify the
-dashboard, or authorize a firewall action.
+rules, capture packets, start a scheduler, persist Suricata telemetry in the
+production store, modify the dashboard, or authorize a firewall action. The
+[`consumer/`](consumer/README.md) subdirectory is a proposed contract and
+synthetic SQLite oracle only; it is not runtime code or a migration.
 
 The historical authoring base was `dc35854a4bb9a4d353b3832cb18d5dee780d244c`
 in `bartytime4life/MEGALODON`; the checked-in schemas, fixtures, tests, and this
@@ -18,7 +21,10 @@ The first dependency-closed slice defines an input envelope, a separate
 `ExternalAlertRecord` representation, accepted pairs, rejected mutations, and
 byte-framing examples. The [`reader/`](reader/README.md) subdirectory adds the
 bounded-source/run contract, completed-run receipts, synthetic fixture mutations,
-and an independent in-memory publish oracle for the runtime reader. All fixture
+and an independent in-memory publish oracle for the runtime reader. The
+[`consumer/`](consumer/README.md) subdirectory separately closes a proposed
+transaction, replay-registry, terminal-receipt, and reconciliation contract for
+a future durable consumer. All fixture
 addresses and rule labels are synthetic;
 forbidden-content tests use null/empty markers, not packet payloads or hashes.
 
@@ -133,11 +139,12 @@ target approval. Missing data must never be invented to satisfy these rules.
 
 Schemas cannot enforce run-wide uniqueness, file ownership, permissions,
 symlink safety, immutable snapshots, total input size, bounded streaming, or
-failure atomicity. The proposed [bounded reader contract](reader/README.md) now
-fixes those as normative requirements and synthetic conformance cases without
-implementing the filesystem boundary. The ordinal bound still does not prove
-enforcement of the independent 10,000-record run limit. No source file is read
-or processed by a production path in either contract slice.
+failure atomicity. The adopted [bounded reader contract](reader/README.md) fixes
+the filesystem, quota, and publication requirements, and the implemented Linux
+reader enforces that narrow completed-file boundary. The proposed
+[durable-consumer contract](consumer/README.md) fixes a later transactional
+boundary without implementing it. The ordinal bound still does not prove
+enforcement of the independent 10,000-record run limit.
 
 ## 4. Normalization and action separation
 
@@ -188,35 +195,36 @@ From the repository root, with the existing test extra installed:
 
 ```bash
 python -m pytest -q tests/test_suricata_contract.py tests/test_suricata_formats.py \\
-  tests/test_suricata_reader_contract.py
+  tests/test_suricata_reader_contract.py tests/test_suricata_consumer_contract.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
 ```
 
 The focused tests refuse socket creation and subprocess launch, keep schema
-resolution local, assert closed objects, and exercise the record and reader
-conformance examples.
+resolution local, assert closed objects, and exercise the record, reader, and
+proposed consumer conformance examples.
 Passing them proves these fixtures and guards in the tested environment only.
 It does not prove a production ingestion boundary, sensor detection quality,
 rule authenticity, compatibility, privacy on arbitrary EVE logs, or deployment
 safety. The existing full suite and safe CI smoke checks remain required and
 unchanged; green tests are not independent human review.
 
-## 6. Next gate, not enabled by this contract
+## 6. Next gate, not enabled by these contracts
 
-The schema, fixtures, and tests are present on `main`; issues #9 and #24 are
-closed as contract gates. Their merge does not
-supply the independent review or repository-control evidence still tracked in
-issue #3, and it grants no installation, capture, ruleset, or enforcement
+The record and reader schemas, fixtures, tests, and Linux reader are present on
+`main`; issues #9 and #24 are closed as their bounded gates. Issue #212 tracks
+the separate durable-consumer contract slice in `consumer/`. These artifacts
+do not supply the independent review or repository-control evidence still tracked in
+issue #3, and they grant no installation, capture, ruleset, or enforcement
 authority.
 
-A later, separately authorized change may implement a bounded local reader and
-consumer only by conforming to the adopted reader contract and supplying
-production Linux descriptor, hostile-input resource, failure-atomicity, replay,
-and durable-transaction tests. A pinned supported producer profile and the
-source-file/privacy boundary also remain required. Installed-tool
-compatibility, rule acquisition, local reports, SQLite integration, dashboard
-projection, host context, scheduler execution, and response remain out of scope.
+A later, separately authorized change may implement the durable consumer only
+by conforming to the adopted reader and proposed consumer contracts and
+supplying a reviewed production migration, failure-atomicity, capacity,
+deadline, replay, commit-unknown, and reconciliation evidence. A pinned
+supported producer profile and the source-file/privacy boundary also remain
+required. Installed-tool compatibility, rule acquisition, dashboard projection,
+host context, scheduler execution, and response remain out of scope.
 Existing dashboard work tracked by issue #7 is not a dependency of this contract.
 
 ## References
