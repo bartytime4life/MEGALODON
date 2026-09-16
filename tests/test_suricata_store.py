@@ -88,6 +88,47 @@ def test_initializer_normalizes_owner_permissions_under_restrictive_umask(tmp_pa
     assert validate_suricata_store(path)["status"] == "compatible"
 
 
+@pytest.mark.parametrize("suffix", ("-wal", "-shm", "-journal"))
+def test_initializer_refuses_orphaned_sqlite_sidecars(tmp_path, suffix):
+    directory = tmp_path / "suricata"
+    directory.mkdir(mode=0o700)
+    path = directory / "durable.db"
+    sidecar = path.with_name(path.name + suffix)
+    sidecar.write_bytes(b"orphaned")
+    if os.name == "posix":
+        sidecar.chmod(0o600)
+
+    with pytest.raises(SuricataStoreError, match="ORPHANED_SIDECAR_REFUSED"):
+        initialize_suricata_store(path)
+
+    assert not path.exists()
+    assert sidecar.read_bytes() == b"orphaned"
+
+
+def test_initializer_refuses_sidecar_created_during_exclusive_open(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "durable.db"
+    original = suricata_store._create_private_database
+
+    def create_with_sidecar(database_path, directory_descriptor):
+        descriptor = original(database_path, directory_descriptor)
+        sidecar = database_path.with_name(database_path.name + "-wal")
+        sidecar.write_bytes(b"raced")
+        if os.name == "posix":
+            sidecar.chmod(0o600)
+        return descriptor
+
+    monkeypatch.setattr(
+        suricata_store, "_create_private_database", create_with_sidecar
+    )
+    with pytest.raises(SuricataStoreError, match="ORPHANED_SIDECAR_REFUSED"):
+        initialize_suricata_store(path)
+
+    assert not path.exists()
+    assert path.with_name(path.name + "-wal").read_bytes() == b"raced"
+
+
 def test_validation_is_read_only_and_initializer_refuses_existing_store(tmp_path):
     path = tmp_path / "durable.db"
     initialize_suricata_store(path)
