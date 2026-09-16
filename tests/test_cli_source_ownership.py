@@ -1235,7 +1235,7 @@ class SourceOwnershipTests(unittest.TestCase):
                 if exhaust:
                     self.assertEqual(list(source), [])
                 source.close()
-                path.open.assert_called_once_with("r", encoding="utf-8")
+                path.open.assert_called_once_with("r", encoding="utf-8", newline="")
                 stream.close.assert_called_once_with()
 
     def test_jsonl_failed_file_close_is_not_hidden_by_generator_exit(self):

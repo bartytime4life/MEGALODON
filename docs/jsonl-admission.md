@@ -34,6 +34,17 @@ interrupt a blocking stream read. Malformed Unicode is reported as a capture
 error; decoder buffering means a decode failure identifies the next attempted
 line, not necessarily the precise physical byte location.
 
+The CLI opens owned UTF-8 files with newline translation disabled: LF, CRLF,
+and CR remain line separators, but every original terminator byte counts toward
+both byte limits. Exact equality is accepted, including a final record without
+a terminator. `iter_jsonl` measures the UTF-8 encoding of the text returned by
+its caller-supplied stream. Borrowed stdin and other text streams are not
+reconfigured or closed; callers requiring original-file byte accounting must
+preserve line endings and use UTF-8 decoding. Bytes already translated away by
+a caller's decoder cannot be recovered by this text-stream API. Decoder
+read-ahead is separate from the admitted-byte budget: refusal prevents another
+logical line read, not necessarily underlying buffered I/O.
+
 On refusal, the CLI retains committed prefix events, records a failed run with
 `CAPTURE_ERROR`, and emits its existing bounded diagnostic. The rejected record
 and unread suffix produce no events, detections or actions. This does not make

@@ -6,6 +6,7 @@ import json
 import pytest
 
 from megalodon.capture import CaptureError, iter_jsonl
+from megalodon import cli
 from megalodon.models import PacketEvent
 from megalodon.validation import SQLITE_INTEGER_MAX
 
@@ -74,6 +75,31 @@ def test_line_byte_boundary_includes_newline_and_utf8():
     assert len(list(iter_jsonl(StringIO(text), max_line_bytes=size))) == 1
     with pytest.raises(CaptureError, match='exceeds'):
         list(iter_jsonl(StringIO(text), max_line_bytes=size - 1))
+
+
+@pytest.mark.parametrize('ending', ['\n', '\r\n', '\r', ''])
+@pytest.mark.parametrize('limit_name', ['max_line_bytes', 'max_input_bytes'])
+@pytest.mark.parametrize('interface', ['eth0', 'é'])
+def test_file_byte_boundaries_preserve_utf8_and_line_endings(
+    tmp_path, monkeypatch, ending, limit_name, interface
+):
+    event = dict(EVENT, interface=interface)
+    raw = (json.dumps(event, ensure_ascii=False) + ending).encode('utf-8')
+    source = tmp_path / 'events.jsonl'
+    source.write_bytes(raw)
+    limit = len(raw)
+    monkeypatch.setattr(
+        cli, 'iter_jsonl', lambda stream: iter_jsonl(stream, **{limit_name: limit})
+    )
+
+    # Equality is admitted; one byte less must refuse even a CRLF record.
+    assert len(list(cli._jsonl_file_events(source))) == 1
+    limit -= 1
+    message = ('^JSONL input-byte limit exceeded at line 1$'
+               if limit_name == 'max_input_bytes'
+               else f'^JSONL event at line 1 exceeds {limit} bytes$')
+    with pytest.raises(CaptureError, match=message):
+        list(cli._jsonl_file_events(source))
 
 
 def test_literal_surrogate_normalizes_to_capture_error():

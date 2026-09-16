@@ -247,7 +247,8 @@ def _owned_source(source):
 
 def _jsonl_file_events(path: Path):
     # Lazy open: closing an unstarted iterator must not acquire a file.
-    with _owned_source(path.open("r", encoding="utf-8")) as stream:
+    # Preserve terminators so CRLF bytes count toward both JSONL byte budgets.
+    with _owned_source(path.open("r", encoding="utf-8", newline="")) as stream:
         yield from iter_jsonl(stream)
 
 

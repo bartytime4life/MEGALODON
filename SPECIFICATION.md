@@ -186,6 +186,10 @@ suffix. Errors expose only the line number, never the record. Valid prefixes
 retain the existing per-event transaction and failed-run semantics. The scan
 budget alone does not interrupt a blocking read or provide an elapsed-time
 deadline.
+Owned UTF-8 JSONL files preserve LF, CRLF, and CR terminators for both byte
+limits. Borrowed stdin and API text streams are measured as returned UTF-8
+text, without reconfiguring their decoder; original-byte accounting requires
+the caller to preserve newlines. The limits do not bound decoder read-ahead.
 The operational CLI also requires an explicit positive accepted-event
 `--max-events` ceiling
 from 1 through 10,000,000 before opening a JSONL file/stdin source or Scapy
