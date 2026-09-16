@@ -75,6 +75,19 @@ def test_explicit_initializer_creates_exact_private_v1_store(tmp_path):
         assert path.stat().st_mode & 0o777 == 0o600
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX umask and mode semantics")
+def test_initializer_normalizes_owner_permissions_under_restrictive_umask(tmp_path):
+    path = tmp_path / "durable.db"
+    previous = os.umask(0o277)
+    try:
+        assert initialize_suricata_store(path)["status"] == "created"
+    finally:
+        os.umask(previous)
+
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert validate_suricata_store(path)["status"] == "compatible"
+
+
 def test_validation_is_read_only_and_initializer_refuses_existing_store(tmp_path):
     path = tmp_path / "durable.db"
     initialize_suricata_store(path)
