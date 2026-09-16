@@ -87,7 +87,7 @@ future transaction boundary and proves:
 - the implemented reader's immutable publication is accepted directly;
 - a duplicate identity is rejected without new rows;
 - an attempt-ID collision for a different run is not misclassified as replay;
-- a capacity or deadline preflight refusal never starts a transaction;
+- a capacity, deadline, or failed-begin refusal never claims a rollback;
 - an injected pre-commit failure rolls back registry and alert rows together;
 - a simulated lost acknowledgement after commit produces only
   `reconciliation_required` until explicit readback; and

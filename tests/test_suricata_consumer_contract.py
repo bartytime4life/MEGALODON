@@ -283,7 +283,8 @@ def _find_attempt(database, attempt_id):
 
 
 def _consume(database, batch, reader_receipt, *, attempt_id,
-             fail_before_commit=False, lose_commit_acknowledgement=False,
+             fail_begin=False, fail_before_commit=False,
+             lose_commit_acknowledgement=False,
              capacity_available=True, elapsed_ms=0):
     identity, count, blocked, output_bytes = _validate_publication(
         batch, reader_receipt
@@ -311,8 +312,12 @@ def _consume(database, batch, reader_receipt, *, attempt_id,
     committed = _receipt(
         attempt_id, identity, count, blocked, output_bytes, "committed"
     )
+    transaction_started = False
     try:
+        if fail_begin:
+            raise sqlite3.OperationalError("synthetic begin failure")
         database.execute("BEGIN IMMEDIATE")
+        transaction_started = True
         cursor = database.execute(
             """INSERT INTO consumer_runs (
                    engine, adapter_profile, declared_version, version_basis,
@@ -359,7 +364,13 @@ def _consume(database, batch, reader_receipt, *, attempt_id,
             "failed", "DATABASE_IDENTITY",
         )
     except sqlite3.DatabaseError:
-        database.rollback()
+        if transaction_started:
+            database.rollback()
+        else:
+            return _receipt(
+                attempt_id, identity, count, blocked, output_bytes,
+                "preflight_failed", "STORAGE_ERROR",
+            )
         return _receipt(
             attempt_id, identity, count, blocked, output_bytes, "failed"
         )
@@ -616,6 +627,7 @@ def test_publication_counts_identity_sequence_and_bytes_are_recomputed(publicati
     [
         ({"capacity_available": False}, "fixture-attempt-capacity", "STORAGE_CAPACITY"),
         ({"elapsed_ms": MAX_ELAPSED_MS + 1}, "over-time-budget", "TRANSACTION_TIMEOUT"),
+        ({"fail_begin": True}, "begin-failed", "STORAGE_ERROR"),
     ],
 )
 def test_preflight_failures_do_not_start_a_write(publication, options, attempt_id, code):
