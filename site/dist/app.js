@@ -345,28 +345,45 @@ const categories = [
 
 const sourceOptions = [["all", "All"], ["core", "Core"], ["tshark", "TShark"], ["zeek", "Zeek"], ["suricata", "Suricata"], ["scapy", "Scapy"]];
 const sourceToolIds = new Set(["core", "tshark", "zeek", "suricata", "scapy"]);
-const toolPresenceKey = "megalodon-tool-presence-v1";
+const toolPresenceKey = "megalodon-tool-presence-v2";
 const toolPresenceValues = new Set(["unchecked", "installed", "missing"]);
-const toolPresenceLabels = { unchecked: "Not checked", installed: "Installed", missing: "Missing" };
+const toolPresenceLabels = { unchecked: "Not checked", installed: "Reported present", missing: "Reported missing", stale: "Recheck note" };
+const presenceMaxAge = 7 * 24 * 60 * 60 * 1000;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const runExamples = [
+  { id: "demo-tshark-042", tool: "tshark", name: "Saved-capture replay", state: "complete", records: "5,400 packet metadata records", completeness: "Complete within the illustrated replay budget", limitation: "A saved capture covers only its collection window and vantage. It cannot establish current network health.", next: "Review installed-TShark compatibility evidence before using a real capture.", fields: ["source: tshark", "kind: packet metadata", "capture: synthetic fixture", "payload: absent"] },
+  { id: "demo-zeek-018", tool: "zeek", name: "Connection-log import", state: "complete", records: "318 flow records", completeness: "Complete within the illustrated import budget", limitation: "Flow records are context; they are not packet counts or proof of malicious activity.", next: "Confirm the declared conn.log producer profile and input limits.", fields: ["source: zeek", "kind: flow metadata", "profile: illustrative conn.log", "payload: absent"] },
+  { id: "demo-core-042", tool: "core", name: "Fixed detection review", state: "complete", records: "7 candidate detections", completeness: "Completed synthetic detection window", limitation: "A threshold match is a candidate finding, not attribution or action authority.", next: "Review the source observations and rule threshold before any operator decision.", fields: ["source: core", "kind: detection metadata", "actions_applied: 0", "model_authority: none"] },
+  { id: "demo-scapy-009", tool: "scapy", name: "Interrupted capture example", state: "incomplete", records: "742 metadata records retained", completeness: "Incomplete — later input was not observed", limitation: "Retained records remain scoped evidence. An incomplete window cannot be reported as a clean success or zero threats.", next: "Inspect the terminal error and capture loss evidence; do not infer missing traffic.", fields: ["source: scapy", "kind: interface metadata", "completeness: incomplete", "live_connection: false"] },
+  { id: "demo-suricata-007", tool: "suricata", name: "Commit outcome unknown", state: "unknown", records: "7 alert candidates; commit unproved", completeness: "Unknown — no database was queried by this Site", limitation: "An unknown commit is neither committed nor absent. Retrying could duplicate an already committed publication.", next: "Use separately reviewed read-only reconciliation for the exact publication and attempt. An indeterminate result remains on hold.", fields: ["source: suricata", "kind: alert metadata", "consumer_attempt: synthetic-007", "commit_outcome: unknown"] }
+];
+const runForSource = Object.fromEntries(runExamples.map((run) => [run.tool, run.id]));
 
 function loadToolPresence() {
   try {
     const saved = JSON.parse(localStorage.getItem(toolPresenceKey) || "{}");
     if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
-    return Object.fromEntries(Object.entries(saved).filter(([id, value]) => integrations.some((item) => item.id === id) && toolPresenceValues.has(value)));
+    return Object.fromEntries(Object.entries(saved).filter(([id, value]) => integrations.some((item) => item.id === id) && value && typeof value === "object" && ["installed", "missing"].includes(value.status) && Number.isFinite(value.checkedAt) && value.checkedAt > 0 && value.checkedAt <= Date.now()));
   } catch {
     return {};
   }
 }
 
 const state = {
-  running: true,
+  running: !reducedMotion.matches,
   tick: 0,
+  windowSeconds: 60,
+  eventSearch: "",
+  dispositionFilter: "all",
+  selectedEvent: null,
+  selectedRun: "demo-tshark-042",
+  activeView: "hud",
+  readiness: null,
   sourceFilter: "all",
   categoryFilter: "all",
   selectedTool: "core",
   toolPresence: loadToolPresence(),
-  events: eventTemplates.map((item, index) => ({ ...item, offset: index * 7 + 2 }))
+  events: eventTemplates.map((item, index) => ({ ...item, id: `demo-event-${index + 1}`, run: runForSource[item.source], offset: [2, 18, 34, 50, 95, 140, 380, 650][index] }))
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -374,13 +391,16 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const svgNS = "http://www.w3.org/2000/svg";
 
 function presenceFor(id) {
-  return toolPresenceValues.has(state.toolPresence[id]) ? state.toolPresence[id] : "unchecked";
+  const note = state.toolPresence[id];
+  if (!note) return "unchecked";
+  if (Date.now() - note.checkedAt > presenceMaxAge) return "stale";
+  return note.status;
 }
 
 function setToolPresence(id, value) {
   if (!integrations.some((item) => item.id === id) || !toolPresenceValues.has(value)) return;
   if (value === "unchecked") delete state.toolPresence[id];
-  else state.toolPresence[id] = value;
+  else state.toolPresence[id] = { status: value, checkedAt: Date.now() };
   try {
     localStorage.setItem(toolPresenceKey, JSON.stringify(state.toolPresence));
   } catch {
@@ -395,10 +415,47 @@ function renderVerificationSummary() {
   const missing = integrations.filter((item) => presenceFor(item.id) === "missing").length;
   const unchecked = integrations.length - installed - missing;
   const summary = $("#verification-summary");
-  if (summary) summary.textContent = `${installed} installed · ${missing} missing · ${unchecked} not checked`;
+  const stale = integrations.filter((item) => presenceFor(item.id) === "stale").length;
+  if (summary) summary.textContent = `Manual notes: ${installed} reported present · ${missing} reported missing · ${stale} need recheck · ${unchecked - stale} not checked`;
+}
+
+function readinessLabel(id) {
+  if (!state.readiness) return "Report: not loaded";
+  const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
+  const report = state.readiness.tools.find((tool) => tool.id === mapped);
+  const labels = { executable_found: "Executable found", not_found: "Not found on checked PATH", not_checked: "Not checked" };
+  const stale = Date.now() - Date.parse(state.readiness.checked_at) > 24 * 60 * 60 * 1000;
+  return `${stale ? "Stale report · " : "Report · "}${labels[report.status]}`;
+}
+
+let readinessImportSequence = 0;
+async function importReadinessFile(file) {
+  const sequence = ++readinessImportSequence;
+  state.readiness = null;
+  $("#clear-readiness").disabled = true;
+  $("#readiness-feedback").textContent = file ? "Reading a bounded report… Previous report cleared." : "No readiness report loaded.";
+  renderIntegrationGrid(); renderToolInspector();
+  if (!file) return;
+  try {
+    if (!Number.isFinite(file.size) || file.size > 8192 || file.size < 2) throw new Error("Choose a JSON report no larger than 8 KiB.");
+    const bytes = await file.arrayBuffer();
+    if (sequence !== readinessImportSequence) return;
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const report = validateReadinessReport(text);
+    state.readiness = report;
+    const age = Date.now() - Date.parse(report.checked_at);
+    $("#readiness-feedback").textContent = `${age > 86400000 ? "STALE — more than 24 hours old. " : ""}14 tool results loaded · claimed check ${report.checked_at} · ${report.platform}. Schema accepted; report authenticity is not verified. Memory only.`;
+    $("#clear-readiness").disabled = false;
+  } catch (error) {
+    if (sequence !== readinessImportSequence) return;
+    $("#readiness-feedback").textContent = `Report rejected. ${error instanceof TypeError ? "The file must be valid UTF-8 JSON." : error.message} No results retained.`;
+  }
+  renderIntegrationGrid(); renderToolInspector();
 }
 
 function switchView(name) {
+  if (!$( `[data-view-panel="${name}"]`)) return;
+  state.activeView = name;
   $$("[data-view-panel]").forEach((panel) => {
     const active = panel.dataset.viewPanel === name;
     panel.hidden = !active;
@@ -410,7 +467,7 @@ function switchView(name) {
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: reducedMotion.matches ? "instant" : "smooth" });
 }
 
 function chartSeries(tick) {
@@ -418,7 +475,7 @@ function chartSeries(tick) {
   const ingress = [];
   const egress = [];
   for (let i = 0; i < length; i += 1) {
-    const phase = i + tick;
+    const phase = i * state.windowSeconds / 60 + tick;
     const pulse = phase % 17 === 0 ? 175 : phase % 23 === 0 ? 105 : 0;
     ingress.push(Math.max(110, 505 + Math.sin(phase * 0.52) * 105 + Math.cos(phase * 0.21) * 62 + pulse));
     egress.push(Math.max(60, 255 + Math.sin(phase * 0.41 + 1.8) * 72 + Math.cos(phase * 0.15) * 38 + pulse * 0.28));
@@ -477,7 +534,8 @@ function renderSourceFilters() {
 }
 
 function renderEventFeed() {
-  const visible = state.events.filter((item) => state.sourceFilter === "all" || item.source === state.sourceFilter).slice(0, 7);
+  const matched = state.events.filter((item) => item.offset <= state.windowSeconds && (state.sourceFilter === "all" || item.source === state.sourceFilter) && (state.dispositionFilter === "all" || item.disposition === state.dispositionFilter) && `${item.sourceLabel} ${item.type} ${item.subject}`.toLowerCase().includes(state.eventSearch));
+  const visible = matched.slice(0, 12);
   const rows = visible.map((event) => {
     const tr = document.createElement("tr");
     const cells = [clockString(event.offset), event.sourceLabel, event.type, event.subject];
@@ -492,9 +550,60 @@ function renderEventFeed() {
     badge.textContent = event.disposition;
     disposition.append(badge);
     tr.append(disposition);
+    const detail = document.createElement("td");
+    const inspect = document.createElement("button");
+    inspect.type = "button";
+    inspect.className = "text-button";
+    inspect.textContent = "Inspect";
+    inspect.setAttribute("aria-label", `Inspect ${event.sourceLabel} ${event.type} ${event.id}`);
+    inspect.addEventListener("click", () => { state.selectedEvent = { ...event, time: clockString(event.offset) }; renderEventInspector(); });
+    detail.append(inspect);
+    tr.append(detail);
     return tr;
   });
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.className = "empty-feed";
+    cell.textContent = "No synthetic records match this window and these filters. This is not a statement about network safety.";
+    row.append(cell); rows.push(row);
+  }
   $("#event-feed").replaceChildren(...rows);
+  $("#feed-count").textContent = `${visible.length} of ${matched.length} matching demo records · ${state.windowSeconds}s window · source and disposition filters apply to this table only`;
+}
+
+function renderEventInspector() {
+  const event = state.selectedEvent;
+  const panel = $("#event-inspector");
+  panel.hidden = !event;
+  if (!event) return;
+  const run = runExamples.find((item) => item.id === event.run);
+  panel.innerHTML = `<div class="panel-heading"><div><p class="panel-kicker">SYNTHETIC RECORD · SNAPSHOT</p><h3 id="event-inspector-title" tabindex="-1"></h3></div><button class="text-button" type="button" id="close-event">Close</button></div><dl class="evidence-fields"></dl><p class="evidence-limit"></p><button class="control-button" id="open-event-run" type="button">Follow run evidence →</button>`;
+  $("#event-inspector-title").textContent = event.subject;
+  const fields = [["Record", event.id], ["Source", event.sourceLabel], ["Demo time", `${event.time} UTC`], ["Type", event.type], ["Disposition", event.disposition], ["Run", event.run]];
+  fields.forEach(([label, value]) => { const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd"); dd.textContent = value; panel.querySelector("dl").append(dt, dd); });
+  panel.querySelector(".evidence-limit").textContent = run.limitation;
+  $("#close-event").addEventListener("click", () => { state.selectedEvent = null; panel.hidden = true; $("#event-search").focus(); });
+  $("#open-event-run").addEventListener("click", () => { state.selectedRun = run.id; renderRunEvidence(); switchView("evidence"); $("#evidence-title").focus({ preventScroll: true }); });
+  $("#event-inspector-title").focus({ preventScroll: true });
+}
+
+function renderRunEvidence() {
+  $("#run-list").replaceChildren(...runExamples.map((run) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `run-item${state.selectedRun === run.id ? " active" : ""}`;
+    button.setAttribute("aria-pressed", String(state.selectedRun === run.id));
+    button.innerHTML = `<span class="run-state ${run.state}">${run.state === "unknown" ? "Commit unknown" : run.state}</span><strong>${run.name}</strong><small>${run.id} · ${run.records}</small>`;
+    button.addEventListener("click", () => { state.selectedRun = run.id; renderRunEvidence(); });
+    return button;
+  }));
+  const run = runExamples.find((item) => item.id === state.selectedRun);
+  const item = integrations.find((tool) => tool.id === run.tool);
+  $("#run-inspector").innerHTML = `<p class="panel-kicker">ILLUSTRATIVE REVIEW RECORD</p><h2>${run.name}</h2><span class="run-state ${run.state}">${run.completeness}</span><dl class="evidence-fields"><dt>Example identity</dt><dd>${run.id}</dd><dt>Source</dt><dd>${item.name}</dd><dt>Record unit</dt><dd>${run.records}</dd><dt>Provenance</dt><dd>Bundled deterministic browser fixture</dd><dt>Observed host</dt><dd>None — no host or network access</dd></dl><h3>What this can establish</h3><p>${run.limitation}</p><h3>Next evidence gate</h3><p>${run.next}</p><h3>Bounded display fields</h3><pre class="evidence-code"></pre><button class="control-button" id="inspect-run-tool" type="button">Inspect ${item.name} contract →</button><p class="panel-footnote">Display illustration only; not a signed receipt, a schema-validation result, or independent acceptance.</p>`;
+  $("#run-inspector pre").textContent = run.fields.join("\n");
+  $("#inspect-run-tool").addEventListener("click", () => { state.categoryFilter = "all"; state.selectedTool = run.tool; renderCategoryFilters(); renderIntegrationGrid(); renderToolInspector(); switchView("integrations"); });
 }
 
 function renderDetectionLanes() {
@@ -542,7 +651,7 @@ function renderIntegrationGrid() {
     button.type = "button";
     button.className = `tool-card${state.selectedTool === item.id ? " active" : ""}`;
     button.setAttribute("aria-pressed", String(state.selectedTool === item.id));
-    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Installation status: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><footer><span>${item.dataKind}</span><span>Inspect + get →</span></footer>`;
+    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Manual note: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><span class="readiness-card-status">${readinessLabel(item.id)}</span><footer><span>${item.dataKind}</span><span>Inspect + get →</span></footer>`;
     button.addEventListener("click", () => {
       state.selectedTool = item.id;
       renderIntegrationGrid();
@@ -568,6 +677,7 @@ function renderToolInspector() {
       <div><strong>${item.metricB}</strong><small>${item.metricBLabel}</small></div>
     </div>
     <div class="inspector-section"><span>MEGALODON contract</span><p>${item.contract}</p></div>
+    <div class="inspector-section"><span>Imported presence report · self-reported</span><p>${readinessLabel(item.id)}</p><small class="panel-footnote">${state.readiness ? `Claimed check: ${state.readiness.checked_at} · ${state.readiness.platform} · path_presence_only` : "No report loaded. The browser has not inspected this device."}</small>${item.id === "qwen" ? "<p class=\"panel-footnote\">The report checks the Ollama executable only. It does not check a Qwen model or its digest.</p>" : ""}</div>
     <div class="inspector-section"><span>Integration owner</span><p>${item.owner}</p></div>
     <div class="inspector-section"><span>HUD surfaces</span><div class="hud-slots">${item.ui.map((slot) => `<span>${slot}</span>`).join("")}</div></div>
     ${item.evidence ? `<div class="inspector-section"><span>Acceptance evidence</span><p><a class="evidence-link" href="${item.evidence.url}" target="_blank" rel="noopener noreferrer">${item.evidence.label} <span aria-hidden="true">↗</span></a></p></div>` : ""}
@@ -579,15 +689,15 @@ function renderToolInspector() {
       <div class="acquire-actions"><a href="${acquire.url}" target="_blank" rel="noopener noreferrer">${acquire.linkLabel} <span aria-hidden="true">↗</span></a></div>
       <p class="acquire-note">${acquire.note}</p>
       <div class="verification-panel">
-        <div class="verification-heading"><strong>Verify this device</strong><span>${acquire.verificationLabel}</span></div>
-        <p>Run this read-only check in a terminal. A successful result or exit code 0 means the expected executable or local artifact was found.</p>
+        <div class="verification-heading"><strong>Manual presence note</strong><span>${acquire.verificationLabel}</span></div>
+        <p>Review and run this read-only command yourself. A successful result only supports this specific check; it does not verify compatibility or service health.</p>
         <div class="verify-command"><code>${acquire.verificationCommand}</code><button type="button" data-copy-verify>Copy verify</button></div>
-        <div class="presence-controls" role="group" aria-label="Record ${item.name} installation result">
-          <button type="button" class="installed${presence === "installed" ? " active" : ""}" data-set-presence="installed" aria-pressed="${presence === "installed"}">Installed</button>
-          <button type="button" class="missing${presence === "missing" ? " active" : ""}" data-set-presence="missing" aria-pressed="${presence === "missing"}">Missing</button>
+        <div class="presence-controls" role="group" aria-label="Record ${item.name} manual presence note">
+          <button type="button" class="installed${presence === "installed" ? " active" : ""}" data-set-presence="installed" aria-pressed="${presence === "installed"}">I found it</button>
+          <button type="button" class="missing${presence === "missing" ? " active" : ""}" data-set-presence="missing" aria-pressed="${presence === "missing"}">Not found by me</button>
           <button type="button" class="unchecked${presence === "unchecked" ? " active" : ""}" data-set-presence="unchecked" aria-pressed="${presence === "unchecked"}">Clear</button>
         </div>
-        <small>Recorded only in this browser for this device. The Site cannot inspect your computer automatically.</small>
+        <small>${state.toolPresence[item.id] ? `Self-reported ${new Date(state.toolPresence[item.id].checkedAt).toISOString()}. ` : ""}Saved only in this browser; recheck after 7 days. Manual notes are not verified installation evidence.</small>
       </div>
       <p class="acquire-boundary"><strong>Operator action:</strong> this HUD opens setup guidance and copies verification text. It never probes the host or executes an installer.</p>
     </div>
@@ -628,9 +738,10 @@ async function copyText(value, button, successLabel = "Copied") {
     temporary.className = "clipboard-fallback";
     document.body.append(temporary);
     temporary.select();
-    document.execCommand("copy");
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch { /* Ask the operator to select the visible text. */ }
     temporary.remove();
-    button.textContent = "Copied";
+    button.textContent = copied ? successLabel : "Copy unavailable — select text";
   }
   window.setTimeout(() => { button.textContent = original; }, 1600);
 }
@@ -663,42 +774,50 @@ function listItem(text) {
 
 function addSyntheticEvent() {
   const template = eventTemplates[state.tick % eventTemplates.length];
-  state.events = [{ ...template, offset: 0 }, ...state.events.map((event) => ({ ...event, offset: event.offset + 2 }))].slice(0, 12);
+  state.events = [{ ...template, id: `demo-stream-${state.tick}`, run: runForSource[template.source], offset: 0 }, ...state.events.map((event) => ({ ...event, offset: event.offset + 2 }))].filter((event) => event.offset <= 900).slice(0, 128);
 }
 
-function updateMetrics() {
-  $("#metric-events").textContent = (12480 + state.tick * 32).toLocaleString("en-US");
-  $("#metric-flows").textContent = String(318 + Math.floor(state.tick / 2));
-  $("#metric-detections").textContent = String(7 + Math.floor(state.tick / 6));
-}
 
 function tick() {
-  if (!state.running) return;
+  if (!state.running || document.hidden || state.activeView !== "hud") return;
   state.tick += 1;
   addSyntheticEvent();
   renderChart();
   renderEventFeed();
-  updateMetrics();
-  $("#feed-announcement").textContent = `Synthetic ${state.events[0].type} added from ${state.events[0].sourceLabel}.`;
 }
 
-$$('[data-view]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
+$$('[data-view]').forEach((button) => { button.setAttribute("aria-label", button.querySelector("span:last-child").textContent); button.addEventListener('click', () => switchView(button.dataset.view)); });
 $$('[data-jump]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
 $$('.mission').forEach((button) => button.addEventListener('click', () => renderWorkflow(button.dataset.workflow)));
 
-$("#toggle-stream").addEventListener("click", () => {
-  state.running = !state.running;
+function renderFeedControl() {
   const button = $("#toggle-stream");
   button.textContent = state.running ? "Pause feed" : "Resume feed";
   button.setAttribute("aria-pressed", String(!state.running));
   $(".mode-badge .pulse-dot").classList.toggle("idle", !state.running);
+}
+
+$("#toggle-stream").addEventListener("click", () => {
+  state.running = !state.running;
+  renderFeedControl();
 });
 
 $("#time-window").addEventListener("change", (event) => {
   const seconds = Number(event.target.value);
-  const labels = seconds === 60 ? ["-60s", "-45s", "-30s", "-15s", "now"] : seconds === 300 ? ["-5m", "-4m", "-3m", "-1m", "now"] : ["-15m", "-11m", "-7m", "-3m", "now"];
+  if (![60, 300, 900].includes(seconds)) return;
+  state.windowSeconds = seconds;
+  const labels = [1, 0.75, 0.5, 0.25, 0].map((fraction) => { const value = seconds * fraction; if (!value) return "now"; return value < 60 ? `-${value}s` : `-${Math.floor(value / 60)}m${value % 60 ? `${value % 60}s` : ""}`; });
   $$(".chart-time span").forEach((span, index) => { span.textContent = labels[index]; });
+  renderChart(); renderEventFeed();
 });
+
+$("#event-search").addEventListener("input", (event) => { state.eventSearch = event.target.value.slice(0, 120).trim().toLowerCase(); renderEventFeed(); });
+$("#event-disposition").addEventListener("change", (event) => { state.dispositionFilter = event.target.value; renderEventFeed(); });
+$("#reset-feed").addEventListener("click", () => { state.sourceFilter = "all"; state.eventSearch = ""; state.dispositionFilter = "all"; $("#event-search").value = ""; $("#event-disposition").value = "all"; renderSourceFilters(); renderEventFeed(); });
+$("#readiness-file").addEventListener("change", (event) => importReadinessFile(event.target.files[0]));
+$("#clear-readiness").addEventListener("click", () => { readinessImportSequence += 1; state.readiness = null; $("#readiness-file").value = ""; $("#readiness-feedback").textContent = "Report forgotten. No readiness results retained."; $("#clear-readiness").disabled = true; renderIntegrationGrid(); renderToolInspector(); });
+$("#clear-tool-notes").addEventListener("click", () => { state.toolPresence = {}; try { localStorage.removeItem(toolPresenceKey); localStorage.removeItem("megalodon-tool-presence-v1"); } catch { /* Current page still clears. */ } renderIntegrationGrid(); renderToolInspector(); });
+reducedMotion.addEventListener("change", () => { if (reducedMotion.matches) { state.running = false; renderFeedControl(); } });
 
 $("#copy-command").addEventListener("click", async () => {
   const command = $("#workflow-command").textContent;
@@ -707,6 +826,8 @@ $("#copy-command").addEventListener("click", async () => {
 });
 
 renderChart();
+renderFeedControl();
+renderRunEvidence();
 renderSourceFilters();
 renderEventFeed();
 renderDetectionLanes();

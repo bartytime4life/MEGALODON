@@ -143,6 +143,11 @@ python -m megalodon hub-plan --platform windows
 portability test, or permission to execute a tool. The default follows the Python
 runtime's platform family, so a Linux guest describes Linux, not its host.
 See [`docs/integration-hub.md`](docs/integration-hub.md) for the closed workflow map.
+For an explicit Linux executable-presence check, run
+`python -m megalodon readiness`. Its bounded JSON report can be selected locally
+in the Defense Console. It executes no companion tool and reports presence,
+not installation integrity, compatibility, or running status. See
+[`docs/tool-readiness.md`](docs/tool-readiness.md) for exact bounds and limitations.
 The baseline excludes Npcap from its open-source dependencies and omits native
 Windows live capture; manual saved-capture analysis is a different workflow.
 
@@ -160,7 +165,8 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata completed-file reader | Single-threaded Linux main-thread Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
-| Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, startup hook, watcher, retention, or dashboard projection |
+| Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
+| Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |

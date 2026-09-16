@@ -65,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="show one documented profile; defaults to the current runtime family",
     )
 
+    sub.add_parser(
+        "readiness",
+        help="print a bounded local executable-presence receipt without running tools",
+    )
+
     posture = sub.add_parser(
         "posture",
         help="print a bounded package-level posture receipt without probing the host",
@@ -157,6 +162,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="absolute path to one complete private offline run; loaded read-only at startup",
     )
+    dashboard.add_argument(
+        "--suricata-db",
+        type=Path,
+        help="existing private Suricata store; bounded read-only startup snapshot",
+    )
 
     plan = sub.add_parser("firewall-plan", help="print a non-mutating nftables plan")
     plan.add_argument("ip")
@@ -192,6 +202,13 @@ def _configure_logging(level: str) -> None:
 
 def _capabilities(args: argparse.Namespace) -> int:
     print(json.dumps(catalog(args.platform), sort_keys=True))
+    return 0
+
+
+def _readiness(args: argparse.Namespace) -> int:
+    from .readiness import readiness_json
+
+    print(readiness_json())
     return 0
 
 
@@ -739,6 +756,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                 enabled=enabled,
                 allow_remote=args.allow_remote,
                 offline_summary=offline_summary,
+                suricata_db=getattr(args, "suricata_db", None),
                 refresh_seconds=(
                     args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
                 ),
@@ -871,6 +889,8 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(raw_argv)
     if args.command == "capabilities":
         code = _capabilities(args)
+    elif args.command == "readiness":
+        code = _readiness(args)
     elif args.command == "posture":
         code = _posture(args)
     elif args.command == "hub-plan":

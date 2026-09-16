@@ -430,10 +430,15 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "last successful reference result as stale" in DASHBOARD_JS
     for forbidden in ("Notification", "Audio(", "WebSocket", "EventSource"):
         assert forbidden not in INDEX_HTML + DASHBOARD_JS
-    for private_field in ("dst_ip", "evidence", "recommendation", "suppressed_reason"):
+    # Destination endpoints belong only to the separately selected Suricata
+    # evidence contract. Core detections retain their five-field projection.
+    core_event_validation = DASHBOARD_JS.split("function validatedEvents(", 1)[1].split("function boundedAdvisoryText(", 1)[0]
+    assert "dst_ip" not in core_event_validation
+    assert DASHBOARD_EVENT_FIELDS == ("detected_at", "rule_id", "severity", "src_ip", "message")
+    for private_field in ("evidence", "recommendation", "suppressed_reason"):
         assert f"'{private_field}'" not in INDEX_HTML + DASHBOARD_JS
         assert f'"{private_field}"' not in INDEX_HTML + DASHBOARD_JS
-        assert f".{private_field}" not in DASHBOARD_JS
+        assert not re.search(r"\." + re.escape(private_field) + r"\b", DASHBOARD_JS)
     assert "method: 'POST'" not in DASHBOARD_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
