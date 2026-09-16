@@ -17,7 +17,7 @@ PR #176 is now on main. Open #177 covers hypothetical workload arithmetic; #179
 covers enabled-provider denials; #178, #180 and #181 form the anomaly evidence,
 Qwen-policy and triage stack. Those changes should not be duplicated here.
 
-Two independent gaps remain in current main:
+Two independent gaps remained open at this document's `caf7e4bd` basis:
 
 1. **JSONL admission:** repeated keys silently replace prior values and unknown
    fields disappear during projection. Reject ambiguity before constructing
@@ -29,6 +29,17 @@ Two independent gaps remain in current main:
 The second item is a separate proposed implementation at this document's commit,
 not a claim that its code is present here. Both choices strengthen the evidence
 appliance without adding another integration or overlapping the AI stack.
+
+**Resolved as of current `main`.** Both gaps are implemented and documented
+separately; do not duplicate this work. JSONL admission rejects duplicate keys
+and unknown fields (`megalodon/capture.py`'s `_jsonl_object`/`_jsonl_integer`
+hooks; see [`docs/jsonl-admission.md`](jsonl-admission.md)). Dashboard reads
+enforce a cooperative SQLite progress-handler VM/deadline budget with
+complete-result-or-`503` behavior (`Store`'s dashboard read path in
+`megalodon/storage.py`, raising `DASHBOARD_STORE:READ_BUDGET_EXCEEDED`; see
+[`docs/dashboard-query-budget.md`](dashboard-query-budget.md)). This paragraph
+is a documentation-currentness correction only; it changes no runtime,
+schema, dependency, or review-control behavior.
 
 ## Supplied source disposition
 
