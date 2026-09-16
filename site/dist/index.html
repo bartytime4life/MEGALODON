@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050b11" />
+    <meta name="description" content="MEGALODON source-aware network activity, detection, evidence, and integration HUD." />
+    <title>MEGALODON — Defensive operations HUD</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to operations HUD</a>
+
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="MEGALODON activity HUD">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span class="brand-copy"><strong>MEGALODON</strong><small>DEFENSIVE OPERATIONS SURFACE</small></span>
+      </a>
+      <div class="topbar-posture" aria-label="Current operating posture">
+        <span><i class="status-dot cyan"></i>LOCAL-FIRST</span>
+        <span><i class="status-dot green"></i>OBSERVE-ONLY</span>
+        <span><i class="status-dot amber"></i>SYNTHETIC INPUT</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="source-pin">main@a0fa34f</span>
+        <a href="https://github.com/bartytime4life/MEGALODON" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="side-rail" aria-label="Console navigation">
+        <nav class="primary-nav">
+          <button class="nav-item active" data-view="hud" aria-current="page"><span class="nav-glyph" aria-hidden="true">⌁</span><span>Activity HUD</span></button>
+          <button class="nav-item" data-view="integrations"><span class="nav-glyph" aria-hidden="true">⌘</span><span>Integrations</span></button>
+          <button class="nav-item" data-view="missions"><span class="nav-glyph" aria-hidden="true">◇</span><span>Workflows</span></button>
+          <button class="nav-item" data-view="boundaries"><span class="nav-glyph" aria-hidden="true">▱</span><span>Boundaries</span></button>
+        </nav>
+        <section class="rail-summary" aria-labelledby="rail-summary-title">
+          <p id="rail-summary-title">INSTRUMENT MAP</p>
+          <div><span>14</span><small>tool surfaces</small></div>
+          <div><span>5</span><small>active demo lanes</small></div>
+          <div><span>0</span><small>live connectors</small></div>
+        </section>
+        <div class="rail-boundary"><span>NO RUNTIME ACCESS</span><p>This Site does not read your host, network, database, or tools.</p></div>
+      </aside>
+
+      <main id="main-content">
+        <section class="view active" data-view-panel="hud" aria-labelledby="hud-title">
+          <div class="view-heading hud-heading">
+            <div>
+              <p class="eyebrow">Unified telemetry surface</p>
+              <h1 id="hud-title">Network activity HUD</h1>
+              <p>Source-qualified activity, detections, and metadata in one review surface.</p>
+            </div>
+            <div class="hud-controls" aria-label="Synthetic preview controls">
+              <div class="mode-badge"><span class="pulse-dot" aria-hidden="true"></span><span><strong>SYNTHETIC PREVIEW</strong><small>Browser-only · no live intake</small></span></div>
+              <button id="toggle-stream" class="control-button" type="button" aria-pressed="false">Pause feed</button>
+              <select id="time-window" aria-label="Activity time window">
+                <option value="60">Last 60 seconds</option>
+                <option value="300">Last 5 minutes</option>
+                <option value="900">Last 15 minutes</option>
+              </select>
+            </div>
+          </div>
+
+          <section class="kpi-grid" aria-label="Synthetic activity summary">
+            <article class="kpi-card cyan-accent"><div><span>METADATA EVENTS</span><small>validated / browser preview</small></div><strong id="metric-events">12,480</strong><span class="metric-delta">+184 this window</span></article>
+            <article class="kpi-card blue-accent"><div><span>FLOW RECORDS</span><small>Zeek lane</small></div><strong id="metric-flows">318</strong><span class="metric-delta">27 active pairs</span></article>
+            <article class="kpi-card amber-accent"><div><span>DETECTIONS</span><small>fixed heuristics + alert metadata</small></div><strong id="metric-detections">7</strong><span class="metric-delta caution">3 need review</span></article>
+            <article class="kpi-card green-accent"><div><span>ACTIONS APPLIED</span><small>authority boundary</small></div><strong>0</strong><span class="metric-delta safe">plan-only remains intact</span></article>
+          </section>
+
+          <div class="hud-grid">
+            <section class="panel traffic-panel" aria-labelledby="traffic-title">
+              <div class="panel-heading">
+                <div><p class="panel-kicker">AGGREGATE ACTIVITY</p><h2 id="traffic-title">Network metadata rate</h2></div>
+                <div class="chart-legend" aria-label="Chart legend"><span><i class="legend-line inbound"></i>Ingress metadata</span><span><i class="legend-line outbound"></i>Egress metadata</span><span><i class="legend-mark"></i>Detection</span></div>
+              </div>
+              <div class="chart-wrap">
+                <div class="chart-scale" aria-hidden="true"><span>900/s</span><span>600/s</span><span>300/s</span><span>0</span></div>
+                <svg id="traffic-chart" viewBox="0 0 900 250" role="img" aria-labelledby="traffic-chart-title traffic-chart-desc">
+                  <title id="traffic-chart-title">Synthetic network metadata rate</title>
+                  <desc id="traffic-chart-desc">Ingress and egress metadata rates over the selected preview window with detection markers.</desc>
+                  <g class="chart-grid" aria-hidden="true"><line x1="0" y1="25" x2="900" y2="25"></line><line x1="0" y1="92" x2="900" y2="92"></line><line x1="0" y1="159" x2="900" y2="159"></line><line x1="0" y1="226" x2="900" y2="226"></line></g>
+                  <path id="traffic-area" class="traffic-area" d=""></path>
+                  <path id="traffic-ingress" class="traffic-line ingress" d=""></path>
+                  <path id="traffic-egress" class="traffic-line egress" d=""></path>
+                  <g id="detection-markers"></g>
+                </svg>
+                <div class="chart-time" aria-hidden="true"><span>-60s</span><span>-45s</span><span>-30s</span><span>-15s</span><span>now</span></div>
+              </div>
+              <div class="protocol-strip" aria-label="Synthetic protocol distribution">
+                <span style="--share: 41%"><strong>TCP</strong><small>41%</small></span><span style="--share: 28%"><strong>TLS</strong><small>28%</small></span><span style="--share: 17%"><strong>DNS</strong><small>17%</small></span><span style="--share: 9%"><strong>UDP</strong><small>9%</small></span><span style="--share: 5%"><strong>OTHER</strong><small>5%</small></span>
+              </div>
+            </section>
+
+            <section class="panel posture-panel" aria-labelledby="posture-title">
+              <div class="panel-heading"><div><p class="panel-kicker">CONTROL STATE</p><h2 id="posture-title">Safety posture</h2></div><span class="posture-seal">INTACT</span></div>
+              <div class="posture-ring" aria-label="Safety membrane intact"><div><strong>0</strong><span>write paths</span></div></div>
+              <ul class="posture-list"><li><span>Payload intake</span><strong>OFF</strong></li><li><span>External egress</span><strong>OFF</strong></li><li><span>Firewall apply</span><strong>REFUSED</strong></li><li><span>Model authority</span><strong>NONE</strong></li></ul>
+            </section>
+
+            <section class="panel event-panel" aria-labelledby="event-title">
+              <div class="panel-heading event-heading"><div><p class="panel-kicker">SOURCE-QUALIFIED FEED</p><h2 id="event-title">Recent metadata</h2></div><div class="source-filter" id="source-filter" role="group" aria-label="Filter recent metadata by source"></div></div>
+              <div class="table-scroll"><table><thead><tr><th>Time</th><th>Source</th><th>Metadata type</th><th>Route / subject</th><th>Disposition</th></tr></thead><tbody id="event-feed"></tbody></table></div>
+              <div id="feed-announcement" class="sr-only" aria-live="polite"></div>
+            </section>
+
+            <section class="panel detection-panel" aria-labelledby="detection-title">
+              <div class="panel-heading"><div><p class="panel-kicker">REVIEW QUEUE</p><h2 id="detection-title">Detection lanes</h2></div><span class="panel-meta">SYNTHETIC</span></div>
+              <div id="detection-lanes" class="detection-lanes"></div>
+            </section>
+
+            <section class="panel source-panel" aria-labelledby="source-title">
+              <div class="panel-heading"><div><p class="panel-kicker">INSTRUMENT CONTRIBUTION</p><h2 id="source-title">Metadata by source</h2></div><button class="text-button" type="button" data-jump="integrations">Inspect tools</button></div>
+              <div id="source-bars" class="source-bars"></div>
+              <p class="panel-footnote">Values are deterministic preview samples, not observations from your network.</p>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="integrations" aria-labelledby="integrations-title" hidden>
+          <div class="view-heading">
+            <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Integration control room</h1><p>Inspect each program, open its reviewed setup source, and copy a read-only verification command. MEGALODON receives only a bounded, source-qualified result where a contract exists.</p></div>
+            <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>UI contract preview</small></span></div>
+          </div>
+          <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
+          <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and verification.</strong> Setup links open reviewed project or vendor guidance. Copy controls provide presence checks only; this browser surface never installs, starts, configures, or probes a tool.<small id="verification-summary">0 installed · 0 missing · 14 not checked</small></p></div>
+          <div class="integration-layout"><div id="integration-grid" class="integration-grid" aria-label="Companion tool interfaces"></div><aside id="tool-inspector" class="tool-inspector" aria-live="polite"></aside></div>
+        </section>
+
+        <section class="view" data-view-panel="missions" aria-labelledby="missions-title" hidden>
+          <div class="view-heading"><div><p class="eyebrow">Bounded workflows</p><h1 id="missions-title">Choose the work. See the boundary.</h1><p>Review an entry point, its evidence output, and the authority it deliberately does not receive.</p></div></div>
+          <div class="mission-deck">
+            <nav class="mission-list" aria-label="Select a MEGALODON workflow">
+              <button class="mission active" data-workflow="synthetic" aria-pressed="true"><span>01</span><strong>Synthetic core</strong><small>No capture tool or privilege</small></button>
+              <button class="mission" data-workflow="replay" aria-pressed="false"><span>02</span><strong>Bounded replay</strong><small>JSONL into audit evidence</small></button>
+              <button class="mission" data-workflow="offline" aria-pressed="false"><span>03</span><strong>Saved capture</strong><small>Isolated TShark adapter</small></button>
+              <button class="mission" data-workflow="suricata" aria-pressed="false"><span>04</span><strong>Alert publication</strong><small>Atomic bounded transaction</small></button>
+              <button class="mission" data-workflow="plans" aria-pressed="false"><span>05</span><strong>Integration plans</strong><small>Static; non-executing</small></button>
+            </nav>
+            <article class="mission-panel" aria-live="polite" aria-atomic="true">
+              <div class="mission-topline"><span id="workflow-status" class="status-pill implemented">Implemented</span><span id="workflow-platform"></span></div>
+              <h2 id="workflow-title"></h2><p id="workflow-summary"></p>
+              <div class="command-block"><span>Reviewable entry point</span><code id="workflow-command"></code><button id="copy-command" type="button">Copy</button></div>
+              <div class="mission-columns"><div><h3>Produces</h3><ul id="workflow-produces"></ul></div><div><h3>Refuses</h3><ul id="workflow-refuses"></ul></div></div>
+              <div class="boundary-line"><span>SAFETY MEMBRANE</span><strong id="workflow-boundary"></strong></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="boundaries" aria-labelledby="boundaries-title" hidden>
+          <div class="view-heading boundary-heading"><div><p class="eyebrow">Trust membrane</p><h1 id="boundaries-title">Autonomy stops before authority.</h1><p>A detection or advisory is evidence for review—not proof of malicious activity and never permission to change a host.</p></div><a class="doc-link" href="https://github.com/bartytime4life/MEGALODON/blob/main/SECURITY_REVIEW.md" target="_blank" rel="noreferrer">Security review ↗</a></div>
+          <div class="boundary-grid">
+            <article><span>01</span><h2>Metadata only</h2><p>No packet payloads or payload-derived hashes enter the core event model.</p></article>
+            <article><span>02</span><h2>Loopback by default</h2><p>The read-only dashboard stays on <code>127.0.0.1:8787</code>; there is no write API.</p></article>
+            <article><span>03</span><h2>No egress</h2><p>No threat feed, cloud analytics, SIEM, SOAR, or external-model traffic is required.</p></article>
+            <article><span>04</span><h2>Plan, do not apply</h2><p>Firewall proposals are inert. Live application remains explicitly refused.</p></article>
+            <article><span>05</span><h2>Bounded local AI</h2><p>Optional Qwen output is display-only, single-request, and carries no action authority.</p></article>
+            <article><span>06</span><h2>Finite evidence</h2><p>Input, time, state, storage, result, and retention operations use explicit ceilings.</p></article>
+          </div>
+          <section class="evidence-flow" aria-labelledby="evidence-flow-title"><div><p class="eyebrow">Evidence flow</p><h2 id="evidence-flow-title">One-way by design</h2></div><ol><li><span>01</span><strong>Bounded input</strong><small>Synthetic, JSONL, or approved adapter</small></li><li><span>02</span><strong>Fixed detection</strong><small>SYN flood, port scan, DNS tunneling</small></li><li><span>03</span><strong>Atomic evidence</strong><small>Audit ledger and terminal receipts</small></li><li><span>04</span><strong>Read-only review</strong><small>Local dashboard and private reports</small></li></ol></section>
+        </section>
+      </main>
+    </div>
+
+    <footer>
+      <span><strong>MEGALODON</strong> · Malware Elimination Gateway And Layered Operations Defense Online Network</span>
+      <span>This Site is a read-only interface prototype. Repository contracts remain authoritative.</span>
+      <nav aria-label="Project documents"><a href="https://github.com/bartytime4life/MEGALODON/blob/main/README.md" target="_blank" rel="noreferrer">README</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/integration-hub.md" target="_blank" rel="noreferrer">Integration hub</a></nav>
+    </footer>
+  </body>
+</html>
