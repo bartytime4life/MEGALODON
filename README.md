@@ -55,6 +55,11 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
+The private [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site)
+is a static, synthetic, read-only review surface. Its deployable source and
+alignment record are versioned under [`site/`](site/README.md); the repository
+contracts remain authoritative.
+
 ## Documentation map
 
 Use one document as the authority for each kind of decision. Issue and PR pages
@@ -79,6 +84,7 @@ record delivery state; they do not override the checked-in contracts.
 | Suricata record, bounded-reader, and durable-consumer gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), and [`consumer`](contracts/suricata-eve/v1/consumer/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
+| Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
 
 ## Choose a configuration
 
@@ -1068,6 +1074,7 @@ examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI
 megalodon/offline/           isolated TShark/Zeek adapters, Suricata reader/consumer, and private reports
 megalodon/reference/         pinned offline IANA context and synthetic evaluation corpus
+site/                        static Defense Console source mirror and Sites identity
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls
 SPECIFICATION.md             implemented MVP contract and acceptance boundary
