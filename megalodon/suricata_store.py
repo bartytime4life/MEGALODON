@@ -254,7 +254,6 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
             database_path.parent, create=True, prefix="SURICATA_STORE"
         )
         _assert_path_identity(database_path, None, directory_descriptor)
-        _refuse_orphaned_sidecars(database_path, directory_descriptor)
         database_descriptor = _create_private_database(
             database_path, directory_descriptor
         )
@@ -276,6 +275,7 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
         _assert_path_identity(
             database_path, database_descriptor, directory_descriptor
         )
+        _refuse_orphaned_sidecars(database_path, directory_descriptor)
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("BEGIN IMMEDIATE")
         for statement in SCHEMA_STATEMENTS:
@@ -283,6 +283,7 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         _validate_current(connection)
         connection.commit()
+        _refuse_orphaned_sidecars(database_path, directory_descriptor)
         _assert_path_identity(
             database_path, database_descriptor, directory_descriptor
         )
