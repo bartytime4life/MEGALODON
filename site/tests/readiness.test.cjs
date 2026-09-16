@@ -114,6 +114,8 @@ test('the HTML declares unique evidence controls and loads its local validator f
   for (const id of ['event-search', 'event-disposition', 'event-feed', 'event-inspector', 'run-list', 'run-inspector', 'readiness-file', 'clear-readiness', 'readiness-feedback']) assert.ok(ids.includes(id));
   assert.ok(html.indexOf('src="./readiness.js"') < html.indexOf('src="./app.js"'));
   for (const match of html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)) assert.ok(fs.existsSync(path.join(path.dirname(require.resolve('../dist/index.html')), match[1])));
-  assert.match(html, /Candidate feature · pending merge/);
-  assert.match(html, /not part of the displayed baseline/);
+  assert.match(html, /Delivered in/);
+  assert.match(html, /MEGALODON\/pull\/241/);
+  assert.match(html, /main@5583ac1/);
+  assert.doesNotMatch(html, /pending merge/);
 });

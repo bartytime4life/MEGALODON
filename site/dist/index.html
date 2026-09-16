@@ -25,7 +25,7 @@
         <span><i class="status-dot amber"></i>SYNTHETIC INPUT</span>
       </div>
       <div class="topbar-actions">
-        <span class="source-pin">main@98a708a</span>
+        <span class="source-pin">main@5583ac1</span>
         <a href="https://github.com/bartytime4life/MEGALODON" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a>
       </div>
     </header>
@@ -144,7 +144,7 @@
           </div>
           <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
           <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and verification.</strong> Setup links open reviewed project or vendor guidance. Copy controls provide presence checks only; this browser surface never installs, starts, configures, or probes a tool.<small id="verification-summary">14 tools not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
-          <section class="readiness-import panel" aria-labelledby="readiness-title"><div><p class="panel-kicker">LOCAL READINESS REPORT</p><h2 id="readiness-title">Bring a presence check into view</h2><p>Open a bounded report generated on your Linux host. It stays in this page's memory and is never uploaded. An executable found on PATH does not establish compatibility, service health, or permission to run it.</p></div><div class="readiness-actions"><label class="control-button" for="readiness-file">Choose JSON report</label><input id="readiness-file" type="file" accept="application/json,.json" /><button id="clear-readiness" class="text-button" type="button" disabled>Forget report</button></div><p class="readiness-candidate"><strong>Candidate feature · pending merge.</strong> On the matching reviewed branch, run <code>python -m megalodon readiness &gt; megalodon-readiness.json</code>. This command is not part of the displayed baseline main@98a708a.</p><p id="readiness-feedback" role="status">No readiness report loaded.</p></section>
+          <section class="readiness-import panel" aria-labelledby="readiness-title"><div><p class="panel-kicker">LOCAL READINESS REPORT</p><h2 id="readiness-title">Bring a presence check into view</h2><p>Open a bounded report generated on your Linux host. It stays in this page's memory and is never uploaded. An executable found on PATH does not establish compatibility, service health, or permission to run it.</p></div><div class="readiness-actions"><label class="control-button" for="readiness-file">Choose JSON report</label><input id="readiness-file" type="file" accept="application/json,.json" /><button id="clear-readiness" class="text-button" type="button" disabled>Forget report</button></div><p class="readiness-candidate"><strong>Delivered in <a href="https://github.com/bartytime4life/MEGALODON/pull/241" target="_blank" rel="noopener noreferrer">PR #241</a>.</strong> On main@5583ac1 or later, run <code>python -m megalodon readiness &gt; megalodon-readiness.json</code>. This checks executable presence only; it does not start a tool or establish compatibility.</p><p id="readiness-feedback" role="status">No readiness report loaded.</p></section>
           <div class="integration-layout"><div id="integration-grid" class="integration-grid" aria-label="Companion tool interfaces"></div><aside id="tool-inspector" class="tool-inspector" aria-live="polite"></aside></div>
         </section>
 
@@ -155,7 +155,7 @@
               <button class="mission active" data-workflow="synthetic" aria-pressed="true"><span>01</span><strong>Synthetic core</strong><small>No capture tool or privilege</small></button>
               <button class="mission" data-workflow="replay" aria-pressed="false"><span>02</span><strong>Bounded replay</strong><small>JSONL into audit evidence</small></button>
               <button class="mission" data-workflow="offline" aria-pressed="false"><span>03</span><strong>Saved capture</strong><small>Isolated TShark adapter</small></button>
-              <button class="mission" data-workflow="suricata" aria-pressed="false"><span>04</span><strong>Alert publication</strong><small>Atomic write + exact reconciliation</small></button>
+              <button class="mission" data-workflow="suricata" aria-pressed="false"><span>04</span><strong>Suricata review</strong><small>Optional local startup snapshot</small></button>
               <button class="mission" data-workflow="plans" aria-pressed="false"><span>05</span><strong>Integration plans</strong><small>Static; non-executing</small></button>
             </nav>
             <article class="mission-panel" aria-live="polite" aria-atomic="true">

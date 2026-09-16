@@ -8,14 +8,14 @@ The Site is a static, browser-only interface prototype. It has no backend, conne
 
 - Site project: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3`
 - Public project repository: https://github.com/bartytime4life/MEGALODON
-- Repository baseline represented by this revision: `main@98a708ae7b7fece400f529acc70bbf9f4b48c4fb`
+- Repository baseline represented by this revision: `main@5583ac1d7f465757a0375d64cf1c18ee7c47ade9`
 - Public mirror path: `site/`
 - Deployable static assets: `dist/`
 - Brand asset: `assets/megalodon-github-hero-compact.png` from the repository README
 
 The MEGALODON repository root remains authoritative for product behavior, security contracts, tests, and implementation status. This Site summarizes those contracts for human review; it does not expand runtime authority.
 
-The Suricata surface reflects both the accepted durable-consumer capacity gate and the explicit commit-unknown reconciliation contract. The single atomic writer still checks a fixed consumer-owned logical 512 MiB ceiling before runtime writes. The separate reader pins the existing database with `O_RDONLY`, holds a Linux OFD read lock across SQLite's complete locking-byte region, refuses persistent WAL state and coordination sidecars, queries in read-only/query-only mode, and returns only `committed`, `not_committed`, or conservative `indeterminate` evidence for the exact publication and attempt identity. Neither path repairs permissions, migrates schema, deletes retained evidence, starts a producer, projects a dashboard, blocks traffic, attributes an action, or executes a response. The shared 30-second deadline is cooperative, not a process-termination or filesystem-stall SLA.
+The Suricata surface reflects both the accepted durable-consumer capacity gate and the explicit commit-unknown reconciliation contract. The single atomic writer still checks a fixed consumer-owned logical 512 MiB ceiling before runtime writes. The separate reader pins the existing database with `O_RDONLY`, holds a Linux OFD read lock across SQLite's complete locking-byte region, refuses persistent WAL state and coordination sidecars, queries in read-only/query-only mode, and returns only `committed`, `not_committed`, or conservative `indeterminate` evidence for the exact publication and attempt identity. Neither path repairs permissions, migrates schema, deletes retained evidence, starts a producer, blocks traffic, attributes an action, or executes a response. Separately, merged PR #239 adds an optional `dashboard --suricata-db` read-only startup projection: up to five recent validated publications, at most 50 alerts, and 64 KiB output within a cooperative five-second deadline. HTTP requests use immutable startup bytes, with no per-request database access. The shared 30-second deadline is cooperative, not a process-termination or filesystem-stall SLA.
 
 ## Evidence and readiness surfaces
 
@@ -31,4 +31,4 @@ Before publishing, verify JavaScript syntax, local asset references, the hosting
 
 This revision passed `node --check dist/app.js`, `node --check dist/readiness.js`, and all 25 dependency-free checks in `node --test tests/readiness.test.cjs`, including duplicate keys, timestamps, forged claims, input bounds, overlapping reads, and HTML asset/control references. Independent review reproduced the real Python CLI-to-JavaScript schema path and additional negative cases. Local browser interaction and visual acceptance remain unproved: Chromium download timed out and Cloud Browser policy refused local preview URLs. Tests and this README are excluded from the deployment archive.
 
-The readiness CLI is a candidate feature on the companion GitHub draft branch. It is not claimed as merged into the displayed `98a708a` baseline. The hosted Site has no connection to the local dashboard or any proposed Suricata read projection.
+The readiness CLI was delivered by merged [PR #241](https://github.com/bartytime4life/MEGALODON/pull/241) at `5583ac1d7f465757a0375d64cf1c18ee7c47ade9`. Run `python -m megalodon readiness > megalodon-readiness.json` for the bounded presence-only report. The optional local Suricata projection was delivered by [PR #239](https://github.com/bartytime4life/MEGALODON/pull/239). The hosted Site remains a synthetic static interface with no connection to the local dashboard or Suricata store. This currentness-only revision changes labels, provenance, and guidance; it adds no UI behavior.

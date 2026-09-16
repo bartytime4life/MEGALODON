@@ -24,12 +24,12 @@ const integrations = [
     metricA: "318", metricALabel: "preview flows", metricB: "27", metricBLabel: "active pairs"
   },
   {
-    id: "suricata", name: "Suricata", monogram: "SU", category: "network", status: "implemented", statusLabel: "Gate complete",
-    summary: "Capacity-gates and atomically publishes one immutable alert envelope, then reconciles an unknown commit from one locked read-only evidence snapshot.",
+    id: "suricata", name: "Suricata", monogram: "SU", category: "network", status: "implemented", statusLabel: "Local read view",
+    summary: "Capacity-gates atomic publication, reconciles unknown commits, and optionally shows bounded Suricata evidence in a read-only local dashboard startup snapshot.",
     dataKind: "alert metadata", contract: "suricata-eve-alert-input-v1", owner: "megalodon.offline.suricata",
-    boundary: "Linux, non-root, and capability-free; existing owner-private store only. The reconciler pins O_RDONLY, holds an OFD lock, refuses WAL/sidecars, and never repairs, retries, migrates, retains/deletes, starts sensors, projects dashboards, blocks, attributes, or responds.",
-    nextGate: "Installed-producer acceptance, followed by a separately authorized read-only dashboard projection.", ui: ["Alert lane", "Severity", "Terminal receipt"],
-    evidence: { label: "Issue #231 · read-only commit reconciliation", url: "https://github.com/bartytime4life/MEGALODON/issues/231" },
+    boundary: "Linux, non-root, and capability-free; existing owner-private store only. Reconciliation and the separate dashboard projection use locked read-only snapshots. No repair, retry, migration, retention deletion, sensor start, blocking, attribution, or response. This hosted Site stays synthetic and disconnected.",
+    nextGate: "Installed-producer and operator acceptance; verify snapshot age and source provenance before interpreting local results.", ui: ["Alert lane", "Severity", "Terminal receipt"],
+    evidence: { label: "PR #239 · optional local read-only projection", url: "https://github.com/bartytime4life/MEGALODON/pull/239" },
     metricA: "512 MiB", metricALabel: "logical consumer ceiling", metricB: "30 s", metricBLabel: "cooperative deadline"
   },
   {
@@ -297,12 +297,12 @@ const workflows = {
     boundary: "Fixed /usr/bin/tshark, bounded output and time; Windows desktop Wireshark is separate."
   },
   suricata: {
-    status: "Reconciliation gate complete", statusClass: "implemented", platform: "Linux · non-root · capability-free", title: "Atomic Suricata publication + exact reconciliation",
-    summary: "Publish once behind the durable capacity gate. If the commit outcome is unknown, inspect the exact run, attempt, alerts, and receipt in one locked read-only snapshot.",
-    command: "reconcile_publication(private_store, publication, consumer_attempt_id=\"operator-issued-id\")",
-    produces: ["Exact committed evidence", "Dual-absence not_committed evidence", "Conservative indeterminate receipt"],
-    refuses: ["Database, schema, permission, or evidence writes", "WAL/sidecar creation and concurrent writer races", "Retry, repair, retention, producer, dashboard, or response authority"],
-    boundary: "Pinned O_RDONLY descriptor + full SQLite OFD read lock + rollback-journal header + no sidecars + query_only; one cooperative 30-second deadline covers validation, query, readback, and final identity verification."
+    status: "Implemented · optional local view", statusClass: "implemented", platform: "Linux · non-root · capability-free", title: "Review a bounded Suricata startup snapshot",
+    summary: "Point the local dashboard at an existing private Suricata store. It validates a bounded read-only snapshot at startup and serves immutable review data; the hosted Site remains synthetic and is not connected.",
+    command: "python -m megalodon dashboard --suricata-db /absolute/private/suricata.sqlite",
+    produces: ["Up to five validated recent publications", "At most 50 external alert metadata rows", "Explicit unconfigured, unavailable, and snapshot provenance states"],
+    refuses: ["Database, schema, permission, or evidence writes", "Per-request database queries or live sensor access", "Retry, repair, retention, producer, or response authority"],
+    boundary: "The optional projection validates a locked read-only startup snapshot within a cooperative five-second deadline and 64 KiB output bound. Snapshot freshness is explicit; external alert evidence does not become MEGALODON detection or action authority."
   },
   plans: {
     status: "Implemented / non-executing", statusClass: "implemented", platform: "Static catalog", title: "Capability and integration plans",
