@@ -12,8 +12,9 @@ Current workflow positions include:
 - Optional fixed-argument offline TShark metadata analysis.
 - Optional closed Zeek connection-log import.
 - Single-threaded Linux main-thread Suricata completed contract-envelope file
-  reader plus an explicit atomic transaction into one pre-created private store;
-  no raw-EVE converter, watcher, dashboard projection, sensor, or IPS.
+  reader, an explicit atomic transaction into one pre-created private store,
+  and explicit read-only unknown-commit reconciliation; no raw-EVE converter,
+  watcher, dashboard projection, sensor, or IPS.
 - Optional Scapy metadata capture under its separate boundary.
 - nftables planning only; live application refused.
 - Manual ClamAV companion; no file/scan integration.

@@ -166,6 +166,140 @@ class _SuricataWriterHandle:
         )
 
 
+class _SuricataReaderHandle:
+    """Descriptor-pinned query-only handle for exact evidence readback."""
+
+    def __init__(
+        self,
+        path: Path,
+        connection: sqlite3.Connection,
+        database_descriptor: int,
+        directory_descriptor: int | None,
+    ) -> None:
+        self.path = path
+        self.connection = connection
+        self._database_descriptor = database_descriptor
+        self._directory_descriptor = directory_descriptor
+
+    def verify_identity(self) -> None:
+        _assert_path_identity(
+            self.path,
+            self._database_descriptor,
+            self._directory_descriptor,
+        )
+
+
+@contextmanager
+def _open_suricata_store_reader(
+    path: str | Path,
+    *,
+    progress_handler: Callable[[], int] | None = None,
+    remaining_milliseconds: Callable[[], int] | None = None,
+    require_sidecar_free: bool = False,
+) -> Iterator[_SuricataReaderHandle]:
+    """Open one existing exact v1 store read-only without repair or creation."""
+
+    directory_descriptor: int | None = None
+    database_descriptor: int | None = None
+    connection: sqlite3.Connection | None = None
+    try:
+        try:
+            database_path = _absolute_database_path(path, "SURICATA_STORE")
+            directory_descriptor = _open_private_directory(
+                database_path.parent, create=False, prefix="SURICATA_STORE"
+            )
+            _assert_path_identity(database_path, None, directory_descriptor)
+            database_descriptor, created = _open_private_database(
+                database_path,
+                directory_descriptor,
+                writable=False,
+                create=False,
+                prefix="SURICATA_STORE",
+                normalize_writable_mode=False,
+            )
+            if created:
+                raise SuricataStoreError("SURICATA_STORE:UNEXPECTED_CREATION")
+            _assert_path_identity(
+                database_path, database_descriptor, directory_descriptor
+            )
+            sidecars = _validate_sqlite_sidecars(
+                database_path,
+                directory_descriptor,
+                writable=False,
+                prefix="SURICATA_STORE",
+            )
+            if require_sidecar_free and sidecars:
+                raise SuricataStoreError("SURICATA_STORE:ACTIVE_SIDECAR_REFUSED")
+            if ("-wal" in sidecars) != ("-shm" in sidecars):
+                raise SuricataStoreError("SURICATA_STORE:INCOMPLETE_WAL_STATE")
+            if "-journal" in sidecars:
+                raise SuricataStoreError("SURICATA_STORE:ACTIVE_JOURNAL_REFUSED")
+            sqlite_path = _anchored_database_path(
+                database_descriptor, database_path, "SURICATA_STORE"
+            )
+            timeout_ms = (
+                remaining_milliseconds()
+                if remaining_milliseconds is not None
+                else 10_000
+            )
+            connection = sqlite3.connect(
+                f"{sqlite_path.as_uri()}?mode=ro&cache=private",
+                uri=True,
+                timeout=timeout_ms / 1_000,
+                isolation_level=None,
+            )
+            connection.execute("PRAGMA query_only=ON")
+            if connection.execute("PRAGMA query_only").fetchone() != (1,):
+                raise SuricataStoreError("SURICATA_STORE:QUERY_ONLY_DISABLED")
+            if remaining_milliseconds is not None:
+                timeout_ms = remaining_milliseconds()
+            connection.execute(f"PRAGMA busy_timeout={timeout_ms}")
+            if connection.execute("PRAGMA busy_timeout").fetchone() != (timeout_ms,):
+                raise SuricataStoreError("SURICATA_STORE:BUSY_TIMEOUT_FAILED")
+            if progress_handler is not None:
+                connection.set_progress_handler(progress_handler, 1_000)
+            _validate_connection_path(connection, database_path, "SURICATA_STORE")
+            _assert_path_identity(
+                database_path, database_descriptor, directory_descriptor
+            )
+            connection.execute("PRAGMA foreign_keys=ON")
+            if connection.execute("PRAGMA foreign_keys").fetchone() != (1,):
+                raise SuricataStoreError("SURICATA_STORE:FOREIGN_KEYS_DISABLED")
+            page_size = int(connection.execute("PRAGMA page_size").fetchone()[0])
+            if page_size != _STORE_PAGE_SIZE_BYTES:
+                raise SuricataStoreError("SURICATA_STORE:INCOMPATIBLE_PAGE_SIZE")
+            page_count = int(connection.execute("PRAGMA page_count").fetchone()[0])
+            if not 0 <= page_count <= _STORE_MAX_PAGES:
+                raise SuricataStoreError("SURICATA_STORE:CAPACITY_EXCEEDED")
+            _validate_current(connection)
+            handle = _SuricataReaderHandle(
+                database_path,
+                connection,
+                database_descriptor,
+                directory_descriptor,
+            )
+            handle.verify_identity()
+        except SuricataStoreError:
+            raise
+        except StorageSchemaError as exc:
+            raise SuricataStoreError(str(exc)) from exc
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            raise SuricataStoreError("SURICATA_STORE:READER_OPEN_FAILED") from exc
+        yield handle
+    finally:
+        if connection is not None:
+            try:
+                connection.set_progress_handler(None, 0)
+            except sqlite3.Error:
+                pass
+            try:
+                connection.close()
+            except sqlite3.Error:
+                pass
+        _close_descriptor(database_descriptor)
+        _close_descriptor(directory_descriptor)
+
+
 @contextmanager
 def _open_suricata_store_writer(
     path: str | Path,

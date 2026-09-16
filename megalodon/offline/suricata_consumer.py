@@ -23,7 +23,9 @@ from ..suricata_store import (
     _STORE_MAX_BYTES as STORE_MAX_BYTES,
     _STORE_MAX_PAGES as STORE_MAX_PAGES,
     _STORE_PAGE_SIZE_BYTES as STORE_PAGE_SIZE_BYTES,
+    _SuricataReaderHandle,
     _SuricataWriterHandle,
+    _open_suricata_store_reader,
     _open_suricata_store_writer,
 )
 
@@ -38,7 +40,7 @@ ERROR_CODES = frozenset({
     "INPUT_CONTRACT", "COUNT_MISMATCH", "BATCH_BYTES", "REPLAY",
     "DATABASE_IDENTITY", "SCHEMA_INCOMPATIBLE", "STORAGE_CAPACITY",
     "TRANSACTION_TIMEOUT", "STORAGE_ERROR", "COMMIT_UNKNOWN",
-    "RECONCILIATION_REQUIRED",
+    "RECONCILIATION_REQUIRED", "EVIDENCE_AMBIGUOUS",
 })
 
 _IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
@@ -543,6 +545,40 @@ def _receipt(
     return _freeze(value)
 
 
+def _reconciliation_receipt(
+    facts: _PublicationFacts,
+    attempt_id: str,
+    disposition: str,
+    failure_code: str | None = None,
+) -> Mapping[str, Any]:
+    states = {
+        "committed": ("exact_match", "committed", None),
+        "not_committed": ("exact_absence", "not_committed", None),
+        "indeterminate": ("not_proven", "unknown", failure_code),
+    }
+    evidence, durable, failure = states[disposition]
+    return _freeze({
+        "schema_version": "suricata-eve-reconciliation-receipt-v1",
+        "reconciliation_policy_version": (
+            "suricata-eve-reconciliation-policy-v1"
+        ),
+        "reader_receipt_version": "suricata-eve-reader-receipt-v1",
+        "consumer_receipt_version": "suricata-eve-consumer-receipt-v1",
+        "consumer_attempt_id": attempt_id,
+        "disposition": disposition,
+        "evidence_status": evidence,
+        "run_identity": _plain(facts.identity),
+        "record_count": facts.record_count,
+        "normalized_alert_count": facts.record_count,
+        "producer_blocked_count": facts.blocked_count,
+        "normalized_batch_bytes": facts.normalized_bytes,
+        "count_unit": "alert",
+        "action_status": "not_attempted",
+        "durable_write_status": durable,
+        "failure_code": failure,
+    })
+
+
 def _find_run(
     connection: sqlite3.Connection, identity: Mapping[str, Any]
 ) -> tuple[int, str] | None:
@@ -821,6 +857,89 @@ def _consume_open_store(
     return committed
 
 
+def _reconcile_open_store(
+    reader: _SuricataReaderHandle,
+    facts: _PublicationFacts,
+    attempt_id: str,
+    started: float,
+) -> Mapping[str, Any]:
+    """Classify one attempt from a single read-only SQLite snapshot."""
+
+    connection = reader.connection
+    try:
+        _set_remaining_busy_timeout(connection, started)
+        reader.verify_identity()
+        connection.execute("BEGIN")
+        _remaining_milliseconds(started)
+        reader.verify_identity()
+        runs = connection.execute(
+            """SELECT id, consumer_attempt_id FROM consumer_runs
+               WHERE engine=? AND adapter_profile=? AND declared_version=?
+                 AND version_basis=? AND sensor_id=? AND run_id=?
+                 AND ruleset_id=? AND ruleset_basis=?""",
+            _run_key(facts.identity),
+        ).fetchall()
+        attempts = connection.execute(
+            """SELECT id FROM consumer_runs
+               WHERE consumer_attempt_id=?""",
+            (attempt_id,),
+        ).fetchall()
+        _remaining_milliseconds(started)
+        reader.verify_identity()
+
+        if not runs and not attempts:
+            return _reconciliation_receipt(
+                facts, attempt_id, "not_committed"
+            )
+        if (
+            len(runs) != 1
+            or len(attempts) != 1
+            or type(runs[0][0]) is not int
+            or type(attempts[0][0]) is not int
+            or type(runs[0][1]) is not str
+            or runs[0][0] != attempts[0][0]
+            or runs[0][1] != attempt_id
+        ):
+            return _reconciliation_receipt(
+                facts, attempt_id, "indeterminate", "EVIDENCE_AMBIGUOUS"
+            )
+
+        committed = _receipt(facts, attempt_id, "committed")
+        committed_json = json.dumps(
+            _plain(committed), sort_keys=True, separators=(",", ":"),
+        )
+        if not _readback_matches(
+            connection, facts, attempt_id, committed_json,
+        ):
+            return _reconciliation_receipt(
+                facts, attempt_id, "indeterminate", "EVIDENCE_AMBIGUOUS"
+            )
+        _remaining_milliseconds(started)
+        reader.verify_identity()
+        return _reconciliation_receipt(facts, attempt_id, "committed")
+    except _TransactionTimeout:
+        return _reconciliation_receipt(
+            facts, attempt_id, "indeterminate", "TRANSACTION_TIMEOUT"
+        )
+    except SuricataStoreError:
+        return _reconciliation_receipt(
+            facts, attempt_id, "indeterminate", "DATABASE_IDENTITY"
+        )
+    except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
+        return _reconciliation_receipt(
+            facts,
+            attempt_id,
+            "indeterminate",
+            _deadline_failure_code(started, "STORAGE_ERROR"),
+        )
+    finally:
+        if connection.in_transaction:
+            try:
+                connection.rollback()
+            except sqlite3.Error:
+                pass
+
+
 def consume_publication(
     database_path: str | os.PathLike[str],
     publication: Any,
@@ -865,7 +984,57 @@ def consume_publication(
         )
 
 
+def reconcile_publication(
+    database_path: str | os.PathLike[str],
+    publication: Any,
+    *,
+    consumer_attempt_id: str,
+) -> Mapping[str, Any]:
+    """Read back one unknown consumer attempt without writing or retrying it.
+
+    The caller must supply the exact immutable publication and attempt identity
+    used by ``consume_publication``. The operation is explicit, query-only, and
+    never creates, migrates, repairs, retries, completes, or deletes evidence.
+    """
+
+    facts = _validate_publication(publication)
+    attempt_id = _validate_attempt_id(consumer_attempt_id)
+    try:
+        suricata.require_unprivileged_linux()
+    except OfflineError:
+        return _reconciliation_receipt(
+            facts, attempt_id, "indeterminate", "STORAGE_ERROR"
+        )
+    try:
+        started = time.monotonic()
+        _remaining_milliseconds(started)
+    except Exception:
+        return _reconciliation_receipt(
+            facts, attempt_id, "indeterminate", "TRANSACTION_TIMEOUT"
+        )
+    try:
+        with _open_suricata_store_reader(
+            database_path,
+            progress_handler=lambda: _deadline_progress(started),
+            remaining_milliseconds=lambda: _remaining_milliseconds(started),
+            require_sidecar_free=True,
+        ) as reader:
+            _remaining_milliseconds(started)
+            return _reconcile_open_store(reader, facts, attempt_id, started)
+    except _TransactionTimeout:
+        return _reconciliation_receipt(
+            facts, attempt_id, "indeterminate", "TRANSACTION_TIMEOUT"
+        )
+    except SuricataStoreError as error:
+        return _reconciliation_receipt(
+            facts,
+            attempt_id,
+            "indeterminate",
+            _deadline_failure_code(started, _store_failure_code(error)),
+        )
+
+
 __all__ = [
     "ConsumerError", "ConsumerPreflight", "ConsumerPreflightError",
-    "consume_publication", "preflight_publication",
+    "consume_publication", "preflight_publication", "reconcile_publication",
 ]

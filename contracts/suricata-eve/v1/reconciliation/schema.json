@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:megalodon:contract:suricata-eve-reconciliation:v1",
+  "title": "Read-only Suricata durable-consumer reconciliation contract v1",
+  "oneOf": [
+    { "$ref": "#/$defs/policy" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}(?![\\s\\S])"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})(?![\\s\\S])"
+    },
+    "runIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine", "adapter_profile", "declared_version", "version_basis",
+        "sensor_id", "run_id", "ruleset_id", "ruleset_basis"
+      ],
+      "properties": {
+        "engine": { "const": "suricata" },
+        "adapter_profile": { "const": "suricata-eve-alert-v1" },
+        "declared_version": { "$ref": "#/$defs/version" },
+        "version_basis": { "const": "operator_declared" },
+        "sensor_id": { "$ref": "#/$defs/identifier" },
+        "run_id": { "$ref": "#/$defs/identifier" },
+        "ruleset_id": { "$ref": "#/$defs/identifier" },
+        "ruleset_basis": { "const": "operator_declared" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "input_publication_contract", "input_attempt_contract",
+        "output_receipt_contract", "invocation", "read_only",
+        "max_reconciliation_ms", "caller_tunable_limits", "automatic_retry",
+        "store_creation", "schema_migration", "permission_repair",
+        "retention_or_deletion", "network_access", "process_launch",
+        "sensor_control", "dashboard_mutation", "response_action"
+      ],
+      "properties": {
+        "schema_version": { "const": "suricata-eve-reconciliation-policy-v1" },
+        "input_publication_contract": { "const": "suricata-eve-reader-receipt-v1" },
+        "input_attempt_contract": { "const": "consumer-attempt-identifier-v1" },
+        "output_receipt_contract": { "const": "suricata-eve-reconciliation-receipt-v1" },
+        "invocation": { "const": "explicit_operator_api" },
+        "read_only": { "const": true },
+        "max_reconciliation_ms": { "const": 30000 },
+        "caller_tunable_limits": { "const": false },
+        "automatic_retry": { "const": false },
+        "store_creation": { "const": false },
+        "schema_migration": { "const": false },
+        "permission_repair": { "const": false },
+        "retention_or_deletion": { "const": false },
+        "network_access": { "const": false },
+        "process_launch": { "const": false },
+        "sensor_control": { "const": false },
+        "dashboard_mutation": { "const": false },
+        "response_action": { "const": false }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "reconciliation_policy_version",
+        "reader_receipt_version", "consumer_receipt_version",
+        "consumer_attempt_id", "disposition", "evidence_status",
+        "run_identity", "record_count", "normalized_alert_count",
+        "producer_blocked_count", "normalized_batch_bytes", "count_unit",
+        "action_status", "durable_write_status", "failure_code"
+      ],
+      "properties": {
+        "schema_version": { "const": "suricata-eve-reconciliation-receipt-v1" },
+        "reconciliation_policy_version": { "const": "suricata-eve-reconciliation-policy-v1" },
+        "reader_receipt_version": { "const": "suricata-eve-reader-receipt-v1" },
+        "consumer_receipt_version": { "const": "suricata-eve-consumer-receipt-v1" },
+        "consumer_attempt_id": { "$ref": "#/$defs/identifier" },
+        "disposition": { "enum": ["committed", "not_committed", "indeterminate"] },
+        "evidence_status": { "enum": ["exact_match", "exact_absence", "not_proven"] },
+        "run_identity": { "$ref": "#/$defs/runIdentity" },
+        "record_count": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "normalized_alert_count": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "producer_blocked_count": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "normalized_batch_bytes": { "type": "integer", "minimum": 1, "maximum": 16777216 },
+        "count_unit": { "const": "alert" },
+        "action_status": { "const": "not_attempted" },
+        "durable_write_status": { "enum": ["committed", "not_committed", "unknown"] },
+        "failure_code": {
+          "type": ["string", "null"],
+          "enum": [null, "DATABASE_IDENTITY", "SCHEMA_INCOMPATIBLE", "TRANSACTION_TIMEOUT", "STORAGE_ERROR", "EVIDENCE_AMBIGUOUS"]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "disposition": { "const": "committed" } }, "required": ["disposition"] },
+          "then": {
+            "properties": {
+              "evidence_status": { "const": "exact_match" },
+              "durable_write_status": { "const": "committed" },
+              "failure_code": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "not_committed" } }, "required": ["disposition"] },
+          "then": {
+            "properties": {
+              "evidence_status": { "const": "exact_absence" },
+              "durable_write_status": { "const": "not_committed" },
+              "failure_code": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "indeterminate" } }, "required": ["disposition"] },
+          "then": {
+            "properties": {
+              "evidence_status": { "const": "not_proven" },
+              "durable_write_status": { "const": "unknown" },
+              "failure_code": { "type": "string" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

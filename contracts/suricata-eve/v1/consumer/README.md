@@ -1,7 +1,8 @@
 # Transactional Suricata durable-consumer contract v1
 
-**Status: IMPLEMENTED BOUNDED TRANSACTION, SYNTHETIC ORACLE, AND EXPLICIT
-STORE INITIALIZER. RECONCILIATION API AND DASHBOARD PROJECTION REMAIN DEFERRED.**
+**Status: IMPLEMENTED BOUNDED TRANSACTION, SYNTHETIC ORACLE, EXPLICIT STORE
+INITIALIZER, AND SEPARATE READ-ONLY RECONCILIATION. DASHBOARD PROJECTION REMAINS
+DEFERRED.**
 
 This directory defines the durable boundary after the bounded Linux reader.
 `megalodon.suricata_store` explicitly creates and validates the dedicated v1
@@ -57,6 +58,11 @@ acknowledgement or readback is lost, the only truthful result is
 `reconciliation_required`. The caller must read back the exact attempt and run
 identity before retrying. Blind retry after an unknown commit is forbidden; the
 uniqueness constraint remains the final replay backstop.
+
+The separate [`reconciliation`](../reconciliation/README.md) contract implements
+that readback as an explicit `reconcile_publication` API. It accepts the exact
+immutable publication and attempt ID and never runs automatically from this
+transaction.
 
 ## 3. Receipt states
 
@@ -179,6 +185,7 @@ python -m pytest -q \
   tests/test_suricata_consumer_contract.py \
   tests/test_suricata_consumer_preflight.py \
   tests/test_suricata_consumer_runtime.py \
+  tests/test_suricata_reconciliation.py \
   tests/test_suricata_store.py
 python -m compileall -q megalodon tests
 python -m pytest -ra
@@ -186,8 +193,7 @@ python -m pytest -ra
 
 ## 7. Remaining gates
 
-The runtime transaction does not supply the separate reconciliation API needed
-to resolve an unknown commit, and it intentionally has no CLI or background
-entry point. Exact-head hosted checks and independent review remain required.
-After those gates, the next dependency-ordered implementation is an explicit
-reconciliation API; dashboard projection remains a later read-only slice.
+The transaction and separate read-only reconciliation API intentionally have no
+CLI or background entry point. Exact-head hosted checks and independent review
+remain required. Installed-producer acceptance and source-file/privacy proof
+remain ahead of any later read-only dashboard projection.

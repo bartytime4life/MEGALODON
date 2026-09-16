@@ -4,7 +4,7 @@ MEGALODON is a defensive MVP, not a finished enterprise IDS/IPS.
 
 ## Current limits
 
-The project does not currently provide an authenticated remote UI, arbitrary rule authoring, threat-feed or SIEM/SOAR integration, distributed sensor management, automatic retention, production rollback orchestration, active scheduler, unattended response, a Suricata sensor/raw-EVE watcher, or a consumer reconciliation command. It does provide an explicit operator-invoked transaction for one already validated immutable Suricata publication.
+The project does not currently provide an authenticated remote UI, arbitrary rule authoring, threat-feed or SIEM/SOAR integration, distributed sensor management, automatic retention, production rollback orchestration, active scheduler, unattended response, a Suricata sensor/raw-EVE watcher, or a reconciliation CLI/background worker. It does provide explicit operator-invoked APIs to transact one validated immutable Suricata publication and read-only reconcile an unknown commit.
 
 Operational JSONL/stdin replay and optional Scapy capture require an explicit
 positive accepted-event `--max-events` ceiling from 1 through 10,000,000. The
