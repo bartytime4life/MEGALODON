@@ -27,10 +27,10 @@ const integrations = [
     id: "suricata", name: "Suricata", monogram: "SU", category: "network", status: "implemented", statusLabel: "Gate complete",
     summary: "Reads one completed alert envelope, applies a fixed consumer-owned 512 MiB capacity gate, and persists exactly one immutable publication atomically.",
     dataKind: "alert metadata", contract: "suricata-eve-alert-input-v1", owner: "megalodon.offline.suricata",
-    boundary: "Linux, non-root, and capability-free; existing owner-private store only. No permission repair, migration, retention deletion, network, sensor or IPS control, or dashboard write.",
-    nextGate: "Explicit commit-unknown reconciliation API, then installed-producer acceptance.", ui: ["Alert lane", "Severity", "Terminal receipt"],
+    boundary: "Linux, non-root, and capability-free; existing owner-private store only. No permission repair, migration, retention deletion, network, sensor or IPS control, dashboard projection, blocking, action attribution, or response path.",
+    nextGate: "Explicit commit-unknown reconciliation API, then installed-producer and dashboard-projection acceptance.", ui: ["Alert lane", "Severity", "Terminal receipt"],
     evidence: { label: "Issue #221 · durable-consumer capacity gate", url: "https://github.com/bartytime4life/MEGALODON/issues/221" },
-    metricA: "512 MiB", metricALabel: "hard store ceiling", metricB: "30 s", metricBLabel: "shared deadline"
+    metricA: "512 MiB", metricALabel: "logical consumer ceiling", metricB: "30 s", metricBLabel: "cooperative deadline"
   },
   {
     id: "scapy", name: "Scapy", monogram: "SC", category: "network", status: "bounded", statusLabel: "Optional",
@@ -302,7 +302,7 @@ const workflows = {
     command: "consume_publication(private_store, publication, consumer_attempt_id=\"operator-issued-id\")",
     produces: ["Deterministic capacity preflight", "Atomic run + alert + receipt rows", "Exact post-commit readback"],
     refuses: ["Public or replaced stores", "Permission repair or schema migration", "Automatic retention or blind retry"],
-    boundary: "Fixed 512 MiB no-freelist-credit ceiling and shared 30-second deadline; refusal writes zero rows."
+    boundary: "Fixed 512 MiB logical no-freelist-credit ceiling and shared 30-second cooperative deadline; refusal writes zero rows. Neither is a physical-disk or hard real-time SLA."
   },
   plans: {
     status: "Implemented / non-executing", statusClass: "implemented", platform: "Static catalog", title: "Capability and integration plans",

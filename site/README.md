@@ -14,7 +14,7 @@ The Site is a static, browser-only interface prototype. It has no backend, conne
 
 The MEGALODON repository root remains authoritative for product behavior, security contracts, tests, and implementation status. This Site summarizes those contracts for human review; it does not expand runtime authority.
 
-The Suricata surface reflects the accepted durable-consumer capacity gate: a fixed consumer-owned 512 MiB ceiling is checked before runtime writes, refusal leaves no rows, and the single atomic writer remains Linux-only, non-root, capability-free, and limited to an already-private pre-created store. Retention, deletion, migration, reconciliation, producer orchestration, and dashboard writes remain separate authority gates.
+The Suricata surface reflects the accepted durable-consumer capacity gate: a fixed consumer-owned logical 512 MiB ceiling is checked before runtime writes, refusal leaves no rows, and the single atomic writer remains Linux-only, non-root, capability-free, and limited to an already-private pre-created store. The shared 30-second deadline is cooperative, not a process-termination or filesystem-stall SLA. Retention, deletion, migration, reconciliation, producer orchestration, dashboard projection, blocking, action attribution, and every response path remain separate authority gates.
 
 ## Validation
 
