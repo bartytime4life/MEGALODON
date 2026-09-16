@@ -442,6 +442,37 @@
                   "const": "failed"
                 },
                 "durable_write_status": {
+                  "const": "not_attempted"
+                },
+                "replay_status": {
+                  "const": "not_recorded"
+                },
+                "transaction_status": {
+                  "const": "not_started"
+                },
+                "reconciliation_status": {
+                  "const": "not_required"
+                },
+                "failure_code": {
+                  "enum": [
+                    "INPUT_CONTRACT",
+                    "COUNT_MISMATCH",
+                    "BATCH_BYTES",
+                    "DATABASE_IDENTITY",
+                    "SCHEMA_INCOMPATIBLE",
+                    "STORAGE_CAPACITY",
+                    "TRANSACTION_TIMEOUT",
+                    "STORAGE_ERROR"
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "failed"
+                },
+                "durable_write_status": {
                   "const": "rolled_back"
                 },
                 "replay_status": {
@@ -455,12 +486,7 @@
                 },
                 "failure_code": {
                   "enum": [
-                    "INPUT_CONTRACT",
-                    "COUNT_MISMATCH",
-                    "BATCH_BYTES",
                     "DATABASE_IDENTITY",
-                    "SCHEMA_INCOMPATIBLE",
-                    "STORAGE_CAPACITY",
                     "TRANSACTION_TIMEOUT",
                     "STORAGE_ERROR"
                   ]

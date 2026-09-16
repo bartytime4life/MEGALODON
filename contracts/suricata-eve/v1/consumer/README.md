@@ -41,11 +41,13 @@ The replay registry and alert rows are one atomic unit. A duplicate complete run
 identity is `REPLAY`; relabeling content with a new identity remains a new
 operator claim. The contract deliberately forbids content or payload hashes.
 
-A failure before confirmed commit rolls back the entire attempt. If commit may
-have succeeded but acknowledgement or readback is lost, the only truthful result
-is `reconciliation_required`. The caller must read back the exact attempt and
-run identity before retrying. Blind retry after an unknown commit is forbidden;
-the uniqueness constraint remains the final replay backstop.
+A preflight failure before `BEGIN IMMEDIATE` writes nothing and reports
+`not_started`/`not_attempted`. A failure after the transaction starts but before
+confirmed commit rolls back the entire attempt. If commit may have succeeded but
+acknowledgement or readback is lost, the only truthful result is
+`reconciliation_required`. The caller must read back the exact attempt and run
+identity before retrying. Blind retry after an unknown commit is forbidden; the
+uniqueness constraint remains the final replay backstop.
 
 ## 3. Receipt states
 
@@ -55,7 +57,8 @@ the uniqueness constraint remains the final replay backstop.
 | --- | --- | --- | --- | --- |
 | `committed` | `committed` | `committed` | `recorded` | Exact batch, registry identity, and receipt passed readback |
 | `rejected` | `not_started` | `not_attempted` | `duplicate` | Complete run identity already exists |
-| `failed` | `rolled_back` | `rolled_back` | `not_recorded` | Pre-commit failure left no durable rows |
+| `failed` | `not_started` | `not_attempted` | `not_recorded` | Preflight failure wrote no durable rows |
+| `failed` | `rolled_back` | `rolled_back` | `not_recorded` | Post-begin, pre-commit failure left no durable rows |
 | `reconciliation_required` | `unknown` | `unknown` | `unknown` | Commit disposition cannot yet be claimed |
 
 Every receipt keeps `action_status=not_attempted` and uses one fixed failure code
@@ -81,7 +84,10 @@ fixtures with local-only references. Its in-memory SQLite oracle models the
 future transaction boundary and proves:
 
 - an exact two-record publication commits once;
+- the implemented reader's immutable publication is accepted directly;
 - a duplicate identity is rejected without new rows;
+- an attempt-ID collision for a different run is not misclassified as replay;
+- a capacity, deadline, or failed-begin refusal never claims a rollback;
 - an injected pre-commit failure rolls back registry and alert rows together;
 - a simulated lost acknowledgement after commit produces only
   `reconciliation_required` until explicit readback; and
