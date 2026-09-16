@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from statistics import median_low
 
 from .common import Batch, FlowRecord, OfflineError
-from .baseline import BASELINE_SCHEMA, PROTOCOLS, validate_baseline
+from .baseline import BASELINE_SCHEMA, validate_baseline
 
 MAX_CANDIDATES = 256
 

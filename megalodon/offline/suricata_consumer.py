@@ -20,7 +20,6 @@ from . import suricata
 from .common import OfflineError
 from ..suricata_store import (
     SuricataStoreError,
-    _STORE_MAX_BYTES as STORE_MAX_BYTES,
     _STORE_MAX_PAGES as STORE_MAX_PAGES,
     _STORE_PAGE_SIZE_BYTES as STORE_PAGE_SIZE_BYTES,
     _SuricataReaderHandle,

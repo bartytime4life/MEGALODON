@@ -4,7 +4,7 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
 import sqlite3
-from threading import Event, Thread
+from threading import Thread
 
 import pytest
 
