@@ -701,7 +701,8 @@ def _store_failure_code(error: SuricataStoreError) -> str:
     if "CAPACITY" in diagnostic:
         return "STORAGE_CAPACITY"
     if any(token in diagnostic for token in (
-        "DATABASE", "DIRECTORY", "SIDECAR", "PATH", "CREATION", "RECOVERY",
+        "DATABASE", "DIRECTORY", "SIDECAR", "JOURNAL", "HEADER", "PATH",
+        "CREATION", "RECOVERY",
     )):
         return "DATABASE_IDENTITY"
     return "STORAGE_ERROR"
@@ -886,6 +887,7 @@ def _reconcile_open_store(
         ).fetchall()
         _remaining_milliseconds(started)
         reader.verify_identity()
+        _remaining_milliseconds(started)
 
         if not runs and not attempts:
             return _reconciliation_receipt(
@@ -916,6 +918,7 @@ def _reconcile_open_store(
             )
         _remaining_milliseconds(started)
         reader.verify_identity()
+        _remaining_milliseconds(started)
         return _reconciliation_receipt(facts, attempt_id, "committed")
     except _TransactionTimeout:
         return _reconciliation_receipt(

@@ -41,7 +41,7 @@
       "required": [
         "schema_version", "input_publication_contract", "input_attempt_contract",
         "output_receipt_contract", "invocation", "read_only",
-        "max_reconciliation_ms", "caller_tunable_limits", "automatic_retry",
+        "max_reconciliation_ms", "caller_tunable_limits", "sqlite_journal_mode", "automatic_retry",
         "store_creation", "schema_migration", "permission_repair",
         "retention_or_deletion", "network_access", "process_launch",
         "sensor_control", "dashboard_mutation", "response_action"
@@ -55,6 +55,7 @@
         "read_only": { "const": true },
         "max_reconciliation_ms": { "const": 30000 },
         "caller_tunable_limits": { "const": false },
+        "sqlite_journal_mode": { "const": "rollback" },
         "automatic_retry": { "const": false },
         "store_creation": { "const": false },
         "schema_migration": { "const": false },
