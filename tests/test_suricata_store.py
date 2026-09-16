@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 
 import pytest
@@ -122,6 +123,43 @@ def test_validation_refuses_missing_future_partial_and_weakened_stores(tmp_path)
         path.chmod(0o600)
         with pytest.raises(SuricataStoreError, match="INCOMPATIBLE"):
             validate_suricata_store(path)
+
+
+def test_validation_reads_committed_uncheckpointed_wal_pages(tmp_path):
+    path = tmp_path / "durable.db"
+    initialize_suricata_store(path)
+    writer = _connect(path)
+    try:
+        assert writer.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        writer.execute("PRAGMA foreign_keys=OFF")
+        writer.execute(
+            "INSERT INTO consumer_alerts VALUES (?, ?, ?)",
+            (999, 1, "{}"),
+        )
+        writer.commit()
+        assert path.with_name(path.name + "-wal").exists()
+
+        with pytest.raises(SuricataStoreError, match="INCOMPATIBLE_DATA"):
+            validate_suricata_store(path)
+    finally:
+        writer.close()
+
+
+def test_validation_rechecks_path_identity_after_schema_scan(tmp_path, monkeypatch):
+    path = tmp_path / "durable.db"
+    replacement = tmp_path / "replacement.db"
+    initialize_suricata_store(path)
+    original = suricata_store._validate_current
+
+    def replace_after_validation(connection):
+        original(connection)
+        shutil.copyfile(path, replacement)
+        replacement.chmod(0o600)
+        os.replace(replacement, path)
+
+    monkeypatch.setattr(suricata_store, "_validate_current", replace_after_validation)
+    with pytest.raises(SuricataStoreError, match="DATABASE_CHANGED"):
+        validate_suricata_store(path)
 
 
 def test_schema_enforces_run_attempt_and_record_identity(tmp_path):

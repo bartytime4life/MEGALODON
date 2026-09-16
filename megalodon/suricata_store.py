@@ -327,17 +327,21 @@ def validate_suricata_store(path: str | Path) -> dict[str, object]:
         _assert_path_identity(
             database_path, database_descriptor, directory_descriptor
         )
-        _validate_sqlite_sidecars(
+        sidecars = _validate_sqlite_sidecars(
             database_path,
             directory_descriptor,
             writable=False,
             prefix="SURICATA_STORE",
         )
+        if ("-wal" in sidecars) != ("-shm" in sidecars):
+            raise SuricataStoreError("SURICATA_STORE:INCOMPLETE_WAL_STATE")
+        if "-journal" in sidecars:
+            raise SuricataStoreError("SURICATA_STORE:ACTIVE_JOURNAL_REFUSED")
         sqlite_path = _anchored_database_path(
             database_descriptor, database_path, "SURICATA_STORE"
         )
         connection = sqlite3.connect(
-            f"{sqlite_path.as_uri()}?mode=ro&immutable=1&cache=private",
+            f"{sqlite_path.as_uri()}?mode=ro&cache=private",
             uri=True,
             timeout=10,
             isolation_level=None,
@@ -348,6 +352,9 @@ def validate_suricata_store(path: str | Path) -> dict[str, object]:
         )
         connection.execute("PRAGMA query_only=ON")
         _validate_current(connection)
+        _assert_path_identity(
+            database_path, database_descriptor, directory_descriptor
+        )
         return {
             "status": "compatible",
             "schema_version": SCHEMA_VERSION,

@@ -92,8 +92,10 @@ It creates an owner-private database and atomically reserves:
 
 `validate_suricata_store` opens an existing file read-only and query-only, then
 checks the exact version, SQL, columns, indexes, foreign keys, uniqueness,
-foreign-key integrity, and SQLite quick check. Missing, partial, future, or
-weakened layouts fail closed. Initialization refuses every existing database;
+foreign-key integrity, and SQLite quick check. Its coordinated read-only open
+includes committed WAL pages; incomplete WAL sidecars and active rollback
+journals fail closed. Missing, partial, future, or weakened layouts fail closed.
+Initialization refuses every existing database;
 there is no implicit upgrade or ordinary-startup hook. This is storage
 reservation evidence, not a consumer transaction, replay decision, retention
 policy, or operational migration.
