@@ -187,7 +187,9 @@ def test_pure_analysis_never_opens_io_or_invokes_model(monkeypatch):
     data = sample()
     for obj, name in [(builtins, 'open'), (Path, 'open'), (socket, 'socket'),
                       (socket, 'getaddrinfo'), (sqlite3, 'connect'),
-                      (subprocess, 'Popen'), (qwen, 'invoke_qwen_advisory')]:
+                      (subprocess, 'Popen'), (qwen, 'invoke_qwen_advisory'),
+                      (firewall.NftablesFirewall, 'install'),
+                      (firewall.NftablesFirewall, 'plan_block')]:
         monkeypatch.setattr(obj, name, forbidden)
     result = build_anomaly_dossier(data)
     assert result['candidate_count'] == 2

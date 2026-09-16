@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
-from pathlib import Path
 import queue
 import time
 from threading import Event, Lock
-from typing import Iterable, Iterator, TextIO
+from typing import Iterator, TextIO
 
 from .capabilities import runtime_platform
 from .models import PacketEvent

@@ -6,7 +6,7 @@ network, file, database, model, detector-state or action path exists here.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 import hashlib
 import json
 import re

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import stat
 import struct
+import subprocess
 import sys
 import time
 from types import SimpleNamespace

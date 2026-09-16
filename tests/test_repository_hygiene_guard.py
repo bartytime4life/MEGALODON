@@ -1,7 +1,5 @@
 """Tests for the repository hygiene guard."""
 
-from pathlib import Path
-
 import pytest
 
 from tools.check_repository_hygiene import (
