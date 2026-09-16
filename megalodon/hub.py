@@ -61,8 +61,8 @@ _WORKFLOWS = (
         "entry_point": "Python APIs: read_completed_file, consume_publication, reconcile_publication",
         "launch_policy": "explicit_completed_file_read_then_explicit_local_transaction_or_read_only_reconciliation",
         "data_boundary": "closed alert fields; no payload, file content, unrestricted protocol records, or ruleset updates",
-        "action_boundary": "persistence is limited to one validated publication in an explicit existing store that is already private; unknown-commit reconciliation is read-only; both require a Linux non-root capability-free process, perform no permission repair, and grant no sensor launch, dashboard, IPS, blocking, or action authority",
-        "next_gate": "installed-producer acceptance and later read-only dashboard projection",
+        "action_boundary": "persistence is limited to one validated publication in an explicit existing store that is already private; unknown-commit reconciliation is read-only; an optional read-only dashboard startup snapshot grants no sensor launch, dashboard control, IPS, blocking, or action authority; all store paths require Linux non-root capability-free admission and no permission repair",
+        "next_gate": "installed-producer and operational acceptance; startup snapshots require restart to refresh",
     },
     {
         "id": "live-metadata-capture",

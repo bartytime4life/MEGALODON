@@ -634,11 +634,22 @@ and returns an immutable in-memory batch and receipt.
 publication, applies the fixed no-freelist-credit 512 MiB admission policy, and
 commits the run identity, canonical alert rows, and receipt in one bounded
 `BEGIN IMMEDIATE` transaction followed by exact readback. Commit or readback
-uncertainty returns `reconciliation_required`; the separate reconciliation API
-remains the next gate. There is no raw-EVE converter, sensor operation, ruleset
-manager, existing-store migration, background watcher, dashboard projection, or
-IPS path. The offline dashboard
-projection remains independent and does not accept or display Suricata alerts.
+uncertainty returns `reconciliation_required`; the separate explicit
+`reconcile_publication` API classifies exact durable evidence without retrying.
+There is no raw-EVE converter, sensor operation, ruleset manager, existing-store
+migration, background watcher, or IPS path.
+
+The separate [Suricata evidence projection](docs/suricata-evidence-projection.md)
+reads an existing private store once at dashboard startup when the operator
+selects `--suricata-db`. It reuses Linux non-root capability-free admission,
+descriptor-pinned identity and OFD snapshot locking, with a cooperative
+five-second read budget, at most five fully validated recent runs, 50 displayed
+alert rows and 64 KiB output. A refusal publishes no partial evidence. HTTP
+requests serve owned snapshot bytes and cannot select paths or refresh the
+store. Counts remain external Suricata alerts and producer-reported actions,
+separate from core detections and MEGALODON response authority. The existing
+offline-run summary stays independent. Installed-producer and operational
+acceptance remain separate gates.
 
 `megalodon capabilities` returns a deterministic static catalog of these
 boundaries for Linux, Windows, or another platform family. It performs no host

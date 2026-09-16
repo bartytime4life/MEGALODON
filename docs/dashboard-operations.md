@@ -11,8 +11,8 @@ capture, analyzer installation, or response action. See the
 The command center stays pinned to one browser viewport. Its persistent tabs
 switch among three internally scrolling workspaces without reloading the page:
 **Live review** leads with the trust strip, stored counters, and detection
-triage; **Analysis** contains the Reference Library, offline snapshot, and
-display-only Qwen receipt boundary; **Interfaces** contains every closed
+triage; **Analysis** contains the Reference Library, offline snapshot, optional
+Suricata evidence, and display-only Qwen receipt boundary; **Interfaces** contains every closed
 application slot.
 Switching workspaces preserves local filters and never fetches external data or
 starts an analysis.
@@ -33,7 +33,7 @@ Airlock-admitted request to literal IPv4 loopback. The dashboard cannot start
 that call, poll Qwen, inspect raw traffic, run analysis in the background, or
 apply a response.
 
-There are five distinct surfaces. Do not combine their meanings:
+There are six distinct surfaces. Do not combine their meanings:
 
 | Surface | What it represents | What it does not prove |
 | --- | --- | --- |
@@ -42,6 +42,38 @@ There are five distinct surfaces. Do not combine their meanings:
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |
 | Application interfaces | Fourteen repository-defined capability slots, workflow contracts, and next gates for one profile | Embedded vendor consoles, installed programs, live connections, active sensors, or platform acceptance |
 | Qwen advisory receipt | One startup-supplied, validated, display-only bounded result | An installed/reachable model, an invocation control, live traffic analysis, an evidence source, or a response authority |
+| Suricata evidence | A bounded startup snapshot from one explicitly selected separate durable store | A live sensor, continuous EVE feed, MEGALODON detection, independent source attestation, or applied response |
+
+## Inspect separately stored Suricata evidence
+
+When an existing compatible private Suricata store has already been populated
+through the explicit operator workflow, start the dashboard with its absolute
+path. The dashboard still uses the core telemetry store selected by the ordinary
+configuration; the two stores are separate:
+
+```bash
+megalodon dashboard --suricata-db /absolute/private/suricata.db
+```
+
+Open **Analysis → Suricata evidence**. **Not configured** means no Suricata
+path was supplied; **Unavailable** means the chosen snapshot was refused or
+could not be validated. Neither state means that the core telemetry store is
+empty. An **available** empty store is shown separately and does not mean that
+the network is free of threats.
+
+The panel validates the newest five publications and displays at most fifty
+signature alerts, newest publication first. Source provenance links lead to the
+corresponding publication facts: sensor, run, declared ruleset/version, consumer
+attempt, and committed alert count. The producer's `blocked` observation remains
+separate from MEGALODON's `not_attempted` action state. These alerts are excluded
+from the Live review detection and action counters.
+
+This is a startup snapshot. Periodic refresh, browser reload, and workspace
+switches do not read the Suricata store again. Restart the dashboard to take a
+new snapshot after reviewed operator ingestion. A busy store, unsafe path,
+active sidecar, invalid evidence, or exhausted read budget fails the optional
+snapshot closed without creating, repairing, or writing a database. See the
+[projection contract](suricata-evidence-projection.md) for precise bounds.
 
 The high/critical counter compares sequential stored counts. An increase is not a
 unique new incident; a decrease is not proof that a threat was remediated. The
@@ -109,11 +141,12 @@ Availability words are deliberately narrow:
 - **Implemented/optional** describe a repository path, not an installed or running
   component. The Suricata status covers a completed contract-envelope reader and
   separate operator-invoked durable transaction and read-only reconciliation;
-  none is dashboard integration. Optional nftables support remains inert planning.
+  an explicitly selected store can now supply the bounded startup evidence
+  panel. Optional nftables support remains inert planning.
 - **Evaluation only/guest only** preserve unproved or non-native platform status.
   They must not be promoted by a successful Linux test or by installing a tool.
 - **Contract only/manual only/proposed/unsupported** remain non-runtime or limited
-  relationships. Suricata has no dashboard or sensor integration; Qwen/Ollama is
+  relationships. Suricata has no live sensor integration; Qwen/Ollama is
   limited to one explicitly enabled library call with no dashboard invocation or CLI entry point;
   its receipt can only be supplied programmatically at dashboard startup;
   ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone, Zabbix, and
@@ -181,6 +214,7 @@ release acceptance remain separate evidence gates.
 | API request returns 400 | Invalid Host, request target, or query | Use the direct loopback URL and documented canonical arguments; do not remove validation |
 | Reference integrity failure | The installed reference bundle failed its verification boundary | Diagnose or reinstall a verified package through the existing operator process; never bypass the manifest |
 | Telemetry unavailable or stale | A successful current read is missing | Preserve the last-success evidence; inspect private local configuration/storage separately |
+| Suricata evidence unavailable | The optional startup snapshot was refused | Inspect the existing private store separately, then restart after resolving the local condition; do not initialize or repair it through HTTP |
 
 ## What this interface deliberately does not do
 

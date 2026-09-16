@@ -10,6 +10,7 @@ from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import json
+from pathlib import Path
 from threading import Lock
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
@@ -19,6 +20,7 @@ from .hub import integration_plan
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
+from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYTES, read_suricata_projection
 
 
 MIN_REFRESH_SECONDS = 2
@@ -55,6 +57,23 @@ class DashboardReader(Protocol):
 
 class ReferenceLookupError(ValueError):
     """A fixed, path-free diagnostic for the dashboard reference surface."""
+
+
+def suricata_snapshot(database_path: str | Path | None) -> bytes:
+    """Own one optional startup projection; HTTP requests never reopen the store."""
+    projection = read_suricata_projection(database_path)
+    try:
+        encoded = json.dumps(
+            projection, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+        if len(encoded) > MAX_SURICATA_RESPONSE_BYTES:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        # An optional projection must never prevent core telemetry startup.
+        projection = read_suricata_projection(None)
+        projection.update(status="unavailable", failure_code="RESPONSE_LIMIT")
+        encoded = json.dumps(projection, sort_keys=True, separators=(",", ":")).encode()
+    return encoded
 
 
 def advisory_receipt_snapshot(
@@ -302,6 +321,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     offline_summary: dict[str, Any] | None = None
     advisory_receipt: dict[str, object] | None = None
     reference_library: ReferenceLibrary | None = None
+    suricata_evidence: bytes | None = None
     refresh_seconds: int = 5
     event_limit: int = 50
 
@@ -326,7 +346,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", DASHBOARD_JS.encode())
             return
-        if route.path in {"/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/config":
@@ -420,6 +440,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {"available": False} if self.offline_summary is None
                 else {"available": True, "snapshot": self.offline_summary}
+            )
+            return
+        if route.path == "/api/suricata":
+            # The bytes are owned before binding. Browser input can neither
+            # select a path nor cause another store read or snapshot refresh.
+            self._send(
+                200, "application/json; charset=utf-8",
+                self.suricata_evidence if self.suricata_evidence is not None
+                else suricata_snapshot(None),
             )
             return
         if route.path == "/api/advisory-receipt":
@@ -629,6 +658,7 @@ def serve(
     allow_remote: bool = False, offline_summary: dict[str, Any] | None = None,
     advisory_receipt: QwenAdvisoryResult | None = None,
     reference_library: ReferenceLibrary | None = None,
+    suricata_db: str | Path | None = None,
     refresh_seconds: int = 5, event_limit: int = 50,
 ) -> None:
     if not enabled:
@@ -639,10 +669,12 @@ def serve(
     event_limit = _bounded_dashboard_integer(event_limit, "dashboard event_limit", 1, MAX_EVENT_LIMIT)
     advisory_snapshot = advisory_receipt_snapshot(advisory_receipt)
     host = loopback_host(host, allow_remote=allow_remote)
+    suricata_evidence = suricata_snapshot(suricata_db)
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
             "advisory_receipt": advisory_snapshot,
+            "suricata_evidence": suricata_evidence,
             "reference_library": reference_library, "refresh_seconds": refresh_seconds,
             "event_limit": event_limit,
         },
