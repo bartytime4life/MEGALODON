@@ -16,13 +16,18 @@ respects that split:
 1. **Tracked repository storage** — checked into git, read-only at runtime,
    versioned by commit. Schemas, fixtures, pinned reference bundles, and the
    static Defense Console mirror live here.
-2. **Runtime-only local storage** — created on the operator's filesystem by an
-   explicit command, never committed, and excluded by `.gitignore`. The audit
-   database, capture/log inputs, offline report sets, and any Suricata store
-   live here, each under its own owner-private leaf directory.
+2. **Runtime-only local storage** — created or selected on the operator's
+   filesystem by an explicit command or API call. The repository `.gitignore`
+   excludes only its named root-relative directories and filename patterns; it
+   cannot guarantee that every arbitrary operator-selected path inside a
+   checkout is ignored. The audit database, capture/log inputs, offline report
+   sets, and any Suricata store live here, each under its own owner-private leaf
+   directory. Keep operator-selected destinations outside the checkout unless
+   an exact `git check-ignore --no-index <path>` readback proves otherwise.
 
 Nothing in the second category is implied by cloning or installing the
-repository. It exists only after an operator runs a command that names it.
+repository. It exists only after an operator explicitly selects or creates it
+through a command or API, or authorizes an external producer to write it.
 
 ## Tracked repository storage
 
@@ -31,8 +36,8 @@ repository. It exists only after an operator runs a command that names it.
 | `config/settings.toml`, `config/rules.toml` | Conservative typed defaults and the fixed detection-rule reference | Maintainers | `megalodon/config.py` at startup |
 | `contracts/*/v1/` | Inert schemas, accepted/rejected fixtures, and per-contract `README.md` boundary notes | Maintainers | Contract tests; `tools/build_reference_assets.py` and related build tooling |
 | `megalodon/reference/iana-v1/` (2.7 MiB) | SHA-256-pinned IANA service/port and protocol snapshot | `tools/build_reference_assets.py` | `megalodon/reference/loader.py`; the dashboard's read-only Reference Library panel |
-| `megalodon/reference/corpus-v1/` (1.7 MiB) | Deterministic synthetic detector-evaluation corpus | `tools/build_reference_assets.py` | `megalodon/offline/*` evaluation commands |
-| `site/dist/` | Static Defense Console mirror (HTML/CSS/JS, no build step) | Maintainers, mirroring the hosted Sites source described in [`docs/site-source-alignment.md`](site-source-alignment.md) | A browser only; no MEGALODON process reads `site/` at runtime |
+| `megalodon/reference/corpus-v1/` (1.7 MiB) | Deterministic synthetic detector-evaluation corpus | `tools/build_reference_assets.py` | `megalodon.reference.loader.evaluate_corpus`, exposed by `python -m megalodon.evaluation corpus` |
+| `site/dist/` | Static Defense Console source mirror (HTML/CSS/JS, no build step); equality with the hosted version is separately receipted and may be unverified | Maintainers; current deployment status is recorded in [`docs/site-source-alignment.md`](site-source-alignment.md) | A browser only; no MEGALODON process reads `site/` at runtime |
 | `examples/` | Bounded JSONL replay fixture | Maintainers | `python -m megalodon run` examples in the README |
 
 None of these paths grow at runtime. Updating them is a source change reviewed
@@ -42,20 +47,21 @@ like any other commit, not an operational side effect of running the tool.
 
 | Path (default) | Contents | Written by | Read by | Bound |
 | --- | --- | --- | --- | --- |
-| `data/megalodon.db` (+ `-wal`/`-shm`) | The audit ledger: accepted events, detections, one policy-plan action per detection, provenance links, and ingestion-run receipts | `Store` writer, via `run`/`service`/replay commands | Dashboard reader, opened `mode=ro` with `query_only` and a deny-by-default SQL authorizer | `storage.max_database_bytes` in `config/settings.toml`, default 256 MiB, operator range 1 MiB–4 GiB (see [`docs/storage-failure-policy.md`](storage-failure-policy.md)) |
-| `captures/`, `logs/` (operator-chosen; gitignored by convention) | Raw adapter inputs an operator has authority to analyze (pcap, `eve.json`, Zeek logs) | External producers (TShark, Zeek, Suricata) or the operator | The relevant offline adapter, by explicit `--input`/path argument only | No default retention job; operator-owned |
-| `offline-runs/` or any `--output` directory the operator names | One report set per offline analysis run | `megalodon offline analyze` / `zeek` / `suricata` commands, each into a new mode-`0700` output directory | `dashboard --offline-run <path>` (Linux analysis profile), read-only, single selected run at a time | One completed run only; the dashboard does not browse or watch the directory |
-| An operator-selected Suricata consumer store (no repository default path) | Normalized, source-qualified EVE alert rows | `megalodon/offline/suricata_consumer.py` | `dashboard --suricata-db <path>`, opened `mode=ro` for one startup snapshot | 512 MiB logical store ceiling (see [`docs/suricata-evidence-projection.md`](suricata-evidence-projection.md)) |
+| `data/megalodon.db` (+ `-wal`/`-shm`) | The audit ledger: accepted events, detections, one policy-plan action per detection, provenance links, and ingestion-run receipts | `Store` writer through `python -m megalodon run` or the bounded service API | Dashboard reader, opened `mode=ro` with `query_only` and a deny-by-default SQL authorizer | `storage.max_database_bytes` in `config/settings.toml`, default 256 MiB, operator range 1 MiB–4 GiB (see [`docs/storage-failure-policy.md`](storage-failure-policy.md)) |
+| Repository-root `captures/`, `logs/`, and matching ignored filename patterns | Raw adapter inputs an operator has authority to analyze (pcap, `eve.json`, Zeek logs) | External producers (TShark, Zeek, Suricata) or the operator | The relevant offline adapter, by explicit `--input-root` plus `--input` selection only | No default retention job; operator-owned |
+| Repository-root `offline-runs/`, or another explicit `--output` directory | One report set per offline analysis run | `python -m megalodon.offline --source tshark ...`, `--source zeek-json ...`, or `--source zeek-tsv ...`, each into a new mode-`0700` output directory | `python -m megalodon dashboard --offline-run <absolute-path>` (Linux analysis profile), read-only, single selected run at a time | One completed run only; the dashboard does not browse or watch the directory |
+| An operator-selected Suricata consumer store (no repository default path) | Normalized, source-qualified EVE alert rows | Explicit API call to `megalodon.offline.suricata_consumer.consume_publication`; there is no CLI consumer | `python -m megalodon dashboard --suricata-db <absolute-path>`, opened `mode=ro` for one startup snapshot | 512 MiB logical store ceiling (see [`docs/suricata-evidence-projection.md`](suricata-evidence-projection.md)) |
 | `reports/` (gitignored by convention) | Any exported analyst report an operator chooses to keep | Operator/offline tooling | Operator | No default retention job |
 
 `config/settings.toml` only ever names `app.db_path` (default `data/megalodon.db`,
 resolved relative to the working directory, not the TOML file). Every other
-path in this table — captures, logs, offline output, and the Suricata store —
-is supplied explicitly on the command line for that one invocation. There is
-no shared "data directory" the whole system writes into; that separation is
-what lets each store keep its own POSIX ownership and mode checks (owner-private
-`0700` directories, `0600` files, no symlinked or hard-linked ancestors) without
-one store's failure or migration touching another's.
+path in this table — captures, logs, and offline output — is supplied explicitly
+on the command line for that one invocation. The Suricata store and publication
+are supplied to the explicit consumer API. There is no shared "data directory"
+the whole system writes into; that separation is what lets each store keep its
+own POSIX ownership and mode checks (owner-private `0700` directories, `0600`
+files, no symlinked or hard-linked ancestors) without one store's failure or
+migration touching another's.
 
 ## How an operator ties the pieces together
 
@@ -80,11 +86,12 @@ that only that store's process has ever written into.
 
 ## Proposed repository directories
 
-These directories are not tracked in git today — some appear only in
-`.gitignore` as a naming convention, and none is created by cloning the
+These directories are not tracked in git today. The exact repository-root
+forms below appear in `.gitignore`, and none is created by cloning the
 repository. Listing them here in one place is the "proposed layout" a fresh
-checkout should grow into once an operator starts running commands, so the
-tree above and an operator's actual disk usage describe the same system:
+checkout can grow into once an operator starts running commands. A similarly
+named nested or arbitrary directory is not automatically protected; verify it
+with `git check-ignore --no-index <path>` or keep it outside the checkout.
 
 - `data/` — audit database and WAL/SHM sidecars (`app.db_path`); created by
   the first writer command, never by `dashboard` or `hud`.
