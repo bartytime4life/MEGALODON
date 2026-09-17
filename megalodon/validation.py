@@ -40,7 +40,9 @@ def parse_network(value: str) -> ipaddress._BaseNetwork:
         raise ValidationError("invalid network") from exc
 
 
-def _parse_integer(value: Any, field_name: str) -> int:
+def _parse_integer(
+    value: Any, field_name: str, *, maximum: int | None = None
+) -> int:
     if isinstance(value, bool):
         raise ValidationError(f"{field_name} must be an integer")
     if isinstance(value, int):
@@ -48,16 +50,25 @@ def _parse_integer(value: Any, field_name: str) -> int:
     if isinstance(value, str):
         candidate = value.strip()
         if _INTEGER_TEXT.fullmatch(candidate):
-            return int(candidate)
+            # Bound decimal conversion before int(): admission must not depend
+            # on Python's configurable integer-string digit limit. Leading
+            # zeroes do not change the value or require a large conversion.
+            candidate = candidate.lstrip("0") or "0"
+            if maximum is not None and len(candidate) > len(str(maximum)):
+                raise ValidationError(f"{field_name} must be <= {maximum}")
+            try:
+                return int(candidate)
+            except ValueError:
+                raise ValidationError(f"{field_name} must be an integer") from None
     raise ValidationError(f"{field_name} must be an integer")
 
 
 def parse_port(value: Any, *, allow_none: bool = True) -> int | None:
     if value is None and allow_none:
         return None
-    port = _parse_integer(value, "port")
+    port = _parse_integer(value, "port", maximum=65535)
     if not 0 <= port <= 65535:
-        raise ValidationError(f"port outside 0..65535: {port}")
+        raise ValidationError("port outside 0..65535")
     return port
 
 
@@ -67,7 +78,7 @@ def parse_nonnegative_int(
     *,
     maximum: int | None = None,
 ) -> int:
-    parsed = _parse_integer(value, field_name)
+    parsed = _parse_integer(value, field_name, maximum=maximum)
     if parsed < 0:
         raise ValidationError(f"{field_name} must be non-negative")
     if maximum is not None and parsed > maximum:

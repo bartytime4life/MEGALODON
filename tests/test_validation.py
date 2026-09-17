@@ -6,7 +6,9 @@ import unittest
 from megalodon.models import PacketEvent
 from megalodon.validation import (
     ValidationError,
+    SQLITE_INTEGER_MAX,
     parse_ip,
+    parse_nonnegative_int,
     parse_port,
     parse_timestamp,
     validate_metadata,
@@ -28,6 +30,25 @@ class ValidationTests(unittest.TestCase):
             parse_port(70000)
         with self.assertRaises(ValidationError):
             parse_port(443.5)
+
+    def test_oversized_numeric_values_raise_validation_errors(self):
+        for value in ("9" * 5000, 10**5000):
+            with self.subTest(value_type=type(value).__name__):
+                with self.assertRaises(ValidationError) as caught:
+                    parse_port(value)
+                self.assertLess(len(str(caught.exception)), 80)
+                with self.assertRaises(ValidationError):
+                    parse_nonnegative_int(value, "byte_count", maximum=SQLITE_INTEGER_MAX)
+
+    def test_numeric_string_bounds_preserve_zero_padding_and_maximum(self):
+        self.assertEqual(parse_port("0" * 5000 + "443"), 443)
+        self.assertEqual(parse_port("0" * 5000), 0)
+        self.assertEqual(
+            parse_nonnegative_int(str(SQLITE_INTEGER_MAX), "byte_count", maximum=SQLITE_INTEGER_MAX),
+            SQLITE_INTEGER_MAX,
+        )
+        with self.assertRaises(ValidationError):
+            parse_nonnegative_int(str(SQLITE_INTEGER_MAX + 1), "byte_count", maximum=SQLITE_INTEGER_MAX)
 
     def test_timestamp_requires_explicit_offset_and_normalizes_to_utc(self):
         self.assertEqual(

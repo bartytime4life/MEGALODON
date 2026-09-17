@@ -135,6 +135,31 @@ class CliTests(unittest.TestCase):
                     build_parser().parse_args(argv)
                 self.assertEqual(raised.exception.code, 2)
 
+    def test_oversized_cli_integers_have_bounded_errors_before_configuration(self):
+        options = (
+            (["run", "--max-events"], "max-events"),
+            (["run", "--max-seconds"], "max-seconds"),
+            (["dashboard", "--port"], "port"),
+            (["dashboard", "--refresh-seconds"], "refresh-seconds"),
+            (["hud", "--event-limit"], "event-limit"),
+            (["database-reconcile"], "run-id"),
+        )
+        value = "9" * 5000
+        with patch("megalodon.cli._load", side_effect=AssertionError("unexpected I/O")):
+            for argv, name in options:
+                error = io.StringIO()
+                with self.subTest(option=name), redirect_stderr(error):
+                    with self.assertRaises(SystemExit) as raised:
+                        main([*argv, value])
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn(f"{name} must be between", error.getvalue())
+                self.assertNotIn(value, error.getvalue())
+                self.assertLess(len(error.getvalue()), 1024)
+
+    def test_cli_integer_leading_zeroes_do_not_hit_python_conversion_limit(self):
+        args = build_parser().parse_args(["run", "--max-events", "0" * 5000 + "1"])
+        self.assertEqual(args.max_events, 1)
+
     def test_non_sample_sources_require_limit_before_configuration_or_io(self):
         def forbidden(*_args, **_kwargs):
             raise AssertionError("unbounded source must refuse before I/O")

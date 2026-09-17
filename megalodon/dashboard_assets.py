@@ -149,7 +149,7 @@ INDEX_HTML = """<!doctype html>
   <section class="analysis-window" aria-labelledby="analysis-window-title">
     <div>
       <p class="eyebrow">AI advisory status</p>
-      <h3 id="analysis-window-title">Qwen advisory receipt · checking</h3>
+      <h3 id="analysis-window-title" tabindex="-1">Qwen advisory receipt · checking</h3>
       <p id="analysis-summary">Checking for one startup-supplied, display-only advisory receipt. This page cannot start Qwen or request an analysis.</p>
       <p class="analysis-trust" role="note">AI advisory; not evidence or an action.</p>
       <ul class="analysis-limitations" id="analysis-limitations" aria-label="Advisory limitations"></ul>
@@ -346,7 +346,7 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
 .analysis-window { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .7fr); gap: 18px; align-items: center; margin: 0 0 18px; padding: 18px 20px; border: 1px solid rgba(255, 209, 102, .28); border-radius: var(--radius); background: linear-gradient(145deg, rgba(65, 54, 23, .24), rgba(8, 24, 33, .88)); box-shadow: var(--shadow); }
 .analysis-window h3 { margin: 0; font-size: .94rem; }
 .analysis-window p:not(.eyebrow) { max-width: 720px; margin: 7px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
-.analysis-window .analysis-trust { color: var(--warning); font-weight: 700; }
+.analysis-window p.analysis-trust { color: var(--amber); font-weight: 700; }
 .analysis-limitations { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: .76rem; line-height: 1.5; }
 .receipt-digest { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .analysis-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 0; }
@@ -566,6 +566,7 @@ const state = {
   timer: null,
   lastSuccessfulRefresh: null,
   lastRefreshFailed: false,
+  telemetryNotConfigured: false,
   configDegraded: false,
   config: {event_limit: 50, refresh_seconds: 5}
 };
@@ -644,7 +645,20 @@ workspaceIds.forEach((workspace, index) => {
     event.preventDefault(); activateWorkspace(workspaceIds[nextIndex], true);
   });
 });
-byId('skip-link').addEventListener('click', () => activateWorkspace('live'));
+document.addEventListener('click', event => {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = event.target && typeof event.target.closest === 'function' ? event.target.closest('a[href^="#"]') : null;
+  if (!link || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
+  const hash = link.getAttribute('href');
+  const workspace = workspaceFromHash(hash);
+  if (!workspace) return;
+  // A tab change can hide the current hash target. Reveal it on every link
+  // activation, including repeated fragments that do not fire hashchange.
+  activateWorkspace(workspace);
+  const target = byId(hash.slice(1));
+  if (target && typeof target.focus === 'function') target.focus({preventScroll: true});
+  // Keep native fragment history and scrolling after exposing the target.
+});
 if (typeof window.addEventListener === 'function') window.addEventListener('hashchange', restoreWorkspaceFromHash);
 function textNode(tag, value, className) {
   const node = document.createElement(tag);
@@ -1243,9 +1257,13 @@ function renderEvents(events) {
 }
 function renderInitialUnavailable() {
   const row = document.createElement('tr');
-  const cell = textNode('td', 'Recent detections are unavailable until a complete dashboard refresh succeeds.', 'empty');
+  const cell = textNode('td', state.telemetryNotConfigured
+    ? 'No audit store was available at launch. Import real data, then restart this HUD to review detections.'
+    : 'Recent detections are unavailable until a complete dashboard refresh succeeds.', 'empty');
   cell.colSpan = 5; row.append(cell); byId('events').replaceChildren(row);
-  const filterStatus = 'No successful dashboard data refresh is available.';
+  const filterStatus = state.telemetryNotConfigured
+    ? 'Detection filters are ready for a configured audit store.'
+    : 'No successful dashboard data refresh is available.';
   if (byId('filter-status').textContent !== filterStatus) byId('filter-status').textContent = filterStatus;
   byId('returned-status').textContent = 'Returned rows unavailable';
   byId('priority-status').textContent = 'Priority rows unavailable';
@@ -1253,7 +1271,9 @@ function renderInitialUnavailable() {
   byId('timeline').replaceChildren();
   const timelineStatus = 'No successful returned-timestamp set is available.';
   if (byId('timeline-status').textContent !== timelineStatus) byId('timeline-status').textContent = timelineStatus;
-  byId('priority-change').textContent = 'Stored priority baseline unavailable; retry refresh.';
+  byId('priority-change').textContent = state.telemetryNotConfigured
+    ? 'Stored priority count unavailable until an audit store is available at startup.'
+    : 'Stored priority baseline unavailable; retry refresh.';
 }
 function applyFilters() {
   if (!state.lastSuccessfulRefresh) { renderInitialUnavailable(); return; }
@@ -1537,7 +1557,10 @@ function setSnapshotStatus(mode) {
   if (strip.className !== nextClass) strip.className = nextClass;
   const healthLimit = 'Dashboard API reachability does not measure capture or ingestion health.';
   let message;
-  if (mode === 'current') {
+  if (mode === 'unconfigured') {
+    message = `HUD ready. No audit store was available at launch, so telemetry remains unavailable. Import real data, then restart this HUD. Tools and reference lookup are separate.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
+    setUpdatedTime('No audit store available at launch');
+  } else if (mode === 'current') {
     message = `Dashboard data fetched successfully. Last-success time is shown below. ${healthLimit}`;
     setUpdatedTime(`Data fetched ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
   } else if (mode === 'paused') {
@@ -1593,6 +1616,21 @@ async function refresh(announce = true) {
     const [summaryResult, eventsResult] = await Promise.allSettled([
       requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`)
     ]);
+    const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh
+      && [summaryResult, eventsResult].every(result => result.status === 'rejected'
+        && result.reason && result.reason.status === 503
+        && result.reason.payload && typeof result.reason.payload === 'object' && !Array.isArray(result.reason.payload)
+        && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable');
+    if (expectedMissingStore) {
+      state.telemetryNotConfigured = true;
+      state.lastRefreshFailed = false;
+      renderInitialUnavailable();
+      setSnapshotStatus('unconfigured');
+      setConnection(state.paused ? 'Dashboard API · reachable, no audit store, refresh paused' : 'Dashboard API · reachable, no audit store', '');
+      if (announce) byId('refresh-announcement').textContent = 'No audit store was available at launch. Import real data, then restart this HUD.';
+      return;
+    }
+    state.telemetryNotConfigured = false;
     if (summaryResult.status !== 'fulfilled' || eventsResult.status !== 'fulfilled') {
       throw new Error('dashboard refresh failed');
     }
@@ -1611,6 +1649,7 @@ async function refresh(announce = true) {
     setConnection(state.paused ? 'Dashboard API · reachable, refresh paused' : 'Dashboard API · reachable', 'ok');
     if (announce) byId('refresh-announcement').textContent = 'Dashboard data refreshed.';
   } catch (_) {
+    state.telemetryNotConfigured = false;
     state.lastRefreshFailed = true;
     if (!state.lastSuccessfulRefresh) renderInitialUnavailable();
     setConnection(state.paused ? 'Dashboard API · unavailable, refresh paused' : 'Dashboard API · unavailable', 'error');
@@ -1631,7 +1670,10 @@ function togglePause() {
   const button = byId('pause-button'); button.setAttribute('aria-pressed', String(state.paused));
   button.textContent = state.paused ? 'Resume refresh' : 'Pause refresh';
   if (state.paused) {
-    if (state.lastRefreshFailed) {
+    if (state.telemetryNotConfigured) {
+      setConnection('Dashboard API · reachable, no audit store, refresh paused', '');
+      setSnapshotStatus('unconfigured');
+    } else if (state.lastRefreshFailed) {
       setConnection('Dashboard API · unavailable, refresh paused', 'error');
       setSnapshotStatus('stale');
     } else {
@@ -1670,7 +1712,7 @@ async function bootstrap() {
   loadSuricataEvidence();
   loadIngestionRuns();
   loadReferenceStatus();
-  loadSetup();
+  await loadSetup();
   await refresh(false); scheduleNext();
 }
 

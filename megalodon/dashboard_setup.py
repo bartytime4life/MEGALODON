@@ -28,7 +28,7 @@ SETUP_HTML = """
 """
 
 SETUP_JS = r"""
-const setupState = {readiness: null};
+const setupState = {readiness: null, sourceStatus: null};
 const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
 function toolPresenceText(index) {
   const report = setupState.readiness;
@@ -37,12 +37,14 @@ function toolPresenceText(index) {
   return labels[report.tools[index].status];
 }
 async function loadSetup() {
+  setupState.sourceStatus = null;
   try {
     const value = await requestJSON('/api/setup');
     if (!referenceExactKeys(value, ['schema', 'source_status', 'readiness']) || value.schema !== 'dashboard-setup-v1'
         || !['connected', 'not_configured'].includes(value.source_status)) throw new Error('Invalid setup receipt');
     const report = value.readiness === null ? null : validateReadinessReport(JSON.stringify(value.readiness));
     setupState.readiness = report;
+    setupState.sourceStatus = value.source_status;
     byId('setup-source').textContent = value.source_status === 'connected'
       ? 'Your selected audit store is open. Stored events refresh here automatically; capture and companion services run separately.'
       : 'HUD ready. No audit store exists at the selected path yet. Tools and reference lookup work now; network measurements remain unavailable. After importing real data, restart this HUD.';
@@ -51,6 +53,7 @@ async function loadSetup() {
       : 'For tool presence without importing a report, start with: python -m megalodon hud. The dashboard command keeps host checks off.';
     if (typeof integrationState !== 'undefined' && integrationState.snapshot) renderIntegrationMap();
   } catch (_) {
+    setupState.sourceStatus = null;
     byId('setup-source').textContent = 'Setup information unavailable. Existing telemetry controls remain independent.';
     byId('setup-readiness').textContent = 'No tool-presence claim is available. Restart with python -m megalodon hud to check at launch.';
   }
