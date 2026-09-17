@@ -15,7 +15,9 @@ This specification describes behavior present in the repository unless a
 section is explicitly labeled proposed, contract-only, optional, or a future
 production gate. The README is the operator entry point; the security review
 owns the threat/control analysis; specialized documents own their versioned
-offline, automation, platform, and Suricata boundaries. A merged contract or a
+offline, automation, platform, and Suricata boundaries; and
+[`docs/storage-layout.md`](docs/storage-layout.md) maps which tracked and
+runtime-only paths each subsystem reads or writes. A merged contract or a
 green test run does not by itself create a runtime integration or deployment
 approval.
 
