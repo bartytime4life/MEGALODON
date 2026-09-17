@@ -1,0 +1,205 @@
+{
+  "schema_version": "megalodon-currentness-capture-v1",
+  "basis": "synthetic",
+  "repository": "bartytime4life/MEGALODON",
+  "commit_sha": "1111111111111111111111111111111111111111",
+  "tree_sha": "2222222222222222222222222222222222222222",
+  "started_at": "2026-09-17T00:00:00Z",
+  "finished_at": "2026-09-17T00:00:00Z",
+  "readbacks": {
+    "branch_start": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/branches/main",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "sha": "1111111111111111111111111111111111111111",
+        "protected": true
+      }
+    },
+    "branch_end": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/branches/main",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "sha": "1111111111111111111111111111111111111111",
+        "protected": true
+      }
+    },
+    "commit": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/git/commits/1111111111111111111111111111111111111111",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "sha": "1111111111111111111111111111111111111111",
+        "tree_sha": "2222222222222222222222222222222222222222"
+      }
+    },
+    "tree": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/git/trees/2222222222222222222222222222222222222222?recursive=1",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "sha": "2222222222222222222222222222222222222222",
+        "truncated": false,
+        "files": [
+          {
+            "path": "SECURITY_REVIEW.md",
+            "mode": "100644",
+            "sha": "ce80f6cd8b57c8f32fa500833dfa18cf6b922199"
+          },
+          {
+            "path": "docs/site-source-alignment.md",
+            "mode": "100644",
+            "sha": "f25e3e8c278fa86d77e58966c9825584b93e615b"
+          },
+          {
+            "path": "docs/storage-layout.md",
+            "mode": "100644",
+            "sha": "a163016ddcaca9671071950ed6ecc4947d54c5ad"
+          },
+          {
+            "path": "megalodon/firewall.py",
+            "mode": "100644",
+            "sha": "2fdc41c75ac4a3e19b11793ee22c078b71d521fc"
+          },
+          {
+            "path": "tests/test_documentation_currentness.py",
+            "mode": "100644",
+            "sha": "1b9c9697ea9f1b21bbb7ab5f0e410c92c0959991"
+          },
+          {
+            "path": "tests/test_firewall.py",
+            "mode": "100644",
+            "sha": "b9644152652a3f94e3a26fe87d8f5b9d6956750b"
+          }
+        ]
+      }
+    },
+    "issues": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/issues?state=open&per_page=100",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "items": [
+          {
+            "number": 254,
+            "kind": "issue"
+          }
+        ]
+      }
+    },
+    "pulls": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/pulls?state=open&per_page=100",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "numbers": []
+      }
+    },
+    "checks": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/commits/1111111111111111111111111111111111111111/check-runs?per_page=100",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "total_count": 1,
+        "items": [
+          {
+            "id": 123,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      }
+    },
+    "workflows": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/actions/runs?head_sha=1111111111111111111111111111111111111111&per_page=100",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "total_count": 0,
+        "items": []
+      }
+    },
+    "releases": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/releases?per_page=100",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "items": []
+      }
+    },
+    "rulesets": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/rulesets",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "ids": [
+          22394782
+        ]
+      }
+    },
+    "ruleset": {
+      "query": "https://api.github.com/repos/bartytime4life/MEGALODON/rulesets/22394782",
+      "observed_at": "2026-09-17T00:00:00Z",
+      "status": "observed",
+      "excerpt": {
+        "id": 22394782,
+        "enforcement": "active",
+        "default_branch_only": true,
+        "required_approvals": 0,
+        "strict_checks": true,
+        "required_test": true,
+        "bypass_actor_count": 0,
+        "dismiss_stale_reviews": false,
+        "code_owner_review": false,
+        "last_push_approval": false,
+        "thread_resolution": false
+      }
+    }
+  },
+  "claims": [
+    {
+      "id": "firewall-refusal",
+      "state": "observed",
+      "source_paths": [
+        "megalodon/firewall.py"
+      ],
+      "test_paths": [
+        "tests/test_firewall.py"
+      ],
+      "check_run_ids": []
+    },
+    {
+      "id": "storage-documentation",
+      "state": "observed",
+      "source_paths": [
+        "docs/storage-layout.md"
+      ],
+      "test_paths": [
+        "tests/test_documentation_currentness.py"
+      ],
+      "check_run_ids": []
+    },
+    {
+      "id": "site-parity-unverified",
+      "state": "observed",
+      "source_paths": [
+        "docs/site-source-alignment.md"
+      ],
+      "test_paths": [
+        "tests/test_documentation_currentness.py"
+      ],
+      "check_run_ids": []
+    },
+    {
+      "id": "control-disposition",
+      "state": "observed",
+      "source_paths": [
+        "SECURITY_REVIEW.md"
+      ],
+      "test_paths": [],
+      "check_run_ids": []
+    }
+  ]
+}
