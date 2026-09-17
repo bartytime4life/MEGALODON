@@ -409,13 +409,25 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             "el => document.activeElement === el && getComputedStyle(el).outlineStyle !== 'none'"))
         await page.set_viewport_size({"width": 1440, "height": 1000})
         await page.locator("#workspace-tab-traffic").click()
+        zoom_base = await page.evaluate("({width: innerWidth, ratio: devicePixelRatio})")
+        REPORT["zoom_metrics"] = {}
         for level, presses in ((200, 5), (400, 3)):
             for _ in range(presses):
                 await page.keyboard.press("Control+=")
+            zoom = await page.evaluate("""() => ({
+                width: innerWidth, ratio: devicePixelRatio,
+                scroll: document.documentElement.scrollWidth
+            })""")
+            effective_zoom = max(zoom_base["width"] / zoom["width"],
+                                 zoom["ratio"] / zoom_base["ratio"])
+            REPORT["zoom_metrics"][str(level)] = {
+                "css_width": zoom["width"], "device_pixel_ratio": zoom["ratio"],
+                "effective_zoom": round(effective_zoom, 3), "root_scroll_width": zoom["scroll"],
+            }
             passed(f"browser zoom {level} percent preserves return and internal scroll",
                    await page.locator(".room-back").is_visible() and
-                   await page.evaluate("devicePixelRatio") >= level / 100 - .05 and
-                   await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+                   effective_zoom >= level / 100 - .05 and
+                   zoom["scroll"] <= zoom["width"] + 1)
         await page.keyboard.press("Control+0")
         passed("no page script errors or nonlocal page requests", not errors and not violations)
     finally:
