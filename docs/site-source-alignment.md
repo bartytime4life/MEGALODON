@@ -25,12 +25,14 @@ acceptance.
 ## Exact source and artifact scope
 
 The repository tracks thirteen Sites source files: README,
-`.openai/hosting.json`, nine deployable assets, and two Node test files. The
+`.openai/hosting.json`, nine deployable assets (including
+`site/dist/index.html` and `site/dist/styles.css`), and two Node test files. The
 version 16 server archive receipt contains ten files: the normalized manifest
 and nine assets; README and tests are excluded from deployment. A blob-by-blob
 comparison confirmed that all thirteen files in the Sites source commit match
 the draft repository mirror at `d54687a`. That comparison does not establish
-that unmerged draft files are on repository `main`.
+that unmerged draft files are on repository `main`, and future repository edits
+do not become a Sites deployment without a separate save and deploy operation.
 
 Version 16 preserves the one-command local HUD launch, disconnected hosted
 measurements, shared companion controls, and the repository storage map. It adds
@@ -42,6 +44,7 @@ retry, scheduler, playbook, or host-action control.
 The new exchange contract lives in draft PR #264. Deploying this reference UI
 does not install the contract into a local checkout and does not implement a
 parser, exporter, network client, notifier, scheduler, or executor.
+Source parity does **not** establish runtime interoperability.
 
 ## Version 16 validation and current limits
 
