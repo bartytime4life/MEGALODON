@@ -37,8 +37,21 @@ TRAFFIC_HTML = """
   <div id="room-findings-visual" class="room-grid"></div><div id="room-findings-table" class="room-table"></div>
 </section>
 <section class="workspace-view" id="workspace-reports" role="tabpanel" aria-labelledby="workspace-tab-reports" hidden>
-  <h2 id="room-reports-title" tabindex="-1">Make a report</h2>
-  <div id="room-report-flow"><p>Local report preview is unavailable in this projection-only slice. No evidence has been exported.</p></div>
+  <h2 id="room-reports-title" tabindex="-1">Make a local report</h2>
+  <p>Preview the exact metadata-only JSON before downloading it. Nothing is uploaded, sent, or written by the server.</p>
+  <div id="room-report-flow" class="room-report-flow">
+    <ol class="room-report-steps">
+      <li><strong>1. Confirm range</strong><span>The shared UTC range above controls this report.</span></li>
+      <li><strong>2. Preview locally</strong><span>Review the complete bounded JSON in this browser tab.</span></li>
+      <li><strong>3. Download explicitly</strong><span>Save only after the preview is ready.</span></li>
+    </ol>
+    <div class="room-report-actions">
+      <button type="button" id="room-report-create">Preview local report</button>
+      <button type="button" id="room-report-download" disabled>Download JSON report</button>
+    </div>
+    <p id="room-report-status" class="room-meta" role="status" aria-live="polite">No preview is ready.</p>
+    <pre id="room-report-preview" class="room-report-preview" tabindex="0" hidden aria-label="Exact local report preview"></pre>
+  </div>
 </section>
 <section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
   <h2 id="room-help-title" tabindex="-1">Help</h2>
@@ -113,14 +126,22 @@ ROOM_CSS = r"""
 .room-audit-history > summary { min-height:44px; padding:1rem; color:#d9e8ef; cursor:pointer; }
 .room-home p,.workspace-view > p { color:#bfd0d9; line-height:1.6; }
 .room-home summary { min-height:44px; padding:.8rem 0; cursor:pointer; }
-:is(.room-range,.room-actions,.room-visual,.room-table) :focus-visible,.room-back:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
-@media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
+.room-report-flow { display:grid; gap:1rem; max-width:900px; }
+.room-report-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; margin:0; padding:0; list-style:none; counter-reset:none; }
+.room-report-steps li { display:grid; gap:.4rem; border:1px solid #335064; border-radius:10px; padding:.85rem; background:#0e2330; }
+.room-report-steps span { color:#bfd0d9; font-size:.82rem; line-height:1.5; }
+.room-report-actions { display:flex; flex-wrap:wrap; gap:.6rem; }
+.room-report-actions button { min-height:44px; font:inherit; border:1px solid #426173; border-radius:7px; padding:.65rem .8rem; color:#e9f5f9; background:#112b38; cursor:pointer; }
+.room-report-actions button:disabled { cursor:not-allowed; opacity:.58; }
+.room-report-preview { max-height:48vh; overflow:auto; margin:0; padding:1rem; border:1px solid #335064; border-radius:10px; background:#071923; color:#dcebf0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.78rem; line-height:1.5; }
+:is(.room-range,.room-actions,.room-visual,.room-table,.room-report-actions) :focus-visible,.room-report-preview:focus-visible,.room-back:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
+@media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 """
 
 ROOM_JS = r"""
-const roomState = {snapshot:null, failed:false, busy:false, range:'recorded', custom:null, selection:null};
+const roomState = {snapshot:null, failed:false, busy:false, range:'recorded', custom:null, selection:null, report:null};
 const roomProtocols = ['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'];
 const roomRules = ['SYN_FLOOD','PORT_SCAN','DNS_TUNNELING'];
 const roomFlags = ['FIN','SYN','RST','PSH','ACK','URG','ECE','CWR'];
@@ -198,6 +219,90 @@ function roomTimeline(parent,selection,rows,stamp) {
   bins.forEach((count,i)=>{const bar=document.createElementNS(svg.namespaceURI,'rect');bar.setAttribute('x',String(i*40+4));bar.setAttribute('y',String(115-count/max*105));bar.setAttribute('width','30');bar.setAttribute('height',String(count/max*105));svg.append(bar);const label=document.createElementNS(svg.namespaceURI,'text');label.setAttribute('x',String(i*40+8));label.setAttribute('y','134');label.textContent=String(count);svg.append(label);});parent.append(svg);
   parent.append(textNode('p','12 equal time bins, left to right. An empty bin means no returned records; sensor gaps and drops are unknown.','room-meta'));
 }
+const roomReportFields = ['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build'];
+const roomReportLimitations = [
+  'Saved metadata only; no packet bodies, raw logs, messages, model output, addresses, ports, IDs, or commands.',
+  'Source authenticity, sensor health, installed-tool qualification, drops, and whole-network completeness remain unknown.',
+  'Direction, local-subnet scope, connection state, and observed service identities are unavailable.',
+  'Counts cover only the validated events in the selected bounded range.',
+  'A missing finding or empty range does not prove safety or absence of traffic.',
+  'Imported source labels are provenance, not independent authentication.',
+  'This report was created locally in the browser and was not uploaded by MEGALODON.'
+];
+function roomReportDocument(now=Date.now()) {
+  const snapshot=roomState.snapshot,selection=roomState.selection;
+  if(!snapshot || !selection || !selection.events.length) throw new Error('No qualified data is available in the selected range. No report was created.');
+  const findings=new Map();
+  selection.findings.forEach(item=>{
+    const key=item.rule_id+'\n'+item.severity;
+    findings.set(key,(findings.get(key)||0)+1);
+  });
+  const document={
+    schema:'megalodon-local-report-v1',
+    generated_at:new Date(now).toISOString(),
+    title:'MEGALODON local metadata report',
+    range:{start:new Date(selection.start).toISOString(),end:new Date(selection.end).toISOString()},
+    sources:[...new Set(selection.events.map(item=>item.source))].sort(),
+    vantage:'unknown',
+    quality:snapshot.quality,
+    freshness:roomState.failed || now-Date.parse(snapshot.generated_at)>300000 ? 'stale' : 'current_by_five_minute_ui_threshold',
+    unit:'metadata events / linked findings / reported bytes',
+    counts:{
+      events:selection.events.length,
+      findings:selection.findings.length,
+      reported_bytes:selection.events.reduce((sum,item)=>sum+BigInt(item.byte_count),0n).toString()
+    },
+    findings:[...findings].sort((a,b)=>a[0].localeCompare(b[0])).map(([key,count])=>{
+      const [rule_id,severity]=key.split('\n');return {rule_id,severity,count};
+    }),
+    limitations:[...roomReportLimitations],
+    build:{
+      package_version:snapshot.build.package_version,
+      base_commit:snapshot.build.base_commit,
+      projection_sha256:snapshot.build.projection_sha256,
+      commit:snapshot.build.commit
+    }
+  };
+  if(!referenceExactKeys(document,roomReportFields)
+      || !referenceExactKeys(document.range,['start','end'])
+      || !referenceExactKeys(document.counts,['events','findings','reported_bytes'])
+      || !referenceExactKeys(document.build,['package_version','base_commit','projection_sha256','commit'])
+      || document.findings.some(item=>!referenceExactKeys(item,['rule_id','severity','count']))) throw new Error('The local report contract could not be satisfied.');
+  const json=JSON.stringify(document,null,2)+'\n';
+  if(new TextEncoder().encode(json).byteLength>65536) throw new Error('The local report exceeded its 64 KiB limit. No report was created.');
+  return {document,json};
+}
+function invalidateRoomReport() {
+  roomState.report=null;
+  byId('room-report-download').disabled=true;
+  const preview=byId('room-report-preview');preview.replaceChildren();preview.hidden=true;
+  byId('room-report-status').textContent=roomState.selection && roomState.selection.events.length
+    ? 'No preview is ready. Preview the current selected range before downloading.'
+    : 'No qualified data is available in the selected range. No report can be created.';
+}
+function previewRoomReport() {
+  try {
+    const report=roomReportDocument();roomState.report=report;
+    const preview=byId('room-report-preview');preview.replaceChildren(textNode('code',report.json));preview.hidden=false;
+    byId('room-report-download').disabled=false;
+    byId('room-report-status').textContent='Preview ready in this browser. Review it, then download explicitly.';
+    return true;
+  } catch(_) {
+    roomState.report=null;byId('room-report-download').disabled=true;
+    const preview=byId('room-report-preview');preview.replaceChildren();preview.hidden=true;
+    byId('room-report-status').textContent='No qualified data is available in the selected range. No report was created.';
+    return false;
+  }
+}
+function downloadRoomReport() {
+  if(!roomState.report) {byId('room-report-status').textContent='Preview the current selected range before downloading.';return false;}
+  const url=URL.createObjectURL(new Blob([roomState.report.json],{type:'application/json'}));
+  const link=document.createElement('a');
+  link.href=url;link.download='megalodon-local-report-'+roomState.report.document.generated_at.replace(/[:.]/g,'-')+'.json';
+  link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
+  byId('room-report-status').textContent='Local JSON download requested. MEGALODON did not upload it.';
+  return true;
+}
 function renderRoom() {
   let selected;
   try {selected=roomSelection(roomState.snapshot,roomState.range,roomState.custom);} catch(error) {byId('room-notice').textContent=error.message;return;}
@@ -244,4 +349,6 @@ async function refreshRoom() {
 byId('room-range').addEventListener('change',()=>{const custom=byId('room-range').value==='custom';byId('room-start-label').hidden=!custom;byId('room-end-label').hidden=!custom;});
 byId('room-apply').addEventListener('click',()=>{try{const range=byId('room-range').value;const custom=range==='custom'?{start:Date.parse(byId('room-start').value+'Z'),end:Date.parse(byId('room-end').value+'Z')}:null;roomSelection(roomState.snapshot,range,custom);roomState.range=range;roomState.custom=custom;renderRoom();}catch(error){byId('room-notice').textContent=error.message;}});
 byId('room-refresh').addEventListener('click',refreshRoom);
+byId('room-report-create').addEventListener('click',previewRoomReport);
+byId('room-report-download').addEventListener('click',downloadRoomReport);
 """
