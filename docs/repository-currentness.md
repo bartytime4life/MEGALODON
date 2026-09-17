@@ -65,6 +65,13 @@ even if all structural checks pass. The committed fixtures are synthetic test
 material, not repository receipts; their source blobs belong to a temporary
 test checkout.
 
+Every capture must include **all four claim IDs exactly once**, in any order.
+Keep a stale, blocked, or unknown claim present with its actual state; omitting
+it is an invalid capture. The schema enforces exact ID cardinality, and the
+generator independently compares the claim-ID set with its fixed registry.
+Do not infer coverage from `uniqueItems`: it compares whole objects, so two
+objects with the same ID but different states can still be distinct objects.
+
 | Claim ID | Source | Test reference | Scope |
 | --- | --- | --- | --- |
 | `firewall-refusal` | `megalodon/firewall.py` | `tests/test_firewall.py` | Source refusal boundary; no live firewall test |
