@@ -18,6 +18,10 @@ def test_seven_workspaces_and_persistent_return():
         assert f'id="workspace-{name}"' in INDEX_HTML
     assert INDEX_HTML.count('class="room-back"') == 1
     assert 'Audit history — may include sample and unlinked rows' in INDEX_HTML
+    assert 'id="room-report-create"' in INDEX_HTML
+    assert 'id="room-report-download" disabled' in INDEX_HTML
+    assert 'id="room-report-preview"' in INDEX_HTML
+    assert 'Local report preview is unavailable' not in INDEX_HTML
 
 
 def test_projection_browser_filters_truth_and_failure(tmp_path):
@@ -42,7 +46,7 @@ const document={createElement:element,createElementNS:(ns,tag)=>element(tag)};
 const byId=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
 const textNode=(tag,text='',cls='')=>Object.assign(element(tag),{textContent:text,className:cls});
 const textOf=n=>n.textContent+' '+n.children.map(textOf).join(' ');
-const context={document,byId,textNode,Date,BigInt,AbortSignal,TextDecoder,Uint8Array,payload,
+const context={document,byId,textNode,Date,BigInt,AbortSignal,TextDecoder,TextEncoder,Uint8Array,payload,
 referenceExactKeys:(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k)),
 knownSeverities:new Set(['LOW','MEDIUM','HIGH','CRITICAL']),
 fetch:async(path,options)=>{calls.push({path,options});throw Error('PRIVATE_FAILURE')}};
@@ -50,11 +54,26 @@ vm.createContext(context);vm.runInContext(code,context,{timeout:1000});
 const run=code=>vm.runInContext(code,context,{timeout:1000});run('renderRoom()');
 assert.match(byId('room-home-summary').textContent,/No qualified data available/);
 assert.equal(byId('room-count').textContent,'Unavailable');assert.equal(calls.length,0);
+assert.equal(run('downloadRoomReport()'),false);
+assert.equal(run('previewRoomReport()'),false);assert.equal(byId('room-report-download').disabled,true);
+assert.match(byId('room-report-status').textContent,/No qualified data/);
 run('roomState.snapshot=validateTraffic(payload);renderRoom()');
 assert.match(byId('room-home-summary').textContent,/1 stored metadata events and 1 linked findings/);
 assert.match(textOf(byId('room-traffic-grid')),/9223372036854775807 reported bytes/);
 assert.equal(byId('room-traffic-grid').children.length,8);
 assert.match(textOf(byId('room-traffic-grid')),/local-subnet or sensor-vantage/);
+assert.equal(run('previewRoomReport()'),true);assert.equal(byId('room-report-download').disabled,false);
+const reportJson=run('roomState.report.json'),report=JSON.parse(reportJson);
+assert.deepEqual(Object.keys(report),['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build']);
+assert.equal(report.schema,'megalodon-local-report-v1');
+assert.deepEqual(report.counts,{events:1,findings:1,reported_bytes:'9223372036854775807'});
+assert.deepEqual(report.sources,['jsonl']);assert.equal(report.vantage,'unknown');
+assert.deepEqual(report.findings,[{rule_id:payload.findings[0].rule_id,severity:payload.findings[0].severity,count:1}]);
+assert.equal(report.limitations.length,7);assert.ok(Buffer.byteLength(reportJson,'utf8')<=65536);
+assert.doesNotMatch(reportJson,/192\.0\.2\.|198\.51\.100\.|PRIVATE_|event_id|src_ip|dst_ip/);
+assert.match(textOf(byId('room-report-preview')),/megalodon-local-report-v1/);
+assert.equal(calls.length,0);
+run('renderRoom()');assert.equal(run('roomState.report'),null);assert.equal(byId('room-report-download').disabled,true);
 assert.equal(run('roomSelection(payload,"hour",null,Date.parse("2026-09-18T00:00:00Z")).events.length'),0);
 assert.throws(()=>run('roomSelection(payload,"custom",{start:0,end:Date.now()})'));
 assert.throws(()=>run('roomSelection(payload,"custom",{start:2,end:1})'));

@@ -64,7 +64,7 @@ connection state, observed service identities, drops and clock accuracy remain
 unavailable. Stale refreshes preserve the prior view with an explicit warning.
 The default recorded window is historical, never a live capture claim.
 
-The Reports tab is reserved for the subsequent reviewed export slice. Native
+The Reports tab is activated only by the fourth reviewed slice below. Native
 browser acceptance uses synthetic fixtures only; those fixtures never enter
 production charts or the hosted reference console. Accessibility checks do not
 by themselves certify WCAG conformance or a physical screen-reader experience.
@@ -90,3 +90,24 @@ Operator console links are browser-only destinations. They open in a new tab so
 the loopback HUD remains the stable return point; URL preferences stay in local
 browser storage. The HUD never embeds a remote console, executes a package
 manager, or converts roadmap text into runtime authority.
+
+
+## Bounded local report (fourth reviewed slice)
+
+Reports are created only after an operator presses **Preview local report**.
+The browser derives one closed `megalodon-local-report-v1` document from the
+already validated traffic snapshot and the currently selected UTC range. An
+empty selection is unavailable, not a zero-activity report.
+
+The preview and downloaded JSON contain counts, exact reported-byte totals,
+source labels, finding rule/severity aggregates, fixed limitations, range and
+projection-build evidence. They omit addresses, ports, event/finding/run IDs,
+packet bodies, raw logs, messages, recommendations, commands and model output.
+The JSON is capped at 64 KiB. Changing the selected data or rendering a new
+snapshot invalidates the prior preview and disables download.
+
+Download is a browser `Blob` created only after preview. It does not call a
+server endpoint, write through the MEGALODON process, upload data, send
+telemetry or grant package/process/firewall/model authority. Browser acceptance
+confirms that the downloaded bytes match the preview and that preview/download
+make no page request; it is not OS-level egress containment or release approval.

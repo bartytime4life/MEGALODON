@@ -252,6 +252,38 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             await page.locator("#room-apply").click()
         else:
             await expect(page.locator("#room-traffic-grid")).to_contain_text("No qualified data available")
+        await page.locator("#workspace-tab-reports").click()
+        if nonempty:
+            request_counts = dict(counts)
+            violation_count = len(violations)
+            await expect(page.locator("#room-report-download")).to_be_disabled()
+            await page.locator("#room-report-create").click()
+            await expect(page.locator("#room-report-status")).to_contain_text("Preview ready")
+            await expect(page.locator("#room-report-download")).to_be_enabled()
+            preview_text = await page.locator("#room-report-preview").inner_text()
+            report = json.loads(preview_text)
+            passed("local report preview uses the closed metadata-only schema",
+                   list(report) == ["schema", "generated_at", "title", "range", "sources",
+                                    "vantage", "quality", "freshness", "unit", "counts",
+                                    "findings", "limitations", "build"] and
+                   report["schema"] == "megalodon-local-report-v1" and
+                   report["counts"] == {"events": 2, "findings": 2, "reported_bytes": "200"} and
+                   all(token not in preview_text for token in ("192.0.2.", "198.51.100.", "src_ip", "dst_ip", "event_id")))
+            async with page.expect_download() as download_info:
+                await page.locator("#room-report-download").click()
+            download = await download_info.value
+            downloaded = Path(await download.path()).read_text(encoding="utf-8")
+            passed("explicit browser download exactly matches the bounded preview",
+                   downloaded == preview_text + ("\n" if not preview_text.endswith("\n") else "") and
+                   download.suggested_filename.startswith("megalodon-local-report-") and
+                   download.suggested_filename.endswith(".json") and len(downloaded.encode("utf-8")) <= 65536)
+            passed("report preview and download make no page request",
+                   counts == request_counts and len(violations) == violation_count)
+        else:
+            await page.locator("#room-report-create").click()
+            await expect(page.locator("#room-report-status")).to_contain_text("No qualified data")
+            await expect(page.locator("#room-report-download")).to_be_disabled()
+            passed("empty report flow refuses to invent zero evidence")
         await page.locator(".room-back").click()
         await expect(page.locator("#workspace-live")).to_be_visible()
         passed("persistent return control reaches Home")
