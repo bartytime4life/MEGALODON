@@ -68,3 +68,25 @@ The Reports tab is reserved for the subsequent reviewed export slice. Native
 browser acceptance uses synthetic fixtures only; those fixtures never enter
 production charts or the hosted reference console. Accessibility checks do not
 by themselves certify WCAG conformance or a physical screen-reader experience.
+
+
+## App capability truth matrix (third reviewed slice)
+
+The Apps view keeps four different claims separate for every supported tool.
+**Presence** is only the startup PATH observation returned by the bounded
+readiness snapshot: green means an executable candidate was found, red means
+none was found on the checked PATH, and gray means presence was not checked.
+None of those states proves package installation, version compatibility,
+configuration, usability, process state or health.
+
+**MEGALODON support** describes whether the static integration profile has a
+documented command contract. **Administration** remains external because the
+HUD cannot install, update, remove or configure companion applications.
+**Health** remains unverified because the HUD does not start, stop, attach to or
+probe their processes or services. These rows must not be collapsed into one
+overall readiness badge.
+
+Operator console links are browser-only destinations. They open in a new tab so
+the loopback HUD remains the stable return point; URL preferences stay in local
+browser storage. The HUD never embeds a remote console, executes a package
+manager, or converts roadmap text into runtime authority.
