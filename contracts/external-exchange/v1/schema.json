@@ -19,6 +19,23 @@
           "minItems": 3,
           "maxItems": 3,
           "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": {"$ref": "#/$defs/threatContext"},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {"$ref": "#/$defs/siemExport"},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {"$ref": "#/$defs/soarHandoff"},
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ],
           "items": {
             "oneOf": [
               {"$ref": "#/$defs/threatContext"},
