@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
+from itertools import permutations
 import json
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 
 
 ROOT = Path(__file__).parents[1] / "contracts" / "external-exchange" / "v1"
@@ -16,6 +17,7 @@ SCHEMA = json.loads((ROOT / "schema.json").read_text(encoding="utf-8"))
 ACCEPTED = json.loads(
     (ROOT / "fixtures" / "accepted" / "static-plan.json").read_text(encoding="utf-8")
 )
+LANE_IDS = ("threat-context-import", "siem-export", "soar-handoff")
 
 
 def rejected() -> list[Path]:
@@ -36,18 +38,27 @@ def test_schema_and_static_plan_are_valid() -> None:
     ]
 
 
-def test_schema_requires_exactly_one_object_per_lane() -> None:
+@pytest.mark.parametrize(
+    ("duplicate_index", "missing_index"),
+    list(permutations(range(len(LANE_IDS)), 2)),
+    ids=lambda index: LANE_IDS[index],
+)
+def test_schema_requires_exactly_one_object_per_lane(
+    duplicate_index: int, missing_index: int
+) -> None:
     validator = Draft202012Validator(SCHEMA)
+    candidate = deepcopy(ACCEPTED)
+    duplicate = deepcopy(candidate["lanes"][duplicate_index])
+    if duplicate["lane"] == "threat-context-import":
+        duplicate["artifact_digest"] = "sha256:" + str(missing_index + 2) * 64
+    candidate["lanes"][missing_index] = duplicate
 
-    for missing_index, digest_character in ((1, "2"), (2, "3")):
-        candidate = deepcopy(ACCEPTED)
-        duplicate = deepcopy(candidate["lanes"][0])
-        duplicate["artifact_digest"] = "sha256:" + digest_character * 64
-        candidate["lanes"][missing_index] = duplicate
+    with pytest.raises(ValidationError):
+        validator.validate(candidate)
 
-        with pytest.raises(Exception) as caught:
-            validator.validate(candidate)
-        assert caught.type.__module__.startswith("jsonschema")
+    failed_keywords = {error.validator for error in validator.iter_errors(candidate)}
+    assert "maxContains" in failed_keywords
+    assert "contains" in failed_keywords or "minContains" in failed_keywords
 
 
 @pytest.mark.parametrize("path", rejected(), ids=lambda path: path.stem)
@@ -56,9 +67,8 @@ def test_rejected_capability_escalations_fail_closed(path: Path) -> None:
     candidate = deepcopy(ACCEPTED)
     patch = case["patch"]
     lane(candidate, patch["lane"]).update({key: value for key, value in patch.items() if key != "lane"})
-    with pytest.raises(Exception) as caught:
+    with pytest.raises(ValidationError):
         Draft202012Validator(SCHEMA).validate(candidate)
-    assert caught.type.__module__.startswith("jsonschema")
 
 
 def test_threat_context_is_offline_bounded_and_non_authoritative() -> None:
