@@ -36,6 +36,20 @@ def test_schema_and_static_plan_are_valid() -> None:
     ]
 
 
+def test_schema_requires_exactly_one_object_per_lane() -> None:
+    validator = Draft202012Validator(SCHEMA)
+
+    for missing_index, digest_character in ((1, "2"), (2, "3")):
+        candidate = deepcopy(ACCEPTED)
+        duplicate = deepcopy(candidate["lanes"][0])
+        duplicate["artifact_digest"] = "sha256:" + digest_character * 64
+        candidate["lanes"][missing_index] = duplicate
+
+        with pytest.raises(Exception) as caught:
+            validator.validate(candidate)
+        assert caught.type.__module__.startswith("jsonschema")
+
+
 @pytest.mark.parametrize("path", rejected(), ids=lambda path: path.stem)
 def test_rejected_capability_escalations_fail_closed(path: Path) -> None:
     case = json.loads(path.read_text(encoding="utf-8"))
