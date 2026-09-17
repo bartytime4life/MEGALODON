@@ -241,7 +241,7 @@ function renderIntegrationMap() {
   const snapshot = integrationState.snapshot;
   const query = byId('integrations-query').value.slice(0, 160).trim().toLowerCase();
   const status = byId('integrations-status-filter').value;
-  const presence = byId('integrations-presence-filter').value;
+  const presence = byId('integrations-presence-filter').value || 'ALL';
   const rows = snapshot ? snapshot.workflows.filter(item => {
     if (status !== 'ALL' && item.selected_status !== status) return false;
     const toolIndex = integrationIds.indexOf(item.id);
