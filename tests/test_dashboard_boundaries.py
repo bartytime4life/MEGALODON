@@ -255,8 +255,8 @@ process.stdin.on('end', async () => {
     assert.equal(run("workspaceFromHash('#integrations-title')"), 'interfaces');
     assert.equal(run("workspaceFromHash('#unknown')"), null);
     context.window.location.hash = '#detections-title'; run('restoreWorkspaceFromHash()');
-    assert.equal(nodeFor('workspace-live').hidden, false);
-    assert.equal(nodeFor('workspace-analysis').hidden, true);
+    assert.equal(nodeFor('workspace-live').hidden, true);
+    assert.equal(nodeFor('workspace-analysis').hidden, false);
     // Native browsers do not emit hashchange when an anchor repeats the hash.
     // Changing tabs in between must not strand a quick link in a hidden panel.
     function clickFragment(hash, options = {}) {
@@ -276,8 +276,9 @@ process.stdin.on('end', async () => {
       assert.equal(context.window.location.hash, '#' + target);
     }
     clickFragment('#detections-title');
-    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(nodeFor('workspace-analysis').hidden, false);
     assert.equal(document.activeElement, nodeFor('detections-title'));
+    clickFragment('#page-title');
     for (const options of [{ctrlKey: true}, {metaKey: true}, {shiftKey: true}, {altKey: true}, {button: 1}, {defaultPrevented: true}]) {
       clickFragment('#offline-title', options);
       assert.equal(nodeFor('workspace-live').hidden, false);
