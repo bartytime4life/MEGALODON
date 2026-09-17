@@ -369,6 +369,13 @@ implementation provide all of the following:
 
 ## 6. Dashboard contract
 
+The bounded [control room traffic projection](docs/control-room-contract.md)
+adds `GET /api/traffic` with no parameters. It selects named metadata and run
+links in a separate least-data reader subclass; sample and unlinked records
+are excluded. Missing or invalid data stays unavailable. The existing
+five-field recent-detection API remains compatible. Traffic validation is not
+proof of capture authenticity, full coverage, local direction or sensor health.
+
 The IPv4 server accepts only dotted-decimal addresses in `127.0.0.0/8` or the
 literal `localhost`, mapped directly to `127.0.0.1` without DNS. IPv6, mapped or
 scoped addresses, other hostnames, wildcards and non-loopback addresses are

@@ -2,6 +2,14 @@
 
 ## HUD usability boundary
 
+The [control room projection](docs/control-room-contract.md) extends the named
+metadata read allowlist only in `TrafficDashboardStore`. One bounded SQL
+snapshot excludes sample/unlinked/legacy/reconciliation-required events and
+never selects raw JSON, messages, interface text, recommendations or model
+output. Stored strings are bounded before decoding; invalid metadata fails the
+whole projection. Newest-candidate caps and missing provenance remain visible.
+An operator-supplied JSONL source is not authenticated capture evidence.
+
 The `hud` launch alias inspects bounded executable metadata once before listening,
 using the existing readiness contract. HTTP only returns that cached snapshot;
 there is no probe, installation, service-control or model-invocation endpoint.
