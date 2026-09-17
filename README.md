@@ -86,6 +86,7 @@ record delivery state; they do not override the checked-in contracts.
 | Threat context and SIEM/SOAR exchange boundary | [`docs/external-exchange-contract.md`](docs/external-exchange-contract.md), [`docs/threat-context-reader.md`](docs/threat-context-reader.md), and [`contracts/external-exchange/v1`](contracts/external-exchange/v1/README.md) |
 | Suricata record, reader, durable-consumer, and reconciliation gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), [`consumer`](contracts/suricata-eve/v1/consumer/README.md), and [`reconciliation`](contracts/suricata-eve/v1/reconciliation/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
+| Contract-only SQLite backup and restore-to-new-destination gate | [`docs/sqlite-recovery-contract.md`](docs/sqlite-recovery-contract.md) and [`contracts/sqlite-recovery/v1`](contracts/sqlite-recovery/v1/README.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
 | Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
@@ -634,6 +635,13 @@ identity-bound SQLite batch at a time, refuses stale previews or active/ambiguou
 ingestion runs, and emits path-free receipts. It selects no cutoff or deletion
 value and exposes no CLI, scheduler, or automatic job.
 
+The [SQLite recovery v1 contract](docs/sqlite-recovery-contract.md) separately
+defines closed explicit requests, bounds, terminal reasons, and path-free
+receipts for a future SQLite online backup and restore into a new destination.
+It is schema, fixtures, tests, and a runbook only. There is no general backup or
+restore command, no in-place restore or overwrite, and no automatic cleanup,
+retention, migration, repair, configuration change, or dashboard write path.
+
 Each `run` command writes a closed lifecycle receipt before consuming input.
 Natural exhaustion records `completed/source_exhausted`; an operator event limit
 records `incomplete/event_limit_reached`; handled interruption and bounded
@@ -1062,6 +1070,7 @@ checks, reviews, and remaining evidence can change.
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed `completed`: deterministic bounded synthetic evaluation and evidence-quality reporting are on `main` | Representative accuracy, calibrated thresholds, or operational interpretation |
 | [#27 — Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Closed `completed`: the Linux-preserving Windows capability and acceptance handoff is recorded | Native Windows, NTFS ACL, browser, and exact-platform execution receipts |
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed `completed`: data-class/failure matrices and bounded preview-bound retention transactions are on `main` | Selected operator retention values, automatic cleanup, secure erasure, or native failure recovery |
+| [#256 — SQLite recovery contract](https://github.com/bartytime4life/MEGALODON/issues/256) | Contract candidate defines explicit backup/restore requests, online-backup-only policy, new-destination identity, fixed bounds, closed receipts/reasons, adversarial fixtures, and a fault runbook | Runtime implementation, native failure injection, operator acceptance, independent review, configuration activation, release, or deployment |
 | [#65 — firewall containment](https://github.com/bartytime4life/MEGALODON/issues/65) | Closed `completed`: retained apply routes fail closed before host inspection or subprocess creation; plan-only receipts remain | A live backend or crash-consistent restoration design |
 | [#66 — dashboard read isolation](https://github.com/bartytime4life/MEGALODON/issues/66) | Closed `completed`: a least-data reader validates private storage and constrains SQL to the dashboard projection | Native Windows ACL evidence or remote dashboard authority |
 | [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Closed `completed`: per-event evidence commits, terminal reasons, rollback behavior, and bounded orphan reconciliation are on `main` | Exactly-once intake, native power-loss recovery, alert lifecycle, or delivery |
@@ -1123,6 +1132,7 @@ config/                      conservative typed defaults and fixed-rule referenc
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
 contracts/alert-lifecycle/v1/ inert alert lifecycle schema, fixtures, and contract notes
 contracts/external-exchange/v1/ offline threat-context, local SIEM projection, and inert SOAR handoff contract
+contracts/sqlite-recovery/v1/ contract-only SQLite backup/restore policy, fixtures, and terminal receipts
 contracts/suricata-eve/v1/   alert, bounded-reader, and durable-consumer contracts
 docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture

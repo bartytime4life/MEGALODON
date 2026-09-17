@@ -1,0 +1,531 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/sqlite-recovery/v1/schema.json",
+  "title": "MEGALODON SQLite recovery contract v1",
+  "description": "Contract-only policy, explicit requests, and terminal receipts for bounded local SQLite backup and restore-to-new-destination operations.",
+  "$ref": "#/$defs/document",
+  "$defs": {
+    "document": {
+      "oneOf": [
+        {"$ref": "#/$defs/policy"},
+        {"$ref": "#/$defs/backupRequest"},
+        {"$ref": "#/$defs/restoreRequest"},
+        {"$ref": "#/$defs/successReceipt"},
+        {"$ref": "#/$defs/failureReceipt"}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_source_bytes",
+        "max_artifact_bytes",
+        "min_free_reserve_bytes",
+        "max_elapsed_ms",
+        "max_busy_retries",
+        "pages_per_step"
+      ],
+      "properties": {
+        "max_source_bytes": {"const": 4294967296},
+        "max_artifact_bytes": {"const": 4294967296},
+        "min_free_reserve_bytes": {"const": 16777216},
+        "max_elapsed_ms": {"const": 300000},
+        "max_busy_retries": {"const": 60},
+        "pages_per_step": {"const": 1024}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_access",
+        "dashboard_write",
+        "scheduler",
+        "service_install",
+        "retention",
+        "deletion",
+        "migration",
+        "repair"
+      ],
+      "properties": {
+        "network_access": {"const": false},
+        "dashboard_write": {"const": false},
+        "scheduler": {"const": false},
+        "service_install": {"const": false},
+        "retention": {"const": false},
+        "deletion": {"const": false},
+        "migration": {"const": false},
+        "repair": {"const": false}
+      }
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "must_not_exist",
+        "overwrite",
+        "same_as_source",
+        "owner_private"
+      ],
+      "properties": {
+        "kind": {"enum": ["new_backup_artifact", "new_sqlite_store"]},
+        "must_not_exist": {"const": true},
+        "overwrite": {"const": false},
+        "same_as_source": {"const": false},
+        "owner_private": {"const": true}
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "inode",
+        "uid",
+        "mode",
+        "link_count",
+        "path_disclosed"
+      ],
+      "properties": {
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "uid": {"type": "integer", "minimum": 0},
+        "mode": {"const": "0600"},
+        "link_count": {"const": 1},
+        "path_disclosed": {"const": false}
+      }
+    },
+    "verifiedDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "schema_user_version",
+        "sqlite_version",
+        "page_size",
+        "page_count",
+        "logical_bytes",
+        "integrity_check",
+        "foreign_key_check"
+      ],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identity"},
+        "schema_user_version": {"const": 3},
+        "sqlite_version": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 32,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "page_size": {
+          "enum": [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        },
+        "logical_bytes": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 4294967296
+        },
+        "integrity_check": {"const": "ok"},
+        "foreign_key_check": {"const": "ok"}
+      }
+    },
+    "receiptEffects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_mutated",
+        "network_access_performed",
+        "ordinary_copy_performed",
+        "migration_performed",
+        "repair_performed",
+        "deletion_performed",
+        "path_disclosed"
+      ],
+      "properties": {
+        "source_mutated": {"const": false},
+        "network_access_performed": {"const": false},
+        "ordinary_copy_performed": {"const": false},
+        "migration_performed": {"const": false},
+        "repair_performed": {"const": false},
+        "deletion_performed": {"const": false},
+        "path_disclosed": {"const": false}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "runtime_implemented",
+        "operations",
+        "limits",
+        "guarantees",
+        "reason_codes"
+      ],
+      "properties": {
+        "schema_version": {"const": "megalodon-sqlite-recovery-policy-v1"},
+        "status": {"const": "contract_only"},
+        "runtime_implemented": {"const": false},
+        "operations": {
+          "type": "array",
+          "prefixItems": [{"const": "backup"}, {"const": "restore"}],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "limits": {"$ref": "#/$defs/limits"},
+        "guarantees": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sqlite_online_backup_only",
+            "ordinary_live_file_copy",
+            "overwrite",
+            "restore_in_place",
+            "destination_must_not_exist",
+            "full_integrity_before_success",
+            "foreign_key_check_before_success",
+            "digest_raw_telemetry",
+            "automatic_retention",
+            "automatic_deletion",
+            "automatic_migration",
+            "automatic_repair",
+            "service_install",
+            "dashboard_write",
+            "network_access",
+            "scheduler"
+          ],
+          "properties": {
+            "sqlite_online_backup_only": {"const": true},
+            "ordinary_live_file_copy": {"const": false},
+            "overwrite": {"const": false},
+            "restore_in_place": {"const": false},
+            "destination_must_not_exist": {"const": true},
+            "full_integrity_before_success": {"const": true},
+            "foreign_key_check_before_success": {"const": true},
+            "digest_raw_telemetry": {"const": false},
+            "automatic_retention": {"const": false},
+            "automatic_deletion": {"const": false},
+            "automatic_migration": {"const": false},
+            "automatic_repair": {"const": false},
+            "service_install": {"const": false},
+            "dashboard_write": {"const": false},
+            "network_access": {"const": false},
+            "scheduler": {"const": false}
+          }
+        },
+        "reason_codes": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "COMPLETED"},
+            {"const": "INPUT_INVALID"},
+            {"const": "SOURCE_UNAVAILABLE"},
+            {"const": "SOURCE_UNSAFE"},
+            {"const": "SOURCE_NOT_PRIVATE"},
+            {"const": "SOURCE_IDENTITY_CHANGED"},
+            {"const": "SCHEMA_INCOMPATIBLE"},
+            {"const": "SOURCE_CORRUPT"},
+            {"const": "DESTINATION_UNSAFE"},
+            {"const": "DESTINATION_EXISTS"},
+            {"const": "SAME_FILE_REFUSED"},
+            {"const": "LOCK_TIMEOUT"},
+            {"const": "DEADLINE_EXCEEDED"},
+            {"const": "DISK_RESERVE_INSUFFICIENT"},
+            {"const": "ARTIFACT_LIMIT_EXCEEDED"},
+            {"const": "ARTIFACT_CORRUPT"},
+            {"const": "FOREIGN_KEY_VIOLATION"},
+            {"const": "CLOCK_ROLLBACK"},
+            {"const": "INTERRUPTED_BEFORE_CREATE"},
+            {"const": "INTERRUPTED_AFTER_CREATE"},
+            {"const": "CLEANUP_FAILED"},
+            {"const": "COMPLETION_UNCERTAIN"},
+            {"const": "IO_ERROR"}
+          ],
+          "items": false,
+          "minItems": 23,
+          "maxItems": 23
+        }
+      }
+    },
+    "requestCommon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_id",
+        "operation",
+        "explicit_operator_request",
+        "requested_at",
+        "clock_source",
+        "source",
+        "destination",
+        "limits",
+        "effects"
+      ],
+      "properties": {
+        "schema_version": {"const": "megalodon-sqlite-recovery-request-v1"},
+        "operation_id": {"$ref": "#/$defs/operationId"},
+        "operation": {"enum": ["backup", "restore"]},
+        "explicit_operator_request": {"const": true},
+        "requested_at": {"$ref": "#/$defs/timestamp"},
+        "clock_source": {"const": "operator_system_clock_untrusted"},
+        "source": {"type": "object"},
+        "destination": {"$ref": "#/$defs/destination"},
+        "limits": {"$ref": "#/$defs/limits"},
+        "effects": {"$ref": "#/$defs/effects"}
+      }
+    },
+    "backupRequest": {
+      "allOf": [
+        {"$ref": "#/$defs/requestCommon"},
+        {
+          "properties": {
+            "operation": {"const": "backup"},
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "required_schema_user_version", "method"],
+              "properties": {
+                "kind": {"const": "existing_private_sqlite_store"},
+                "required_schema_user_version": {"const": 3},
+                "method": {"const": "sqlite_online_backup_api"}
+              }
+            },
+            "destination": {
+              "allOf": [
+                {"$ref": "#/$defs/destination"},
+                {"properties": {"kind": {"const": "new_backup_artifact"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "restoreRequest": {
+      "allOf": [
+        {"$ref": "#/$defs/requestCommon"},
+        {
+          "properties": {
+            "operation": {"const": "restore"},
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "artifact_sha256", "required_schema_user_version", "method"],
+              "properties": {
+                "kind": {"const": "verified_backup_artifact"},
+                "artifact_sha256": {"$ref": "#/$defs/digest"},
+                "required_schema_user_version": {"const": 3},
+                "method": {"const": "sqlite_online_backup_api"}
+              }
+            },
+            "destination": {
+              "allOf": [
+                {"$ref": "#/$defs/destination"},
+                {"properties": {"kind": {"const": "new_sqlite_store"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "successReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_id",
+        "operation",
+        "status",
+        "reason",
+        "started_at",
+        "finished_at",
+        "clock_source",
+        "monotonic_elapsed_ms",
+        "clock_rollback_observed",
+        "completion_uncertain",
+        "source",
+        "destination",
+        "destination_created",
+        "destination_complete",
+        "artifact_sha256",
+        "manifest_sha256",
+        "effects"
+      ],
+      "properties": {
+        "schema_version": {"const": "megalodon-sqlite-recovery-receipt-v1"},
+        "operation_id": {"$ref": "#/$defs/operationId"},
+        "operation": {"enum": ["backup", "restore"]},
+        "status": {"const": "completed"},
+        "reason": {"const": "COMPLETED"},
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "finished_at": {"$ref": "#/$defs/timestamp"},
+        "clock_source": {"const": "operator_system_clock_untrusted"},
+        "monotonic_elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 300000},
+        "clock_rollback_observed": {"const": false},
+        "completion_uncertain": {"const": false},
+        "source": {"$ref": "#/$defs/verifiedDatabase"},
+        "destination": {"$ref": "#/$defs/verifiedDatabase"},
+        "destination_created": {"const": true},
+        "destination_complete": {"const": true},
+        "artifact_sha256": {"$ref": "#/$defs/digest"},
+        "manifest_sha256": {"$ref": "#/$defs/digest"},
+        "effects": {"$ref": "#/$defs/receiptEffects"}
+      }
+    },
+    "failureReason": {
+      "enum": [
+        "INPUT_INVALID",
+        "SOURCE_UNAVAILABLE",
+        "SOURCE_UNSAFE",
+        "SOURCE_NOT_PRIVATE",
+        "SOURCE_IDENTITY_CHANGED",
+        "SCHEMA_INCOMPATIBLE",
+        "SOURCE_CORRUPT",
+        "DESTINATION_UNSAFE",
+        "DESTINATION_EXISTS",
+        "SAME_FILE_REFUSED",
+        "LOCK_TIMEOUT",
+        "DEADLINE_EXCEEDED",
+        "DISK_RESERVE_INSUFFICIENT",
+        "ARTIFACT_LIMIT_EXCEEDED",
+        "ARTIFACT_CORRUPT",
+        "FOREIGN_KEY_VIOLATION",
+        "CLOCK_ROLLBACK",
+        "INTERRUPTED_BEFORE_CREATE",
+        "INTERRUPTED_AFTER_CREATE",
+        "CLEANUP_FAILED",
+        "COMPLETION_UNCERTAIN",
+        "IO_ERROR"
+      ]
+    },
+    "failureReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_id",
+        "operation",
+        "status",
+        "reason",
+        "started_at",
+        "finished_at",
+        "clock_source",
+        "monotonic_elapsed_ms",
+        "clock_rollback_observed",
+        "completion_uncertain",
+        "source_state",
+        "destination_state",
+        "destination_created",
+        "destination_complete",
+        "artifact_sha256",
+        "manifest_sha256",
+        "effects"
+      ],
+      "properties": {
+        "schema_version": {"const": "megalodon-sqlite-recovery-receipt-v1"},
+        "operation_id": {"$ref": "#/$defs/operationId"},
+        "operation": {"enum": ["backup", "restore"]},
+        "status": {"const": "failed"},
+        "reason": {"$ref": "#/$defs/failureReason"},
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "finished_at": {"$ref": "#/$defs/timestamp"},
+        "clock_source": {"const": "operator_system_clock_untrusted"},
+        "monotonic_elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 300000},
+        "clock_rollback_observed": {"type": "boolean"},
+        "completion_uncertain": {"type": "boolean"},
+        "source_state": {
+          "enum": [
+            "not_admitted",
+            "admitted",
+            "unavailable",
+            "unsafe",
+            "incompatible",
+            "corrupt",
+            "identity_changed"
+          ]
+        },
+        "destination_state": {
+          "enum": ["not_created", "incomplete_preserved", "unknown"]
+        },
+        "destination_created": {"type": "boolean"},
+        "destination_complete": {"const": false},
+        "artifact_sha256": {
+          "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "manifest_sha256": {"$ref": "#/$defs/digest"},
+        "effects": {"$ref": "#/$defs/receiptEffects"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"destination_created": {"const": false}}},
+          "then": {"properties": {"destination_state": {"const": "not_created"}}},
+          "else": {
+            "properties": {
+              "destination_state": {"enum": ["incomplete_preserved", "unknown"]}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"reason": {"const": "COMPLETION_UNCERTAIN"}}},
+          "then": {"properties": {"completion_uncertain": {"const": true}}},
+          "else": {"properties": {"completion_uncertain": {"const": false}}}
+        },
+        {
+          "if": {"properties": {"reason": {"const": "CLOCK_ROLLBACK"}}},
+          "then": {"properties": {"clock_rollback_observed": {"const": true}}},
+          "else": {"properties": {"clock_rollback_observed": {"const": false}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "enum": [
+                  "DESTINATION_EXISTS",
+                  "SAME_FILE_REFUSED",
+                  "INTERRUPTED_BEFORE_CREATE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "destination_created": {"const": false},
+              "destination_state": {"const": "not_created"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"reason": {"const": "CLEANUP_FAILED"}}},
+          "then": {
+            "properties": {
+              "destination_created": {"const": true},
+              "destination_state": {"const": "incomplete_preserved"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": "megalodon-sqlite-recovery-request-v1",
+  "operation_id": "backup-copy",
+  "operation": "backup",
+  "explicit_operator_request": true,
+  "requested_at": "2026-09-17T00:00:00Z",
+  "clock_source": "operator_system_clock_untrusted",
+  "source": {
+    "kind": "existing_private_sqlite_store",
+    "required_schema_user_version": 3,
+    "method": "ordinary_file_copy"
+  },
+  "destination": {
+    "kind": "new_backup_artifact",
+    "must_not_exist": true,
+    "overwrite": false,
+    "same_as_source": false,
+    "owner_private": true
+  },
+  "limits": {
+    "max_source_bytes": 4294967296,
+    "max_artifact_bytes": 4294967296,
+    "min_free_reserve_bytes": 16777216,
+    "max_elapsed_ms": 300000,
+    "max_busy_retries": 60,
+    "pages_per_step": 1024
+  },
+  "effects": {
+    "network_access": false,
+    "dashboard_write": false,
+    "scheduler": false,
+    "service_install": false,
+    "retention": false,
+    "deletion": false,
+    "migration": false,
+    "repair": false
+  }
+}
