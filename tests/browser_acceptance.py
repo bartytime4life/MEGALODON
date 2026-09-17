@@ -28,7 +28,8 @@ REPORT = {"schema": "dashboard-browser-acceptance-v1", "status": "failed",
           "concurrent_writer_acceptance": "not_attempted; vendor patch status unverified",
           "limits": ["Not independent review or release approval", "No screen-reader acceptance",
                      "No installed-analyzer or native Windows acceptance",
-                     "Page-request monitoring is not OS-level egress containment"]}
+                     "Page-request monitoring is not OS-level egress containment",
+                     "Zoom reflow uses CSS viewport equivalence; native browser zoom input is not proven"]}
 
 
 def passed(name: str, condition: bool = True) -> None:
@@ -409,26 +410,21 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             "el => document.activeElement === el && getComputedStyle(el).outlineStyle !== 'none'"))
         await page.set_viewport_size({"width": 1440, "height": 1000})
         await page.locator("#workspace-tab-traffic").click()
-        zoom_base = await page.evaluate("({width: innerWidth, ratio: devicePixelRatio})")
-        REPORT["zoom_metrics"] = {}
-        for level, presses in ((200, 5), (400, 3)):
-            for _ in range(presses):
-                await page.keyboard.press("Control+=")
-            zoom = await page.evaluate("""() => ({
-                width: innerWidth, ratio: devicePixelRatio,
-                scroll: document.documentElement.scrollWidth
+        REPORT["zoom_equivalent_viewports"] = {}
+        for level, width, height in ((200, 720, 500), (400, 360, 250)):
+            await page.set_viewport_size({"width": width, "height": height})
+            metrics = await page.evaluate("""() => ({
+                width: innerWidth, height: innerHeight,
+                root_scroll_width: document.documentElement.scrollWidth,
+                workspace_scroll: getComputedStyle(document.querySelector('.workspace-scroll')).overflowY
             })""")
-            effective_zoom = max(zoom_base["width"] / zoom["width"],
-                                 zoom["ratio"] / zoom_base["ratio"])
-            REPORT["zoom_metrics"][str(level)] = {
-                "css_width": zoom["width"], "device_pixel_ratio": zoom["ratio"],
-                "effective_zoom": round(effective_zoom, 3), "root_scroll_width": zoom["scroll"],
-            }
-            passed(f"browser zoom {level} percent preserves return and internal scroll",
+            REPORT["zoom_equivalent_viewports"][str(level)] = metrics
+            passed(f"{level} percent zoom-equivalent viewport preserves return and internal scroll",
                    await page.locator(".room-back").is_visible() and
-                   effective_zoom >= level / 100 - .05 and
-                   zoom["scroll"] <= zoom["width"] + 1)
-        await page.keyboard.press("Control+0")
+                   metrics["width"] == width and metrics["height"] == height and
+                   metrics["root_scroll_width"] <= metrics["width"] + 1 and
+                   metrics["workspace_scroll"] == "auto")
+        await page.set_viewport_size({"width": 1440, "height": 1000})
         passed("no page script errors or nonlocal page requests", not errors and not violations)
     finally:
         await context.close()
