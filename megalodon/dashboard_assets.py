@@ -548,9 +548,11 @@ const eventFields = ['detected_at', 'message', 'rule_id', 'severity', 'src_ip'];
 const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
-const workspaceIds = ['live', 'analysis', 'interfaces'];
+const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
 const workspaceTargets = {
-  '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'live',
+  '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
+  'room-home-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
+  'room-reports-title': 'reports', 'room-help-title': 'help',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis'
@@ -630,6 +632,9 @@ function restoreWorkspaceFromHash() {
   activateWorkspace(workspace);
   const targetId = hash.startsWith('#') ? hash.slice(1) : '';
   const target = targetId ? byId(targetId) : null;
+  for (let parent = target && target.parentElement; parent; parent = parent.parentElement) {
+    if (parent.tagName === 'DETAILS') parent.open = true;
+  }
   if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'start'});
 }
 workspaceIds.forEach((workspace, index) => {
@@ -656,6 +661,9 @@ document.addEventListener('click', event => {
   // activation, including repeated fragments that do not fire hashchange.
   activateWorkspace(workspace);
   const target = byId(hash.slice(1));
+  for (let parent = target && target.parentElement; parent; parent = parent.parentElement) {
+    if (parent.tagName === 'DETAILS') parent.open = true;
+  }
   if (target && typeof target.focus === 'function') target.focus({preventScroll: true});
   // Keep native fragment history and scrolling after exposing the target.
 });
@@ -1663,6 +1671,7 @@ async function refresh(announce = true) {
     state.refreshing = false; button.disabled = false; button.textContent = 'Refresh now';
     byId('triage-controls').disabled = false;
     byId('triage-panel').setAttribute('aria-busy', 'false');
+    refreshRoom();
   }
 }
 function togglePause() {
@@ -1700,6 +1709,7 @@ function applyConfig(payload) {
   renderScope();
 }
 async function bootstrap() {
+  renderRoom();
   restoreWorkspaceFromHash();
   try { applyConfig(await requestJSON('/api/config')); }
   catch (_) {
@@ -1713,6 +1723,7 @@ async function bootstrap() {
   loadIngestionRuns();
   loadReferenceStatus();
   await loadSetup();
+  refreshRoom();
   await refresh(false); scheduleNext();
 }
 
@@ -1741,6 +1752,9 @@ document.addEventListener('visibilitychange', () => {
 });
 """
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS
+from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
+
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + "\nbootstrap();\n"
+INDEX_HTML = compose_control_room(INDEX_HTML)
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + "\nbootstrap();\n"

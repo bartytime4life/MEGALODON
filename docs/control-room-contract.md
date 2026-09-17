@@ -47,3 +47,24 @@ published as real telemetry. Native source authenticity, installed-tool
 qualification, human accessibility acceptance and independent security review
 remain separate gates. The hosted Site receives no local feed, record,
 identifier, model output, health state, bookmark or report.
+
+## Control-room presentation (second draft slice)
+
+Home, Traffic, Findings, Apps, Reports, Evidence and Help share one anchored,
+keyboard-operable shell. A persistent Back to Main HUD link returns to Home.
+The old audit inspector is explicitly separate in Evidence because it can
+contain sample/unlinked rows. It is never the source of traffic visuals.
+
+All traffic panels share a browser-only UTC time filter (maximum 31 days) over
+one bounded `/api/traffic` response. Every panel includes range, source, unknown
+vantage, fetch time, unit and quality. Counts describe returned metadata;
+bytes use exact integers. Top lists are limited to ten entries (flows eight).
+Empty bins do not prove absence of traffic. Direction, local network identity,
+connection state, observed service identities, drops and clock accuracy remain
+unavailable. Stale refreshes preserve the prior view with an explicit warning.
+The default recorded window is historical, never a live capture claim.
+
+The Reports tab is reserved for the subsequent reviewed export slice. Native
+browser acceptance uses synthetic fixtures only; those fixtures never enter
+production charts or the hosted reference console. Accessibility checks do not
+by themselves certify WCAG conformance or a physical screen-reader experience.

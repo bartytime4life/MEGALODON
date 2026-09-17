@@ -224,13 +224,37 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await expect(page.locator("#analysis-window-title")).to_contain_text("unavailable")
         passed("display-only Qwen receipt is loaded once and remains unavailable when not supplied",
                counts["advisory"] == 1)
-        await page.locator("#workspace-tab-live").click()
+        await page.locator("#workspace-tab-analysis").click()
+        await page.locator(".room-audit-history > summary").click()
         await page.locator("#pause-button").click()
         await expect(page.locator("#pause-button")).to_have_attribute("aria-pressed", "true")
         passed("real HTTP bootstrap " + ("nonempty" if nonempty else "empty"), response.status == 200)
         stable = dict(counts)
         await asyncio.sleep(2.4)
         passed("pause stops scheduled polling " + str(nonempty), counts == stable)
+        await expect(page.locator("#room-updated")).not_to_have_text("Not fetched")
+        await page.locator("#workspace-tab-traffic").click()
+        passed("eight traffic views share explicit quality context",
+               await page.locator("#room-traffic-grid .room-visual").count() == 8 and
+               await page.locator("#room-traffic-grid .room-meta").first.inner_text() != "")
+        if nonempty:
+            await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
+            await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")
+            await page.locator("#workspace-tab-findings").click()
+            passed("qualified linked finding rows", await page.locator("#room-findings-table tbody tr").count() == 2)
+            await page.locator("#room-range").select_option("hour")
+            await page.locator("#room-apply").click()
+            await expect(page.locator("#room-coverage")).to_have_text("Unavailable")
+            await expect(page.locator("#room-count")).to_have_text("Unavailable")
+            passed("time filter does not turn missing coverage into zero traffic")
+            await page.locator("#room-range").select_option("recorded")
+            await page.locator("#room-apply").click()
+        else:
+            await expect(page.locator("#room-traffic-grid")).to_contain_text("No qualified data available")
+        await page.locator(".room-back").click()
+        await expect(page.locator("#workspace-live")).to_be_visible()
+        passed("persistent return control reaches Home")
+        await page.locator("#workspace-tab-analysis").click()
         if not nonempty:
             await expect(page.locator("#events")).to_contain_text("No detections recorded.")
             await page.locator("#workspace-tab-analysis").click()
@@ -295,8 +319,8 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await page.unroute("**/api/integrations?*", slow)
         passed("pending integration profile survives real request delay")
 
-        await page.locator("#workspace-tab-live").click()
-        await expect(page.locator("#workspace-live")).to_be_visible()
+        await page.locator("#workspace-tab-analysis").click()
+        await expect(page.locator("#workspace-analysis")).to_be_visible()
         saved_rows = await page.locator("#events").inner_text()
         saved_time = await page.locator("#updated").get_attribute("datetime")
         await page.route("**/api/summary", fail)
@@ -383,6 +407,16 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await page.locator("#filter-query").focus()
         passed("rendered keyboard focus", await page.locator("#filter-query").evaluate(
             "el => document.activeElement === el && getComputedStyle(el).outlineStyle !== 'none'"))
+        await page.set_viewport_size({"width": 1440, "height": 1000})
+        await page.locator("#workspace-tab-traffic").click()
+        for level, presses in ((200, 5), (400, 3)):
+            for _ in range(presses):
+                await page.keyboard.press("Control+=")
+            passed(f"browser zoom {level} percent preserves return and internal scroll",
+                   await page.locator(".room-back").is_visible() and
+                   await page.evaluate("devicePixelRatio") >= level / 100 - .05 and
+                   await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+        await page.keyboard.press("Control+0")
         passed("no page script errors or nonlocal page requests", not errors and not violations)
     finally:
         await context.close()
