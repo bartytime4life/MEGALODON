@@ -321,11 +321,13 @@ a live database does not authorize deletion; only the exact preview token can
 bind one later transaction, and every subsequent batch requires a new preview.
 Deletion is not a secure-erasure or backup-retention guarantee. Private parent
 directories and SQLite sidecars require deployment review; native Windows ACL
-acceptance is separately tracked in #27. Stop intake on unresolved storage
+acceptance remains unproved after #27's closed handoff. Stop intake on unresolved storage
 failure; do not silently redirect evidence, purge history or upload a backup.
 
 Independent review, physical storage-exhaustion/permission/interruption evidence,
-operator policy values and #3 review-control repair remain separate gates.
+and operator policy values remain separate gates. Closed #3 records the
+owner-directed review workflow; it did not establish an enforced independent-human
+approval floor.
 No timer, filesystem sweep, command/dashboard deletion surface, firewall action,
 or telemetry sharing is authorized by these tests or this document.
 

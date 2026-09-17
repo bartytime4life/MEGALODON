@@ -184,9 +184,10 @@ Python 3.13.5, SQLite 3.46.1 and pytest 9.0.2 with plugin autoload disabled;
 pytest 9 was outside the constraint at that historical checkpoint. Full hosted results
 belong in the exact-head PR receipt, not in an inferred pass here.
 
-Remaining gates: designated human review, GitHub approval/control handling under
-#3, reordered-time semantics and representative provenance/privacy-reviewed
-interpretation. Closing #26 does not authorize apply, scheduling, external data
+Remaining gates: independent operational review, reordered-time semantics and
+representative provenance/privacy-reviewed interpretation. Closed #3 records
+the owner-directed review workflow rather than an enforced human approval floor.
+Closing #26 does not authorize apply, scheduling, external data
 sharing, host changes, or deployment, and it does not turn the fixture counts
 into an effectiveness measurement.
 

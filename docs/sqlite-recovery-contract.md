@@ -1,6 +1,6 @@
 # SQLite backup and restore-to-new-destination contract
 
-Status: **PROPOSED implementation contract; no runtime command exists.**
+Status: **Contract delivered on `main` by merged PR #271; no runtime command exists.**
 
 Issue [#256](https://github.com/bartytime4life/MEGALODON/issues/256), M01.
 The contract was prepared from
@@ -8,6 +8,10 @@ The contract was prepared from
 repository-currentness tool validated that commit and tree. That receipt does
 not supply owner acceptance, independent review, release authority, or native
 recovery evidence.
+
+Delivery readback on 2026-09-17: PR #271 merged as
+`77f082a0548e64f97090c94dd11503a68ca05d99`. Issue #256 remains open;
+contract delivery does not establish runtime recovery or maintainer acceptance.
 
 ## Outcome and authority boundary
 

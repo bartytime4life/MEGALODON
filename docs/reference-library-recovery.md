@@ -1,8 +1,11 @@
 # Reference Library: recovery, provenance, and exact-query contract
 
-Status: review candidate prepared on 2026-09-11 against
-`f6df35421798b0eb6b1931b9ebc38a1407349eb1`. The touched source blobs were unchanged after PR #90. This document describes the accompanying
-candidate, not an assertion that it has reached main or passed independent review.
+Status: **delivered by merged PR #91**, merge commit
+`1b16069e430b539f9677c616a5f61c597fd0bec2`; lifecycle rechecked 2026-09-17.
+The original candidate was prepared on 2026-09-11 against
+`f6df35421798b0eb6b1931b9ebc38a1407349eb1`, with touched source blobs unchanged
+after PR #90. Candidate wording and test receipts below retain that preparation
+basis. Merge records source delivery, not independent or native acceptance.
 
 ## What this surface does
 

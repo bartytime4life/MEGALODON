@@ -92,9 +92,16 @@ exercise contract fixtures, refusal behavior, local path identity, privacy,
 and absence of network/process/write calls. CI does not fetch mutable GitHub
 state or pretend a frozen fixture is current.
 
-After owner review and merge, collect a **new** receipt naming the immutable
+For each owner-reviewed merge, collect a **new** receipt naming the immutable
 merge SHA and tree, run this tool against that checkout, and record its manifest
 digest and readback time in the existing coordination record. A pre-merge
-candidate cannot know its future squash SHA. Keep #254 open until that receipt
-exists. Then #256's contract-only recovery slice is the next dependency step;
-#255 still requires the owner's actual license selection.
+candidate cannot know its future squash SHA.
+
+At the 2026-09-17 reconciliation, PR #270 has merged to `main` as
+`2e5099fcec2d1a08007efab70b4607cd5ba652ac`, and PR #271 has delivered the
+contract-only recovery slice as `77f082a0548e64f97090c94dd11503a68ca05d99`.
+The earlier selected-field receipt at #270's merge remains a historical
+observation. Issue #254 is still open for explicit maintainer disposition;
+neither that receipt nor the #271 merge silently closes it. Issue #256 also
+remains open, runtime recovery is unimplemented, and #255 still requires the
+owner's actual license selection.

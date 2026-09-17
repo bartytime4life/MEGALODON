@@ -43,7 +43,7 @@ ambiguous-delivery reconciliation, and privacy review.
 
 ## Dependency-ordered adoption
 
-1. **Implemented source candidate:** bounded offline STIX reader against one
+1. **Implemented on `main` by merged PR #269:** bounded offline STIX reader against one
    private completed file, with exact digest, immutable output, fixed failures,
    adversarial fixtures, and zero network/process/persistence behavior.
 2. Add pure projection functions for ECS and OCSF plus golden fixtures; write

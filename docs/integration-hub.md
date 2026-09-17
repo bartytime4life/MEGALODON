@@ -64,7 +64,7 @@ them to the executable companion-tool catalog:
 
 | Lane | Contract state | Boundary |
 | --- | --- | --- |
-| Offline threat context | Bounded reader source candidate | One completed owner-private, checksum-bound, size/object/depth/time-bounded STIX 2.1 file returns immutable context and a no-authority receipt; no TAXII, persistence, pattern execution, model input, attribution, detection, or action authority |
+| Offline threat context | Bounded reader delivered by merged PR #269 | One completed owner-private, checksum-bound, size/object/depth/time-bounded STIX 2.1 file returns immutable context and a no-authority receipt; no TAXII, persistence, pattern execution, model input, attribution, detection, or action authority |
 | SIEM projection | Contract only | New local file only; bounded ECS 9.5.0 and OCSF 1.9.0 projections; no `event.original`, payload, credential, collector, or network delivery |
 | SOAR handoff | Contract only | Inert local record with no destination, endpoint, credential, retry, scheduler, automation, or host action |
 

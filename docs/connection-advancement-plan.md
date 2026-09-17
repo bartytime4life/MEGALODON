@@ -2,8 +2,8 @@
 
 Status: **PROPOSED architecture and acceptance sequence**, not a runtime integration
 or source-admission decision. Prepared 2026-09-11. This plan complements the
-separate [Reference Library recovery candidate in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91);
-it neither incorporates that code nor claims its behavior is on main. It does not
+separate [Reference Library recovery delivery in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91);
+PR #91 is now merged as `1b16069e430b539f9677c616a5f61c597fd0bec2`, as rechecked on 2026-09-17. This proposal does not
 install, connect, scan, capture, acknowledge, notify, or apply anything.
 
 ## Design decision
@@ -42,8 +42,7 @@ Capture producer cleanup and CLI ownership are separate work. A reference UI
 recovery button does not fix asynchronous sniffer death, stop/join deadlines,
 kernel loss accounting, resource-pressure ingestion, or persistence boundaries.
 Do not mix those changes into a connection-card implementation merely because
-they share the word “health.” The current resource work remains associated with
-issue #68; eligible review remains controlled by issue #3. [3]
+they share the word “health.” Closed #68 delivered bounded resource controls; native loss and sustained-capacity evidence remain separate. Closed #3 records the owner-directed review workflow, not an enforced independent-human approval floor. [3]
 
 ## Phase A: accepted-run presentation before a new connector
 
@@ -159,7 +158,7 @@ A package must include the runtime asset and the source distribution must retain
 its regression fixtures/harnesses. Verify the installed package outside the
 checkout rather than only importing from a developer tree.
 
-The [Reference Library recovery candidate in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91)
+The [Reference Library recovery delivery in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91)
 is one pattern: a bounded
 contract, exact query identity, visible provenance, request guards, explicit
 recovery, text-only rendering, failure classification, and documented verification
@@ -176,7 +175,7 @@ source panel. A rejected response is a failure, not proof of malicious input.
 | Local checks | Supported development environment | Compile, focused/full tests, byte/readback checks, safe smokes |
 | Hosted checks | Exact-head jobs and logs | Actual results recorded; failures and skips classified |
 | Native acceptance | Prepared authorized platform | Browser and installed-tool/runtime behavior actually exercised |
-| Independent review | Eligible reviewer under #3 | Review applies to exact current head; CI is not approval |
+| Independent review | Independent operational acceptance; current owner merge workflow | Review applies to exact current head; CI is not approval |
 | Release/deployment | Explicit separate authority | No release or host operation follows automatically from a merge |
 
 No date substitutes for these gates. Resolve the current delivery's independent

@@ -176,11 +176,11 @@ test('disconnected HUD has no generated observations, fixtures or refresh timer'
   assert.ok(html.indexOf('src="./lifecycle.js"') < html.indexOf('src="./app.js"'));
 });
 
-test('exchange map separates the offline STIX reader candidate from inert SIEM/SOAR contracts', () => {
+test('exchange map separates the implemented offline STIX reader from inert SIEM/SOAR contracts', () => {
   const fs = require('node:fs');
   const html = fs.readFileSync(require.resolve('../dist/index.html'), 'utf8');
   assert.match(html, /id="external-exchange"/);
-  for (const value of ['STIX 2.1', 'ECS 9.5.0', 'OCSF 1.9.0', 'Reader candidate', 'Contract only', 'Zero attempts; status not attempted']) assert.ok(html.includes(value));
+  for (const value of ['STIX 2.1', 'ECS 9.5.0', 'OCSF 1.9.0', 'Reader implemented', 'Contract only', 'Zero attempts; status not attempted']) assert.ok(html.includes(value));
   assert.match(html, /No TAXII, persistence, model, attribution, or action/);
   assert.match(html, /No collector, credential, or network delivery/);
   assert.match(html, /No endpoint, webhook, playbook, or host action/);

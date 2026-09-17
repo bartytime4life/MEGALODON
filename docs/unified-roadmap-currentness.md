@@ -1,7 +1,7 @@
 # Unified roadmap: repository reconciliation
 
 Status: **OBSERVED implementation baseline with remaining acceptance gates**, refreshed 2026-09-17.
-Repository basis: [`main@2e5099fcec2d1a08007efab70b4607cd5ba652ac`](https://github.com/bartytime4life/MEGALODON/commit/2e5099fcec2d1a08007efab70b4607cd5ba652ac).
+Repository basis: [`main@77f082a0548e64f97090c94dd11503a68ca05d99`](https://github.com/bartytime4life/MEGALODON/commit/77f082a0548e64f97090c94dd11503a68ca05d99).
 This record reconciles the supplied *MEGALODON — Unified Architecture, Safety,
 and Roadmap* with code, contracts, and live GitHub issue dispositions. It does
 not adopt the supplied document wholesale or replace the specification and
@@ -39,16 +39,18 @@ preserves the distinction between supplied bytes and publisher authenticity.
 
 ## Dependency-ordered delivery
 
-Slices 1–3 were delivered by merged PRs #239/#241/#243. Their presence is not
-installed-producer, visual or operational acceptance. This alignment pass removes
-the hosted demonstration data and corrects lifecycle guidance; its PR/deployment
-state is recorded separately in the source-alignment receipt.
+Slices 1–3 were delivered by merged PRs #239/#241/#243 and corrected by #244.
+Their presence is not installed-producer, visual or operational acceptance.
+PR #245 delivered the simpler HUD launch. PR #269 delivered the bounded STIX
+reader; PR #270 integrated the complete currentness schema; PR #271 delivered
+the SQLite recovery contract. Deployment evidence remains separately pinned in
+the source-alignment receipt.
 
 | Priority | Candidate | Acceptance boundary |
 | --- | --- | --- |
 | 1 | **Delivered #239:** read-only Suricata evidence projection | Read one existing private exact-schema store, preserve descriptor identity and snapshot locks, bound query and output work, validate source-qualified run/receipt/alert data, and return unavailable without partial rows on ambiguity. Never invoke a consumer or migrate/repair a store. |
 | 2 | **Delivered #241:** local tool-readiness report | Explicit operator command, fixed executable names, bounded PATH inspection, no execution/network. Executable presence is neither an installation attestation, compatibility proof, nor running-service health. Unchecked is distinct from missing. |
-| 3 | **Delivered #241/#243; corrected in this pass:** Defense Console readiness and lifecycle guidance | Hosted telemetry stays unavailable with no generated observations. Accept only a bounded locally selected readiness report in page memory; manual notes persist separately in browser storage. No upload, host probe, command execution or runtime data connection. Preserve private Site identity. |
+| 3 | **Delivered #241/#243; corrected by #244:** Defense Console readiness and lifecycle guidance | Hosted telemetry stays unavailable with no generated observations. Accept only a bounded locally selected readiness report in page memory; manual notes persist separately in browser storage. No upload, host probe, command execution or runtime data connection. Preserve private Site identity. |
 | 4 | Installed-producer acceptance | Operator-supplied authorized completed evidence, exact producer/version/platform, representative negative cases and timing/resource receipts. A green synthetic parser test or PATH presence report cannot satisfy this gate. |
 | 5 | Next adapter or AI field expansion | One closed versioned input proposal, privacy review, explicit source/count units, hostile fixtures, and independent review before broader operational claims. Keep Q2/Q4 and automation side effects proposed. |
 
@@ -59,7 +61,8 @@ source mirror cannot establish local sensor liveness or operational acceptance.
 
 ## Current high-level sequence
 
-A selected-field currentness capture at 2026-09-17T16:35:48Z–16:35:50Z
+A historical selected-field currentness capture at 2026-09-17T16:35:48Z–16:35:50Z,
+against `2e5099fcec2d1a08007efab70b4607cd5ba652ac`,
 observed eight open issues (#254–#261), zero open pull requests, zero releases,
 four successful exact-head checks, three successful exact-head workflows, and
 active ruleset 22394782 with strict required `test` but zero required
@@ -67,10 +70,16 @@ approvals. The manifest validated against the pinned commit/tree. It is not
 owner acceptance or independent review, so #254 remains an explicit disposition
 gate.
 
+The later `77f082a` readback found the same eight open issues and no open PRs
+or releases; all four exact-commit checks and three workflows succeeded.
+PR #271 is merged, so recovery-contract delivery is complete even though #256
+remains open. See [the alignment record](document-alignment-2026-09-17.md) for
+the observation scope; this update is not a new validated currentness manifest.
+
 | Order | Work | Smallest safe outcome |
 | --- | --- | --- |
 | 0 | #254 currentness disposition | Preserve the immutable receipt and obtain explicit maintainer disposition; do not promote selected-field validation into broad acceptance |
-| 1 | #256 SQLite recovery | Land the contract, fixtures, reason codes, and fault runbook first; runtime backup/restore remains a separate PR |
+| 1 | #256 SQLite recovery | Contract, fixtures, reason codes, and fault runbook delivered by #271; obtain issue disposition and separately review runtime backup/restore |
 | 2 | #255 license decision | Obtain the owner's actual choice and only then align root/package/SBOM metadata; no release follows automatically |
 | 3 | #257 Suricata raw-EVE profile | Select one exact producer profile and close a privacy-minimal converter contract before code or sensor integration |
 | 4 | #258 Zeek/correlation qualification | Pin producer profiles and treat Community ID as a non-authoritative grouping hint |

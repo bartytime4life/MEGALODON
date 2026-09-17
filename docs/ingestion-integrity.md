@@ -2,8 +2,9 @@
 
 Status: implemented Stage 0 integrity slice for issue #67. This is a local audit
 property, not production approval, continuous-monitoring proof, alert delivery,
-or authority to change the host. Independent review under issue #3 and finite
-whole-service resource controls under issue #68 remain separate gates.
+or authority to change the host. Closed #68 delivered finite resource controls;
+native sustained-capacity evidence remains separate. Closed #3 records the
+owner-directed review workflow, not an enforced independent-human approval floor.
 
 ## Commit boundary
 

@@ -27,3 +27,9 @@ This guide is a navigational layer. The repository's versioned [specification](.
 ## Evidence basis
 
 Initial content was reconciled against `main` at [ad35e0ada03a4c57923d8c0e956e8ff3b295f168](https://github.com/bartytime4life/MEGALODON/commit/ad35e0ada03a4c57923d8c0e956e8ff3b295f168) on 2026-09-15 UTC. It does not replace current source, checks, or independent review.
+
+Integration and roadmap status was refreshed on 2026-09-17 against
+[`77f082a`](https://github.com/bartytime4life/MEGALODON/commit/77f082a0548e64f97090c94dd11503a68ca05d99).
+See the [document reconciliation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/document-alignment-2026-09-17.md)
+for source authority, historical checkpoints, and remaining gates. Wiki source
+changes become published Wiki content through the main-branch workflow.

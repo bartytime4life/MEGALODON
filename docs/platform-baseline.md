@@ -8,7 +8,10 @@ an immutable observation, not a floating claim about current `main`. The merged
 firewall-containment changes from PRs #72–#74 and the first bounded #66
 dashboard-reader slice from PR #75 are implemented at this pin. Merged state
 and green CI do not establish independent approval; issues #3, #65, and #66
-remain open. This document is the canonical platform configuration entry point.
+were open at that historical pin. All three are now closed: #3 as `not planned`
+under the owner-directed review workflow, #65/#66 as bounded completed delivery.
+Their remaining operational obligations are in the current security control
+register. This document is the canonical platform configuration entry point.
 It does not install software, activate sensors, certify Windows support, or
 authorize a license decision, tag, release, package publication, deployment,
 protection/ruleset change, firewall restoration, ready transition, or future

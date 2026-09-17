@@ -35,4 +35,4 @@ The contract tests prove only that the named JSON values conform to a closed sch
 
 ## Adoption gates
 
-Runtime adoption remains blocked by the review-control work in #3, whole-service capacity and retention boundaries in #68, an explicit operator identity/authentication/authorization design, native Windows storage confidentiality evidence, and one adapter-specific privacy/secret/egress/failure review. No code path may consume these fixtures as authorization.
+Runtime adoption still needs an explicit operator identity/authentication/authorization design, native Windows storage confidentiality evidence where applicable, and one adapter-specific privacy/secret/egress/failure review. Closed #68 delivered bounded resource controls but did not select operator retention values or prove native sustained capacity. Closed #3 records the owner-directed review workflow, not an enforced independent-human approval floor. Apply the current control register and preserve separate operational acceptance. No code path may consume these fixtures as authorization.
