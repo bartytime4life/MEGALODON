@@ -202,6 +202,11 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert "overflow: hidden" in DASHBOARD_CSS
     assert ".workspace-scroll" in DASHBOARD_CSS
     assert "<iframe" not in INDEX_HTML.lower()
+    assert 'id="integrations-presence-filter"' in INDEX_HTML
+    for label in ("Presence", "MEGALODON support", "Administration", "Health"):
+        assert label in DASHBOARD_JS
+    for state_class in ("state-found", "state-missing", "state-unknown"):
+        assert state_class in DASHBOARD_CSS
     from megalodon.dashboard_tool_assets import CONTROLS_JS
     assert "innerHTML" not in DASHBOARD_JS
     assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
@@ -220,7 +225,7 @@ process.stdin.on('end', async () => {
     const nodes = new Map(), timers = new Map(); let sequence = 0; const calls = [];
     function fakeNode(id = '') {
       let text = '';
-      return {id, value: id === 'integrations-platform' ? 'linux' : id === 'integrations-status-filter' ? 'ALL' : '',
+      return {id, value: id === 'integrations-platform' ? 'linux' : (id === 'integrations-status-filter' || id === 'integrations-presence-filter') ? 'ALL' : '',
         children: [], className: '', disabled: false, hidden: false, attrs: {}, listeners: {},
         get textContent() { return text; }, set textContent(v) { text = String(v); },
         set innerHTML(_) { throw new Error('unsafe HTML sink'); },
@@ -313,6 +318,17 @@ process.stdin.on('end', async () => {
     }
     await run('loadIntegrationMap()'); assert.equal(calls.length, 1); assert.equal(nodeFor('integrations-cards').children.length, 14);
     assert.match(nodeFor('integrations-profile').textContent, /linux/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Presence not checked/);
+    assert.match(textOf(nodeFor('integrations-cards')), /MEGALODON support:/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Administration: Operator managed/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Health: Runtime health unknown/);
+    run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'}))}; renderIntegrationMap()");
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);
+    nodeFor('integrations-presence-filter').value = 'found'; run('renderIntegrationMap()');
+    assert.equal(nodeFor('integrations-cards').children.length, 1);
+    assert.match(textOf(nodeFor('integrations-cards')), /TShark/);
+    nodeFor('integrations-presence-filter').value = 'ALL'; run('renderIntegrationMap()');
     nodeFor('integrations-query').value = 'does-not-exist'; run('renderIntegrationMap()');
     assert.match(nodeFor('integrations-status').textContent, /0 of 14/);
     nodeFor('integrations-query').value = 'Suricata'; nodeFor('integrations-status-filter').value = 'implemented'; run('renderIntegrationMap()');
