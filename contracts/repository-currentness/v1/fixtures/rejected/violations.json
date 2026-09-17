@@ -83,6 +83,47 @@
     }
   },
   {
+    "id": "missing-canonical-claim",
+    "reason": "INPUT_INVALID",
+    "changes": {
+      "/claims": [
+        {
+          "id": "firewall-refusal",
+          "state": "observed",
+          "source_paths": [
+            "megalodon/firewall.py"
+          ],
+          "test_paths": [
+            "tests/test_firewall.py"
+          ],
+          "check_run_ids": []
+        },
+        {
+          "id": "storage-documentation",
+          "state": "observed",
+          "source_paths": [
+            "docs/storage-layout.md"
+          ],
+          "test_paths": [
+            "tests/test_documentation_currentness.py"
+          ],
+          "check_run_ids": []
+        },
+        {
+          "id": "site-parity-unverified",
+          "state": "observed",
+          "source_paths": [
+            "docs/site-source-alignment.md"
+          ],
+          "test_paths": [
+            "tests/test_documentation_currentness.py"
+          ],
+          "check_run_ids": []
+        }
+      ]
+    }
+  },
+  {
     "id": "source-path-traversal",
     "reason": "INPUT_INVALID",
     "changes": {

@@ -160,7 +160,7 @@ def generate(raw: bytes, root: Path = ROOT) -> dict:
                 raise Refusal("LOCAL_IDENTITY")
         claims = capture["claims"]
         claim_ids = {claim["id"] for claim in claims}
-        if claim_ids != set(CLAIMS) or len(claim_ids) != len(claims):
+        if len(claim_ids) != len(claims) or claim_ids != set(CLAIMS):
             raise Refusal("CLAIM_REFERENCE")
         successful_checks = {row["id"] for row in data["checks"]["items"] if row["conclusion"] == "success"}
         for claim in claims:
