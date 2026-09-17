@@ -64,15 +64,16 @@ them to the executable companion-tool catalog:
 
 | Lane | Contract state | Boundary |
 | --- | --- | --- |
-| Offline threat context | Contract only | One completed, checksummed, size/object/depth-bounded STIX 2.1 file; no TAXII, pattern execution, attribution, detection, or action authority |
+| Offline threat context | Bounded reader source candidate | One completed owner-private, checksum-bound, size/object/depth/time-bounded STIX 2.1 file returns immutable context and a no-authority receipt; no TAXII, persistence, pattern execution, model input, attribution, detection, or action authority |
 | SIEM projection | Contract only | New local file only; bounded ECS 9.5.0 and OCSF 1.9.0 projections; no `event.original`, payload, credential, collector, or network delivery |
 | SOAR handoff | Contract only | Inert local record with no destination, endpoint, credential, retry, scheduler, automation, or host action |
 
 These are data-exchange profiles, not installed utilities, so readiness probes,
 package lifecycle commands, saved console URLs, and `hub-plan` execution fields
-remain unchanged. Runtime adoption requires separate parser/exporter code,
-adversarial fixtures, private-file and atomic-publication controls, exact-head
-validation, independent review, and operator acceptance.
+remain unchanged. The offline reader is an explicit library call, not a feed or
+background integration. SIEM projection still requires pure mapping code,
+golden fixtures and private atomic publication; all runtime adoption still
+requires exact-head validation, independent review, and operator acceptance.
 
 Each capability appears exactly once. Platform support status is derived from
 `megalodon.capabilities` instead of being copied into this registry. That
