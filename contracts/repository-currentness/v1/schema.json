@@ -1,0 +1,669 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/capture",
+  "$defs": {
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "basis",
+        "repository",
+        "commit_sha",
+        "tree_sha",
+        "started_at",
+        "finished_at",
+        "readbacks",
+        "claims"
+      ],
+      "properties": {
+        "schema_version": {"const": "megalodon-currentness-capture-v1"},
+        "basis": {"enum": ["synthetic", "github-readback"]},
+        "repository": {"const": "bartytime4life/MEGALODON"},
+        "commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "readbacks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "branch_start",
+            "branch_end",
+            "commit",
+            "tree",
+            "issues",
+            "pulls",
+            "checks",
+            "workflows",
+            "releases",
+            "rulesets",
+            "ruleset"
+          ],
+          "properties": {
+            "branch_start": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {"const": "https://api.github.com/repos/bartytime4life/MEGALODON/branches/main"},
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/branch_startExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/branch_startExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "branch_end": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {"const": "https://api.github.com/repos/bartytime4life/MEGALODON/branches/main"},
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/branch_endExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/branch_endExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "commit": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "pattern": "^https://api\\.github\\.com/repos/bartytime4life/MEGALODON/git/commits/[0-9a-f]{40}$"
+                },
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/commitExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/commitExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "tree": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "pattern": "^https://api\\.github\\.com/repos/bartytime4life/MEGALODON/git/trees/[0-9a-f]{40}\\?recursive=1$"
+                },
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/treeExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/treeExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "issues": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {
+                  "const": "https://api.github.com/repos/bartytime4life/MEGALODON/issues?state=open&per_page=100"
+                },
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/issuesExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/issuesExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "pulls": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {
+                  "const": "https://api.github.com/repos/bartytime4life/MEGALODON/pulls?state=open&per_page=100"
+                },
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/pullsExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/pullsExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "checks": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "pattern": "^https://api\\.github\\.com/repos/bartytime4life/MEGALODON/commits/[0-9a-f]{40}/check\\-runs\\?per_page=100$"
+                },
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/checksExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/checksExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "workflows": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "pattern": "^https://api\\.github\\.com/repos/bartytime4life/MEGALODON/actions/runs\\?head_sha=[0-9a-f]{40}\\&per_page=100$"
+                },
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/workflowsExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/workflowsExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "releases": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {"const": "https://api.github.com/repos/bartytime4life/MEGALODON/releases?per_page=100"},
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/releasesExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/releasesExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "rulesets": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {"const": "https://api.github.com/repos/bartytime4life/MEGALODON/rulesets"},
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/rulesetsExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/rulesetsExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            },
+            "ruleset": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["query", "observed_at", "status", "excerpt"],
+              "properties": {
+                "query": {"const": "https://api.github.com/repos/bartytime4life/MEGALODON/rulesets/22394782"},
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                "status": {"enum": ["observed", "unavailable", "ambiguous"]},
+                "excerpt": {"oneOf": [{"$ref": "#/$defs/rulesetExcerpt"}, {"type": "null"}]}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"status": {"const": "observed"}}},
+                  "then": {"properties": {"excerpt": {"$ref": "#/$defs/rulesetExcerpt"}}},
+                  "else": {"properties": {"excerpt": {"type": "null"}}}
+                }
+              ]
+            }
+          }
+        },
+        "claims": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "state", "source_paths", "test_paths", "check_run_ids"],
+            "properties": {
+              "id": {
+                "enum": [
+                  "firewall-refusal",
+                  "storage-documentation",
+                  "site-parity-unverified",
+                  "control-disposition"
+                ]
+              },
+              "state": {"enum": ["verified", "observed", "proposed", "blocked", "unknown", "stale"]},
+              "source_paths": {
+                "type": "array",
+                "maxItems": 6,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "megalodon/firewall.py",
+                    "tests/test_firewall.py",
+                    "docs/storage-layout.md",
+                    "docs/site-source-alignment.md",
+                    "tests/test_documentation_currentness.py",
+                    "SECURITY_REVIEW.md"
+                  ]
+                }
+              },
+              "test_paths": {
+                "type": "array",
+                "maxItems": 6,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "megalodon/firewall.py",
+                    "tests/test_firewall.py",
+                    "docs/storage-layout.md",
+                    "docs/site-source-alignment.md",
+                    "tests/test_documentation_currentness.py",
+                    "SECURITY_REVIEW.md"
+                  ]
+                }
+              },
+              "check_run_ids": {
+                "type": "array",
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+              }
+            }
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "scope", "capture", "capture_sha256", "excerpt_sha256"],
+      "properties": {
+        "schema_version": {"const": "megalodon-currentness-manifest-v1"},
+        "status": {"const": "validated"},
+        "scope": {"const": "point-in-time-selected-fields-only"},
+        "capture": {"$ref": "#/$defs/capture"},
+        "capture_sha256": {"$ref": "#/$defs/digest"},
+        "excerpt_sha256": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "branch_start",
+            "branch_end",
+            "commit",
+            "tree",
+            "issues",
+            "pulls",
+            "checks",
+            "workflows",
+            "releases",
+            "rulesets",
+            "ruleset"
+          ],
+          "properties": {
+            "branch_start": {"$ref": "#/$defs/digest"},
+            "branch_end": {"$ref": "#/$defs/digest"},
+            "commit": {"$ref": "#/$defs/digest"},
+            "tree": {"$ref": "#/$defs/digest"},
+            "issues": {"$ref": "#/$defs/digest"},
+            "pulls": {"$ref": "#/$defs/digest"},
+            "checks": {"$ref": "#/$defs/digest"},
+            "workflows": {"$ref": "#/$defs/digest"},
+            "releases": {"$ref": "#/$defs/digest"},
+            "rulesets": {"$ref": "#/$defs/digest"},
+            "ruleset": {"$ref": "#/$defs/digest"}
+          }
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "reason"],
+      "properties": {
+        "schema_version": {"const": "megalodon-currentness-manifest-v1"},
+        "status": {"const": "blocked"},
+        "reason": {
+          "enum": [
+            "INPUT_INVALID",
+            "INPUT_LIMIT",
+            "READBACK_UNAVAILABLE",
+            "PIN_MISMATCH",
+            "TIME_WINDOW",
+            "INCOMPLETE_READBACK",
+            "CLAIM_REFERENCE",
+            "LOCAL_IDENTITY",
+            "IO_UNAVAILABLE"
+          ]
+        }
+      }
+    },
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "branch_startExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "protected"],
+      "properties": {"sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "protected": {"type": "boolean"}}
+    },
+    "branch_endExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "protected"],
+      "properties": {"sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "protected": {"type": "boolean"}}
+    },
+    "commitExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "tree_sha"],
+      "properties": {
+        "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "treeExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "truncated", "files"],
+      "properties": {
+        "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "truncated": {"type": "boolean"},
+        "files": {
+          "type": "array",
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha", "mode"],
+            "properties": {
+              "path": {
+                "enum": [
+                  "megalodon/firewall.py",
+                  "tests/test_firewall.py",
+                  "docs/storage-layout.md",
+                  "docs/site-source-alignment.md",
+                  "tests/test_documentation_currentness.py",
+                  "SECURITY_REVIEW.md"
+                ]
+              },
+              "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+              "mode": {"enum": ["100644", "100755"]}
+            }
+          }
+        }
+      }
+    },
+    "issuesExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 99,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["number", "kind"],
+            "properties": {
+              "number": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+              "kind": {"enum": ["issue", "pull_request"]}
+            }
+          }
+        }
+      }
+    },
+    "pullsExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numbers"],
+      "properties": {
+        "numbers": {
+          "type": "array",
+          "maxItems": 99,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+        }
+      }
+    },
+    "checksExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_count", "items"],
+      "properties": {
+        "total_count": {"type": "integer", "minimum": 0, "maximum": 99},
+        "items": {
+          "type": "array",
+          "maxItems": 99,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "head_sha", "status", "conclusion"],
+            "properties": {
+              "id": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+              "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+              "status": {"enum": ["queued", "in_progress", "completed", "waiting", "requested", "pending"]},
+              "conclusion": {
+                "enum": [
+                  null,
+                  "success",
+                  "failure",
+                  "neutral",
+                  "cancelled",
+                  "skipped",
+                  "timed_out",
+                  "action_required",
+                  "stale",
+                  "startup_failure"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "workflowsExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_count", "items"],
+      "properties": {
+        "total_count": {"type": "integer", "minimum": 0, "maximum": 99},
+        "items": {
+          "type": "array",
+          "maxItems": 99,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "head_sha", "status", "conclusion"],
+            "properties": {
+              "id": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+              "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+              "status": {"enum": ["queued", "in_progress", "completed", "waiting", "requested", "pending"]},
+              "conclusion": {
+                "enum": [
+                  null,
+                  "success",
+                  "failure",
+                  "neutral",
+                  "cancelled",
+                  "skipped",
+                  "timed_out",
+                  "action_required",
+                  "stale",
+                  "startup_failure"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "releasesExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 99,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "draft", "prerelease"],
+            "properties": {
+              "id": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+              "draft": {"type": "boolean"},
+              "prerelease": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "rulesetsExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ids"],
+      "properties": {
+        "ids": {
+          "type": "array",
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+        }
+      }
+    },
+    "rulesetExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "enforcement",
+        "default_branch_only",
+        "required_approvals",
+        "strict_checks",
+        "required_test",
+        "bypass_actor_count",
+        "dismiss_stale_reviews",
+        "code_owner_review",
+        "last_push_approval",
+        "thread_resolution"
+      ],
+      "properties": {
+        "id": {"const": 22394782},
+        "enforcement": {"enum": ["active", "evaluate", "disabled"]},
+        "default_branch_only": {"type": "boolean"},
+        "required_approvals": {"type": "integer", "minimum": 0, "maximum": 6},
+        "strict_checks": {"type": "boolean"},
+        "required_test": {"type": "boolean"},
+        "bypass_actor_count": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+        "dismiss_stale_reviews": {"type": "boolean"},
+        "code_owner_review": {"type": "boolean"},
+        "last_push_approval": {"type": "boolean"},
+        "thread_resolution": {"type": "boolean"}
+      }
+    }
+  }
+}

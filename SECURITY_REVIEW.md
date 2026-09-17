@@ -270,8 +270,9 @@ GitHub issue states:
   not be reopened merely because the control is absent.
 - **Untracked acceptance obligation** means a claim is intentionally withheld
   until external, operator, native-platform, installed-runtime, or independent
-  evidence exists. Zero open issues is accurate; these obligations are not
-  silently converted into completed work.
+  evidence exists. Issue counts are point-in-time observations; these
+  obligations are not silently converted into completed work. New roadmap
+  issues #254–#261 track bounded follow-up work after the original register.
 
 The server-enforced independent-approval floor from #3 is **explicitly
 declined** under the owner-adopted fast, AI-reviewed, owner-directed merge
@@ -287,11 +288,18 @@ acceptance obligation**, not a promise to restore the declined server rule.
 | Local model | Operator-owned Ollama alias/artifact, lifecycle, compatibility, cancellation, and independent security review | Accepted Qwen capability or model authority |
 | Independent evidence | Exact-head and independent review where a row expressly requires it, without creating a server-enforced approval claim | Independent acceptance, production approval, or release authority |
 
-These bundles are the smallest current follow-up artifact. They deliberately
-create no replacement issues and do not reopen #3, #7, #25, #27, #28, #65–#68,
-#165, #191, #194, #196, #198, or #203. A future issue should be created only
+These bundles preserve acceptance obligations beyond the delivered code. The
+subsequent M01–M04 roadmap tracks currentness (#254), licensing (#255), recovery
+(#256), telemetry/detection qualification (#257–#259), Linux release evidence
+(#260), and provider containment (#261). Those issue scopes do not prove any
+acceptance gate complete or reopen #3, #7, #25, #27, #28, #65–#68, #165, #191,
+#194, #196, #198, or #203. A future issue should be created only
 when an owner authorizes a concrete execution environment and acceptance
 scope.
+
+The [repository currentness contract](docs/repository-currentness.md) binds
+selected readbacks and claim references to a point-in-time commit. Its
+validation result is not independent approval or a timeless security posture.
 
 | Gate | Repository evidence | Remaining control |
 | --- | --- | --- |

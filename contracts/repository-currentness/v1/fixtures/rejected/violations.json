@@ -1,0 +1,129 @@
+[
+  {
+    "id": "unavailable",
+    "reason": "READBACK_UNAVAILABLE",
+    "changes": {
+      "/readbacks/checks/status": "unavailable",
+      "/readbacks/checks/excerpt": null
+    }
+  },
+  {
+    "id": "ambiguous",
+    "reason": "READBACK_UNAVAILABLE",
+    "changes": {
+      "/readbacks/releases/status": "ambiguous",
+      "/readbacks/releases/excerpt": null
+    }
+  },
+  {
+    "id": "moved-main",
+    "reason": "PIN_MISMATCH",
+    "changes": {
+      "/readbacks/branch_end/excerpt/sha": "3333333333333333333333333333333333333333"
+    }
+  },
+  {
+    "id": "wrong-check-head",
+    "reason": "PIN_MISMATCH",
+    "changes": {
+      "/readbacks/checks/excerpt/items/0/head_sha": "3333333333333333333333333333333333333333"
+    }
+  },
+  {
+    "id": "wrong-query-pin",
+    "reason": "PIN_MISMATCH",
+    "changes": {
+      "/readbacks/commit/query": "https://api.github.com/repos/bartytime4life/MEGALODON/git/commits/3333333333333333333333333333333333333333"
+    }
+  },
+  {
+    "id": "truncated-tree",
+    "reason": "INCOMPLETE_READBACK",
+    "changes": {
+      "/readbacks/tree/excerpt/truncated": true
+    }
+  },
+  {
+    "id": "missing-checks",
+    "reason": "INCOMPLETE_READBACK",
+    "changes": {
+      "/readbacks/checks/excerpt/total_count": 2
+    }
+  },
+  {
+    "id": "unknown-ruleset",
+    "reason": "INCOMPLETE_READBACK",
+    "changes": {
+      "/readbacks/rulesets/excerpt/ids": [
+        9
+      ]
+    }
+  },
+  {
+    "id": "changed-local-bytes",
+    "reason": "LOCAL_IDENTITY",
+    "changes": {
+      "/readbacks/tree/excerpt/files/0/sha": "3333333333333333333333333333333333333333"
+    }
+  },
+  {
+    "id": "unknown-check-receipt",
+    "reason": "CLAIM_REFERENCE",
+    "changes": {
+      "/claims/0/check_run_ids": [
+        999
+      ]
+    }
+  },
+  {
+    "id": "unreceipted-verified",
+    "reason": "CLAIM_REFERENCE",
+    "changes": {
+      "/claims/0/state": "verified"
+    }
+  },
+  {
+    "id": "source-path-traversal",
+    "reason": "INPUT_INVALID",
+    "changes": {
+      "/claims/0/source_paths": [
+        "../private"
+      ]
+    }
+  },
+  {
+    "id": "raw-body-field",
+    "reason": "INPUT_INVALID",
+    "changes": {
+      "/readbacks/issues/excerpt/body": "forbidden-sentinel"
+    }
+  },
+  {
+    "id": "clock-rollback",
+    "reason": "TIME_WINDOW",
+    "changes": {
+      "/finished_at": "2026-09-16T23:59:59Z"
+    }
+  },
+  {
+    "id": "wide-window",
+    "reason": "TIME_WINDOW",
+    "changes": {
+      "/finished_at": "2026-09-17T00:15:01Z"
+    }
+  },
+  {
+    "id": "out-of-window",
+    "reason": "TIME_WINDOW",
+    "changes": {
+      "/readbacks/checks/observed_at": "2026-09-17T00:00:01Z"
+    }
+  },
+  {
+    "id": "future-date-invalid",
+    "reason": "INPUT_INVALID",
+    "changes": {
+      "/started_at": "2026-02-30T00:00:00Z"
+    }
+  }
+]
