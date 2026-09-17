@@ -1,0 +1,28 @@
+{
+  "schema_version": "megalodon-sqlite-recovery-receipt-v1",
+  "operation_id": "backup-collision",
+  "operation": "backup",
+  "status": "failed",
+  "reason": "DESTINATION_EXISTS",
+  "started_at": "2026-09-17T00:00:00Z",
+  "finished_at": "2026-09-17T00:00:00Z",
+  "clock_source": "operator_system_clock_untrusted",
+  "monotonic_elapsed_ms": 0,
+  "clock_rollback_observed": false,
+  "completion_uncertain": false,
+  "source_state": "admitted",
+  "destination_state": "incomplete_preserved",
+  "destination_created": true,
+  "destination_complete": false,
+  "artifact_sha256": null,
+  "manifest_sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "effects": {
+    "source_mutated": false,
+    "network_access_performed": false,
+    "ordinary_copy_performed": false,
+    "migration_performed": false,
+    "repair_performed": false,
+    "deletion_performed": false,
+    "path_disclosed": false
+  }
+}

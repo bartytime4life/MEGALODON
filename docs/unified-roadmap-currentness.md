@@ -1,7 +1,7 @@
 # Unified roadmap: repository reconciliation
 
-Status: **OBSERVED implementation baseline with remaining acceptance gates**, reviewed 2026-09-16.
-Repository basis: [`main@0e71cd41627fe2d2bffde7c2ddd222b475f73bc1`](https://github.com/bartytime4life/MEGALODON/commit/0e71cd41627fe2d2bffde7c2ddd222b475f73bc1).
+Status: **OBSERVED implementation baseline with remaining acceptance gates**, refreshed 2026-09-17.
+Repository basis: [`main@2e5099fcec2d1a08007efab70b4607cd5ba652ac`](https://github.com/bartytime4life/MEGALODON/commit/2e5099fcec2d1a08007efab70b4607cd5ba652ac).
 This record reconciles the supplied *MEGALODON — Unified Architecture, Safety,
 and Roadmap* with code, contracts, and live GitHub issue dispositions. It does
 not adopt the supplied document wholesale or replace the specification and
@@ -56,6 +56,31 @@ The local dashboard and hosted Defense Console are separate products. The
 dashboard may read bounded local evidence through explicit operator startup;
 the Site is a static reference console with no runtime feed. A Site update or matching GitHub
 source mirror cannot establish local sensor liveness or operational acceptance.
+
+## Current high-level sequence
+
+A selected-field currentness capture at 2026-09-17T16:35:48Z–16:35:50Z
+observed eight open issues (#254–#261), zero open pull requests, zero releases,
+four successful exact-head checks, three successful exact-head workflows, and
+active ruleset 22394782 with strict required `test` but zero required
+approvals. The manifest validated against the pinned commit/tree. It is not
+owner acceptance or independent review, so #254 remains an explicit disposition
+gate.
+
+| Order | Work | Smallest safe outcome |
+| --- | --- | --- |
+| 0 | #254 currentness disposition | Preserve the immutable receipt and obtain explicit maintainer disposition; do not promote selected-field validation into broad acceptance |
+| 1 | #256 SQLite recovery | Land the contract, fixtures, reason codes, and fault runbook first; runtime backup/restore remains a separate PR |
+| 2 | #255 license decision | Obtain the owner's actual choice and only then align root/package/SBOM metadata; no release follows automatically |
+| 3 | #257 Suricata raw-EVE profile | Select one exact producer profile and close a privacy-minimal converter contract before code or sensor integration |
+| 4 | #258 Zeek/correlation qualification | Pin producer profiles and treat Community ID as a non-authoritative grouping hint |
+| 5 | #259 detector registry/evaluation | Version the three existing deterministic rules and require corpus, denominator, quality, and uncertainty context |
+| 6 | #260 Ubuntu release evidence plan | Define an evidence packet after recovery and license gates; do not tag, publish, or deploy |
+| 7 | #261 Ollama/Qwen containment | Post-RC operator-host acceptance only; no new model, tool, persistence, or action authority |
+
+This ordering favors recovery and truthful claims over new ingestion breadth.
+The telemetry and model tracks may be designed in parallel, but their runtime
+or acceptance claims remain blocked by their named prerequisites.
 
 ## Evidence and ownership handoff
 
