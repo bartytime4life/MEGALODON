@@ -299,10 +299,13 @@ prove that the newly separated Python asset modules ship and import correctly.
 This change does not bound total request threads, close slow clients, solve disk
 exhaustion, optimize detector state, establish native Windows behavior, prove
 installed TShark containment, or complete independent review. Those are separate
-work items, especially [#68](https://github.com/bartytime4life/MEGALODON/issues/68),
+evidence classes. Historical tracking included [#68](https://github.com/bartytime4life/MEGALODON/issues/68),
 [#7](https://github.com/bartytime4life/MEGALODON/issues/7),
 [#27](https://github.com/bartytime4life/MEGALODON/issues/27), and
 [#3](https://github.com/bartytime4life/MEGALODON/issues/3).
+Those issues are now closed with bounded dispositions; use the current
+`SECURITY_REVIEW.md` control register for delivered controls and remaining
+operational obligations rather than treating this original slice as current backlog.
 
 ## Primary design references, checked 2026-09-10
 

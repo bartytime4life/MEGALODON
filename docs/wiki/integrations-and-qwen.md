@@ -19,6 +19,10 @@ Current workflow positions include:
 - Optional Scapy metadata capture under its separate boundary.
 - nftables planning only; live application refused.
 - Manual ClamAV companion; no file/scan integration.
+- Bounded offline STIX 2.1 completed-file reader, delivered by merged PR #269;
+  immutable context only, with no TAXII fetch, persistence, pattern execution,
+  detection, attribution, model, or action authority. ECS/OCSF projection and
+  the zero-attempt SOAR handoff remain contract-only.
 - Proposed osquery, Nmap, OSSEC, Greenbone, Zabbix, and Nagios relationships with no general runner.
 
 Adding a utility requires a capability status, one closed workflow, explicit input/output contracts, data and action boundaries, negative tests, and separate approval for any egress, scheduler, privileged action, or remote listener.

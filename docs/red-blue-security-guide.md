@@ -49,9 +49,11 @@ signal, not an alert lifecycle or a capture/ingestion-health claim.
 | Purple | Translate the finding into shared coverage and verify the control remains effective | Threat-to-control mapping, regression ownership, red-team retest, exact-head CI evidence, and independent review |
 
 Red and blue are functions, not permanent identities. The same person may help
-both functions during development, but issue
-[#3](https://github.com/bartytime4life/MEGALODON/issues/3) still requires an
-eligible independent reviewer for the approval gate.
+both functions during development. Closed issue
+[#3](https://github.com/bartytime4life/MEGALODON/issues/3) records the owner's
+AI-reviewed workflow and explicit PR-numbered merge decisions; it does not
+establish a required independent-human approval floor. Operational acceptance
+by an eligible independent reviewer remains a separate evidence requirement.
 
 ## Current defensive validation map
 

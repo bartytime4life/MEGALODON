@@ -16,10 +16,12 @@ Retain historical checkpoints rather than rewriting them as current evidence.
 Keep one coherent review surface per PR. Describe the defect or operator task,
 what changes, the negative controls, and what remains unproved. Mark proposed work
 as draft. A merged commit, green workflow, automated comment, or author statement
-is not independently attributable approval. The outstanding review-control problem
-is tracked in [issue #3](https://github.com/bartytime4life/MEGALODON/issues/3);
-this guide does not claim that GitHub settings enforce the intended policy.
-Do not close that issue or change rulesets as a side effect of a code cleanup.
+is not independently attributable approval. Closed [issue #3](https://github.com/bartytime4life/MEGALODON/issues/3)
+records the owner-directed AI-reviewed workflow and its `not planned` disposition.
+It did not establish a server-enforced independent-human approval floor. Preserve
+strict CI and explicit PR-numbered owner merge decisions; operational independent
+acceptance remains separate. Do not change issue dispositions or rulesets as a
+side effect of a code cleanup.
 
 ## Development environment
 
@@ -210,5 +212,6 @@ raw-input or payload-derived hashes as a retention workaround.
 The [source-pinned correction review](docs/repository-review-2026-09-11.md)
 records the original ZIP preparation separately from GitHub delivery. The
 [Reference Library implementation and recovery runbook in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91)
-have their own exact-head checks and review gate. These documents do not require
-that PR to be merged; refresh its live lifecycle before relying on its behavior.
+were delivered by merged PR #91 at `1b16069e430b539f9677c616a5f61c597fd0bec2`.
+Its dated checks remain evidence for that revision; refresh the current source
+and checks before relying on later behavior.

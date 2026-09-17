@@ -1,5 +1,9 @@
 # Offline threat-context reader v1
 
+Source delivery: merged PR #269, present at the 2026-09-17 repository baseline
+`77f082a0548e64f97090c94dd11503a68ca05d99`. Native operator acceptance remains
+separate from source delivery and synthetic validation.
+
 `megalodon.threat_context.read_completed_bundle(path, expected_digest)` reads
 one explicitly selected STIX 2.1 bundle from a completed private file. It
 returns an immutable tuple of bounded context objects and an immutable receipt.

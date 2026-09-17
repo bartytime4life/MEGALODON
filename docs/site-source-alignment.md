@@ -1,6 +1,19 @@
 # Defense Console source alignment
 
-Readback refreshed: 2026-09-17 against repository
+## Repository reconciliation after merge
+
+Repository readback on 2026-09-17: `main@77f082a0548e64f97090c94dd11503a68ca05d99`
+contains merged PR #269's STIX reader and Site mirror. The reader is delivered
+source; native operator acceptance is still separate. This documentation pass
+updates the repository's Site README and reader-status label. Those changed
+files have not been deployed to Sites, so current whole-source parity is
+**UNVERIFIED**. The last recorded deployment is version 17 below; its original
+thirteen-file equality receipt remains valid only for its named candidate.
+No new Sites readback or rendered-browser acceptance was performed in this pass.
+
+## Historical version 17 deployment receipt
+
+Readback captured: 2026-09-17 against repository
 `main@8ae0294a0fc89d5cddda454cb50df3339e599570`, candidate branch commit
 `5310eeb5397571a6df6b81cfe4f42d7e5d9b1d0b`, and the Sites project record.
 This receipt separates the hosted reference console, repository mirror, local
@@ -29,8 +42,8 @@ The repository tracks thirteen Sites source files: README,
 version 17 server archive receipt contains ten files: the normalized manifest
 and nine assets; README and tests are excluded from deployment. A blob-by-blob
 comparison confirmed that all thirteen files in the Sites source commit match
-the candidate repository mirror at `5310eeb`. That comparison does not establish
-that unmerged candidate files are on repository `main`, and future repository edits
+the candidate repository mirror at `5310eeb`. That comparison alone did not establish
+that candidate files were on repository `main`; #269 has since merged. Future repository edits
 do not become a Sites deployment without a separate save and deploy operation.
 
 Version 17 preserves the one-command local HUD launch, disconnected hosted
@@ -40,8 +53,8 @@ contract-only ECS 9.5.0 / OCSF 1.9.0 projection and inert SOAR handoff. The page
 cannot select or upload a bundle and explicitly exposes no TAXII fetch, SIEM
 sender, endpoint, credential, retry, scheduler, playbook, or host-action control.
 
-The reader exists only in the repository review candidate until merge and local
-installation. Deploying this reference UI does not install that reader into a
+At this deployment checkpoint the reader existed only in the review candidate;
+its later merge is recorded above. Deploying this reference UI does not install that reader into a
 local checkout and does not add a Site-side parser, exporter, network client,
 notifier, scheduler, or executor. Source parity does **not** establish runtime interoperability.
 

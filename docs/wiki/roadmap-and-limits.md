@@ -52,11 +52,16 @@ Native Windows remains an evaluation path until its ACL, SQLite, process-cleanup
 
 ## Order of operations
 
-1. Preserve independent review and lifecycle evidence.
-2. Maintain fail-closed firewall containment.
-3. Prove private read-only dashboard access and honest degraded behavior.
-4. Preserve atomic evidence and bounded resource behavior.
-5. Add one versioned, privacy-reviewed adapter at a time.
-6. Obtain environment-specific and independent acceptance before any release or expansion claim.
+At the 2026-09-17 readback, #269's offline STIX reader, #270's currentness schema
+integration, and #271's SQLite recovery contract are merged. Recovery has no
+runtime command. Issues #254–#261 remain open; the absence of open PRs is not
+acceptance evidence.
+
+1. Obtain maintainer disposition for #254's currentness evidence.
+2. Preserve #271's delivered recovery contract and separately review runtime recovery under #256.
+3. Resolve the owner's license decision under #255.
+4. Define producer and detector qualification under #257–#259.
+5. Prepare #260's Ubuntu release evidence after its recovery and licensing prerequisites.
+6. Keep #261's provider containment and native/operational acceptance separate.
 
 Review the [open control register](../../SECURITY_REVIEW.md#open-control-register) and [development status](../../README.md#development-status-and-remaining-evidence) before treating an implemented slice as operational authorization.

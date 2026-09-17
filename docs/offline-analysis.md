@@ -1,8 +1,9 @@
 # Offline metadata analysis v1
 
 Status: implemented optional Linux analysis path with synthetic regression
-coverage. Installed-system TShark compatibility remains a separate evidence
-gate in [issue #25](https://github.com/bartytime4life/MEGALODON/issues/25).
+coverage. Closed [issue #25](https://github.com/bartytime4life/MEGALODON/issues/25)
+records one pinned header-only installed-TShark probe. Other versions, arbitrary
+captures, and operational containment remain separate acceptance work.
 
 This optional command is an isolated analysis path, not an ingestion change to
 `megalodon run`. It produces private local reports. It does **not** write to the
@@ -11,10 +12,11 @@ replay packets onto a network, plan/apply a firewall action, or export to a SIEM
 The proposed automation contract is not implemented by this command.
 
 Implementation is not deployment approval. The delivery history is already on
-`main`; the independent-review control tracked in
-[issue #3](https://github.com/bartytime4life/MEGALODON/issues/3) remains a
-repository governance gate for later changes and operational acceptance. This
-document does not grant retrospective approval or authority to analyze data.
+`main`; closed [issue #3](https://github.com/bartytime4life/MEGALODON/issues/3)
+records the owner-directed review workflow, without a server-enforced
+independent-human approval floor. Independent operational acceptance remains
+separate. This document does not grant retrospective approval or authority to
+analyze data.
 
 ## Isolated analyst operations
 
