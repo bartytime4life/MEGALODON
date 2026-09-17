@@ -72,9 +72,9 @@ def test_site_alignment_requires_a_specific_receipt_for_deployment_parity():
     assert "thirteen-file Site parity" not in document
     assert "Repository/hosted equality | **VERIFIED for the thirteen `site/` source files**" in document
     assert "`appgprj_6aaa2be9d9288191a15a9c1d743af0b3`" in document
-    assert "appgver_854e979de5d08191b476b33331359ef5" in document
-    assert "`appgdep_6aab835bb224819183dfabbea28633fd`" in document
-    assert "`sha256:11996ba0bfeec6a0f6e6af57b5a5a7e39e2cfbd21bb25444c2068a05b3e3d75e`" in document
+    assert "appgver_706b9bc005cc8191aec7e17bd69448b9" in document
+    assert "`appgdep_6aac008f26ec81919669f61df409945d`" in document
+    assert "`sha256:e0a9b9b76a6bd85d6479bf4765d661191780139a4adee05e67459bfb104c1227`" in document
     assert "deployment reached terminal `succeeded`" in document
     assert "site/dist/index.html" in document
     assert "site/dist/styles.css" in document

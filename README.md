@@ -83,7 +83,7 @@ record delivery state; they do not override the checked-in contracts.
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
 | Local Qwen advisory boundary | [`megalodon/qwen_advisory.py`](megalodon/qwen_advisory.py), [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), and [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md) |
 | Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
-| Threat context and SIEM/SOAR exchange boundary | [`docs/external-exchange-contract.md`](docs/external-exchange-contract.md) and [`contracts/external-exchange/v1`](contracts/external-exchange/v1/README.md) |
+| Threat context and SIEM/SOAR exchange boundary | [`docs/external-exchange-contract.md`](docs/external-exchange-contract.md), [`docs/threat-context-reader.md`](docs/threat-context-reader.md), and [`contracts/external-exchange/v1`](contracts/external-exchange/v1/README.md) |
 | Suricata record, reader, durable-consumer, and reconciliation gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), [`consumer`](contracts/suricata-eve/v1/consumer/README.md), and [`reconciliation`](contracts/suricata-eve/v1/reconciliation/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
@@ -109,6 +109,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
 | Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
+| Read one completed STIX 2.1 context bundle | `megalodon.threat_context.read_completed_bundle`; immutable bounded context plus a receipt | Linux-only, non-root, capability-free, owner-private completed file with an exact operator-supplied SHA-256 digest. No TAXII, pattern execution, persistence, detection, attribution, model, or action authority |
 | Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; immutable alert batch and receipt | Main thread of a single-threaded Linux process, reusing the guarded `SIGALRM` deadline; one private file, no raw-EVE conversion, persistence, dashboard projection, sensor launch, or IPS |
 | Persist one validated Suricata publication | `megalodon.offline.suricata_consumer.consume_publication`; explicit pre-created private store | One fixed-capacity local transaction with durable replay identity, terminal receipt, and exact commit readback. No migration, retention, watcher, CLI, dashboard projection, sensor launch, model call, network access, or response action |
 | Reconcile one unknown Suricata consumer attempt | `megalodon.offline.suricata_consumer.reconcile_publication`; exact immutable publication and attempt ID | Explicit query-only readback returns only `committed`, `not_committed`, or `indeterminate`. It never retries, repairs, migrates, creates, deletes, projects, or acts |
@@ -1128,6 +1129,7 @@ examples/                    bounded JSONL replay fixture
 megalodon/                   validation, capability/hub catalogs, capture, detection, storage, policy, CLI, UI
 megalodon/offline/           isolated TShark/Zeek adapters, Suricata reader/consumer, and private reports
 megalodon/reference/         pinned offline IANA context and synthetic evaluation corpus
+megalodon/threat_context.py  bounded completed-file STIX context reader; no feed or action path
 site/                        static Defense Console source mirror and Sites identity
 tests/                       safety, behavior, offline, and schema contract tests
 SECURITY_REVIEW.md           architecture threat assessment and required controls

@@ -626,9 +626,13 @@ admitted by adopting an external analyzer.
 normative-draft schema and fixtures. It is not scheduler execution, recurrence
 calculation, model access, or permission to use commands, endpoints, or tools.
 [contracts/external-exchange/v1](contracts/external-exchange/v1/README.md)
-defines contract-only offline STIX context, bounded local ECS/OCSF projections,
-and a zero-attempt SOAR handoff. It does not implement TAXII, network delivery,
-credentials, a notifier, a scheduler, a playbook, or host action authority.
+defines offline STIX context, bounded local ECS/OCSF projections, and a
+zero-attempt SOAR handoff. The separate
+[`megalodon.threat_context`](megalodon/threat_context.py) module implements one
+bounded completed-file STIX reader with immutable inert output; the SIEM and
+SOAR lanes remain contract-only. Nothing in these lanes implements TAXII,
+network delivery, credentials, a notifier, a scheduler, a playbook, model
+authority, or host action authority.
 [contracts/suricata-eve/v1](contracts/suricata-eve/v1/README.md) contains the
 closed EVE-alert schema, synthetic fixtures, conformance tests, and the adopted
 [bounded-reader contract](contracts/suricata-eve/v1/reader/README.md). The

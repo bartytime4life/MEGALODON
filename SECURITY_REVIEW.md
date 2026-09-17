@@ -359,12 +359,16 @@ request, persistence, capture, or host change. See
 [the integration hub contract](docs/integration-hub.md). Runtime orchestration
 remains a separate review boundary.
 
-The [external exchange contract](docs/external-exchange-contract.md) is also
-data-only. It permits only a future operator-supplied completed STIX file and
-future bounded local ECS/OCSF output files; its SOAR lane has no destination,
-endpoint, credential, retry, automation, or action. Live TAXII, SIEM delivery,
-webhooks, provider credentials, background jobs, and SOAR mutation remain
-unimplemented and unauthorized.
+The [external exchange contract](docs/external-exchange-contract.md) keeps all
+three lanes local and non-authoritative. The completed-file STIX reader is now
+implemented as a bounded source candidate with exact digest, private-file,
+closed projection, marking-resolution, immutable-output, and no-external-work
+controls. It does not authenticate feed content, fetch TAXII, persist context,
+evaluate patterns, invoke a model, or grant detection, attribution, or action
+authority. Bounded local ECS/OCSF output remains contract-only, and the SOAR
+lane still has no destination, endpoint, credential, retry, automation, or
+action. Live TAXII, SIEM delivery, webhooks, provider credentials, background
+jobs, and SOAR mutation remain unimplemented and unauthorized.
 
 The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.
