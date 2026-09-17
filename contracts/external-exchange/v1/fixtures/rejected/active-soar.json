@@ -1,0 +1,4 @@
+{
+  "name": "SOAR endpoints retries and actions are outside v1",
+  "patch": {"lane": "soar-handoff", "endpoint": true, "max_attempts": 1, "host_action": true, "automation": true}
+}

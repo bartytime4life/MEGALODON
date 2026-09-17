@@ -56,6 +56,24 @@ Windows remains `contract_only`; no platform gains producer management, raw-EVE
 conversion, background ingestion, dashboard control, or action authority.
 `hub-plan` itself remains static and writes nothing.
 
+## Threat context and SIEM/SOAR exchange
+
+The separate [external exchange contract](external-exchange-contract.md) adds a
+closed, machine-validated plan for three interoperability lanes without adding
+them to the executable companion-tool catalog:
+
+| Lane | Contract state | Boundary |
+| --- | --- | --- |
+| Offline threat context | Contract only | One completed, checksummed, size/object/depth-bounded STIX 2.1 file; no TAXII, pattern execution, attribution, detection, or action authority |
+| SIEM projection | Contract only | New local file only; bounded ECS 9.5.0 and OCSF 1.9.0 projections; no `event.original`, payload, credential, collector, or network delivery |
+| SOAR handoff | Contract only | Inert local record with no destination, endpoint, credential, retry, scheduler, automation, or host action |
+
+These are data-exchange profiles, not installed utilities, so readiness probes,
+package lifecycle commands, saved console URLs, and `hub-plan` execution fields
+remain unchanged. Runtime adoption requires separate parser/exporter code,
+adversarial fixtures, private-file and atomic-publication controls, exact-head
+validation, independent review, and operator acceptance.
+
 Each capability appears exactly once. Platform support status is derived from
 `megalodon.capabilities` instead of being copied into this registry. That
 prevents a hub plan from upgrading `contract_only`, `manual_only`, `proposed`,

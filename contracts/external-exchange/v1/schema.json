@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/external-exchange/v1/schema.json",
+  "title": "MEGALODON external exchange contract v1",
+  "description": "Static contract for offline threat context, local file-only SIEM projections, and an inert SOAR handoff. Validation performs no I/O or action.",
+  "$ref": "#/$defs/plan",
+  "$defs": {
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "network_access_performed", "host_change_performed", "lanes"],
+      "properties": {
+        "schema_version": {"const": "megalodon-external-exchange-v1"},
+        "status": {"const": "contract_only"},
+        "network_access_performed": {"const": false},
+        "host_change_performed": {"const": false},
+        "lanes": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {"$ref": "#/$defs/threatContext"},
+              {"$ref": "#/$defs/siemExport"},
+              {"$ref": "#/$defs/soarHandoff"}
+            ]
+          }
+        }
+      }
+    },
+    "threatContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane", "input_mode", "format", "max_bundle_bytes", "max_objects", "max_nesting_depth", "artifact_digest", "markings", "pattern_handling", "runtime_fetch", "taxii", "attribution_authority", "action_authority"],
+      "properties": {
+        "lane": {"const": "threat-context-import"},
+        "input_mode": {"const": "operator_supplied_completed_file"},
+        "format": {"const": "stix-2.1-json"},
+        "max_bundle_bytes": {"const": 16777216},
+        "max_objects": {"const": 4096},
+        "max_nesting_depth": {"const": 32},
+        "artifact_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "markings": {"const": "preserve"},
+        "pattern_handling": {"const": "store_as_untrusted_text_never_execute"},
+        "runtime_fetch": {"const": false},
+        "taxii": {"const": false},
+        "attribution_authority": {"const": false},
+        "action_authority": {"const": "none"}
+      }
+    },
+    "siemExport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane", "output_mode", "profiles", "max_records", "max_output_bytes", "include_event_original", "include_payload", "network_delivery", "credentials", "action_authority"],
+      "properties": {
+        "lane": {"const": "siem-export"},
+        "output_mode": {"const": "new_local_file_only"},
+        "profiles": {
+          "type": "array",
+          "prefixItems": [{"const": "ecs-9.5.0"}, {"const": "ocsf-1.9.0"}],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "max_records": {"const": 10000},
+        "max_output_bytes": {"const": 16777216},
+        "include_event_original": {"const": false},
+        "include_payload": {"const": false},
+        "network_delivery": {"const": false},
+        "credentials": {"const": false},
+        "action_authority": {"const": "none"}
+      }
+    },
+    "soarHandoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane", "output_mode", "destination_class", "max_attempts", "status", "endpoint", "credentials", "network_delivery", "host_action", "automation"],
+      "properties": {
+        "lane": {"const": "soar-handoff"},
+        "output_mode": {"const": "inert_local_handoff_only"},
+        "destination_class": {"const": "not_configured"},
+        "max_attempts": {"const": 0},
+        "status": {"const": "not_attempted"},
+        "endpoint": {"const": false},
+        "credentials": {"const": false},
+        "network_delivery": {"const": false},
+        "host_action": {"const": false},
+        "automation": {"const": false}
+      }
+    }
+  }
+}

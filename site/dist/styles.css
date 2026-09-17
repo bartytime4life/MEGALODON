@@ -633,3 +633,16 @@ button:disabled, input:disabled, select:disabled { opacity: .65; cursor: not-all
 .tool-card footer, .readiness-card-status { font-size: .875rem; }
 .integration-layout { align-items: start; }
 .tool-inspector { position: static; max-height: none; }
+.exchange-map { margin: 1.2rem 0; padding: 1.25rem; border: 1px solid var(--line-strong); background: linear-gradient(135deg, rgba(78,220,243,0.045), rgba(168,128,255,0.035)); }
+.exchange-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.exchange-heading h2 { margin: .2rem 0 .45rem; font-size: 1.25rem; }
+.exchange-heading p { margin: 0; max-width: 72ch; color: var(--muted); }
+.exchange-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin-top: 1rem; }
+.exchange-grid article { padding: 1rem; border: 1px solid var(--line); background: rgba(3,11,16,.72); }
+.exchange-grid article > div { display: grid; gap: .45rem; }
+.exchange-grid strong { color: var(--ink); font-size: .95rem; }
+.exchange-grid p, .exchange-grid li { color: var(--muted); font-size: .78rem; line-height: 1.55; }
+.exchange-grid ul { margin: .75rem 0 0; padding-left: 1.1rem; }
+.exchange-code { width: fit-content; padding: .22rem .4rem; border: 1px solid rgba(78,220,243,.35); color: var(--cyan); font: .68rem/1.2 "SFMono-Regular", Consolas, monospace; letter-spacing: .04em; }
+.exchange-map a { color: var(--cyan); }
+@media (max-width: 980px) { .exchange-grid { grid-template-columns: 1fr; } }

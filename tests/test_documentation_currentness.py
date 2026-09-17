@@ -64,13 +64,19 @@ def test_storage_layout_limits_gitignore_claim_to_exact_patterns():
     assert arbitrary.stdout == ""
 
 
-def test_site_alignment_does_not_claim_unreceipted_deployment_parity():
+def test_site_alignment_requires_a_specific_receipt_for_deployment_parity():
     document = _text("docs/site-source-alignment.md")
     normalized = " ".join(document.split())
 
     assert "`site/` matches all thirteen tracked Sites source files byte-for-byte" not in document
     assert "thirteen-file Site parity" not in document
-    assert "Repository/hosted equality | **UNVERIFIED**" in document
+    assert "Repository/hosted equality | **VERIFIED for the thirteen `site/` source files**" in document
+    assert "`appgprj_6aaa2be9d9288191a15a9c1d743af0b3`" in document
+    assert "appgver_854e979de5d08191b476b33331359ef5" in document
+    assert "`appgdep_6aab835bb224819183dfabbea28633fd`" in document
+    assert "`sha256:11996ba0bfeec6a0f6e6af57b5a5a7e39e2cfbd21bb25444c2068a05b3e3d75e`" in document
+    assert "deployment reached terminal `succeeded`" in document
     assert "site/dist/index.html" in document
     assert "site/dist/styles.css" in document
+    assert "does **not** establish runtime interoperability" in document
     assert "do not become a Sites deployment" in normalized

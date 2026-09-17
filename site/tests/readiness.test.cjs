@@ -176,6 +176,16 @@ test('disconnected HUD has no generated observations, fixtures or refresh timer'
   assert.ok(html.indexOf('src="./lifecycle.js"') < html.indexOf('src="./app.js"'));
 });
 
+test('exchange map exposes only offline and inert SIEM/SOAR contracts', () => {
+  const fs = require('node:fs');
+  const html = fs.readFileSync(require.resolve('../dist/index.html'), 'utf8');
+  assert.match(html, /id="external-exchange"/);
+  for (const value of ['STIX 2.1', 'ECS 9.5.0', 'OCSF 1.9.0', 'No TAXII, fetch, attribution, or action', 'Zero attempts; status not attempted']) assert.ok(html.includes(value));
+  assert.match(html, /No collector, credential, or network delivery/);
+  assert.match(html, /No endpoint, webhook, playbook, or host action/);
+  assert.doesNotMatch(html, /Connect TAXII|Send to SIEM|Run playbook/);
+});
+
 test('whole application initializes and navigates without a feed or browser network API', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   class Element {
