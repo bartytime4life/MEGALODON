@@ -28,7 +28,7 @@
         <span><i class="status-dot amber"></i>NO TELEMETRY</span>
       </div>
       <div class="topbar-actions">
-        <span class="source-pin">baseline@d27f801</span>
+        <span class="source-pin">repo-base@c19f63f</span>
         <a href="https://github.com/bartytime4life/MEGALODON" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a>
       </div>
     </header>
@@ -136,6 +136,15 @@
           <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card separates self-reported installed/not-installed notes from imported PATH findings. Copyable commands are scoped to an installation method; unknown methods require vendor guidance. Setup links open project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Manual notes: 0 reported installed · 0 reported not installed · 0 need recheck · 14 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
           <details class="manual-import"><summary>Optional: view a presence report in this hosted page</summary>          <section class="readiness-import panel" aria-labelledby="readiness-title"><div><p class="panel-kicker">LOCAL READINESS REPORT</p><h2 id="readiness-title">Bring a presence check into view</h2><p>Open a bounded report generated on your Linux host. It stays in this page's memory and is never uploaded. An executable found on PATH does not establish compatibility, service health, or permission to run it.</p></div><div class="readiness-actions"><label class="control-button" for="readiness-file">Choose JSON report</label><input id="readiness-file" type="file" accept="application/json,.json" /><button id="clear-readiness" class="text-button" type="button" disabled>Forget report</button></div><p class="readiness-candidate"><strong>Delivered in <a href="https://github.com/bartytime4life/MEGALODON/pull/241" target="_blank" rel="noopener noreferrer">PR #241</a>.</strong> On main@5583ac1 or later, run <code>python -m megalodon readiness &gt; megalodon-readiness.json</code>. This checks executable presence only; it does not start a tool or establish compatibility.</p><p id="readiness-feedback" role="status">No readiness report loaded.</p></section>
           </details>
+          <section class="exchange-map" id="external-exchange" aria-labelledby="exchange-title">
+            <div class="exchange-heading"><div><p class="panel-kicker">DATA EXCHANGE · CONTRACT ONLY</p><h2 id="exchange-title">Threat context and SIEM/SOAR boundaries</h2><p>Three planned local handoffs improve interoperability without adding a live feed, cloud sender, credential, scheduler, or response path.</p></div><span class="status-pill proposed">No runtime</span></div>
+            <div class="exchange-grid">
+              <article><div><span class="exchange-code">STIX 2.1</span><strong>Offline threat context</strong></div><p>Operator-supplied completed file, checksum-bound and capped at 16 MiB, 4,096 objects, and 32 nesting levels.</p><ul><li>Preserve markings and provenance</li><li>Patterns remain inert text</li><li>No TAXII, fetch, attribution, or action</li></ul></article>
+              <article><div><span class="exchange-code">ECS · OCSF</span><strong>Local SIEM projection</strong></div><p>Future versioned ECS 9.5.0 and OCSF 1.9.0 views write only to a new bounded local file.</p><ul><li>10,000 records / 16 MiB maximum</li><li>No payload or <code>event.original</code></li><li>No collector, credential, or network delivery</li></ul></article>
+              <article><div><span class="exchange-code">SOAR</span><strong>Inert handoff</strong></div><p>A future provider-neutral record can describe review state while remaining incapable of delivery or response.</p><ul><li>Destination not configured</li><li>Zero attempts; status not attempted</li><li>No endpoint, webhook, playbook, or host action</li></ul></article>
+            </div>
+            <p class="panel-footnote">Contract fixtures are design evidence only. They do not prove parser safety, SIEM compatibility, delivery, threat coverage, or production acceptance. <a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/external-exchange-contract.md" target="_blank" rel="noreferrer">Review the exchange contract ↗</a></p>
+          </section>
           <div class="integration-layout"><div id="integration-grid" class="integration-grid" aria-label="Companion tool interfaces"></div><aside id="tool-inspector" class="tool-inspector" aria-live="polite"></aside></div>
         </section>
 
@@ -203,7 +212,7 @@
     <footer>
       <span><strong>MEGALODON</strong> · Malware Elimination Gateway And Layered Operations Defense Online Network</span>
       <span>Hosted reference console; no network feed connected. Repository implementation and local runtime evidence remain separate.</span>
-      <nav aria-label="Project documents"><a href="https://github.com/bartytime4life/MEGALODON/blob/main/README.md" target="_blank" rel="noreferrer">README</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/integration-hub.md" target="_blank" rel="noreferrer">Integration hub</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/storage-layout.md" target="_blank" rel="noreferrer">Storage layout</a></nav>
+      <nav aria-label="Project documents"><a href="https://github.com/bartytime4life/MEGALODON/blob/main/README.md" target="_blank" rel="noreferrer">README</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/integration-hub.md" target="_blank" rel="noreferrer">Integration hub</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/external-exchange-contract.md" target="_blank" rel="noreferrer">Exchange contract</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/storage-layout.md" target="_blank" rel="noreferrer">Storage layout</a></nav>
     </footer>
   </body>
 </html>

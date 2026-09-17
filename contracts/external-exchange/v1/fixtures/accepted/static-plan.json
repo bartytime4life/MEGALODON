@@ -1,0 +1,47 @@
+{
+  "schema_version": "megalodon-external-exchange-v1",
+  "status": "contract_only",
+  "network_access_performed": false,
+  "host_change_performed": false,
+  "lanes": [
+    {
+      "lane": "threat-context-import",
+      "input_mode": "operator_supplied_completed_file",
+      "format": "stix-2.1-json",
+      "max_bundle_bytes": 16777216,
+      "max_objects": 4096,
+      "max_nesting_depth": 32,
+      "artifact_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "markings": "preserve",
+      "pattern_handling": "store_as_untrusted_text_never_execute",
+      "runtime_fetch": false,
+      "taxii": false,
+      "attribution_authority": false,
+      "action_authority": "none"
+    },
+    {
+      "lane": "siem-export",
+      "output_mode": "new_local_file_only",
+      "profiles": ["ecs-9.5.0", "ocsf-1.9.0"],
+      "max_records": 10000,
+      "max_output_bytes": 16777216,
+      "include_event_original": false,
+      "include_payload": false,
+      "network_delivery": false,
+      "credentials": false,
+      "action_authority": "none"
+    },
+    {
+      "lane": "soar-handoff",
+      "output_mode": "inert_local_handoff_only",
+      "destination_class": "not_configured",
+      "max_attempts": 0,
+      "status": "not_attempted",
+      "endpoint": false,
+      "credentials": false,
+      "network_delivery": false,
+      "host_action": false,
+      "automation": false
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "name": "SIEM network delivery and raw event retention are outside v1",
+  "patch": {"lane": "siem-export", "network_delivery": true, "include_event_original": true}
+}

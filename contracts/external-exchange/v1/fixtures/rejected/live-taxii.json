@@ -1,0 +1,4 @@
+{
+  "name": "live TAXII fetching is outside v1",
+  "patch": {"lane": "threat-context-import", "runtime_fetch": true, "taxii": true}
+}
