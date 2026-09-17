@@ -1,6 +1,6 @@
 # Threat context and SIEM/SOAR exchange contract
 
-Status: **contract-only; no runtime parser, exporter, network client, notifier, scheduler, or executor.**
+Status: **offline STIX reader implemented; SIEM projection and SOAR handoff remain contract-only; no network client, notifier, scheduler, or executor.**
 
 ## Decision
 
@@ -10,7 +10,7 @@ operator-invoked:
 
 | Lane | v1 shape | Explicitly absent |
 | --- | --- | --- |
-| Threat context | One operator-supplied, completed STIX 2.1 JSON bundle with a recorded SHA-256 digest; at most 16 MiB, 4,096 objects, and 32 levels of nesting | TAXII, HTTP, credentials, automatic refresh, STIX pattern execution, attribution, blocking, or detection authority |
+| Threat context | Implemented `read_completed_bundle` API for one operator-supplied, completed STIX 2.1 JSON bundle with an exact SHA-256 digest; at most 16 MiB, 4,096 objects, 32 levels of nesting, and 15 seconds | TAXII, HTTP, credentials, automatic refresh, STIX pattern execution, persistence, attribution, blocking, model input, or detection authority |
 | SIEM export | A new local file containing at most 10,000 records and 16 MiB under fixed ECS 9.5.0 or OCSF 1.9.0 projection profiles | Network delivery, collector/agent control, credentials, `event.original`, payloads, raw log bodies, or acknowledgement |
 | SOAR handoff | An inert local handoff that can only say `destination_class=not_configured`, `max_attempts=0`, and `status=not_attempted` | Endpoint, webhook, token, retry, scheduler, playbook, case mutation, host action, firewall action, or model authority |
 
@@ -19,11 +19,14 @@ accepted fixture as configuration or authorization.
 
 ## Trust and data rules
 
-Threat-intelligence objects are untrusted context. A future reader must preserve
-object identity, source, created/modified times, confidence, and markings while
-keeping STIX patterns as inert text. Context may annotate an operator view but
-cannot convert an observation into a verified detection, infer attribution, or
-create an action.
+Threat-intelligence objects are untrusted context. The reader preserves a
+closed immutable projection of object identity, source references,
+created/modified times, confidence, labels, supported markings, and indicator
+patterns. It verifies all retained object-marking references against marking
+definitions in the same bundle. Granular markings are refused until they can
+be preserved without ambiguity. Patterns remain inert text: the reader cannot
+convert context into a verified detection, infer attribution, persist data,
+invoke a model, or create an action.
 
 SIEM projections are lossy, versioned views of already accepted metadata. They
 must carry MEGALODON evidence and run identifiers, source kind, observed and
@@ -40,7 +43,9 @@ ambiguous-delivery reconciliation, and privacy review.
 
 ## Dependency-ordered adoption
 
-1. Implement and fuzz the offline STIX reader against a private, completed file.
+1. **Implemented source candidate:** bounded offline STIX reader against one
+   private completed file, with exact digest, immutable output, fixed failures,
+   adversarial fixtures, and zero network/process/persistence behavior.
 2. Add pure projection functions for ECS and OCSF plus golden fixtures; write
    only to a new private local file and fail before partial publication.
 3. Connect neither path to the dashboard, a network destination, or a schedule
@@ -51,8 +56,12 @@ ambiguous-delivery reconciliation, and privacy review.
 
 ## What the tests prove
 
-The tests validate the closed schema, exact three-lane vocabulary, fixed limits,
-and negative fixtures for live TAXII, network SIEM delivery/raw retention, and
-active SOAR behavior. They do not prove parser safety, projection correctness,
-storage atomicity, interoperability with a SIEM, third-party delivery, threat
-coverage, operational accuracy, independent review, release readiness, or deployment.
+The contract tests validate the closed schema, exact three-lane vocabulary,
+fixed limits, and negative fixtures for live TAXII, network SIEM delivery/raw
+retention, and active SOAR behavior. The reader tests additionally exercise
+digest, file identity/mode/owner/link, UTF-8, duplicate-key, numeric, depth,
+object-count, marking-resolution, immutability, deadline, output, and no-side-
+effect boundaries. They do not prove semantic trust in a feed, complete STIX
+interoperability, SIEM projection correctness, storage atomicity, third-party
+delivery, threat coverage, operational accuracy, independent review, release
+readiness, or deployment.

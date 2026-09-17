@@ -29,10 +29,11 @@ presence-report import remains optional for this hosted page.
 - Lifecycle diagnostics and commands are reference text. The browser never executes them. Qwen operations use one explicit example model tag and literal local provider; the tag is mutable and not an approved digest. Zabbix requires one selected role. Greenbone labels distinguish image inventory, container removal and image refresh. Zeek/OSSEC/Nagios defer to the actual installation method instead of inventing universal package commands.
 - Package commands can download dependencies or start services when an operator runs them. They do not bypass the repository's guarded setup or establish MEGALODON operational acceptance. No command was executed to test host changes.
 - The local Suricata projection is an immutable startup snapshot, not this Site's feed. Client-side Qwen admission does not confine the separate model process. Linux reference support does not imply native Windows/macOS acceptance.
+- The exchange map now distinguishes the bounded offline STIX reader source candidate from the still-contract-only ECS/OCSF and SOAR lanes. This hosted page cannot select or upload a bundle and has no threat-feed, TAXII, SIEM, or SOAR runtime connection.
 
 ## Source and verification
 
-Implementation baseline: `73d2a2e36ed4e110b7ecbdc138359ebc9b06c23c` (merged PR #244), with the HUD update on `agent/intuitive-hud-20260916`. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive.
+Implementation baseline: `main@8ae0294a0fc89d5cddda454cb50df3339e599570`, with the bounded threat-context reader and exchange-map update carried by the current review candidate. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive.
 
 Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites have 37 checks for the actual parser, lifecycle semantics, empty telemetry and application initialization/navigation. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 
