@@ -256,10 +256,47 @@ owner decision, not merely unfinished). Treat each row's evidence and
 remaining-control text on its own merits; do not infer resolution from
 issue closure alone.
 
+### Control disposition
+
+This register uses three dispositions. They are evidence classifications, not
+GitHub issue states:
+
+- **Delivered** means the repository contains the named implementation,
+  contract, test, or receipt. It does not imply deployment, operator
+  acceptance, supported-platform status, or security approval beyond the
+  cited evidence.
+- **Explicitly declined** means the owner made a recorded policy choice not to
+  build that control. The closed issue remains the decision record and must
+  not be reopened merely because the control is absent.
+- **Untracked acceptance obligation** means a claim is intentionally withheld
+  until external, operator, native-platform, installed-runtime, or independent
+  evidence exists. Zero open issues is accurate; these obligations are not
+  silently converted into completed work.
+
+The server-enforced independent-approval floor from #3 is **explicitly
+declined** under the owner-adopted fast, AI-reviewed, owner-directed merge
+workflow. This does not turn automated review into independent human approval.
+Independent review requested by individual rows remains an **untracked
+acceptance obligation**, not a promise to restore the declined server rule.
+
+| Untracked acceptance bundle | Evidence still required | Claims withheld until then |
+| --- | --- | --- |
+| Operator acceptance | Dashboard operator acceptance and finite retention-policy values on an authorized host | Operator-approved dashboard or continuous operation |
+| Native Windows | Core execution, private NTFS ACLs, loopback UI/browser behavior, and exact-platform receipts | Windows support or parity |
+| Installed runtime | Intended TShark/Suricata revisions, capture-loss behavior, threaded/native-stall interruption, and long-running exhaustion behavior | Installed-sensor compatibility or continuous monitoring |
+| Local model | Operator-owned Ollama alias/artifact, lifecycle, compatibility, cancellation, and independent security review | Accepted Qwen capability or model authority |
+| Independent evidence | Exact-head and independent review where a row expressly requires it, without creating a server-enforced approval claim | Independent acceptance, production approval, or release authority |
+
+These bundles are the smallest current follow-up artifact. They deliberately
+create no replacement issues and do not reopen #3, #7, #25, #27, #28, #65–#68,
+#165, #191, #194, #196, #198, or #203. A future issue should be created only
+when an owner authorizes a concrete execution environment and acceptance
+scope.
+
 | Gate | Repository evidence | Remaining control |
 | --- | --- | --- |
 | Aggregate JSONL input budget ([#203](https://github.com/bartytime4life/MEGALODON/issues/203)) | Every returned JSONL line counts toward a fixed 256 MiB UTF-8 budget before classification or parsing; owned UTF-8 files preserve LF/CRLF/CR bytes; the first excess line fails with a record-free capture error and no further logical line read | Borrowed text streams must preserve newlines for original-byte accounting; decoder read-ahead is not bounded by this counter. Revalidate exact-head behavior on intended Linux files and pipes; retain the separate event, skipped-line, elapsed-deadline, storage, and cleanup controls |
-| Independent review ([#3](https://github.com/bartytime4life/MEGALODON/issues/3)) | CI and merge history exist | Enforce and evidence an independent approval path |
+| Independent review ([#3](https://github.com/bartytime4life/MEGALODON/issues/3)) | CI and merge history exist; #3 records the owner-adopted fast, AI-reviewed, owner-directed merge workflow | **Explicitly declined:** no server-enforced independent-approval floor is planned under the recorded owner decision. Do not describe automated review as independent human approval |
 | Firewall containment ([#65](https://github.com/bartytime4life/MEGALODON/issues/65)) | Evaluation apply routes fail with one fixed diagnostic before configuration, host, executable, privilege, or process work; plan-only receipts remain | Complete exact-head validation and independent review; design durable intent, outcome readback, expiry, rollback, and reconciliation before any separate restoration proposal |
 | Dashboard acceptance ([#7](https://github.com/bartytime4life/MEGALODON/issues/7)) | Loopback, read-only, bounded implementation exists; a real headed-Chrome CI job (`.github/workflows/browser-acceptance.yml`, `tests/browser_native_profile.py`) exercises the five-field privacy-minimized HTTP projection, native window visibility, and refresh/pause/resume behavior — see [docs/dashboard-browser-acceptance.md](docs/dashboard-browser-acceptance.md) | That suite's own text states its existence "is not acceptance, independent review, or a supported-platform promise"; independent human review and operator acceptance evidence remain outstanding |
 | Dashboard storage isolation ([#66](https://github.com/bartytime4life/MEGALODON/issues/66)) | Separate least-data reader requires an existing compatible private POSIX store with rename-resistant trusted ancestry; pins the database inode; requires SQLite to resolve the configured private path; holds a stable parent-entry generation; revalidates sidecars; uses `mode=ro` plus `query_only`; and denies non-dashboard SQL | Obtain independent review and native Windows ACL evidence; keep successful WAL coordination confined to a dedicated verified private directory |
