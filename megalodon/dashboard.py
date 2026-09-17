@@ -375,11 +375,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", DASHBOARD_JS.encode())
             return
-        if route.path in {"/api/config", "/api/setup", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/traffic", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
+            return
+        if route.path == "/api/traffic":
+            from .dashboard_traffic import MAX_BYTES, unavailable
+            try:
+                reader = getattr(self.store, "traffic", None)
+                if reader is None:
+                    raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+                payload = json.dumps(reader(), separators=(",", ":"), allow_nan=False).encode()
+                if len(payload) > MAX_BYTES:
+                    raise ValueError("response bound")
+            except (StorageSchemaError, ValueError, TypeError, OverflowError):
+                self._send_json(unavailable(), status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
             return
         if route.path == "/api/config":
             self._send_json({

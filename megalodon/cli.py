@@ -22,8 +22,8 @@ from .config import load_settings
 from .firewall import FirewallError, LIVE_APPLY_UNSUPPORTED, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
+from .dashboard_traffic import TrafficDashboardStore as DashboardStore
 from .storage import (
-    DashboardStore,
     StorageSchemaError,
     IngestionRunError,
     migrate_database,
