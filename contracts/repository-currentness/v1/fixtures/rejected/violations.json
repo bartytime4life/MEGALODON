@@ -84,7 +84,7 @@
   },
   {
     "id": "missing-canonical-claim",
-    "reason": "CLAIM_REFERENCE",
+    "reason": "INPUT_INVALID",
     "changes": {
       "/claims": [
         {
@@ -165,6 +165,21 @@
     "reason": "INPUT_INVALID",
     "changes": {
       "/started_at": "2026-02-30T00:00:00Z"
+    }
+  },
+  {
+    "id": "incomplete-claim-set",
+    "reason": "INPUT_INVALID",
+    "changes": {
+      "/claims": [
+        {
+          "id": "firewall-refusal",
+          "state": "observed",
+          "source_paths": ["megalodon/firewall.py"],
+          "test_paths": ["tests/test_firewall.py"],
+          "check_run_ids": []
+        }
+      ]
     }
   }
 ]

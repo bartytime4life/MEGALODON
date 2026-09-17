@@ -369,7 +369,29 @@
               }
             }
           },
-          "minItems": 1
+          "minItems": 4,
+          "allOf": [
+            {
+              "contains": {"required": ["id"], "properties": {"id": {"const": "firewall-refusal"}}},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {"required": ["id"], "properties": {"id": {"const": "storage-documentation"}}},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {"required": ["id"], "properties": {"id": {"const": "site-parity-unverified"}}},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {"required": ["id"], "properties": {"id": {"const": "control-disposition"}}},
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
         }
       }
     },
