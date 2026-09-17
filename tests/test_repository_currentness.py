@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import importlib.util
+from itertools import combinations, permutations
 import json
 import os
 from pathlib import Path
@@ -126,14 +127,59 @@ def test_claim_states_are_preserved_not_promoted(state, checkout):
 
 
 def test_missing_duplicate_and_misassigned_references_refuse(checkout):
-    for mutate in [
-        lambda c: c["readbacks"]["tree"]["excerpt"]["files"].pop(),
-        lambda c: c["claims"].__setitem__(1, {**c["claims"][0], "state": "unknown"}),
-        lambda c: c["claims"][0].update(source_paths=["SECURITY_REVIEW.md"]),
+    for mutate, reason in [
+        (lambda c: c["readbacks"]["tree"]["excerpt"]["files"].pop(), "CLAIM_REFERENCE"),
+        (lambda c: c["claims"].__setitem__(1, {**c["claims"][0], "state": "unknown"}), "INPUT_INVALID"),
+        (lambda c: c["claims"][0].update(source_paths=["SECURITY_REVIEW.md"]), "CLAIM_REFERENCE"),
     ]:
         capture = deepcopy(CAPTURE)
         mutate(capture)
-        assert_blocked(generate(capture, checkout), "CLAIM_REFERENCE")
+        assert_blocked(generate(capture, checkout), reason)
+
+
+@pytest.mark.parametrize("indices", [subset for size in range(4) for subset in combinations(range(4), size)])
+def test_every_incomplete_claim_subset_refuses(indices, checkout):
+    capture = deepcopy(CAPTURE)
+    capture["claims"] = [capture["claims"][index] for index in indices]
+    assert not validator("capture").is_valid(capture)
+    assert_blocked(generate(capture, checkout), "INPUT_INVALID")
+
+
+@pytest.mark.parametrize("indices", list(permutations(range(4))))
+def test_complete_claim_set_accepts_every_order_without_hiding_states(indices, checkout):
+    capture = deepcopy(CAPTURE)
+    for claim, state in zip(capture["claims"], ("observed", "stale", "blocked", "unknown")):
+        claim["state"] = state
+    capture["claims"] = [capture["claims"][index] for index in indices]
+    validator("capture").validate(capture)
+    result = generate(capture, checkout)
+    validator("manifest").validate(result)
+    assert result["capture"]["claims"] == capture["claims"]
+
+
+@pytest.mark.parametrize("source,target", list(permutations(range(4), 2)))
+def test_same_id_with_distinct_state_cannot_replace_another_claim(source, target, checkout):
+    capture = deepcopy(CAPTURE)
+    capture["claims"][target] = {**capture["claims"][source], "state": "unknown"}
+    # Whole-object uniqueness alone allows this attack; exact ID coverage must not.
+    assert len({json.dumps(claim, sort_keys=True) for claim in capture["claims"]}) == 4
+    assert not validator("capture").is_valid(capture)
+    assert_blocked(generate(capture, checkout), "INPUT_INVALID")
+
+
+def test_generator_rejects_subset_even_if_schema_cardinality_is_weakened(checkout, monkeypatch):
+    weakened = deepcopy(SCHEMA)
+    claims = weakened["$defs"]["capture"]["properties"]["claims"]
+    claims["minItems"] = 1
+    del claims["allOf"]
+    capture = deepcopy(CAPTURE)
+    capture["claims"] = capture["claims"][:1]
+    Draft202012Validator(weakened, format_checker=FormatChecker()).validate(capture)
+    read_regular = tool._read_regular
+    def read_with_weakened_schema(path, limit):
+        return tool.canonical(weakened) if path == tool.CONTRACT else read_regular(path, limit)
+    monkeypatch.setattr(tool, "_read_regular", read_with_weakened_schema)
+    assert_blocked(generate(capture, checkout), "CLAIM_REFERENCE")
 
 
 def test_source_bytes_must_match_and_paths_still_exist(checkout):
