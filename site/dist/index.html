@@ -28,7 +28,7 @@
         <span><i class="status-dot amber"></i>NO TELEMETRY</span>
       </div>
       <div class="topbar-actions">
-        <span class="source-pin">baseline@0e71cd4</span>
+        <span class="source-pin">baseline@d27f801</span>
         <a href="https://github.com/bartytime4life/MEGALODON" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a>
       </div>
     </header>
@@ -170,6 +170,32 @@
             <article><span>06</span><h2>Finite evidence</h2><p>Implemented operations have documented bounds. The Suricata 512 MiB logical store ceiling is not a whole-disk or retention budget; retention remains operator-owned.</p></article>
           </div>
           <section class="evidence-flow" aria-labelledby="evidence-flow-title"><div><p class="eyebrow">Evidence flow</p><h2 id="evidence-flow-title">One-way by design</h2></div><ol><li><span>01</span><strong>Bounded input</strong><small>JSONL or a supported bounded adapter</small></li><li><span>02</span><strong>Fixed detection</strong><small>SYN flood, port scan, DNS tunneling</small></li><li><span>03</span><strong>Atomic evidence</strong><small>Audit ledger and terminal receipts</small></li><li><span>04</span><strong>Read-only review</strong><small>Local dashboard and private reports</small></li></ol></section>
+
+          <section class="storage-map" aria-labelledby="storage-map-title">
+            <div class="view-heading"><div><p class="eyebrow">Where the bytes live</p><h2 id="storage-map-title">Tracked source vs. runtime-only storage</h2><p>Quoted from <a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/storage-layout.md" target="_blank" rel="noreferrer">docs/storage-layout.md ↗</a>. Cloning this repository creates only the left lane; the right lane exists only after an operator runs the named command.</p></div></div>
+            <div class="storage-columns">
+              <div class="storage-lane tracked">
+                <h3><i class="status-dot cyan" aria-hidden="true"></i>Tracked in git</h3>
+                <ul>
+                  <li><code>config/*.toml</code><small>Typed defaults and the fixed detection-rule reference</small></li>
+                  <li><code>contracts/*/v1/</code><small>Inert schemas and accepted/rejected fixtures</small></li>
+                  <li><code>megalodon/reference/*</code><small>Pinned IANA snapshot and synthetic evaluation corpus</small></li>
+                  <li><code>site/dist/</code><small>This static console mirror; no process reads it at runtime</small></li>
+                </ul>
+              </div>
+              <div class="storage-arrow" aria-hidden="true"><span>run a command →</span></div>
+              <div class="storage-lane runtime">
+                <h3><i class="status-dot amber" aria-hidden="true"></i>Runtime-only, gitignored</h3>
+                <ul>
+                  <li><code>data/megalodon.db</code><small>Audit ledger; 256 MiB default high-water stop</small></li>
+                  <li><code>captures/</code>, <code>logs/</code><small>Operator-authorized adapter input, never created automatically</small></li>
+                  <li><code>offline-runs/</code><small>One mode-0700 report-set directory per analysis run</small></li>
+                  <li><code>--suricata-db &lt;path&gt;</code><small>Operator-selected store; 512 MiB logical ceiling</small></li>
+                </ul>
+              </div>
+            </div>
+            <p class="panel-footnote">No command shares one path across stores. Each keeps its own owner-private directory and mode checks, so one store's failure or migration cannot touch another's.</p>
+          </section>
         </section>
       </main>
     </div>
@@ -177,7 +203,7 @@
     <footer>
       <span><strong>MEGALODON</strong> · Malware Elimination Gateway And Layered Operations Defense Online Network</span>
       <span>Hosted reference console; no network feed connected. Repository implementation and local runtime evidence remain separate.</span>
-      <nav aria-label="Project documents"><a href="https://github.com/bartytime4life/MEGALODON/blob/main/README.md" target="_blank" rel="noreferrer">README</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/integration-hub.md" target="_blank" rel="noreferrer">Integration hub</a></nav>
+      <nav aria-label="Project documents"><a href="https://github.com/bartytime4life/MEGALODON/blob/main/README.md" target="_blank" rel="noreferrer">README</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/integration-hub.md" target="_blank" rel="noreferrer">Integration hub</a><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/storage-layout.md" target="_blank" rel="noreferrer">Storage layout</a></nav>
     </footer>
   </body>
 </html>

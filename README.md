@@ -92,6 +92,7 @@ record delivery state; they do not override the checked-in contracts.
 | Real-browser Linux dashboard acceptance evidence | [`docs/dashboard-browser-acceptance.md`](docs/dashboard-browser-acceptance.md) |
 | Optional Scapy capture failure reporting | [`docs/capture-failure-policy.md`](docs/capture-failure-policy.md) |
 | `python -m megalodon posture` command output | [`docs/local-posture.md`](docs/local-posture.md) |
+| Storage layout: tracked vs. runtime-only, and how the stores connect | [`docs/storage-layout.md`](docs/storage-layout.md) |
 
 ## Choose a configuration
 
@@ -1130,6 +1131,22 @@ tests/                       safety, behavior, offline, and schema contract test
 SECURITY_REVIEW.md           architecture threat assessment and required controls
 SPECIFICATION.md             implemented MVP contract and acceptance boundary
 ```
+
+Runtime-only storage is deliberately not part of that tracked tree: it is
+created by an explicit command, excluded by `.gitignore`, and never assumed
+to exist by a fresh clone.
+
+```text
+data/                        audit database + WAL/SHM sidecars (app.db_path); created by the first writer run
+captures/, logs/             operator-supplied adapter inputs (TShark/Zeek/Suricata); never created automatically
+offline-runs/                parent for offline-analysis --output report sets, one mode-0700 leaf per run
+reports/                     optional operator export destination; MEGALODON does not write here
+(operator-chosen path)       Suricata consumer store selected with --suricata-db; no repository default
+```
+
+See [`docs/storage-layout.md`](docs/storage-layout.md) for the full map of
+which command writes each path, which reader opens it read-only, and the
+configured size bounds.
 
 ## Current limits
 
