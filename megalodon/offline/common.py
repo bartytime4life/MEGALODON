@@ -80,7 +80,11 @@ def seconds_us(value: object, maximum: int) -> int:
         number = Decimal(text)
         if not number.is_finite() or not 0 <= number < maximum:
             raise OfflineError('INVALID_TIME')
-        return int(number * 1_000_000)  # Truncate sub-microsecond precision.
+        # Decimal multiplication uses the caller's precision and can round a
+        # valid value up to the exclusive time bound. Use exact integer
+        # arithmetic so sub-microsecond precision is always truncated.
+        numerator, denominator = number.as_integer_ratio()
+        return numerator * 1_000_000 // denominator
     except InvalidOperation:
         raise OfflineError('INVALID_TIME') from None
 

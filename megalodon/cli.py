@@ -44,7 +44,14 @@ def _bounded_cli_integer(name: str, minimum: int, maximum: int):
         candidate = value.strip()
         if not candidate.isascii() or not candidate.isdecimal():
             raise argparse.ArgumentTypeError(f"{name} must be a decimal integer")
-        parsed = int(candidate)
+        # Bound conversion independently of Python's configurable integer digit
+        # limit, while retaining the existing acceptance of leading zeroes.
+        digits = candidate.lstrip("0") or "0"
+        if len(digits) > len(str(maximum)):
+            raise argparse.ArgumentTypeError(
+                f"{name} must be between {minimum} and {maximum}"
+            )
+        parsed = int(digits)
         if not minimum <= parsed <= maximum:
             raise argparse.ArgumentTypeError(
                 f"{name} must be between {minimum} and {maximum}"

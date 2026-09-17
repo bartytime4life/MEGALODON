@@ -193,7 +193,7 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
         assert f'id="workspace-tab-{workspace}"' in INDEX_HTML
         assert f'aria-controls="workspace-{workspace}"' in INDEX_HTML
         assert f'id="workspace-{workspace}" role="tabpanel"' in INDEX_HTML
-    for target in ("live-review-title", "detections-title", "deep-analysis-title", "reference-title", "offline-title", "integrations-title"):
+    for target in ("live-review-title", "detections-title", "deep-analysis-title", "analysis-window-title", "reference-title", "offline-title", "integrations-title"):
         assert f'id="{target}" tabindex="-1"' in INDEX_HTML
     assert 'role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
@@ -226,10 +226,12 @@ process.stdin.on('end', async () => {
         set innerHTML(_) { throw new Error('unsafe HTML sink'); },
         append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; },
         setAttribute(k,v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
-        addEventListener(k,v) { this.listeners[k] = v; }
+        addEventListener(k,v) { this.listeners[k] = v; },
+        focus() { document.activeElement = this; }
       };
     }
-    const document = {hidden: false, createElement: fakeNode, addEventListener() {},
+    const document = {hidden: false, createElement: fakeNode, listeners: {},
+      addEventListener(k,v) { this.listeners[k] = v; },
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); }};
     const context = {document, AbortController, Intl, Date, Number, String, Math, Set, Promise, Error, Array,
       window: {location: {hash: ''}, setTimeout(fn, ms) { assert.equal(ms, 5000); timers.set(++sequence, fn); return sequence; }, clearTimeout(id) { timers.delete(id); }},
@@ -255,6 +257,34 @@ process.stdin.on('end', async () => {
     context.window.location.hash = '#detections-title'; run('restoreWorkspaceFromHash()');
     assert.equal(nodeFor('workspace-live').hidden, false);
     assert.equal(nodeFor('workspace-analysis').hidden, true);
+    // Native browsers do not emit hashchange when an anchor repeats the hash.
+    // Changing tabs in between must not strand a quick link in a hidden panel.
+    function clickFragment(hash, options = {}) {
+      const link = {target: '', getAttribute() { return hash; }, hasAttribute() { return false; }};
+      document.listeners.click({button: 0, target: {closest(selector) {
+        assert.equal(selector, 'a[href^="#"]'); return link;
+      }}, preventDefault() { throw new Error('native link behavior must be retained'); }, ...options});
+    }
+    for (const target of ['offline-title', 'suricata-title', 'analysis-window-title']) {
+      context.window.location.hash = '#' + target;
+      run('restoreWorkspaceFromHash()');
+      run("activateWorkspace('live')");
+      clickFragment('#' + target);
+      assert.equal(nodeFor('workspace-analysis').hidden, false);
+      assert.equal(nodeFor('workspace-live').hidden, true);
+      assert.equal(document.activeElement, nodeFor(target));
+      assert.equal(context.window.location.hash, '#' + target);
+    }
+    clickFragment('#detections-title');
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(document.activeElement, nodeFor('detections-title'));
+    for (const options of [{ctrlKey: true}, {metaKey: true}, {shiftKey: true}, {altKey: true}, {button: 1}, {defaultPrevented: true}]) {
+      clickFragment('#offline-title', options);
+      assert.equal(nodeFor('workspace-live').hidden, false);
+    }
+    clickFragment('#unknown');
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(calls.length, 0, 'navigation to local evidence must not request an integration or execute a tool');
     for (const platform of ['linux', 'windows', 'other']) {
       assert.equal(run(`validatedIntegrationMap(plans.${platform}, '${platform}').selected_platform`), platform);
     }
@@ -319,7 +349,68 @@ process.stdin.on('end', async () => {
     context.fetch = () => { throw new Error('must not fetch invalid profile'); };
     nodeFor('integrations-platform').value = '../../run'; await run('loadIntegrationMap()');
     assert.match(nodeFor('integrations-status').textContent, /No request was made/);
-    console.log('integration map: validation, text sinks, filters, platform identity, timeout, stale recovery, and no overlap passed');
+    // An explicitly absent startup store is expected unavailability, not a
+    // broken dashboard API. Both live responses must still confirm that state.
+    const missingStoreResponse = () => ({ok: false, status: 503, json: async () => ({error: 'telemetry unavailable'})});
+    async function setup(sourceStatus, extra = {}) {
+      context.fetch = async path => {
+        assert.equal(path, '/api/setup');
+        return {ok: true, json: async () => ({schema: 'dashboard-setup-v1', source_status: sourceStatus, readiness: null, ...extra})};
+      };
+      await run('loadSetup()');
+      context.fetch = async () => missingStoreResponse();
+    }
+    await setup('not_configured');
+    await run('refresh(true)');
+    assert.equal(run('state.telemetryNotConfigured'), true);
+    assert.equal(run('state.lastRefreshFailed'), false);
+    assert.equal(run('state.lastSuccessfulRefresh'), null);
+    assert.equal(run('state.lastPriorityTotal'), null);
+    assert.equal(nodeFor('live-metrics').children.length, 0, 'no synthetic zero counters may be rendered');
+    assert.match(nodeFor('connection').textContent, /reachable, no audit store/);
+    assert.equal(nodeFor('connection').className, 'connection');
+    assert.match(nodeFor('snapshot-status').textContent, /Import real data, then restart/);
+    assert.doesNotMatch(nodeFor('snapshot-status').textContent, /Refresh failed/);
+    assert.match(nodeFor('refresh-announcement').textContent, /No audit store/);
+    run('applyFilters()');
+    assert.match(textOf(nodeFor('events')), /No audit store/);
+    assert.equal(nodeFor('triage-controls').disabled, false);
+    assert.equal(nodeFor('triage-panel').attrs['aria-busy'], 'false');
+    run('togglePause()');
+    assert.match(nodeFor('snapshot-status').textContent, /No audit store.*refresh is paused/);
+    assert.doesNotMatch(nodeFor('snapshot-status').textContent, /successful fetch/);
+    run('togglePause()');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(run('state.telemetryNotConfigured'), true);
+    // The same 503 is a real failure for a configured or unverified source.
+    for (const [source, extra] of [['connected', {}], ['not_configured', {extra: true}], ['not_configured', {readiness: {}}]]) {
+      await setup(source, extra); await run('refresh(true)');
+      assert.equal(run('state.telemetryNotConfigured'), false);
+      assert.equal(run('state.lastRefreshFailed'), true);
+      assert.equal(nodeFor('connection').className, 'connection error');
+      assert.match(nodeFor('snapshot-status').textContent, /Refresh failed/);
+    }
+    await setup('not_configured');
+    for (const response of [
+      {ok: false, status: 500, json: async () => ({error: 'telemetry unavailable'})},
+      {ok: false, status: 503, json: async () => ({error: 'telemetry unavailable', extra: true})},
+      {ok: false, status: 503, json: async () => ({error: 'other failure'})},
+      {ok: false, status: 503, json: async () => null},
+    ]) {
+      context.fetch = async () => response; await run('refresh(true)');
+      assert.equal(run('state.telemetryNotConfigured'), false);
+      assert.match(nodeFor('snapshot-status').textContent, /Refresh failed/);
+    }
+    context.fetch = async path => {
+      if (path === '/api/summary') return missingStoreResponse();
+      throw new Error('transport failure');
+    };
+    await run('refresh(true)');
+    assert.equal(run('state.lastRefreshFailed'), true);
+    context.fetch = async () => missingStoreResponse(); await run('refresh(true)');
+    assert.equal(run('state.telemetryNotConfigured'), true, 'expected state must recover after transport failure');
+    assert.equal(run('state.lastSuccessfulRefresh'), null);
+    console.log('integration map and first-launch telemetry states passed');
   } catch (error) { console.error(error); process.exitCode = 1; }
 });
 """

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, localcontext
 import json
 import os
 from pathlib import Path
@@ -95,6 +95,22 @@ def test_precise_time_and_duration():
     assert common.timestamp('1788710400.123456789').microsecond == 123456
     assert common.seconds_us(Decimal('0.06685185432434082'), 604800) == 66851
     assert common.seconds_us(Decimal('1E-7'), 604800) == 0
+
+
+@pytest.mark.parametrize('precision', [3, 28, 50])
+def test_submicrosecond_truncation_is_independent_of_decimal_context(precision):
+    with localcontext() as context:
+        context.prec = precision
+        assert common.seconds_us('1788710400.123456789', common.MAX_EPOCH) == 1788710400123456
+        assert common.seconds_us('4102444799.999999999999999999999999', common.MAX_EPOCH) == 4102444799999999
+        assert common.seconds_us('604799.999999999999999999999999', 604800) == 604799999999
+
+
+def test_zeek_accepts_times_just_below_exclusive_bounds():
+    value = zeek.parse_flow(conn(ts='4102444799.999999999999999999999999',
+                                 duration='604799.999999999999999999999999'))
+    assert value.observed_at.isoformat() == '2099-12-31T23:59:59.999999+00:00'
+    assert value.duration_us == 604799999999
 
 
 def test_non_root_and_linux_required(monkeypatch):

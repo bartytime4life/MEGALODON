@@ -107,6 +107,17 @@ def test_literal_surrogate_normalizes_to_capture_error():
         list(iter_jsonl(StringIO('\ud800')))
 
 
+@pytest.mark.parametrize('field', ['src_port', 'dst_port', 'byte_count', 'dns_query_length'])
+def test_oversized_numeric_strings_normalize_to_capture_error(field):
+    hostile = dict(EVENT, **{field: '9' * 5000})
+    events = iter_jsonl(StringIO(json.dumps(EVENT) + '\n' + json.dumps(hostile) + '\n'))
+    assert next(events).src_ip == EVENT['src_ip']
+    with pytest.raises(CaptureError, match='^invalid JSONL event at line 2$') as caught:
+        next(events)
+    assert caught.value.__suppress_context__
+    assert list(events) == []
+
+
 def test_decode_failure_normalizes_to_capture_error():
     class BrokenUtf8:
         def readline(self, *_):

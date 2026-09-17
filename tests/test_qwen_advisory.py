@@ -698,6 +698,87 @@ def test_highly_fragmented_chunks_cannot_bypass_the_protocol_budget() -> None:
             pass
 
 
+@pytest.mark.parametrize(
+    "size_prefix,size_ending,chunk_ending,trailer",
+    [
+        (b"", b"\r\n", b"XX", b"\r\n"),
+        (b"", b"\r\n", b"\r\n", b""),
+        (b"", b"\r\n", b"\r\n", b"X-Trace: incomplete"),
+        (b"", b"\n", b"\r\n", b"\r\n"),
+        (b"+", b"\r\n", b"\r\n", b"\r\n"),
+        (b"-", b"\r\n", b"\r\n", b"\r\n"),
+    ],
+    ids=["bad-separator", "missing-trailer-end", "partial-trailer",
+         "missing-size-crlf", "signed-size", "negative-size"],
+)
+def test_malformed_chunked_response_cannot_become_an_answer(
+    size_prefix: bytes, size_ending: bytes, chunk_ending: bytes, trailer: bytes,
+) -> None:
+    body = FakeResponse().body
+    wire = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n"
+        + size_prefix + format(len(body), "x").encode("ascii") + size_ending
+        + body + chunk_ending + b"0\r\n" + trailer
+    )
+
+    class MemorySocket:
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return io.BytesIO(wire)
+
+    response = qwen._BoundedHTTPResponse(MemorySocket())
+    response.begin()
+    FakeConnection.next_response = response
+
+    result = invoke()
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.outcome == "ERROR"
+    assert result.reason_code == "PROVIDER_RESPONSE_INVALID"
+    assert result.output_bytes == 0
+    assert response.isclosed()
+    assert FakeConnection.instances[0].closed
+
+
+@pytest.mark.parametrize(
+    "extension,trailer",
+    [(b"", b"\r\n"), (b";source=local", b"X-Trace: bounded\r\n\r\n")],
+)
+def test_complete_chunked_response_preserves_the_output_budget(
+    extension: bytes, trailer: bytes,
+) -> None:
+    output = "🙂" * 1024
+    body = FakeResponse({"model": MODEL_ID, "response": output, "done": True}).body
+    chunks = [body[offset:offset + 997] for offset in range(0, len(body), 997)]
+    wire = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n"
+        + b"".join(format(len(chunk), "X").encode("ascii") + extension
+                   + b"\r\n" + chunk + b"\r\n" for chunk in chunks)
+        + b"0" + extension + b"\r\n" + trailer
+    )
+
+    class MemorySocket:
+        def makefile(self, mode: str) -> io.BytesIO:
+            assert mode == "rb"
+            return io.BytesIO(wire)
+
+    response = qwen._BoundedHTTPResponse(MemorySocket())
+    response.begin()
+    FakeConnection.next_response = response
+
+    result = invoke()
+
+    assert isinstance(result, QwenAdvisoryResult)
+    assert result.outcome == "ANSWER"
+    assert result.summary == output
+    assert result.output_bytes == qwen.MAX_OUTPUT_BYTES
+    assert response.isclosed()
+
+
 def test_exact_four_kibibyte_utf8_output_is_accepted() -> None:
     output = "🙂" * 1024
     assert len(output.encode("utf-8")) == 4096

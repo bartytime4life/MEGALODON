@@ -133,6 +133,40 @@ class _BoundedHTTPResponse(http.client.HTTPResponse):
         )
         self.fp = self._protocol_reader
 
+    def _get_chunk_left(self) -> int | None:
+        """Require complete framing before treating a chunked reply as finished.
+
+        The standard-library parser tolerates a missing trailer terminator and
+        discards chunk separators without checking them. That compatibility
+        behavior must not turn a partial provider response into an advisory.
+        All framing still passes through the shared protocol byte budget.
+        """
+        if self.chunk_left:
+            return self.chunk_left
+        if self.fp is None:
+            raise _ProviderResponseInvalid("provider chunk stream unavailable")
+        if self.chunk_left == 0:
+            if self.fp.read(2) != b"\r\n":
+                raise _ProviderResponseInvalid("provider chunk separator is invalid")
+        line = self.fp.readline(MAX_PROVIDER_PROTOCOL_BYTES + 1)
+        size_text = line[:-2].split(b";", 1)[0]
+        if not line.endswith(b"\r\n") or re.fullmatch(rb"[0-9A-Fa-f]+", size_text) is None:
+            raise _ProviderResponseInvalid("provider chunk size is invalid")
+        size = int(size_text, 16)
+        if size > MAX_PROVIDER_ENVELOPE_BYTES:
+            raise _ProviderResponseInvalid("provider chunk exceeds envelope limit")
+        self.chunk_left = size
+        if size == 0:
+            while True:
+                trailer = self.fp.readline(MAX_PROVIDER_PROTOCOL_BYTES + 1)
+                if not trailer.endswith(b"\r\n"):
+                    raise _ProviderResponseInvalid("provider trailer is incomplete")
+                if trailer == b"\r\n":
+                    break
+            self._close_conn()
+            self.chunk_left = None
+        return self.chunk_left
+
 
 class _LiteralLoopbackHTTPConnection(http.client.HTTPConnection):
     """HTTP connection that never resolves a name or honors a proxy."""
