@@ -9,7 +9,7 @@ from threading import Thread
 import pytest
 
 from megalodon.dashboard import DashboardHandler, UnconfiguredDashboardReader
-from megalodon.dashboard_traffic import TrafficDashboardStore, MAX_BYTES
+from megalodon.dashboard_traffic import TrafficDashboardStore, MAX_BYTES, unavailable
 from megalodon.models import PacketEvent, DetectionResult, ActionRecord
 from megalodon.storage import Store, StorageSchemaError
 import megalodon.storage as storage
@@ -126,6 +126,11 @@ def test_http_unavailable_is_not_zero_and_query_cannot_choose_path():
             assert response.getheader("Access-Control-Allow-Origin") is None
             assert "default-src 'none'" in response.getheader("Content-Security-Policy")
             if expected == 503:
-                assert json.loads(body)["status"] == "unavailable"
+                value = json.loads(body)
+                assert value["status"] == "unavailable"
+                assert value["window"] == {"start": None, "end": None}
+                assert value["events"] == [] and value["findings"] == []
+                assert value["limits"] == {"events": 500, "findings": 200, "bytes": MAX_BYTES}
+                assert value["build"]["projection_sha256"] == unavailable()["build"]["projection_sha256"]
     finally:
         server.shutdown(); server.server_close(); worker.join(timeout=2)

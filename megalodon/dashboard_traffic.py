@@ -87,8 +87,29 @@ def _time(value: object) -> str:
 
 
 def unavailable() -> dict:
-    return {"schema": SCHEMA, "status": "unavailable", "reason": "No qualified data available. Import authorized metadata, then restart the HUD.",
-            "events": [], "findings": [], "limitations": list(LIMITATIONS)}
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {
+        "schema": SCHEMA,
+        "status": "unavailable",
+        "reason": "No qualified data available. Import authorized metadata, then restart the HUD.",
+        "generated_at": now,
+        "unit": "metadata events; reported bytes",
+        "vantage": "unknown; no qualified store projection",
+        "quality": "unknown",
+        "window": {"start": None, "end": None},
+        "limits": {"events": MAX_EVENTS, "findings": MAX_FINDINGS, "bytes": MAX_BYTES},
+        "truncated": False,
+        "excluded_event_candidates": 0,
+        "events": [],
+        "findings": [],
+        "limitations": list(LIMITATIONS),
+        "build": {
+            "package_version": __version__,
+            "base_commit": "4971d85a2c56d932fda9053873a42985b4233371",
+            "projection_sha256": PROJECTION_SHA256,
+            "commit": "unknown; source component digest identifies this projection",
+        },
+    }
 
 
 class TrafficDashboardStore(DashboardStore):
