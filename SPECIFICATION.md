@@ -375,6 +375,9 @@ links in a separate least-data reader subclass; sample and unlinked records
 are excluded. Missing or invalid data stays unavailable. The existing
 five-field recent-detection API remains compatible. Traffic validation is not
 proof of capture authenticity, full coverage, local direction or sensor health.
+The HUD reports successful same-origin read-only service connectivity separately
+from telemetry availability. Its complete 503 envelope is validated like a data
+response; malformed transport or calendar-normalized timestamps fail closed.
 
 The IPv4 server accepts only dotted-decimal addresses in `127.0.0.0/8` or the
 literal `localhost`, mapped directly to `127.0.0.1` without DNS. IPv6, mapped or

@@ -3,6 +3,7 @@
 STATUS_HTML = """
 <section class="room-status" aria-label="Control room status">
   <div><span>Overall Status</span><strong id="room-overall">Unknown</strong></div>
+  <div><span>Local Service</span><strong id="room-connection">Not checked</strong></div>
   <div><span>Data Coverage</span><strong id="room-coverage">Unavailable</strong></div>
   <div><span>Last Updated</span><strong id="room-updated">Not fetched</strong></div>
   <div><span>Active Sources</span><strong id="room-sources">Unknown</strong></div>
@@ -93,7 +94,7 @@ ROOM_CSS = r"""
 .room-chrome { max-height:45vh; overflow:auto; flex-shrink:1; }
 .workspace-scroll { flex:1; min-height:80px; }
 .section-nav { grid-template-columns:repeat(7,minmax(0,1fr)); margin:0; }
-.room-status { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.6rem; margin:.7rem 0; }
+.room-status { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.6rem; margin:.7rem 0; }
 .room-status > div { background:#102632; border:1px solid #325061; border-radius:10px; padding:.75rem; min-width:0; }
 .room-status span { display:block; font-size:.8rem; color:#b7cbd4; margin-bottom:.4rem; }
 .room-status strong { display:block; font-size:.96rem; overflow-wrap:anywhere; color:#f2f7f9; }
@@ -141,12 +142,24 @@ ROOM_CSS = r"""
 """
 
 ROOM_JS = r"""
-const roomState = {snapshot:null, failed:false, busy:false, range:'recorded', custom:null, selection:null, report:null};
+const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null};
 const roomProtocols = ['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'];
 const roomRules = ['SYN_FLOOD','PORT_SCAN','DNS_TUNNELING'];
 const roomFlags = ['FIN','SYN','RST','PSH','ACK','URG','ECE','CWR'];
 const roomId = value => typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) && Number.isSafeInteger(Number(value));
-const roomStamp = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/.test(value) && Number.isFinite(Date.parse(value));
+function roomStamp(value) {
+  if(typeof value!=='string') return false;
+  const match=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z$/.exec(value);
+  if(!match) return false;
+  const [year,month,day,hour,minute,second]=match.slice(1,7).map(Number);
+  if(year<1 || month<1 || month>12 || hour>23 || minute>59 || second>59) return false;
+  const instant=new Date(0);
+  instant.setUTCFullYear(year,month-1,day);
+  instant.setUTCHours(hour,minute,second,Number((match[7]||'').padEnd(3,'0').slice(0,3)));
+  return Number.isFinite(instant.valueOf())
+    && instant.getUTCFullYear()===year && instant.getUTCMonth()===month-1 && instant.getUTCDate()===day
+    && instant.getUTCHours()===hour && instant.getUTCMinutes()===minute && instant.getUTCSeconds()===second;
+}
 function validateTraffic(value) {
   if (!referenceExactKeys(value, ['schema','status','reason','generated_at','unit','vantage','quality','window','limits','truncated','excluded_event_candidates','events','findings','limitations','build'])
     || value.schema !== 'dashboard-traffic-v1' || !['available','unavailable'].includes(value.status)
@@ -312,7 +325,8 @@ function renderRoom() {
   const old=has && Date.now()-Math.max(...selected.events.map(e=>Date.parse(e.observed_at)))>300000;
   const future=has && selected.events.some(e=>Date.parse(e.observed_at)>Date.now()+60000);
   const needs=stale||old||future||snapshot?.quality==='degraded'||selected.findings.length>0;
-  byId('room-overall').textContent=!snapshot?'Not Ready':needs?'Needs Attention':'Unknown';
+  byId('room-overall').textContent=!snapshot||snapshot.status==='unavailable'?'Not Ready':needs?'Needs Attention':'Unknown';
+  byId('room-connection').textContent=roomState.connected===true?'Connected · read-only':roomState.connected===false?(snapshot?'Unavailable · preserved view':'Unavailable'):'Not checked';
   byId('room-coverage').textContent=stale?'Stale':future?'Clock uncertain':has?'Partial · quality unknown':'Unavailable';
   byId('room-updated').textContent=snapshot?.generated_at||'Not fetched';
   byId('room-sources').textContent=has?'Unknown · '+new Set(selected.events.map(e=>e.source)).size+' stored source types':'Unknown';
@@ -342,9 +356,11 @@ async function refreshRoom() {
     const response=await fetch('/api/traffic',{method:'GET',cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(3000)});
     const reader=response.body?.getReader();if(!reader)throw new Error('Unavailable');let bytes=0,chunks=[];
     while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>262144){await reader.cancel();throw new Error('Oversized');}chunks.push(value);}
-    if(!response.ok)throw new Error('Unavailable');const merged=new Uint8Array(bytes);let offset=0;chunks.forEach(chunk=>{merged.set(chunk,offset);offset+=chunk.length;});
-    roomState.snapshot=validateTraffic(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(merged)));roomState.failed=false;
-  } catch(_) {roomState.failed=true;} finally {roomState.busy=false;byId('room-refresh').disabled=false;renderRoom();}
+    const merged=new Uint8Array(bytes);let offset=0;chunks.forEach(chunk=>{merged.set(chunk,offset);offset+=chunk.length;});
+    const snapshot=validateTraffic(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(merged)));
+    if(!response.ok && !(response.status===503 && snapshot.status==='unavailable')) throw new Error('Unavailable');
+    roomState.snapshot=snapshot;roomState.failed=false;roomState.connected=true;
+  } catch(_) {roomState.failed=true;roomState.connected=false;} finally {roomState.busy=false;byId('room-refresh').disabled=false;renderRoom();}
 }
 byId('room-range').addEventListener('change',()=>{const custom=byId('room-range').value==='custom';byId('room-start-label').hidden=!custom;byId('room-end-label').hidden=!custom;});
 byId('room-apply').addEventListener('click',()=>{try{const range=byId('room-range').value;const custom=range==='custom'?{start:Date.parse(byId('room-start').value+'Z'),end:Date.parse(byId('room-end').value+'Z')}:null;roomSelection(roomState.snapshot,range,custom);roomState.range=range;roomState.custom=custom;renderRoom();}catch(error){byId('room-notice').textContent=error.message;}});

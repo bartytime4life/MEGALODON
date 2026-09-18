@@ -32,7 +32,13 @@ termination state. Stored text is byte-bounded in SQLite before decoding.
 Messages, evidence JSON, recommendations, metadata JSON, interface strings,
 raw logs, packet bodies and model output are not selected. Malformed selected
 metadata fails the complete projection; no partial valid prefix is returned.
-Missing stores return a fixed 503 unavailable envelope, never zero counters.
+Missing, unsafe or unreadable stores return a fixed, complete 503 unavailable
+envelope, never zero counters. The browser validates that closed envelope before
+showing **Connected · read-only** separately from unavailable data coverage. A
+malformed response or transport failure marks the local service unavailable and
+preserves any prior valid snapshot as stale; it cannot become an empty or healthy
+view. UTC timestamps must be real calendar instants, not values that JavaScript
+silently normalizes (for example, 31 April).
 
 Vantage, local-subnet scope, direction, connection state, producer/detector
 versions, drops, rejected-record counts, clock accuracy and whole-network

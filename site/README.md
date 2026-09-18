@@ -33,7 +33,7 @@ presence-report import remains optional for this hosted page.
 
 ## Source and verification
 
-Implementation baseline: `main@77f082a0548e64f97090c94dd11503a68ca05d99`. PR #269 delivered the bounded threat-context reader and exchange map. The current repository reader-status label is a source update, not a new hosted deployment; the version 17 receipt remains historical and whole-source parity after these edits is unverified. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive.
+Implementation baseline: `main@67ea0af9ab6b19129bace608abf1127c7c7928df`. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 subsequently delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
 
 Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites have 38 checks for the actual parser, lifecycle semantics, empty telemetry and application initialization/navigation. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 
