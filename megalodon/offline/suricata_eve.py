@@ -13,14 +13,14 @@ producer-reported ``blocked`` value.
 
 from __future__ import annotations
 
-from collections.abc import AbstractSet, Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 import hashlib
 import json
 import os
 import re
 import time
-from typing import Any, Iterator
+from typing import AbstractSet, Any, Iterator
 
 from ..capture import CaptureError
 from . import suricata

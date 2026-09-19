@@ -1,10 +1,13 @@
 # Suricata EVE alert contract v1
 
-**Status: ADOPTED RECORD CONTRACT / BOUNDED LINUX READER AVAILABLE /
-BOUNDED DURABLE CONSUMER IMPLEMENTED / EXPLICIT STORE INITIALIZER.**
+**Status: ADOPTED RECORD CONTRACT / PINNED SURICATA 8.0.7 RAW-EVE
+PRODUCER PROFILE / BOUNDED LINUX READERS / BOUNDED DURABLE CONSUMER /
+EXPLICIT STORE INITIALIZER.**
 The record gate (#9) and bounded-reader design gate (#24) are closed on `main`.
-The separate `megalodon.offline.suricata` module implements only the contracted
-completed-file reader. This directory does not install or run Suricata,
+The separate `megalodon.offline.suricata_eve` module converts one exact-digest
+completed 8.0.7 alert-only EVE file, and `megalodon.offline.suricata` retains the
+contract-envelope reader. Both publish the same immutable consumer input. This
+directory does not install or run Suricata,
 download rules, capture packets, start a scheduler, modify the dashboard, or
 authorize a firewall action. The [`consumer/`](consumer/README.md) subdirectory
 is the adopted transaction contract and synthetic SQLite oracle. The
@@ -26,6 +29,8 @@ The first dependency-closed slice defines an input envelope, a separate
 byte-framing examples. The [`reader/`](reader/README.md) subdirectory adds the
 bounded-source/run contract, completed-run receipts, synthetic fixture mutations,
 and an independent in-memory publish oracle for the runtime reader. The
+[`producer/`](producer/README.md) subdirectory pins the only accepted raw-EVE
+profile and its checksum/private-file/privacy boundary. The
 [`consumer/`](consumer/README.md) subdirectory closes and implements the
 transaction, replay-registry, terminal-receipt, and commit-readback boundary.
 Its explicit store initializer reserves the exact tables and uniqueness
@@ -74,10 +79,10 @@ producer configuration is validated by this slice.
 
 The envelope is a MEGALODON contract, **not a stock Suricata log line**. Its
 `event` member is an intentionally narrow EVE alert profile; `source` and
-`source_record_index` are separate run context for a future operator-driven
-importer. Ordinary EVE output can contain additional fields and will not
-necessarily conform. There is no producer filter or scrubbing tool here. Do not
-blindly strip forbidden fields to make a mixed or sensitive EVE log pass.
+`source_record_index` are separate run context. The pinned producer converter
+constructs that envelope only after validating an entire alert-only file.
+Ordinary mixed EVE output can contain additional fields and will not conform.
+Do not blindly strip forbidden fields to make a mixed or sensitive EVE log pass.
 
 ## 2. Input profile
 
@@ -225,8 +230,9 @@ This revision does not supply installed-producer compatibility or operational
 acceptance, and it grants no installation, capture, ruleset, or enforcement
 authority.
 
-A pinned supported producer profile and the
-source-file/privacy boundary also remain required. Rule acquisition, dashboard
+A pinned supported producer profile and the source-file/privacy boundary are
+now implemented for Suricata 8.0.7; installed-producer and operational
+acceptance remain required. Rule acquisition, dashboard
 projection, host context, scheduler execution, sensor operation, and response
 remain out of scope.
 Existing dashboard work tracked by issue #7 is not a dependency of this contract.

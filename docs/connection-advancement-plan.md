@@ -90,8 +90,11 @@ protection. Use synthetic records until that boundary is reviewed.
 
 ## Phase B: one bounded completed-file reader
 
-Implementation status: `megalodon.offline.suricata.read_completed_file` now
-delivers this file-only read and validation boundary.
+Implementation status: `megalodon.offline.suricata_eve.read_completed_raw_eve`
+now supplies the pinned, checksum-bound Suricata 8.0.7 alert-only producer
+boundary, while `megalodon.offline.suricata.read_completed_file` retains the
+closed-envelope read and validation boundary. Both return the same immutable
+publication and receipt.
 `megalodon.offline.suricata_consumer.consume_publication` now supplies the next
 operator-invoked step: an owned immutable snapshot, durable complete-run replay
 identity, atomic alert/receipt commit, and exact readback in one pre-created v1
@@ -100,9 +103,9 @@ classification with exact evidence readback and a descriptor-pinned OFD snapshot
 lock. Dashboard projection remains a later gate at the
 [2026-09-16 reconciliation baseline](unified-roadmap-currentness.md).
 
-The first runtime sensor family should remain the already contracted Suricata
-EVE alert subset, not a broad multi-tool import framework. That choice leverages
-existing schema and negative fixtures. It does not permit a generic EVE firehose,
+The first runtime sensor family remains the contracted Suricata EVE alert
+subset, not a broad multi-tool import framework. That choice leverages existing
+schema and negative fixtures. It does not permit a generic EVE firehose,
 payload fields, live tailing, IPS, sensor management, or launching Suricata. [1, 2]
 
 The reader's unit is an alert. Accept one operator-selected existing private
