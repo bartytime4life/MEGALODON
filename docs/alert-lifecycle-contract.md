@@ -1,6 +1,6 @@
 # Alert lifecycle and delivery outbox contract
 
-Status: **normative draft contract and synthetic test oracle only.** This document and [`contracts/alert-lifecycle/v1`](../contracts/alert-lifecycle/v1/README.md) define vocabulary and structural bounds for issue #84. They do not implement alert creation, acknowledgement, assignment, resolution, escalation, notification, retry, credentials, external delivery, scheduler execution, remote access, or a database migration.
+Status: **normative draft contract, plus a bounded in-memory decision engine.** This document and [`contracts/alert-lifecycle/v1`](../contracts/alert-lifecycle/v1/README.md) define vocabulary and structural bounds for issue #84. [`megalodon/alert_lifecycle.py`](../megalodon/alert_lifecycle.py) turns the transition/outbox/receipt logic that used to live only as a test oracle into a reusable, importable pure-Python API (`alert_projection`, `transition`, `apply_transition`, `outbox_intent`, `not_attempted_receipt`, and the process-local `AlertLifecycleLedger` helper), validated against the same checked-in fixtures in [`tests/test_alert_lifecycle_engine.py`](../tests/test_alert_lifecycle_engine.py). Neither the contract nor the engine implements alert creation from a live detection, assignment, escalation, notification, retry, credentials, external delivery, scheduler execution, remote access, persistence, or a database migration. `AlertLifecycleLedger` keeps state only in one process's memory; it is not the SQLite audit store in `storage.py`, is not thread-safe, and is not wired into detection ingestion, the dashboard, or the CLI.
 
 ## Decision
 
@@ -32,6 +32,8 @@ The contract does not select retention values or perform deletion. A future poli
 ## What the fixtures prove
 
 The contract tests prove only that the named JSON values conform to a closed schema, the selected transition/sequence/policy relationships remain explicit, an inert outbox cannot produce an attempt, and endpoint/secret fields, raw error text, ambiguous-delivery claims, and retry amplification are rejected. They do not prove storage atomicity, identity verification, IDOR/CSRF resistance, queue-exhaustion behavior, screen or API behavior, third-party delivery, notification receipt, continuous operation, or independent review.
+
+The engine tests additionally prove that `megalodon.alert_lifecycle.apply_transition` reaches the same accept/reject outcome as the contract's semantic fixtures for every named case, that its outbox/receipt constructors reproduce the accepted fixture values byte-for-byte, and that the module's public surface names no delivery, notification, or endpoint operation. They do not prove anything about a future storage-backed, identity-bound, or dashboard-wired implementation.
 
 ## Adoption gates
 
