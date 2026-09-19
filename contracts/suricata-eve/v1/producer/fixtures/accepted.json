@@ -1,0 +1,43 @@
+[
+  {
+    "id": "minimal-tcp-alert",
+    "value": {
+      "timestamp": "2026-09-19T10:15:30.123456+0000",
+      "event_type": "alert",
+      "src_ip": "192.0.2.10",
+      "src_port": 54321,
+      "dest_ip": "198.51.100.20",
+      "dest_port": 443,
+      "proto": "TCP",
+      "alert": {"action": "allowed", "gid": 1, "signature_id": 2100001, "rev": 2, "severity": 2}
+    }
+  },
+  {
+    "id": "bounded-optional-provenance",
+    "value": {
+      "timestamp": "2026-09-19T05:15:31.250000-0500",
+      "flow_id": 1676750115612680,
+      "pcap_cnt": 130,
+      "event_type": "alert",
+      "src_ip": "2001:db8::10",
+      "src_port": 53,
+      "dest_ip": "2001:db8::20",
+      "dest_port": 53000,
+      "proto": "UDP",
+      "tx_id": 4,
+      "app_proto": "dns",
+      "direction": "to_client",
+      "pkt_src": "wire/pcap",
+      "community_id": "1:hO+sN4H+MG5MY/8hIrXPqc4ZQz0=",
+      "alert": {
+        "action": "blocked",
+        "gid": 1,
+        "signature_id": 2100002,
+        "rev": 1,
+        "severity": 1,
+        "signature": "Synthetic bounded DNS alert",
+        "category": "Attempted Information Leak"
+      }
+    }
+  }
+]

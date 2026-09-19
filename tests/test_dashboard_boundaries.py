@@ -238,7 +238,7 @@ process.stdin.on('end', async () => {
     const document = {hidden: false, createElement: fakeNode, listeners: {},
       addEventListener(k,v) { this.listeners[k] = v; },
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); }};
-    const context = {document, AbortController, Intl, Date, Number, String, Math, Set, Promise, Error, Array,
+    const context = {document, AbortController, AbortSignal, TextEncoder, TextDecoder, Uint8Array, Intl, Date, Number, String, Math, Set, Promise, Error, Array,
       window: {location: {hash: ''}, setTimeout(fn, ms) { assert.equal(ms, 5000); timers.set(++sequence, fn); return sequence; }, clearTimeout(id) { timers.delete(id); }},
       fetch: async path => { calls.push(path); return {ok: true, json: async () => plans[new URL(path, 'http://localhost').searchParams.get('platform')]}; }
     };
@@ -369,7 +369,7 @@ process.stdin.on('end', async () => {
     // An explicitly absent startup store is expected unavailability, not a
     // broken dashboard API. Both live responses must still confirm that state.
     const missingStoreResponse = () => ({ok: false, status: 503, json: async () => ({error: 'telemetry unavailable'})});
-    const missingTrafficResponse = () => ({ok: false, status: 503, json: async () => ({
+    const missingTrafficResponse = () => { const value = {
       schema: 'dashboard-traffic-v1', status: 'unavailable',
       reason: 'No qualified data available. Import authorized metadata, then restart the HUD.',
       generated_at: new Date().toISOString(), unit: 'metadata events; reported bytes',
@@ -378,7 +378,7 @@ process.stdin.on('end', async () => {
       truncated: false, excluded_event_candidates: 0, events: [], findings: [],
       limitations: Array.from({length: 7}, (_, index) => `Bounded limitation ${index + 1}.`),
       build: {package_version: 'test', base_commit: '0'.repeat(40), projection_sha256: '0'.repeat(64), commit: 'test'}
-    })});
+    }; let sent=false; const bytes=new TextEncoder().encode(JSON.stringify(value));return {ok:false,status:503,body:{getReader:()=>({read:async()=>sent?{done:true}:{done:false,value:(sent=true,bytes)},cancel:async()=>{}})}};};
     const useMissingStoreResponses = () => {
       context.fetch = async path => path === '/api/traffic' ? missingTrafficResponse() : missingStoreResponse();
     };

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "mixed-flow-record",
+    "code": "MIXED_EVENT_TYPE",
+    "value": {
+      "timestamp": "2026-09-19T10:15:30.123456+0000",
+      "event_type": "flow",
+      "src_ip": "192.0.2.10",
+      "src_port": 54321,
+      "dest_ip": "198.51.100.20",
+      "dest_port": 443,
+      "proto": "TCP",
+      "alert": {"action": "allowed", "gid": 1, "signature_id": 2100001, "rev": 2, "severity": 2}
+    }
+  },
+  {
+    "id": "raw-packet-content",
+    "code": "FORBIDDEN_FIELD",
+    "value": {
+      "timestamp": "2026-09-19T10:15:30.123456+0000",
+      "event_type": "alert",
+      "src_ip": "192.0.2.10",
+      "src_port": 54321,
+      "dest_ip": "198.51.100.20",
+      "dest_port": 443,
+      "proto": "TCP",
+      "packet": "Zm9yYmlkZGVu",
+      "alert": {"action": "allowed", "gid": 1, "signature_id": 2100001, "rev": 2, "severity": 2}
+    }
+  },
+  {
+    "id": "alert-metadata-expansion",
+    "code": "FORBIDDEN_FIELD",
+    "value": {
+      "timestamp": "2026-09-19T10:15:30.123456+0000",
+      "event_type": "alert",
+      "src_ip": "192.0.2.10",
+      "src_port": 54321,
+      "dest_ip": "198.51.100.20",
+      "dest_port": 443,
+      "proto": "TCP",
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 2100001,
+        "rev": 2,
+        "severity": 2,
+        "metadata": {"affected_product": ["private-host"]}
+      }
+    }
+  },
+  {
+    "id": "unknown-top-level-field",
+    "code": "SCHEMA",
+    "value": {
+      "timestamp": "2026-09-19T10:15:30.123456+0000",
+      "event_type": "alert",
+      "src_ip": "192.0.2.10",
+      "src_port": 54321,
+      "dest_ip": "198.51.100.20",
+      "dest_port": 443,
+      "proto": "TCP",
+      "tenant": "unreviewed",
+      "alert": {"action": "allowed", "gid": 1, "signature_id": 2100001, "rev": 2, "severity": 2}
+    }
+  }
+]

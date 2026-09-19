@@ -62,7 +62,7 @@ assert.match(byId('room-report-status').textContent,/No qualified data/);
 context.fetch=async(path,options)=>{calls.push({path,options});return response(unavailable,503)};
 await run('refreshRoom()');assert.equal(calls.length,1);assert.equal(run('roomState.snapshot.status'),'unavailable');
 assert.equal(run('roomState.failed'),false);assert.equal(run('roomState.connected'),true);
-assert.equal(byId('room-connection').textContent,'Connected · read-only');assert.equal(byId('room-overall').textContent,'Not Ready');
+assert.equal(byId('room-connection').textContent,'Connected · read-only');assert.equal(byId('room-overall').textContent,'No qualified data');
 run('roomState.snapshot=validateTraffic(payload);renderRoom()');
 assert.match(byId('room-home-summary').textContent,/1 stored metadata events and 1 linked findings/);
 assert.match(textOf(byId('room-traffic-grid')),/9223372036854775807 reported bytes/);

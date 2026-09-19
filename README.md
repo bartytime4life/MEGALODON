@@ -170,7 +170,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
-| Dashboard | Read-only loopback UI pinned to one viewport with persistent **Overview**, **Investigate**, and **Tools** workspace tabs. Overview follows one evidence order: data freshness, stored counters, bounded traffic, local tool observations, common tasks, then stored alerts. Report controls and advanced alert filters stay collapsed until requested. Investigate opens one evidence or reference source at a time, and Tools renders 14 compact application rows whose controls remain hidden until selected. No vendor console is embedded. The advisory status may display one startup-supplied, immutable Qwen receipt through a bounded same-origin GET; the dashboard cannot request analysis, poll the provider, load a receipt from disk, or perform host/network action |
+| Dashboard | Read-only loopback HUD with Home, Traffic, Findings, Apps, Reports, Evidence and Help. Traffic shows qualified metadata with bounded automatic refresh, UTC history pages, event details and local reports. Apps separates startup presence from support and unknown health, with an explicitly opened console viewer and external-open fallback. Optional offline, Suricata and Qwen evidence remains startup-only; opening an app UI does not ingest its data or establish sensor health |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
@@ -583,21 +583,30 @@ that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.
 
-**Tools** shows one startup executable-presence snapshot, official
-setup links, optional saved companion-console addresses, and the same reviewed
-copy-only maintenance controls as the hosted Site. Console links open the real
-companion app in another tab; they do not connect its data or grant MEGALODON
-control. Commands remain visible for review and execution in your terminal.
-Qwen invocation, sensor startup, package changes and firewall application are
-not HUD actions.
+**Apps** shows the startup executable-presence snapshot, official setup links,
+saved companion-console addresses and copy-only maintenance controls. Choose
+**View in HUD** on any app card to use its configured web console in the App
+viewer. Nothing loads until you choose it. If the app refuses embedding or needs
+external sign-in, use **Open outside HUD**. Desktop GUIs such as Wireshark and
+Zenmap require a separately configured web viewer; MEGALODON cannot embed native
+windows. The app's own controls retain that app's permissions. Viewing its UI does
+not connect its telemetry to the HUD.
 
-The overview also separates executable presence from a one-time bounded
-process-name observation. A process shown as observed is not a health or coverage
-claim. The traffic pulse charts only the newest 240 stored event timestamps,
-protocols, and byte counts and labels sample ingestion explicitly; it does not
-show payloads, endpoints, wire speed, or capture completeness. The report builder
-creates overview, detection, or ingestion snapshots in the browser for JSON,
-CSV, copy, or print/PDF without a server write endpoint.
+**Traffic** refreshes the newest 500 stored event candidates every five seconds
+by default while the tab is visible. A configured capture or metadata writer must
+be operating separately for new records to appear. Last Fetched and the latest
+observation are separate timestamps; neither establishes whole-network coverage.
+Sample, unlinked and unqualified receipts are excluded. Endpoint addresses,
+ports, reported byte counts and source/run provenance appear in Activity detail.
+
+Choose **Last hour**, **Today (UTC)** or **Custom UTC**, then **Apply time range**
+to read database history, up to 31 days per range. **Older page** and **Newer page**
+move through 500-candidate pages, including pages containing only excluded rows.
+The selected history page stays fixed during automatic refresh. **Return to
+latest** resumes the current view. Findings are capped at 200 per page, and
+retention or concurrent writes can change pages on reread. Reports describe the
+selected page, not the complete range or network. Preview and download the local
+JSON from **Reports**; **Evidence** contains the separate legacy audit inspector.
 
 The optional **Choose existing data for the next launch** form prepares a quoted
 command for a settings file, completed offline run, or Suricata store. It never
@@ -989,7 +998,7 @@ The current UI is a responsive dark-theme status view with:
   from unmeasured capture/ingestion health and marks preserved data stale; and
 - DOM text-node rendering rather than raw HTML insertion.
 
-The server exposes only these read routes:
+Key read routes (the complete list is in the dashboard contract in SPECIFICATION.md):
 
 | Route | Response |
 | --- | --- |
@@ -997,12 +1006,13 @@ The server exposes only these read routes:
 | `GET /assets/dashboard.css`, `GET /assets/dashboard.js` | Same-origin no-store assets |
 | `GET /api/config` | Immutable polling, row-budget, and offline-summary availability metadata |
 | `GET /api/summary` | SQLite event, detection, action, and severity counts from one read snapshot |
-| `GET /api/traffic` | Bounded recent stored-event time/protocol/byte projection with no endpoints or payloads |
+| `GET /api/traffic` | Up to 500 qualified metadata event candidates and 200 linked finding candidates; endpoints, ports, flags, exact reported bytes and run provenance; no payloads |
+| `GET /api/traffic-history?start=UTC&end=UTC&before=ID` | Same bounded projection for a UTC range up to 31 days; optional exclusive event-ID cursor and next-page receipt |
 | `GET /api/events?limit=N` | Five-field recent-detection projections with strict query validation and a 200-row ceiling |
 | `GET /api/offline-summary` | Availability plus one startup-validated, capped offline summary; never record rows or capture paths |
 
-Responses use `Cache-Control: no-store`, a self-only Content Security Policy
-without `unsafe-inline`, opener/resource isolation headers,
+Responses use `Cache-Control: no-store`, self-only scripts and data requests, an
+HTTP(S) frame allowance for explicitly selected app consoles, opener/resource isolation headers,
 `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`. The UI cannot
 start capture, run analysis, apply firewall actions, edit settings, choose a
 filesystem path, or browse local files. [Issue #7](https://github.com/bartytime4life/MEGALODON/issues/7)

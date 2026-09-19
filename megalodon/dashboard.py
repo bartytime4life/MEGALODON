@@ -405,6 +405,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             self._send(200, "application/json; charset=utf-8", payload)
             return
+        if route.path == "/api/traffic-history":
+            from .dashboard_traffic import MAX_BYTES, history_parameters
+            try:
+                params = _bounded_query(route.query, max_fields=3)
+                if not {"start", "end"} <= set(params) or set(params) - {"start", "end", "before"} or any(len(v) != 1 for v in params.values()):
+                    raise ValueError("invalid history query")
+                values = {key: items[0] for key, items in params.items()}
+                history_parameters(**values)
+            except ValueError:
+                self._send_json({"error": "history requires a UTC start/end range of at most 31 days and an optional positive before cursor"}, status=400)
+                return
+            try:
+                reader = getattr(self.store, "traffic_history", None)
+                if reader is None:
+                    raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+                payload = json.dumps(reader(**values), separators=(",", ":"), allow_nan=False).encode()
+                if len(payload) > MAX_BYTES:
+                    raise ValueError("response bound")
+            except (StorageSchemaError, ValueError, TypeError, OverflowError):
+                self._send_json({"error": "history unavailable"}, status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
+            return
         if route.path == "/api/config":
             self._send_json({
                 "schema": "dashboard-config-v1", "read_only": True,
@@ -657,7 +680,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; "
             "img-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; "
-            "frame-ancestors 'none'; form-action 'none'; worker-src 'none'",
+            "frame-src http: https:; frame-ancestors 'none'; form-action 'none'; worker-src 'none'",
         )
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
