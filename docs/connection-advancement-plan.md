@@ -46,6 +46,28 @@ they share the word “health.” Closed #68 delivered bounded resource controls
 
 ## Phase A: accepted-run presentation before a new connector
 
+Implementation status: the core acceptance criteria below are now delivered by
+`DashboardStore.ingestion_runs()` (`megalodon/storage.py`) and the dashboard's
+`/api/ingestion-runs` route (`megalodon/dashboard.py`), returning a
+`dashboard-ingestion-runs-v1` envelope: one bounded, no-writer, no-migration
+read of already-stored `ingestion_runs` rows (`id`, `started_at`, `finished_at`,
+`source`, `status`, `processed_count`, `detection_count`, `action_count`,
+`receipt_version`, `failure_code`, `termination_reason`), a fixed 1–25 record
+ceiling, and a genuine unavailable/empty distinction (`503` on a storage
+failure versus `200` with an empty `runs` array when no run has been recorded
+yet). This closes the "no writer construction, no migration, no telemetry
+ingestion, no filesystem browser" requirement below and the smallest form of
+the unavailable-versus-empty requirement.
+
+Still open, and not yet delivered by that route: selecting or qualifying by
+one specific `source` rather than returning the newest rows across all
+sources; a separate "adapter identity" distinct from `source`; explicitly
+labeling an absent field `not_recorded` rather than leaving it JSON `null`;
+and disclosing the response's cardinality/byte ceiling inside the envelope
+itself rather than only in this document and the route's fixed limit
+constants. The rest of this section states the original, still-relevant
+acceptance bar for that remaining slice.
+
 **Proposed smallest read-model slice:** expose one already recorded source run,
 using the existing read-only store seam, with a closed response schema and
 synthetic failure fixtures. Begin with source unit, adapter identity, accepted
@@ -179,10 +201,14 @@ source panel. A rejected response is a failure, not proof of malicious input.
 | Release/deployment | Explicit separate authority | No release or host operation follows automatically from a merge |
 
 No date substitutes for these gates. Resolve the current delivery's independent
-review and browser acceptance first. The next implementation after that should
-be the smallest truthful accepted-run projection, while resource/cleanup work
-continues in its own issue-owned slices. Runtime integration expansion must wait
-for the relevant trust-kernel gates or remain explicitly release-excluded.
+review and browser acceptance first. The smallest truthful accepted-run
+projection described in Phase A is now implemented; the next implementation
+after that should be its remaining refinements (source qualification, an
+explicit `not_recorded` label, and in-envelope cardinality/byte-ceiling
+disclosure) or Phase C's source-qualified receipt checklist, while
+resource/cleanup work continues in its own issue-owned slices. Runtime
+integration expansion must wait for the relevant trust-kernel gates or remain
+explicitly release-excluded.
 
 ## Sources and currentness
 
