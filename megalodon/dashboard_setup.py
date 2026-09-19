@@ -2,19 +2,24 @@
 
 SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
-    <div>
-      <h2 id="setup-title">Your local control desk</h2>
+    <div class="setup-overview">
+      <p class="eyebrow">On this computer</p>
+      <h2 id="setup-title">Data and tools</h2>
       <p id="setup-source" role="status">Checking the selected data source…</p>
-      <div class="start-actions">
-        <a href="#integrations-title" class="start-link">Tools &amp; consoles</a>
-        <a href="#offline-title">Review a saved capture</a>
-        <a href="#suricata-title">Suricata alerts</a>
+      <div class="setup-status-grid" aria-label="Startup status summary">
+        <div><span>Tools available</span><b id="setup-installed-count">Checking</b></div>
+        <div><span>Running now</span><b id="setup-running-count">Checking</b></div>
       </div>
-    </div>
-    <div>
       <p id="setup-readiness" role="status">Checking for startup tool information…</p>
-      <details><summary>Choose existing data for the next launch</summary>
-        <p>Optional. Leave fields empty to use the default audit store. Paths stay in this page; the command reads selected files at startup.</p>
+      <details class="tool-status-details"><summary>Which tools were found?</summary>
+        <p class="setup-boundary">Available means an executable was found. Running means a matching process name was seen at launch. Neither result proves that a tool is healthy or connected.</p>
+        <div id="setup-tool-status" class="tool-status-list"></div>
+      </details>
+    </div>
+    <details class="setup-actions-card">
+      <summary>Change data for the next launch</summary>
+      <div class="setup-form">
+        <p>Optional. Leave every field empty to use the default audit store. This creates a command; it does not open or change any file.</p>
         <label class="field">Settings file<input id="setup-config" placeholder="/absolute/private/settings.toml" maxlength="512"></label>
         <label class="field">Completed offline run<input id="setup-offline" placeholder="/absolute/private/completed-run" maxlength="512"></label>
         <label class="field">Suricata store<input id="setup-suricata" placeholder="/absolute/private/suricata.db" maxlength="512"></label>
@@ -22,40 +27,88 @@ SETUP_HTML = """
         <code id="setup-command">python -m megalodon hud</code>
         <button id="setup-copy" type="button">Copy launch command</button>
         <p id="setup-feedback" role="status">No files are selected or opened by this form.</p>
-      </details>
-    </div>
+      </div>
+    </details>
   </section>
 """
 
 SETUP_JS = r"""
-const setupState = {readiness: null, sourceStatus: null};
+const setupState = {readiness: null, runtime: null, sourceStatus: null};
 const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
+const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios-core'];
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
   const labels = {executable_found: 'Executable found at launch', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
   return labels[report.tools[index].status];
 }
+const runtimeStatuses = new Set(['running', 'not_running', 'not_applicable', 'not_checked']);
+function validatedRuntimeReport(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || value.schema !== 'megalodon-tool-runtime-v1'
+      || value.probe_mode !== 'process_name_presence_only'
+      || typeof value.checked_at !== 'string' || typeof value.platform !== 'string'
+      || !Array.isArray(value.boundaries) || value.boundaries.length !== 4
+      || !value.boundaries.every(item => typeof item === 'string' && item.length > 0 && item.length <= 240)
+      || !Array.isArray(value.tools) || value.tools.length !== startupToolIds.length) throw new Error('Invalid runtime receipt');
+  value.tools.forEach((tool, index) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)
+        || !referenceExactKeys(tool, ['id', 'status']) || tool.id !== startupToolIds[index]
+        || !runtimeStatuses.has(tool.status)) throw new Error('Invalid runtime receipt');
+  });
+  return value;
+}
+function renderToolStatus() {
+  const readiness = setupState.readiness;
+  const runtime = setupState.runtime;
+  const names = {
+    'python-sqlite': 'MEGALODON core', 'wireshark-tshark': 'Wireshark / TShark', zeek: 'Zeek', suricata: 'Suricata',
+    scapy: 'Scapy', nftables: 'nftables', clamav: 'ClamAV', osquery: 'osquery', 'qwen-ollama': 'Qwen / Ollama',
+    nmap: 'Nmap', ossec: 'OSSEC', greenbone: 'Greenbone', zabbix: 'Zabbix', 'nagios-core': 'Nagios Core'
+  };
+  const installedCount = readiness ? readiness.tools.filter(tool => tool.status === 'executable_found').length : null;
+  const runningCount = runtime ? runtime.tools.filter(tool => tool.status === 'running').length : null;
+  byId('setup-installed-count').textContent = installedCount === null ? 'Not checked' : `${installedCount} found`;
+  byId('setup-running-count').textContent = runningCount === null ? 'Not checked' : `${runningCount} observed`;
+  const presenceLabels = {executable_found: 'Executable found', not_found: 'Not found', not_checked: 'Not checked'};
+  const runtimeLabels = {running: 'Process observed', not_running: 'Process not observed', not_applicable: 'Runtime not applicable', not_checked: 'Runtime not checked'};
+  byId('setup-tool-status').replaceChildren(...startupToolIds.map((id, index) => {
+    const row = document.createElement('div'); row.className = 'tool-status-row';
+    const name = document.createElement('strong'); name.textContent = names[id] || id;
+    const badges = document.createElement('div'); badges.className = 'tool-status-badges';
+    const presenceStatus = readiness ? readiness.tools[index].status : 'not_checked';
+    const runtimeStatus = runtime ? runtime.tools[index].status : 'not_checked';
+    const presence = document.createElement('span'); presence.className = `status-badge ${presenceStatus}`; presence.textContent = presenceLabels[presenceStatus];
+    const process = document.createElement('span'); process.className = `status-badge ${runtimeStatus}`; process.textContent = runtimeLabels[runtimeStatus];
+    badges.append(presence, process); row.append(name, badges); return row;
+  }));
+}
 async function loadSetup() {
   setupState.sourceStatus = null;
   try {
     const value = await requestJSON('/api/setup');
-    if (!referenceExactKeys(value, ['schema', 'source_status', 'readiness']) || value.schema !== 'dashboard-setup-v1'
+    if (!referenceExactKeys(value, ['schema', 'source_status', 'readiness', 'runtime']) || value.schema !== 'dashboard-setup-v2'
         || !['connected', 'not_configured'].includes(value.source_status)) throw new Error('Invalid setup receipt');
     const report = value.readiness === null ? null : validateReadinessReport(JSON.stringify(value.readiness));
+    const runtime = value.runtime === null ? null : validatedRuntimeReport(value.runtime);
     setupState.readiness = report;
+    setupState.runtime = runtime;
     setupState.sourceStatus = value.source_status;
     byId('setup-source').textContent = value.source_status === 'connected'
-      ? 'Your selected audit store is open. Stored events refresh here automatically; capture and companion services run separately.'
-      : 'HUD ready. No audit store exists at the selected path yet. Tools and reference lookup work now; network measurements remain unavailable. After importing real data, restart this HUD.';
+      ? 'The local data file is open. Traffic and alert counts come from this file.'
+      : 'No local data file is available yet. Tool checks still work, but traffic and alert counts do not.';
     byId('setup-readiness').textContent = report
-      ? `${report.tools.filter(tool => tool.status === 'executable_found').length} of 12 executable checks found a tool at launch. Python/SQLite and Scapy are not checked. Snapshot: ${report.checked_at}. Presence is not running state; restart the HUD to recheck.`
-      : 'For tool presence without importing a report, start with: python -m megalodon hud. The dashboard command keeps host checks off.';
+      ? `Tool checks ran ${formatRefreshTime(new Date(report.checked_at))}. Restart the HUD to check again.`
+      : 'Run the HUD command to check which tools are available and running.';
+    renderToolStatus();
     if (typeof integrationState !== 'undefined' && integrationState.snapshot) renderIntegrationMap();
   } catch (_) {
     setupState.sourceStatus = null;
+    setupState.readiness = null;
+    setupState.runtime = null;
     byId('setup-source').textContent = 'Setup information unavailable. Existing telemetry controls remain independent.';
     byId('setup-readiness').textContent = 'No tool-presence claim is available. Restart with python -m megalodon hud to check at launch.';
+    renderToolStatus();
   }
 }
 function hudLaunchCommand(values) {

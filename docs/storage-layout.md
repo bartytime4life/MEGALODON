@@ -33,7 +33,8 @@ through a command or API, or authorizes an external producer to write it.
 
 | Path | Contents | Produced by | Read by |
 | --- | --- | --- | --- |
-| `config/settings.toml`, `config/rules.toml` | Conservative typed defaults and the fixed detection-rule reference | Maintainers | `megalodon/config.py` at startup |
+| `config/settings.toml` | Example conservative settings | Maintainers | `megalodon/config.py` only when explicitly selected with `--config`; otherwise built-in defaults apply |
+| `config/rules.toml` | Fixed detection-rule reference | Maintainers | Documentation/reference only; the runtime does not load this file |
 | `contracts/*/v1/` | Inert schemas, accepted/rejected fixtures, and per-contract `README.md` boundary notes | Maintainers | Contract tests; `tools/build_reference_assets.py` and related build tooling |
 | `megalodon/reference/iana-v1/` (2.7 MiB) | SHA-256-pinned IANA service/port and protocol snapshot | `tools/build_reference_assets.py` | `megalodon/reference/loader.py`; the dashboard's read-only Reference Library panel |
 | `megalodon/reference/corpus-v1/` (1.7 MiB) | Deterministic synthetic detector-evaluation corpus | `tools/build_reference_assets.py` | `megalodon.reference.loader.evaluate_corpus`, exposed by `python -m megalodon.evaluation corpus` |
@@ -59,9 +60,15 @@ path in this table — captures, logs, and offline output — is supplied explic
 on the command line for that one invocation. The Suricata store and publication
 are supplied to the explicit consumer API. There is no shared "data directory"
 the whole system writes into; that separation is what lets each store keep its
-own POSIX ownership and mode checks (owner-private `0700` directories, `0600`
-files, no symlinked or hard-linked ancestors) without one store's failure or
-migration touching another's.
+own POSIX ownership and mode checks (owner-private `0700` leaf directories,
+`0600` database files, safe ancestors, no symlink traversal and single-link
+database files) without one store's failure or migration touching another's.
+
+For generic TShark and Zeek inputs, the offline opener checks the selected root,
+no-follow path traversal, regular single-link files, size and read stability.
+It does not enforce input owner or permission bits. Keeping those raw inputs
+private is an operator responsibility; private output and database checks are
+separate controls.
 
 ## How an operator ties the pieces together
 
@@ -79,10 +86,12 @@ point each command at a dedicated child underneath it, for example:
 
 This is a convention, not a requirement enforced by any command: nothing
 rejects a different layout, and nothing assumes this one exists. Keep each
-leaf directory private (mode `0700`) and let the writer/consumer create it;
-do not pre-create or share it across stores, since the identity checks in
-`megalodon/storage.py` and `megalodon/suricata_store.py` verify a directory
-that only that store's process has ever written into.
+leaf directory private (mode `0700`) and use the relevant writer or explicit
+initializer to create each store. The Suricata consumer requires an existing
+initialized store. Prefer dedicated directories to avoid mixing unrelated
+state. Checks in `megalodon/storage.py` and `megalodon/suricata_store.py` verify
+current ownership, permissions and filesystem identity; they do not prove a
+directory's historical writers or isolate processes sharing the same OS user.
 
 ## Proposed repository directories
 

@@ -1,6 +1,7 @@
 """Keep storage and Sites documentation aligned with executable entry points."""
 
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -80,3 +81,55 @@ def test_site_alignment_requires_a_specific_receipt_for_deployment_parity():
     assert "site/dist/styles.css" in document
     assert "does **not** establish runtime interoperability" in document
     assert "do not become a Sites deployment" in normalized
+
+
+def test_ubuntu_zeek_recipe_pins_the_verified_release_identity():
+    readme = _text("README.md")
+
+    assert "ZEEK_VERSION=8.0.10" in readme
+    assert (
+        "ZEEK_SHA256=dbb1cb6c1eac27a8883ee4bd229a378b2f1253fa18e16cdeaaef8a00f124ddf1"
+        in readme
+    )
+    assert (
+        "ZEEK_PRIMARY_FINGERPRINT=962FD2187ED5A1DD82FC478A33F15EAEF8CB8019"
+        in readme
+    )
+    assert (
+        "ZEEK_SIGNING_FINGERPRINT=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E"
+        in readme
+    )
+    assert "https://download.zeek.org/zeek-$ZEEK_VERSION.tar.gz.asc" in readme
+    assert (
+        'https://keys.openpgp.org/vks/v1/by-fingerprint/$ZEEK_PRIMARY_FINGERPRINT'
+        in readme
+    )
+    assert "ZEEK_SHA256=''" not in readme
+    assert "exact SHA-256 published" not in readme
+
+
+def test_ubuntu_zeek_recipe_verifies_before_extraction_without_managing_zeek():
+    readme = _text("README.md")
+    normalized = " ".join(readme.split())
+    recipe_match = re.search(
+        r"### 3\. Build Zeek as a private, non-service producer.*?~~~bash\n"
+        r"(?P<recipe>.*?)\n~~~",
+        readme,
+        flags=re.DOTALL,
+    )
+    assert recipe_match is not None
+    recipe = recipe_match.group("recipe")
+
+    assert '--homedir "$gpg_home"' in recipe
+    assert '--import-options show-only --import "$release_key"' in recipe
+    assert 'actual_primary_fingerprint" = "$ZEEK_PRIMARY_FINGERPRINT"' in recipe
+    assert '--verify "$signature" "$archive"' in recipe
+    assert '$2 == "VALIDSIG"' in recipe
+    assert recipe.index('--verify "$signature" "$archive"') < recipe.index(
+        'tar -xzf "$archive"'
+    )
+    assert "systemctl" not in recipe
+    assert "zeekctl" not in recipe.lower()
+
+    assert "MEGALODON never launches Zeek" in normalized
+    assert "closed-profile conn.log" in normalized

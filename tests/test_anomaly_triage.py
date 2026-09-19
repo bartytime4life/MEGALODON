@@ -13,26 +13,32 @@ import tempfile
 import pytest
 
 from megalodon.offline import triage
-from megalodon.offline.anomaly import build_anomaly_dossier
+from megalodon.offline.anomaly import (
+    SELECTION_SCHEMA, baseline_fingerprint, build_anomaly_dossier, selection_fingerprint,
+)
 from megalodon.offline.common import OfflineError
 import megalodon.qwen_advisory as qwen
-from test_anomaly_advisory import REQUEST, REGISTRY, pin
+from test_anomaly_advisory import REQUEST, REGISTRY, pin, structured_answer
 from test_anomaly import baseline
 from test_qwen_advisory import FakeConnection, FakeResponse
 
 
 def write_inputs(root):
     data = deepcopy(REQUEST['input'])
+    selection = {'schema': SELECTION_SCHEMA, 'as_of': data['as_of'],
+                 'reference': {'window': data['reference']['window'],
+                               'baseline_sha256': data['reference']['baseline_sha256']},
+                 'current': {'window': data['current']['window'],
+                             'baseline_sha256': data['current']['baseline_sha256']}}
     files = {'reference.json': data['reference']['baseline'],
              'current.json': data['current']['baseline'],
-             'windows.json': {'schema': 'offline-anomaly-windows-v1',
-                              'reference': data['reference']['window'],
-                              'current': data['current']['window'], 'as_of': data['as_of']},
+             'selection.json': selection,
              'registry.json': REGISTRY}
     for name, value in files.items():
         (root / name).write_text(json.dumps(value))
     return ['--input-root', str(root), '--reference', 'reference.json',
-            '--current', 'current.json', '--windows', 'windows.json']
+            '--current', 'current.json', '--selection', 'selection.json',
+            '--selection-sha256', selection_fingerprint(selection)]
 
 
 @pytest.fixture
@@ -45,6 +51,16 @@ def inputs(tmp_path, monkeypatch):
 
 def enable(args):
     return args + ['--qwen', '--registry', 'registry.json', '--registry-sha256', pin()]
+
+
+def refresh_selection(root, args):
+    selection = json.loads((root / 'selection.json').read_text())
+    selection['reference']['baseline_sha256'] = baseline_fingerprint(
+        json.loads((root / 'reference.json').read_text()))
+    selection['current']['baseline_sha256'] = baseline_fingerprint(
+        json.loads((root / 'current.json').read_text()))
+    (root / 'selection.json').write_text(json.dumps(selection))
+    args[args.index('--selection-sha256') + 1] = selection_fingerprint(selection)
 
 
 def forbid(*args, **kwargs):
@@ -66,7 +82,8 @@ def test_default_command_returns_evidence_without_provider_or_other_io(inputs, m
 @pytest.fixture
 def provider(monkeypatch):
     FakeConnection.instances = []
-    FakeConnection.next_response = FakeResponse()
+    FakeConnection.next_response = FakeResponse(payload={
+        'model': 'local:qwen-approved-v1', 'response': structured_answer(), 'done': True})
     FakeConnection.request_error = None
     monkeypatch.setattr(qwen, '_LiteralLoopbackHTTPConnection', FakeConnection)
     return FakeConnection
@@ -90,6 +107,24 @@ def test_bad_pin_preserves_evidence_and_prevents_socket(inputs, monkeypatch, cap
     value = json.loads(capsys.readouterr().out)
     assert value['dossier'] == build_anomaly_dossier(REQUEST['input'])
     assert value['ai']['reason_code'] == 'REGISTRY_FINGERPRINT_MISMATCH'
+    assert value['provider_request_performed'] is False
+
+
+def test_bad_selection_pin_fails_before_baseline_reads(inputs, monkeypatch, capsys):
+    args = list(inputs)
+    args[args.index('--selection-sha256') + 1] = '0' * 64
+    monkeypatch.setattr(triage, 'read_reference', forbid)
+    assert triage.main(args) == 1
+    value = json.loads(capsys.readouterr().out)
+    assert value['reason_code'] == 'ANOMALY_SELECTION_FINGERPRINT_MISMATCH'
+    assert value['provider_request_performed'] is False
+
+
+def test_selection_rejects_a_stable_but_substituted_baseline(inputs, tmp_path, capsys):
+    (tmp_path / 'current.json').write_text((tmp_path / 'reference.json').read_text())
+    assert triage.main(inputs) == 1
+    value = json.loads(capsys.readouterr().out)
+    assert value['reason_code'] == 'ANOMALY_BASELINE_FINGERPRINT_MISMATCH'
     assert value['provider_request_performed'] is False
 
 
@@ -118,6 +153,7 @@ def test_unexpected_provider_escape_records_unknown_without_losing_evidence(inpu
 
 def test_no_candidates_never_reads_registry_or_starts_provider(inputs, tmp_path, monkeypatch, capsys):
     (tmp_path / 'current.json').write_text((tmp_path / 'reference.json').read_text())
+    refresh_selection(tmp_path, inputs)
     (tmp_path / 'registry.json').unlink()
     monkeypatch.setattr(triage, 'invoke_qwen_anomaly_advisory', forbid)
     assert triage.main(enable(inputs)) == 0
@@ -131,6 +167,7 @@ def test_filtered_port_churn_keeps_no_candidate_gate_before_registry(inputs, tmp
     for name, start in [('reference.json', 1000), ('current.json', 2000)]:
         data = baseline(tuple((port, 1) for port in range(start, start + 300)))
         (tmp_path / name).write_text(json.dumps(data))
+    refresh_selection(tmp_path, inputs)
     (tmp_path / 'registry.json').unlink()
     monkeypatch.setattr(triage, 'invoke_qwen_anomaly_advisory', forbid)
     assert triage.main(enable(inputs)) == 0
@@ -138,6 +175,23 @@ def test_filtered_port_churn_keeps_no_candidate_gate_before_registry(inputs, tmp
     assert value['dossier']['status'] == 'no_candidates'
     assert value['dossier']['reason_code'] == 'NO_THRESHOLD_CROSSING'
     assert value['dossier']['candidates'] == []
+    assert value['ai']['reason_code'] == 'EVIDENCE_NOT_ELIGIBLE'
+    assert value['provider_request_performed'] is False
+
+
+def test_truncated_candidate_evidence_is_retained_but_never_sent_to_qwen(
+        inputs, tmp_path, monkeypatch, capsys):
+    (tmp_path / 'current.json').write_text(json.dumps(
+        baseline(tuple((port, 5) for port in range(8000, 8009)))))
+    refresh_selection(tmp_path, inputs)
+    (tmp_path / 'registry.json').unlink()
+    monkeypatch.setattr(triage, 'invoke_qwen_anomaly_advisory', forbid)
+    assert triage.main(enable(inputs)) == 0
+    value = json.loads(capsys.readouterr().out)
+    assert value['dossier']['status'] == 'candidates'
+    assert value['dossier']['truncated'] is True
+    assert value['dossier']['candidate_count'] == 8
+    assert value['dossier']['candidate_total'] == 10
     assert value['ai']['reason_code'] == 'EVIDENCE_NOT_ELIGIBLE'
     assert value['provider_request_performed'] is False
 
@@ -152,8 +206,8 @@ def test_missing_registry_is_isolated_from_evidence(inputs, tmp_path, capsys):
 
 @pytest.mark.parametrize('raw', [b'{"schema":1,"schema":2}', b'\xffSECRET', b' '*8193,
                                   b'{"schema":"offline-anomaly-windows-v1","prompt":"SECRET"}'])
-def test_malformed_windows_fail_before_any_provider(inputs, tmp_path, monkeypatch, capsys, raw):
-    (tmp_path / 'windows.json').write_bytes(raw)
+def test_malformed_selection_fails_before_any_provider(inputs, tmp_path, monkeypatch, capsys, raw):
+    (tmp_path / 'selection.json').write_bytes(raw)
     monkeypatch.setattr(triage, 'invoke_qwen_anomaly_advisory', forbid)
     assert triage.main(enable(inputs)) == 1
     output = capsys.readouterr().out
@@ -163,12 +217,12 @@ def test_malformed_windows_fail_before_any_provider(inputs, tmp_path, monkeypatc
 
 
 def test_symlink_and_traversal_are_denied(inputs, tmp_path, capsys):
-    (tmp_path / 'windows.json').unlink()
-    (tmp_path / 'windows.json').symlink_to('current.json')
+    (tmp_path / 'selection.json').unlink()
+    (tmp_path / 'selection.json').symlink_to('current.json')
     assert triage.main(inputs) == 1
     assert json.loads(capsys.readouterr().out)['reason_code'] == 'INPUT_IO_ERROR'
     args = list(inputs)
-    args[-1] = '../SECRET'
+    args[args.index('--selection') + 1] = '../SECRET'
     assert triage.main(args) == 1
     assert 'SECRET' not in capsys.readouterr().out
 
@@ -192,7 +246,8 @@ def test_privilege_gate_precedes_selected_file_reads(monkeypatch, capsys):
         raise OfflineError('NON_ROOT_REQUIRED')
     monkeypatch.setattr(triage, 'require_unprivileged_linux', denied)
     monkeypatch.setattr(triage, '_read_small_json', forbid)
-    assert triage.main(['--input-root', '/SECRET', '--reference', 'r', '--current', 'c', '--windows', 'w']) == 1
+    assert triage.main(['--input-root', '/SECRET', '--reference', 'r', '--current', 'c',
+                        '--selection', 's', '--selection-sha256', '0' * 64]) == 1
     assert json.loads(capsys.readouterr().out)['reason_code'] == 'NON_ROOT_REQUIRED'
 
 

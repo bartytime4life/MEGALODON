@@ -22,7 +22,14 @@ or service connection. Restart to recheck. Readiness describes the dashboard
 process's PATH, not every installed package or other user's environment. The
 original `dashboard` command still requires a store and omits tool checks.
 
-Use **Tools & consoles** to find a tool, open its official setup guide, inspect
+The HUD also takes one bounded process-name snapshot at startup. **Executable
+found** and **Process observed** are shown as separate facts. Process observation
+does not establish service health, configuration, traffic coverage, or a working
+integration; standalone tools show **Runtime not applicable**. The receipt omits
+process IDs, command lines, paths, users, and host identity. Restart the HUD to
+refresh this snapshot.
+
+Use **Tools** to find a tool, open its official setup guide, inspect
 copy-only verification/maintenance commands, or save its existing web-console
 address once. Saved console links open the companion app in another tab, where
 that app retains its own authentication and controls. Desktop-only tools still
@@ -31,6 +38,16 @@ MEGALODON does not install/start tools or embed their admin interfaces.
 Addresses persist only in this browser and origin; the hosted Site and local HUD
 have separate bookmarks. Remove a link from its editor. No credentials belong
 in a saved address. No background connection test is performed.
+
+On the local Linux dashboard, the Python/SQLite and Scapy maintenance cards
+use the absolute Python executable running that dashboard. Copied commands work
+from a new terminal without activating a virtual environment. When the package
+is loaded from an identified MEGALODON source checkout, its reinstall command
+names that checkout explicitly and retains an editable install; review that
+checkout before running it. Without an identified checkout, use the original
+reviewed package source to reinstall. These command paths are captured at startup
+and displayed only in the local command cards. The hosted Site keeps generic
+examples, which require activating the intended environment in each terminal.
 
 The home **Choose existing data for the next launch** form prepares a command
 for optional settings, completed offline evidence and a Suricata store. Fields
@@ -43,10 +60,14 @@ and sensor operation remain explicit separate workflows.
 
 The command center stays pinned to one browser viewport. Its persistent tabs
 switch among three internally scrolling workspaces without reloading the page:
-**Live review** leads with the trust strip, stored counters, and detection
-triage; **Analysis** contains the Reference Library, offline snapshot, optional
-Suricata evidence, and display-only Qwen receipt boundary; **Tools & consoles** contains every closed
-application slot.
+**Overview** reads from top to bottom as data freshness, four stored counters,
+bounded recent traffic, local data/tool observations, three common tasks, and
+the stored-alert table. The report builder and advanced alert filters stay
+collapsed until requested. **Investigate** keeps its Reference Library, offline
+snapshot, optional Suricata evidence, and ingestion receipts closed until one
+source is opened; the display-only Qwen receipt boundary remains visible at the
+top. **Tools** presents every application as a compact row and reveals setup,
+console, and data-boundary controls only for the row that is opened.
 Switching workspaces preserves local filters and never fetches external data or
 starts an analysis.
 
@@ -71,6 +92,8 @@ There are six distinct surfaces. Do not combine their meanings:
 | Surface | What it represents | What it does not prove |
 | --- | --- | --- |
 | Stored telemetry and triage | The current successful read of bounded stored metadata/detections | Current capture, ingestion, endpoint health, or incident uniqueness |
+| Stored traffic pulse | The newest 240 stored event timestamps, protocols, and byte counts | Wire speed, complete network visibility, payload content, or sensor continuity |
+| Tool startup status | Separate executable-presence and process-name observations taken when `hud` starts | Package compatibility, configured service health, accepted data, or complete host inventory |
 | Offline snapshot | One explicitly selected, validated report projection loaded at startup | A live analyzer connection or automatically refreshed run |
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |
 | Application interfaces | Fourteen repository-defined capability slots, workflow contracts, and next gates for one profile | Embedded vendor consoles, installed programs, live connections, active sensors, or platform acceptance |
@@ -99,7 +122,7 @@ signature alerts, newest publication first. Source provenance links lead to the
 corresponding publication facts: sensor, run, declared ruleset/version, consumer
 attempt, and committed alert count. The producer's `blocked` observation remains
 separate from MEGALODON's `not_attempted` action state. These alerts are excluded
-from the Live review detection and action counters.
+from the Overview alert and recorded-decision counters.
 
 This is a startup snapshot. Periodic refresh, browser reload, and workspace
 switches do not read the Suricata store again. Restart the dashboard to take a
@@ -113,9 +136,23 @@ unique new incident; a decrease is not proof that a threat was remediated. The
 bounded detection list can omit older rows. Search, severity, rule, and timeline
 filters apply only to the returned view, not the entire history.
 
+## Create a bounded report
+
+Choose **Create a report** under Common tasks in Overview, then choose **Operations overview**,
+**Detection review**, or **Ingestion health**. Update the preview, then copy its
+plain-language summary, download JSON or CSV, or use **Print / save PDF**. Every
+format includes its generation time, returned-data bounds, and the limitation
+that stored metadata does not prove capture completeness or service health.
+
+Reports are assembled in the browser from the successful projections already on
+screen. The controls do not query additional private fields, POST data, write the
+audit database, or create a server-side report. A failed refresh preserves a
+prior traffic picture as stale; generate a report only when that provenance is
+acceptable for the intended use.
+
 ## Operate the Integration Map
 
-Opening **Tools & consoles** loads the selected **Linux** profile once through a
+Opening **Tools** loads the selected **Linux** profile once through a
 same-origin GET for static repository constants. Choose **Windows evaluation**
 or **Other platforms**, then select **Load integration map** to request that
 profile. A failed first load requires an explicit retry. None of these steps

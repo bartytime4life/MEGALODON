@@ -194,20 +194,27 @@
       "additionalProperties": false,
       "required": [
         "schema",
+        "selection_sha256",
         "reference",
         "current",
         "as_of"
       ],
       "properties": {
         "schema": {
-          "const": "offline-anomaly-input-v1"
+          "const": "offline-anomaly-input-v2"
+        },
+        "selection_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "maxLength": 64
         },
         "reference": {
           "type": "object",
           "additionalProperties": false,
           "required": [
             "window",
-            "baseline"
+            "baseline",
+            "baseline_sha256"
           ],
           "properties": {
             "window": {
@@ -215,6 +222,11 @@
             },
             "baseline": {
               "$ref": "#/$defs/baseline"
+            },
+            "baseline_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "maxLength": 64
             }
           }
         },
@@ -223,7 +235,8 @@
           "additionalProperties": false,
           "required": [
             "window",
-            "baseline"
+            "baseline",
+            "baseline_sha256"
           ],
           "properties": {
             "window": {
@@ -231,6 +244,11 @@
             },
             "baseline": {
               "$ref": "#/$defs/baseline"
+            },
+            "baseline_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "maxLength": 64
             }
           }
         },
@@ -329,6 +347,55 @@
         "tools": {
           "type": "array",
           "maxItems": 0
+        }
+      }
+    },
+    "anomalyAdvisoryOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_ids",
+        "summary",
+        "benign_alternatives",
+        "missing_evidence"
+      ],
+      "properties": {
+        "candidate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^a[0-9]{2}$"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "benign_alternatives": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "missing_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
         }
       }
     },

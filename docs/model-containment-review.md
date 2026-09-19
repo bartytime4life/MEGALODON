@@ -73,7 +73,7 @@ not prove resistance to an arbitrary compromised interpreter or provider.
 | --- | --- | --- |
 | Client transport | At most one bounded request to literal `127.0.0.1:11434`, no DNS/proxy/redirect/fallback path | Ownership and integrity of the process bound to that port; the provider's own outbound access or reachable shared services |
 | Model identity | Request metadata agrees with the independently pinned registry | Authentic publisher provenance and attestation of the bytes actually loaded by the provider |
-| Resource limits | Per-process concurrency one, bounded request/response and active request deadline | Host-wide concurrency across other processes, model-server resource containment and cross-user isolation |
+| Resource limits | Concurrency one across threads and local Linux processes sharing the fixed `/tmp` mount, bounded request/response and active request deadline | Separate-mount/container concurrency, model-server resource containment and provider-side clients outside MEGALODON |
 | Package/build inputs | Existing platform wheel hashes, pinned Actions and index-free use of verified wheelhouses | Publisher trust, bootstrap/runner integrity, or OS-enforced direct and transitive egress restrictions |
 | Monitoring and audit | Deterministic, bounded, caller-visible refusal receipts | A durable independent monitor, notification delivery or tamper-proof incident log; this API does not persist receipts |
 

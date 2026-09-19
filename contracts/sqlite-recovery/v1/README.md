@@ -22,9 +22,11 @@ contract.
 Successful receipts require source and destination identity, SQLite and
 application schema versions, page counts and logical byte counts, full
 `integrity_check`, `foreign_key_check`, a monotonic elapsed time, and
-digests for the reviewed artifact and manifest. They disclose no filesystem
-path. The digest scope is the backup artifact or bounded manifest only, never
-packet payloads, captured telemetry, audit rows, or another raw input.
+digests for the reviewed artifact and manifest. They also attest that the
+destination is not the source object; a same-object success receipt is outside
+the schema. They disclose no filesystem path. The digest scope is the backup
+artifact or bounded manifest only, never packet payloads, captured telemetry,
+audit rows, or another raw input.
 
 Failed receipts never become partial success. A created but incomplete
 destination is preserved for operator review or marked unknown; this contract

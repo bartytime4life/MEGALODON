@@ -71,6 +71,7 @@ def test_backup_then_restore_round_trip_preserves_data(tmp_path) -> None:
     receipt = sr.backup_database(operation_id="op-backup-1", source_path=source, destination_path=backup_path)
     assert receipt["status"] == "completed"
     assert receipt["reason"] == "COMPLETED"
+    assert receipt["destination_same_as_source"] is False
     _assert_valid(receipt)
 
     # source_mutated: false is not just claimed, verify it is actually true.

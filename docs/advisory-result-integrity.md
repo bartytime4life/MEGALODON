@@ -19,17 +19,26 @@ No real provider was called to reproduce them.
 | Provider completion | `done=true` remains required. If `done_reason` is present, only exact string `stop` is admitted. Other values discard partial text and return `PROVIDER_RESPONSE_INVALID`. |
 | Optional metadata | Present `thinking`, `created_at`, `done_reason` and `context` fields must meet their types; explicit null is not omission. Existing accounting and envelope limits remain. |
 | Display text | Python, JSON Schema and browser reject C0/C1 controls, bidi direction/override/isolate controls, line/paragraph separators, isolated surrogates and BOM. Empty/whitespace-only fields are rejected. |
-| Typed results | Copy an exact `QwenAdvisoryResult`; validate outcome/code, policy/model fields, text, limits and accounting. Arbitrary objects and field subclasses do not supply methods. |
+| Typed results | Copy an exact `QwenAdvisoryResult`; validate outcome/code, policy/model fields, text, limits, accounting and anomaly candidate identities. Arbitrary objects and field subclasses do not supply methods. |
 | Triage handoff | Validate against the anomaly policy and selected model receipt, then serialize inside the provider isolation boundary. Any malformed return retains the completed dossier and marks request completion unknown. |
 | Dashboard | Reuse the owned validator while retaining the original v1 policy, 8 KiB envelope, startup-only snapshot, text-only rendering and GET-only route. |
+
+The anomaly policy additionally requires one closed JSON object whose candidate
+IDs exactly equal the recomputed dossier order. It validates bounded summary,
+benign-alternative, and missing-evidence fields before constructing display
+text. Empty or whitespace-only response text is invalid rather than an
+unstructured abstention. This prevents unsupported candidate references and
+executable fields; it does not prove that free prose is factually correct or
+semantically action-free.
 
 The [Ollama generate API](https://docs.ollama.com/api/generate) distinguishes
 `done` from the reason generation stopped. MEGALODON's exact-stop allowlist is
 a conservative local acceptance rule, not a claim that every upstream reason
 is an error in Ollama. Legacy responses omitting the optional reason remain
 compatible; they do not prove natural termination. The endpoint, fixed request,
-512-token ceiling, time/byte budgets, cancellation, lock and no-retry policy
-are unchanged. Optional upstream fields are not new local capabilities.
+512-token ceiling, time/byte budgets, cancellation, the nonblocking in-process
+gate and stable `/tmp` directory-inode Linux lock, and no-retry policy remain
+fixed. Optional upstream fields are not new local capabilities.
 
 Tab, CR and LF in a provider response may be normalized to spaces. Other
 disallowed controls are checked before whitespace normalization so it cannot

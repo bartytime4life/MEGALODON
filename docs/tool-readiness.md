@@ -56,7 +56,7 @@ fixed `/usr/bin/tshark` path or installed-tool acceptance gate, and finding
 | `ossec` | `ossec-control` |
 | `greenbone` | `gvmd` |
 | `zabbix` | `zabbix_agentd` |
-| `nagios-core` | `nagios` |
+| `nagios-core` | `nagios4` (Ubuntu package executable) |
 
 For tools with multiple separately installed components, this checks only the
 named representative; it does not infer the other components' state. Neither

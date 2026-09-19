@@ -10,7 +10,7 @@ import re
 from ..advisory import AirlockDecision, FIXED_LIMITS
 from ..anomaly_advisory import POLICY_VERSION, REQUEST_SCHEMA
 from ..qwen_advisory import invoke_qwen_anomaly_advisory, validated_qwen_result
-from .anomaly import build_anomaly_dossier
+from .anomaly import INPUT_SCHEMA, build_anomaly_dossier, selection_fingerprint
 from .baseline import read_reference
 from .common import Limits, OfflineError, open_input, require_unprivileged_linux
 from .zeek import json_object
@@ -19,7 +19,7 @@ MAX_RECEIPT_BYTES = 32 * 1024
 
 
 def _failure(code: str) -> dict:
-    return {'schema': 'offline-anomaly-triage-v1', 'status': 'failed',
+    return {'schema': 'offline-anomaly-triage-v2', 'status': 'failed',
             'reason_code': code, 'provider_request_performed': False,
             'persistence_status': 'not_attempted', 'action_status': 'not_attempted'}
 
@@ -58,7 +58,7 @@ def _read_small_json(root: str, relative: str) -> dict:
         raise OfflineError('INVALID_ENCODING') from None
 
 
-def _explain(args, data: dict) -> tuple[dict, bool | None, int]:
+def _explain(args, data: dict, dossier: dict) -> tuple[dict, bool | None, int]:
     """Provider failure must not discard the already constructed evidence."""
     try:
         registry = _read_small_json(args.input_root, args.registry)
@@ -74,6 +74,7 @@ def _explain(args, data: dict) -> tuple[dict, bool | None, int]:
         result = invoke_qwen_anomaly_advisory(
             request, enabled=True, local_model_registry=registry,
             local_model_registry_sha256=args.registry_sha256,
+            selection_sha256=args.selection_sha256,
         )
         if type(result) is AirlockDecision:
             if (type(result.decision) is not str or result.decision != 'DENY'
@@ -85,7 +86,9 @@ def _explain(args, data: dict) -> tuple[dict, bool | None, int]:
                 raise ValueError('invalid preflight denial')
             return {'outcome': 'DENY', 'reason_code': result.reason_code,
                     'policy_version': POLICY_VERSION}, False, 3
-        result = validated_qwen_result(result, policy_version=POLICY_VERSION)
+        expected_ids = tuple(row['id'] for row in dossier['candidates'])
+        result = validated_qwen_result(
+            result, policy_version=POLICY_VERSION, candidate_ids=expected_ids)
         projection = result.to_dict()
         if projection['model_receipt'] != receipt:
             raise ValueError('provider receipt identity mismatch')
@@ -104,7 +107,7 @@ def _explain(args, data: dict) -> tuple[dict, bool | None, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = _Parser(description='Compare selected offline baselines; optional one-shot local Qwen explanation.',
                      allow_abbrev=False)
-    for name in ('input-root', 'reference', 'current', 'windows'):
+    for name in ('input-root', 'reference', 'current', 'selection', 'selection-sha256'):
         parser.add_argument('--' + name, required=True, action=_Once)
     parser.add_argument('--qwen', action=_Once, nargs=0, help='Explicitly enable at most one local model request.')
     parser.add_argument('--registry', action=_Once, help='Relative approved anomaly-registry file under input-root.')
@@ -119,25 +122,37 @@ def main(argv: list[str] | None = None) -> int:
     try:
         # Real privilege/capability checks precede every selected-file open.
         require_unprivileged_linux()
-        windows = _read_small_json(args.input_root, args.windows)
-        if set(windows) != {'schema', 'reference', 'current', 'as_of'} or windows['schema'] != 'offline-anomaly-windows-v1':
-            raise OfflineError('ANOMALY_WINDOW_INVALID')
-        data = {'schema': 'offline-anomaly-input-v1', 'as_of': windows['as_of'],
-                'reference': {'window': windows['reference'],
-                              'baseline': read_reference(args.input_root, args.reference, Limits())},
-                'current': {'window': windows['current'],
-                            'baseline': read_reference(args.input_root, args.current, Limits())}}
+        selection = _read_small_json(args.input_root, args.selection)
+        fingerprint = selection_fingerprint(selection)
+        if (re.fullmatch(r'[a-f0-9]{64}', args.selection_sha256) is None
+                or fingerprint != args.selection_sha256):
+            raise OfflineError('ANOMALY_SELECTION_FINGERPRINT_MISMATCH')
+        data = {
+            'schema': INPUT_SCHEMA,
+            'selection_sha256': fingerprint,
+            'as_of': selection['as_of'],
+            'reference': {
+                'window': selection['reference']['window'],
+                'baseline_sha256': selection['reference']['baseline_sha256'],
+                'baseline': read_reference(args.input_root, args.reference, Limits()),
+            },
+            'current': {
+                'window': selection['current']['window'],
+                'baseline_sha256': selection['current']['baseline_sha256'],
+                'baseline': read_reference(args.input_root, args.current, Limits()),
+            },
+        }
         dossier = build_anomaly_dossier(data)
     except (OfflineError, OSError) as exc:
         print(_json(_failure(str(exc) if isinstance(exc, OfflineError) else 'LOCAL_IO_ERROR')))
         return 1
     ai = {'outcome': 'not_requested', 'reason_code': 'QWEN_DISABLED'}
     performed, exit_code = False, 0
-    if args.qwen and dossier['status'] == 'candidates':
-        ai, performed, exit_code = _explain(args, data)
+    if args.qwen and dossier['status'] == 'candidates' and not dossier['truncated']:
+        ai, performed, exit_code = _explain(args, data, dossier)
     elif args.qwen:
         ai = {'outcome': 'not_attempted', 'reason_code': 'EVIDENCE_NOT_ELIGIBLE'}
-    result = {'schema': 'offline-anomaly-triage-v1', 'status': 'complete',
+    result = {'schema': 'offline-anomaly-triage-v2', 'status': 'complete',
               'dossier': dossier, 'ai': ai, 'provider_request_performed': performed,
               'persistence_status': 'not_attempted', 'action_status': 'not_attempted'}
     output = _json(result)

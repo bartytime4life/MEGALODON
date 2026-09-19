@@ -13,14 +13,14 @@ INTEGRATIONS_HTML = """
       <span class="state-unknown"><i class="app-dot" aria-hidden="true"></i>Not checked or unknown</span>
     </div>
     <div class="integration-controls">
-      <label class="field" for="integrations-platform"><span>Documentation profile</span>
+      <label class="field" for="integrations-platform"><span>Platform guide</span>
         <select id="integrations-platform"><option value="linux">Linux</option><option value="windows">Windows evaluation</option><option value="other">Other platforms</option></select>
       </label>
       <button id="integrations-load" type="button">Load integration map</button>
-      <label class="field" for="integrations-query"><span>Filter this map</span>
-        <input id="integrations-query" type="search" maxlength="160" autocomplete="off" placeholder="Tool, input, output, or gate">
+      <label class="field" for="integrations-query"><span>Search tools</span>
+        <input id="integrations-query" type="search" maxlength="160" autocomplete="off" placeholder="Name, data type, or capability">
       </label>
-      <label class="field" for="integrations-status-filter"><span>Documented availability</span>
+      <label class="field" for="integrations-status-filter"><span>Availability</span>
         <select id="integrations-status-filter">
           <option value="ALL">All statuses</option><option value="implemented">Implemented</option><option value="optional">Optional</option>
           <option value="evaluation_only">Evaluation only</option><option value="contract_only">Contract only</option><option value="manual_only">Manual only</option>
@@ -46,11 +46,17 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 18px 22px 0; }
 .integration-controls .field { flex: 1 1 180px; min-width: 0; }
 .integration-controls button { min-height: 44px; }
-.integration-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 22px; }
-.integration-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .34); overflow-wrap: anywhere; }
-.integration-card h3 { margin: 0 0 9px; font-size: .95rem; }
-.integration-zone { margin: 0 0 6px; color: var(--aqua); font-size: .65rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.integration-cards { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 14px 22px 18px; }
+.integration-card { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: rgba(3, 13, 19, .34); overflow-wrap: anywhere; }
+.integration-card > summary { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(0, 1.4fr); gap: 12px; align-items: center; min-height: 64px; padding: 11px 13px; cursor: pointer; list-style: none; }
+.integration-card > summary::-webkit-details-marker { display: none; }
+.integration-card[open] > summary { border-bottom: 1px solid var(--line); background: rgba(81, 230, 207, .04); }
+.integration-identity { display: grid; gap: 3px; }
+.integration-title { color: var(--text); font-size: .86rem; font-weight: 800; }
+.integration-zone { margin: 0; color: var(--aqua); font-size: .62rem; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+.integration-summary-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .integration-card .summary-chip { display: inline-block; border-radius: 9px; }
+.integration-card-body { padding: 14px; }
 .app-state-legend { display:flex; flex-wrap:wrap; gap:12px; padding:14px 22px 0; color:var(--muted); font-size:.76rem; }
 .app-state-legend span { display:inline-flex; align-items:center; gap:7px; }
 .app-status-grid { display:grid; gap:7px; margin:13px 0; }
@@ -68,11 +74,11 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-card dt { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04em; }
 .integration-card dd { margin: 0 0 8px; font-size: .8rem; line-height: 1.5; }
 .integration-gate { padding: 10px; border-left: 3px solid var(--amber); background: rgba(255, 209, 102, .045); font-size: .78rem; line-height: 1.5; }
-.integration-card summary { min-height: 44px; padding: 12px 0; color: var(--cyan); cursor: pointer; font-size: .8rem; font-weight: 750; }
+.integration-card-body details > summary { min-height: 44px; padding: 12px 0; color: var(--cyan); cursor: pointer; font-size: .8rem; font-weight: 750; }
 .integration-card details dl { margin: 8px 0 0; }
 .integration-footnote { margin: 0; padding: 0 22px 22px; color: var(--muted); font-size: .76rem; line-height: 1.6; }
 .integration-empty { grid-column: 1 / -1; margin: 0; padding: 18px; color: var(--muted); font-size: .85rem; }
-@media (max-width: 720px) { .integration-cards { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .integration-card > summary { grid-template-columns: 1fr; } .integration-summary-status { justify-content: flex-start; } }
 @media (max-width: 560px) {
   .integration-controls, .integration-cards { padding-right: 14px; padding-left: 14px; }
   .integration-footnote { padding-right: 14px; padding-left: 14px; }
@@ -185,27 +191,30 @@ function integrationStatusRow(name, state) {
   return row;
 }
 function integrationCard(item) {
-  const card = document.createElement('article'); card.className = 'integration-card';
-  card.append(
-    textNode('p', integrationZones[item.id], 'integration-zone'),
-    textNode('h3', item.software),
-    textNode('span', integrationStatuses[item.selected_status], 'summary-chip')
-  );
+  const card = document.createElement('details'); card.className = 'integration-card';
+  const summary = document.createElement('summary');
+  const identity = document.createElement('span'); identity.className = 'integration-identity';
+  identity.append(textNode('span', integrationZones[item.id], 'integration-zone'), textNode('span', item.software, 'integration-title'));
+  const statuses = document.createElement('span'); statuses.className = 'integration-summary-status';
+  statuses.append(textNode('span', integrationStatuses[item.selected_status], 'summary-chip'));
   const toolIndex = integrationIds.indexOf(item.id);
   const toolId = workflowToolIds[toolIndex];
+  statuses.append(textNode('span', toolPresenceText(toolIndex), 'summary-chip'));
+  summary.append(identity, statuses); card.append(summary);
+  const body = document.createElement('div'); body.className = 'integration-card-body';
   const capability = integrationCapabilityState(toolIndex, item);
   const matrix = document.createElement('section'); matrix.className = 'app-status-grid'; matrix.setAttribute('aria-label', item.software + ' capability state');
   matrix.append(integrationStatusRow('Presence', capability.presence),
                 integrationStatusRow('MEGALODON support', capability.qualification),
                 integrationStatusRow('Administration', capability.administration),
                 integrationStatusRow('Health', capability.health));
-  card.append(matrix);
+  body.append(matrix);
   const reviewTargets = {core: '#detections-title', tshark: '#offline-title', zeek: '#offline-title', suricata: '#suricata-title', qwen: '#analysis-window-title'};
   if (reviewTargets[toolId]) {
-    const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; card.append(review);
+    const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);
   }
-  MegalodonControls.mount(card, toolId, item.software);
-  card.append(textNode('p', 'Open companion consoles in a new tab; return to this HUD tab for MEGALODON navigation.', 'app-return-note'));
+  MegalodonControls.mount(body, toolId, item.software);
+  body.append(textNode('p', 'Open companion consoles in a new tab; return to this HUD tab for MEGALODON navigation.', 'app-return-note'));
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);
@@ -217,7 +226,7 @@ function integrationCard(item) {
     ['Launch policy', item.launch_policy], ['Data boundary', item.data_boundary], ['Action boundary', item.action_boundary],
     ['Inert command template (not a launch control)', item.entry_point === null ? 'No MEGALODON runtime entry point' : item.entry_point]
   ].forEach(([label, value]) => integrationDefinition(label, value, facts));
-  details.append(facts); card.append(details);
+  details.append(facts); body.append(details); card.append(body);
   return card;
 }
 function integrationViewStatus(visibleCount) {

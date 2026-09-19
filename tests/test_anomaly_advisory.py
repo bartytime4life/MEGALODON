@@ -15,9 +15,13 @@ import pytest
 
 from megalodon.advisory import preflight_advisory
 from megalodon.anomaly_advisory import POLICY_VERSION, preflight_anomaly_advisory
-from megalodon.offline.anomaly import build_anomaly_dossier
+from megalodon.offline.anomaly import (
+    SELECTION_SCHEMA, baseline_fingerprint, build_anomaly_dossier,
+    selection_fingerprint,
+)
 import megalodon.qwen_advisory as qwen
 from test_qwen_advisory import FakeConnection, FakeResponse
+from test_anomaly import baseline
 
 ROOT = Path(__file__).parents[1] / 'contracts' / 'anomaly-advisory' / 'v1'
 REQUEST = json.loads((ROOT / 'fixtures/request.json').read_text())
@@ -29,18 +33,41 @@ def pin(registry=REGISTRY):
     return hashlib.sha256(json.dumps(registry, sort_keys=True, separators=(',', ':')).encode('ascii')).hexdigest()
 
 
-def admit(request=None, registry=None, fingerprint=None):
+def seal_request(request):
+    data = request['input']
+    for name in ('reference', 'current'):
+        data[name]['baseline_sha256'] = baseline_fingerprint(data[name]['baseline'])
+    selection = {'schema': SELECTION_SCHEMA, 'as_of': data['as_of']}
+    for name in ('reference', 'current'):
+        selection[name] = {'window': data[name]['window'],
+                           'baseline_sha256': data[name]['baseline_sha256']}
+    data['selection_sha256'] = selection_fingerprint(selection)
+    return request
+
+
+def structured_answer(ids=('a01', 'a02')):
+    return json.dumps({'candidate_ids': list(ids),
+                       'summary': 'The supplied aggregate candidates changed.',
+                       'benign_alternatives': ['A service migration could explain the change.'],
+                       'missing_evidence': ['Capture coverage and source identity need verification.']},
+                      separators=(',', ':'))
+
+
+def admit(request=None, registry=None, fingerprint=None, selection_pin=None):
     return preflight_anomaly_advisory(
         deepcopy(REQUEST) if request is None else request,
         local_model_registry=deepcopy(REGISTRY) if registry is None else registry,
         local_model_registry_sha256=pin() if fingerprint is None else fingerprint,
+        selection_sha256=(REQUEST['input']['selection_sha256']
+                          if selection_pin is None else selection_pin),
     )
 
 
 @pytest.fixture
 def provider(monkeypatch):
     FakeConnection.instances = []
-    FakeConnection.next_response = FakeResponse()
+    FakeConnection.next_response = FakeResponse(payload={
+        'model': 'local:qwen-approved-v1', 'response': structured_answer(), 'done': True})
     FakeConnection.request_error = None
     monkeypatch.setattr(qwen, '_LiteralLoopbackHTTPConnection', FakeConnection)
     return FakeConnection
@@ -48,7 +75,8 @@ def provider(monkeypatch):
 
 def invoke(**kwargs):
     values = dict(request=deepcopy(REQUEST), enabled=True,
-                  local_model_registry=deepcopy(REGISTRY), local_model_registry_sha256=pin())
+                  local_model_registry=deepcopy(REGISTRY), local_model_registry_sha256=pin(),
+                  selection_sha256=REQUEST['input']['selection_sha256'])
     values.update(kwargs)
     return qwen.invoke_qwen_anomaly_advisory(**values)
 
@@ -66,6 +94,8 @@ def test_structural_fixtures_and_canonical_evidence_prompt():
     assert projected['dossier_id'] == dossier['dossier_id']
     assert projected['candidates'] == dossier['candidates']
     assert projected['quality_label'] == 'uncalibrated'
+    Draft202012Validator({'$ref': '#/$defs/anomalyAdvisoryOutput',
+                          '$defs': SCHEMA['$defs']}).validate(json.loads(structured_answer()))
 
 
 @pytest.mark.parametrize('field,value', [
@@ -105,9 +135,22 @@ def test_derived_candidates_cannot_be_supplied_and_unusable_evidence_denies():
     assert admit(request).reason_code == 'ANOMALY_EVIDENCE_INVALID'
     request = deepcopy(REQUEST)
     request['input']['current']['baseline'] = deepcopy(request['input']['reference']['baseline'])
-    assert admit(request).reason_code == 'ANOMALY_EVIDENCE_UNAVAILABLE'
+    seal_request(request)
+    assert admit(request, selection_pin=request['input']['selection_sha256']).reason_code == 'ANOMALY_EVIDENCE_UNAVAILABLE'
     request['input']['current']['window']['completeness'] = 'unknown'
-    assert admit(request).reason_code == 'ANOMALY_EVIDENCE_UNAVAILABLE'
+    seal_request(request)
+    assert admit(request, selection_pin=request['input']['selection_sha256']).reason_code == 'ANOMALY_EVIDENCE_UNAVAILABLE'
+
+
+def test_truncated_evidence_is_visible_but_model_ineligible():
+    request = deepcopy(REQUEST)
+    request['input']['current']['baseline'] = baseline(
+        tuple((port, 5) for port in range(8000, 8009)))
+    seal_request(request)
+    result = admit(request, selection_pin=request['input']['selection_sha256'])
+    assert result.decision == 'DENY'
+    assert result.reason_code == 'ANOMALY_EVIDENCE_INCOMPLETE'
+    assert result.provider_request_performed is False
 
 
 @pytest.mark.parametrize('field,value', [
@@ -149,6 +192,26 @@ def test_independent_fingerprint_and_model_policy_are_required():
     assert result.decision == 'DENY'
 
 
+@pytest.mark.parametrize('value', [True, [], {}, 2, 'x' * 64])
+def test_independent_selection_pin_must_be_a_digest(value):
+    assert admit(selection_pin=value).reason_code == 'ANOMALY_SELECTION_PIN_INVALID'
+
+
+def test_direct_api_cannot_self_assert_a_replaced_selection():
+    request = deepcopy(REQUEST)
+    request['input']['as_of'] = '2026-02-01T03:00:00Z'
+    request['input']['reference']['window']['started_at'] = '2026-02-01T01:00:00Z'
+    request['input']['reference']['window']['finished_at'] = '2026-02-01T02:00:00Z'
+    request['input']['current']['window']['started_at'] = '2026-02-01T02:00:00Z'
+    request['input']['current']['window']['finished_at'] = '2026-02-01T03:00:00Z'
+    seal_request(request)
+    assert request['input']['selection_sha256'] != REQUEST['input']['selection_sha256']
+    result = admit(request)
+    assert result.decision == 'DENY'
+    assert result.reason_code == 'ANOMALY_SELECTION_FINGERPRINT_MISMATCH'
+    assert result.provider_request_performed is False
+
+
 def test_owned_snapshot_rejects_hostile_types_without_methods():
     class Hostile(dict):
         def __iter__(self):
@@ -173,6 +236,7 @@ def test_anomaly_provider_reuses_exact_transport_and_result_policy(provider):
     assert result.outcome == 'ANSWER' and result.policy_version == POLICY_VERSION
     assert result.to_dict()['model_receipt']['policy_version'] == POLICY_VERSION
     assert result.provider_request_performed is True
+    assert result.candidate_ids == ('a01', 'a02')
     assert len(provider.instances) == 1
     connection = provider.instances[0]
     assert (connection.host, connection.port) == ('127.0.0.1', 11434)
@@ -186,7 +250,7 @@ def test_anomaly_provider_reuses_exact_transport_and_result_policy(provider):
 
 
 @pytest.mark.parametrize('payload,status,outcome', [
-    ({'model': 'local:qwen-approved-v1', 'response': '', 'done': True}, 200, 'ABSTAIN'),
+    ({'model': 'local:qwen-approved-v1', 'response': '', 'done': True}, 200, 'ERROR'),
     ({'model': 'local:qwen-approved-v1', 'response': 'x', 'done': True, 'tools': []}, 200, 'ERROR'),
     ({'model': 'local:qwen-approved-v1', 'response': 'x'*4097, 'done': True}, 200, 'ERROR'),
     ({'model': 'local:qwen-approved-v1', 'response': 'x', 'done': True}, 302, 'ERROR'),
@@ -197,6 +261,16 @@ def test_anomaly_provider_failure_never_retries(provider, payload, status, outco
     result = invoke()
     assert result.outcome == outcome and result.policy_version == POLICY_VERSION
     assert len(provider.instances) == 1 and len(provider.instances[0].requests) == 1
+
+
+@pytest.mark.parametrize('ids', [('a01',), ('a01', 'a99'), ('a02', 'a01'),
+                                 ('a01', 'a01')])
+def test_anomaly_provider_rejects_incomplete_unknown_reordered_or_duplicate_ids(provider, ids):
+    provider.next_response = FakeResponse(payload={
+        'model': 'local:qwen-approved-v1', 'response': structured_answer(ids), 'done': True})
+    result = invoke()
+    assert result.outcome == 'ERROR'
+    assert result.reason_code == 'PROVIDER_RESPONSE_INVALID'
 
 
 def test_concurrency_is_shared_with_v1_and_cancellation_prevents_send(provider):

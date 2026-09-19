@@ -174,8 +174,14 @@ manual-only capability to an automatic or healthy state.
 
 The preflight authenticates the registry bytes with its independently supplied
 fingerprint and matches the operator-recorded artifact digest before HTTP. The
-provider adapter then applies a non-blocking process-local concurrency-one gate,
-one actively enforced shared 15-second deadline, an optional explicit
+provider adapter then applies a non-blocking in-process gate plus an exclusive
+Linux `flock` on the stable existing `/tmp` directory inode before the send
+boundary. The gate creates no replaceable lock pathname; processes sharing that
+mount contend on the same inode. Lock contention
+returns `CONCURRENCY_LIMIT_REACHED`; unsafe or unavailable lock state returns
+`CONCURRENCY_CONTROL_UNAVAILABLE`. Both preserve zero provider requests, no queue
+and no retry. The adapter also applies one actively enforced shared 15-second
+deadline, an optional explicit
 per-invocation cancellation event, a 4 KiB UTF-8 model-output cap, an 8 KiB
 status/header/chunk-framing/trailer cap applied during standard-library
 parsing, and a 32 KiB body cap. The fixed request asks the provider to unload after the call,

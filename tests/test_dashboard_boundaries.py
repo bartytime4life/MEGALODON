@@ -94,7 +94,7 @@ def test_event_projection_and_valid_limits_remain_compatible(http_dashboard, tar
     assert b"must not appear" not in body and b"198.51.100.1" not in body
 
 
-@pytest.mark.parametrize("path", ["/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"])
+@pytest.mark.parametrize("path", ["/api/config", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"])
 def test_no_query_routes_do_not_ignore_unknown_arguments(http_dashboard, path):
     server, reader = http_dashboard
     assert request(server, path + "?unknown=1")[0] == 400
@@ -193,7 +193,7 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
         assert f'id="workspace-tab-{workspace}"' in INDEX_HTML
         assert f'aria-controls="workspace-{workspace}"' in INDEX_HTML
         assert f'id="workspace-{workspace}" role="tabpanel"' in INDEX_HTML
-    for target in ("live-review-title", "detections-title", "deep-analysis-title", "analysis-window-title", "reference-title", "offline-title", "integrations-title"):
+    for target in ("detections-title", "deep-analysis-title", "analysis-window-title", "reference-title", "offline-title", "integrations-title"):
         assert f'id="{target}" tabindex="-1"' in INDEX_HTML
     assert 'role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
@@ -369,13 +369,26 @@ process.stdin.on('end', async () => {
     // An explicitly absent startup store is expected unavailability, not a
     // broken dashboard API. Both live responses must still confirm that state.
     const missingStoreResponse = () => ({ok: false, status: 503, json: async () => ({error: 'telemetry unavailable'})});
+    const missingTrafficResponse = () => ({ok: false, status: 503, json: async () => ({
+      schema: 'dashboard-traffic-v1', status: 'unavailable',
+      reason: 'No qualified data available. Import authorized metadata, then restart the HUD.',
+      generated_at: new Date().toISOString(), unit: 'metadata events; reported bytes',
+      vantage: 'unknown; no qualified store projection', quality: 'unknown',
+      window: {start: null, end: null}, limits: {events: 500, findings: 200, bytes: 262144},
+      truncated: false, excluded_event_candidates: 0, events: [], findings: [],
+      limitations: Array.from({length: 7}, (_, index) => `Bounded limitation ${index + 1}.`),
+      build: {package_version: 'test', base_commit: '0'.repeat(40), projection_sha256: '0'.repeat(64), commit: 'test'}
+    })});
+    const useMissingStoreResponses = () => {
+      context.fetch = async path => path === '/api/traffic' ? missingTrafficResponse() : missingStoreResponse();
+    };
     async function setup(sourceStatus, extra = {}) {
       context.fetch = async path => {
         assert.equal(path, '/api/setup');
-        return {ok: true, json: async () => ({schema: 'dashboard-setup-v1', source_status: sourceStatus, readiness: null, ...extra})};
+        return {ok: true, json: async () => ({schema: 'dashboard-setup-v2', source_status: sourceStatus, readiness: null, runtime: null, ...extra})};
       };
       await run('loadSetup()');
-      context.fetch = async () => missingStoreResponse();
+      useMissingStoreResponses();
     }
     await setup('not_configured');
     await run('refresh(true)');
@@ -424,7 +437,7 @@ process.stdin.on('end', async () => {
     };
     await run('refresh(true)');
     assert.equal(run('state.lastRefreshFailed'), true);
-    context.fetch = async () => missingStoreResponse(); await run('refresh(true)');
+    useMissingStoreResponses(); await run('refresh(true)');
     assert.equal(run('state.telemetryNotConfigured'), true, 'expected state must recover after transport failure');
     assert.equal(run('state.lastSuccessfulRefresh'), null);
     console.log('integration map and first-launch telemetry states passed');

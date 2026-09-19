@@ -130,6 +130,12 @@ test('lifecycle choices cover the exact fourteen tools without inventing unknown
   }
 });
 
+test('Nagios verification recognizes the Ubuntu package before source-install fallbacks', () => {
+  const nagios = resolveLifecycle('nagios');
+  assert.match(nagios.verify, /^if command -v nagios4/);
+  assert.match(nagios.verify, /\/usr\/local\/nagios\/bin\/nagios --version/);
+});
+
 test('Qwen inspect, removal and download use the same example model and literal local provider', () => {
   const qwen = resolveLifecycle('qwen');
   for (const action of ['verify','uninstall','reinstall']) {

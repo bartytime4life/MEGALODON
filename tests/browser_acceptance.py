@@ -227,6 +227,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
                counts["advisory"] == 1)
         await page.locator("#workspace-tab-analysis").click()
         await page.locator(".room-audit-history > summary").click()
+        await page.locator("#triage-tools > summary").click()
         await page.locator("#pause-button").click()
         await expect(page.locator("#pause-button")).to_have_attribute("aria-pressed", "true")
         passed("real HTTP bootstrap " + ("nonempty" if nonempty else "empty"), response.status == 200)
@@ -288,9 +289,9 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await expect(page.locator("#workspace-live")).to_be_visible()
         passed("persistent return control reaches Home")
         await page.locator("#workspace-tab-analysis").click()
+        await page.locator('details[aria-labelledby="offline-title"] > summary').click()
         if not nonempty:
             await expect(page.locator("#events")).to_contain_text("No detections recorded.")
-            await page.locator("#workspace-tab-analysis").click()
             await expect(page.locator("#offline-empty")).to_be_visible()
             passed("empty database and unselected offline states")
             passed("empty page has no script errors or nonlocal requests", not errors and not violations)
@@ -314,6 +315,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         offline_text = await page.locator("#offline-content").inner_text()
         passed("real offline projection excludes addresses", "203.0.113." not in offline_text and
                "synthetic.jsonl" not in offline_text and "flow" in offline_text)
+        await page.locator('details[aria-labelledby="reference-title"] > summary').click()
         await page.locator("#reference-port").fill("443")
         await page.locator("#reference-port-form button").click()
         await expect(page.locator("#reference-status")).to_contain_text("Reference context loaded for tcp/443")

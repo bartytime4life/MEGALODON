@@ -8,7 +8,7 @@ from threading import Thread
 
 import pytest
 
-from megalodon import cli, dashboard, readiness
+from megalodon import cli, dashboard, readiness, runtime_status
 from megalodon.config import Settings
 from megalodon.storage import DashboardStore, StorageSchemaError, Store
 
@@ -22,7 +22,7 @@ def test_hud_launch_without_store_never_creates_files(tmp_path, monkeypatch):
         observed.append(kwargs)
         assert isinstance(reader, dashboard.UnconfiguredDashboardReader)
         assert (host, port) == ("127.0.0.1", 8787)
-        for method in (reader.summary, reader.recent, reader.ingestion_runs):
+        for method in (reader.summary, reader.recent, reader.ingestion_runs, reader.traffic):
             with pytest.raises(StorageSchemaError):
                 method()
 
@@ -60,6 +60,7 @@ def test_setup_receipt_is_cached_and_http_cannot_trigger_probes(monkeypatch):
         calls.append(1)
         return {"test": "startup only"}
     monkeypatch.setattr(readiness, "readiness_report", check)
+    monkeypatch.setattr(runtime_status, "runtime_report", lambda: calls.append(2) or {"runtime": "startup only"})
     snapshot = dashboard.setup_snapshot(inspect_tools=True, source_available=False)
     handler = type("HudTestHandler", (dashboard.DashboardHandler,), {
         "setup_evidence": snapshot, "store": dashboard.UnconfiguredDashboardReader(),
@@ -81,14 +82,18 @@ def test_setup_receipt_is_cached_and_http_cannot_trigger_probes(monkeypatch):
             if expected == 200:
                 assert body == snapshot
                 assert json.loads(body)["source_status"] == "not_configured"
-        assert calls == [1]
+        assert calls == [1, 2]
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=2)
 
 
 def test_ordinary_dashboard_setup_performs_no_readiness_check(monkeypatch):
     monkeypatch.setattr(readiness, "readiness_report", lambda: pytest.fail("Unexpected tool inspection"))
-    assert json.loads(dashboard.setup_snapshot())["readiness"] is None
+    monkeypatch.setattr(runtime_status, "runtime_report", lambda: pytest.fail("Unexpected runtime inspection"))
+    receipt = json.loads(dashboard.setup_snapshot())
+    assert receipt["schema"] == "dashboard-setup-v2"
+    assert receipt["readiness"] is None
+    assert receipt["runtime"] is None
 
 
 def test_local_and_hosted_companion_assets_match():

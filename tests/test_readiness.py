@@ -59,6 +59,7 @@ def test_regular_executable_presence_does_not_execute_or_import(monkeypatch, tmp
     (tmp_path / "zeek").write_text("not executable", encoding="utf-8")
     (tmp_path / "suricata").mkdir()
     (tmp_path / "ollama").symlink_to(executable)
+    (tmp_path / "nagios4").symlink_to(executable)
     monkeypatch.setenv("PATH", str(tmp_path))
 
     def denied(*args, **kwargs):
@@ -86,6 +87,7 @@ def test_regular_executable_presence_does_not_execute_or_import(monkeypatch, tmp
     assert values["zeek"] == "not_found"
     assert values["suricata"] == "not_found"
     assert values["qwen-ollama"] == "executable_found"
+    assert values["nagios-core"] == "executable_found"
     assert not marker.exists()
 
 

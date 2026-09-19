@@ -369,6 +369,7 @@
         "destination",
         "destination_created",
         "destination_complete",
+        "destination_same_as_source",
         "artifact_sha256",
         "manifest_sha256",
         "effects"
@@ -389,6 +390,7 @@
         "destination": {"$ref": "#/$defs/verifiedDatabase"},
         "destination_created": {"const": true},
         "destination_complete": {"const": true},
+        "destination_same_as_source": {"const": false},
         "artifact_sha256": {"$ref": "#/$defs/digest"},
         "manifest_sha256": {"$ref": "#/$defs/digest"},
         "effects": {"$ref": "#/$defs/receiptEffects"}

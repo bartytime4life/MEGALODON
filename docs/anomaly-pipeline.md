@@ -61,12 +61,20 @@ it does not notify, assign severity, or replace an incident-response process.
 ## Candidate evidence
 
 `megalodon.offline.anomaly.build_anomaly_dossier` takes a closed
-`offline-anomaly-input-v1` object with `reference`, `current`, and `as_of`.
-Each side contains an existing `offline-baseline-v1` plus a declared `window`:
+`offline-anomaly-input-v2` object with `reference`, `current`, `as_of`, and an
+independently approved selection fingerprint. Each side contains an existing
+`offline-baseline-v1`, its normalized aggregate SHA-256, and a declared `window`:
 `source_id` (`source-0001` style pseudonym), canonical UTC `started_at` and
 `finished_at`, and `completeness` (`complete`, `incomplete`, `unknown`).
 
-Both adapters, record kinds and declared source IDs must match. Never combine
+The `offline-anomaly-selection-v2` manifest binds both normalized baseline
+fingerprints to their windows and `as_of`; its canonical SHA-256 must match the
+separately supplied pin at the command and advisory API boundaries. The pure
+dossier builder validates the embedded binding, while those outer boundaries
+provide the independent trust input. This detects file substitution and
+cross-selection mixing. It does not attest that an operator declaration is true
+or authenticate the original sensor. Both adapters, record kinds and declared
+source IDs must match. Never combine
 packet and flow counts, infer cross-source identity, or silently deduplicate
 different sensors. Baseline membership, source identity and loss-free collection
 are not attested by these declarations; operators must verify them separately.
@@ -81,10 +89,14 @@ five current records, changes of at least 20 percentage points in destination
 port or protocol shares, and changes in the large-record share. Comparisons
 use integer cross multiplication. Candidate rows retain counts and denominators;
 they have no probability, confidence, threat severity, or attribution field.
-Eight candidates is a hard limit: overflow abstains without returning a partial
-list. Cold start, incompleteness, stale windows and incompatible sources also
-abstain. No candidates never means safe. The dossier ID hashes only validated
-aggregate metadata; it is neither a packet-payload hash nor source attestation.
+Eight candidates is the display limit. Overflow returns the eight rows with the
+largest exact share deltas, then support and original deterministic order,
+sets `truncated=true`, and records the complete `candidate_total`. Truncated
+evidence is never sent to Qwen. Cold start, incompleteness, stale windows and
+incompatible sources abstain. No candidates never means safe. The dossier ID
+hashes normalized validated aggregate meaning plus the pinned selection, so
+equivalent list orderings have one identity. It is neither a packet-payload hash
+nor source attestation.
 
 The pure API performs no I/O. It does not change the existing live detectors,
 SQLite schema, actions, capture loop, dashboard or provider behavior.

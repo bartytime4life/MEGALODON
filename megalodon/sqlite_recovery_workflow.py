@@ -870,6 +870,18 @@ def _success_receipt(
     source: dict[str, object],
     destination: dict[str, object],
 ) -> dict[str, object]:
+    source_identity = source.get("identity")
+    destination_identity = destination.get("identity")
+    if not isinstance(source_identity, dict) or not isinstance(destination_identity, dict):
+        raise _RecoveryFailure("COMPLETION_UNCERTAIN", source_state="admitted", completion_uncertain=True)
+    if (
+        source_identity.get("device"),
+        source_identity.get("inode"),
+    ) == (
+        destination_identity.get("device"),
+        destination_identity.get("inode"),
+    ):
+        raise _RecoveryFailure("SAME_FILE_REFUSED", source_state="admitted")
     finished = _wall_now()
     if finished < operation.started_wall:
         raise _RecoveryFailure("CLOCK_ROLLBACK", source_state="admitted")
@@ -892,6 +904,7 @@ def _success_receipt(
         "destination": destination,
         "destination_created": True,
         "destination_complete": True,
+        "destination_same_as_source": False,
         "artifact_sha256": operation.artifact_sha256,
         "manifest_sha256": operation.manifest_sha256,
         "effects": dict(_EFFECTS),

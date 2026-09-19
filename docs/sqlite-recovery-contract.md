@@ -125,7 +125,9 @@ The runtime follows this sequence:
 6. Copy in bounded page steps under a monotonic deadline and retry ceiling.
    Wall-clock timestamps are recorded as untrusted operator-clock context.
 7. Recheck source and destination identity, schema version, page count, logical
-   bytes, full `integrity_check`, and `foreign_key_check`.
+   bytes, full `integrity_check`, and `foreign_key_check`. A success receipt
+   must record `destination_same_as_source: false`; matching held identities
+   are failure and can never be reported as completed.
 8. Digest only the completed backup artifact and bounded manifest. Never hash
    packet payloads or raw telemetry merely to place them in a receipt.
 9. Emit exactly one closed terminal receipt. Uncertainty, interruption, clock

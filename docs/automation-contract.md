@@ -1,6 +1,6 @@
 # MEGALODON Automation Contract
 
-**Status:** Stage 0 data contract implemented; bounded read-only recurrence preview implemented; scheduler and execution design proposed  
+**Status:** Stage 0 data contract implemented; bounded read-only recurrence preview implemented; scheduler and execution design proposed
 **Date:** 2026-09-08  
 **Audience:** MEGALODON maintainers, reviewers, operators, and future scheduler implementers  
 **Repository baseline:** [bartytime4life/MEGALODON](https://github.com/bartytime4life/MEGALODON) at ec53f5968e498b1ebee00b11119b216ba1812699

@@ -46,6 +46,7 @@
   },
   "destination_created": true,
   "destination_complete": true,
+  "destination_same_as_source": false,
   "artifact_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "manifest_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "effects": {

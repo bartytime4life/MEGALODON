@@ -1,6 +1,6 @@
 {
   "schema_version": "megalodon-sqlite-recovery-receipt-v1",
-  "operation_id": "restore-0001",
+  "operation_id": "restore-same-object",
   "operation": "restore",
   "status": "completed",
   "reason": "COMPLETED",
@@ -30,7 +30,7 @@
   "destination": {
     "identity": {
       "device": 1,
-      "inode": 2002,
+      "inode": 2001,
       "uid": 1000,
       "mode": "0600",
       "link_count": 1,
@@ -46,7 +46,7 @@
   },
   "destination_created": true,
   "destination_complete": true,
-  "destination_same_as_source": false,
+  "destination_same_as_source": true,
   "artifact_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "manifest_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "effects": {

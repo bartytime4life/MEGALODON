@@ -29,57 +29,114 @@ INDEX_HTML = """<!doctype html>
       <div class="mark" aria-hidden="true">M</div>
       <div><p class="brand-name">MEGALODON</p><p class="brand-subtitle">Local defense telemetry</p></div>
     </div>
-    <div class="connection" id="connection">Dashboard API · connecting</div>
+    <div class="connection-state"><div class="connection" id="connection">Dashboard API · connecting</div><span>Capture health unknown</span></div>
     <p class="sr-only" id="refresh-announcement" aria-live="polite"></p>
   </header>
 
   <nav class="section-nav" aria-label="Command center workspaces" role="tablist">
-    <button id="workspace-tab-live" type="button" role="tab" aria-controls="workspace-live" aria-selected="true" tabindex="0">Live review</button>
-    <button id="workspace-tab-analysis" type="button" role="tab" aria-controls="workspace-analysis" aria-selected="false" tabindex="-1">Analysis</button>
-    <button id="workspace-tab-interfaces" type="button" role="tab" aria-controls="workspace-interfaces" aria-selected="false" tabindex="-1">Tools &amp; consoles</button>
+    <button id="workspace-tab-live" type="button" role="tab" aria-controls="workspace-live" aria-selected="true" tabindex="0">Overview</button>
+    <button id="workspace-tab-analysis" type="button" role="tab" aria-controls="workspace-analysis" aria-selected="false" tabindex="-1">Investigate</button>
+    <button id="workspace-tab-interfaces" type="button" role="tab" aria-controls="workspace-interfaces" aria-selected="false" tabindex="-1">Tools</button>
   </nav>
 
   <div class="workspace-scroll" id="workspace-content">
   <section class="workspace-view" id="workspace-live" role="tabpanel" aria-labelledby="workspace-tab-live">
   <section class="hero" aria-labelledby="page-title">
     <div>
-      <p class="eyebrow">Live review</p>
-      <h1 id="page-title" tabindex="-1">Network activity</h1>
-      <p class="lede">Your stored detections, evidence and companion tools in one place.</p>
+      <p class="eyebrow">Overview</p>
+      <h1 id="page-title" tabindex="-1">What MEGALODON has stored</h1>
+      <p class="lede">A read-only view of recent metadata, alerts, and tools on this computer.</p>
     </div>
-    <div class="read-only">HTTP read only · loopback only</div>
-  </section>
-
-  <!-- HUD_SETUP -->
-
-  <section class="section-intro" aria-labelledby="live-review-title">
-    <p class="eyebrow">First layer</p>
-    <div><h2 id="live-review-title" tabindex="-1">Live review</h2><p>Stored telemetry and fixed-rule findings, refreshed only on this local dashboard’s controlled cadence. This view never changes the host or the network.</p></div>
+    <div class="read-only">Local and read only</div>
   </section>
 
   <section class="trust-strip waiting" id="trust-strip" aria-labelledby="trust-title">
     <div class="trust-summary">
-      <p class="eyebrow" id="trust-title">Operator trust status</p>
-      <p class="trust-message" id="snapshot-status" role="status" aria-live="polite" aria-atomic="true">No successful dashboard data fetch yet. Dashboard API reachability does not measure capture or ingestion health.</p>
+      <p class="eyebrow" id="trust-title">Data status</p>
+      <p class="trust-message" id="snapshot-status" role="status" aria-live="polite" aria-atomic="true">Waiting for the first dashboard update. API status does not prove capture health.</p>
     </div>
-    <dl class="trust-facts">
-      <div><dt>Detection scope</dt><dd id="scope-status">Newest 50 detections maximum</dd></div>
-      <div><dt>Response boundary</dt><dd>Review only · no live application</dd></div>
-    </dl>
+    <p class="snapshot-scope"><span id="scope-status">Newest 50 detections maximum</span><span>No changes made</span></p>
   </section>
 
   <section class="metrics" id="live-metrics" aria-label="Stored telemetry summary">
-    <article class="metric"><div class="metric-label">Events</div><div class="metric-value">—</div></article>
-    <article class="metric"><div class="metric-label">Detections</div><div class="metric-value">—</div></article>
-    <article class="metric"><div class="metric-label">High / critical stored</div><div class="metric-value">—</div></article>
-    <article class="metric"><div class="metric-label">Action records</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">Stored events</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">Alerts</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">High priority</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">Recorded decisions</div><div class="metric-value">—</div></article>
   </section>
+
+  <div class="command-overview">
+  <section class="panel traffic-panel" id="traffic-panel" aria-labelledby="traffic-title" aria-busy="true">
+    <div class="traffic-heading">
+      <div>
+        <p class="eyebrow">Recent activity</p>
+        <h2 id="traffic-title">Recent network metadata</h2>
+        <p id="traffic-status" role="status" aria-live="polite">Loading a bounded view of recorded events…</p>
+      </div>
+      <span class="traffic-freshness" id="traffic-freshness">Awaiting data</span>
+    </div>
+    <div class="traffic-layout">
+      <div class="traffic-plot-wrap">
+        <div class="traffic-chart" id="traffic-chart" role="img" aria-label="No stored traffic data loaded yet"></div>
+        <div class="traffic-axis"><span>Earlier</span><span>Most recent</span></div>
+        <p class="traffic-explainer">Each bar groups records by time. Taller bars contain more stored metadata bytes.</p>
+      </div>
+      <dl class="traffic-facts">
+        <div><dt>Records shown</dt><dd id="traffic-events">—</dd></div>
+        <div><dt>Stored volume</dt><dd id="traffic-bytes">—</dd></div>
+        <div><dt>Sample window</dt><dd id="traffic-window">—</dd></div>
+        <div><dt>Last observed</dt><dd id="traffic-last">—</dd></div>
+      </dl>
+    </div>
+    <div class="protocol-mix" id="protocol-mix" aria-label="Protocol mix"></div>
+    <p class="traffic-boundary">Shows at most 500 source-qualified records tied to ingestion receipts. This is bounded saved metadata, not network speed or proof that capture is complete.</p>
+  </section>
+
+  <!-- HUD_SETUP -->
+  </div>
+
+  <nav class="next-actions" aria-label="Common tasks">
+    <a href="#detections-title"><strong>Review alerts</strong><span>Open the newest stored findings.</span></a>
+    <button id="open-report-studio" type="button"><strong>Create a report</strong><span>Export an overview, alert review, or ingestion summary.</span></button>
+    <a href="#integrations-title"><strong>Open tools</strong><span>Review companion apps and their setup instructions.</span></a>
+  </nav>
+
+  <details class="panel report-studio" id="report-studio">
+    <summary><span><strong id="report-title">Create a report</strong><small>Choose a purpose, preview the result, then export it locally.</small></span><span class="summary-action" id="report-studio-action">Open report builder</span></summary>
+    <div class="report-layout">
+      <div class="report-controls">
+        <label class="field" for="report-scope"><span>Report purpose</span>
+          <select id="report-scope">
+            <option value="overview">Operations overview</option>
+            <option value="detections">Detection review</option>
+            <option value="ingestion">Ingestion health</option>
+          </select>
+        </label>
+        <label class="field" for="report-title-input"><span>Report title</span><input id="report-title-input" maxlength="80" value="MEGALODON local telemetry report"></label>
+        <div class="report-actions">
+          <button id="report-preview" type="button">Update preview</button>
+          <button id="report-copy" type="button" class="button-secondary">Copy summary</button>
+          <button id="report-json" type="button" class="button-secondary">Download JSON</button>
+          <button id="report-csv" type="button" class="button-secondary">Download CSV</button>
+          <button id="report-print" type="button" class="button-secondary">Print / save PDF</button>
+        </div>
+        <p class="report-feedback" id="report-feedback" role="status" aria-live="polite">Choose a purpose, then update the preview.</p>
+      </div>
+      <article class="report-preview" id="report-preview-card" aria-live="polite">
+        <p class="eyebrow">Preview</p>
+        <h3>MEGALODON local telemetry report</h3>
+        <p>No successful dashboard snapshot is available yet.</p>
+      </article>
+    </div>
+  </details>
 
   <section class="panel" id="triage-panel" aria-labelledby="detections-title" aria-busy="true">
     <div class="panel-head">
-      <div><h2 id="detections-title" tabindex="-1">Recent detection triage</h2><p>Bounded local review of returned fixed-rule findings. Filters and timeline do not change stored data.</p></div>
+      <div><p class="eyebrow">Needs attention</p><h2 id="detections-title" tabindex="-1">Stored alerts</h2><p>The newest fixed-rule findings. MEGALODON has not changed the host or network.</p></div>
       <time class="timestamp" id="updated">Awaiting first refresh</time>
     </div>
+    <details class="triage-tools" id="triage-tools">
+      <summary><span><strong>Filter and inspect timing</strong><small>Optional controls for a longer alert list.</small></span><span class="summary-action" id="triage-tools-action">Show controls</span></summary>
     <div class="priority-pulse" aria-labelledby="priority-title">
       <div>
         <p class="eyebrow" id="priority-title">Stored priority counter</p>
@@ -129,6 +186,7 @@ INDEX_HTML = """<!doctype html>
       <div class="timeline" id="timeline" role="group" aria-label="Filter detections by returned timestamp range"></div>
       <p class="timeline-status" id="timeline-status" role="status" aria-live="polite">Waiting for returned timestamps.</p>
     </section>
+    </details>
     <p class="sr-only" id="table-scroll-help">The recent detections table may scroll horizontally on narrow screens.</p>
     <div class="table-scroll" role="region" aria-label="Scrollable recent detections table" aria-describedby="table-scroll-help" tabindex="0">
       <table aria-describedby="filter-status">
@@ -142,8 +200,8 @@ INDEX_HTML = """<!doctype html>
 
   <section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>
   <section class="section-intro deep-analysis-intro" aria-labelledby="deep-analysis-title">
-    <p class="eyebrow">Second layer</p>
-    <div><h2 id="deep-analysis-title" tabindex="-1">Deep analysis &amp; context</h2><p>Optional, bounded views for investigating a completed result. They remain separate from the live review so context never looks like a real-time verdict.</p></div>
+    <p class="eyebrow">Investigate</p>
+    <div><h2 id="deep-analysis-title" tabindex="-1">Inspect one source at a time</h2><p>Open only the evidence or reference source you need. These panels are read only and do not start a tool or create a verdict.</p></div>
   </section>
 
   <section class="analysis-window" aria-labelledby="analysis-window-title">
@@ -162,11 +220,11 @@ INDEX_HTML = """<!doctype html>
     </dl>
   </section>
 
-  <section class="panel" id="suricata-panel" aria-labelledby="suricata-title" aria-busy="true">
-    <div class="panel-head">
+  <details class="panel investigation-panel" id="suricata-panel" aria-labelledby="suricata-title" aria-busy="true">
+    <summary class="panel-head">
       <div><h2 id="suricata-title" tabindex="-1">Suricata evidence</h2><p>Startup snapshot of the separately selected durable alert store. Signature matches remain external evidence and never increase MEGALODON’s detection or action counters.</p></div>
       <span class="timestamp" id="suricata-status">Checking startup snapshot…</span>
-    </div>
+    </summary>
     <p class="ingestion-runs-note" id="suricata-message" role="status" aria-live="polite" aria-atomic="true">Checking for an explicitly selected Suricata store.</p>
     <div id="suricata-content" hidden>
       <dl class="ingestion-run-facts suricata-summary" id="suricata-summary"></dl>
@@ -180,13 +238,13 @@ INDEX_HTML = """<!doctype html>
       <div class="panel-head"><div><h3 id="suricata-provenance" tabindex="-1">Publication provenance</h3><p>Sensor, run, ruleset, and version are recorded operator declarations. They do not establish a live sensor, independent verification, or maliciousness.</p></div></div>
       <div class="ingestion-runs-list" id="suricata-runs" role="list"></div>
     </div>
-  </section>
+  </details>
 
-  <section class="panel ingestion-runs-panel" id="ingestion-runs-panel" aria-labelledby="ingestion-runs-title" aria-busy="true">
-    <div class="panel-head">
+  <details class="panel investigation-panel ingestion-runs-panel" id="ingestion-runs-panel" aria-labelledby="ingestion-runs-title" aria-busy="true">
+    <summary class="panel-head">
       <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
       <span class="timestamp" id="ingestion-runs-status">Loading receipts…</span>
-    </div>
+    </summary>
     <div class="ingestion-runs-note" role="note">Source, terminal reason, counts, and recorded time basis remain separate. Missing values are shown as not recorded rather than inferred.</div>
     <div class="ingestion-runs-list" id="ingestion-runs-list" role="list" aria-live="polite" aria-atomic="true">
       <p class="ingestion-runs-empty">Loading bounded ingestion receipts…</p>
@@ -194,13 +252,13 @@ INDEX_HTML = """<!doctype html>
     <div class="ingestion-runs-actions">
       <button id="ingestion-runs-retry" type="button" class="button-secondary">Reload receipts</button>
     </div>
-  </section>
+  </details>
 
-  <section class="panel reference-panel" id="reference-panel" aria-labelledby="reference-title" aria-busy="true">
-    <div class="panel-head">
+  <details class="panel investigation-panel reference-panel" id="reference-panel" aria-labelledby="reference-title" aria-busy="true">
+    <summary class="panel-head">
       <div><h2 id="reference-title" tabindex="-1">Reference Library</h2><p>Manual context lookup against the installed, manifest-verified IANA snapshot. It never classifies traffic or changes stored records.</p></div>
       <span class="timestamp" id="reference-bundle-label">Loading pinned snapshot…</span>
-    </div>
+    </summary>
     <div class="reference-warning" role="note">
       Registration is analyst context, not proof of what was observed or whether an endpoint is safe or malicious.
     </div>
@@ -241,13 +299,13 @@ INDEX_HTML = """<!doctype html>
       <div id="reference-meta" hidden></div>
       <div id="reference-results" hidden></div>
     </div>
-  </section>
+  </details>
 
-  <section class="panel" aria-labelledby="offline-title">
-    <div class="panel-head">
+  <details class="panel investigation-panel" aria-labelledby="offline-title">
+    <summary class="panel-head">
       <div><h2 id="offline-title" tabindex="-1">Offline analysis snapshot</h2><p>Validated, source-qualified, privacy-bounded summary loaded once at dashboard startup.</p></div>
       <span class="timestamp" id="offline-status">Checking</span>
-    </div>
+    </summary>
     <div class="offline-empty" id="offline-empty" hidden>
       No offline run is selected. Restart with <code>megalodon dashboard --offline-run /absolute/private/run</code> to view one completed report snapshot.
     </div>
@@ -264,7 +322,7 @@ INDEX_HTML = """<!doctype html>
         <h3 class="subhead">Interpretation limits</h3><ul class="limitations" id="limitations"></ul>
       </aside>
     </div>
-  </section>
+  </details>
   </section>
 
   <section class="workspace-view" id="workspace-interfaces" role="tabpanel" aria-labelledby="workspace-tab-interfaces" hidden>
@@ -322,6 +380,8 @@ body::before {
 .connection::before { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); content: ""; }
 .connection.ok::before { background: var(--aqua); box-shadow: 0 0 0 5px rgba(81, 230, 207, .1); }
 .connection.error::before { background: var(--rose); box-shadow: 0 0 0 5px rgba(255, 117, 143, .1); }
+.connection-state { display: grid; justify-items: end; gap: 3px; }
+.connection-state > span { color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
 .section-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .68); }
 .section-nav button { min-height: 44px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 800; }
 .section-nav button:hover:not(:disabled) { border-color: rgba(81, 230, 207, .28); color: #c8fff7; background: rgba(81, 230, 207, .06); }
@@ -370,34 +430,41 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
 .ingestion-runs-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: .78rem; }
 .ingestion-runs-actions { padding: 14px 22px 20px; }
 .trust-strip {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .65fr); gap: 18px;
-  align-items: center; margin: 24px 0 12px; padding: 16px 18px; border: 1px solid var(--line);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px;
+  align-items: center; margin: 0 0 10px; padding: 12px 14px; border: 1px solid var(--line);
   border-left: 4px solid var(--muted); border-radius: 15px; background: rgba(5, 18, 25, .62);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, .18);
 }
 .trust-strip.current { border-left-color: var(--aqua); }
 .trust-strip.paused, .trust-strip.checking { border-left-color: var(--amber); background: rgba(255, 209, 102, .035); }
 .trust-strip.stale { border-left-color: var(--rose); background: rgba(255, 117, 143, .04); }
 .trust-summary .eyebrow { margin-bottom: 6px; }
 .trust-message { margin: 0; color: var(--text); font-size: .82rem; line-height: 1.55; }
+.snapshot-scope { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; margin: 0; }
+.snapshot-scope span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .66rem; font-weight: 750; }
 .trust-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0; }
 .trust-facts div { padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .42); }
 .trust-facts dt { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .trust-facts dd { margin: 5px 0 0; color: #d8ebee; font-size: .78rem; font-weight: 750; line-height: 1.35; }
-.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 12px 0 28px; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
 .metric, .panel {
   border: 1px solid var(--line); background: linear-gradient(145deg, rgba(18, 45, 59, .92), rgba(8, 24, 33, .9));
   box-shadow: var(--shadow);
 }
-.metric { min-height: 128px; padding: 18px; border-radius: var(--radius); }
-.metric-label { color: var(--muted); font-size: .75rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-.metric-value { margin-top: 18px; font-size: clamp(1.8rem, 4vw, 2.65rem); font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: -.04em; }
-.metric-note { margin-top: 5px; color: var(--muted); font-size: .76rem; }
+.metric { min-height: 76px; padding: 12px 14px; border-radius: 13px; box-shadow: none; }
+.metric-label { color: var(--muted); font-size: .66rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.metric-value { margin-top: 7px; font-size: 1.45rem; font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: -.03em; }
+.metric-note { margin-top: 3px; color: var(--muted); font-size: .68rem; line-height: 1.35; }
 .panel { overflow: hidden; border-radius: var(--radius); }
 .panel + .panel { margin-top: 18px; }
 .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
 .panel-head h2 { margin: 0; font-size: 1rem; letter-spacing: -.01em; }
 .panel-head p { margin: 6px 0 0; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.panel-head .eyebrow { margin: 0 0 5px; }
+.investigation-panel > summary { cursor: pointer; list-style: none; }
+.investigation-panel > summary::-webkit-details-marker { display: none; }
+.investigation-panel > summary::after { content: "Open"; color: var(--aqua); font-size: .7rem; font-weight: 800; }
+.investigation-panel[open] > summary::after { content: "Close"; }
+.investigation-panel:not([open]) > summary { border-bottom: 0; }
 .timestamp { color: var(--muted); font-size: .75rem; white-space: nowrap; }
 .priority-pulse { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 22px; border-bottom: 1px solid var(--line); background: rgba(81, 230, 207, .035); }
 .priority-pulse .eyebrow { margin-bottom: 5px; }
@@ -435,6 +502,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .timeline-bar.level-7 { height: 70%; } .timeline-bar.level-8 { height: 80%; } .timeline-bar.level-9 { height: 90%; } .timeline-bar.level-10 { height: 100%; }
 .timeline-count { overflow: hidden; font-size: .68rem; font-variant-numeric: tabular-nums; font-weight: 850; text-overflow: ellipsis; }
 .timeline-status { margin: 9px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.triage-tools { border-bottom: 1px solid var(--line); background: rgba(3, 13, 19, .2); }
+.triage-tools > summary { border-bottom: 0; }
+.triage-tools[open] > summary { border-bottom: 1px solid var(--line); }
 .table-scroll { overflow-x: auto; scrollbar-color: var(--muted) rgba(3, 13, 19, .42); }
 .table-scroll:focus-visible { outline-offset: -3px; }
 table { width: 100%; border-collapse: collapse; }
@@ -533,15 +603,118 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
 
 DASHBOARD_CSS += INTEGRATIONS_CSS
 DASHBOARD_CSS += CONTROLS_CSS + "\n.hero {padding: 18px 0;} .hero h1 {font-size: 2rem;} .integration-card h3 {font-size: 1.1rem;} .integration-card dd, .integration-gate {font-size: .875rem;}\n"
+DASHBOARD_CSS += r"""
+.command-overview { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(310px, .62fr); gap: 12px; align-items: stretch; margin-bottom: 12px; }
+.traffic-panel { margin: 0; border-color: rgba(81, 230, 207, .28); background: linear-gradient(145deg, rgba(14, 49, 61, .96), rgba(6, 23, 32, .96)); }
+.traffic-heading { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; padding: 16px 18px 10px; }
+.traffic-heading h2 { margin: 0; font-size: clamp(1.25rem, 2.5vw, 1.8rem); letter-spacing: -.03em; }
+.traffic-heading p:not(.eyebrow) { margin: 7px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.traffic-freshness { padding: 6px 10px; border: 1px solid rgba(81, 230, 207, .28); border-radius: 999px; color: var(--aqua); background: rgba(81, 230, 207, .07); font-size: .7rem; font-weight: 800; white-space: nowrap; }
+.traffic-freshness.sample { border-color: rgba(255, 209, 102, .32); color: var(--amber); background: rgba(255, 209, 102, .07); }
+.traffic-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(250px, .58fr); gap: 12px; padding: 0 18px 12px; }
+.traffic-plot-wrap { min-width: 0; padding: 12px 14px 9px; border: 1px solid var(--line); border-radius: 12px; background: rgba(1, 12, 18, .48); }
+.traffic-chart { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); align-items: end; gap: clamp(2px, .55vw, 7px); width: 100%; height: 112px; overflow: hidden; }
+.traffic-bar { display: block; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; min-height: 3px; justify-self: stretch; overflow: hidden; border-radius: 5px 5px 2px 2px; background: linear-gradient(to top, rgba(81, 230, 207, .35), var(--aqua)); box-shadow: 0 0 14px rgba(81, 230, 207, .12); }
+.traffic-bar.traffic-empty { width: 1px; min-width: 0; max-width: 1px; padding: 0; justify-self: center; opacity: .2; box-shadow: none; }
+.traffic-bar.level-0 { height: 2%; } .traffic-bar.level-1 { height: 10%; } .traffic-bar.level-2 { height: 20%; }
+.traffic-bar.level-3 { height: 30%; } .traffic-bar.level-4 { height: 40%; } .traffic-bar.level-5 { height: 50%; }
+.traffic-bar.level-6 { height: 60%; } .traffic-bar.level-7 { height: 70%; } .traffic-bar.level-8 { height: 80%; }
+.traffic-bar.level-9 { height: 90%; } .traffic-bar.level-10 { height: 100%; }
+.traffic-axis { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: .64rem; text-transform: uppercase; letter-spacing: .08em; }
+.traffic-explainer { margin: 8px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.traffic-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.traffic-facts div { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(3, 13, 19, .38); }
+.traffic-facts dt { color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.traffic-facts dd { margin: 5px 0 0; overflow-wrap: anywhere; font-size: .88rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.protocol-mix { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 18px 12px; }
+.protocol-pill { display: inline-flex; gap: 7px; align-items: center; padding: 6px 9px; border: 1px solid var(--line); border-radius: 999px; background: rgba(110, 216, 255, .045); color: #d9f5f7; font-size: .7rem; }
+.protocol-pill b { color: var(--aqua); font-variant-numeric: tabular-nums; }
+.traffic-boundary { margin: 0; padding: 9px 18px; border-top: 1px solid var(--line); color: var(--muted); background: rgba(3, 13, 19, .26); font-size: .66rem; line-height: 1.4; }
+.hud-start { display: grid; grid-template-columns: 1fr; align-content: start; margin: 0; padding: 16px; border-color: var(--line); border-radius: var(--radius); background: linear-gradient(145deg, rgba(15, 38, 50, .9), rgba(7, 22, 31, .9)); }
+.hud-start h2, .hud-start h3 { margin: 0; font-size: 1rem; }
+.hud-start p { margin: 7px 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.setup-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 8px; }
+.setup-status-grid div { padding: 10px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .42); }
+.setup-status-grid span { display: block; color: var(--muted); font-size: .62rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.setup-status-grid b { display: block; margin-top: 4px; font-size: .82rem; }
+.setup-actions-card { margin-top: 10px; border-top: 1px solid var(--line); }
+.setup-form { display: grid; gap: 10px; padding-top: 10px; }
+.tool-status-details { border-top: 1px solid var(--line); }
+.setup-boundary { margin-bottom: 10px !important; }
+.tool-status-list { display: grid; gap: 7px; max-height: 290px; overflow: auto; padding-right: 4px; }
+.tool-status-row { display: grid; grid-template-columns: minmax(110px, .6fr) minmax(0, 1.4fr); gap: 10px; align-items: center; padding: 8px 9px; border: 1px solid var(--line); border-radius: 9px; background: rgba(3, 13, 19, .32); }
+.tool-status-row strong { font-size: .72rem; }
+.tool-status-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.status-badge { padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .62rem; font-weight: 750; }
+.status-badge.executable_found, .status-badge.running { border-color: rgba(81, 230, 207, .3); color: var(--aqua); }
+.status-badge.not_found, .status-badge.not_running { color: #bdd0d6; }
+.status-badge.not_checked { border-color: rgba(255, 209, 102, .28); color: var(--amber); }
+.next-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.next-actions a, .next-actions button { display: grid; gap: 4px; min-height: 70px; padding: 12px 14px; text-align: left; text-decoration: none; border: 1px solid var(--line); border-radius: 13px; background: rgba(7, 25, 34, .74); color: var(--text); box-shadow: none; }
+.next-actions a:hover, .next-actions button:hover { border-color: rgba(81, 230, 207, .38); background: rgba(81, 230, 207, .08); }
+.next-actions strong { font-size: .8rem; }
+.next-actions span { color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.report-studio { margin: 0 0 12px; }
+.report-studio:not([open]) { display: none; }
+.report-studio > summary, .triage-tools > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 58px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.report-studio > summary::-webkit-details-marker, .triage-tools > summary::-webkit-details-marker { display: none; }
+.report-studio > summary span:first-child, .triage-tools > summary span:first-child { display: grid; gap: 3px; }
+.report-studio > summary strong, .triage-tools > summary strong { font-size: .82rem; }
+.report-studio > summary small, .triage-tools > summary small { color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.summary-action { color: var(--aqua); font-size: .7rem; font-weight: 800; white-space: nowrap; }
+.report-studio[open] > summary { border-bottom: 1px solid var(--line); }
+.report-layout { display: grid; grid-template-columns: minmax(280px, .72fr) minmax(0, 1.28fr); }
+.report-controls { display: grid; gap: 12px; align-content: start; padding: 18px 22px 22px; border-right: 1px solid var(--line); }
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-feedback { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.report-preview { min-height: 230px; padding: 20px 22px; background: rgba(3, 13, 19, .3); }
+.report-preview h3 { margin: 0; font-size: 1.1rem; }
+.report-preview p, .report-preview li { color: var(--muted); font-size: .78rem; line-height: 1.55; }
+.report-preview dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.report-preview dl div { padding: 9px; border: 1px solid var(--line); border-radius: 9px; }
+.report-preview dt { color: var(--muted); font-size: .62rem; font-weight: 800; text-transform: uppercase; }
+.report-preview dd { margin: 4px 0 0; font-size: .8rem; font-weight: 800; overflow-wrap: anywhere; }
+@media (max-width: 880px) {
+  .command-overview, .traffic-layout, .report-layout, .hud-start { grid-template-columns: 1fr; }
+  .traffic-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+  .report-controls { padding-left: 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 560px) {
+  .hero { margin-bottom: 14px; }
+  .connection-state > span { max-width: 145px; text-align: right; }
+  .traffic-heading { display: block; padding: 16px 14px 10px; }
+  .traffic-freshness { display: inline-flex; margin-top: 10px; }
+  .traffic-layout { padding: 0 14px 12px; }
+  .traffic-chart { height: 96px; }
+  .traffic-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .protocol-mix, .traffic-boundary { padding-right: 14px; padding-left: 14px; }
+  .setup-status-grid, .report-preview dl { grid-template-columns: 1fr; }
+  .next-actions { grid-template-columns: 1fr; }
+  .next-actions a, .next-actions button { min-height: 60px; }
+  .metric { min-height: 72px; padding: 10px 11px; }
+  .tool-status-row { grid-template-columns: 1fr; }
+  .tool-status-badges { justify-content: flex-start; }
+  .report-controls, .report-preview { padding: 16px 14px; }
+}
+@media print {
+  body { height: auto; overflow: visible; background: white; color: black; }
+  body::before, .topbar, .section-nav, .hero, .traffic-panel, .hud-start, .section-intro, .trust-strip, .metrics, .triage-panel, .next-actions, .report-studio > summary,
+  #workspace-analysis, #workspace-interfaces, .report-studio .panel-head, .report-controls { display: none !important; }
+  .shell, .workspace-scroll, .workspace-view, .report-studio { display: block !important; width: 100%; height: auto; overflow: visible; margin: 0; padding: 0; border: 0; box-shadow: none; }
+  .report-layout { display: block; }
+  .report-preview { color: black; background: white; }
+  .report-preview p, .report-preview li, .report-preview dt { color: #333; }
+}
+"""
 
 DASHBOARD_JS = r"""
 'use strict';
 
 const metricSpec = [
-  ['events', 'Events', 'Validated metadata records'],
-  ['detections', 'Detections', 'Fixed-rule findings'],
-  ['high_or_critical', 'High / critical stored', 'Sequential stored count; not incident state'],
-  ['actions', 'Action records', 'Audit decisions; no live application']
+  ['events', 'Stored events', 'Metadata rows'],
+  ['detections', 'Alerts', 'Fixed-rule matches'],
+  ['high_or_critical', 'High priority', 'Stored high or critical alerts'],
+  ['actions', 'Recorded decisions', 'Audit records only']
 ];
 const summaryFields = ['actions', 'detections', 'events', 'high_or_critical'];
 const eventFields = ['detected_at', 'message', 'rule_id', 'severity', 'src_ip'];
@@ -559,6 +732,9 @@ const workspaceTargets = {
 };
 const state = {
   events: [],
+  summary: null,
+  traffic: null,
+  ingestionRuns: [],
   activeBin: null,
   timelineBins: [],
   timelineNotice: '',
@@ -625,6 +801,11 @@ function workspaceFromHash(value) {
   const target = value.startsWith('#') ? value.slice(1) : '';
   return Object.prototype.hasOwnProperty.call(workspaceTargets, target) ? workspaceTargets[target] : null;
 }
+function revealTargetDisclosure(target) {
+  for (let parent = target; parent; parent = parent.parentElement) {
+    if (parent.tagName === 'DETAILS') parent.open = true;
+  }
+}
 function restoreWorkspaceFromHash() {
   const hash = window.location && typeof window.location.hash === 'string' ? window.location.hash : '';
   const workspace = workspaceFromHash(hash);
@@ -632,9 +813,7 @@ function restoreWorkspaceFromHash() {
   activateWorkspace(workspace);
   const targetId = hash.startsWith('#') ? hash.slice(1) : '';
   const target = targetId ? byId(targetId) : null;
-  for (let parent = target && target.parentElement; parent; parent = parent.parentElement) {
-    if (parent.tagName === 'DETAILS') parent.open = true;
-  }
+  revealTargetDisclosure(target);
   if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'start'});
 }
 workspaceIds.forEach((workspace, index) => {
@@ -661,9 +840,7 @@ document.addEventListener('click', event => {
   // activation, including repeated fragments that do not fire hashchange.
   activateWorkspace(workspace);
   const target = byId(hash.slice(1));
-  for (let parent = target && target.parentElement; parent; parent = parent.parentElement) {
-    if (parent.tagName === 'DETAILS') parent.open = true;
-  }
+  revealTargetDisclosure(target);
   if (target && typeof target.focus === 'function') target.focus({preventScroll: true});
   // Keep native fragment history and scrolling after exposing the target.
 });
@@ -712,6 +889,39 @@ function validatedEvents(value) {
   });
   if (!valid) throw new Error('invalid events response');
   return value;
+}
+function validatedTraffic(value) {
+  const source = validateTraffic(value);
+  const events = source.events.map(event => Object.freeze({
+    observed_at: event.observed_at,
+    protocol: event.protocol,
+    byte_count: event.byte_count
+  }));
+  const protocolMap = new Map();
+  let totalBytes = 0n;
+  events.forEach(event => {
+    const byteCount = BigInt(event.byte_count);
+    totalBytes += byteCount;
+    const item = protocolMap.get(event.protocol) || {protocol: event.protocol, events: 0, bytes: 0n};
+    item.events += 1; item.bytes += byteCount; protocolMap.set(event.protocol, item);
+  });
+  const protocols = [...protocolMap.values()]
+    .sort((left, right) => right.events - left.events || left.protocol.localeCompare(right.protocol))
+    .map(item => Object.freeze({...item, bytes: item.bytes.toString()}));
+  return Object.freeze({
+    schema: source.schema,
+    sample_limit: source.limits.events,
+    sampled_events: events.length,
+    total_bytes: totalBytes.toString(),
+    first_observed_at: source.window.start,
+    last_observed_at: source.window.end,
+    protocols: Object.freeze(protocols),
+    events: Object.freeze(events)
+  });
+}
+function unavailableTrafficResponse(value) {
+  try { return validateTraffic(value).status === 'unavailable'; }
+  catch (_) { return false; }
 }
 function boundedAdvisoryText(value) {
   return typeof value === 'string' && [...value].length >= 1 && [...value].length <= 1200
@@ -851,6 +1061,8 @@ function ingestionFact(label, value) {
   return wrapper;
 }
 function renderIngestionRuns(runs) {
+  state.ingestionRuns = [...runs];
+  if (state.traffic) updateTrafficFreshness();
   const panel = byId('ingestion-runs-panel');
   const list = byId('ingestion-runs-list');
   panel.setAttribute('aria-busy', 'false');
@@ -885,6 +1097,7 @@ function renderIngestionRuns(runs) {
   list.replaceChildren(...cards);
 }
 function renderIngestionRunsUnavailable() {
+  state.ingestionRuns = [];
   byId('ingestion-runs-panel').setAttribute('aria-busy', 'false');
   byId('ingestion-runs-status').textContent = 'Unavailable';
   byId('ingestion-runs-list').replaceChildren(
@@ -1104,6 +1317,168 @@ function renderMetrics(summary) {
     return card;
   });
   byId('live-metrics').replaceChildren(...cards);
+}
+function formatBytes(value) {
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB'];
+  const bytes = typeof value === 'bigint' ? value : BigInt(value);
+  let divisor = 1n, unit = 0;
+  while (bytes >= divisor * 1024n && unit < units.length - 1) { divisor *= 1024n; unit += 1; }
+  if (unit === 0 || bytes >= divisor * 10n) return `${(bytes + divisor / 2n) / divisor} ${units[unit]}`;
+  const tenths = (bytes * 10n + divisor / 2n) / divisor;
+  return `${tenths / 10n}.${tenths % 10n} ${units[unit]}`;
+}
+function trafficBins(events, count = 24) {
+  const bins = Array.from({length: count}, () => ({events: 0, bytes: 0n}));
+  if (!events.length) return bins;
+  const times = events.map(item => new Date(item.observed_at).valueOf());
+  const oldest = Math.min(...times), newest = Math.max(...times), span = Math.max(1, newest - oldest + 1);
+  events.forEach((item, index) => {
+    const target = oldest === newest ? count - 1 : Math.min(count - 1, Math.floor(((times[index] - oldest) / span) * count));
+    bins[target].events += 1; bins[target].bytes += BigInt(item.byte_count);
+  });
+  return bins;
+}
+function trafficWindowLabel(firstObserved, lastObserved) {
+  if (firstObserved === null || lastObserved === null) return 'Unavailable';
+  const first = new Date(firstObserved), last = new Date(lastObserved);
+  const elapsed = last.valueOf() - first.valueOf();
+  if (!Number.isFinite(elapsed) || elapsed < 0) return 'Unavailable';
+  const day = first.toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'});
+  const firstTime = first.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'});
+  const lastTime = last.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'});
+  const sameDay = first.toLocaleDateString() === last.toLocaleDateString();
+  const exactRange = sameDay ? `${day}, ${firstTime}–${lastTime}` : `${displayTime(first)} to ${displayTime(last)}`;
+  if (elapsed === 0) return `Single timestamp · ${day}, ${firstTime}`;
+  const totalSeconds = Math.max(1, Math.ceil(elapsed / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const duration = [hours ? `${hours}h` : '', minutes ? `${minutes}m` : '', `${seconds}s`].filter(Boolean).join(' ');
+  return `${duration} · ${exactRange}`;
+}
+function renderTraffic(traffic) {
+  state.traffic = traffic;
+  const bins = trafficBins(traffic.events);
+  const maximum = bins.reduce((largest, item) => item.bytes > largest ? item.bytes : largest, 1n);
+  const bars = bins.map((item, index) => {
+    const bar = document.createElement('span');
+    const level = item.events ? Math.max(1, Number((item.bytes * 10n + maximum - 1n) / maximum)) : 0;
+    bar.className = `traffic-bar level-${level}${item.events ? '' : ' traffic-empty'}`;
+    bar.title = `Window ${index + 1}: ${item.events} event${item.events === 1 ? '' : 's'}, ${formatBytes(item.bytes)}`;
+    return bar;
+  });
+  const chart = byId('traffic-chart'); chart.replaceChildren(...bars);
+  chart.setAttribute('aria-label', traffic.sampled_events
+    ? `${traffic.sampled_events} newest stored events across 24 chronological bins, totaling ${formatBytes(traffic.total_bytes)}.`
+    : 'No stored traffic metadata is available in the bounded sample.');
+  byId('traffic-events').textContent = formatNumber(traffic.sampled_events);
+  byId('traffic-bytes').textContent = formatBytes(traffic.total_bytes);
+  byId('traffic-window').textContent = trafficWindowLabel(traffic.first_observed_at, traffic.last_observed_at);
+  if (traffic.last_observed_at === null) {
+    byId('traffic-last').replaceChildren(textNode('span', 'No event recorded'));
+  } else {
+    const observed = document.createElement('time'); observed.dateTime = traffic.last_observed_at;
+    observed.textContent = formatRefreshTime(new Date(traffic.last_observed_at));
+    byId('traffic-last').replaceChildren(observed);
+  }
+  byId('protocol-mix').replaceChildren(...traffic.protocols.map(item => {
+    const pill = document.createElement('span'); pill.className = 'protocol-pill';
+    pill.append(textNode('span', item.protocol), textNode('b', `${formatNumber(item.events)} · ${formatBytes(item.bytes)}`)); return pill;
+  }));
+  byId('traffic-status').textContent = traffic.sampled_events
+    ? `Showing the newest ${formatNumber(traffic.sampled_events)} stored metadata records in chronological bins.`
+    : 'The audit store is connected, but no event metadata is recorded yet.';
+  updateTrafficFreshness();
+  byId('traffic-panel').setAttribute('aria-busy', 'false');
+}
+function updateTrafficFreshness() {
+  const latest = state.ingestionRuns[0];
+  const badge = byId('traffic-freshness');
+  if (latest && latest.source === 'sample') {
+    badge.textContent = `Sample source · refreshes every ${state.config.refresh_seconds}s`;
+    badge.className = 'traffic-freshness sample';
+  } else {
+    badge.textContent = latest ? `Latest run: ${latest.source} · every ${state.config.refresh_seconds}s` : `Refreshes every ${state.config.refresh_seconds}s`;
+    badge.className = 'traffic-freshness';
+  }
+}
+function renderTrafficUnavailable(preserve = false) {
+  byId('traffic-panel').setAttribute('aria-busy', 'false');
+  byId('traffic-status').textContent = preserve
+    ? 'Traffic refresh failed. The prior bounded traffic snapshot remains visible.'
+    : 'Stored traffic metadata is unavailable. No traffic volume or health claim is shown.';
+  byId('traffic-freshness').textContent = preserve ? 'Stale snapshot' : 'Unavailable';
+  byId('traffic-freshness').className = 'traffic-freshness sample';
+  if (!preserve) {
+    state.traffic = null;
+    byId('traffic-chart').replaceChildren();
+    byId('traffic-chart').setAttribute('aria-label', 'Stored traffic metadata is unavailable.');
+    byId('traffic-events').textContent = '—'; byId('traffic-bytes').textContent = '—'; byId('traffic-window').textContent = '—'; byId('traffic-last').textContent = '—';
+    byId('protocol-mix').replaceChildren();
+  }
+}
+function reportSnapshot() {
+  if (!state.summary || !state.traffic || !state.lastSuccessfulRefresh) return null;
+  const scope = byId('report-scope').value;
+  const title = byId('report-title-input').value.trim() || 'MEGALODON local telemetry report';
+  const generatedAt = new Date().toISOString();
+  const refreshedLabel = formatRefreshTime(state.lastSuccessfulRefresh);
+  const common = {
+    schema: 'megalodon-browser-report-v1', title, scope, generated_at: generatedAt,
+    last_dashboard_refresh: state.lastSuccessfulRefresh.toISOString(),
+    bounds: `Newest ${state.config.event_limit} detections and ${state.traffic.sample_limit} traffic records maximum`,
+    limitation: 'Stored metadata only; not capture completeness, wire speed, service health, or incident state.'
+  };
+  if (scope === 'detections') return {...common,
+    source_scope: `${state.events.length} stored alerts shown from a maximum of ${state.config.event_limit}. Updated ${refreshedLabel}.`,
+    detections: state.events.map(item => ({...item}))};
+  if (scope === 'ingestion') return {...common,
+    source_scope: `${state.ingestionRuns.length} import runs shown from a maximum of 5. Updated ${refreshedLabel}.`,
+    ingestion_runs: state.ingestionRuns.map(item => ({...item}))};
+  return {...common,
+    source_scope: `The counts above plus ${state.traffic.sampled_events} traffic records from a maximum of ${state.traffic.sample_limit}. Updated ${refreshedLabel}.`,
+    summary: {...state.summary}, traffic: {
+    sampled_events: state.traffic.sampled_events, total_bytes: state.traffic.total_bytes,
+    first_observed_at: state.traffic.first_observed_at, last_observed_at: state.traffic.last_observed_at,
+    protocols: state.traffic.protocols.map(item => ({...item}))
+  }};
+}
+function reportPlainText(report) {
+  const lines = [report.title, `Generated: ${report.generated_at}`, `Scope: ${report.scope}`, `Source scope: ${report.source_scope}`, report.bounds];
+  if (report.summary) lines.push(`Events: ${report.summary.events}`, `Detections: ${report.summary.detections}`, `High / critical: ${report.summary.high_or_critical}`, `Actions: ${report.summary.actions}`, `Traffic sample: ${report.traffic.sampled_events} events, ${formatBytes(report.traffic.total_bytes)}`);
+  if (report.detections) lines.push(`Returned detections: ${report.detections.length}`);
+  if (report.ingestion_runs) lines.push(`Returned ingestion receipts: ${report.ingestion_runs.length}`);
+  lines.push(`Limitation: ${report.limitation}`); return lines.join('\n');
+}
+function renderReportPreview() {
+  const report = reportSnapshot(), card = byId('report-preview-card');
+  if (!report) {
+    card.replaceChildren(textNode('p', 'Preview', 'eyebrow'), textNode('h3', 'Report unavailable'), textNode('p', 'Wait for one successful summary and traffic refresh.'));
+    byId('report-feedback').textContent = 'A report needs one successful dashboard snapshot.'; return null;
+  }
+  const facts = document.createElement('dl');
+  const entries = report.summary
+    ? [['Stored events', report.summary.events], ['Alerts', report.summary.detections], ['Traffic records', `${report.traffic.sampled_events} · ${formatBytes(report.traffic.total_bytes)}`]]
+    : report.detections
+      ? [['Returned rows', report.detections.length], ['Priority rows', report.detections.filter(item => prioritySeverities.has(item.severity)).length], ['Newest bound', state.config.event_limit]]
+      : [['Run receipts', report.ingestion_runs.length], ['Running receipts', report.ingestion_runs.filter(item => item.status === 'running').length], ['Needs review', report.ingestion_runs.filter(item => !['running', 'completed'].includes(item.status)).length]];
+  entries.forEach(([label, value]) => { const item = document.createElement('div'); const shown = typeof value === 'number' ? formatNumber(value) : String(value); item.append(textNode('dt', label), textNode('dd', shown)); facts.append(item); });
+  card.replaceChildren(textNode('p', 'Preview', 'eyebrow'), textNode('h3', report.title), textNode('p', `Generated ${formatRefreshTime(new Date(report.generated_at))} from the last successful local dashboard refresh.`), facts, textNode('p', `Source scope: ${report.source_scope}`), textNode('p', report.limitation));
+  byId('report-feedback').textContent = 'Preview updated. Choose copy, download, or print.'; return report;
+}
+function reportCsv(report) {
+  const quote = value => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  let rows;
+  if (report.detections) rows = [['detected_at', 'severity', 'rule_id', 'src_ip', 'message'], ...report.detections.map(item => [item.detected_at, item.severity, item.rule_id, item.src_ip, item.message])];
+  else if (report.ingestion_runs) rows = [['run_id', 'source', 'status', 'started_at', 'finished_at', 'processed_count', 'detection_count', 'action_count', 'termination_reason', 'failure_code'], ...report.ingestion_runs.map(item => [item.run_id, item.source, item.status, item.started_at, item.finished_at, item.processed_count, item.detection_count, item.action_count, item.termination_reason, item.failure_code])];
+  else rows = [['metric', 'value'], ['events', report.summary.events], ['detections', report.summary.detections], ['high_or_critical', report.summary.high_or_critical], ['actions', report.summary.actions], ['traffic_sampled_events', report.traffic.sampled_events], ['traffic_total_bytes', report.traffic.total_bytes]];
+  rows = [['report_scope', report.scope], ['source_scope', report.source_scope], ['last_dashboard_refresh', report.last_dashboard_refresh], [], ...rows];
+  return rows.map(row => row.map(quote).join(',')).join('\n') + '\n';
+}
+function downloadReport(contents, extension, type) {
+  const blob = new Blob([contents], {type}); const url = URL.createObjectURL(blob);
+  const link = document.createElement('a'); link.href = url; link.download = `megalodon-report-${new Date().toISOString().slice(0, 10)}.${extension}`;
+  link.click(); URL.revokeObjectURL(url);
 }
 function hasActiveFilters() {
   return Boolean(
@@ -1566,14 +1941,14 @@ function setSnapshotStatus(mode) {
   const healthLimit = 'Dashboard API reachability does not measure capture or ingestion health.';
   let message;
   if (mode === 'unconfigured') {
-    message = `HUD ready. No audit store was available at launch, so telemetry remains unavailable. Import real data, then restart this HUD. Tools and reference lookup are separate.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
+    message = `No audit store was available at launch. Import real data, then restart the HUD.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
     setUpdatedTime('No audit store available at launch');
   } else if (mode === 'current') {
-    message = `Dashboard data fetched successfully. Last-success time is shown below. ${healthLimit}`;
+    message = `Dashboard data fetched successfully. ${healthLimit}`;
     setUpdatedTime(`Data fetched ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
   } else if (mode === 'paused') {
     if (state.lastSuccessfulRefresh) {
-      message = `Automatic refresh paused. Showing preserved dashboard data from the last successful fetch. ${healthLimit}`;
+      message = `Automatic refresh paused. The last successful dashboard snapshot remains visible. ${healthLimit}`;
       setUpdatedTime(`Paused · last success ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
     } else {
       message = `Automatic refresh paused. No successful dashboard data fetch is available. ${healthLimit}`;
@@ -1584,16 +1959,16 @@ function setSnapshotStatus(mode) {
       const priorState = state.lastRefreshFailed
         ? 'Preserved dashboard data remains stale until a refresh succeeds.'
         : 'Preserved dashboard data is not treated as current until a refresh succeeds.';
-      message = `Refresh resumed. Checking the dashboard API. ${priorState} ${healthLimit}`;
+      message = `Checking the dashboard API. ${priorState} ${healthLimit}`;
       setUpdatedTime(`Checking · last success ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
     } else {
-      message = `Refresh resumed. Checking the dashboard API. No successful dashboard data fetch is available. ${healthLimit}`;
+      message = `Checking the dashboard API. No successful dashboard data fetch is available. ${healthLimit}`;
       setUpdatedTime('Checking · no successful dashboard data yet');
     }
   } else if (mode === 'stale') {
     const pauseContext = state.paused ? ' Automatic refresh remains paused.' : '';
     if (state.lastSuccessfulRefresh) {
-      message = `Refresh failed.${pauseContext} Showing preserved stale dashboard data from the last successful fetch. ${healthLimit}`;
+      message = `Refresh failed.${pauseContext} The last successful snapshot is stale. ${healthLimit}`;
       setUpdatedTime(`Stale · last success ${formatRefreshTime(state.lastSuccessfulRefresh)}`, state.lastSuccessfulRefresh);
     } else {
       message = `Refresh failed.${pauseContext} No successful dashboard data fetch is available. ${healthLimit}`;
@@ -1621,37 +1996,42 @@ async function refresh(announce = true) {
   if (!state.lastSuccessfulRefresh) byId('triage-controls').disabled = true;
   const button = byId('refresh-button'); button.disabled = true; button.textContent = 'Refreshing…';
   try {
-    const [summaryResult, eventsResult] = await Promise.allSettled([
-      requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`)
+    const [summaryResult, eventsResult, trafficResult] = await Promise.allSettled([
+      requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`), requestJSON('/api/traffic')
     ]);
     const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh
       && [summaryResult, eventsResult].every(result => result.status === 'rejected'
         && result.reason && result.reason.status === 503
         && result.reason.payload && typeof result.reason.payload === 'object' && !Array.isArray(result.reason.payload)
-        && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable');
+        && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable')
+      && trafficResult.status === 'rejected' && trafficResult.reason && trafficResult.reason.status === 503
+      && unavailableTrafficResponse(trafficResult.reason.payload);
     if (expectedMissingStore) {
       state.telemetryNotConfigured = true;
       state.lastRefreshFailed = false;
       renderInitialUnavailable();
+      renderTrafficUnavailable(false);
       setSnapshotStatus('unconfigured');
       setConnection(state.paused ? 'Dashboard API · reachable, no audit store, refresh paused' : 'Dashboard API · reachable, no audit store', '');
       if (announce) byId('refresh-announcement').textContent = 'No audit store was available at launch. Import real data, then restart this HUD.';
       return;
     }
     state.telemetryNotConfigured = false;
-    if (summaryResult.status !== 'fulfilled' || eventsResult.status !== 'fulfilled') {
+    if (summaryResult.status !== 'fulfilled' || eventsResult.status !== 'fulfilled' || trafficResult.status !== 'fulfilled') {
       throw new Error('dashboard refresh failed');
     }
     const summary = validatedSummary(summaryResult.value);
     const events = validatedEvents(eventsResult.value);
+    const traffic = validatedTraffic(trafficResult.value);
     if (state.activeBin !== null && !sameEvents(state.events, events)) {
       state.activeBin = null;
       state.timelineNotice = 'Returned rows changed; the prior time filter was cleared.';
     }
     state.events = events;
+    state.summary = summary;
     state.lastSuccessfulRefresh = new Date();
     state.lastRefreshFailed = false;
-    renderMetrics(summary); renderRuleOptions(); renderReturnedSummary(); applyFilters(); renderScope();
+    renderMetrics(summary); renderTraffic(traffic); renderRuleOptions(); renderReturnedSummary(); applyFilters(); renderScope(); renderReportPreview();
     updatePriorityChange(summary);
     setSnapshotStatus(state.paused ? 'paused' : 'current');
     setConnection(state.paused ? 'Dashboard API · reachable, refresh paused' : 'Dashboard API · reachable', 'ok');
@@ -1659,6 +2039,7 @@ async function refresh(announce = true) {
   } catch (_) {
     state.telemetryNotConfigured = false;
     state.lastRefreshFailed = true;
+    renderTrafficUnavailable(Boolean(state.traffic));
     if (!state.lastSuccessfulRefresh) renderInitialUnavailable();
     setConnection(state.paused ? 'Dashboard API · unavailable, refresh paused' : 'Dashboard API · unavailable', 'error');
     setSnapshotStatus('stale');
@@ -1743,6 +2124,40 @@ byId('reference-clear').addEventListener('click', () => {
   if (referenceState.loading || referenceState.statusLoading) return;
   clearReferenceResult(); syncReferenceControls();
   setReferenceStatus('Displayed context cleared. Stored records and the server cache were not changed.', referenceState.available ? 'ready' : 'unavailable');
+});
+byId('open-report-studio').addEventListener('click', () => {
+  const studio = byId('report-studio');
+  studio.open = true;
+  byId('report-studio-action').textContent = 'Close report builder';
+  renderReportPreview();
+  if (typeof studio.scrollIntoView === 'function') studio.scrollIntoView({block: 'start'});
+});
+byId('report-studio').addEventListener('toggle', event => {
+  byId('report-studio-action').textContent = event.currentTarget.open ? 'Close report builder' : 'Open report builder';
+});
+byId('triage-tools').addEventListener('toggle', event => {
+  byId('triage-tools-action').textContent = event.currentTarget.open ? 'Hide controls' : 'Show controls';
+});
+byId('report-preview').addEventListener('click', renderReportPreview);
+byId('report-scope').addEventListener('change', renderReportPreview);
+byId('report-copy').addEventListener('click', async () => {
+  const report = renderReportPreview(); if (!report) return;
+  try { await navigator.clipboard.writeText(reportPlainText(report)); byId('report-feedback').textContent = 'Plain-language report summary copied.'; }
+  catch (_) { byId('report-feedback').textContent = 'Clipboard unavailable. Select the preview text to copy it.'; }
+});
+byId('report-json').addEventListener('click', () => {
+  const report = renderReportPreview(); if (!report) return;
+  downloadReport(JSON.stringify(report, null, 2) + '\n', 'json', 'application/json');
+  byId('report-feedback').textContent = 'Bounded JSON report downloaded.';
+});
+byId('report-csv').addEventListener('click', () => {
+  const report = renderReportPreview(); if (!report) return;
+  downloadReport(reportCsv(report), 'csv', 'text/csv');
+  byId('report-feedback').textContent = 'Bounded CSV report downloaded.';
+});
+byId('report-print').addEventListener('click', () => {
+  const report = renderReportPreview(); if (!report) return;
+  window.print();
 });
 ['reference-transport', 'reference-port', 'reference-protocol'].forEach(id => {
   byId(id).addEventListener(id === 'reference-transport' ? 'change' : 'input', referenceInputChanged);

@@ -65,6 +65,7 @@ def test_backup_and_restore_complete_with_closed_verified_receipts(
 ) -> None:
     artifact, manifest, backup = successful_backup(private_directory)
     assert_contract_receipt(backup)
+    assert backup["destination_same_as_source"] is False
     assert stat.S_IMODE(artifact.stat().st_mode) == 0o600
     assert stat.S_IMODE(manifest.stat().st_mode) == 0o600
 

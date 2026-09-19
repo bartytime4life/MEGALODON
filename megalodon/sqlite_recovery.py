@@ -358,6 +358,14 @@ def _run(
             raise _Halt("ARTIFACT_LIMIT_EXCEEDED", source_state=source_state)
 
         destination_verified = _verify_database(destination_descriptor, read_only=False)
+        if (
+            source_verified["identity"]["device"],
+            source_verified["identity"]["inode"],
+        ) == (
+            destination_verified["identity"]["device"],
+            destination_verified["identity"]["inode"],
+        ):
+            raise _Halt("SAME_FILE_REFUSED", source_state=source_state)
         artifact_bytes = _read_all(destination_descriptor, MAX_ARTIFACT_BYTES)
         artifact_digest = artifact_digest or _sha256_hex_prefixed(
             hashlib.sha256(artifact_bytes).hexdigest()
@@ -387,6 +395,7 @@ def _run(
             "destination": destination_verified,
             "destination_created": True,
             "destination_complete": True,
+            "destination_same_as_source": False,
             "artifact_sha256": artifact_digest,
             "manifest_sha256": _sha256_manifest(manifest),
             "effects": dict(_FIXED_EFFECTS),
