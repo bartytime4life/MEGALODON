@@ -1,7 +1,7 @@
 {
   "schema_version": "megalodon-sqlite-recovery-policy-v1",
-  "status": "contract_only",
-  "runtime_implemented": false,
+  "status": "runtime_available",
+  "runtime_implemented": true,
   "operations": ["backup", "restore"],
   "limits": {
     "max_source_bytes": 4294967296,

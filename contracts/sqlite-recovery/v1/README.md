@@ -1,7 +1,9 @@
 # SQLite recovery contract v1
 
-Status: **contract only** for issue #256. This directory adds no runtime
-backup or restore command.
+Status: **implemented runtime contract** for issue #256. The
+`database-backup` and `database-restore` commands produce terminal documents
+from this schema; `megalodon/sqlite_recovery.py` provides the standalone engine
+and `megalodon/sqlite_recovery_workflow.py` enforces the stricter CLI workflow.
 
 The closed JSON Schema admits exactly five document families:
 
@@ -29,6 +31,6 @@ destination is preserved for operator review or marked unknown; this contract
 does not authorize deleting it. `COMPLETION_UNCERTAIN` and
 `CLOCK_ROLLBACK` must be recorded explicitly.
 
-See [the operator and implementation runbook](../../../docs/sqlite-recovery-contract.md)
+See [the operator runbook](../../../docs/sqlite-recovery-contract.md)
 for the fault matrix, reason-code meanings, validation command, and the
-separate implementation/acceptance gates.
+remaining native acceptance gates.

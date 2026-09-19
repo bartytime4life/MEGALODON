@@ -1,6 +1,7 @@
 # SQLite backup and restore-to-new-destination contract
 
-Status: **Contract delivered on `main` by merged PR #271; a bounded standalone runtime engine now implements it (not wired into the CLI, dashboard, `storage.py`, or `service.py`).**
+Status: **IMPLEMENTED runtime contract with an explicit CLI workflow; native
+operational evidence remains a separate gate.**
 
 Issue [#256](https://github.com/bartytime4life/MEGALODON/issues/256), M01.
 The contract was prepared from
@@ -13,7 +14,7 @@ Delivery readback on 2026-09-17: PR #271 merged as
 `77f082a0548e64f97090c94dd11503a68ca05d99`. Issue #256 remains open;
 contract delivery does not establish runtime recovery or maintainer acceptance.
 
-## Implemented engine
+## Implemented engine and operator workflow
 
 [`megalodon/sqlite_recovery.py`](../megalodon/sqlite_recovery.py) implements
 `backup_database` and `restore_backup` against this contract: SQLite's
@@ -23,23 +24,31 @@ destination that is never overwritten or restored in place, a full
 `PRAGMA integrity_check` plus `PRAGMA foreign_key_check` on both sides before
 any success claim, and exactly one closed terminal receipt validated in
 [`tests/test_sqlite_recovery_engine.py`](../tests/test_sqlite_recovery_engine.py)
-against this directory's own `schema.json`. It is a standalone Python API a
-caller invokes with explicit paths; it adds no CLI subcommand, API route,
-dashboard control, timer, watcher, service, or scheduler, and no other module
-in `megalodon/` imports it. `MAX_BUSY_RETRIES` remains a policy constant only:
+against this directory's own `schema.json`. It remains a standalone Python API
+a caller can invoke with explicit paths.
+
+[`megalodon/sqlite_recovery_workflow.py`](../megalodon/sqlite_recovery_workflow.py)
+adds the stricter operator workflow used by the `database-backup` and
+`database-restore` CLI commands. It admits the exact MEGALODON schema-v3 store,
+persists and validates a separately named bounded manifest, verifies trusted
+ancestry and descriptor/path identity, counts busy/lock retries, and retains
+the same closed terminal-receipt vocabulary. It adds no dashboard control,
+timer, watcher, service, or scheduler.
+
+In the original standalone engine, `MAX_BUSY_RETRIES` remains a policy constant:
 CPython's `sqlite3` module does not expose a per-step busy-retry count, so
-this implementation bounds the whole operation by the monotonic deadline
+that API bounds the whole operation by the monotonic deadline
 instead of counting retries separately. A destination created but not
 verified complete is always left in place; nothing here ever deletes it.
 
 ## Outcome and authority boundary
 
-The contract closes the vocabulary and evidence shape needed before code may
-back up the schema-v3 local audit database or restore a reviewed backup into a
-new database. It does not:
+The contract and runtime close the vocabulary, evidence shape, and local
+operator path for backing up the schema-v3 audit database or restoring a
+reviewed backup into a new database. The implementation does not:
 
-- add a CLI, API, dashboard control, timer, watcher, service, or scheduler;
-- copy, open, create, delete, migrate, repair, or restore any runtime database;
+- add a dashboard control, watcher, service, or scheduler;
+- delete, migrate, repair, activate, or select a runtime database;
 - select a retention period or delete an incomplete artifact;
 - authorize network access, remote storage, credentials, release, or deployment;
 - prove POSIX crash, disk-full, power-loss, or Windows ACL behavior.
@@ -63,13 +72,42 @@ It is not the general recovery flow specified here.
 | Digest scope | reviewed backup artifact and bounded manifest only |
 
 The 4 GiB ceiling matches the current maximum configured audit-store
-high-water setting. A later implementation must prove that page-count and byte
-accounting fit this ceiling before creating a destination; it must not silently
+high-water setting. The runtime proves that page-count and aggregate source-byte
+accounting fit this ceiling before creating a destination and does not silently
 raise the limit.
 
-## Future operator runbook
+## Operator runbook
 
-These are requirements for a later implementation, not commands available now.
+Backup the configured audit store into two new paths:
+
+```bash
+python -m megalodon database-backup /private/recovery/audit.db \
+  --manifest /private/recovery/audit.manifest.json \
+  --operation-id backup-20260919 \
+  --config /private/megalodon/settings.toml
+```
+
+Record the successful receipt's `artifact_sha256`. After review, restore that
+artifact into a different new path:
+
+```bash
+python -m megalodon database-restore \
+  /private/recovery/audit.db /private/restore/megalodon.db \
+  --manifest /private/recovery/audit.manifest.json \
+  --artifact-sha256 sha256:REPLACE_WITH_64_LOWERCASE_HEX_DIGITS \
+  --operation-id restore-20260919
+```
+
+The source, destination, and manifest parents must already exist as trusted,
+owner-private directories. For backup, both the artifact and manifest paths
+must be absent; for restore, the database destination must be absent. A failed
+command exits nonzero but still writes exactly one bounded JSON receipt to
+standard output. Paths and raw exceptions are never included in the receipt.
+The v1 runtime is POSIX-only because its owner/mode and descriptor-path claims
+cannot be made truthfully from Windows ACLs without a separate implementation
+and native acceptance evidence.
+
+The runtime follows this sequence:
 
 1. Record one explicit operator request and a unique bounded operation ID.
 2. Admit the source through the same trusted-ancestry, ownership, mode,
@@ -144,7 +182,7 @@ does not change configuration or activate it.
 | Cleanup/disposition failure | `CLEANUP_FAILED`; incomplete artifact preserved for operator review | No deletion authority |
 | Uncertain copy/commit outcome | `COMPLETION_UNCERTAIN`; destination state unknown | No success or activation |
 
-## Validation and next gate
+## Validation and remaining gates
 
 From the repository root:
 
@@ -152,22 +190,24 @@ From the repository root:
 python -m compileall -q megalodon tests
 python -m pytest tests/test_sqlite_recovery_contract.py
 python -m pytest tests/test_sqlite_recovery_engine.py
+python -m pytest tests/test_sqlite_recovery_runtime.py
 python -m pytest -ra
 ```
 
 The focused contract suite validates the schema, all accepted/rejected
 fixtures, the exact reason registry, cross-field receipt invariants,
-documentation coverage, packaging, and that no *other* module references this
-contract yet. The engine suite exercises `megalodon/sqlite_recovery.py`
+documentation coverage, and packaging. The engine suite exercises
+`megalodon/sqlite_recovery.py`
 directly against real SQLite files: a full backup/restore round trip with
 content and non-mutation verification, every failure reason reachable without
 special privileges, and every produced receipt validated against this
-directory's `schema.json`. Neither suite performs a database backup or
-restore against any real MEGALODON audit store; both operate only on paths
-explicitly passed to them.
+directory's `schema.json`. The workflow suite validates real schema-v3 online
+backup and restore, digest/manifest checks, collisions, in-place refusal,
+schema/FK failures, unsafe permissions/ancestry, reserve refusal, closed failure
+classification, and preserved interruption output.
 
-Wiring this engine into a CLI subcommand, API route, or scheduled operation
-remains a separate, not-yet-reviewed change requiring its own explicit
-decision, native failure-injection evidence (crash, disk-full, power-loss),
-exact-head CI, and independent or owner acceptance. Existence of the engine
-does not authorize that wiring or close those gates.
+Synthetic tests do not prove POSIX crash, physical disk-full, power-loss,
+uninterruptible kernel-stall, concurrent high-write WAL, or Windows ACL
+behavior. Those require native failure injection, exact-head CI, descriptor-safe
+runtime review, and independent or owner acceptance. A completed restore receipt
+does not authorize configuration activation, release, or deployment.

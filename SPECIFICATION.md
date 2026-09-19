@@ -568,11 +568,12 @@ not secure erasure. SQLite audit data and standalone offline report sets have
 independent operator-owned retention decisions; authority over one never covers
 the other.
 
-### SQLite recovery contract v1 (schema only)
+### SQLite recovery contract v1 and runtime
 
-The static [SQLite recovery contract](docs/sqlite-recovery-contract.md) defines
-future explicit backup and restore-to-new-destination requests plus closed
-terminal receipts. It admits only SQLite online-backup semantics, schema
+The [SQLite recovery contract](docs/sqlite-recovery-contract.md) defines
+explicit backup and restore-to-new-destination requests plus closed terminal
+receipts. The `database-backup` and `database-restore` CLI routes admit only
+SQLite online-backup semantics, schema
 `user_version = 3`, a new owner-private destination, 4 GiB source/artifact
 ceilings, a 16 MiB free-space reserve, at most 60 busy retries, 1,024 pages per
 step, and a 300-second monotonic deadline. A completed receipt requires stable
@@ -581,12 +582,14 @@ source/destination identity, page and logical-byte counts, full
 artifact and bounded manifest. Raw telemetry is never digested merely to place
 it in a receipt.
 
-This is not a runtime capability. No CLI, API, dashboard action, scheduler,
-service, network path, overwrite, in-place restore, automatic deletion,
-retention, migration, repair, or configuration activation is present. Any
-incomplete created destination remains failed and preserved for operator
-review. Runtime implementation and native recovery evidence require a separate
-reviewed change.
+Backup writes a separately named, exclusive, owner-private manifest no larger
+than 16 KiB. Restore requires that manifest and the expected artifact SHA-256,
+validates both before destination creation, and leaves the completed new store
+inactive. No dashboard action, scheduler, service, network path, overwrite,
+in-place restore, automatic deletion, retention, migration, repair, or
+configuration activation is present. Any incomplete created destination
+remains failed and preserved for operator review. Native power-loss, physical
+disk-full, Windows ACL, and operator recovery evidence remain separate gates.
 
 External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
 future integration must document what identifiers leave the host and require
