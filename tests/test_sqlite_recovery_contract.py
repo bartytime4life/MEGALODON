@@ -1,4 +1,4 @@
-"""Static SQLite recovery contract tests; no backup or restore runtime."""
+"""SQLite recovery contract tests shared by the runtime implementation."""
 
 from __future__ import annotations
 
@@ -110,7 +110,8 @@ def test_rejected_fixtures_fail_closed(name: str) -> None:
 
 def test_policy_fixes_limits_reasons_and_non_effects() -> None:
     policy = ACCEPTED["policy"]
-    assert policy["runtime_implemented"] is False
+    assert policy["status"] == "runtime_available"
+    assert policy["runtime_implemented"] is True
     assert policy["operations"] == ["backup", "restore"]
     assert tuple(policy["reason_codes"]) == REASONS
     assert policy["limits"] == {
@@ -237,7 +238,7 @@ def test_documentation_covers_every_reason_and_required_fault() -> None:
         assert phrase in document
 
 
-def test_contract_is_packaged_documented_and_engine_stays_isolated() -> None:
+def test_contract_is_packaged_documented_and_runtime_surfaces_are_explicit() -> None:
     manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     specification = (ROOT / "SPECIFICATION.md").read_text(encoding="utf-8")
@@ -248,20 +249,16 @@ def test_contract_is_packaged_documented_and_engine_stays_isolated() -> None:
     assert "contracts/sqlite-recovery/v1" in readme
     assert "SQLite recovery contract v1" in specification
     assert "SQLite recovery contract ([#256]" in security
-    # megalodon/sqlite_recovery.py is the one deliberate exception: it is the
-    # bounded runtime engine for this contract. No *other* module may
-    # reference the contract's schema strings or import that engine, so the
-    # engine stays a standalone API rather than getting wired into the CLI,
-    # dashboard, storage layer, or service.
     engine = ROOT / "megalodon" / "sqlite_recovery.py"
     assert engine.is_file()
-    for path in (ROOT / "megalodon").rglob("*.py"):
-        if path == engine:
-            continue
-        text = path.read_text(encoding="utf-8")
-        assert "megalodon-sqlite-recovery" not in text
-        assert "sqlite-recovery/v1" not in text
-        assert "sqlite_recovery" not in text
+    workflow = (ROOT / "megalodon" / "sqlite_recovery_workflow.py").read_text(
+        encoding="utf-8"
+    )
+    cli = (ROOT / "megalodon" / "cli.py").read_text(encoding="utf-8")
+    assert 'RECEIPT_SCHEMA = "megalodon-sqlite-recovery-receipt-v1"' in workflow
+    assert "sqlite_recovery_workflow" in cli
+    assert '"database-backup"' in cli
+    assert '"database-restore"' in cli
 
 
 def test_contract_test_has_no_runtime_import() -> None:
