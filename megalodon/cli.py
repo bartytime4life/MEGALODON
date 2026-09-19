@@ -22,8 +22,8 @@ from .config import load_settings
 from .firewall import FirewallError, LIVE_APPLY_UNSUPPORTED, NftablesFirewall
 from .models import ActionRecord
 from .service import MegalodonService
+from .dashboard_traffic import TrafficDashboardStore as DashboardStore
 from .storage import (
-    DashboardStore,
     StorageSchemaError,
     IngestionRunError,
     migrate_database,
@@ -131,6 +131,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         help="explicit TOML settings file; safe built-in defaults are used when omitted",
     )
+
+    backup = sub.add_parser(
+        "database-backup",
+        help="back up the configured audit database to a new local artifact",
+    )
+    backup.add_argument("destination", type=Path)
+    backup.add_argument(
+        "--manifest",
+        type=Path,
+        required=True,
+        help="new path for the bounded recovery manifest",
+    )
+    backup.add_argument("--operation-id", required=True)
+    backup.add_argument(
+        "--config",
+        help="explicit TOML settings file; safe built-in defaults are used when omitted",
+    )
+
+    restore = sub.add_parser(
+        "database-restore",
+        help="restore a reviewed backup into a new, inactive database",
+    )
+    restore.add_argument("source", type=Path)
+    restore.add_argument("destination", type=Path)
+    restore.add_argument("--manifest", type=Path, required=True)
+    restore.add_argument("--artifact-sha256", required=True)
+    restore.add_argument("--operation-id", required=True)
 
     reconciliation_status = sub.add_parser(
         "database-reconciliation-status",
@@ -807,6 +834,39 @@ def _database_migrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _database_backup(args: argparse.Namespace) -> int:
+    from .sqlite_recovery_workflow import backup_database
+
+    try:
+        settings = _load(args.config)
+    except (OSError, ValueError):
+        source: object = object()
+    else:
+        source = settings.db_path
+    receipt = backup_database(
+        source,
+        args.destination,
+        args.manifest,
+        operation_id=args.operation_id,
+    )
+    print(json.dumps(receipt, sort_keys=True))
+    return 0 if receipt["status"] == "completed" else 2
+
+
+def _database_restore(args: argparse.Namespace) -> int:
+    from .sqlite_recovery_workflow import restore_database
+
+    receipt = restore_database(
+        args.source,
+        args.manifest,
+        args.destination,
+        artifact_sha256=args.artifact_sha256,
+        operation_id=args.operation_id,
+    )
+    print(json.dumps(receipt, sort_keys=True))
+    return 0 if receipt["status"] == "completed" else 2
+
+
 def _database_reconciliation_status(args: argparse.Namespace) -> int:
     try:
         settings = _load(args.config)
@@ -930,6 +990,10 @@ def main(argv: list[str] | None = None) -> None:
         code = _dashboard(args)
     elif args.command == "database-migrate":
         code = _database_migrate(args)
+    elif args.command == "database-backup":
+        code = _database_backup(args)
+    elif args.command == "database-restore":
+        code = _database_restore(args)
     elif args.command == "database-reconciliation-status":
         code = _database_reconciliation_status(args)
     elif args.command == "database-reconcile":

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://megalodon.local/contracts/sqlite-recovery/v1/schema.json",
   "title": "MEGALODON SQLite recovery contract v1",
-  "description": "Contract-only policy, explicit requests, and terminal receipts for bounded local SQLite backup and restore-to-new-destination operations.",
+  "description": "Policy, explicit requests, and terminal receipts for bounded local SQLite backup and restore-to-new-destination operations.",
   "$ref": "#/$defs/document",
   "$defs": {
     "document": {
@@ -186,8 +186,8 @@
       ],
       "properties": {
         "schema_version": {"const": "megalodon-sqlite-recovery-policy-v1"},
-        "status": {"const": "contract_only"},
-        "runtime_implemented": {"const": false},
+        "status": {"const": "runtime_available"},
+        "runtime_implemented": {"const": true},
         "operations": {
           "type": "array",
           "prefixItems": [{"const": "backup"}, {"const": "restore"}],

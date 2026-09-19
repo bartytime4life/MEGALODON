@@ -244,17 +244,18 @@ paths.
 
 ## Recovery contract boundary
 
-The static [SQLite recovery contract](sqlite-recovery-contract.md) is the next
-recovery-design layer above these implemented storage behaviors. It defines
-future online-backup and restore-to-new-destination requests, limits, reason
-codes, terminal receipts, and the fault matrix required by issue #256. It does
-not add a caller to `Store`, a CLI/API/dashboard surface, ordinary live-file
-copy, in-place restore, overwrite, cleanup, retention, migration, repair, or
-configuration activation.
+The [SQLite recovery workflow](sqlite-recovery-contract.md) is the explicit
+recovery layer above these storage behaviors. Its CLI backs up the configured
+store with SQLite's online-backup API and restores a digest- and
+manifest-verified artifact only to a new inactive destination. It retains the
+contract's fixed limits, closed reason codes, path-free terminal receipts, and
+fault matrix. It adds no `Store` mutation, dashboard surface, ordinary
+live-file copy, in-place restore, overwrite, cleanup, retention, migration,
+repair, or configuration activation.
 
 The existing `.pre-v3.bak` path remains limited to explicit v1/v2 schema
 migration. It must not be presented as implementation of the general recovery
-contract. Conversely, a future schema-v3 backup receipt cannot authorize
+contract. Conversely, a schema-v3 backup receipt cannot authorize
 migration or select the restored destination for runtime use.
 
 ## Reproducible synthetic confirmation

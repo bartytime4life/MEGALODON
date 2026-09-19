@@ -79,7 +79,7 @@ the observation scope; this update is not a new validated currentness manifest.
 | Order | Work | Smallest safe outcome |
 | --- | --- | --- |
 | 0 | #254 currentness disposition | Preserve the immutable receipt and obtain explicit maintainer disposition; do not promote selected-field validation into broad acceptance |
-| 1 | #256 SQLite recovery | Contract, fixtures, reason codes, and fault runbook delivered by #271; obtain issue disposition and separately review runtime backup/restore |
+| 1 | #256 SQLite recovery | Contract and standalone engine are on `main`; review the explicit operator-workflow PR and retain native failure/operator acceptance as later evidence gates |
 | 2 | #255 license decision | Obtain the owner's actual choice and only then align root/package/SBOM metadata; no release follows automatically |
 | 3 | #257 Suricata raw-EVE profile | Select one exact producer profile and close a privacy-minimal converter contract before code or sensor integration |
 | 4 | #258 Zeek/correlation qualification | Pin producer profiles and treat Community ID as a non-authoritative grouping hint |

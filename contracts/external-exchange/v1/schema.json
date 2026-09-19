@@ -105,6 +105,164 @@
         "host_action": {"const": false},
         "automation": {"const": false}
       }
+    },
+    "logicalId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "boundedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ip"],
+      "properties": {
+        "ip": {"type": "string", "minLength": 2, "maxLength": 45},
+        "port": {"type": "integer", "minimum": 0, "maximum": 65535}
+      }
+    },
+    "ecsRecord": {
+      "description": "MEGALODON's own bounded ECS 9.5.0 profile: a minimal, verifiable field subset. Every non-standard value lives under the free-form `megalodon` namespace, ECS's own sanctioned custom-fields mechanism. This is not a claim of full ECS compliance, and `event.original` is never present.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["@timestamp", "event", "source", "destination", "network", "message", "rule", "megalodon"],
+      "properties": {
+        "@timestamp": {"$ref": "#/$defs/utcTimestamp"},
+        "event": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "category", "type", "severity", "id", "dataset", "ingested"],
+          "properties": {
+            "kind": {"const": "alert"},
+            "category": {
+              "type": "array",
+              "prefixItems": [{"const": "network"}, {"const": "intrusion_detection"}],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "type": {
+              "type": "array",
+              "prefixItems": [{"const": "info"}],
+              "items": false,
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "severity": {"enum": [25, 50, 75, 99]},
+            "id": {"$ref": "#/$defs/logicalId"},
+            "dataset": {"const": "megalodon.detection"},
+            "ingested": {"$ref": "#/$defs/utcTimestamp"}
+          }
+        },
+        "source": {"$ref": "#/$defs/endpoint"},
+        "destination": {"$ref": "#/$defs/endpoint"},
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transport", "bytes"],
+          "properties": {
+            "transport": {"type": "string", "minLength": 1, "maxLength": 32},
+            "bytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "message": {"$ref": "#/$defs/boundedText"},
+        "rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {"id": {"$ref": "#/$defs/logicalId"}}
+        },
+        "megalodon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "run_id", "event_id", "detection_id", "source_kind", "recommendation", "completeness", "projection_version"],
+          "properties": {
+            "schema_version": {"const": "megalodon-ecs-profile-v1"},
+            "run_id": {"$ref": "#/$defs/logicalId"},
+            "event_id": {"$ref": "#/$defs/logicalId"},
+            "detection_id": {"$ref": "#/$defs/logicalId"},
+            "source_kind": {"enum": ["sample", "jsonl", "scapy"]},
+            "recommendation": {"$ref": "#/$defs/boundedText"},
+            "suppressed_reason": {"$ref": "#/$defs/boundedText"},
+            "completeness": {"enum": ["complete", "partial"]},
+            "projection_version": {"const": "1"}
+          }
+        }
+      }
+    },
+    "ocsfRecord": {
+      "description": "MEGALODON's own bounded OCSF 1.9.0 profile: Network Activity class (4001) with a minimal, verifiable field subset. Every value this repository is not confident maps to a specific upstream enum uses OCSF's own generic `99`/\"Other\" sentinel, and every non-standard value lives under `unmapped`, OCSF's own sanctioned vendor-extension mechanism. This is not a claim of full OCSF compliance.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class_uid", "class_name", "category_uid", "category_name", "activity_id", "activity_name", "severity_id", "severity", "time", "metadata", "src_endpoint", "dst_endpoint", "connection_info", "message", "unmapped"],
+      "properties": {
+        "class_uid": {"const": 4001},
+        "class_name": {"const": "Network Activity"},
+        "category_uid": {"const": 4},
+        "category_name": {"const": "Network Activity"},
+        "activity_id": {"const": 99},
+        "activity_name": {"const": "Other"},
+        "severity_id": {"enum": [2, 3, 4, 5]},
+        "severity": {"enum": ["Low", "Medium", "High", "Critical"]},
+        "time": {"type": "integer", "minimum": 0},
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "product", "uid"],
+          "properties": {
+            "version": {"const": "1.9.0"},
+            "product": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "vendor_name"],
+              "properties": {
+                "name": {"const": "MEGALODON"},
+                "vendor_name": {"const": "MEGALODON"}
+              }
+            },
+            "uid": {"$ref": "#/$defs/logicalId"}
+          }
+        },
+        "src_endpoint": {"$ref": "#/$defs/endpoint"},
+        "dst_endpoint": {"$ref": "#/$defs/endpoint"},
+        "connection_info": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol_name"],
+          "properties": {"protocol_name": {"type": "string", "minLength": 1, "maxLength": 32}}
+        },
+        "message": {"$ref": "#/$defs/boundedText"},
+        "unmapped": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "run_id", "event_id", "detection_id", "rule_id", "source_kind", "recommendation", "byte_count", "completeness", "projection_version", "megalodon_activity"],
+          "properties": {
+            "schema_version": {"const": "megalodon-ocsf-profile-v1"},
+            "run_id": {"$ref": "#/$defs/logicalId"},
+            "event_id": {"$ref": "#/$defs/logicalId"},
+            "detection_id": {"$ref": "#/$defs/logicalId"},
+            "rule_id": {"$ref": "#/$defs/logicalId"},
+            "source_kind": {"enum": ["sample", "jsonl", "scapy"]},
+            "recommendation": {"$ref": "#/$defs/boundedText"},
+            "suppressed_reason": {"$ref": "#/$defs/boundedText"},
+            "byte_count": {"type": "integer", "minimum": 0},
+            "completeness": {"enum": ["complete", "partial"]},
+            "projection_version": {"const": "1"},
+            "megalodon_activity": {"const": "detection"}
+          }
+        }
+      }
     }
   }
 }

@@ -395,47 +395,18 @@ def test_summary_is_one_statement_and_recent_selects_only_public_fields(tmp_path
     assert "TEMP B-TREE" not in plan
 
 
-def test_traffic_projection_is_bounded_and_omits_endpoints(tmp_path):
+def test_base_dashboard_store_does_not_expose_unqualified_traffic(tmp_path):
     path = tmp_path / "private" / "audit.db"
     with Store(path) as writer:
         writer.record_event(PacketEvent(STAMP, "192.0.2.1", "198.51.100.2", "tcp", byte_count=120))
         writer.record_event(PacketEvent(STAMP, "192.0.2.3", "198.51.100.4", "dns", byte_count=80))
 
-    statements: list[str] = []
     with DashboardStore(path) as reader:
-        reader._connection.set_trace_callback(statements.append)
-        traffic = reader.traffic(2)
-
-    assert traffic == {
-        "schema": "dashboard-traffic-v1",
-        "sample_limit": 2,
-        "sampled_events": 2,
-        "total_bytes": 200,
-        "first_observed_at": STAMP.isoformat(),
-        "last_observed_at": STAMP.isoformat(),
-        "protocols": [
-            {"protocol": "DNS", "events": 1, "bytes": 80},
-            {"protocol": "TCP", "events": 1, "bytes": 120},
-        ],
-        "events": [
-            {"observed_at": STAMP.isoformat(), "protocol": "TCP", "byte_count": 120},
-            {"observed_at": STAMP.isoformat(), "protocol": "DNS", "byte_count": 80},
-        ],
-    }
-    sql = " ".join(statements[-1].lower().split())
-    assert "select observed_at, protocol, byte_count from events" in sql
-    for private_column in ("src_ip", "dst_ip", "interface", "metadata_json", "tcp_flags"):
-        assert private_column not in sql
-
-
-@pytest.mark.parametrize("limit", [0, 501, True, 1.0, "1"])
-def test_traffic_projection_rejects_invalid_limits(tmp_path, limit):
-    path = tmp_path / "private" / "audit.db"
-    with Store(path):
-        pass
-    with DashboardStore(path) as reader:
-        with pytest.raises(ValueError, match="^DASHBOARD_STORE:INVALID_LIMIT$"):
-            reader.traffic(limit)
+        assert not hasattr(reader, "traffic")
+        with pytest.raises(sqlite3.DatabaseError):
+            reader._connection.execute(
+                "SELECT observed_at, protocol, byte_count FROM events LIMIT 1"
+            )
 
 
 def test_ingestion_run_projection_is_bounded_receipt_only_and_newest_first(tmp_path):

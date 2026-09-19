@@ -27,7 +27,6 @@ from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYT
 MIN_REFRESH_SECONDS = 2
 MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
-TRAFFIC_SAMPLE_LIMIT = 240
 DEFAULT_INGESTION_RUN_LIMIT = 8
 MAX_INGESTION_RUN_LIMIT = 25
 DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
@@ -56,7 +55,7 @@ class DashboardReader(Protocol):
         self, limit: int = DEFAULT_INGESTION_RUN_LIMIT
     ) -> list[dict[str, Any]]: ...
 
-    def traffic(self, limit: int = TRAFFIC_SAMPLE_LIMIT) -> dict[str, Any]: ...
+    def traffic(self) -> dict[str, Any]: ...
 
 
 class UnconfiguredDashboardReader:
@@ -71,7 +70,7 @@ class UnconfiguredDashboardReader:
     def ingestion_runs(self, limit: int = DEFAULT_INGESTION_RUN_LIMIT) -> list[dict[str, Any]]:
         raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
 
-    def traffic(self, limit: int = TRAFFIC_SAMPLE_LIMIT) -> dict[str, Any]:
+    def traffic(self) -> dict[str, Any]:
         raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
 
 
@@ -392,6 +391,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
             return
+        if route.path == "/api/traffic":
+            from .dashboard_traffic import MAX_BYTES, unavailable
+            try:
+                reader = getattr(self.store, "traffic", None)
+                if reader is None:
+                    raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+                payload = json.dumps(reader(), separators=(",", ":"), allow_nan=False).encode()
+                if len(payload) > MAX_BYTES:
+                    raise ValueError("response bound")
+            except (StorageSchemaError, ValueError, TypeError, OverflowError):
+                self._send_json(unavailable(), status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
+            return
         if route.path == "/api/config":
             self._send_json({
                 "schema": "dashboard-config-v1", "read_only": True,
@@ -406,14 +419,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "telemetry unavailable"}, status=503)
                 return
             self._send_json(summary)
-            return
-        if route.path == "/api/traffic":
-            try:
-                traffic = self.store.traffic(TRAFFIC_SAMPLE_LIMIT)
-            except StorageSchemaError:
-                self._send_json({"error": "telemetry unavailable"}, status=503)
-                return
-            self._send_json(traffic)
             return
         if route.path == "/api/events":
             try:

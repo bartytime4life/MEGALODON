@@ -89,7 +89,7 @@ INDEX_HTML = """<!doctype html>
       </dl>
     </div>
     <div class="protocol-mix" id="protocol-mix" aria-label="Protocol mix"></div>
-    <p class="traffic-boundary">Shows at most 240 stored records. This is a sample of saved metadata, not network speed or proof that capture is complete.</p>
+    <p class="traffic-boundary">Shows at most 500 source-qualified records tied to ingestion receipts. This is bounded saved metadata, not network speed or proof that capture is complete.</p>
   </section>
 
   <!-- HUD_SETUP -->
@@ -718,15 +718,14 @@ const metricSpec = [
 ];
 const summaryFields = ['actions', 'detections', 'events', 'high_or_critical'];
 const eventFields = ['detected_at', 'message', 'rule_id', 'severity', 'src_ip'];
-const trafficFields = ['events', 'first_observed_at', 'last_observed_at', 'protocols', 'sample_limit', 'sampled_events', 'schema', 'total_bytes'];
-const trafficEventFields = ['byte_count', 'observed_at', 'protocol'];
-const trafficProtocolFields = ['bytes', 'events', 'protocol'];
 const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
-const workspaceIds = ['live', 'analysis', 'interfaces'];
+const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
 const workspaceTargets = {
-  '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'live',
+  '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
+  'room-home-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
+  'room-reports-title': 'reports', 'room-help-title': 'help',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis'
@@ -803,9 +802,9 @@ function workspaceFromHash(value) {
   return Object.prototype.hasOwnProperty.call(workspaceTargets, target) ? workspaceTargets[target] : null;
 }
 function revealTargetDisclosure(target) {
-  if (!target || typeof target.closest !== 'function') return;
-  const disclosure = target.closest('details');
-  if (disclosure) disclosure.open = true;
+  for (let parent = target; parent; parent = parent.parentElement) {
+    if (parent.tagName === 'DETAILS') parent.open = true;
+  }
 }
 function restoreWorkspaceFromHash() {
   const hash = window.location && typeof window.location.hash === 'string' ? window.location.hash : '';
@@ -891,42 +890,38 @@ function validatedEvents(value) {
   if (!valid) throw new Error('invalid events response');
   return value;
 }
-function validTrafficName(value) {
-  return typeof value === 'string' && /^[A-Z0-9][A-Z0-9._-]{0,15}(?![\s\S])/u.test(value);
-}
 function validatedTraffic(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)
-      || Object.keys(value).sort().join(',') !== trafficFields.join(',')
-      || value.schema !== 'dashboard-traffic-v1'
-      || !Number.isSafeInteger(value.sample_limit) || value.sample_limit !== 240
-      || !Number.isSafeInteger(value.sampled_events) || value.sampled_events < 0 || value.sampled_events > value.sample_limit
-      || !Number.isSafeInteger(value.total_bytes) || value.total_bytes < 0
-      || !Array.isArray(value.events) || value.events.length !== value.sampled_events
-      || !Array.isArray(value.protocols) || value.protocols.length > 8) throw new Error('invalid traffic response');
-  const optionalTimes = [value.first_observed_at, value.last_observed_at];
-  if (!optionalTimes.every(item => item === null || validRecordedTime(item))
-      || (value.sampled_events === 0) !== (value.first_observed_at === null && value.last_observed_at === null)) throw new Error('invalid traffic response');
-  let byteTotal = 0;
-  const events = value.events.map(event => {
-    if (!event || typeof event !== 'object' || Array.isArray(event)
-        || Object.keys(event).sort().join(',') !== trafficEventFields.join(',')
-        || !validRecordedTime(event.observed_at) || !validTrafficName(event.protocol)
-        || !Number.isSafeInteger(event.byte_count) || event.byte_count < 0) throw new Error('invalid traffic response');
-    byteTotal += event.byte_count;
-    return Object.freeze({...event});
+  const source = validateTraffic(value);
+  const events = source.events.map(event => Object.freeze({
+    observed_at: event.observed_at,
+    protocol: event.protocol,
+    byte_count: event.byte_count
+  }));
+  const protocolMap = new Map();
+  let totalBytes = 0n;
+  events.forEach(event => {
+    const byteCount = BigInt(event.byte_count);
+    totalBytes += byteCount;
+    const item = protocolMap.get(event.protocol) || {protocol: event.protocol, events: 0, bytes: 0n};
+    item.events += 1; item.bytes += byteCount; protocolMap.set(event.protocol, item);
   });
-  if (byteTotal !== value.total_bytes) throw new Error('invalid traffic response');
-  const protocols = value.protocols.map(item => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)
-        || Object.keys(item).sort().join(',') !== trafficProtocolFields.join(',')
-        || !validTrafficName(item.protocol)
-        || !Number.isSafeInteger(item.events) || item.events < 1
-        || !Number.isSafeInteger(item.bytes) || item.bytes < 0) throw new Error('invalid traffic response');
-    return Object.freeze({...item});
+  const protocols = [...protocolMap.values()]
+    .sort((left, right) => right.events - left.events || left.protocol.localeCompare(right.protocol))
+    .map(item => Object.freeze({...item, bytes: item.bytes.toString()}));
+  return Object.freeze({
+    schema: source.schema,
+    sample_limit: source.limits.events,
+    sampled_events: events.length,
+    total_bytes: totalBytes.toString(),
+    first_observed_at: source.window.start,
+    last_observed_at: source.window.end,
+    protocols: Object.freeze(protocols),
+    events: Object.freeze(events)
   });
-  if (protocols.reduce((total, item) => total + item.events, 0) !== value.sampled_events
-      || protocols.reduce((total, item) => total + item.bytes, 0) !== value.total_bytes) throw new Error('invalid traffic response');
-  return Object.freeze({...value, events: Object.freeze(events), protocols: Object.freeze(protocols)});
+}
+function unavailableTrafficResponse(value) {
+  try { return validateTraffic(value).status === 'unavailable'; }
+  catch (_) { return false; }
 }
 function boundedAdvisoryText(value) {
   return typeof value === 'string' && [...value].length >= 1 && [...value].length <= 1200
@@ -1324,19 +1319,22 @@ function renderMetrics(summary) {
   byId('live-metrics').replaceChildren(...cards);
 }
 function formatBytes(value) {
-  const units = ['B', 'KiB', 'MiB', 'GiB'];
-  let amount = Number(value), unit = 0;
-  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
-  return `${amount >= 10 || unit === 0 ? Math.round(amount) : amount.toFixed(1)} ${units[unit]}`;
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB'];
+  const bytes = typeof value === 'bigint' ? value : BigInt(value);
+  let divisor = 1n, unit = 0;
+  while (bytes >= divisor * 1024n && unit < units.length - 1) { divisor *= 1024n; unit += 1; }
+  if (unit === 0 || bytes >= divisor * 10n) return `${(bytes + divisor / 2n) / divisor} ${units[unit]}`;
+  const tenths = (bytes * 10n + divisor / 2n) / divisor;
+  return `${tenths / 10n}.${tenths % 10n} ${units[unit]}`;
 }
 function trafficBins(events, count = 24) {
-  const bins = Array.from({length: count}, () => ({events: 0, bytes: 0}));
+  const bins = Array.from({length: count}, () => ({events: 0, bytes: 0n}));
   if (!events.length) return bins;
   const times = events.map(item => new Date(item.observed_at).valueOf());
   const oldest = Math.min(...times), newest = Math.max(...times), span = Math.max(1, newest - oldest + 1);
   events.forEach((item, index) => {
     const target = oldest === newest ? count - 1 : Math.min(count - 1, Math.floor(((times[index] - oldest) / span) * count));
-    bins[target].events += 1; bins[target].bytes += item.byte_count;
+    bins[target].events += 1; bins[target].bytes += BigInt(item.byte_count);
   });
   return bins;
 }
@@ -1361,11 +1359,10 @@ function trafficWindowLabel(firstObserved, lastObserved) {
 function renderTraffic(traffic) {
   state.traffic = traffic;
   const bins = trafficBins(traffic.events);
-  const maximum = Math.max(1, ...bins.map(item => item.bytes || item.events));
+  const maximum = bins.reduce((largest, item) => item.bytes > largest ? item.bytes : largest, 1n);
   const bars = bins.map((item, index) => {
     const bar = document.createElement('span');
-    const magnitude = item.bytes || item.events;
-    const level = item.events ? Math.max(1, Math.ceil(magnitude / maximum * 10)) : 0;
+    const level = item.events ? Math.max(1, Number((item.bytes * 10n + maximum - 1n) / maximum)) : 0;
     bar.className = `traffic-bar level-${level}${item.events ? '' : ' traffic-empty'}`;
     bar.title = `Window ${index + 1}: ${item.events} event${item.events === 1 ? '' : 's'}, ${formatBytes(item.bytes)}`;
     return bar;
@@ -2003,10 +2000,12 @@ async function refresh(announce = true) {
       requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`), requestJSON('/api/traffic')
     ]);
     const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh
-      && [summaryResult, eventsResult, trafficResult].every(result => result.status === 'rejected'
+      && [summaryResult, eventsResult].every(result => result.status === 'rejected'
         && result.reason && result.reason.status === 503
         && result.reason.payload && typeof result.reason.payload === 'object' && !Array.isArray(result.reason.payload)
-        && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable');
+        && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable')
+      && trafficResult.status === 'rejected' && trafficResult.reason && trafficResult.reason.status === 503
+      && unavailableTrafficResponse(trafficResult.reason.payload);
     if (expectedMissingStore) {
       state.telemetryNotConfigured = true;
       state.lastRefreshFailed = false;
@@ -2053,6 +2052,7 @@ async function refresh(announce = true) {
     state.refreshing = false; button.disabled = false; button.textContent = 'Refresh now';
     byId('triage-controls').disabled = false;
     byId('triage-panel').setAttribute('aria-busy', 'false');
+    refreshRoom();
   }
 }
 function togglePause() {
@@ -2090,6 +2090,7 @@ function applyConfig(payload) {
   renderScope();
 }
 async function bootstrap() {
+  renderRoom();
   restoreWorkspaceFromHash();
   try { applyConfig(await requestJSON('/api/config')); }
   catch (_) {
@@ -2103,6 +2104,7 @@ async function bootstrap() {
   loadIngestionRuns();
   loadReferenceStatus();
   await loadSetup();
+  refreshRoom();
   await refresh(false); scheduleNext();
 }
 
@@ -2165,6 +2167,9 @@ document.addEventListener('visibilitychange', () => {
 });
 """
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS
+from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
+
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + "\nbootstrap();\n"
+INDEX_HTML = compose_control_room(INDEX_HTML)
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + "\nbootstrap();\n"

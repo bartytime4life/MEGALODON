@@ -1,0 +1,20 @@
+{
+  "schema": "ecsRecord",
+  "value": {
+    "@timestamp": "2026-09-19T12:00:01Z",
+    "event": {
+      "kind": "alert",
+      "category": ["network", "intrusion_detection"],
+      "type": ["info"],
+      "severity": 75,
+      "id": "detection-1",
+      "dataset": "megalodon.detection",
+      "ingested": "2026-09-19T12:00:05Z"
+    },
+    "source": {"ip": "10.0.0.5", "port": 51000},
+    "destination": {"ip": "10.0.0.9", "port": 443},
+    "network": {"transport": "tcp", "bytes": 1500},
+    "message": "High rate of SYN packets observed",
+    "rule": {"id": "SYN_FLOOD"}
+  }
+}

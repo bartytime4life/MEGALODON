@@ -202,6 +202,11 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert "overflow: hidden" in DASHBOARD_CSS
     assert ".workspace-scroll" in DASHBOARD_CSS
     assert "<iframe" not in INDEX_HTML.lower()
+    assert 'id="integrations-presence-filter"' in INDEX_HTML
+    for label in ("Presence", "MEGALODON support", "Administration", "Health"):
+        assert label in DASHBOARD_JS
+    for state_class in ("state-found", "state-missing", "state-unknown"):
+        assert state_class in DASHBOARD_CSS
     from megalodon.dashboard_tool_assets import CONTROLS_JS
     assert "innerHTML" not in DASHBOARD_JS
     assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
@@ -220,7 +225,7 @@ process.stdin.on('end', async () => {
     const nodes = new Map(), timers = new Map(); let sequence = 0; const calls = [];
     function fakeNode(id = '') {
       let text = '';
-      return {id, value: id === 'integrations-platform' ? 'linux' : id === 'integrations-status-filter' ? 'ALL' : '',
+      return {id, value: id === 'integrations-platform' ? 'linux' : (id === 'integrations-status-filter' || id === 'integrations-presence-filter') ? 'ALL' : '',
         children: [], className: '', disabled: false, hidden: false, attrs: {}, listeners: {},
         get textContent() { return text; }, set textContent(v) { text = String(v); },
         set innerHTML(_) { throw new Error('unsafe HTML sink'); },
@@ -255,8 +260,8 @@ process.stdin.on('end', async () => {
     assert.equal(run("workspaceFromHash('#integrations-title')"), 'interfaces');
     assert.equal(run("workspaceFromHash('#unknown')"), null);
     context.window.location.hash = '#detections-title'; run('restoreWorkspaceFromHash()');
-    assert.equal(nodeFor('workspace-live').hidden, false);
-    assert.equal(nodeFor('workspace-analysis').hidden, true);
+    assert.equal(nodeFor('workspace-live').hidden, true);
+    assert.equal(nodeFor('workspace-analysis').hidden, false);
     // Native browsers do not emit hashchange when an anchor repeats the hash.
     // Changing tabs in between must not strand a quick link in a hidden panel.
     function clickFragment(hash, options = {}) {
@@ -276,8 +281,9 @@ process.stdin.on('end', async () => {
       assert.equal(context.window.location.hash, '#' + target);
     }
     clickFragment('#detections-title');
-    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(nodeFor('workspace-analysis').hidden, false);
     assert.equal(document.activeElement, nodeFor('detections-title'));
+    clickFragment('#page-title');
     for (const options of [{ctrlKey: true}, {metaKey: true}, {shiftKey: true}, {altKey: true}, {button: 1}, {defaultPrevented: true}]) {
       clickFragment('#offline-title', options);
       assert.equal(nodeFor('workspace-live').hidden, false);
@@ -312,6 +318,17 @@ process.stdin.on('end', async () => {
     }
     await run('loadIntegrationMap()'); assert.equal(calls.length, 1); assert.equal(nodeFor('integrations-cards').children.length, 14);
     assert.match(nodeFor('integrations-profile').textContent, /linux/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Presence not checked/);
+    assert.match(textOf(nodeFor('integrations-cards')), /MEGALODON support:/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Administration: Operator managed/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Health: Runtime health unknown/);
+    run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'}))}; renderIntegrationMap()");
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);
+    nodeFor('integrations-presence-filter').value = 'found'; run('renderIntegrationMap()');
+    assert.equal(nodeFor('integrations-cards').children.length, 1);
+    assert.match(textOf(nodeFor('integrations-cards')), /TShark/);
+    nodeFor('integrations-presence-filter').value = 'ALL'; run('renderIntegrationMap()');
     nodeFor('integrations-query').value = 'does-not-exist'; run('renderIntegrationMap()');
     assert.match(nodeFor('integrations-status').textContent, /0 of 14/);
     nodeFor('integrations-query').value = 'Suricata'; nodeFor('integrations-status-filter').value = 'implemented'; run('renderIntegrationMap()');
@@ -352,13 +369,26 @@ process.stdin.on('end', async () => {
     // An explicitly absent startup store is expected unavailability, not a
     // broken dashboard API. Both live responses must still confirm that state.
     const missingStoreResponse = () => ({ok: false, status: 503, json: async () => ({error: 'telemetry unavailable'})});
+    const missingTrafficResponse = () => ({ok: false, status: 503, json: async () => ({
+      schema: 'dashboard-traffic-v1', status: 'unavailable',
+      reason: 'No qualified data available. Import authorized metadata, then restart the HUD.',
+      generated_at: new Date().toISOString(), unit: 'metadata events; reported bytes',
+      vantage: 'unknown; no qualified store projection', quality: 'unknown',
+      window: {start: null, end: null}, limits: {events: 500, findings: 200, bytes: 262144},
+      truncated: false, excluded_event_candidates: 0, events: [], findings: [],
+      limitations: Array.from({length: 7}, (_, index) => `Bounded limitation ${index + 1}.`),
+      build: {package_version: 'test', base_commit: '0'.repeat(40), projection_sha256: '0'.repeat(64), commit: 'test'}
+    })});
+    const useMissingStoreResponses = () => {
+      context.fetch = async path => path === '/api/traffic' ? missingTrafficResponse() : missingStoreResponse();
+    };
     async function setup(sourceStatus, extra = {}) {
       context.fetch = async path => {
         assert.equal(path, '/api/setup');
         return {ok: true, json: async () => ({schema: 'dashboard-setup-v2', source_status: sourceStatus, readiness: null, runtime: null, ...extra})};
       };
       await run('loadSetup()');
-      context.fetch = async () => missingStoreResponse();
+      useMissingStoreResponses();
     }
     await setup('not_configured');
     await run('refresh(true)');
@@ -407,7 +437,7 @@ process.stdin.on('end', async () => {
     };
     await run('refresh(true)');
     assert.equal(run('state.lastRefreshFailed'), true);
-    context.fetch = async () => missingStoreResponse(); await run('refresh(true)');
+    useMissingStoreResponses(); await run('refresh(true)');
     assert.equal(run('state.telemetryNotConfigured'), true, 'expected state must recover after transport failure');
     assert.equal(run('state.lastSuccessfulRefresh'), null);
     console.log('integration map and first-launch telemetry states passed');

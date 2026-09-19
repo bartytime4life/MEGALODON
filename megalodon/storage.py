@@ -2227,9 +2227,8 @@ class DashboardStore:
         "failure_code",
         "termination_reason",
     )
-    TRAFFIC_FIELDS = ("observed_at", "protocol", "byte_count")
     _AUTHORIZED_READS = {
-        "events": frozenset({"", *TRAFFIC_FIELDS}),
+        "events": frozenset({""}),
         "detections": frozenset({"", *EVENT_FIELDS}),
         "actions": frozenset({""}),
         "ingestion_runs": frozenset({"", *INGESTION_RUN_FIELDS}),
@@ -2593,74 +2592,6 @@ class DashboardStore:
                 if cursor is not None:
                     cursor.close()
             return result
-
-    def traffic(self, limit: int = 240) -> dict[str, Any]:
-        """Return bounded event metadata for server-side traffic aggregation."""
-
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
-            raise ValueError("DASHBOARD_STORE:INVALID_LIMIT")
-        with self._bounded_read():
-            cursor: sqlite3.Cursor | None = None
-            try:
-                cursor = self._connection.execute(
-                    """
-                    SELECT observed_at, protocol, byte_count
-                    FROM events
-                    ORDER BY observed_at DESC LIMIT ?
-                    """,
-                    (limit,),
-                )
-                rows = cursor.fetchall()
-                events = [
-                    {
-                        "observed_at": row["observed_at"],
-                        "protocol": row["protocol"],
-                        "byte_count": int(row["byte_count"]),
-                    }
-                    for row in reversed(rows)
-                ]
-            except (KeyError, TypeError, ValueError) as exc:
-                raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED") from exc
-            finally:
-                if cursor is not None:
-                    cursor.close()
-
-        protocols: dict[str, dict[str, int | str]] = {}
-        total_bytes = 0
-        for event in events:
-            raw_protocol = str(event["protocol"]).upper()
-            allowed_protocol = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
-            protocol = (
-                raw_protocol
-                if 1 <= len(raw_protocol) <= 16
-                and raw_protocol[0] in allowed_protocol[:36]
-                and all(character in allowed_protocol for character in raw_protocol)
-                else "OTHER"
-            )
-            event["protocol"] = protocol
-            byte_count = max(0, int(event["byte_count"]))
-            total_bytes += byte_count
-            item = protocols.setdefault(protocol, {"protocol": protocol, "events": 0, "bytes": 0})
-            item["events"] = int(item["events"]) + 1
-            item["bytes"] = int(item["bytes"]) + byte_count
-        ranked_all = sorted(protocols.values(), key=lambda item: (-int(item["events"]), str(item["protocol"])))
-        ranked = ranked_all[:7]
-        if len(ranked_all) > 7:
-            ranked.append({
-                "protocol": "OTHER",
-                "events": sum(int(item["events"]) for item in ranked_all[7:]),
-                "bytes": sum(int(item["bytes"]) for item in ranked_all[7:]),
-            })
-        return {
-            "schema": "dashboard-traffic-v1",
-            "sample_limit": limit,
-            "sampled_events": len(events),
-            "total_bytes": total_bytes,
-            "first_observed_at": events[0]["observed_at"] if events else None,
-            "last_observed_at": events[-1]["observed_at"] if events else None,
-            "protocols": ranked,
-            "events": events,
-        }
 
     def ingestion_runs(self, limit: int = 8) -> list[dict[str, Any]]:
         """Return a bounded, receipt-only view of the newest ingestion runs."""

@@ -83,10 +83,10 @@ record delivery state; they do not override the checked-in contracts.
 | Automation design and Stage 0 schema | [`docs/automation-contract.md`](docs/automation-contract.md) and [`contracts/automation/v1`](contracts/automation/v1/README.md) |
 | Local Qwen advisory boundary | [`megalodon/qwen_advisory.py`](megalodon/qwen_advisory.py), [`docs/local-model-advisory-contract.md`](docs/local-model-advisory-contract.md), and [`contracts/local-model-advisory/v1`](contracts/local-model-advisory/v1/README.md) |
 | Future alert lifecycle and delivery boundary | [`docs/alert-lifecycle-contract.md`](docs/alert-lifecycle-contract.md) and [`contracts/alert-lifecycle/v1`](contracts/alert-lifecycle/v1/README.md) |
-| Threat context and SIEM/SOAR exchange boundary | [`docs/external-exchange-contract.md`](docs/external-exchange-contract.md), [`docs/threat-context-reader.md`](docs/threat-context-reader.md), and [`contracts/external-exchange/v1`](contracts/external-exchange/v1/README.md) |
+| Threat context and SIEM/SOAR exchange boundary | [`docs/external-exchange-contract.md`](docs/external-exchange-contract.md), [`docs/threat-context-reader.md`](docs/threat-context-reader.md), [`contracts/external-exchange/v1`](contracts/external-exchange/v1/README.md), and [`megalodon/siem_export.py`](megalodon/siem_export.py) |
 | Suricata record, reader, durable-consumer, and reconciliation gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), [`consumer`](contracts/suricata-eve/v1/consumer/README.md), and [`reconciliation`](contracts/suricata-eve/v1/reconciliation/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
-| Contract-only SQLite backup and restore-to-new-destination gate | [`docs/sqlite-recovery-contract.md`](docs/sqlite-recovery-contract.md) and [`contracts/sqlite-recovery/v1`](contracts/sqlite-recovery/v1/README.md) |
+| SQLite backup/restore contract, engine, and explicit operator workflow | [`docs/sqlite-recovery-contract.md`](docs/sqlite-recovery-contract.md), [`contracts/sqlite-recovery/v1`](contracts/sqlite-recovery/v1/README.md), [`megalodon/sqlite_recovery.py`](megalodon/sqlite_recovery.py), and [`megalodon/sqlite_recovery_workflow.py`](megalodon/sqlite_recovery_workflow.py) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
 | Latest repository and document reconciliation | [`docs/document-alignment-2026-09-17.md`](docs/document-alignment-2026-09-17.md) |
@@ -179,10 +179,12 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata completed-file reader | Single-threaded Linux main-thread Python API for one private closed-envelope file; immutable normalized batch and terminal receipt, with no raw-EVE conversion, persistence, dashboard, or sensor operation |
 | Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
 | Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
-| Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests; no scheduler or executor |
+| Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and occurrence-preview engine (`megalodon/automation_schedule.py`) with explicit DST classification; no scheduler, ledger, persistence, model call, or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
-| Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures; no alert mutation, notifier, delivery adapter, or credential path |
+| Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures, plus a bounded in-memory decision engine (`megalodon/alert_lifecycle.py`) validated against those fixtures; no persistence, notifier, delivery adapter, credential path, or wiring into detection ingestion, storage, the dashboard, or the CLI |
+| SQLite backup/restore | A standalone contract engine plus explicit `database-backup` / `database-restore` commands using SQLite's online-backup API only, descriptor-safe admission, new destinations, bounded manifests, full integrity/foreign-key verification, and one closed terminal receipt; no dashboard/scheduler wiring, retention, activation, or native failure-injection evidence yet |
+| SIEM export projection | Pure ECS 9.5.0 / OCSF 1.9.0 record projection plus a bounded new-file-only writer (`megalodon/siem_export.py`), each non-standard value carried in that standard's own vendor-extension mechanism; no `event.original`, network delivery, credential, dashboard, or storage wiring |
 | Reference and evaluation | Manifest-pinned, privacy-minimized IANA service/port and protocol context plus a bounded synthetic detector corpus; separate read-only CLI with no network, store, persistence, action, or subprocess path |
 | CI | Ubuntu 24.04 / Python 3.11 install, dependency check, compilation, pytest, and non-mutating CLI smokes, plus Python 3.12 sdist/wheel builds, an extracted-sdist full test, and installed-package smokes, on pushes to `main` and pull requests |
 
@@ -679,10 +681,17 @@ value and exposes no CLI, scheduler, or automatic job.
 
 The [SQLite recovery v1 contract](docs/sqlite-recovery-contract.md) separately
 defines closed explicit requests, bounds, terminal reasons, and path-free
-receipts for a future SQLite online backup and restore into a new destination.
-It is schema, fixtures, tests, and a runbook only. There is no general backup or
-restore command, no in-place restore or overwrite, and no automatic cleanup,
-retention, migration, repair, configuration change, or dashboard write path.
+receipts for a SQLite online backup and restore into a new destination.
+[`megalodon/sqlite_recovery.py`](megalodon/sqlite_recovery.py) implements it
+as a standalone callable engine. The stricter
+[`sqlite_recovery_workflow`](megalodon/sqlite_recovery_workflow.py) provides
+explicit `database-backup` and `database-restore` commands backed only by
+SQLite's online-backup API. Both commands require a new owner-private
+destination and emit one path-free terminal receipt. Backup also creates a new,
+bounded manifest; restore validates that manifest and an operator-supplied
+artifact digest before creating its destination. There is no in-place restore,
+overwrite, network access, automatic cleanup, retention, migration, repair,
+configuration change, activation, or dashboard write path.
 
 Each `run` command writes a closed lifecycle receipt before consuming input.
 Natural exhaustion records `completed/source_exhausted`; an operator event limit
@@ -1113,7 +1122,7 @@ checks, reviews, and remaining evidence can change.
 | [#26 — detector acceptance](https://github.com/bartytime4life/MEGALODON/issues/26) | Closed `completed`: deterministic bounded synthetic evaluation and evidence-quality reporting are on `main` | Representative accuracy, calibrated thresholds, or operational interpretation |
 | [#27 — Windows core acceptance](https://github.com/bartytime4life/MEGALODON/issues/27) | Closed `completed`: the Linux-preserving Windows capability and acceptance handoff is recorded | Native Windows, NTFS ACL, browser, and exact-platform execution receipts |
 | [#28 — retention and storage failure policy](https://github.com/bartytime4life/MEGALODON/issues/28) | Closed `completed`: data-class/failure matrices and bounded preview-bound retention transactions are on `main` | Selected operator retention values, automatic cleanup, secure erasure, or native failure recovery |
-| [#256 — SQLite recovery contract](https://github.com/bartytime4life/MEGALODON/issues/256) | Contract delivered by merged PR #271: explicit backup/restore requests, online-backup-only policy, new-destination identity, fixed bounds, closed receipts/reasons, adversarial fixtures, and a fault runbook; issue remains open at the 2026-09-17 readback | Runtime implementation, native failure injection, operator acceptance, independent review, configuration activation, release, or deployment |
+| [#256 — SQLite recovery contract](https://github.com/bartytime4life/MEGALODON/issues/256) | Contract and standalone engine are on `main`; the explicit operator workflow adds backup/restore commands, online-backup-only copying, new-destination identity, fixed bounds, bounded manifests, closed receipts/reasons, and focused adversarial tests | Native power-loss/disk-full/high-write-WAL/Windows evidence, operator acceptance, independent review, configuration activation, release, or deployment |
 | [#65 — firewall containment](https://github.com/bartytime4life/MEGALODON/issues/65) | Closed `completed`: retained apply routes fail closed before host inspection or subprocess creation; plan-only receipts remain | A live backend or crash-consistent restoration design |
 | [#66 — dashboard read isolation](https://github.com/bartytime4life/MEGALODON/issues/66) | Closed `completed`: a least-data reader validates private storage and constrains SQL to the dashboard projection | Native Windows ACL evidence or remote dashboard authority |
 | [#67 — atomic ingestion receipts](https://github.com/bartytime4life/MEGALODON/issues/67) | Closed `completed`: per-event evidence commits, terminal reasons, rollback behavior, and bounded orphan reconciliation are on `main` | Exactly-once intake, native power-loss recovery, alert lifecycle, or delivery |
@@ -1175,7 +1184,7 @@ config/                      conservative typed defaults and fixed-rule referenc
 contracts/automation/v1/     inert automation schema, fixtures, and contract notes
 contracts/alert-lifecycle/v1/ inert alert lifecycle schema, fixtures, and contract notes
 contracts/external-exchange/v1/ offline threat-context, local SIEM projection, and inert SOAR handoff contract
-contracts/sqlite-recovery/v1/ contract-only SQLite backup/restore policy, fixtures, and terminal receipts
+contracts/sqlite-recovery/v1/ SQLite backup/restore policy, fixtures, and terminal receipts
 contracts/suricata-eve/v1/   alert, bounded-reader, and durable-consumer contracts
 docs/                        platform baseline, integration hub, automation design, offline analyst guide
 examples/                    bounded JSONL replay fixture

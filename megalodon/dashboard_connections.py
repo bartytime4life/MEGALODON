@@ -3,10 +3,15 @@
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
-      <div><p class="eyebrow">Companion apps</p><h2 id="integrations-title" tabindex="-1">Tools</h2><p>Choose a tool to see what MEGALODON supports, whether it was found at launch, and how to verify it.</p></div>
+      <div><h2 id="integrations-title" tabindex="-1">Apps &amp; integrations</h2><p>See what was found, what MEGALODON supports, what you control, and what remains unknown. Open a saved local console in a new tab or review its evidence here.</p></div>
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
-    <p class="reference-warning" id="integrations-boundary">A tool can be installed without being connected to MEGALODON. Open one row for setup, console, and data-boundary details.</p>
+    <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
+    <div class="app-state-legend" aria-label="App status legend">
+      <span class="state-found"><i class="app-dot" aria-hidden="true"></i>Found candidate</span>
+      <span class="state-missing"><i class="app-dot" aria-hidden="true"></i>Not found</span>
+      <span class="state-unknown"><i class="app-dot" aria-hidden="true"></i>Not checked or unknown</span>
+    </div>
     <div class="integration-controls">
       <label class="field" for="integrations-platform"><span>Platform guide</span>
         <select id="integrations-platform"><option value="linux">Linux</option><option value="windows">Windows evaluation</option><option value="other">Other platforms</option></select>
@@ -22,11 +27,17 @@ INTEGRATIONS_HTML = """
           <option value="guest_only">Guest only</option><option value="proposed">Proposed</option><option value="unsupported">Unsupported</option>
         </select>
       </label>
-      <button id="integrations-clear" type="button" class="button-secondary">Clear filters</button>
+      <label class="field" for="integrations-presence-filter"><span>Startup presence</span>
+        <select id="integrations-presence-filter">
+          <option value="ALL">All presence states</option><option value="found">Found candidate</option>
+          <option value="missing">Not found</option><option value="unknown">Not checked or unknown</option>
+        </select>
+      </label>
+      <button id="integrations-clear" type="button" class="button-secondary">Clear map filters</button>
     </div>
     <p class="reference-status" id="integrations-status" role="status" aria-live="polite" aria-atomic="true">Choose a documentation profile, then load the static map. No host has been inspected.</p>
     <div class="integration-cards" id="integrations-cards" aria-busy="false"></div>
-    <p class="integration-footnote">Displayed commands are copy-only reference templates. They do not start, install, connect, or change a tool.</p>
+    <p class="integration-footnote">Commands in details are inert reference templates, never HUD execution controls. Presence, repository support, operator administration and runtime health are separate facts. Console links open in a new tab so this local HUD remains the fixed return point. Windows evaluation and guest-only workflows are not native Windows support.</p>
   </section>
 """
 
@@ -46,6 +57,19 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-summary-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .integration-card .summary-chip { display: inline-block; border-radius: 9px; }
 .integration-card-body { padding: 14px; }
+.app-state-legend { display:flex; flex-wrap:wrap; gap:12px; padding:14px 22px 0; color:var(--muted); font-size:.76rem; }
+.app-state-legend span { display:inline-flex; align-items:center; gap:7px; }
+.app-status-grid { display:grid; gap:7px; margin:13px 0; }
+.app-status-row { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 8px; align-items:start; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:rgba(110,216,255,.035); }
+.app-status-row .app-dot { grid-row:1 / span 2; margin-top:.24rem; }
+.app-status-row strong { font-size:.76rem; color:var(--text); }
+.app-status-row small { color:var(--muted); font-size:.7rem; line-height:1.4; }
+.app-dot { display:inline-block; width:10px; height:10px; flex:0 0 10px; border:2px solid currentColor; border-radius:50%; }
+.state-found { color:#51e6cf; } .state-found .app-dot { background:#51e6cf; }
+.state-missing { color:#ff758f; } .state-missing .app-dot { background:#ff758f; }
+.state-unknown { color:#99b2ba; } .state-unknown .app-dot { background:transparent; }
+.state-supported { color:#6ed8ff; } .state-supported .app-dot { background:#6ed8ff; }
+.app-return-note { color:var(--muted); font-size:.72rem; line-height:1.45; }
 .integration-flow { display: grid; gap: 6px; margin: 14px 0; }
 .integration-card dt { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04em; }
 .integration-card dd { margin: 0 0 8px; font-size: .8rem; line-height: 1.5; }
@@ -79,6 +103,21 @@ const integrationIds = [
   'local-ai-advisory', 'network-inventory-import', 'host-integrity-import',
   'vulnerability-report-import', 'zabbix-availability-read', 'nagios-availability-read'
 ];
+const integrationPresenceStates = {
+  executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found on the bounded startup PATH; installation method and compatibility remain unverified.'},
+  not_found: {filter: 'missing', className: 'state-missing', label: 'Not found on checked PATH', detail: 'The executable was absent from the checked Linux PATH; it may exist elsewhere.'},
+  not_checked: {filter: 'unknown', className: 'state-unknown', label: 'Presence not checked', detail: 'This app was not eligible for the executable-only startup check.'}
+};
+const integrationQualificationStates = {
+  implemented: {className: 'state-supported', label: 'Implemented integration path'},
+  optional: {className: 'state-unknown', label: 'Optional integration path'},
+  evaluation_only: {className: 'state-unknown', label: 'Evaluation-only path'},
+  contract_only: {className: 'state-missing', label: 'Contract only; importer absent'},
+  manual_only: {className: 'state-unknown', label: 'Manual companion only'},
+  guest_only: {className: 'state-unknown', label: 'Guest-only path'},
+  proposed: {className: 'state-missing', label: 'Proposed; not implemented'},
+  unsupported: {className: 'state-missing', label: 'Unsupported'}
+};
 const integrationZones = {
   'core-metadata': 'Core telemetry', 'offline-packet-metadata': 'Packet data',
   'offline-flow-metadata': 'Flow data', 'alert-metadata': 'Detection data',
@@ -132,6 +171,25 @@ function validatedIntegrationMap(value, expectedPlatform) {
 function integrationDefinition(label, value, parent) {
   parent.append(textNode('dt', label), textNode('dd', value));
 }
+function integrationCapabilityState(toolIndex, item) {
+  const tool = setupState.readiness && setupState.readiness.tools[toolIndex];
+  const presence = integrationPresenceStates[tool ? tool.status : 'not_checked'];
+  return {
+    presence,
+    qualification: {...integrationQualificationStates[item.selected_status],
+      detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
+    administration: {className: 'state-unknown', label: 'Operator managed',
+      detail: 'The HUD cannot install, start, stop, remove, configure, or update this app.'},
+    health: {className: 'state-unknown', label: 'Runtime health unknown',
+      detail: 'No service, endpoint, sensor-liveness, data-freshness, or coverage probe was performed.'}
+  };
+}
+function integrationStatusRow(name, state) {
+  const row = document.createElement('div'); row.className = 'app-status-row ' + state.className;
+  const dot = document.createElement('i'); dot.className = 'app-dot'; dot.setAttribute('aria-hidden', 'true');
+  row.append(dot, textNode('strong', name + ': ' + state.label), textNode('small', state.detail));
+  return row;
+}
 function integrationCard(item) {
   const card = document.createElement('details'); card.className = 'integration-card';
   const summary = document.createElement('summary');
@@ -144,11 +202,19 @@ function integrationCard(item) {
   statuses.append(textNode('span', toolPresenceText(toolIndex), 'summary-chip'));
   summary.append(identity, statuses); card.append(summary);
   const body = document.createElement('div'); body.className = 'integration-card-body';
+  const capability = integrationCapabilityState(toolIndex, item);
+  const matrix = document.createElement('section'); matrix.className = 'app-status-grid'; matrix.setAttribute('aria-label', item.software + ' capability state');
+  matrix.append(integrationStatusRow('Presence', capability.presence),
+                integrationStatusRow('MEGALODON support', capability.qualification),
+                integrationStatusRow('Administration', capability.administration),
+                integrationStatusRow('Health', capability.health));
+  body.append(matrix);
   const reviewTargets = {core: '#detections-title', tshark: '#offline-title', zeek: '#offline-title', suricata: '#suricata-title', qwen: '#analysis-window-title'};
   if (reviewTargets[toolId]) {
     const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);
   }
   MegalodonControls.mount(body, toolId, item.software);
+  body.append(textNode('p', 'Open companion consoles in a new tab; return to this HUD tab for MEGALODON navigation.', 'app-return-note'));
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);
@@ -184,8 +250,11 @@ function renderIntegrationMap() {
   const snapshot = integrationState.snapshot;
   const query = byId('integrations-query').value.slice(0, 160).trim().toLowerCase();
   const status = byId('integrations-status-filter').value;
+  const presence = byId('integrations-presence-filter').value || 'ALL';
   const rows = snapshot ? snapshot.workflows.filter(item => {
     if (status !== 'ALL' && item.selected_status !== status) return false;
+    const toolIndex = integrationIds.indexOf(item.id);
+    if (presence !== 'ALL' && integrationCapabilityState(toolIndex, item).presence.filter !== presence) return false;
     return !query || integrationFields.some(field => typeof item[field] === 'string' && item[field].toLowerCase().includes(query));
   }) : [];
   const cards = rows.map(integrationCard);
@@ -229,8 +298,10 @@ function maybeLoadIntegrationMap() {
 byId('integrations-load').addEventListener('click', loadIntegrationMap);
 byId('integrations-query').addEventListener('input', renderIntegrationMap);
 byId('integrations-status-filter').addEventListener('change', renderIntegrationMap);
+byId('integrations-presence-filter').addEventListener('change', renderIntegrationMap);
 byId('integrations-platform').addEventListener('change', renderIntegrationMap);
 byId('integrations-clear').addEventListener('click', () => {
-  byId('integrations-query').value = ''; byId('integrations-status-filter').value = 'ALL'; renderIntegrationMap();
+  byId('integrations-query').value = ''; byId('integrations-status-filter').value = 'ALL';
+  byId('integrations-presence-filter').value = 'ALL'; renderIntegrationMap();
 });
 """

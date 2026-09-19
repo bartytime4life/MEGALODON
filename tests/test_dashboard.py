@@ -1016,6 +1016,19 @@ process.stdin.on('end', async () => {
     class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
     let failRequests = false, eventTime = '2026-09-10T00:00:00Z', eventRule = 'TEST_RULE';
     const response = value => ({ok: true, json: async () => value});
+    const trafficSnapshot = stamp => ({
+      schema: 'dashboard-traffic-v1', status: 'available',
+      reason: 'Bounded stored metadata; source authenticity and coverage remain unverified.',
+      generated_at: new Date().toISOString(), unit: 'metadata events; reported bytes',
+      vantage: 'unknown; not recorded in this projection', quality: 'unknown',
+      window: {start: stamp, end: stamp}, limits: {events: 500, findings: 200, bytes: 262144},
+      truncated: false, excluded_event_candidates: 0,
+      events: [{id: '1', observed_at: stamp, src_ip: '192.0.2.10', dst_ip: '198.51.100.10',
+        protocol: 'TCP', src_port: 12345, dst_port: 443, tcp_flags: ['SYN'], byte_count: '64',
+        run_id: '1', source: 'jsonl', run_status: 'completed', termination_reason: 'source_exhausted'}],
+      findings: [], limitations: Array.from({length: 7}, (_, index) => `Bounded limitation ${index + 1}.`),
+      build: {package_version: 'test', base_commit: '0'.repeat(40), projection_sha256: '0'.repeat(64), commit: 'test'}
+    });
     function fetch(path) {
       if (failRequests) return Promise.reject(new Error('synthetic refresh failure'));
       if (path === '/api/summary') {
@@ -1026,10 +1039,7 @@ process.stdin.on('end', async () => {
           severity: 'HIGH', src_ip: '192.0.2.10', message: 'Synthetic status test'}]));
       }
       if (path === '/api/traffic') {
-        return Promise.resolve(response({schema: 'dashboard-traffic-v1', sample_limit: 240,
-          sampled_events: 1, total_bytes: 64, first_observed_at: eventTime, last_observed_at: eventTime,
-          protocols: [{protocol: 'TCP', events: 1, bytes: 64}],
-          events: [{observed_at: eventTime, protocol: 'TCP', byte_count: 64}]}));
+        return Promise.resolve(response(trafficSnapshot(eventTime)));
       }
       return Promise.reject(new Error(`unexpected path: ${path}`));
     }
@@ -1247,7 +1257,7 @@ def test_events_api_projects_only_fields_required_by_the_ui(tmp_path):
             thread.join(timeout=2)
 
 
-def test_traffic_api_projects_bounded_metadata_without_endpoints(tmp_path):
+def test_traffic_api_refuses_unqualified_base_store(tmp_path):
     path = tmp_path / "private" / "events.db"
     with Store(path) as writer:
         event = _packet(0)
@@ -1260,15 +1270,14 @@ def test_traffic_api_projects_bounded_metadata_without_endpoints(tmp_path):
         thread.start()
         base = f"http://127.0.0.1:{server.server_port}"
         try:
-            with urlopen(f"{base}/api/traffic", timeout=2) as response:
-                body = response.read().decode()
-                payload = json.loads(body)
+            with pytest.raises(HTTPError) as raised:
+                urlopen(f"{base}/api/traffic", timeout=2)
+            assert raised.value.code == 503
+            payload = json.loads(raised.value.read())
             assert payload["schema"] == "dashboard-traffic-v1"
-            assert payload["sample_limit"] == 240
-            assert payload["sampled_events"] == 1
-            assert set(payload["events"][0]) == {"observed_at", "protocol", "byte_count"}
-            for private_field in ("src_ip", "dst_ip", "interface", "metadata"):
-                assert private_field not in body
+            assert payload["status"] == "unavailable"
+            assert payload["events"] == []
+            assert payload["findings"] == []
             with pytest.raises(HTTPError) as raised:
                 urlopen(f"{base}/api/traffic?limit=1", timeout=2)
             assert raised.value.code == 400
