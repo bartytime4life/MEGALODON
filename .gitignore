@@ -52,6 +52,9 @@ eve.json
 /reports/
 /offline-runs/
 
+# Local agent tooling scratch space (isolated worktrees, session state)
+/.claude/
+
 # Local secrets and credentials
 .env
 .env.*
