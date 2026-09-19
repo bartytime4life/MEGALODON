@@ -254,6 +254,9 @@ function switchView(name) {
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
+  const heading = $(`[data-view-panel="${name}"] h1`);
+  heading.setAttribute('tabindex', '-1');
+  heading.focus({preventScroll: true});
   window.scrollTo({ top: 0, behavior: reducedMotion.matches ? "instant" : "smooth" });
 }
 
@@ -369,7 +372,18 @@ function renderToolInspector() {
   $$('[data-set-presence]').forEach((button) => button.addEventListener('click', () => {
     setToolPresence(item.id, button.dataset.setPresence);
   }));
-  MegalodonControls.mount($('#shared-tool-controls'), item.id, item.name);
+  MegalodonControls.mount($('#shared-tool-controls'), item.id, item.name, {
+    changed() {
+      renderIntegrationGrid();
+      if ($('#tool-inspector').hidden) {
+        $('#tool-quick-filter').focus();
+      } else if (state.selectedTool !== item.id) {
+        renderToolInspector();
+        $('#tool-inspector h2').setAttribute('tabindex', '-1');
+        $('#tool-inspector h2').focus();
+      }
+    }
+  });
   const jump = $("[data-source-jump]");
   if (jump) jump.addEventListener("click", () => {
     renderWorkflow(item.id === "suricata" ? "suricata" : "dashboard");
@@ -424,6 +438,7 @@ function listItem(text) {
 }
 
 $$('[data-view]').forEach((button) => { button.setAttribute("aria-label", button.querySelector("span:last-child").textContent); button.addEventListener('click', () => switchView(button.dataset.view)); });
+$('.brand').addEventListener('click', (event) => { event.preventDefault(); switchView('hud'); });
 $$('[data-jump]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
 $$('.mission').forEach((button) => button.addEventListener('click', () => renderWorkflow(button.dataset.workflow)));
 

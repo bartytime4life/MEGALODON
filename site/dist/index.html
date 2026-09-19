@@ -28,7 +28,7 @@
         <span><i class="status-dot amber"></i>NO TELEMETRY</span>
       </div>
       <div class="topbar-actions">
-        <span class="source-pin">repo-base@c19f63f</span>
+        <span class="source-pin">Reference console</span>
         <a href="https://github.com/bartytime4life/MEGALODON" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a>
       </div>
     </header>
@@ -71,8 +71,8 @@
           </div>
 
           <section class="hud-start" aria-labelledby="hud-start-title">
-            <div><h2 id="hud-start-title">One command. Your own computer.</h2><p>From your installed MEGALODON environment, start the local HUD. It checks tool presence at launch and works even before you have a data store. Companion tools are optional.</p><div class="start-actions"><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a><button type="button" data-jump="integrations">Find a tool</button></div><p class="panel-footnote">The local link works after launch on this computer. This hosted page does not test or connect to your machine.</p></div>
-            <div><code>python -m megalodon hud</code><button id="copy-hud-start" type="button">Copy launch command</button><details><summary>First launch or need help?</summary><p>Activate the virtual environment where MEGALODON is installed, then run the command. Keep that terminal open. Stop with Ctrl+C. Use Tools &amp; consoles inside the local HUD; no report export or cloud login is required.</p><p>If the command is unavailable, review and install the <a href="https://github.com/bartytime4life/MEGALODON/tree/agent/intuitive-hud-20260916" target="_blank" rel="noopener noreferrer">HUD update</a> first. An empty HUD does not start a sensor or generate data.</p></details></div>
+            <div><h2 id="hud-start-title">One command. Your own computer.</h2><p>From your installed MEGALODON environment, start the local HUD. It checks tool presence at launch and works even before you have a data store. Companion tools are optional.</p><div class="start-actions"><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open local HUD on this device ↗</a><button type="button" data-jump="integrations">Find a tool</button></div><p class="panel-footnote">Open this link on the computer running MEGALODON. On a phone, 127.0.0.1 points to the phone, not your Linux computer. This hosted page does not test or connect to your machine.</p></div>
+            <div><code>python -m megalodon hud</code><button id="copy-hud-start" type="button">Copy launch command</button><details><summary>First launch or need help?</summary><p>Activate the virtual environment where MEGALODON is installed, then run the command. Keep that terminal open. Stop with Ctrl+C. Use Tools &amp; consoles inside the local HUD; no report export or cloud login is required.</p><p>If the command is unavailable, follow the <a href="https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup" target="_blank" rel="noopener noreferrer">current Ubuntu setup guide</a>. An empty HUD does not start a sensor or generate data.</p><p>If the HUD opens but shows no qualified data, use its Help workspace to import authorized metadata. Sample records do not count as real traffic. After the first import into a previously missing store, restart the HUD.</p></details></div>
           </section>
           <details class="disconnected-details"><summary>Hosted network feed · not connected</summary><p>Actual measurements are available only in your local HUD after real evidence is ingested.</p>
           <section class="kpi-grid" aria-label="Network measurements unavailable">

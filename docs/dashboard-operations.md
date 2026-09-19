@@ -92,7 +92,7 @@ There are six distinct surfaces. Do not combine their meanings:
 | Surface | What it represents | What it does not prove |
 | --- | --- | --- |
 | Stored telemetry and triage | The current successful read of bounded stored metadata/detections | Current capture, ingestion, endpoint health, or incident uniqueness |
-| Stored traffic pulse | The newest 240 stored event timestamps, protocols, and byte counts | Wire speed, complete network visibility, payload content, or sensor continuity |
+| Stored traffic pulse | Up to 500 event candidates qualified by ingestion receipts; unavailable when none qualify | Wire speed, complete network visibility, payload content, or sensor continuity |
 | Tool startup status | Separate executable-presence and process-name observations taken when `hud` starts | Package compatibility, configured service health, accepted data, or complete host inventory |
 | Offline snapshot | One explicitly selected, validated report projection loaded at startup | A live analyzer connection or automatically refreshed run |
 | Reference Library | Manual registration context from the installed verified IANA bundle | Observed protocol identity, endpoint safety, or maliciousness |

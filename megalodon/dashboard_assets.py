@@ -910,6 +910,7 @@ function validatedTraffic(value) {
     .map(item => Object.freeze({...item, bytes: item.bytes.toString()}));
   return Object.freeze({
     schema: source.schema,
+    status: source.status,
     sample_limit: source.limits.events,
     sampled_events: events.length,
     total_bytes: totalBytes.toString(),
@@ -1357,6 +1358,10 @@ function trafficWindowLabel(firstObserved, lastObserved) {
   return `${duration} · ${exactRange}`;
 }
 function renderTraffic(traffic) {
+  if (traffic.status === 'unavailable') {
+    renderTrafficUnavailable(false);
+    return;
+  }
   state.traffic = traffic;
   const bins = trafficBins(traffic.events);
   const maximum = bins.reduce((largest, item) => item.bytes > largest ? item.bytes : largest, 1n);
@@ -1392,6 +1397,9 @@ function renderTraffic(traffic) {
   byId('traffic-panel').setAttribute('aria-busy', 'false');
 }
 function updateTrafficFreshness() {
+  // An ingestion receipt cannot turn an unavailable traffic projection into
+  // a measured zero, or overwrite its explicit unavailable badge.
+  if (!state.traffic || state.lastRefreshFailed) return;
   const latest = state.ingestionRuns[0];
   const badge = byId('traffic-freshness');
   if (latest && latest.source === 'sample') {

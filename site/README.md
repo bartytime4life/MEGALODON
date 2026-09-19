@@ -4,11 +4,17 @@ The existing private [Defense Console](https://megalodon-defense-console.blackba
 
 ## Quick-start controls
 
-The first view leads with `python -m megalodon hud`, a direct link to the local
+The first view leads with `python -m megalodon hud`, a same-device link to the local
 HUD and tool search. The command requires installation of the HUD update. It
 opens a local workspace before data exists, includes startup presence checks,
 and does not create sample evidence or start a sensor. Disconnected hosted
 measurements are collapsed under an explicit status disclosure.
+
+The local address points to the device opening the link; a phone cannot use it
+to reach a Linux computer. Missing or sample-only evidence is not zero traffic.
+The setup link targets the current Ubuntu guide. The brand returns to Home,
+view changes focus their heading, and saved-console filters update immediately
+when a bookmark changes.
 
 Local and hosted tool controls share the canonical Python asset constants in
 `megalodon/dashboard_tool_assets.py`. The repository's
@@ -33,9 +39,9 @@ presence-report import remains optional for this hosted page.
 
 ## Source and verification
 
-Implementation baseline: `main@67ea0af9ab6b19129bace608abf1127c7c7928df`. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 subsequently delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
+Repository baseline reviewed for this repair: `main@3bdcfb96a155d5dc4d7009e75f3b3c0986e5590b`. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 subsequently delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
 
-Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites have 38 checks for the actual parser, lifecycle semantics, empty telemetry and application initialization/navigation. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
+Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites have 39 checks for the actual parser, lifecycle semantics, empty telemetry, navigation/focus, and bookmark filter updates. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 
 The managed preview service has no compatible server for this plain-static Site. No current visual walkthrough is claimed. Deployment, matching source bytes, tests, native producer acceptance and human review are distinct evidence.
 
