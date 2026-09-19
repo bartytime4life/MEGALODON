@@ -78,7 +78,10 @@ rules, not a claim of statistical sufficiency or an operational latency target.
 
 Candidates include a destination port absent in the reference with at least
 five current records, changes of at least 20 percentage points in destination
-port or protocol shares, changes in the large-record share, and a
+port or protocol shares, changes in the small, medium, or large record-size
+band's share (`SMALL_RECORD_SHARE_SHIFT`, `MEDIUM_RECORD_SHARE_SHIFT`,
+`LARGE_RECORD_SHARE_SHIFT` — mass leaving one band always lands in another,
+so a real shift typically surfaces at least two of these together), and a
 `PEAK_MINUTE_SHARE_SHIFT` change of at least 20 percentage points in the
 busiest single relative minute's share of accepted records. That last
 candidate is a coarse, aggregate-only cousin of

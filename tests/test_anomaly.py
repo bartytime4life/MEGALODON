@@ -81,9 +81,31 @@ def test_large_records_and_protocol_change_are_explicit():
     current['destination_ports'][0]['protocol'] = 'UDP'
     data['current']['baseline'] = current
     result = build_anomaly_dossier(data)
+    # large=8 out of 20 also drains the small band (20 -> 12), so a moved
+    # byte-band share always crosses both bands it touches, not just one.
     assert {row['rule'] for row in result['candidates']} == {
         'PORT_SHARE_SHIFT', 'NEW_DESTINATION_PORT', 'PROTOCOL_SHARE_SHIFT',
-        'LARGE_RECORD_SHARE_SHIFT'}
+        'SMALL_RECORD_SHARE_SHIFT', 'LARGE_RECORD_SHARE_SHIFT'}
+
+
+def test_medium_record_share_shift_fires_with_exact_support():
+    data = sample()
+    # A byte-band swap necessarily crosses at least two bands (mass leaving
+    # one must land in another), so this checks MEDIUM_RECORD_SHARE_SHIFT
+    # fires with the right counts, not that it fires alone.
+    reference = baseline(((443, 20),))
+    reference['byte_bands'] = {'small': 20, 'medium': 0, 'large': 0}
+    current = baseline(((443, 20),))
+    current['byte_bands'] = {'small': 0, 'medium': 20, 'large': 0}
+    current['total_bytes'] = 20 * 1000  # must fit the medium band's byte range
+    data['reference']['baseline'] = reference
+    data['current']['baseline'] = current
+    result = build_anomaly_dossier(data)
+    matches = [row for row in result['candidates'] if row['rule'] == 'MEDIUM_RECORD_SHARE_SHIFT']
+    assert len(matches) == 1
+    row = matches[0]
+    assert (row['reference_count'], row['current_count']) == (0, 20)
+    assert row['protocol'] is None and row['port'] is None
 
 
 def test_peak_minute_concentration_shift_is_detected():

@@ -184,9 +184,11 @@ def build_anomaly_dossier(value: object) -> dict:
             y = current_protocols.get(protocol, 0)
             if shift(x, y):
                 add('PROTOCOL_SHARE_SHIFT', x, y, protocol)
-        x, y = before.byte_bands[2], after.byte_bands[2]
-        if shift(x, y):
-            add('LARGE_RECORD_SHARE_SHIFT', x, y)
+        for index, rule in enumerate((
+                'SMALL_RECORD_SHARE_SHIFT', 'MEDIUM_RECORD_SHARE_SHIFT', 'LARGE_RECORD_SHARE_SHIFT')):
+            x, y = before.byte_bands[index], after.byte_bands[index]
+            if shift(x, y):
+                add(rule, x, y)
         # The busiest single minute's share of all accepted records: a coarse,
         # aggregate-only cousin of offline.analysis.candidates' REGULAR_INTERVAL,
         # for the one pipeline (this one) that only ever sees per-minute counts.
