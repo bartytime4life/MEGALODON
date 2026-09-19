@@ -1,4 +1,5 @@
 /* Reference text only. Nothing in this module executes a command. */
+const localPythonLifecycle = null;
 const lifecycleCommands = (() => {
   const apt = (pkg, verify, note) => ({
     verify,
@@ -11,7 +12,7 @@ const lifecycleCommands = (() => {
       verify: "python3 -m pip show megalodon-defense",
       uninstall: "python3 -m pip uninstall megalodon-defense",
       reinstall: "python3 -m pip install --force-reinstall --no-deps .",
-      note: "Use the same operator-owned virtual environment. Reinstall runs from a reviewed MEGALODON checkout and may obtain build dependencies. Package metadata does not verify SQLite support or operational acceptance."
+      note: "Activate your MEGALODON virtual environment in every new terminal before using these commands. A different python3 can report Package(s) not found even while the dashboard is running. For reinstall, first change into the reviewed MEGALODON checkout containing pyproject.toml; build dependencies may be downloaded. Package metadata does not verify SQLite support or operational acceptance."
     },
     tshark: apt("tshark", "test -x /usr/bin/tshark && /usr/bin/tshark --version", "Use the repository's guarded setup; do not grant capture permissions."),
     zeek: {
@@ -60,16 +61,18 @@ const lifecycleCommands = (() => {
       }
     },
     nagios: {
-      verify: "if command -v nagios >/dev/null; then nagios --version; elif test -x /usr/local/nagios/bin/nagios; then /usr/local/nagios/bin/nagios --version; else exit 1; fi",
+      verify: "if command -v nagios4 >/dev/null; then nagios4 --version; elif command -v nagios >/dev/null; then nagios --version; elif test -x /usr/local/nagios/bin/nagios; then /usr/local/nagios/bin/nagios --version; else exit 1; fi",
       uninstall: null, reinstall: null,
-      note: "The linked Nagios Core guide and an Ubuntu nagios4 package can represent different installations. Match the actual method and prefix; no generic removal/reinstall is supplied."
+      note: "Checks the Ubuntu nagios4 executable first, then common source-install names. The linked Nagios Core guide and Ubuntu package represent different installations. Match the actual method and prefix; no generic removal/reinstall is supplied."
     }
   };
 })();
 
 function resolveLifecycle(id, variant) {
-  const base = lifecycleCommands[id];
-  if (!base) throw new Error("Unknown integration");
+  const defaults = lifecycleCommands[id];
+  if (!defaults) throw new Error("Unknown integration");
+  const base = localPythonLifecycle && Object.hasOwn(localPythonLifecycle, id)
+    ? {...defaults, ...localPythonLifecycle[id]} : defaults;
   const selected = base.variants && Object.hasOwn(base.variants, variant) ? base.variants[variant] : null;
   return selected ? {...base, ...selected} : base;
 }

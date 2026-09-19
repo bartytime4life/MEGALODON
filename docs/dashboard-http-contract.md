@@ -35,8 +35,9 @@ server an Internet-facing production service.
 | `/assets/dashboard.css` | No application query contract | Composed local stylesheet |
 | `/assets/dashboard.js` | No application query contract | Composed local script, one final bootstrap |
 | `/api/config` | None | Read-only flag, refresh interval, event limit, offline-selection availability |
-| `/api/setup` | None | Startup source-selection state and optional executable-presence snapshot |
+| `/api/setup` | None | Startup source state plus optional executable-presence and process-name snapshots |
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
+| `/api/traffic` | None | Newest 240 stored event times, protocols and byte counts plus bounded aggregates; no endpoints or payloads |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
 | `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
@@ -54,18 +55,34 @@ parameters. Never encode an action or secret in a query string.
 
 `python -m megalodon hud` accepts the same configuration and read-view options
 as `dashboard`. It additionally runs the existing readiness metadata check once
-before listening. `/api/setup` returns immutable `dashboard-setup-v1` bytes:
+before listening. `/api/setup` returns immutable `dashboard-setup-v2` bytes:
 `source_status` is `connected` or `not_configured`, and `readiness` is either a
-closed `megalodon-tool-readiness-v1` report or null. The encoded envelope is
-bounded to 8,704 bytes. Query arguments and POST are refused. Repeated GETs and
-browser refresh never inspect executables. The client uses the same strict
-readiness validator as the hosted Site; no report import is needed locally.
+closed `megalodon-tool-readiness-v1` report or null. `runtime` is either a closed
+`megalodon-tool-runtime-v1` receipt or null. The runtime receipt reads only a
+bounded set of Linux `/proc/*/comm` values once and returns closed tool/status
+pairs; it omits process IDs, command lines, paths, users and host identity.
+Standalone tools report `not_applicable`. Query arguments and POST are refused.
+Repeated GETs and browser refresh never repeat either startup observation. The
+client validates both receipts; no report import is needed locally.
 
 Only `DASHBOARD_STORE:NO_DIRECTORY` and `DASHBOARD_STORE:NO_DATABASE` can produce
 the unconfigured first-launch reader. It returns no telemetry; summary, events
 and ingestion receipts remain unavailable. Existing unsafe/invalid stores refuse
 startup, and ordinary `dashboard` retains its strict missing-store behavior.
 No database, sample record, migration, sensor, model request or service is created.
+
+`/api/traffic` is part of the periodic telemetry refresh. Its fixed read selects
+only `observed_at`, `protocol`, and `byte_count` from at most the newest 240
+stored events. The response includes total sampled bytes and at most eight
+protocol aggregates; excess protocol names are combined as `OTHER`. Source and
+destination addresses, ports, interfaces, flags, DNS lengths, event identifiers,
+payloads, and metadata are excluded. The chart therefore describes stored
+metadata only, not wire speed, capture continuity, service health, or coverage.
+
+Report creation remains browser-local. The overview, detection, and ingestion
+presets use only already validated in-memory projections. JSON/CSV downloads,
+clipboard copy, and print/PDF require an explicit user action and do not call a
+write endpoint or create a server-side file.
 
 The local and hosted HUDs share canonical controls, lifecycle text and parser in
 `megalodon/dashboard_tool_assets.py`. `scripts/sync-hud-assets.py` materializes

@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
+from .dashboard_commands import local_python_lifecycle
 from .hub import integration_plan
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .reference import IanaBundle, ReferenceDataError, load_iana
@@ -26,6 +27,7 @@ from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYT
 MIN_REFRESH_SECONDS = 2
 MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
+TRAFFIC_SAMPLE_LIMIT = 240
 DEFAULT_INGESTION_RUN_LIMIT = 8
 MAX_INGESTION_RUN_LIMIT = 25
 DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
@@ -54,6 +56,8 @@ class DashboardReader(Protocol):
         self, limit: int = DEFAULT_INGESTION_RUN_LIMIT
     ) -> list[dict[str, Any]]: ...
 
+    def traffic(self, limit: int = TRAFFIC_SAMPLE_LIMIT) -> dict[str, Any]: ...
+
 
 class UnconfiguredDashboardReader:
     """A missing source is unavailable, never an empty/healthy database."""
@@ -67,18 +71,24 @@ class UnconfiguredDashboardReader:
     def ingestion_runs(self, limit: int = DEFAULT_INGESTION_RUN_LIMIT) -> list[dict[str, Any]]:
         raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
 
+    def traffic(self, limit: int = TRAFFIC_SAMPLE_LIMIT) -> dict[str, Any]:
+        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+
 
 def setup_snapshot(*, inspect_tools: bool = False, source_available: bool = True) -> bytes:
     """One startup check, never a request-triggered probe or tool execution."""
     from .readiness import readiness_report, MAX_REPORT_BYTES
+    from .runtime_status import runtime_report
 
     report = readiness_report() if inspect_tools else None
+    runtime = runtime_report() if inspect_tools else None
     payload = json.dumps({
-        "schema": "dashboard-setup-v1",
+        "schema": "dashboard-setup-v2",
         "source_status": "connected" if source_available else "not_configured",
         "readiness": report,
+        "runtime": runtime,
     }, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
-    if len(payload) > MAX_REPORT_BYTES + 512:
+    if len(payload) > (MAX_REPORT_BYTES * 2) + 1024:
         raise ValueError("dashboard setup response exceeds limit")
     return payload
 
@@ -353,6 +363,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     refresh_seconds: int = 5
     event_limit: int = 50
     setup_evidence: bytes | None = None
+    javascript: bytes = DASHBOARD_JS.encode()
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -373,9 +384,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send(200, "text/css; charset=utf-8", DASHBOARD_CSS.encode())
             return
         if route.path == "/assets/dashboard.js":
-            self._send(200, "text/javascript; charset=utf-8", DASHBOARD_JS.encode())
+            self._send(200, "text/javascript; charset=utf-8", self.javascript)
             return
-        if route.path in {"/api/config", "/api/setup", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/setup":
@@ -395,6 +406,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "telemetry unavailable"}, status=503)
                 return
             self._send_json(summary)
+            return
+        if route.path == "/api/traffic":
+            try:
+                traffic = self.store.traffic(TRAFFIC_SAMPLE_LIMIT)
+            except StorageSchemaError:
+                self._send_json({"error": "telemetry unavailable"}, status=503)
+                return
+            self._send_json(traffic)
             return
         if route.path == "/api/events":
             try:
@@ -704,6 +723,14 @@ def serve(
     host = loopback_host(host, allow_remote=allow_remote)
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
+    # Capture inert command text once. HTTP input cannot choose an interpreter
+    # or checkout, execute commands, or trigger filesystem discovery.
+    lifecycle = json.dumps(local_python_lifecycle(), ensure_ascii=True, allow_nan=False)
+    javascript = DASHBOARD_JS.replace(
+        "const localPythonLifecycle = null;",
+        f"const localPythonLifecycle = {lifecycle};",
+        1,
+    ).encode()
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
@@ -712,6 +739,7 @@ def serve(
             "reference_library": reference_library, "refresh_seconds": refresh_seconds,
             "event_limit": event_limit,
             "setup_evidence": setup_evidence,
+            "javascript": javascript,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)

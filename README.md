@@ -170,7 +170,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
-| Dashboard | Read-only loopback UI pinned to one viewport with persistent **Live review**, **Analysis**, and **Tools & consoles** workspace tabs. The internally scrolling workspaces separate stored telemetry/triage, Reference Library/offline context, and 14 static application-interface slots. No vendor console is embedded. **Deep analysis & context** may display one startup-supplied, immutable Qwen advisory receipt through a bounded same-origin GET; the dashboard cannot request analysis, poll the provider, load a receipt from disk, or perform host/network action |
+| Dashboard | Read-only loopback UI pinned to one viewport with persistent **Overview**, **Investigate**, and **Tools** workspace tabs. Overview follows one evidence order: data freshness, stored counters, bounded traffic, local tool observations, common tasks, then stored alerts. Report controls and advanced alert filters stay collapsed until requested. Investigate opens one evidence or reference source at a time, and Tools renders 14 compact application rows whose controls remain hidden until selected. No vendor console is embedded. The advisory status may display one startup-supplied, immutable Qwen receipt through a bounded same-origin GET; the dashboard cannot request analysis, poll the provider, load a receipt from disk, or perform host/network action |
 | Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
@@ -317,9 +317,15 @@ Build the reviewed release as the current user under the local prefix shown
 below; do not use a system prefix, create a service, or initialize ZeekControl.
 The Zeek project documents the prerequisites and supported source-build flow.
 
-Before setting the version below, obtain the corresponding release source and
-checksum/signature from the [official Zeek downloads page](https://zeek.org/get-zeek/).
-Record the exact version and verification result with the case evidence.
+Zeek's [official downloads page](https://zeek.org/get-zeek/) links the 8.0.10
+source archive, states that source releases are signed, and links the release
+OpenPGP key. The recipe below pins that linked primary-key fingerprint and the
+signing subkey used by the 8.0.10 detached signature. It uses a private keyring,
+checks the repository-reviewed digest, and requires a valid signature from that
+exact primary key before extraction. The SHA-256 value was calculated from the
+successfully verified artifact; the OpenPGP signature, not that locally recorded
+digest, authenticates the release. Record the version, digest, primary-key
+fingerprint, and successful `VALIDSIG` result with the case evidence.
 
 ~~~bash
 (
@@ -327,32 +333,59 @@ Record the exact version and verification result with the case evidence.
   umask 077
 
   ZEEK_VERSION=8.0.10
-  # Set this to the exact SHA-256 published for the selected release by Zeek.
-  # Leave it empty to fail closed; never copy an unverified value from a mirror.
-  ZEEK_SHA256=''
+  ZEEK_SHA256=dbb1cb6c1eac27a8883ee4bd229a378b2f1253fa18e16cdeaaef8a00f124ddf1
+  ZEEK_PRIMARY_FINGERPRINT=962FD2187ED5A1DD82FC478A33F15EAEF8CB8019
+  ZEEK_SIGNING_FINGERPRINT=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E
   source_root="$HOME/src/zeek-build"
   prefix="$HOME/.local/zeek-$ZEEK_VERSION"
   archive="$source_root/zeek-$ZEEK_VERSION.tar.gz"
+  signature="$archive.asc"
   source_dir="$source_root/zeek-$ZEEK_VERSION"
+  verification_dir="$source_root/verification-$ZEEK_VERSION"
+  release_key="$verification_dir/zeek-release-key.asc"
+  gpg_status="$verification_dir/gpg-status.txt"
+  gpg_home="$verification_dir/gnupg"
 
   [ ! -e "$prefix" ] && [ ! -L "$prefix" ] ||
     { echo "Zeek prefix already exists; do not overwrite it."; exit 1; }
   [ ! -e "$source_dir" ] && [ ! -L "$source_dir" ] ||
     { echo "Zeek source directory already exists; do not overwrite it."; exit 1; }
-
-  case "$ZEEK_SHA256" in
-    [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*) ;;
-    *) echo "Set ZEEK_SHA256 to the reviewed 64-character release digest; stop."; exit 1 ;;
-  esac
-  [ "$(printf %s "$ZEEK_SHA256" | wc -c)" -eq 64 ] ||
-    { echo "ZEEK_SHA256 must contain exactly 64 hexadecimal characters; stop."; exit 1; }
   [ ! -e "$archive" ] && [ ! -L "$archive" ] ||
     { echo "Zeek archive already exists; verify or remove it deliberately."; exit 1; }
+  [ ! -e "$signature" ] && [ ! -L "$signature" ] ||
+    { echo "Zeek signature already exists; verify or remove it deliberately."; exit 1; }
+  [ ! -e "$verification_dir" ] && [ ! -L "$verification_dir" ] ||
+    { echo "Zeek verification directory already exists; do not overwrite it."; exit 1; }
 
   install -d -m 700 "$source_root"
-  curl -fL --proto '=https' --tlsv1.2 \
+  install -d -m 700 "$verification_dir" "$gpg_home"
+  curl -fL --proto '=https' --tlsv1.2 --remove-on-error \
     -o "$archive" "https://download.zeek.org/zeek-$ZEEK_VERSION.tar.gz"
+  curl -fL --proto '=https' --tlsv1.2 --remove-on-error \
+    -o "$signature" "https://download.zeek.org/zeek-$ZEEK_VERSION.tar.gz.asc"
+  curl -fL --proto '=https' --tlsv1.2 --remove-on-error \
+    -o "$release_key" \
+    "https://keys.openpgp.org/vks/v1/by-fingerprint/$ZEEK_PRIMARY_FINGERPRINT"
+
   printf '%s  %s\n' "$ZEEK_SHA256" "$archive" | sha256sum -c -
+  actual_primary_fingerprint="$(
+    gpg --homedir "$gpg_home" --batch --with-colons \
+      --import-options show-only --import "$release_key" |
+      awk -F: '$1 == "fpr" { print $10; exit }'
+  )"
+  [ "$actual_primary_fingerprint" = "$ZEEK_PRIMARY_FINGERPRINT" ] ||
+    { echo "Zeek release-key fingerprint mismatch; stop."; exit 1; }
+
+  gpg --homedir "$gpg_home" --batch --import "$release_key"
+  gpg --homedir "$gpg_home" --batch --status-fd 1 \
+    --verify "$signature" "$archive" | tee "$gpg_status"
+  awk -v signer="$ZEEK_SIGNING_FINGERPRINT" \
+      -v primary="$ZEEK_PRIMARY_FINGERPRINT" \
+    '$1 == "[GNUPG:]" && $2 == "VALIDSIG" &&
+     $3 == signer && $NF == primary { valid = 1 }
+     END { exit !valid }' "$gpg_status" ||
+    { echo "Zeek signature was not made by the pinned release key; stop."; exit 1; }
+
   tar -xzf "$archive" -C "$source_root"
   cd "$source_dir"
   ./configure --prefix="$prefix"
@@ -374,7 +407,7 @@ Persist a PATH change only after verifying the version and prefix. MEGALODON
 never launches Zeek: it imports a separately produced, closed-profile conn.log
 in offline analysis. Preserve original producer output; an unsupported record
 must be treated as an input-contract problem, not silently altered in place.
-See [Zeek's source-build documentation](https://docs.zeek.org/en/v8.0.8/building-from-source.html).
+See [Zeek's 8.0.10 source-build documentation](https://docs.zeek.org/en/v8.0.10/building-from-source.html).
 
 ### 4. Install and configure the MEGALODON Python environment
 
@@ -548,13 +581,21 @@ that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.
 
-**Tools & consoles** shows one startup executable-presence snapshot, official
+**Tools** shows one startup executable-presence snapshot, official
 setup links, optional saved companion-console addresses, and the same reviewed
 copy-only maintenance controls as the hosted Site. Console links open the real
 companion app in another tab; they do not connect its data or grant MEGALODON
 control. Commands remain visible for review and execution in your terminal.
 Qwen invocation, sensor startup, package changes and firewall application are
 not HUD actions.
+
+The overview also separates executable presence from a one-time bounded
+process-name observation. A process shown as observed is not a health or coverage
+claim. The traffic pulse charts only the newest 240 stored event timestamps,
+protocols, and byte counts and labels sample ingestion explicitly; it does not
+show payloads, endpoints, wire speed, or capture completeness. The report builder
+creates overview, detection, or ingestion snapshots in the browser for JSON,
+CSV, copy, or print/PDF without a server write endpoint.
 
 The optional **Choose existing data for the next launch** form prepares a quoted
 command for a settings file, completed offline run, or Suricata store. It never
@@ -947,6 +988,7 @@ The server exposes only these read routes:
 | `GET /assets/dashboard.css`, `GET /assets/dashboard.js` | Same-origin no-store assets |
 | `GET /api/config` | Immutable polling, row-budget, and offline-summary availability metadata |
 | `GET /api/summary` | SQLite event, detection, action, and severity counts from one read snapshot |
+| `GET /api/traffic` | Bounded recent stored-event time/protocol/byte projection with no endpoints or payloads |
 | `GET /api/events?limit=N` | Five-field recent-detection projections with strict query validation and a 200-row ceiling |
 | `GET /api/offline-summary` | Availability plus one startup-validated, capped offline summary; never record rows or capture paths |
 

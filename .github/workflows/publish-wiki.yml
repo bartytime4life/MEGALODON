@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'docs/wiki/**'
+      - 'tools/sync_wiki_pages.py'
+      - 'tests/test_wiki_sync.py'
       - '.github/scripts/sync-wiki.sh'
       - '.github/workflows/publish-wiki.yml'
   push:
@@ -13,6 +15,8 @@ on:
       - main
     paths:
       - 'docs/wiki/**'
+      - 'tools/sync_wiki_pages.py'
+      - 'tests/test_wiki_sync.py'
       - '.github/scripts/sync-wiki.sh'
       - '.github/workflows/publish-wiki.yml'
   workflow_dispatch:

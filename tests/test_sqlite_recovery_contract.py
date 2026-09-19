@@ -93,6 +93,7 @@ def test_schema_and_fixture_inventory_are_closed() -> None:
         "overwrite-enabled",
         "raw-telemetry-digest",
         "restore-in-place",
+        "same-object-success",
         "uncertain-marked-certain",
     }
 
@@ -165,6 +166,7 @@ def test_success_requires_verified_distinct_destination(operation: str) -> None:
     assert receipt["reason"] == "COMPLETED"
     assert receipt["destination_created"] is True
     assert receipt["destination_complete"] is True
+    assert receipt["destination_same_as_source"] is False
     assert receipt["completion_uncertain"] is False
     assert receipt["clock_rollback_observed"] is False
     assert receipt["source"]["identity"] != receipt["destination"]["identity"]
@@ -211,6 +213,10 @@ def test_success_cannot_hide_bad_verification_or_new_authority() -> None:
     candidates.append(candidate)
     candidate = deepcopy(base)
     candidate["completion_uncertain"] = True
+    candidates.append(candidate)
+    candidate = deepcopy(base)
+    candidate["destination_same_as_source"] = True
+    candidate["destination"]["identity"] = deepcopy(candidate["source"]["identity"])
     candidates.append(candidate)
     for value in candidates:
         assert not VALIDATOR.is_valid(value)

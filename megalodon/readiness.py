@@ -35,7 +35,7 @@ TOOL_EXECUTABLES = (
     ("ossec", "ossec-control"),
     ("greenbone", "gvmd"),
     ("zabbix", "zabbix_agentd"),
-    ("nagios-core", "nagios"),
+    ("nagios-core", "nagios4"),
 )
 TOOL_IDS = tuple(tool_id for tool_id, _ in TOOL_EXECUTABLES)
 BOUNDARIES = (

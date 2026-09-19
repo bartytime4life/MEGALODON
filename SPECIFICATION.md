@@ -429,9 +429,13 @@ The dashboard exposes only:
 - `GET /assets/dashboard.css` and `GET /assets/dashboard.js` — same-origin,
   no-store presentation assets;
 - `GET /api/config` — a non-sensitive `dashboard-config-v1` view contract;
-- `GET /api/setup` — immutable `dashboard-setup-v1` startup source-selection
-  status and optional bounded readiness report; no request-triggered probe;
+- `GET /api/setup` — immutable `dashboard-setup-v2` startup source-selection
+  status and optional bounded readiness plus process-name observation reports;
+  no request-triggered probe;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
+- `GET /api/traffic` — the newest 240 stored event timestamps, protocols, and
+  byte counts with bounded protocol aggregates; no endpoints, payloads, ports,
+  interfaces, identifiers, or request-selected limit;
 - `GET /api/events?limit=N` — recent detections, with one decimal integer from
   1 through 200; malformed, repeated, out-of-range, and unknown query fields
   fail with `400` rather than being silently coerced. Each returned detection

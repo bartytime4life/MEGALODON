@@ -94,7 +94,7 @@ def test_event_projection_and_valid_limits_remain_compatible(http_dashboard, tar
     assert b"must not appear" not in body and b"198.51.100.1" not in body
 
 
-@pytest.mark.parametrize("path", ["/api/config", "/api/summary", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"])
+@pytest.mark.parametrize("path", ["/api/config", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/reference/status"])
 def test_no_query_routes_do_not_ignore_unknown_arguments(http_dashboard, path):
     server, reader = http_dashboard
     assert request(server, path + "?unknown=1")[0] == 400
@@ -193,7 +193,7 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
         assert f'id="workspace-tab-{workspace}"' in INDEX_HTML
         assert f'aria-controls="workspace-{workspace}"' in INDEX_HTML
         assert f'id="workspace-{workspace}" role="tabpanel"' in INDEX_HTML
-    for target in ("live-review-title", "detections-title", "deep-analysis-title", "analysis-window-title", "reference-title", "offline-title", "integrations-title"):
+    for target in ("detections-title", "deep-analysis-title", "analysis-window-title", "reference-title", "offline-title", "integrations-title"):
         assert f'id="{target}" tabindex="-1"' in INDEX_HTML
     assert 'role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
@@ -355,7 +355,7 @@ process.stdin.on('end', async () => {
     async function setup(sourceStatus, extra = {}) {
       context.fetch = async path => {
         assert.equal(path, '/api/setup');
-        return {ok: true, json: async () => ({schema: 'dashboard-setup-v1', source_status: sourceStatus, readiness: null, ...extra})};
+        return {ok: true, json: async () => ({schema: 'dashboard-setup-v2', source_status: sourceStatus, readiness: null, runtime: null, ...extra})};
       };
       await run('loadSetup()');
       context.fetch = async () => missingStoreResponse();

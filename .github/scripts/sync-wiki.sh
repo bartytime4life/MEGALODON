@@ -102,6 +102,8 @@ EOF
 echo "Prepared $(find "${content_dir}" -maxdepth 1 -type f -name '*.md' | wc -l) Wiki files."
 
 if [[ "${mode}" == '--validate' ]]; then
+  wiki_dir="$(mktemp -d "${runtime_tmp}/megalodon-wiki-validation.XXXXXX")"
+  python3 tools/sync_wiki_pages.py "${content_dir}" "${wiki_dir}"
   exit 0
 fi
 
@@ -115,7 +117,7 @@ git clone "${wiki_url}" "${wiki_dir}"
 wiki_branch="$(git -C "${wiki_dir}" branch --show-current)"
 wiki_branch="${wiki_branch:-master}"
 
-cp "${content_dir}"/*.md "${wiki_dir}/"
+python3 tools/sync_wiki_pages.py "${content_dir}" "${wiki_dir}"
 
 git -C "${wiki_dir}" config user.name 'github-actions[bot]'
 git -C "${wiki_dir}" config user.email '41898282+github-actions[bot]@users.noreply.github.com'

@@ -343,9 +343,9 @@ def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
 
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
-    assert "Recent detection triage" in INDEX_HTML
-    assert "Live review" in INDEX_HTML
-    assert "Deep analysis &amp; context" in INDEX_HTML
+    assert "Stored alerts" in INDEX_HTML
+    assert "What MEGALODON has stored" in INDEX_HTML
+    assert "Inspect one source at a time" in INDEX_HTML
     assert "Qwen advisory receipt · checking" in INDEX_HTML
     assert "This page cannot start Qwen or request an analysis." in INDEX_HTML
     assert "AI advisory; not evidence or an action." in INDEX_HTML
@@ -378,10 +378,16 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert 'id="snapshot-status" role="status" aria-live="polite" aria-atomic="true"' in INDEX_HTML
     assert 'class="table-scroll" role="region" aria-label="Scrollable recent detections table"' in INDEX_HTML
     assert 'aria-describedby="table-scroll-help" tabindex="0"' in INDEX_HTML
-    assert "Dashboard API reachability does not measure capture or ingestion health." in INDEX_HTML
+    assert "API status does not prove capture health." in INDEX_HTML
+    assert "Capture health unknown" in INDEX_HTML
+    assert 'id="traffic-window"' in INDEX_HTML
+    assert 'id="open-report-studio"' in INDEX_HTML
+    assert '<details class="panel report-studio" id="report-studio">' in INDEX_HTML
+    assert 'class="triage-tools" id="triage-tools"' in INDEX_HTML
+    assert INDEX_HTML.count('class="panel investigation-panel') == 4
     assert "Sequential count-change signal only" in INDEX_HTML
-    assert "High / critical stored" in INDEX_HTML
-    assert "Action records" in INDEX_HTML
+    assert "High priority" in INDEX_HTML
+    assert "Recorded decisions" in INDEX_HTML
     assert "Reference Library" in INDEX_HTML
     assert 'id="reference-port-form"' in INDEX_HTML
     assert 'id="reference-protocol-form"' in INDEX_HTML
@@ -395,6 +401,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert 'href="/assets/dashboard.css"' in INDEX_HTML
     assert "prefers-reduced-motion" in DASHBOARD_CSS
     assert "forced-colors: active" in DASHBOARD_CSS
+    assert ".traffic-bar.traffic-empty" in DASHBOARD_CSS
+    assert ".report-studio:not([open])" in DASHBOARD_CSS
+    assert ".integration-card > summary" in DASHBOARD_CSS
+    assert "' traffic-empty'" in DASHBOARD_JS
     assert ".analysis-window" in DASHBOARD_CSS
     assert ".timeline-bar.level-0 { height: 0; }" in DASHBOARD_CSS
     assert "replaceChildren" in DASHBOARD_JS
@@ -402,9 +412,9 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "hashchange" in DASHBOARD_JS
     assert "restoreWorkspaceFromHash" in DASHBOARD_JS
     assert "knownSeverities.has(normalized)" in DASHBOARD_JS
-    assert "Audit decisions; no live application" in DASHBOARD_JS
+    assert "Audit records only" in DASHBOARD_JS
     assert "Schema-checked startup snapshot" in DASHBOARD_JS
-    assert "Showing preserved stale dashboard data" in DASHBOARD_JS
+    assert "last successful snapshot is stale" in DASHBOARD_JS
     assert "No successful dashboard data fetch is available" in DASHBOARD_JS
     assert "Recent SQLite telemetry is checked separately" in DASHBOARD_JS
     assert "Live telemetry remains available" not in DASHBOARD_JS
@@ -418,7 +428,11 @@ def test_dashboard_ui_has_accessible_read_only_states():
     from megalodon.dashboard_tool_assets import CONTROLS_JS
     assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
     from megalodon.dashboard_setup import SETUP_JS
-    assert "navigator.clipboard" not in DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "")
+    dashboard_without_user_exports = DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "")
+    assert dashboard_without_user_exports.count("navigator.clipboard") == 1
+    assert "navigator.clipboard.writeText(reportPlainText(report))" in dashboard_without_user_exports
+    assert "Source scope: ${report.source_scope}" in dashboard_without_user_exports
+    assert "['source_scope', report.source_scope]" in dashboard_without_user_exports
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
     assert "dashboard-ingestion-runs-v1" in DASHBOARD_JS
@@ -849,6 +863,10 @@ process.stdin.on('end', async () => {
       if (path.startsWith('/api/events?')) {
         return new Promise(resolve => { finishEvents = () => resolve(response([])); });
       }
+      if (path === '/api/traffic') return Promise.resolve(response({
+        schema: 'dashboard-traffic-v1', sample_limit: 240, sampled_events: 0, total_bytes: 0,
+        first_observed_at: null, last_observed_at: null, protocols: [], events: []
+      }));
       return Promise.reject(new Error(`unexpected path: ${path}`));
     }
     const context = {document, fetch, AbortController: FakeAbortController,
@@ -858,7 +876,7 @@ process.stdin.on('end', async () => {
     const first = vm.runInContext('refresh(true)', context);
     await new Promise(resolve => setImmediate(resolve));
     await vm.runInContext('refresh(false)', context);
-    if (calls.length !== 2) throw new Error(`overlap: ${JSON.stringify(calls)}`);
+    if (calls.length !== 3) throw new Error(`overlap: ${JSON.stringify(calls)}`);
     finishEvents(); await first;
     if (!nodes.get('events').children[0].children[0].textContent.includes('unavailable')) throw new Error('first failure left the loading row');
     if (nodes.get('triage-controls').disabled) throw new Error('first failure left retry controls disabled');
@@ -1007,6 +1025,12 @@ process.stdin.on('end', async () => {
         return Promise.resolve(response([{detected_at: eventTime, rule_id: eventRule,
           severity: 'HIGH', src_ip: '192.0.2.10', message: 'Synthetic status test'}]));
       }
+      if (path === '/api/traffic') {
+        return Promise.resolve(response({schema: 'dashboard-traffic-v1', sample_limit: 240,
+          sampled_events: 1, total_bytes: 64, first_observed_at: eventTime, last_observed_at: eventTime,
+          protocols: [{protocol: 'TCP', events: 1, bytes: 64}],
+          events: [{observed_at: eventTime, protocol: 'TCP', byte_count: 64}]}));
+      }
       return Promise.reject(new Error(`unexpected path: ${path}`));
     }
     const context = {document, fetch, AbortController: FakeAbortController,
@@ -1073,7 +1097,7 @@ process.stdin.on('end', async () => {
     if (!nodes.get('snapshot-status').textContent.includes('remains stale until a refresh succeeds')) throw new Error('resume loses the preserved stale-data boundary');
     await new Promise(resolve => setImmediate(resolve));
     const stale = nodes.get('snapshot-status').textContent;
-    if (!stale.includes('Showing preserved stale dashboard data')) throw new Error(`stale state is unclear: ${stale}`);
+    if (!stale.includes('last successful snapshot is stale')) throw new Error(`stale state is unclear: ${stale}`);
     if (!nodes.get('updated').textContent.startsWith('Stale · last success')) throw new Error('stale timestamp is unclear');
     if (nodes.get('connection').textContent !== 'Dashboard API · unavailable') throw new Error('failed API state is unclear');
     if (nodes.get('trust-strip').className !== 'trust-strip stale') throw new Error('stale state class is missing');
@@ -1217,6 +1241,37 @@ def test_events_api_projects_only_fields_required_by_the_ui(tmp_path):
             assert "evidence" not in payload[0]
             assert "recommendation" not in payload[0]
             assert "suppressed_reason" not in payload[0]
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+def test_traffic_api_projects_bounded_metadata_without_endpoints(tmp_path):
+    path = tmp_path / "private" / "events.db"
+    with Store(path) as writer:
+        event = _packet(0)
+        writer.record_event(event)
+
+    with DashboardStore(path) as reader:
+        handler = type("TestTrafficHandler", (DashboardHandler,), {"store": reader})
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(f"{base}/api/traffic", timeout=2) as response:
+                body = response.read().decode()
+                payload = json.loads(body)
+            assert payload["schema"] == "dashboard-traffic-v1"
+            assert payload["sample_limit"] == 240
+            assert payload["sampled_events"] == 1
+            assert set(payload["events"][0]) == {"observed_at", "protocol", "byte_count"}
+            for private_field in ("src_ip", "dst_ip", "interface", "metadata"):
+                assert private_field not in body
+            with pytest.raises(HTTPError) as raised:
+                urlopen(f"{base}/api/traffic?limit=1", timeout=2)
+            assert raised.value.code == 400
         finally:
             server.shutdown()
             server.server_close()
