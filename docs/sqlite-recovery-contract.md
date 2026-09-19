@@ -1,7 +1,8 @@
 # SQLite backup and restore-to-new-destination contract
 
-Status: **IMPLEMENTED runtime contract with an explicit CLI workflow; native
-operational evidence remains a separate gate.**
+Status: **IMPLEMENTED runtime contract with an explicit CLI workflow and
+focused Linux failure-path tests; native operational acceptance remains a
+separate gate.**
 
 Issue [#256](https://github.com/bartytime4life/MEGALODON/issues/256), M01.
 The contract was prepared from
@@ -51,7 +52,7 @@ reviewed backup into a new database. The implementation does not:
 - delete, migrate, repair, activate, or select a runtime database;
 - select a retention period or delete an incomplete artifact;
 - authorize network access, remote storage, credentials, release, or deployment;
-- prove POSIX crash, disk-full, power-loss, or Windows ACL behavior.
+- prove POSIX crash, physical disk-full, power-loss, or Windows ACL behavior.
 
 The existing v1/v2 migration backup remains a separate migration safeguard.
 It is not the general recovery flow specified here.
@@ -193,6 +194,7 @@ python -m compileall -q megalodon tests
 python -m pytest tests/test_sqlite_recovery_contract.py
 python -m pytest tests/test_sqlite_recovery_engine.py
 python -m pytest tests/test_sqlite_recovery_runtime.py
+python -m pytest tests/test_sqlite_recovery_native_failures.py
 python -m pytest -ra
 ```
 
@@ -208,8 +210,15 @@ backup and restore, digest/manifest checks, collisions, in-place refusal,
 schema/FK failures, unsafe permissions/ancestry, reserve refusal, closed failure
 classification, and preserved interruption output.
 
-Synthetic tests do not prove POSIX crash, physical disk-full, power-loss,
-uninterruptible kernel-stall, concurrent high-write WAL, or Windows ACL
-behavior. Those require native failure injection, exact-head CI, descriptor-safe
-runtime review, and independent or owner acceptance. A completed restore receipt
-does not authorize configuration activation, release, or deployment.
+The focused Linux failure-path suite uses real SQLite exclusive locking, a real
+process `SIGINT`, destination-entry replacement races in both copy directions,
+and kernel-enforced `RLIMIT_FSIZE` for both CLI operations. It proves that these
+bounded cases emit no success, preserve created outputs, and classify a replaced
+destination as completion-uncertain. `SIGINT` is not a hard crash or power loss,
+and a per-file resource limit is not physical disk exhaustion. The suite does
+not prove
+physical disk-full, hard-kill/power-loss durability, uninterruptible
+kernel-stall, concurrent high-write WAL, Windows ACL behavior, or an operator
+recovery drill. Those remain exact-head platform and acceptance gates. A
+completed restore receipt does not authorize configuration activation, release,
+or deployment.
