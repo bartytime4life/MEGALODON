@@ -1,35 +1,52 @@
 # MEGALODON Documentation Wiki
 
-MEGALODON is a local-first, metadata-only network-defense MVP. It accepts tightly bounded observations, produces deterministic detections, records local audit evidence, and offers a read-only dashboard on loopback.
+MEGALODON is a local-first defensive network telemetry MVP. It accepts bounded
+metadata, applies fixed deterministic rules, records a private SQLite audit
+trail, and presents qualified evidence in a read-only loopback HUD.
 
-This guide is a navigational layer. The repository's versioned [specification](../../SPECIFICATION.md), [security review](../../SECURITY_REVIEW.md), source, and tests remain authoritative.
+This Wiki is a practical guide, not a second specification. The repository's
+versioned [README](../../README.md), [specification](../../SPECIFICATION.md),
+[security review](../../SECURITY_REVIEW.md), source, and tests remain
+authoritative.
 
 ## Start here
 
-- [Quick start](quick-start.md) - synthetic local run and dashboard
-- [Security boundaries](security-boundaries.md) - non-negotiable safety controls
-- [Operator guide](operator-guide.md) - evidence reading and dashboard use
-- [Integrations and Qwen](integrations-and-qwen.md) - closed workflow map and advisory boundary
-- [Development and validation](development-and-validation.md) - contributor workflow
-- [Roadmap and current limits](roadmap-and-limits.md) - gates before broader use
+- [Quick start](quick-start.md) - create an isolated environment, generate synthetic evidence, and open the HUD
+- [Operator guide](operator-guide.md) - read Home, Traffic, Findings, Apps, Reports, Evidence, and Help correctly
+- [Security boundaries](security-boundaries.md) - understand the controls that must remain true
+- [Integrations and Qwen](integrations-and-qwen.md) - distinguish a documented app, an evidence adapter, and an advisory model
+- [Development and validation](development-and-validation.md) - make and verify a narrow change
+- [Roadmap and current limits](roadmap-and-limits.md) - see what is delivered, still gated, or explicitly unsupported
 
-## Product in one minute
+## Current product snapshot
 
-| Area | Current direction |
+| Area | Current boundary |
 | --- | --- |
-| Evidence | Bounded metadata, provenance, deterministic receipts |
-| Storage | Private local SQLite audit trail |
-| Interface | Read-only numeric-loopback dashboard |
-| Integrations | Closed workflow map; no general runner or scheduler |
-| Response | Plan-only; live firewall application is refused |
-| Local AI | Optional bounded advisory with no action authority |
+| Inputs | Finite sample metadata, bounded JSONL replay, and optional explicit Linux Scapy capture |
+| Detection | Three fixed metadata heuristics: `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` |
+| Storage | Private schema-v3 SQLite audit store with explicit migration, backup, and restore-to-new-destination commands |
+| HUD | Read-only `127.0.0.1` interface with qualified traffic history, findings, app guidance, local JSON reports, and separate evidence views |
+| Offline evidence | Linux-only TShark and Zeek analysis, plus closed Suricata file/store workflows under separate contracts |
+| Integrations | A static 14-tool capability and workflow map; no general runner, installer, scheduler, or sensor manager |
+| Response | Reviewable nftables plans only; every retained live-apply path refuses before host interaction |
+| Local AI | Optional bounded Qwen explanation through literal loopback; no detection, evidence, tool, or action authority |
+
+## Read status words literally
+
+- **Unavailable** means no usable evidence was admitted.
+- **Unknown** means the admitted evidence cannot answer the question.
+- **Degraded** means some evidence is limited or incomplete.
+- **Stale** means a saved view is old or a refresh failed.
+
+None of these states means the network is safe, compromised, fully observed, or
+being protected in real time.
 
 ## Evidence basis
 
-Initial content was reconciled against `main` at [ad35e0ada03a4c57923d8c0e956e8ff3b295f168](https://github.com/bartytime4life/MEGALODON/commit/ad35e0ada03a4c57923d8c0e956e8ff3b295f168) on 2026-09-15 UTC. It does not replace current source, checks, or independent review.
+All pages were refreshed on 2026-09-19 against
+[`main@5ac382d`](https://github.com/bartytime4life/MEGALODON/commit/5ac382d9516d4c2e979c26ff3068939b8ed0debe).
+That pin records the review basis; it is not a timeless currentness or release
+claim. Follow the repository documents linked above for later changes.
 
-Integration and roadmap status was refreshed on 2026-09-17 against
-[`77f082a`](https://github.com/bartytime4life/MEGALODON/commit/77f082a0548e64f97090c94dd11503a68ca05d99).
-See the [document reconciliation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/document-alignment-2026-09-17.md)
-for source authority, historical checkpoints, and remaining gates. Wiki source
-changes become published Wiki content through the main-branch workflow.
+Wiki content is generated from `docs/wiki/`. The native GitHub Wiki is a public
+projection of those reviewed source files, not an independent authority.
