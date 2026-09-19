@@ -1,8 +1,12 @@
 # Development and Validation
 
-Keep changes narrow, source-pinned, and reviewable. Documentation, plans, and model output are design input; repository source, checks, and submitted human reviews determine implementation state.
+Keep changes narrow, source-pinned, and reviewable. Documentation, plans, issue
+state, and model output are inputs; repository source, tests, and explicit human
+decisions determine implementation status.
 
-## Linux contributor setup
+## Contributor setup
+
+Use Python 3.11 or newer in an isolated environment:
 
 ```bash
 python3 -m venv .venv
@@ -12,16 +16,37 @@ python3 -m venv .venv
 .venv/bin/python -m pytest -q
 ```
 
-Do not install the capture extra or run an external analyzer merely to execute unit tests.
+Do not add the capture extra or launch an external analyzer merely to run the
+unit suite. Never use real captures, credentials, private paths, databases, or
+sensitive telemetry as fixtures.
 
-## Before opening a pull request
+## Validation by change type
 
-- Record the exact `main` commit, branch head, related issues, and overlapping PRs.
-- State what changes, the negative controls, validation commands, outcomes, skips, and remaining gates.
-- Keep real captures, private paths, credentials, generated reports, databases, and sensitive telemetry out of fixtures and commits.
-- Use a draft PR for proposed work.
-- Treat green CI as test evidence, not as independent review or release approval.
+- **Core input or storage:** exercise success, rejection, interruption, capacity, identity, and no-side-effect paths.
+- **Dashboard or HUD:** run focused dashboard/control-room suites, JavaScript syntax checks, real-browser acceptance when available, and a narrow mobile viewport check.
+- **Adapters and integrations:** prove closed schemas, fixed arguments/endpoints, limits, provenance, and refusal of unreviewed execution or egress.
+- **Security boundaries:** add exact refusal assertions and demonstrate that the prohibited side effect did not occur.
+- **Documentation:** verify every command and link against the same revision; distinguish delivered code from operational acceptance.
 
-For dashboard changes, run the focused dashboard suites plus the full repository suite. For any change that touches a safety boundary, add explicit refusal and no-side-effect tests.
+Useful focused Wiki checks:
+
+```bash
+bash .github/scripts/sync-wiki.sh --validate
+.venv/bin/python -m pytest -q tests/test_wiki_sync.py
+git diff --check
+```
+
+The Wiki publisher transforms `docs/wiki/README.md` into `Home.md`, converts
+Wiki-local links, regenerates `_Sidebar.md` and `_Footer.md`, and records an
+ownership manifest. The native Wiki is a projection; edit the source packet so a
+later publication cannot reintroduce stale content.
+
+## Before review
+
+- Record the exact base commit and branch head.
+- List changed behavior, unchanged boundaries, negative controls, commands, outcomes, skips, and remaining gates.
+- Check for overlapping work and preserve unrelated local changes.
+- Keep proposed capabilities labeled as proposed.
+- Treat green CI as revision evidence, not independent review, release approval, or deployment authorization.
 
 The full contribution contract is in [CONTRIBUTING.md](../../CONTRIBUTING.md).

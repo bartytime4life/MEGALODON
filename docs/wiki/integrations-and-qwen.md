@@ -1,40 +1,71 @@
 # Integrations and Local Qwen
 
-MEGALODON owns the evidence model, receipts, local reports, and browser surface. Companion tools are bounded evidence sources, not embedded control consoles.
+MEGALODON owns its evidence model, receipts, local reports, and browser
+projection. Companion applications remain separately operated evidence sources
+or reference tools; they are not embedded control authority.
+
+## Three different meanings
+
+| Claim | Meaning |
+| --- | --- |
+| Listed in Apps | A repository-defined capability slot and workflow description exists |
+| Present at startup | An executable name or bounded process-name observation was found |
+| Data connected | A separately reviewed adapter admitted evidence under its own contract |
+
+These claims are never interchangeable. A saved console URL or visible app UI
+also does not establish a data connection.
 
 ## Closed workflow map
 
-`megalodon hub-plan` describes supported relationships without probing, installing, launching, networking, mutating storage, or changing the host.
+`megalodon hub-plan` returns static, non-executing workflow descriptions. It does
+not probe, install, start, update, authenticate to, or network-connect a tool.
 
-Current workflow positions include:
+Current positions include:
 
-- Core Python and SQLite metadata intake.
-- Optional fixed-argument offline TShark metadata analysis.
-- Optional closed Zeek connection-log import.
-- Single-threaded Linux main-thread Suricata completed contract-envelope file
-  reader, an explicit atomic transaction into one pre-created private store,
-  and explicit read-only unknown-commit reconciliation; no raw-EVE converter,
-  watcher, sensor, or IPS. A separate optional local-dashboard startup snapshot
-  is available through `dashboard --suricata-db`; it never invokes the consumer.
-- Optional Scapy metadata capture under its separate boundary.
-- nftables planning only; live application refused.
-- Manual ClamAV companion; no file/scan integration.
-- Bounded offline STIX 2.1 completed-file reader, delivered by merged PR #269;
-  immutable context only, with no TAXII fetch, persistence, pattern execution,
-  detection, attribution, model, or action authority. ECS/OCSF projection and
-  the zero-attempt SOAR handoff remain contract-only.
-- Proposed osquery, Nmap, OSSEC, Greenbone, Zabbix, and Nagios relationships with no general runner.
+- core Python and SQLite metadata intake;
+- optional explicit Linux Scapy capture;
+- fixed-argument Linux TShark saved-capture analysis;
+- closed Zeek JSON/TSV `conn.log` import;
+- nftables planning with live application refused;
+- manual ClamAV companionship with no file, result, or quarantine importer;
+- bounded completed-file STIX context reading and pure ECS/OCSF projection;
+- proposed osquery, Nmap, OSSEC, Greenbone, Zabbix, and Nagios relationships with no general runner.
 
-Adding a utility requires a capability status, one closed workflow, explicit input/output contracts, data and action boundaries, negative tests, and separate approval for any egress, scheduler, privileged action, or remote listener.
+Adding an application requires a capability status, one closed workflow, typed
+input/output contracts, privacy and action boundaries, negative tests, and
+separate approval for any egress, credentials, scheduler, privileged action, or
+remote listener.
+
+## Suricata chain
+
+The current Linux main-thread APIs form an explicit, operator-driven chain:
+
+1. convert one checksum-bound, private Suricata 8.0.7 alert-only raw-EVE file into a new closed envelope;
+2. validate one completed envelope into an immutable normalized batch and receipt;
+3. transact one validated publication into a pre-created private durable store;
+4. reconcile an unknown commit through a separate read-only API; and
+5. optionally load one bounded read-only dashboard snapshot at startup.
+
+There is no Suricata sensor launch, rule update, mixed EVE firehose, directory
+watcher, background consumer, retention service, dashboard ingestion control,
+IPS mode, or response authority. Producer-reported `blocked` remains an external
+observation; MEGALODON action stays `not_attempted`.
 
 ## Local Qwen advisory
 
-The optional local-model path is an advisory feature, not an analyst replacement or autonomous defensive agent.
+Qwen is optional explanation, not detection or automation.
 
-- The provider boundary is the fixed numeric loopback address `127.0.0.1:11434`.
-- The original run-count policy is an explicitly enabled library API. The separately versioned offline anomaly command can request one Qwen explanation with opt-in flags. Neither path starts a provider, polls it, schedules work or runs a background worker. See the [anomaly command](https://github.com/bartytime4life/MEGALODON/blob/0e71cd41627fe2d2bffde7c2ddd222b475f73bc1/docs/anomaly-triage.md).
-- Input is a closed, size-limited projection of already validated local metadata and receipts.
-- Outcomes are bounded: `ANSWER`, `ABSTAIN`, `DENY`, or `ERROR`.
-- MEGALODON does not route model output into evidence, detections, tools, database writes, process launches, capture, firewall changes, quarantine or remediation. These application controls do not sandbox the separately operated Ollama/model process; provider filesystem access, egress and loaded-artifact identity require separate proof.
+- The only provider endpoint is literal numeric loopback at `127.0.0.1:11434`.
+- Requests require explicit enablement and a closed, size-limited projection of already validated local evidence.
+- Outcomes are bounded to `ANSWER`, `ABSTAIN`, `DENY`, or `ERROR`.
+- The adapter does not discover, install, pull, start, retry, redirect to, or schedule a model.
+- The HUD can display one validated startup-supplied receipt but cannot request, poll, or rerun Qwen.
+- Output cannot alter evidence, detections, tools, files, storage, capture, quarantine, firewall state, or reports.
 
-See the [integration hub contract](../integration-hub.md) and [local Qwen advisory contract](../local-model-advisory-contract.md).
+Application-level checks do not sandbox Ollama or attest the bytes behind a model
+alias. Provider filesystem access, model identity, compatibility, cancellation,
+and egress containment remain separate acceptance work.
+
+See the [integration hub contract](../integration-hub.md) and [local Qwen
+advisory contract](../local-model-advisory-contract.md) for exact schemas and
+gates.
