@@ -1,6 +1,6 @@
 # MEGALODON Automation Contract
 
-**Status:** Stage 0 data contract implemented; scheduler and execution design proposed  
+**Status:** Stage 0 data contract implemented; bounded read-only recurrence preview implemented; scheduler and execution design proposed  
 **Date:** 2026-09-08  
 **Audience:** MEGALODON maintainers, reviewers, operators, and future scheduler implementers  
 **Repository baseline:** [bartytime4life/MEGALODON](https://github.com/bartytime4life/MEGALODON) at ec53f5968e498b1ebee00b11119b216ba1812699
@@ -12,14 +12,31 @@
 The repository now carries a [draft JSON Schema and deterministic fixtures](../contracts/automation/v1/README.md)
 for the create payload, activation prerequisites, bounded policy, and immutable
 run-snapshot shape. This is contract evidence only. It adds no scheduler loop,
-recurrence calculation, persistence, model invocation, CLI/API operation,
-network access, shell access, or firewall authority. The overall design remains
-proposed; later stages require separate review.
+persistence, model invocation, CLI/API operation, network access, shell
+access, or firewall authority. The overall design remains proposed; later
+stages require separate review.
+
+[`megalodon/automation_schedule.py`](../megalodon/automation_schedule.py) now
+fills the one "Recurrence semantics and parser" row below: `parse_rrule`
+validates and canonicalizes one RRULE beyond the Stage 0 schema's structural
+regex (known/duplicate parts, per-part ranges, the COUNT/UNTIL exclusion, and
+a bounded-high-frequency rule), and `next_occurrences` turns a validated
+`dtstart` + IANA `schedule_timezone` + `rrule` + `dst_policy` into a bounded,
+deterministic, chronologically ordered preview of future occurrence instants
+using [`zoneinfo`](https://docs.python.org/3/library/zoneinfo.html), with
+explicit `normal`/`ambiguous`/`gap` DST status per occurrence. It is pure,
+offline, read-only computation: no automation record, ledger row, scheduler
+loop, worker, retry, model call, folder resolution, or firewall/network/shell
+access exists yet, and it decides nothing about whether an automation may
+activate. To keep every supported case verifiably correct, it intentionally
+covers a narrower RRULE surface than full RFC 5545 (see the module docstring)
+and fails closed with `UNSUPPORTED_COMBINATION` outside it, rather than
+approximating.
 
 | Layer | Current state | What that state proves |
 | --- | --- | --- |
 | Stage 0 schema, fixtures, and tests | Implemented on `main` | Closed structural shapes and fixed no-network/no-firewall authority |
-| Recurrence semantics and parser | Proposed | Design requirements only; no occurrence calculation |
+| Recurrence semantics and parser | Implemented as a bounded, read-only preview (`megalodon/automation_schedule.py`) | Deterministic occurrence calculation and DST classification for a documented RRULE subset; no persistence, activation, or execution authority |
 | Ledger, scheduler, and jobs | Proposed | No tables, claims, worker loop, retries, or execution |
 | Model/output adapters and actions | Proposed and separately gated | No model call, publication, external side effect, or response authority |
 

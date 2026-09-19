@@ -1,6 +1,6 @@
 # SQLite backup and restore-to-new-destination contract
 
-Status: **Contract delivered on `main` by merged PR #271; no runtime command exists.**
+Status: **Contract delivered on `main` by merged PR #271; a bounded standalone runtime engine now implements it (not wired into the CLI, dashboard, `storage.py`, or `service.py`).**
 
 Issue [#256](https://github.com/bartytime4life/MEGALODON/issues/256), M01.
 The contract was prepared from
@@ -12,6 +12,25 @@ recovery evidence.
 Delivery readback on 2026-09-17: PR #271 merged as
 `77f082a0548e64f97090c94dd11503a68ca05d99`. Issue #256 remains open;
 contract delivery does not establish runtime recovery or maintainer acceptance.
+
+## Implemented engine
+
+[`megalodon/sqlite_recovery.py`](../megalodon/sqlite_recovery.py) implements
+`backup_database` and `restore_backup` against this contract: SQLite's
+online-backup API only (never an ordinary file copy), a descriptor-safe
+owner-private source/artifact open, an exclusively created owner-private
+destination that is never overwritten or restored in place, a full
+`PRAGMA integrity_check` plus `PRAGMA foreign_key_check` on both sides before
+any success claim, and exactly one closed terminal receipt validated in
+[`tests/test_sqlite_recovery_engine.py`](../tests/test_sqlite_recovery_engine.py)
+against this directory's own `schema.json`. It is a standalone Python API a
+caller invokes with explicit paths; it adds no CLI subcommand, API route,
+dashboard control, timer, watcher, service, or scheduler, and no other module
+in `megalodon/` imports it. `MAX_BUSY_RETRIES` remains a policy constant only:
+CPython's `sqlite3` module does not expose a per-step busy-retry count, so
+this implementation bounds the whole operation by the monotonic deadline
+instead of counting retries separately. A destination created but not
+verified complete is always left in place; nothing here ever deletes it.
 
 ## Outcome and authority boundary
 
@@ -132,15 +151,23 @@ From the repository root:
 ```bash
 python -m compileall -q megalodon tests
 python -m pytest tests/test_sqlite_recovery_contract.py
+python -m pytest tests/test_sqlite_recovery_engine.py
 python -m pytest -ra
 ```
 
-The focused suite validates the schema, all accepted/rejected fixtures, the
-exact reason registry, cross-field receipt invariants, documentation coverage,
-packaging, and absence of runtime wiring. These synthetic checks do not perform
-a database backup or restore.
+The focused contract suite validates the schema, all accepted/rejected
+fixtures, the exact reason registry, cross-field receipt invariants,
+documentation coverage, packaging, and that no *other* module references this
+contract yet. The engine suite exercises `megalodon/sqlite_recovery.py`
+directly against real SQLite files: a full backup/restore round trip with
+content and non-mutation verification, every failure reason reachable without
+special privileges, and every produced receipt validated against this
+directory's `schema.json`. Neither suite performs a database backup or
+restore against any real MEGALODON audit store; both operate only on paths
+explicitly passed to them.
 
-A later implementation requires its own bounded draft PR, explicit CLI/API
-decision, descriptor-safe runtime review, native failure injection, exact-head
-CI, and independent or owner acceptance. Merge of this contract would not
-authorize that implementation or close those gates.
+Wiring this engine into a CLI subcommand, API route, or scheduled operation
+remains a separate, not-yet-reviewed change requiring its own explicit
+decision, native failure-injection evidence (crash, disk-full, power-loss),
+exact-head CI, and independent or owner acceptance. Existence of the engine
+does not authorize that wiring or close those gates.

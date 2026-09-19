@@ -1,0 +1,48 @@
+{
+  "schema": "ocsfRecord",
+  "value": {
+    "class_uid": 4001,
+    "class_name": "Network Activity",
+    "category_uid": 4,
+    "category_name": "Network Activity",
+    "activity_id": 99,
+    "activity_name": "Other",
+    "severity_id": 4,
+    "severity": "High",
+    "time": 1789819201000,
+    "metadata": {
+      "version": "1.9.0",
+      "product": {
+        "name": "MEGALODON",
+        "vendor_name": "MEGALODON"
+      },
+      "uid": "detection-1"
+    },
+    "src_endpoint": {
+      "ip": "10.0.0.5",
+      "port": 51000
+    },
+    "dst_endpoint": {
+      "ip": "10.0.0.9",
+      "port": 443
+    },
+    "connection_info": {
+      "protocol_name": "tcp"
+    },
+    "message": "High rate of SYN packets observed",
+    "raw_data": "this must never appear in an OCSF record",
+    "unmapped": {
+      "schema_version": "megalodon-ocsf-profile-v1",
+      "run_id": "run-1",
+      "event_id": "event-1",
+      "detection_id": "detection-1",
+      "rule_id": "SYN_FLOOD",
+      "recommendation": "ALERT",
+      "byte_count": 1500,
+      "completeness": "complete",
+      "projection_version": "1",
+      "megalodon_activity": "detection",
+      "source_kind": "sample"
+    }
+  }
+}

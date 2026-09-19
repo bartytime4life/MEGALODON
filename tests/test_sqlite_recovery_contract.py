@@ -237,7 +237,7 @@ def test_documentation_covers_every_reason_and_required_fault() -> None:
         assert phrase in document
 
 
-def test_contract_is_packaged_documented_and_not_runtime_wired() -> None:
+def test_contract_is_packaged_documented_and_engine_stays_isolated() -> None:
     manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     specification = (ROOT / "SPECIFICATION.md").read_text(encoding="utf-8")
@@ -248,10 +248,20 @@ def test_contract_is_packaged_documented_and_not_runtime_wired() -> None:
     assert "contracts/sqlite-recovery/v1" in readme
     assert "SQLite recovery contract v1" in specification
     assert "SQLite recovery contract ([#256]" in security
+    # megalodon/sqlite_recovery.py is the one deliberate exception: it is the
+    # bounded runtime engine for this contract. No *other* module may
+    # reference the contract's schema strings or import that engine, so the
+    # engine stays a standalone API rather than getting wired into the CLI,
+    # dashboard, storage layer, or service.
+    engine = ROOT / "megalodon" / "sqlite_recovery.py"
+    assert engine.is_file()
     for path in (ROOT / "megalodon").rglob("*.py"):
+        if path == engine:
+            continue
         text = path.read_text(encoding="utf-8")
         assert "megalodon-sqlite-recovery" not in text
         assert "sqlite-recovery/v1" not in text
+        assert "sqlite_recovery" not in text
 
 
 def test_contract_test_has_no_runtime_import() -> None:
