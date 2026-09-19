@@ -236,9 +236,14 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         passed("pause stops scheduled polling " + str(nonempty), counts == stable)
         await expect(page.locator("#room-updated")).not_to_have_text("Not fetched")
         await page.locator("#workspace-tab-traffic").click()
+        quality_details = page.locator("#room-traffic-grid .room-visual > details")
+        await expect(quality_details).to_have_count(8)
+        await quality_details.first.locator("summary").click()
+        await expect(quality_details.first.locator(".room-meta")).to_be_visible()
+        quality_contexts = await quality_details.locator(".room-meta").all_text_contents()
         passed("eight traffic views share explicit quality context",
-               await page.locator("#room-traffic-grid .room-visual").count() == 8 and
-               await page.locator("#room-traffic-grid .room-meta").first.inner_text() != "")
+               len(quality_contexts) == 8 and
+               all("quality:" in context for context in quality_contexts))
         if nonempty:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
             await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")

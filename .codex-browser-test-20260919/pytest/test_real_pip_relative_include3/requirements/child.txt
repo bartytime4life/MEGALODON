@@ -1,0 +1,1 @@
+megalodon-browser-lock-fixture==1.0 --hash=sha256:92661702a661e2cd5cd5095fb84cae9a7b2c57c9418502170cd2ae364e44c3d2

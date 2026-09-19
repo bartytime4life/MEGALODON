@@ -362,7 +362,7 @@ is unproven; existing Linux checks must not be removed to advertise it.
 | Capture drivers | Verify maintenance, signed provenance, privileges, licensing, and explicit operator capture authority | Native Windows live capture excluded; Npcap is not an open-source baseline dependency |
 | Guest networking | Validate guest/host scope and loopback behavior; no assumption of full host visibility or firewall control | WSL is development-only here, not the hostile-capture isolation baseline |
 | Host response | Preserve existing firewall/endpoint protection; prove durable intent, outcome readback, expiry/recovery, reconciliation, and operator authorization separately | No Linux or Windows apply backend in the evaluation-release candidate; no services or scheduled cleanup installed |
-| Sensor/file tools | Separate packet, flow, alert and file-scan semantics; allowlist fields; never import payloads or payload hashes | Suricata has a bounded completed-file reader and an explicit operator-invoked publication transaction; no sensor, raw-EVE watcher, IPS, ClamAV, or osquery runtime integration |
+| Sensor/file tools | Separate packet, flow, alert and file-scan semantics; allowlist fields; never import payloads or payload hashes | Suricata has a pinned checksum-bound 8.0.7 alert-only EVE converter, the bounded contract-envelope reader, and an explicit operator-invoked publication transaction; no mixed firehose, sensor control, watcher, IPS, ClamAV, or osquery runtime integration |
 
 The read-only `megalodon capabilities` command reports fixed support states from
 repository data. It deliberately does not inspect executables, versions,

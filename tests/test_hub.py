@@ -71,7 +71,8 @@ def test_workflow_filter_returns_one_fresh_plan():
     assert [item["id"] for item in first["workflows"]] == ["alert-metadata"]
     assert first["workflows"][0]["selected_status"] == "implemented"
     assert first["workflows"][0]["entry_point"] == (
-        "Python APIs: read_completed_file, consume_publication, reconcile_publication"
+        "Python APIs: read_completed_raw_eve, read_completed_file, "
+        "consume_publication, reconcile_publication"
     )
 
     first["workflows"][0]["selected_status"] = "unsupported"
@@ -80,12 +81,16 @@ def test_workflow_filter_returns_one_fresh_plan():
 
 def test_workflow_contracts_match_their_owned_entry_points():
     alert = integration_plan("linux", "alert-metadata")["workflows"][0]
-    assert alert["input_contract"] == "suricata-eve-alert-input-v1 envelope"
+    assert alert["input_contract"] == (
+        "pinned Suricata 8.0.7 alert-only EVE file or "
+        "suricata-eve-alert-input-v1 envelope"
+    )
     assert alert["output_contract"] == (
         "immutable external-alert-v1 publication plus terminal consumer or reconciliation receipt"
     )
     assert alert["launch_policy"] == (
-        "explicit_completed_file_read_then_explicit_local_transaction_or_read_only_reconciliation"
+        "explicit_checksum_bound_completed_file_conversion_or_envelope_read_then_"
+        "explicit_local_transaction_or_read_only_reconciliation"
     )
     assert "no sensor launch" in alert["action_boundary"]
     assert "explicit existing store" in alert["action_boundary"]

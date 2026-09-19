@@ -687,6 +687,13 @@ layout for the consumer; the consumer has no implicit store-creation or
 migration path.
 These gates specify record, filesystem, quota, replay, and completion
 requirements.
+`megalodon.offline.suricata_eve.read_completed_raw_eve` implements the pinned
+`suricata-8.0.7-alert-json-v1` producer boundary. It requires one exact-digest,
+owner-private, single-link, alert-only completed EVE JSONL file and a closed
+operator-supplied run identity. Mixed event types, payload/packet/application
+objects, arbitrary metadata, producer-version drift, and replay fail closed.
+It returns the exact immutable publication and receipt accepted by the existing
+consumer; it does not persist, watch, configure, launch, or act.
 `megalodon.offline.suricata.read_completed_file` implements one single-threaded
 Linux main-thread, completed-private-file reader using the guarded `SIGALRM` deadline
 and returns an immutable in-memory batch and receipt.
@@ -696,8 +703,8 @@ commits the run identity, canonical alert rows, and receipt in one bounded
 `BEGIN IMMEDIATE` transaction followed by exact readback. Commit or readback
 uncertainty returns `reconciliation_required`; the separate explicit
 `reconcile_publication` API classifies exact durable evidence without retrying.
-There is no raw-EVE converter, sensor operation, ruleset manager, existing-store
-migration, background watcher, or IPS path.
+There is no general/mixed raw-EVE intake, sensor operation, ruleset manager,
+existing-store migration, background watcher, or IPS path.
 
 The separate [Suricata evidence projection](docs/suricata-evidence-projection.md)
 reads an existing private store once at dashboard startup when the operator
