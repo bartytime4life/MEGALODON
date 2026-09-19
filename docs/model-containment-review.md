@@ -97,3 +97,11 @@ See [the advisory contract](local-model-advisory-contract.md) and
 [dependency policy](dependency-policy.md) for the existing application and
 build boundaries. The separate Alert Workload Lab draft #177 models hypothetical
 alert burden; it is not a monitor, evidence source or containment control.
+
+[`docs/qwen-provider-hardening.md`](qwen-provider-hardening.md) is an operator
+hardening recipe (a systemd unit and a rootless-container profile) for
+running the actual Ollama/Qwen provider process this section describes.
+It is guidance only — MEGALODON does not install, apply, or verify it — and
+its own verification step is exactly the `provider_containment` observation
+above, so an operator can check the recipe actually held rather than trust
+that it did.

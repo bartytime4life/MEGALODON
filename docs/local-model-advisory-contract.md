@@ -32,6 +32,9 @@ separate, read-only observation of whatever is bound to that same fixed
 loopback destination — see [the containment review](model-containment-review.md)
 for its scope. Neither module imports the other, and the observation never
 gates or feeds back into an advisory request.
+[`docs/qwen-provider-hardening.md`](qwen-provider-hardening.md) is the
+operator-facing companion: a hardening recipe for running Ollama itself, not
+a MEGALODON change.
 
 MEGALODON may use a locally hosted Qwen model as an explicit,
 operator-requested explanation surface. The model is an advisory reader of a
