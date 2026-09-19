@@ -1,96 +1,100 @@
 # Defense Console source alignment
 
-## Repository reconciliation after merge
+## Current readback and comparison scope
 
-Repository readback on 2026-09-17: `main@77f082a0548e64f97090c94dd11503a68ca05d99`
-contains merged PR #269's STIX reader and Site mirror. The reader is delivered
-source; native operator acceptance is still separate. This documentation pass
-updates the repository's Site README and reader-status label. Those changed
-files have not been deployed to Sites, so current whole-source parity is
-**UNVERIFIED**. The last recorded deployment is version 17 below; its original
-thirteen-file equality receipt remains valid only for its named candidate.
-No new Sites readback or rendered-browser acceptance was performed in this pass.
+Readback captured on 2026-09-19 against repository
+`main@440fc176238f6f4c5e4dbb7964f76c30a95bf39d` and the existing Sites project.
+The project now reports version 19 as its latest saved and live version, so the
+requested version 18 comparison is a historical provenance receipt rather than
+a claim about the source currently served at the Site URL. Version 19 is noted
+below only to prevent version 18 from being mistaken for the current
+publication; no version 19 source-equality claim is made in this receipt.
 
-## Historical version 17 deployment receipt
+The project remains `custom` access at revision 1: the owner account is the
+only allowed user, with no groups, editors, or external visitors. This readback
+did not change the audience, save a version, or deploy the Site.
 
-Readback captured: 2026-09-17 against repository
-`main@8ae0294a0fc89d5cddda454cb50df3339e599570`, candidate branch commit
-`5310eeb5397571a6df6b81cfe4f42d7e5d9b1d0b`, and the Sites project record.
-This receipt separates the hosted reference console, repository mirror, local
-Python source candidate, and native operational acceptance.
+## Historical version 18 provenance receipt
 
 | Identity | Observed value |
 | --- | --- |
 | Existing Site | [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) |
 | Project / slug | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` / `megalodon-defense-console` |
-| Version | 17 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_706b9bc005cc8191aec7e17bd69448b9` |
-| Source commit | `50d21d668ae5d86301040aa40c7b37dfb1e11d81` in the existing Sites source repository |
-| Deployment | `appgdep_6aac008f26ec81919669f61df409945d` succeeded at `2026-09-17T15:00:39.758289Z` |
-| Access | `custom`, revision 1; only the owner account is allowed, with no groups, editors, or external visitors |
-| Server archive digest | `sha256:e0a9b9b76a6bd85d6479bf4765d661191780139a4adee05e67459bfb104c1227` |
-| Hosted artifact baseline | Version 17 receipt at source `50d21d668ae5d86301040aa40c7b37dfb1e11d81` |
-| Current repository baseline | `8ae0294a0fc89d5cddda454cb50df3339e599570` |
-| Candidate repository mirror | Branch commit `5310eeb5397571a6df6b81cfe4f42d7e5d9b1d0b` |
-| Repository/hosted equality | **VERIFIED for the thirteen `site/` source files** at the candidate mirror commit; the ten-file server archive remains a separately normalized deployment artifact |
-| Retained rollback | Version 16; source `e9f218760aec26bd092dd6d826da095903da3f5c` |
+| Version | 18 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_deed1835c49481918517a5e501536f99` |
+| Source commit | `9d751a2aa97d313534493e9ef9f1ef8e7136f0a3` in the Sites source repository; committed at `2026-09-18T01:34:22Z` |
+| Server archive | `tar`, 10 files, 286,720 bytes; `sha256:60f60a5cbe4c8ca9c299c198af0996a32fb14a09e426213c599b527744b5fbf8` |
+| Deployment | `appgdep_6aac954de9e88191aa6571bb40dde8b0` succeeded at `2026-09-18T01:35:59.315321Z` |
+| Candidate repository mirror | `29f3111cc113de7a4588e02802bca07c6bcef253` |
+| Merged repository mirror | `main@ceef9817c0cd9de5f9253683603feaa5dc11fcf8` |
+| Historical repository/source equality | **VERIFIED for the thirteen `site/` source files** at both named repository commits |
+| Current `main` / version 18 equality | **NOT EQUAL**: 10 of 13 source files still match; two deployable asset sources and one test changed after version 18 |
+| Current repository baseline | `440fc176238f6f4c5e4dbb7964f76c30a95bf39d` |
 
-## Exact source and artifact scope
+The version record binds the source commit, archive metadata, and deployment ID
+above. A read-only checkout of the recorded Sites source commit contains exactly
+thirteen files: README, `.openai/hosting.json`, nine deployable assets including
+`site/dist/index.html` and `site/dist/styles.css`, and two Node test files. Git
+blob IDs for all thirteen files match both the candidate repository commit and
+the later merge to `main`.
 
-The repository tracks thirteen Sites source files: README,
-`.openai/hosting.json`, nine deployable assets (including
-`site/dist/index.html` and `site/dist/styles.css`), and two Node test files. The
-version 17 server archive receipt contains ten files: the normalized manifest
-and nine assets; README and tests are excluded from deployment. A blob-by-blob
-comparison confirmed that all thirteen files in the Sites source commit match
-the candidate repository mirror at `5310eeb`. That comparison alone did not establish
-that candidate files were on repository `main`; #269 has since merged. Future repository edits
-do not become a Sites deployment without a separate save and deploy operation.
+Packaging that exact source with the current Sites packager produced the
+expected ten-file shape: a normalized manifest and the nine `dist/` assets,
+with each packaged file equal to its source input. README and tests are not
+deployment inputs. The stored server tar remains a separately normalized
+artifact identified by the server digest above; this pass did not substitute a
+local gzip digest for it or claim a fresh download-and-byte-comparison of the
+stored tar.
 
-Version 17 preserves the one-command local HUD launch, disconnected hosted
-measurements, shared companion controls, and the repository storage map. It now
-distinguishes the bounded offline STIX 2.1 reader candidate from the
-contract-only ECS 9.5.0 / OCSF 1.9.0 projection and inert SOAR handoff. The page
-cannot select or upload a bundle and explicitly exposes no TAXII fetch, SIEM
-sender, endpoint, credential, retry, scheduler, playbook, or host-action control.
+## Comparison with current main
 
-At this deployment checkpoint the reader existed only in the review candidate;
-its later merge is recorded above. Deploying this reference UI does not install that reader into a
-local checkout and does not add a Site-side parser, exporter, network client,
-notifier, scheduler, or executor. Source parity does **not** establish runtime interoperability.
+Current `main` preserves ten of version 18's thirteen source blobs. These three
+post-version-18 changes account for the complete delta:
 
-## Version 17 validation and current limits
+| Path | Current-main provenance | Why the version 18 copy was not restored |
+| --- | --- | --- |
+| `site/dist/controls.js` | Merged commit `5ac382d9516d4c2e979c26ff3068939b8ed0debe` | Adds the shared control callbacks used by the later local HUD/app-viewer work. |
+| `site/dist/lifecycle.js` | Merged commit `37d19db9d93def87a58168938e95abe4a388a98c` | Keeps current Python-environment and Nagios reference guidance plus the bounded local override hook. |
+| `site/tests/readiness.test.cjs` | Merged commit `37d19db9d93def87a58168938e95abe4a388a98c` | Verifies the corresponding Nagios command ordering. |
 
-- The threat-context reader and external-exchange contract suites passed 25
-  focused tests.
-- The complete static Site suite passed 38 Node tests after the final link
-  update; JavaScript syntax checks also passed.
-- Python compilation, documentation currentness, diff checks, and the complete
-  repository suite outside four inherited environment-policy probes passed.
-- The four probes fail only because their intentionally isolated child Python
-  cannot import `pytest` in this workspace; they are not reader or Site failures.
-- Thirteen-file repository/Sites source parity passed at candidate commit
-  `5310eeb5397571a6df6b81cfe4f42d7e5d9b1d0b`.
-- The deployment reached terminal `succeeded`; no browser-rendered acceptance,
-  threat-intelligence authenticity, native operator compatibility, runtime
-  interoperability, independent review, merge, release, or local deployment is
-  claimed.
-- No sensor, threat feed, SIEM destination, SOAR provider, lifecycle operation,
-  firewall path, or model was invoked.
+No Site mirror asset is changed by this source-alignment PR. Restoring the
+version 18 copies would reverse later merged work and would break the
+repository's canonical HUD-asset equality check. Consequently, this receipt
+does not claim that current `main` matches version 18, that version 18 is live,
+or that later repository edits became a Sites deployment.
 
-The project identity and owner-only access policy remain unchanged. This receipt
-does not mark a pull request ready, approve it, merge it, release it, expose the
-local HUD remotely, or grant runtime exchange authority.
+## Behavior and evidence limits
 
-## Earlier checkpoints
+Version 18 preserved the one-command local HUD launch, disconnected hosted
+measurements, shared companion controls, repository storage map, and bounded
+offline STIX 2.1 reader status. Its page cannot select or upload a threat bundle
+and exposes no TAXII fetch, SIEM sender, endpoint, credential, retry, scheduler,
+playbook, or host-action control.
 
-Version 16/source `e9f218760aec26bd092dd6d826da095903da3f5c` added the
-three contract-only exchange lanes. Version 15/source
-`cba088ceb88f3cf3ab718a2f2933d8b6fb5b16e6` added the
-simplified HUD launch and shared companion controls. Version 14/source
+Deploying the hosted reference console does not install a reader into a local
+checkout and does not add a Site-side parser, exporter, network client,
+notifier, scheduler, or executor. Source parity does **not** establish runtime
+interoperability, native producer compatibility, evidence authenticity,
+operator acceptance, independent review, release status, or local deployment.
+No sensor, threat feed, SIEM destination, SOAR provider, lifecycle operation,
+firewall path, or model was invoked during this comparison.
+
+Static validation for the current repository mirror is recorded in the source-
+alignment pull request. The Node DOM stub is not rendered-browser acceptance,
+and no current visual walkthrough is claimed.
+
+## Adjacent checkpoints
+
+Version 19 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_82f8538dddfc819196fe2defc126d764`
+— succeeded at `2026-09-19T14:45:20.189204Z` from Sites source
+`3f21ee3d0a6ee83d54e8f791d6b47fa3612ecf46`; its ten-file archive is recorded
+as `sha256:ca77a9b793361e4153e3f9a0f40f9e1a74546f3d406d83bcec0ceb17fd74e2e1`.
+That successor is the current publication, but its whole-source relationship to
+later repository `main` is outside this version 18 equality receipt.
+
+Version 17/source `50d21d668ae5d86301040aa40c7b37dfb1e11d81`
+introduced the bounded reader status and retained version 16/source
+`e9f218760aec26bd092dd6d826da095903da3f5c` as its predecessor. Version 15/source
+`cba088ceb88f3cf3ab718a2f2933d8b6fb5b16e6` added the simplified HUD launch and
+shared companion controls. Version 14/source
 `875b63b661f297c35162303f621349e727587f85` removed generated telemetry and
-corrected lifecycle claims in merged PR #244. Version 13/source
-`463c9d7e411ceaa86666babe1e24426cb88877f1` added lifecycle controls through
-merged PR #243. Version 11/source
-`c0865c0cec760f66a694c04d1108e061bf739358` was mirrored by merged PR #242;
-the Wiki link repair #240 is also merged. Older versions remain available in
-Site history.
+corrected lifecycle claims. Older versions remain in Site history.
