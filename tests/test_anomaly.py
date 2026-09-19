@@ -14,15 +14,19 @@ from megalodon.offline.anomaly import build_anomaly_dossier
 from megalodon.offline.common import OfflineError
 
 
-def baseline(ports=((443, 20),), *, large=0):
+def baseline(ports=((443, 20),), *, large=0, minutes=None):
     size = sum(count for _, count in ports)
+    if minutes is None:
+        relative_minutes = [{'minute': 0, 'count': size}] if size else []
+    else:
+        relative_minutes = [{'minute': minute, 'count': count} for minute, count in minutes]
     return {'schema': 'offline-baseline-v1', 'adapter': 'tshark-fields-v1',
             'record_kind': 'packet', 'record_count': size, 'total_bytes': (size - large) * 64 + large * 4096,
             'protocols': [{'protocol': 'TCP', 'count': size}] if size else [],
             'destination_ports': [{'protocol': 'TCP', 'port': port, 'count': count}
                                   for port, count in ports],
             'byte_bands': {'small': size-large, 'medium': 0, 'large': large},
-            'relative_minutes': [{'minute': 0, 'count': size}] if size else []}
+            'relative_minutes': relative_minutes}
 
 
 def sample():
@@ -80,6 +84,45 @@ def test_large_records_and_protocol_change_are_explicit():
     assert {row['rule'] for row in result['candidates']} == {
         'PORT_SHARE_SHIFT', 'NEW_DESTINATION_PORT', 'PROTOCOL_SHARE_SHIFT',
         'LARGE_RECORD_SHARE_SHIFT'}
+
+
+def test_peak_minute_concentration_shift_is_detected():
+    data = sample()
+    data['reference']['baseline'] = baseline(
+        ((443, 20),), minutes=((0, 5), (1, 5), (2, 5), (3, 5)))
+    data['current']['baseline'] = baseline(
+        ((443, 20),), minutes=((0, 18), (1, 2)))
+    result = build_anomaly_dossier(data)
+    assert result['status'] == 'candidates'
+    matches = [row for row in result['candidates'] if row['rule'] == 'PEAK_MINUTE_SHARE_SHIFT']
+    assert len(matches) == 1
+    row = matches[0]
+    assert (row['reference_count'], row['current_count']) == (5, 18)
+    assert row['protocol'] is None and row['port'] is None
+
+
+def test_similar_peak_minute_share_is_not_a_candidate():
+    data = sample()
+    data['reference']['baseline'] = baseline(
+        ((443, 20),), minutes=((0, 5), (1, 5), (2, 5), (3, 5)))
+    data['current']['baseline'] = baseline(
+        ((443, 20),), minutes=((0, 6), (1, 5), (2, 5), (3, 4)))
+    result = build_anomaly_dossier(data)
+    assert result['status'] == 'no_candidates'
+    assert not any(row['rule'] == 'PEAK_MINUTE_SHARE_SHIFT' for row in result['candidates'])
+
+
+def test_peak_minute_shift_is_exempt_below_minimum_support():
+    data = sample()
+    # Reference peak 2, current peak 4: a doubled busiest minute, but both
+    # peaks stay below MIN_SUPPORT, so the shift floor still blocks it.
+    data['reference']['baseline'] = baseline(
+        ((443, 20),), minutes=((0, 2), (1, 2), (2, 2), (3, 2), (4, 2),
+                              (5, 2), (6, 2), (7, 2), (8, 2), (9, 2)))
+    data['current']['baseline'] = baseline(
+        ((443, 20),), minutes=((0, 4), (1, 4), (2, 4), (3, 4), (4, 4)))
+    result = build_anomaly_dossier(data)
+    assert result['status'] == 'no_candidates'
 
 
 @pytest.mark.parametrize('path,value,code', [

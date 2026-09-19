@@ -26,6 +26,8 @@ LIMITATIONS = (
     'Window identity and completeness are operator declarations, not attestation.',
     'Accepted-record shares do not establish traffic rates or capture coverage.',
     'A new service port or changed share can have a legitimate explanation.',
+    'A busier single minute can reflect a burst, batch job, retry storm or scan;'
+    ' concentration is not attribution to any cause, human, script, or model.',
     'No candidates does not establish that the host or network is safe.',
 )
 _UTC = re.compile(r'20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z')
@@ -185,6 +187,13 @@ def build_anomaly_dossier(value: object) -> dict:
         x, y = before.byte_bands[2], after.byte_bands[2]
         if shift(x, y):
             add('LARGE_RECORD_SHARE_SHIFT', x, y)
+        # The busiest single minute's share of all accepted records: a coarse,
+        # aggregate-only cousin of offline.analysis.candidates' REGULAR_INTERVAL,
+        # for the one pipeline (this one) that only ever sees per-minute counts.
+        peak_before = max((count for _, count in before.relative_minutes), default=0)
+        peak_after = max((count for _, count in after.relative_minutes), default=0)
+        if shift(peak_before, peak_after):
+            add('PEAK_MINUTE_SHARE_SHIFT', peak_before, peak_after)
     except OfflineError:
         return abstain('ANOMALY_CANDIDATE_LIMIT')
     if candidates:

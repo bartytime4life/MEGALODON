@@ -78,7 +78,16 @@ rules, not a claim of statistical sufficiency or an operational latency target.
 
 Candidates include a destination port absent in the reference with at least
 five current records, changes of at least 20 percentage points in destination
-port or protocol shares, and changes in the large-record share. Comparisons
+port or protocol shares, changes in the large-record share, and a
+`PEAK_MINUTE_SHARE_SHIFT` change of at least 20 percentage points in the
+busiest single relative minute's share of accepted records. That last
+candidate is a coarse, aggregate-only cousin of
+[`megalodon.offline.analysis.candidates`](../megalodon/offline/analysis.py)'s
+per-connection `REGULAR_INTERVAL`/`PORT_53_BURST` heuristics, for the one
+pipeline here that only ever sees per-minute counts rather than raw record
+timestamps: it measures timing *concentration*, nothing else, and a busier
+minute can reflect a burst, a batch job, a retry storm, a scan, or any other
+automated or organic cause — it never claims which. Comparisons
 use integer cross multiplication. Candidate rows retain counts and denominators;
 they have no probability, confidence, threat severity, or attribution field.
 Eight candidates is a hard limit: overflow abstains without returning a partial
