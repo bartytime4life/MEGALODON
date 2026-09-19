@@ -236,9 +236,21 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         passed("pause stops scheduled polling " + str(nonempty), counts == stable)
         await expect(page.locator("#room-updated")).not_to_have_text("Not fetched")
         await page.locator("#workspace-tab-traffic").click()
-        passed("eight traffic views share explicit quality context",
-               await page.locator("#room-traffic-grid .room-visual").count() == 8 and
-               await page.locator("#room-traffic-grid .room-meta").first.inner_text() != "")
+        traffic_views = page.locator("#room-traffic-grid .room-visual")
+        await expect(traffic_views).to_have_count(8)
+        for index in range(8):
+            details = traffic_views.nth(index).locator(":scope > details")
+            disclosure = details.locator(":scope > summary")
+            await expect(disclosure).to_have_text("Source and coverage details")
+            await expect(details.locator(".room-meta")).to_be_hidden()
+            await disclosure.focus()
+            await page.keyboard.press("Enter")
+            await expect(details.locator(".room-meta")).to_be_visible()
+            for label in ("source:", "vantage: unknown", "last update:", "unit:", "quality:"):
+                await expect(details.locator(".room-meta")).to_contain_text(label)
+            await page.keyboard.press("Enter")
+            await expect(details.locator(".room-meta")).to_be_hidden()
+        passed("eight traffic views expose source and quality through keyboard-operable disclosures")
         if nonempty:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
             await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")
@@ -246,11 +258,14 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             passed("qualified linked finding rows", await page.locator("#room-findings-table tbody tr").count() == 2)
             await page.locator("#room-range").select_option("hour")
             await page.locator("#room-apply").click()
+            await expect(page.locator("#room-refresh")).to_be_enabled()
             await expect(page.locator("#room-coverage")).to_have_text("Unavailable")
             await expect(page.locator("#room-count")).to_have_text("Unavailable")
             passed("time filter does not turn missing coverage into zero traffic")
             await page.locator("#room-range").select_option("recorded")
             await page.locator("#room-apply").click()
+            await expect(page.locator("#room-refresh")).to_be_enabled()
+            await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
         else:
             await expect(page.locator("#room-traffic-grid")).to_contain_text("No qualified data available")
         await page.locator("#workspace-tab-reports").click()
