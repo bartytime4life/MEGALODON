@@ -597,8 +597,11 @@ validates both before destination creation, and leaves the completed new store
 inactive. No dashboard action, scheduler, service, network path, overwrite,
 in-place restore, automatic deletion, retention, migration, repair, or
 configuration activation is present. Any incomplete created destination
-remains failed and preserved for operator review. Native power-loss, physical
-disk-full, Windows ACL, and operator recovery evidence remain separate gates.
+remains failed and preserved for operator review. Focused Linux tests exercise
+real SQLite locking, `SIGINT`, destination replacement, and `RLIMIT_FSIZE`
+failure paths without promoting them to operational acceptance. Native
+power-loss, physical disk-full, concurrent high-write WAL, Windows ACL, and
+operator recovery evidence remain separate gates.
 
 External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
 future integration must document what identifiers leave the host and require
