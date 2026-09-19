@@ -375,6 +375,8 @@ def _create_destination(
     operation: _Operation, path: Path, directory_descriptor: int | None
 ) -> _Database:
     descriptor: int | None = None
+    database: _Database | None = None
+    completed = False
     try:
         _preflight_new_path(path, directory_descriptor)
         flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
@@ -383,36 +385,58 @@ def _create_destination(
         kwargs = {"dir_fd": directory_descriptor} if directory_descriptor is not None else {}
         descriptor = os.open(target, flags, PRIVATE_DATABASE_MODE, **kwargs)
         operation.destination_created = True
+        # Retain the binding before any further validation or SQLite work can
+        # fail. The caller cannot classify it until this function returns.
+        database = _Database(path, directory_descriptor, descriptor, path)
         if os.name == "posix":
             os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
         _validate_private_file(descriptor, source=False)
         sqlite_path = _anchored_database_path(descriptor, path, "RECOVERY_DESTINATION")
-        connection = sqlite3.connect(
+        database.sqlite_path = sqlite_path
+        database.connection = sqlite3.connect(
             f"{sqlite_path.as_uri()}?mode=rw&cache=private",
             uri=True,
             timeout=0,
             isolation_level=None,
             check_same_thread=False,
         )
-        _validate_connection_path(connection, path, "RECOVERY_DESTINATION")
-        database = _Database(path, directory_descriptor, descriptor, sqlite_path, connection)
+        _validate_connection_path(database.connection, path, "RECOVERY_DESTINATION")
         _assert_database_identity(database, source=False)
+        completed = True
         return database
-    except _RecoveryFailure:
-        if descriptor is not None:
-            os.close(descriptor)
-        raise
-    except FileExistsError as exc:
-        raise _RecoveryFailure("DESTINATION_EXISTS", source_state="admitted") from exc
-    except OSError as exc:
-        if descriptor is not None:
-            os.close(descriptor)
-        reason = "DESTINATION_UNSAFE" if exc.errno in (errno.ELOOP, errno.ENXIO) else "IO_ERROR"
-        raise _RecoveryFailure(reason, source_state="admitted") from exc
-    except (sqlite3.Error, StorageSchemaError, TypeError, ValueError) as exc:
-        if descriptor is not None:
-            os.close(descriptor)
-        raise _RecoveryFailure("IO_ERROR", source_state="admitted") from exc
+    except BaseException as exc:
+        if isinstance(exc, _RecoveryFailure):
+            failure = exc
+        elif isinstance(exc, KeyboardInterrupt):
+            failure = _RecoveryFailure(
+                "INTERRUPTED_AFTER_CREATE" if operation.destination_created
+                else "INTERRUPTED_BEFORE_CREATE", source_state="admitted"
+            )
+        elif isinstance(exc, Exception):
+            reason = "DESTINATION_EXISTS" if isinstance(exc, FileExistsError) else (
+                "DESTINATION_UNSAFE" if isinstance(exc, OSError)
+                and exc.errno in (errno.ELOOP, errno.ENXIO) else "IO_ERROR"
+            )
+            failure = _RecoveryFailure(reason, source_state="admitted")
+        else:
+            raise
+        # Identity loss outranks a lower-level error, including interruption.
+        # Classify while the descriptors are still held, before cleanup.
+        classified = _classify_destination_binding(failure, database)
+        if classified is exc:
+            raise
+        raise classified from exc
+    finally:
+        if not completed:
+            if database is not None:
+                # The directory remains the caller's responsibility on failure.
+                database.directory_descriptor = None
+                try:
+                    database.close()
+                except BaseException:
+                    pass
+            elif descriptor is not None:
+                os.close(descriptor)
 
 
 def _assert_database_identity(database: _Database, *, source: bool) -> None:
