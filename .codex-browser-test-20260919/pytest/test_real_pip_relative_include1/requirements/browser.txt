@@ -1,1 +1,0 @@
--r child.txt
