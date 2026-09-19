@@ -102,6 +102,7 @@ class AirlockDecision:
     registry_sha256: str | None
     policy_version: str = POLICY_VERSION
     provider_request_performed: bool = False
+    candidate_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a fresh JSON-compatible projection with no executable fields."""

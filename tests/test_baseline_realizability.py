@@ -7,7 +7,7 @@ import pytest
 
 from megalodon.models import PacketEvent
 from megalodon.offline.analysis import baseline, validate_reference
-from megalodon.offline.anomaly import build_anomaly_dossier
+from megalodon.offline.anomaly import INPUT_SCHEMA, baseline_fingerprint, build_anomaly_dossier
 from megalodon.offline.baseline import validate_baseline
 from megalodon.offline.common import Batch, OfflineError
 from megalodon.offline.compare import compare_baselines
@@ -30,10 +30,15 @@ def value(bands=(1, 1, 3), total=13000, adapter='tshark-fields-v1'):
 def dossier(current):
     def side(start, end, data):
         return {'window': {'source_id': 'source-0001', 'started_at': start,
-                           'finished_at': end, 'completeness': 'complete'}, 'baseline': data}
-    return {'schema': 'offline-anomaly-input-v1', 'as_of': '2026-09-15T02:01:00Z',
-            'reference': side('2026-09-15T00:00:00Z', '2026-09-15T01:00:00Z', value((20, 0, 0), 1280)),
+                           'finished_at': end, 'completeness': 'complete'}, 'baseline': data,
+                'baseline_sha256': '0' * 64}
+    reference = value((20, 0, 0), 1280)
+    result = {'schema': INPUT_SCHEMA, 'as_of': '2026-09-15T02:01:00Z',
+            'selection_sha256': '0' * 64,
+            'reference': side('2026-09-15T00:00:00Z', '2026-09-15T01:00:00Z', reference),
             'current': side('2026-09-15T01:00:00Z', '2026-09-15T02:00:00Z', current)}
+    result['reference']['baseline_sha256'] = baseline_fingerprint(reference)
+    return result
 
 
 @pytest.mark.parametrize('adapter,ceiling', [('tshark-fields-v1', 262144),

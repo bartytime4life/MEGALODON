@@ -2,9 +2,11 @@
   "schema": "qwen-anomaly-request-v1",
   "question_type": "explain_anomalies",
   "input": {
-    "schema": "offline-anomaly-input-v1",
+    "schema": "offline-anomaly-input-v2",
+    "selection_sha256": "f305db2b77f52464de60910e2d204c6b40316e963e5e08fb1d3fa8bd6752854a",
     "as_of": "2026-09-15T02:01:00Z",
     "reference": {
+      "baseline_sha256": "20a3db28c7b011667b8afd1d3a050aa0c4bd0e082a0c8931de7588637752fcdd",
       "window": {
         "source_id": "source-0001",
         "started_at": "2026-09-15T00:00:00Z",
@@ -44,6 +46,7 @@
       }
     },
     "current": {
+      "baseline_sha256": "291e3c7407515231ff075cdac287304b2b0cd677aea173a220d1f0d4e8623360",
       "window": {
         "source_id": "source-0001",
         "started_at": "2026-09-15T01:00:00Z",

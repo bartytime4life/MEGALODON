@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import errno
 import http.client
 import json
+import os
 import re
 import socket
+import stat
+import sys
 import threading
 import time
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - exercised by non-Linux packaging checks.
+    fcntl = None
 
 from .advisory import (
     AirlockDecision,
@@ -35,6 +44,7 @@ _READ_CHUNK_BYTES = 4096
 _WATCHDOG_POLL_SECONDS = 0.05
 _WATCHDOG_JOIN_SECONDS = 0.25
 _INVOCATION_LOCK = threading.Lock()
+_PROCESS_LOCK_DIRECTORY = "/tmp"
 _RESPONSE_REQUIRED_KEYS = frozenset({"model", "response", "done"})
 _RESPONSE_ALLOWED_KEYS = frozenset(
     {
@@ -90,6 +100,47 @@ class _ProviderResponseInvalid(ValueError):
 
 class _ProviderRequestInvalid(ValueError):
     """A non-sensitive marker for an invalid bounded provider request."""
+
+
+class _ProviderConcurrencyBusy(RuntimeError):
+    """Another process sharing the fixed lock inode owns the provider slot."""
+
+
+class _ProviderConcurrencyUnavailable(RuntimeError):
+    """The cross-process concurrency control could not be established safely."""
+
+
+def _acquire_process_invocation_lock() -> int:
+    """Lock the stable /tmp directory inode without creating a replaceable path."""
+    if not sys.platform.startswith("linux") or fcntl is None:
+        raise _ProviderConcurrencyUnavailable
+    lock = None
+    try:
+        lock = os.open(
+            _PROCESS_LOCK_DIRECTORY,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        )
+        info = os.fstat(lock)
+        if not stat.S_ISDIR(info.st_mode):
+            raise _ProviderConcurrencyUnavailable
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno in (errno.EACCES, errno.EAGAIN):
+                raise _ProviderConcurrencyBusy from None
+            raise _ProviderConcurrencyUnavailable from None
+        return lock
+    except (_ProviderConcurrencyBusy, _ProviderConcurrencyUnavailable):
+        if lock is not None:
+            os.close(lock)
+        raise
+    except OSError as exc:
+        if lock is not None:
+            try:
+                os.close(lock)
+            except OSError:
+                pass
+        raise _ProviderConcurrencyUnavailable from None
 
 
 class _ProtocolBudgetReader:
@@ -299,10 +350,11 @@ class QwenAdvisoryResult:
     provider_request_performed: bool
     policy_version: str = POLICY_VERSION
     provider_class: str = PROVIDER_CLASS
+    candidate_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return the closed display-only ``advisoryResult`` value."""
-        return {
+        result = {
             "outcome": self.outcome,
             "code": self.code,
             "summary": self.summary,
@@ -314,9 +366,15 @@ class QwenAdvisoryResult:
                 "policy_version": self.policy_version,
             },
         }
+        if self.candidate_ids:
+            result["candidate_ids"] = list(self.candidate_ids)
+        return result
 
 
-def validated_qwen_result(value: object, *, policy_version: str = POLICY_VERSION) -> QwenAdvisoryResult:
+def validated_qwen_result(
+    value: object, *, policy_version: str = POLICY_VERSION,
+    candidate_ids: object = None,
+) -> QwenAdvisoryResult:
     """Own and check runtime accounting before a consumer displays a result.
 
     This validates consistency, not model authenticity or statement accuracy.
@@ -345,9 +403,22 @@ def validated_qwen_result(value: object, *, policy_version: str = POLICY_VERSION
                 or type(result.prompt_bytes) is not int or not 1 <= result.prompt_bytes <= 4096
                 or type(result.output_bytes) is not int or not 0 <= result.output_bytes <= 4096
                 or type(result.provider_request_performed) is not bool
+                or type(result.candidate_ids) is not tuple
+                or len(result.candidate_ids) > 8
+                or any(type(item) is not str
+                       or re.fullmatch(r"a[0-9]{2}", item) is None
+                       for item in result.candidate_ids)
+                or len(set(result.candidate_ids)) != len(result.candidate_ids)
+                or (policy_version == POLICY_VERSION and result.candidate_ids)
+                or (policy_version == "local-model-anomaly-advisory-v1"
+                    and not result.candidate_ids)
+                or (candidate_ids is not None
+                    and (type(candidate_ids) is not tuple
+                         or result.candidate_ids != candidate_ids))
                 or (result.outcome in {"ANSWER", "ABSTAIN"} and not result.provider_request_performed)
                 or (result.outcome == "ANSWER" and result.output_bytes == 0)
-                or (result.outcome == "ANSWER" and len(result.summary.encode("utf-8")) > result.output_bytes)
+                or (result.outcome == "ANSWER" and not result.candidate_ids
+                    and len(result.summary.encode("utf-8")) > result.output_bytes)
                 or (result.outcome == "DENY" and result.provider_request_performed)
                 or (result.outcome in {"DENY", "ERROR"} and result.output_bytes != 0)):
             raise ValueError
@@ -515,6 +586,45 @@ def _plain_summary(output: str) -> str:
     return summary
 
 
+def _anomaly_summary(output: str, candidate_ids: tuple[str, ...]) -> str:
+    """Validate candidate-bound structured output before creating display text."""
+    def reject_constant(value: str) -> None:
+        raise _ProviderResponseInvalid("non-finite anomaly advisory value")
+
+    try:
+        value = json.loads(output, object_pairs_hook=_strict_object,
+                           parse_constant=reject_constant)
+    except (json.JSONDecodeError, RecursionError, TypeError, ValueError) as exc:
+        raise _ProviderResponseInvalid("anomaly advisory is not valid JSON") from exc
+    if type(value) is not dict or set(value) != {
+            "candidate_ids", "summary", "benign_alternatives", "missing_evidence"}:
+        raise _ProviderResponseInvalid("anomaly advisory fields are not closed")
+    ids = value["candidate_ids"]
+    if (type(ids) is not list or tuple(ids) != candidate_ids
+            or any(type(item) is not str for item in ids)):
+        raise _ProviderResponseInvalid("anomaly advisory candidate references are invalid")
+
+    def text_list(name: str) -> list[str]:
+        items = value[name]
+        if (type(items) is not list or not 1 <= len(items) <= 4
+                or any(not bounded_advisory_text(item) or len(item) > 300 for item in items)
+                or len(set(items)) != len(items)):
+            raise _ProviderResponseInvalid("anomaly advisory text list is invalid")
+        return items
+
+    summary = value["summary"]
+    if not bounded_advisory_text(summary) or len(summary) > 600:
+        raise _ProviderResponseInvalid("anomaly advisory summary is invalid")
+    benign = text_list("benign_alternatives")
+    missing = text_list("missing_evidence")
+    combined = (
+        f"{summary} Candidate references: {', '.join(candidate_ids)}. "
+        f"Benign alternatives: {'; '.join(benign)}. "
+        f"Missing evidence: {'; '.join(missing)}."
+    )
+    return _plain_summary(combined)
+
+
 def _result(
     admitted: AirlockDecision,
     *,
@@ -543,6 +653,7 @@ def _result(
         output_bytes=output_bytes,
         provider_request_performed=provider_request_performed,
         policy_version=admitted.policy_version,
+        candidate_ids=admitted.candidate_ids,
     )
 
 
@@ -582,7 +693,8 @@ def invoke_qwen_advisory(
     The only network destination is the numeric IPv4 loopback address
     ``127.0.0.1:11434`` and the only path is ``/api/generate``. The function
     performs no discovery, model pull/start, retry, redirect, fallback, tool
-    call, file access, database access, subprocess, or host mutation.
+    call, data-file access, database access, subprocess, or host mutation. Its
+    cross-process gate locks the existing stable ``/tmp`` directory inode.
     """
     admitted = preflight_advisory(
         request,
@@ -594,18 +706,21 @@ def invoke_qwen_advisory(
 
 def invoke_qwen_anomaly_advisory(
     request: object, *, enabled: object, local_model_registry: object,
-    local_model_registry_sha256: object, cancel_event: object = None,
+    local_model_registry_sha256: object, selection_sha256: object,
+    cancel_event: object = None,
 ) -> AirlockDecision | QwenAdvisoryResult:
     """Explain recomputed offline candidates under the separate anomaly policy.
 
     Shares the original literal-loopback transport, lock, deadline and response
-    parser. A v1 registry cannot opt into the richer projection implicitly.
+    parser. A v1 registry cannot opt into the richer projection implicitly, and
+    the independently supplied selection pin must match the request projection.
     """
     from .anomaly_advisory import preflight_anomaly_advisory
 
     admitted = preflight_anomaly_advisory(
         request, local_model_registry=local_model_registry,
         local_model_registry_sha256=local_model_registry_sha256,
+        selection_sha256=selection_sha256,
     )
     return _invoke_admitted(admitted, enabled=enabled, cancel_event=cancel_event)
 
@@ -642,6 +757,28 @@ def _invoke_admitted(
             code="POLICY_DENIED",
             reason_code="CONCURRENCY_LIMIT_REACHED",
             summary="The concurrency-one local Qwen advisory slot is busy.",
+        )
+
+    process_lock: int | None = None
+    try:
+        process_lock = _acquire_process_invocation_lock()
+    except _ProviderConcurrencyBusy:
+        _INVOCATION_LOCK.release()
+        return _result(
+            admitted,
+            outcome="DENY",
+            code="POLICY_DENIED",
+            reason_code="CONCURRENCY_LIMIT_REACHED",
+            summary="The concurrency-one local Qwen advisory slot is busy.",
+        )
+    except _ProviderConcurrencyUnavailable:
+        _INVOCATION_LOCK.release()
+        return _result(
+            admitted,
+            outcome="DENY",
+            code="POLICY_DENIED",
+            reason_code="CONCURRENCY_CONTROL_UNAVAILABLE",
+            summary="The cross-process local Qwen concurrency control is unavailable.",
         )
 
     connection: http.client.HTTPConnection | None = None
@@ -706,7 +843,8 @@ def _invoke_admitted(
                 _read_provider_body(response, connection, deadline, cancellation),
                 admitted.model_id,
             )
-            summary = _plain_summary(output)
+            summary = (_anomaly_summary(output, admitted.candidate_ids)
+                       if admitted.candidate_ids else _plain_summary(output))
             _remaining_seconds(deadline)
             if not summary:
                 result = _result(
@@ -773,7 +911,14 @@ def _invoke_admitted(
                         except Exception:
                             close_failed = True
                 finally:
-                    _INVOCATION_LOCK.release()
+                    try:
+                        if process_lock is not None:
+                            try:
+                                os.close(process_lock)
+                            except Exception:
+                                close_failed = True
+                    finally:
+                        _INVOCATION_LOCK.release()
     if forced_reason is not None:
         return _provider_error(
             admitted, forced_reason, request_performed=request_performed

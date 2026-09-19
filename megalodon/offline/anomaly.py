@@ -11,11 +11,12 @@ import hashlib
 import json
 import re
 
-from .baseline import validate_baseline
+from .baseline import BASELINE_SCHEMA, validate_baseline
 from .common import OfflineError
 
-INPUT_SCHEMA = 'offline-anomaly-input-v1'
-DOSSIER_SCHEMA = 'offline-anomaly-dossier-v1'
+INPUT_SCHEMA = 'offline-anomaly-input-v2'
+SELECTION_SCHEMA = 'offline-anomaly-selection-v2'
+DOSSIER_SCHEMA = 'offline-anomaly-dossier-v2'
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 MAX_CANDIDATES = 8
 MIN_RECORDS = 20
@@ -30,6 +31,7 @@ LIMITATIONS = (
 )
 _UTC = re.compile(r'20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z')
 _SOURCE = re.compile(r'source-[0-9]{4}\Z')
+_SHA256 = re.compile(r'[a-f0-9]{64}\Z')
 
 
 def owned_input(value: object) -> dict:
@@ -93,6 +95,56 @@ def _window(value: object) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _canonical_baseline(value: object) -> tuple[dict, object]:
+    """Return the semantic normal form used by identities and selection pins."""
+    baseline = validate_baseline(value)
+    normalized = {
+        'schema': BASELINE_SCHEMA,
+        'adapter': baseline.adapter,
+        'record_kind': baseline.record_kind,
+        'record_count': baseline.record_count,
+        'total_bytes': baseline.total_bytes,
+        'protocols': [{'protocol': protocol, 'count': count}
+                      for protocol, count in baseline.protocols],
+        'destination_ports': [
+            {'protocol': protocol, 'port': port, 'count': count}
+            for protocol, port, count in baseline.destination_ports
+        ],
+        'byte_bands': dict(zip(('small', 'medium', 'large'), baseline.byte_bands)),
+        'relative_minutes': [{'minute': minute, 'count': count}
+                             for minute, count in baseline.relative_minutes],
+    }
+    return normalized, baseline
+
+
+def _fingerprint(value: object) -> str:
+    canonical = json.dumps(value, sort_keys=True, separators=(',', ':')).encode('ascii')
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def baseline_fingerprint(value: object) -> str:
+    """Hash one validated baseline's normalized aggregate meaning."""
+    normalized, _ = _canonical_baseline(owned_input(value))
+    return _fingerprint(normalized)
+
+
+def selection_fingerprint(value: object) -> str:
+    """Validate and fingerprint a manifest that binds windows to baselines."""
+    data = owned_input(value)
+    if (set(data) != {'schema', 'reference', 'current', 'as_of'}
+            or data['schema'] != SELECTION_SCHEMA):
+        raise OfflineError('ANOMALY_SELECTION_INVALID')
+    _time(data['as_of'])
+    for name in ('reference', 'current'):
+        side = data[name]
+        if (type(side) is not dict or set(side) != {'window', 'baseline_sha256'}
+                or type(side['baseline_sha256']) is not str
+                or _SHA256.fullmatch(side['baseline_sha256']) is None):
+            raise OfflineError('ANOMALY_SELECTION_INVALID')
+        _window(side['window'])
+    return _fingerprint(data)
+
+
 def build_anomaly_dossier(value: object) -> dict:
     """Validate two complete compatible windows before constructing evidence.
 
@@ -100,19 +152,45 @@ def build_anomaly_dossier(value: object) -> dict:
     Incomplete, stale or incomparable windows abstain with no partial candidates.
     """
     data = owned_input(value)
-    if set(data) != {'schema', 'reference', 'current', 'as_of'} or data['schema'] != INPUT_SCHEMA:
+    if (set(data) != {'schema', 'reference', 'current', 'as_of', 'selection_sha256'}
+            or data['schema'] != INPUT_SCHEMA
+            or type(data['selection_sha256']) is not str
+            or _SHA256.fullmatch(data['selection_sha256']) is None):
         raise OfflineError('ANOMALY_INPUT_INVALID')
     for name in ('reference', 'current'):
-        if type(data[name]) is not dict or set(data[name]) != {'window', 'baseline'}:
+        if (type(data[name]) is not dict
+                or set(data[name]) != {'window', 'baseline', 'baseline_sha256'}
+                or type(data[name]['baseline_sha256']) is not str
+                or _SHA256.fullmatch(data[name]['baseline_sha256']) is None):
             raise OfflineError('ANOMALY_INPUT_INVALID')
-    before = validate_baseline(data['reference']['baseline'])
-    after = validate_baseline(data['current']['baseline'])
+    reference_normalized, before = _canonical_baseline(data['reference']['baseline'])
+    current_normalized, after = _canonical_baseline(data['current']['baseline'])
+    if (_fingerprint(reference_normalized) != data['reference']['baseline_sha256']
+            or _fingerprint(current_normalized) != data['current']['baseline_sha256']):
+        raise OfflineError('ANOMALY_BASELINE_FINGERPRINT_MISMATCH')
     rw, cw = data['reference']['window'], data['current']['window']
     rs, re_ = _window(rw)
     cs, ce = _window(cw)
     as_of = _time(data['as_of'])
-    # Identity covers validated aggregate metadata only, never packet payloads.
-    canonical = json.dumps(data, sort_keys=True, separators=(',', ':')).encode('ascii')
+    selection = {
+        'schema': SELECTION_SCHEMA,
+        'reference': {'window': rw, 'baseline_sha256': data['reference']['baseline_sha256']},
+        'current': {'window': cw, 'baseline_sha256': data['current']['baseline_sha256']},
+        'as_of': data['as_of'],
+    }
+    if selection_fingerprint(selection) != data['selection_sha256']:
+        raise OfflineError('ANOMALY_SELECTION_FINGERPRINT_MISMATCH')
+    # Identity covers normalized aggregate meaning and the pinned selection only.
+    normalized_input = {
+        'schema': INPUT_SCHEMA,
+        'selection_sha256': data['selection_sha256'],
+        'as_of': data['as_of'],
+        'reference': {'window': rw, 'baseline_sha256': data['reference']['baseline_sha256'],
+                      'baseline': reference_normalized},
+        'current': {'window': cw, 'baseline_sha256': data['current']['baseline_sha256'],
+                    'baseline': current_normalized},
+    }
+    canonical = json.dumps(normalized_input, sort_keys=True, separators=(',', ':')).encode('ascii')
     if len(canonical) > MAX_INPUT_BYTES:
         raise OfflineError('ANOMALY_INPUT_LIMIT')
     result = {
@@ -122,8 +200,9 @@ def build_anomaly_dossier(value: object) -> dict:
         'adapter': after.adapter, 'record_kind': after.record_kind,
         'reference_records': before.record_count, 'current_records': after.record_count,
         'reference_window': rw, 'current_window': cw, 'as_of': data['as_of'],
+        'selection_sha256': data['selection_sha256'],
         'comparison_basis': 'accepted_record_share', 'quality_label': 'uncalibrated',
-        'candidate_count': 0, 'candidates': [], 'truncated': False,
+        'candidate_count': 0, 'candidate_total': 0, 'candidates': [], 'truncated': False,
         'action_status': 'not_attempted', 'limitations': list(LIMITATIONS),
     }
 
@@ -152,42 +231,52 @@ def build_anomaly_dossier(value: object) -> dict:
 
     def add(rule: str, reference_count: int, current_count: int,
             protocol: str | None = None, port: int | None = None) -> None:
-        if len(candidates) == MAX_CANDIDATES:
-            raise OfflineError('ANOMALY_CANDIDATE_LIMIT')
-        candidates.append({'id': f'a{len(candidates) + 1:02d}', 'rule': rule,
-                           'protocol': protocol, 'port': port,
-                           'reference_count': reference_count, 'current_count': current_count})
+        delta = abs(current_count * before.record_count
+                    - reference_count * after.record_count)
+        candidates.append({'rule': rule, 'protocol': protocol, 'port': port,
+                           'reference_count': reference_count, 'current_count': current_count,
+                           '_delta': delta, '_support': max(reference_count, current_count),
+                           '_ordinal': len(candidates)})
 
     def shift(x: int, y: int) -> bool:
         return (max(x, y) >= MIN_SUPPORT and
                 abs(y * before.record_count - x * after.record_count) * 100 >=
                 SHARE_SHIFT_PERCENT * before.record_count * after.record_count)
 
-    try:
-        previous_ports = {(protocol, port): count
-                          for protocol, port, count in before.destination_ports}
-        current_ports = {(protocol, port): count
-                         for protocol, port, count in after.destination_ports}
-        for protocol, port in sorted(previous_ports.keys() | current_ports.keys()):
-            x = previous_ports.get((protocol, port), 0)
-            y = current_ports.get((protocol, port), 0)
-            if x == 0 and y >= MIN_SUPPORT:
-                add('NEW_DESTINATION_PORT', x, y, protocol, port)
-            elif shift(x, y):
-                add('PORT_SHARE_SHIFT', x, y, protocol, port)
-        previous_protocols = dict(before.protocols)
-        current_protocols = dict(after.protocols)
-        for protocol in sorted(previous_protocols.keys() | current_protocols.keys()):
-            x = previous_protocols.get(protocol, 0)
-            y = current_protocols.get(protocol, 0)
-            if shift(x, y):
-                add('PROTOCOL_SHARE_SHIFT', x, y, protocol)
-        x, y = before.byte_bands[2], after.byte_bands[2]
+    previous_ports = {(protocol, port): count
+                      for protocol, port, count in before.destination_ports}
+    current_ports = {(protocol, port): count
+                     for protocol, port, count in after.destination_ports}
+    for protocol, port in sorted(previous_ports.keys() | current_ports.keys()):
+        x = previous_ports.get((protocol, port), 0)
+        y = current_ports.get((protocol, port), 0)
+        if x == 0 and y >= MIN_SUPPORT:
+            add('NEW_DESTINATION_PORT', x, y, protocol, port)
+        elif shift(x, y):
+            add('PORT_SHARE_SHIFT', x, y, protocol, port)
+    previous_protocols = dict(before.protocols)
+    current_protocols = dict(after.protocols)
+    for protocol in sorted(previous_protocols.keys() | current_protocols.keys()):
+        x = previous_protocols.get(protocol, 0)
+        y = current_protocols.get(protocol, 0)
         if shift(x, y):
-            add('LARGE_RECORD_SHARE_SHIFT', x, y)
-    except OfflineError:
-        return abstain('ANOMALY_CANDIDATE_LIMIT')
+            add('PROTOCOL_SHARE_SHIFT', x, y, protocol)
+    x, y = before.byte_bands[2], after.byte_bands[2]
+    if shift(x, y):
+        add('LARGE_RECORD_SHARE_SHIFT', x, y)
     if candidates:
-        result.update(status='candidates', reason_code='REVIEW_CANDIDATES',
-                      candidate_count=len(candidates), candidates=candidates)
+        total = len(candidates)
+        truncated = total > MAX_CANDIDATES
+        if truncated:
+            candidates = sorted(candidates, key=lambda row: (
+                -row['_delta'], -row['_support'], row['_ordinal']))[:MAX_CANDIDATES]
+        projected = []
+        for index, row in enumerate(candidates, 1):
+            projected.append({'id': f'a{index:02d}', **{
+                key: item for key, item in row.items() if not key.startswith('_')}})
+        result.update(status='candidates',
+                      reason_code=('REVIEW_CANDIDATES_TRUNCATED' if truncated
+                                   else 'REVIEW_CANDIDATES'),
+                      candidate_count=len(projected), candidate_total=total,
+                      candidates=projected, truncated=truncated)
     return result

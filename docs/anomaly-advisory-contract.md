@@ -6,12 +6,17 @@ two questions and registry remain separate. Both policies share the tightened
 [completion and result-text checks](advisory-result-integrity.md). Neither policy's
 registry implicitly authorizes the other.
 
-`preflight_anomaly_advisory` accepts one `qwen-anomaly-request-v1`: the original
-closed anomaly input, one approved model receipt, fixed limits and one of
+`preflight_anomaly_advisory` accepts one `qwen-anomaly-request-v1`: one closed
+`offline-anomaly-input-v2` with normalized baseline fingerprints and a pinned
+selection, one approved model receipt, fixed limits and one of
 `explain_anomalies` or `explain_anomaly_limitations`. It recomputes the dossier
 from both baselines. Caller-supplied dossiers, scores, prompts, paths, URLs,
 commands, log strings, payloads, secrets and tool fields are rejected. Empty,
 stale or otherwise ineligible evidence never triggers a model request.
+The advisory API also requires the approved selection SHA-256 as a separate
+argument and compares it with the request before dossier construction. A caller
+cannot replace the baselines or windows and authorize that replacement merely
+by recomputing the hashes embedded in the same request.
 
 The sole `qwen-anomaly-registry-v1` entry must match the model receipt and the
 4 KiB input/output, 15-second, concurrency-one limits. Canonical registry JSON
@@ -21,22 +26,31 @@ test data, not an operator approval or an installed-model attestation.
 
 The JSON Schema checks the closed structure. Runtime validation additionally
 enforces exact primitive types, count consistency, source/adapter pairing,
-window eligibility, fingerprint agreement and a recomputed evidence identity.
+window eligibility, baseline/selection fingerprint agreement and a recomputed
+normalized evidence identity. Equivalent ordering of protocol, port, and minute
+arrays produces the same identity.
 Only repository-generated candidate IDs, rule names, counts, denominators,
 declared windows and fixed context enter the canonical prompt. These are
 aggregate metadata, with no raw network addresses or packet contents.
 
-`invoke_qwen_anomaly_advisory` repeats preflight and requires `enabled=True`
-per invocation. It shares the original provider implementation, including the
-same lock, deadline, cancellation and strict response parser. There is no
+Truncated candidate evidence remains available to the analyst but is not model
+eligible. `invoke_qwen_anomaly_advisory` repeats preflight and requires
+`enabled=True` per invocation. It shares the original provider implementation,
+including the same in-process lock and stable-directory cross-process Linux lock,
+deadline, cancellation and strict response parser. There is no
 second transport implementation. The sole request uses literal
 `127.0.0.1:11434/api/generate`, no tools, no streaming and no retry. Ollama's
 [generation contract](https://docs.ollama.com/api/generate) describes the
 upstream fields; MEGALODON narrows and validates them independently.
 
-Provider output remains untrusted plain text. The prompt asks for supporting
-candidate IDs and benign alternatives, but generated citations and reasoning
-are not independently verified. The deterministic dossier is retained
+Provider output remains untrusted. The response text must decode to one closed
+JSON object containing the exact admitted candidate IDs in order, a bounded
+summary, one to four bounded benign alternatives, and one to four bounded
+missing-evidence items. Missing, unknown, duplicate, reordered IDs and extra
+fields fail closed. Empty or whitespace-only anomaly output also fails this
+parser; it is not converted into an otherwise structured abstention. This
+verifies evidence references and structure, not the truth or action-freedom of
+generated prose. The deterministic dossier is retained
 separately and cannot be changed or suppressed by an answer, refusal or error.
 The result retains the new policy version, so an old dashboard must reject it
 until an explicit consumer compatibility change is reviewed. Shared result

@@ -11,6 +11,7 @@ from pathlib import Path
 import socket
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 
@@ -360,12 +361,34 @@ def test_concurrency_one_fails_closed_without_http(monkeypatch) -> None:
     assert result.provider_request_performed is False
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux lock contract")
+def test_concurrency_one_is_shared_across_processes_and_recovers_on_exit() -> None:
+    lock = qwen._acquire_process_invocation_lock()
+    assert os.path.samefile(f"/proc/self/fd/{lock}", "/tmp")
+    child = (
+        "import sys; import megalodon.qwen_advisory as q; "
+        "\ntry:\n q._acquire_process_invocation_lock()\nexcept q._ProviderConcurrencyBusy:\n"
+        " sys.exit(0)\nsys.exit(1)"
+    )
+    try:
+        busy = subprocess.run([sys.executable, "-c", child], cwd=ROOT, timeout=5)
+    finally:
+        os.close(lock)
+    assert busy.returncode == 0
+    recovered = subprocess.run(
+        [sys.executable, "-c",
+         "import os; import megalodon.qwen_advisory as q; "
+         "lock=q._acquire_process_invocation_lock(); os.close(lock)"],
+        cwd=ROOT, timeout=5,
+    )
+    assert recovered.returncode == 0
+
+
 def _forbid_non_http_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
     def forbidden(*args, **kwargs):
         raise AssertionError("Qwen adapter attempted a forbidden side effect")
 
     monkeypatch.setattr(builtins, "open", forbidden)
-    monkeypatch.setattr(os, "open", forbidden)
     monkeypatch.setattr(Path, "open", forbidden)
     monkeypatch.setattr(Path, "write_text", forbidden)
     monkeypatch.setattr(Path, "write_bytes", forbidden)

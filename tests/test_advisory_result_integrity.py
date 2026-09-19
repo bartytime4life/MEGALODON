@@ -15,7 +15,7 @@ from megalodon.anomaly_advisory import POLICY_VERSION
 from megalodon.dashboard import advisory_receipt_snapshot
 from megalodon.offline import triage
 from megalodon.offline.anomaly import build_anomaly_dossier
-from test_anomaly_advisory import REQUEST, admit, invoke as anomaly_invoke
+from test_anomaly_advisory import REQUEST, admit, invoke as anomaly_invoke, structured_answer
 from test_anomaly_triage import inputs, provider, enable
 from test_dashboard_advisory_receipt import _result
 from test_local_model_advisory_contract import validator
@@ -47,11 +47,20 @@ def test_non_normal_completion_and_null_metadata_never_publish_partial_text(invo
 @pytest.mark.parametrize('metadata', [{}, {'done_reason': 'stop'},
     {'done_reason': 'stop', 'thinking': '', 'context': [], 'created_at': '2026-09-15T00:00:00Z'}])
 def test_normal_stop_and_legacy_omission_keep_existing_valid_outputs(invoke, metadata, provider):
+    response = (structured_answer() if invoke is anomaly_invoke
+                else 'Café 中文 🙂\n\tNo verdict.')
     provider.next_response = FakeResponse(dict(
-        model='local:qwen-approved-v1', done=True, response='Café 中文 🙂\n\tNo verdict.', **metadata))
+        model='local:qwen-approved-v1', done=True, response=response, **metadata))
     result = invoke()
-    assert result.outcome == 'ANSWER' and result.summary == 'Café 中文 🙂 No verdict.'
-    owned = qwen.validated_qwen_result(result, policy_version=result.policy_version)
+    assert result.outcome == 'ANSWER'
+    if invoke is original_invoke:
+        assert result.summary == 'Café 中文 🙂 No verdict.'
+    else:
+        assert result.candidate_ids == ('a01', 'a02')
+        assert 'Candidate references: a01, a02.' in result.summary
+    owned = qwen.validated_qwen_result(
+        result, policy_version=result.policy_version,
+        candidate_ids=result.candidate_ids if result.candidate_ids else None)
     assert owned == result and owned is not result
 
 
