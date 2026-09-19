@@ -443,9 +443,14 @@ The dashboard exposes only:
   status and optional bounded readiness plus process-name observation reports;
   no request-triggered probe;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
-- `GET /api/traffic` — the newest 240 stored event timestamps, protocols, and
-  byte counts with bounded protocol aggregates; no endpoints, payloads, ports,
-  interfaces, identifiers, or request-selected limit;
+- `GET /api/traffic` — newest 500 event candidates and 200 finding candidates,
+  with qualified endpoint/port/flag metadata, exact reported bytes and run links;
+  no payloads, interfaces, raw JSON or request-selected limit;
+- `GET /api/traffic-history?start=UTC&end=UTC&before=ID` — the same projection
+  over a UTC range up to 31 days, ordered by immutable event ID. The optional
+  exclusive cursor advances through candidate pages even when all are excluded.
+  Findings are linked to the selected page and capped at 200. The 256 KiB
+  ceiling and existing query budgets apply. History reads do not mutate storage;
 - `GET /api/events?limit=N` — recent detections, with one decimal integer from
   1 through 200; malformed, repeated, out-of-range, and unknown query fields
   fail with `400` rather than being silently coerced. Each returned detection
@@ -455,7 +460,7 @@ The dashboard exposes only:
 - `GET /api/offline-summary` — either `available: false` or one immutable,
   validated `dashboard-offline-summary-v1` snapshot selected at startup;
 - `GET /api/integrations` — a static, non-executing workflow map with an optional
-  single `platform=linux|windows|other` parameter; exactly eight workflow cards
+  single `platform=linux|windows|other` parameter; exactly fourteen workflow cards
   and a 32 KiB response ceiling, not installed-tool discovery or connectivity;
 - `GET /api/reference/status` — the process-local IANA library's `ready`,
   `unavailable`, or `integrity_failure` disposition; no query parameters;

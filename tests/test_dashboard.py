@@ -853,10 +853,10 @@ process.stdin.on('end', async () => {
     }
     const document = {hidden: false,
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
-      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+      createElement(tag) { return fakeNode(tag); }, createElementNS(ns,tag) { return fakeNode(tag); }, addEventListener() {}};
     class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
     const calls = []; let finishEvents;
-    const response = value => ({ok: true, json: async () => value});
+    const response = value => {let sent=false; const bytes=new TextEncoder().encode(JSON.stringify(value)); return {ok:true,json:async()=>value,body:{getReader:()=>({read:async()=>sent?{done:true}:{done:false,value:(sent=true,bytes)},cancel:async()=>{}})}};};
     function fetch(path) {
       calls.push(path);
       if (path === '/api/summary') return Promise.reject(new Error('summary failed'));
@@ -869,7 +869,7 @@ process.stdin.on('end', async () => {
       }));
       return Promise.reject(new Error(`unexpected path: ${path}`));
     }
-    const context = {document, fetch, AbortController: FakeAbortController,
+    const context = {document, fetch, AbortController: FakeAbortController, AbortSignal, TextEncoder, TextDecoder, Uint8Array,
       Intl, Date, Number, String, Math, Set,
       Promise, Error, Array, window: {setTimeout() { return 1; }, clearTimeout() {}}};
     vm.createContext(context); vm.runInContext(code, context);
@@ -926,7 +926,7 @@ process.stdin.on('end', async () => {
     }
     const document = {hidden: false,
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
-      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+      createElement(tag) { return fakeNode(tag); }, createElementNS(ns,tag) { return fakeNode(tag); }, addEventListener() {}};
     class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
     const context = {document, AbortController: FakeAbortController,
       Intl, Date, Number, String, Math, Set, Promise, Error, Array,
@@ -1012,10 +1012,10 @@ process.stdin.on('end', async () => {
     }
     const document = {hidden: false,
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
-      createElement(tag) { return fakeNode(tag); }, addEventListener() {}};
+      createElement(tag) { return fakeNode(tag); }, createElementNS(ns,tag) { return fakeNode(tag); }, addEventListener() {}};
     class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
     let failRequests = false, eventTime = '2026-09-10T00:00:00Z', eventRule = 'TEST_RULE';
-    const response = value => ({ok: true, json: async () => value});
+    const response = value => {let sent=false; const bytes=new TextEncoder().encode(JSON.stringify(value)); return {ok:true,json:async()=>value,body:{getReader:()=>({read:async()=>sent?{done:true}:{done:false,value:(sent=true,bytes)},cancel:async()=>{}})}};};
     const trafficSnapshot = stamp => ({
       schema: 'dashboard-traffic-v1', status: 'available',
       reason: 'Bounded stored metadata; source authenticity and coverage remain unverified.',
@@ -1043,7 +1043,7 @@ process.stdin.on('end', async () => {
       }
       return Promise.reject(new Error(`unexpected path: ${path}`));
     }
-    const context = {document, fetch, AbortController: FakeAbortController,
+    const context = {document, fetch, AbortController: FakeAbortController, AbortSignal, TextEncoder, TextDecoder, Uint8Array,
       Intl, Date, Number, String, Math, Set,
       Promise, Error, Array, window: {setTimeout() { return 1; }, clearTimeout() {}}};
     vm.createContext(context); vm.runInContext(code, context);

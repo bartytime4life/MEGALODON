@@ -18,13 +18,24 @@ filesystem-latency guarantee. Ordinary `dashboard` startup does not inspect tool
 The first-launch exception tolerates only a missing audit source, with 503
 telemetry responses. Unsafe or invalid existing stores remain refused.
 
-Companion-console bookmarks are explicit browser navigation, not embedded
-consoles or backend connections. A fixed fourteen-tool registry restricts storage;
-only HTTP(S) addresses without userinfo, query strings or fragments are accepted.
-Stored values are validated again when loaded. Addresses stay in browser
-localStorage for that origin, or page memory if storage is unavailable. They
-must not contain credentials. Clicking a console or official guide leaves the
-dashboard and may access the network; that does not change backend egress policy.
+Companion-console bookmarks are explicit browser navigation. The local HUD can
+open a chosen HTTP(S) console in a sandboxed frame; the hosted reference Site
+retains external links. The fixed fourteen-tool registry accepts no userinfo,
+query strings or fragments. Values are revalidated when loaded and stay in this
+origin's localStorage, or page memory when storage is unavailable. No console
+loads on page startup or merely saving a link. URLs must not contain credentials.
+
+The local frame permits scripts, forms and the console's own origin for login,
+but no top navigation, popups, downloads or device permissions. Same-HUD-origin
+URLs are refused; all HUD responses also deny framing through CSP and
+X-Frame-Options, including a redirect back to the HUD. Parent scripts/data
+requests remain self-only. Frame HTTP(S) navigation and the companion app's own
+requests can access the network; this does not change backend egress policy.
+The HUD neither reads frame content nor treats a load event as proof of success.
+Embedding refusal and external sign-in retain an explicit external-open fallback.
+The companion app retains its own action permissions, independent of MEGALODON's
+read-only API. Changing/removing the selected bookmark unloads its frame.
+
 Terminal commands are copied only after a click, never executed. Optional startup
 paths are quoted as single POSIX shell arguments and are not stored or opened by
 the browser. These controls do not assert installation, health or authority.

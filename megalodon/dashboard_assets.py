@@ -845,7 +845,7 @@ document.addEventListener('click', event => {
   // Keep native fragment history and scrolling after exposing the target.
 });
 if (typeof window.addEventListener === 'function') window.addEventListener('hashchange', restoreWorkspaceFromHash);
-function textNode(tag, value, className) {
+function textNode(tag, value = '', className) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   node.textContent = String(value);
@@ -1997,8 +1997,9 @@ async function refresh(announce = true) {
   const button = byId('refresh-button'); button.disabled = true; button.textContent = 'Refreshing…';
   try {
     const [summaryResult, eventsResult, trafficResult] = await Promise.allSettled([
-      requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`), requestJSON('/api/traffic')
+      requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`), requestRoomSnapshot()
     ]);
+    acceptRoomResult(trafficResult);
     const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh
       && [summaryResult, eventsResult].every(result => result.status === 'rejected'
         && result.reason && result.reason.status === 503
@@ -2052,7 +2053,6 @@ async function refresh(announce = true) {
     state.refreshing = false; button.disabled = false; button.textContent = 'Refresh now';
     byId('triage-controls').disabled = false;
     byId('triage-panel').setAttribute('aria-busy', 'false');
-    refreshRoom();
   }
 }
 function togglePause() {
@@ -2079,6 +2079,7 @@ function togglePause() {
   }
   if (state.paused) scheduleNext();
   else { refresh(false); scheduleNext(); }
+  renderRoomControls();
 }
 function applyConfig(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)
@@ -2104,7 +2105,6 @@ async function bootstrap() {
   loadIngestionRuns();
   loadReferenceStatus();
   await loadSetup();
-  refreshRoom();
   await refresh(false); scheduleNext();
 }
 
@@ -2168,8 +2168,10 @@ document.addEventListener('visibilitychange', () => {
 """
 
 from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
+from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + "\nbootstrap();\n"
+INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + APP_VIEWER_JS + "\nbootstrap();\n"

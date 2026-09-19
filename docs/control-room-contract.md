@@ -61,8 +61,9 @@ keyboard-operable shell. A persistent Back to Main HUD link returns to Home.
 The old audit inspector is explicitly separate in Evidence because it can
 contain sample/unlinked rows. It is never the source of traffic visuals.
 
-All traffic panels share a browser-only UTC time filter (maximum 31 days) over
-one bounded `/api/traffic` response. Every panel includes range, source, unknown
+All traffic panels share a UTC range (maximum 31 days). Recorded window and
+Now use the bounded `/api/traffic` response. Last hour, Today and Custom UTC
+read database history through `/api/traffic-history`. Every panel includes range, source, unknown
 vantage, fetch time, unit and quality. Counts describe returned metadata;
 bytes use exact integers. Top lists are limited to ten entries (flows eight).
 Empty bins do not prove absence of traffic. Direction, local network identity,
@@ -92,10 +93,47 @@ HUD cannot install, update, remove or configure companion applications.
 probe their processes or services. These rows must not be collapsed into one
 overall readiness badge.
 
-Operator console links are browser-only destinations. They open in a new tab so
-the loopback HUD remains the stable return point; URL preferences stay in local
-browser storage. The HUD never embeds a remote console, executes a package
-manager, or converts roadmap text into runtime authority.
+Operator console links are browser-only destinations. The local HUD's App viewer
+loads one chosen console in a sandboxed HTTP(S) frame only after **View in HUD**.
+Saving a link and loading the Apps map do not contact it. Every tool has a viewer
+entry; tools without native web UIs show an explanation and accept a separately
+configured viewer URL. Native desktop windows cannot be embedded directly.
+Reload/close controls and an external-open link remain visible. Browser frame
+restrictions and login requirements are respected; the HUD does not proxy a
+console or claim it loaded successfully. URL preferences stay in local storage.
+The hosted Site still opens consoles externally and receives no telemetry.
+
+## Historical activity and refresh
+
+`GET /api/traffic-history` requires `start` and `end` UTC ISO instants with a
+maximum 31-day span and an end no later than one minute beyond server time. Its
+optional canonical positive `before` event ID is exclusive. The existing UTC
+writer representation and time index support the range query. Parameters are
+bound; unknown, repeated or malformed fields are refused. Existing read-only
+storage, query budgets and the 256 KiB response ceiling apply.
+
+Each page selects up to 501 event candidates and 201 findings linked to its first
+500 event candidates in one SQL snapshot. Published limits remain 500/200.
+`candidate_count` and `next_before` expose candidate paging even if every row was
+excluded. Ordering is by event ID, so out-of-order producer timestamps and newer
+inserts do not shift an older-page cursor. The view is not a multi-page immutable
+snapshot: retention and changed run receipts can affect later reads. Empty pages
+and exhausted candidates do not establish no network activity. Expensive range
+queries can fail their budget; narrow the range when necessary.
+
+History pages remain fixed until refresh or navigation. Automatic latest polling
+cannot overwrite the reviewed page. Activity detail lists every qualified event
+in that page; reports summarize that same page. Failed reads preserve the prior
+page with an explicit stale label. Range and cursor envelopes are validated in
+the browser before a page is applied.
+
+Latest polling shares one bounded traffic request between the HUD and the legacy
+audit view. Concurrent manual reads of the same path share the in-flight request.
+The persistent refresh/pause controls show the interval and separate fetch time
+from latest observation time. Visibility suspends automatic polling; no sensor
+is started. The HUD does not claim sensor liveness, link throughput, a complete
+network map or distributed sensor aggregation.
+
 
 
 ## Bounded local report (fourth reviewed slice)

@@ -2,11 +2,11 @@
 
 STATUS_HTML = """
 <section class="room-status" aria-label="Control room status">
-  <div><span>Overall Status</span><strong id="room-overall">Unknown</strong></div>
+  <div><span>Evidence Status</span><strong id="room-overall">Unknown</strong></div>
   <div><span>Local Service</span><strong id="room-connection">Not checked</strong></div>
   <div><span>Data Coverage</span><strong id="room-coverage">Unavailable</strong></div>
-  <div><span>Last Updated</span><strong id="room-updated">Not fetched</strong></div>
-  <div><span>Active Sources</span><strong id="room-sources">Unknown</strong></div>
+  <div><span>Last Fetched</span><strong id="room-updated">Not fetched</strong></div>
+  <div><span>Stored Sources</span><strong id="room-sources">Unknown</strong></div>
   <div><span>Findings</span><strong id="room-count">Unavailable</strong></div>
 </section>
 <p id="room-notice" class="room-notice" role="status" aria-live="polite">No qualified data available until the local metadata check succeeds.</p>
@@ -15,6 +15,11 @@ STATUS_HTML = """
   <label id="room-start-label" hidden>Start (UTC)<input id="room-start" type="datetime-local" step="1"></label>
   <label id="room-end-label" hidden>End (UTC)<input id="room-end" type="datetime-local" step="1"></label>
   <button type="button" id="room-apply">Apply time range</button><button type="button" id="room-refresh">Refresh metadata</button>
+  <button type="button" id="room-pause" aria-pressed="false">Pause refresh</button>
+  <button type="button" id="room-newer" hidden>Newer page</button><button type="button" id="room-older" hidden>Older page</button>
+  <button type="button" id="room-latest" hidden>Return to latest</button>
+  <p id="room-feed-status" role="status">Automatic refresh is waiting for configuration.</p>
+  <p id="room-history-status" role="status"></p>
   <p id="room-range-description">Time range unavailable</p>
 </div>
 """
@@ -32,6 +37,8 @@ TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>
   <h2 id="room-traffic-title" tabindex="-1">Traffic</h2><p>Saved metadata in the shared time range. No capture starts here.</p>
   <div id="room-traffic-grid" class="room-grid"></div>
+  <h3>Activity detail</h3><p>Every qualified event in this page, with its recorded source and import status. Times are UTC; imported event order can differ from capture time.</p>
+  <div id="room-activity-table" class="room-table" tabindex="0" role="region" aria-label="Scrollable activity detail"></div>
 </section>
 <section class="workspace-view" id="workspace-findings" role="tabpanel" aria-labelledby="workspace-tab-findings" hidden>
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
@@ -137,12 +144,13 @@ ROOM_CSS = r"""
 .room-report-preview { max-height:48vh; overflow:auto; margin:0; padding:1rem; border:1px solid #335064; border-radius:10px; background:#071923; color:#dcebf0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.78rem; line-height:1.5; }
 :is(.room-range,.room-actions,.room-visual,.room-table,.room-report-actions) :focus-visible,.room-report-preview:focus-visible,.room-back:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
 @media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
+@media(max-width:560px) { .room-status { grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; } .room-status > div { padding:.5rem; } .room-status span { font-size:.68rem; } .room-status strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 """
 
 ROOM_JS = r"""
-const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null};
+const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null, history:null};
 const roomProtocols = ['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'];
 const roomRules = ['SYN_FLOOD','PORT_SCAN','DNS_TUNNELING'];
 const roomFlags = ['FIN','SYN','RST','PSH','ACK','URG','ECE','CWR'];
@@ -180,6 +188,7 @@ function validateTraffic(value) {
       || !roomProtocols.includes(e.protocol) || !['jsonl','scapy'].includes(e.source)
       || !['running','completed','incomplete','failed'].includes(e.run_status)
       || ![null,'source_exhausted','event_limit_reached','failed','interrupted'].includes(e.termination_reason)
+      || !({running:[null],completed:['source_exhausted'],incomplete:['event_limit_reached'],failed:['failed','interrupted']}[e.run_status]||[]).includes(e.termination_reason)
       || ![e.src_port,e.dst_port].every(p=>p===null || (Number.isInteger(p)&&p>=0&&p<=65535))
       || !Array.isArray(e.tcp_flags) || e.tcp_flags.length>8 || new Set(e.tcp_flags).size!==e.tcp_flags.length || !e.tcp_flags.every(f=>roomFlags.includes(f))
       || typeof e.byte_count!=='string' || !/^(0|[1-9][0-9]{0,18})$/.test(e.byte_count) || BigInt(e.byte_count)>9223372036854775807n) throw new Error('Invalid event');
@@ -194,6 +203,18 @@ function validateTraffic(value) {
   });
   const times=value.events.map(e=>e.observed_at).sort();
   if(value.window.start!==(times[0]||null) || value.window.end!==(times.at(-1)||null) || (value.status==='available')!==(value.events.length>0)) throw new Error('Invalid coverage');
+  return value;
+}
+function validateHistory(value, request) {
+  if(!referenceExactKeys(value,['schema','traffic','range','next_before','candidate_count']) || value.schema!=='dashboard-traffic-history-v1'
+    || !referenceExactKeys(value.range,['start','end']) || !roomStamp(value.range.start) || !roomStamp(value.range.end)
+    || Date.parse(value.range.start)!==request.start || Date.parse(value.range.end)!==request.end
+    || !Number.isInteger(value.candidate_count) || value.candidate_count<0 || value.candidate_count>500
+    || !(value.next_before===null || roomId(value.next_before))) throw new Error('Invalid history page');
+  validateTraffic(value.traffic);
+  if(value.traffic.events.length+value.traffic.excluded_event_candidates!==value.candidate_count
+    || (value.next_before!==null && (value.candidate_count!==500 || !value.traffic.truncated || (request.before!==null && BigInt(value.next_before)>=BigInt(request.before))))
+    || value.traffic.events.some(e=>Date.parse(e.observed_at)<request.start || Date.parse(e.observed_at)>request.end || (request.before!==null && BigInt(e.id)>=BigInt(request.before)) || (value.next_before!==null && BigInt(e.id)<BigInt(value.next_before)))) throw new Error('Invalid history coverage');
   return value;
 }
 function roomSelection(snapshot, range, custom, now=Date.now()) {
@@ -216,7 +237,9 @@ function roomMeta(selection) {
   return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · source: ${[...new Set(selection.events.map(e=>e.source))].join(', ')||'unavailable'} · vantage: unknown · last update: ${value?.generated_at||'unavailable'} · unit: metadata events / reported bytes · quality: ${roomState.failed?'stale':value?.quality||'unavailable'} · bounded candidate window (top lists omit lower-ranked rows)`;
 }
 function roomVisual(parent,title,selection) {
-  const article=textNode('article','','room-visual'); article.append(textNode('h3',title),textNode('p',roomMeta(selection),'room-meta')); parent.append(article);return article;
+  const article=textNode('article','','room-visual');
+  const details=textNode('details');details.append(textNode('summary','Source and coverage details'),textNode('p',roomMeta(selection),'room-meta'));
+  article.append(textNode('h3',title),details);parent.append(article);return article;
 }
 function roomBars(parent,rows,unit='events') {
   if(!rows.length) {parent.append(textNode('p','No qualified data available in this time range. Use Help to select or import authorized metadata.','room-empty'));return;}
@@ -318,23 +341,32 @@ function downloadRoomReport() {
 }
 function renderRoom() {
   let selected;
-  try {selected=roomSelection(roomState.snapshot,roomState.range,roomState.custom);} catch(error) {byId('room-notice').textContent=error.message;return;}
+  try {selected=roomSelection(roomState.snapshot,roomState.history?'custom':roomState.range,roomState.history||roomState.custom);} catch(error) {byId('room-notice').textContent=error.message;return;}
   roomState.selection=selected;
   const snapshot=roomState.snapshot,has=selected.events.length>0;
   const stale=roomState.failed || (snapshot && Date.now()-Date.parse(snapshot.generated_at)>300000);
   const old=has && Date.now()-Math.max(...selected.events.map(e=>Date.parse(e.observed_at)))>300000;
   const future=has && selected.events.some(e=>Date.parse(e.observed_at)>Date.now()+60000);
-  const needs=stale||old||future||snapshot?.quality==='degraded'||selected.findings.length>0;
-  byId('room-overall').textContent=!snapshot||snapshot.status==='unavailable'?'Not Ready':needs?'Needs Attention':'Unknown';
+  byId('room-overall').textContent=stale?'Stale view':!has?'No qualified data':future?'Clock uncertain':selected.findings.length?'Review findings':roomState.history||old?'Historical view':snapshot?.truncated?'Limited window':'Metadata available';
   byId('room-connection').textContent=roomState.connected===true?'Connected · read-only':roomState.connected===false?(snapshot?'Unavailable · preserved view':'Unavailable'):'Not checked';
   byId('room-coverage').textContent=stale?'Stale':future?'Clock uncertain':has?'Partial · quality unknown':'Unavailable';
-  byId('room-updated').textContent=snapshot?.generated_at||'Not fetched';
-  byId('room-sources').textContent=has?'Unknown · '+new Set(selected.events.map(e=>e.source)).size+' stored source types':'Unknown';
+  byId('room-updated').textContent=snapshot?new Date(snapshot.generated_at).toISOString().slice(0,19).replace('T',' ')+' UTC':'Not fetched';
+  byId('room-updated').title=snapshot?.generated_at||'';
+  byId('room-sources').textContent=has?[...new Set(selected.events.map(e=>e.source==='jsonl'?'JSONL import':'Scapy'))].join(', '):'Unknown';
   byId('room-count').textContent=has?`${selected.findings.length} in returned set`:'Unavailable';
   const note=stale?(snapshot?'Refresh failed or snapshot expired. Preserved metadata is stale.':'No qualified data available. The metadata check failed; use Help for the safe next step.'):!has?'No qualified data available in this time range.':future?'Clock uncertainty: future timestamps are present.':old?'Historical metadata only. Current sensor activity is unknown.':'Showing saved metadata. Sensor health and full coverage are unknown.';
   byId('room-notice').textContent=note;
   byId('room-home-summary').textContent=has?`${selected.events.length} stored metadata events and ${selected.findings.length} linked findings are available. ${note}`:note+' Open Help for the safe next command.';
   byId('room-range-description').textContent=roomMeta(selected);
+  renderRoomControls();
+  const activity=textNode('table');activity.append(textNode('caption',`${selected.events.length} qualified events in this page`));
+  const activityHead=textNode('tr');['Observed (UTC)','Source → destination','Protocol / flags','Reported bytes','Source / run / state','Event ID'].forEach(label=>{const th=textNode('th',label);th.scope='col';activityHead.append(th);});
+  const activityHeader=textNode('thead');activityHeader.append(activityHead);activity.append(activityHeader);
+  const activityBody=textNode('tbody');
+  const endpoint=(ip,port)=>(ip.includes(':')?'['+ip+']':ip)+(port===null?'':':'+port);
+  [...selected.events].sort((a,b)=>Date.parse(b.observed_at)-Date.parse(a.observed_at)||Number(b.id)-Number(a.id)).forEach(e=>{
+    const row=textNode('tr');[e.observed_at,endpoint(e.src_ip,e.src_port)+' → '+endpoint(e.dst_ip,e.dst_port),e.protocol+' / '+(e.tcp_flags.join(', ')||'—'),e.byte_count,e.source+' / '+e.run_id+' / '+e.run_status,e.id].forEach(value=>row.append(textNode('td',value)));activityBody.append(row);
+  });activity.append(activityBody);byId('room-activity-table').replaceChildren(activity);
   const grid=byId('room-traffic-grid');grid.replaceChildren();
   let panel=roomVisual(grid,'Traffic volume over time',selected);roomTimeline(panel,selected,selected.events,'observed_at');
   if(has) panel.append(textNode('p',`${selected.events.reduce((sum,e)=>sum+BigInt(e.byte_count),0n)} reported bytes in this returned set. No packets-per-second or link-speed claim.`,'room-meta'));
@@ -350,20 +382,79 @@ function renderRoom() {
   const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach(value=>row.append(textNode('td',value)));body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
   if(typeof invalidateRoomReport==='function')invalidateRoomReport();
 }
-async function refreshRoom() {
-  if(roomState.busy)return;roomState.busy=true;byId('room-refresh').disabled=true;
-  try {
-    const response=await fetch('/api/traffic',{method:'GET',cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(3000)});
+const roomRequests=new Map();
+function requestRoomSnapshot(path='/api/traffic') {
+  if(roomRequests.has(path))return roomRequests.get(path);
+  const pending=(async()=>{
+    const response=await fetch(path,{method:'GET',cache:'no-store',credentials:'omit',mode:'same-origin',redirect:'error',signal:AbortSignal.timeout(5000)});
     const reader=response.body?.getReader();if(!reader)throw new Error('Unavailable');let bytes=0,chunks=[];
-    while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>262144){await reader.cancel();throw new Error('Oversized');}chunks.push(value);}
+    try {
+      while(true){const {done,value}=await reader.read();if(done)break;if(!(value instanceof Uint8Array))throw new Error('Invalid response');bytes+=value.byteLength;if(bytes>262144)throw new Error('Oversized');chunks.push(value);}
+      const declared=response.headers?.get('Content-Length');
+      if(declared!==null && declared!==undefined && (!/^(0|[1-9][0-9]*)$/.test(declared)||Number(declared)!==bytes))throw new Error('Partial response');
+    } finally {try{await reader.cancel();}catch(_){}}
     const merged=new Uint8Array(bytes);let offset=0;chunks.forEach(chunk=>{merged.set(chunk,offset);offset+=chunk.length;});
-    const snapshot=validateTraffic(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(merged)));
-    if(!response.ok && !(response.status===503 && snapshot.status==='unavailable')) throw new Error('Unavailable');
+    const payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(merged));
+    if(!response.ok){const error=new Error('Unavailable');error.status=response.status;error.payload=payload;throw error;}
+    return payload;
+  })();
+  roomRequests.set(path,pending);pending.then(()=>roomRequests.delete(path),()=>roomRequests.delete(path));return pending;
+}
+function acceptRoomResult(result) {
+  if(roomState.history||roomState.busy)return;
+  try {
+    const value=result.status==='fulfilled'?result.value:result.reason?.status===503?result.reason.payload:null;
+    const snapshot=validateTraffic(value);
+    if(result.status!=='fulfilled' && snapshot.status!=='unavailable')throw new Error('Unavailable');
     roomState.snapshot=snapshot;roomState.failed=false;roomState.connected=true;
-  } catch(_) {roomState.failed=true;roomState.connected=false;} finally {roomState.busy=false;byId('room-refresh').disabled=false;renderRoom();}
+  } catch(_) {roomState.failed=true;roomState.connected=false;}
+  renderRoom();
+}
+function renderRoomControls() {
+  const history=roomState.history,busy=roomState.busy;
+  ['room-apply','room-refresh','room-older','room-newer','room-latest'].forEach(id=>byId(id).disabled=busy);
+  byId('room-older').hidden=!history;byId('room-newer').hidden=!history;byId('room-latest').hidden=!history;
+  if(history){byId('room-older').disabled=busy||history.next===null;byId('room-newer').disabled=busy||!history.previous.length;}
+  const paused=typeof state!=='undefined' && state.paused;
+  const interval=typeof state!=='undefined'?state.config.refresh_seconds:5;
+  byId('room-pause').textContent=paused?'Resume refresh':'Pause refresh';byId('room-pause').setAttribute('aria-pressed',String(Boolean(paused)));
+  const last=roomState.snapshot?.window.end;
+  byId('room-feed-status').textContent=(history?'History page held for review.':paused?'Automatic refresh paused.':`Automatic refresh every ${interval}s while this tab is visible.`)+(last?' Latest observation in this page: '+last+'.':' No observation available.')+' Sensor liveness and network-wide coverage are unknown.';
+  byId('room-history-status').textContent=history?`History page ${history.previous.length+1} · ${history.candidates} stored candidates checked · ${history.next===null?'End of stored candidates in this range.':'More stored candidates available.'} Findings are capped at 200 per page; pages reflect the store when read.`:'Latest 500 stored candidates. Choose Last hour, Today or Custom UTC to browse database history.';
+}
+async function refreshRoom(request=undefined) {
+  if(roomState.busy)return;
+  // Event listeners pass an Event; only source-owned request objects select a page.
+  const history=request?.history===null?null:request?.history||roomState.history;
+  roomState.busy=true;renderRoomControls();
+  try {
+    const path=history?`/api/traffic-history?start=${encodeURIComponent(new Date(history.start).toISOString())}&end=${encodeURIComponent(new Date(history.end).toISOString())}`+(history.before?'&before='+history.before:''):'/api/traffic';
+    const payload=await requestRoomSnapshot(path);
+    if(history){const page=validateHistory(payload,history);roomState.history={...history,next:page.next_before,candidates:page.candidate_count};roomState.snapshot=page.traffic;}
+    else {roomState.snapshot=validateTraffic(payload);roomState.history=null;}
+    if(request?.range){roomState.range=request.range;roomState.custom=request.custom||null;}
+    roomState.failed=false;roomState.connected=true;
+  } catch(error) {
+    if(!history && error.status===503){try{const snapshot=validateTraffic(error.payload);if(snapshot.status!=='unavailable')throw Error();roomState.snapshot=snapshot;roomState.history=null;roomState.failed=false;roomState.connected=true;}catch(_){roomState.failed=true;roomState.connected=false;}}
+    else {roomState.failed=true;roomState.connected=false;}
+  } finally {roomState.busy=false;renderRoom();}
+}
+function applyRoomRange() {
+  try {
+    const range=byId('room-range').value;
+    const utcInput=id=>{const raw=byId(id).value;const value=raw.length===16?raw+':00Z':raw+'Z';if(!roomStamp(value))throw Error('Choose valid UTC start and end times.');return Date.parse(value);};
+    const custom=range==='custom'?{start:utcInput('room-start'),end:utcInput('room-end')}:null;
+    const selection=roomSelection(roomState.snapshot,range,custom);
+    const history=['hour','today','custom'].includes(range)?{start:selection.start,end:selection.end,before:null,next:null,candidates:0,previous:[]}:null;
+    return refreshRoom({history,range,custom});
+  }catch(error){byId('room-notice').textContent=error.message;}
 }
 byId('room-range').addEventListener('change',()=>{const custom=byId('room-range').value==='custom';byId('room-start-label').hidden=!custom;byId('room-end-label').hidden=!custom;});
-byId('room-apply').addEventListener('click',()=>{try{const range=byId('room-range').value;const custom=range==='custom'?{start:Date.parse(byId('room-start').value+'Z'),end:Date.parse(byId('room-end').value+'Z')}:null;roomSelection(roomState.snapshot,range,custom);roomState.range=range;roomState.custom=custom;renderRoom();}catch(error){byId('room-notice').textContent=error.message;}});
+byId('room-apply').addEventListener('click',applyRoomRange);
+byId('room-older').addEventListener('click',()=>{const h=roomState.history;if(h?.next)refreshRoom({history:{...h,before:h.next,previous:[...h.previous,h.before]}});});
+byId('room-newer').addEventListener('click',()=>{const h=roomState.history;if(h?.previous.length)refreshRoom({history:{...h,before:h.previous.at(-1),previous:h.previous.slice(0,-1)}});});
+byId('room-latest').addEventListener('click',()=>{byId('room-range').value='recorded';byId('room-start-label').hidden=true;byId('room-end-label').hidden=true;refreshRoom({history:null,range:'recorded'});});
+byId('room-pause').addEventListener('click',()=>{if(typeof togglePause==='function'){togglePause();renderRoomControls();}});
 byId('room-refresh').addEventListener('click',refreshRoom);
 byId('room-report-create').addEventListener('click',previewRoomReport);
 byId('room-report-download').addEventListener('click',downloadRoomReport);

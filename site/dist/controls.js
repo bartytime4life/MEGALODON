@@ -182,7 +182,7 @@ const MegalodonControls = (() => {
     if (className) element.className = className;
     return element;
   };
-  function mount(parent, id, name) {
+  function mount(parent, id, name, options = {}) {
     if (!ids.includes(id)) throw new Error('Unknown companion tool.');
     const root = node('section', '', 'companion-controls');
     root.setAttribute('aria-label', `${name} controls`);
@@ -197,6 +197,11 @@ const MegalodonControls = (() => {
     label.append(input);
     const saveButton = node('button', 'Save link'); saveButton.type = 'button';
     const removeButton = node('button', 'Remove link'); removeButton.type = 'button';
+    if (typeof options.view === 'function') {
+      const view = node('button', 'View in HUD', 'companion-button'); view.type = 'button';
+      view.addEventListener('click', () => options.view(id, name, links()[id] || null));
+      root.append(view);
+    }
     const repaint = () => {
       const url = links()[id]; open.hidden = !url;
       if (url) open.href = url; else open.removeAttribute('href');
@@ -207,12 +212,13 @@ const MegalodonControls = (() => {
     saveButton.addEventListener('click', () => {
       try {
         const persistent = save(id, input.value.trim()); repaint();
+        if (typeof options.changed === 'function') options.changed(id);
         feedback.textContent = persistent ? 'Link saved in this browser. No connection was tested.' : 'Link kept for this page only; browser storage is unavailable.';
         editor.open = false;
         (open.hidden ? editor.querySelector('summary') : open).focus();
       } catch (error) { feedback.textContent = error.message; input.focus(); }
     });
-    removeButton.addEventListener('click', () => { save(id, ''); repaint(); feedback.textContent = 'Console link removed.'; input.focus(); });
+    removeButton.addEventListener('click', () => { save(id, ''); repaint(); if (typeof options.changed === 'function') options.changed(id); feedback.textContent = 'Console link removed.'; input.focus(); });
     editor.append(label, saveButton, removeButton, node('p', 'Saved only in this browser and origin. Do not paste credentials. Opens the actual companion app in a new tab; it is not a data connection.', 'companion-help'));
     root.append(open, destination, editor);
     const guide = node('a', 'Official setup guide ↗');

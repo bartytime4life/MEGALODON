@@ -3,7 +3,7 @@
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
-      <div><h2 id="integrations-title" tabindex="-1">Apps &amp; integrations</h2><p>See what was found, what MEGALODON supports, what you control, and what remains unknown. Open a saved local console in a new tab or review its evidence here.</p></div>
+      <div><h2 id="integrations-title" tabindex="-1">Apps &amp; integrations</h2><p>See what was found, what MEGALODON supports, and what remains unknown. Use View in HUD to open an app's web console in the viewer below.</p></div>
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
     <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
@@ -36,8 +36,9 @@ INTEGRATIONS_HTML = """
       <button id="integrations-clear" type="button" class="button-secondary">Clear map filters</button>
     </div>
     <p class="reference-status" id="integrations-status" role="status" aria-live="polite" aria-atomic="true">Choose a documentation profile, then load the static map. No host has been inspected.</p>
+    <!-- APP_VIEWER -->
     <div class="integration-cards" id="integrations-cards" aria-busy="false"></div>
-    <p class="integration-footnote">Commands in details are inert reference templates, never HUD execution controls. Presence, repository support, operator administration and runtime health are separate facts. Console links open in a new tab so this local HUD remains the fixed return point. Windows evaluation and guest-only workflows are not native Windows support.</p>
+    <p class="integration-footnote">Commands in details are reference templates. An app's own console uses that app's permissions and may include administration controls. Viewing a console does not connect its data to MEGALODON. Desktop apps need a separately configured web viewer.</p>
   </section>
 """
 
@@ -213,8 +214,8 @@ function integrationCard(item) {
   if (reviewTargets[toolId]) {
     const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);
   }
-  MegalodonControls.mount(body, toolId, item.software);
-  body.append(textNode('p', 'Open companion consoles in a new tab; return to this HUD tab for MEGALODON navigation.', 'app-return-note'));
+  MegalodonControls.mount(body, toolId, item.software, typeof appConsole === 'undefined' ? {} : appConsole);
+  body.append(textNode('p', 'View in HUD provides a place for this app. If its console blocks embedding or requires a separate sign-in window, use Open companion console.', 'app-return-note'));
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);

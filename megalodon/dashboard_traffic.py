@@ -6,9 +6,10 @@ of capture authenticity. Sample and unlinked records never become traffic.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
+import re
 from pathlib import Path
 import sqlite3
 
@@ -71,7 +72,39 @@ SELECT 'finding', d.id, d.event_id, {_text('d.detected_at', 40)},
  r.receipt_version, {_text('r.termination_reason', 28)}
 FROM newest_findings d LEFT JOIN ingestion_run_events l ON l.event_id=d.event_id
 LEFT JOIN ingestion_runs r ON r.id=l.run_id
+ORDER BY record_id DESC
 """
+
+# The writer stores UTC ISO timestamps (including an offset and optional
+# microseconds). Bind that same representation so the existing time index works.
+# Each page is ordered by immutable record ID, independent of capture clocks.
+HISTORY_QUERY = QUERY.replace(
+    "FROM events ORDER BY id DESC LIMIT 501",
+    "FROM events WHERE observed_at >= :start AND observed_at <= :end "
+    "AND id < :before ORDER BY id DESC LIMIT 501",
+).replace(
+    "FROM detections ORDER BY id DESC LIMIT 201",
+    "FROM detections WHERE detected_at >= :start AND detected_at <= :end "
+    "AND event_id IN (SELECT id FROM newest_events ORDER BY id DESC LIMIT 500) "
+    "ORDER BY id DESC LIMIT 201",
+)
+
+
+def history_parameters(start: str, end: str, before: str | None = None) -> dict:
+    """Closed UTC range and keyset cursor; never a path or SQL expression."""
+    for value in (start, end):
+        if not isinstance(value, str) or not re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z", value
+        ):
+            raise ValueError("invalid UTC range")
+    first, last = parse_timestamp(start), parse_timestamp(end)
+    if first > last or last - first > timedelta(days=31) or last > datetime.now(timezone.utc) + timedelta(minutes=1):
+        raise ValueError("invalid UTC range")
+    if before is not None and (not isinstance(before, str) or not re.fullmatch(r"[1-9][0-9]{0,15}", before)
+                               or int(before) > MAX_SAFE_INTEGER):
+        raise ValueError("invalid history cursor")
+    return {"start": first.isoformat(), "end": last.isoformat(),
+            "before": int(before) if before is not None else MAX_SAFE_INTEGER + 1}
 
 
 def _integer(value: object, *, minimum: int = 0, maximum: int = MAX_SAFE_INTEGER) -> int:
@@ -129,13 +162,32 @@ class TrafficDashboardStore(DashboardStore):
         return super()._authorize(action, first, second, database, source)
 
     def traffic(self) -> dict:
+        return self._read_traffic(QUERY, {})
+
+    def traffic_history(self, start: str, end: str, before: str | None = None) -> dict:
+        parameters = history_parameters(start, end, before)
+        return self._read_traffic(HISTORY_QUERY, parameters, history=True)
+
+    def _read_traffic(self, query: str, parameters: dict, *, history: bool = False) -> dict:
         with self._bounded_read():
-            cursor = self._connection.execute(QUERY)
+            cursor = self._connection.execute(query, parameters)
             try:
                 rows = cursor.fetchmany(MAX_EVENTS + MAX_FINDINGS + 3)
                 if len(rows) > MAX_EVENTS + MAX_FINDINGS + 2:
                     raise StorageSchemaError("DASHBOARD_STORE:READ_FAILED")
-                return self._project(rows)
+                result = self._project(rows)
+                if not history:
+                    return result
+                candidates = [row for row in rows if row["kind"] == "event"]
+                # Advance even when this entire page contains excluded samples.
+                next_before = str(_integer(candidates[MAX_EVENTS - 1]["record_id"], minimum=1)) if len(candidates) > MAX_EVENTS else None
+                result["limitations"][0] = "One page of up to 500 stored event candidates in the requested UTC range; linked finding candidates capped at 200."
+                page = {"schema": "dashboard-traffic-history-v1", "traffic": result,
+                        "range": {"start": _time(parameters["start"]), "end": _time(parameters["end"])},
+                        "next_before": next_before, "candidate_count": min(len(candidates), MAX_EVENTS)}
+                if len(json.dumps(page, separators=(",", ":"), allow_nan=False).encode()) > MAX_BYTES:
+                    raise ValueError("response bound")
+                return page
             except (ValueError, TypeError, KeyError, OverflowError, UnicodeError):
                 raise StorageSchemaError("DASHBOARD_STORE:INVALID_TRAFFIC") from None
             finally:
