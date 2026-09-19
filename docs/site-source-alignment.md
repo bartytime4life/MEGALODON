@@ -1,6 +1,43 @@
 # Defense Console source alignment
 
-## Current repair — Console v20, local telemetry candidate
+## Current repair — Console v21, setup and evidence wording
+
+Repository readback: PR [#290](https://github.com/bartytime4life/MEGALODON/pull/290)
+is merged at `643cb30f058957aa87b84d2de89b6d1782d5c42d`. Its unavailable-traffic
+repair is on main; installation on the owner's computer remains unverified.
+The v20 source matches all thirteen tracked Site files at that main revision.
+The earlier draft/no-review observations below are historical, not current.
+
+The automated review of #290 identified a nonexistent Ubuntu setup fragment.
+The current Site points directly to the README's existing
+`#installation-and-first-run` section, which covers the missing core command.
+It also corrects the Boundaries page: model advice is untrusted commentary,
+never evidence or host authority. Detections remain evidence for review, not
+proof of malicious activity.
+
+**OBSERVED deployment:** the existing owner-private Defense Console v21
+succeeded at `2026-09-19T21:08:03.361713+00:00`.
+
+- Sites source: `d89b8af91405066cdffaa72b2491d07a3dd8b61b`.
+- Version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_32da2a5c7e608191af75ec8969392f8e`.
+- Deployment: `appgdep_6aaef9ae0b7881918479e639bf5dec48`.
+- Archive: `sha256:6368b095bee52dfe6b56a3256a3f7f4e062b9647377e82d1f86ed0809815c128`; ten deployable files.
+- URL: <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+
+**VERIFIED source and checks:** all thirteen Site source files match the
+`agent/site-setup-evidence-20260919` candidate; 39 Site tests, JavaScript syntax,
+local asset references and the README section target pass. This is candidate
+parity, not v21/main parity. Rendered-browser acceptance remains unverified
+because this plain-static Site has no compatible managed preview. v20 is the
+rollback reference; identity, audience and disconnected reference behavior are
+preserved. No host installation, telemetry connection or model invocation occurs.
+
+The separate recovery repair for [#291](https://github.com/bartytime4life/MEGALODON/issues/291)
+is draft [#292](https://github.com/bartytime4life/MEGALODON/pull/292), not a Site
+capability or a merged recovery acceptance. Site publication, code merge,
+independent review, release and operator acceptance remain separate.
+
+## Historical repair — Console v20, local telemetry candidate
 
 Repository baseline: `main@3bdcfb96a155d5dc4d7009e75f3b3c0986e5590b`.
 The bounded repair is on `agent/telemetry-site-errors-20260919`; the associated
