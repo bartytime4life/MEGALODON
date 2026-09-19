@@ -71,16 +71,19 @@ def test_site_alignment_requires_a_specific_receipt_for_deployment_parity():
 
     assert "`site/` matches all thirteen tracked Sites source files byte-for-byte" not in document
     assert "thirteen-file Site parity" not in document
-    assert "Repository/hosted equality | **VERIFIED for the thirteen `site/` source files**" in document
+    assert "Historical repository/source equality | **VERIFIED for the thirteen `site/` source files**" in document
+    assert "Current `main` / version 18 equality | **NOT EQUAL**" in document
     assert "`appgprj_6aaa2be9d9288191a15a9c1d743af0b3`" in document
-    assert "appgver_706b9bc005cc8191aec7e17bd69448b9" in document
-    assert "`appgdep_6aac008f26ec81919669f61df409945d`" in document
-    assert "`sha256:e0a9b9b76a6bd85d6479bf4765d661191780139a4adee05e67459bfb104c1227`" in document
-    assert "deployment reached terminal `succeeded`" in document
+    assert "appgver_deed1835c49481918517a5e501536f99" in document
+    assert "`appgdep_6aac954de9e88191aa6571bb40dde8b0` succeeded" in document
+    assert "`sha256:60f60a5cbe4c8ca9c299c198af0996a32fb14a09e426213c599b527744b5fbf8`" in document
+    assert "`9d751a2aa97d313534493e9ef9f1ef8e7136f0a3`" in document
+    assert "`main@ceef9817c0cd9de5f9253683603feaa5dc11fcf8`" in document
+    assert "`main@440fc176238f6f4c5e4dbb7964f76c30a95bf39d`" in document
     assert "site/dist/index.html" in document
     assert "site/dist/styles.css" in document
-    assert "does **not** establish runtime interoperability" in document
-    assert "do not become a Sites deployment" in normalized
+    assert "does **not** establish runtime interoperability" in normalized
+    assert "later repository edits became a Sites deployment" in normalized
 
 
 def test_ubuntu_zeek_recipe_pins_the_verified_release_identity():
