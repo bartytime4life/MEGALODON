@@ -1,67 +1,61 @@
 # Roadmap and Current Limits
 
-MEGALODON is a defensive MVP, not a finished enterprise IDS/IPS.
+MEGALODON is a defensive MVP, not a finished enterprise IDS/IPS. Implemented
+code, an open or closed issue, a passing test, and operational acceptance are
+different evidence states.
 
-See the [unified roadmap reconciliation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/unified-roadmap-currentness.md)
-for source-document dispositions, delivered slices and remaining acceptance
-work. Proposed AI/automation stages and licensing recommendations are not
-implemented capabilities or owner decisions.
+## Delivered, with boundaries
 
-## Current limits
+- The loopback HUD now separates Home, Traffic, Findings, Apps, Reports, Evidence, and Help; historical traffic and local JSON reports remain bounded stored-data projections.
+- SQLite schema-v3 migration plus explicit backup and restore-to-new-destination commands exist; activation, retention, native failure injection, and Windows ACL acceptance remain separate.
+- Suricata has closed raw-EVE conversion, envelope validation, durable-consumer, reconciliation, and read-only dashboard projection APIs; there is no sensor, watcher, background service, CLI ingestion workflow, or IPS authority.
+- The offline anomaly pipeline can preserve deterministic candidates alongside an optional bounded Qwen explanation; it is descriptive and uncalibrated.
+- Static integration, readiness, posture, STIX, ECS/OCSF, alert-lifecycle, automation-schedule, and reference/evaluation slices remain limited to their documented contracts.
 
-The project does not currently provide an authenticated remote UI, arbitrary rule authoring, threat-feed or SIEM/SOAR integration, distributed sensor management, automatic retention, production rollback orchestration, active scheduler, unattended response, a Suricata sensor/raw-EVE watcher, or a reconciliation CLI/background worker. It does provide explicit operator-invoked APIs to transact one validated immutable Suricata publication and read-only reconcile an unknown commit.
+## Current product limits
 
-Operational JSONL/stdin replay and optional Scapy capture require an explicit
-positive accepted-event `--max-events` ceiling from 1 through 10,000,000. The
-built-in sample source may omit it because the repository owns its finite
-generator. JSONL iterators also refuse the first blank/comment line beyond a
-fixed 65,536-line skipped-input budget, bounding physical line work after reads
-return. Every JSONL physical line, including blank and comment lines, also counts
-toward a fixed 256 MiB aggregate input budget; crossing it fails before parsing
-or reading the suffix. An optional Linux `--max-seconds` value from 1 through 86,400 bounds
-source acquisition, iteration, processing, and cleanup with a fixed failed
-receipt; unsupported runtimes, unavailable `/proc/self/task`, signal-mask, or
-pending-signal inspection, blocked or pre-existing pending `SIGALRM`, and processes with more than one OS thread refuse
-the option before configuration or I/O because the timer/handler are process-wide;
-the mask and OS-thread count are rechecked inside protected setup before handler
-or timer installation. A post-arm pending alarm is dispatched under the deadline
-handler as `CaptureError` if the new deadline already expired. Existing and
-concurrently armed process timers are preserved and refused while `SIGALRM` is
-blocked across the handler/timer swap, and prior-handler restoration remains
-conditional on confirmed timer inactivity when cancellation raises. Teardown
-blocks `SIGALRM` before cancellation and keeps the deadline handler until the
-original mask is restored; deadline dispatch at cleanup-mask entry is re-raised
-after teardown completes. Dispatch as setup unmasking returns re-enters protected
-teardown, and dispatch during post-cancel timer inspection is preserved until
-the remaining cleanup decisions complete. Threaded
-Scapy capture refuses the deadline.
-Interrupted setup masking restores the observed pre-call mask, and an interrupted
-protected pending-signal inspection restores that mask. An interrupted handler
-installation is restored. An interrupted arming call is conservatively
-treated as live until teardown cancellation; interrupted competing-timer
-restoration is read back so a confirmed competing timer is preserved, while an
-incomplete swap cancels the deadline and restores the displaced timer.
-Without that option, blocking work remains unbounded. The deadline does not
-interrupt kernel-level uninterruptible sleep, supply a Windows control, or
-establish installed-capture loss handling, sustained native capacity, or
-continuous-monitoring acceptance.
+The project does not currently provide:
 
-The bundled IANA reference data is not service discovery or a vulnerability feed. The synthetic corpus verifies deterministic boundary behavior; it is not representative production traffic, a product benchmark, or proof an alert is malicious.
+- an authenticated remote UI or distributed sensor management;
+- arbitrary rule authoring, threat-feed retrieval, TAXII polling, or SIEM/SOAR delivery;
+- an active scheduler, unattended analysis, notification service, or automatic response;
+- live firewall application, quarantine, remediation, or rollback orchestration;
+- a continuous Suricata EVE watcher, sensor-health monitor, or retention worker;
+- representative detection accuracy, false-positive, installed-sensor, or long-running capacity evidence;
+- accepted native Windows parity or an accepted operator-owned Qwen/Ollama deployment.
 
-Native Windows remains an evaluation path until its ACL, SQLite, process-cleanup, and browser acceptance work is proven. Installed-tool compatibility and browser/operator acceptance are distinct evidence classes.
+Operational JSONL and Scapy inputs require finite event limits. Optional Linux
+elapsed deadlines have explicit single-thread and signal-state restrictions and
+cannot interrupt kernel-level uninterruptible sleep. The bundled IANA data is
+registration context, and the synthetic corpus is deterministic regression
+evidence, not a production benchmark.
 
-## Order of operations
+## Active tracking at this refresh
 
-At the 2026-09-17 readback, #269's offline STIX reader, #270's currentness schema
-integration, and #271's SQLite recovery contract are merged. Recovery has no
-runtime command. Issues #254–#261 remain open; the absence of open PRs is not
-acceptance evidence.
+The following issues were still open on 2026-09-19. Their issue state does not
+override the code and acceptance boundaries above.
 
-1. Obtain maintainer disposition for #254's currentness evidence.
-2. Preserve #271's delivered recovery contract and separately review runtime recovery under #256.
-3. Resolve the owner's license decision under #255.
-4. Define producer and detector qualification under #257–#259.
-5. Prepare #260's Ubuntu release evidence after its recovery and licensing prerequisites.
-6. Keep #261's provider containment and native/operational acceptance separate.
+| Issue | Remaining decision or evidence theme |
+| --- | --- |
+| [#254](https://github.com/bartytime4life/MEGALODON/issues/254) | Machine-readable repository currentness and maintainer disposition |
+| [#255](https://github.com/bartytime4life/MEGALODON/issues/255) | Repository license and release metadata decision |
+| [#256](https://github.com/bartytime4life/MEGALODON/issues/256) | Native and operator recovery evidence beyond the delivered contract/runtime |
+| [#257](https://github.com/bartytime4life/MEGALODON/issues/257) | Raw Suricata EVE converter qualification beyond the delivered bounded API |
+| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) | Zeek profile qualification and correlation design |
+| [#259](https://github.com/bartytime4life/MEGALODON/issues/259) | Detector registry and evidence-quality evaluation |
+| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) | Ubuntu 24.04 release-candidate evidence |
+| [#261](https://github.com/bartytime4life/MEGALODON/issues/261) | Operator-owned Ollama/Qwen containment and acceptance |
 
-Review the [open control register](../../SECURITY_REVIEW.md#open-control-register) and [development status](../../README.md#development-status-and-remaining-evidence) before treating an implemented slice as operational authorization.
+## Evidence still needed before broader claims
+
+1. Select the license and keep release metadata consistent.
+2. Produce authorized native recovery, lock, interruption, exhaustion, and long-running evidence.
+3. Qualify installed producers and privacy-reviewed representative data without turning a catalog entry into a connection claim.
+4. Version and measure detector quality before operational interpretation.
+5. Complete Ubuntu release and native Windows evidence separately.
+6. Verify the exact local model artifact and provider containment before calling Qwen an accepted capability.
+
+Review the [open control register](../../SECURITY_REVIEW.md#open-control-register)
+and the [development status](../../README.md#development-status-and-remaining-evidence)
+before making release, deployment, continuous-monitoring, or production-readiness
+claims.
