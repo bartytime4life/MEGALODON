@@ -126,6 +126,123 @@ def test_existing_destination_is_never_overwritten(
     assert destination.read_bytes() == before
 
 
+@pytest.mark.parametrize("operation", ("backup", "restore"))
+@pytest.mark.parametrize("phase", ("anchor", "connect", "validate", "copy"))
+def test_destination_replacement_at_creation_boundaries(
+    private_directory: Path, monkeypatch, operation: str, phase: str
+) -> None:
+    """Move real files at fixed boundaries; never rely on a scheduling race."""
+    if operation == "restore":
+        source, manifest, backup = successful_backup(private_directory)
+    else:
+        source = create_store(private_directory)
+        manifest = private_directory / "manifest.json"
+    source_before = source.read_bytes()
+    destination = private_directory / "candidate.db"
+    displaced = private_directory / "displaced.db"
+    replacement = b"operator-owned-replacement"
+    connections = []
+    descriptors = []
+    original_anchor = recovery._anchored_database_path
+    original_connect = recovery.sqlite3.connect
+    original_validate = recovery._validate_connection_path
+    original_copy = recovery._copy_online
+
+    def replace():
+        destination.rename(displaced)
+        destination.write_bytes(replacement)
+        destination.chmod(0o600)
+
+    def anchor(descriptor, path, prefix):
+        if prefix == "RECOVERY_DESTINATION":
+            descriptors.append(descriptor)
+            if phase == "anchor":
+                replace()
+        return original_anchor(descriptor, path, prefix)
+
+    def connect(database_uri, *args, **kwargs):
+        connection = original_connect(database_uri, *args, **kwargs)
+        if "mode=rw&" in str(database_uri):
+            connections.append(connection)
+            if phase == "connect":
+                replace()
+        return connection
+
+    def validate(connection, path, prefix):
+        if prefix == "RECOVERY_DESTINATION" and phase == "validate":
+            replace()
+        return original_validate(connection, path, prefix)
+
+    def copy(operation, source_db, destination_db):
+        if phase == "copy":
+            replace()
+        return original_copy(operation, source_db, destination_db)
+
+    monkeypatch.setattr(recovery, "_anchored_database_path", anchor)
+    monkeypatch.setattr(recovery.sqlite3, "connect", connect)
+    monkeypatch.setattr(recovery, "_validate_connection_path", validate)
+    monkeypatch.setattr(recovery, "_copy_online", copy)
+    if operation == "backup":
+        receipt = backup_database(source, destination, manifest, operation_id="binding-backup")
+    else:
+        receipt = restore_database(source, manifest, destination,
+            artifact_sha256=str(backup["artifact_sha256"]), operation_id="binding-restore")
+
+    assert_contract_receipt(receipt)
+    assert receipt["reason"] == "COMPLETION_UNCERTAIN"
+    assert receipt["completion_uncertain"] is True
+    assert receipt["destination_created"] is True
+    assert receipt["destination_state"] == "unknown"
+    assert destination.read_bytes() == replacement
+    assert source.read_bytes() == source_before
+    assert displaced.exists()
+    assert manifest.exists() is (operation == "restore")
+    for descriptor in descriptors:
+        with pytest.raises(OSError):
+            os.fstat(descriptor)
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connection.execute("SELECT 1")
+
+
+@pytest.mark.parametrize("operation", ("backup", "restore"))
+@pytest.mark.parametrize("error,reason", ((OSError, "IO_ERROR"),
+                                         (KeyboardInterrupt, "INTERRUPTED_AFTER_CREATE")))
+def test_creation_failure_with_intact_binding_closes_connection(
+    private_directory: Path, monkeypatch, operation: str, error, reason: str
+) -> None:
+    if operation == "restore":
+        source, manifest, backup = successful_backup(private_directory)
+    else:
+        source = create_store(private_directory)
+        manifest = private_directory / "manifest.json"
+    destination = private_directory / "candidate.db"
+    connections = []
+    original_validate = recovery._validate_connection_path
+
+    def fail_validation(connection, path, prefix):
+        original_validate(connection, path, prefix)
+        if prefix == "RECOVERY_DESTINATION":
+            connections.append(connection)
+            raise error("synthetic creation failure")
+
+    monkeypatch.setattr(recovery, "_validate_connection_path", fail_validation)
+    if operation == "backup":
+        receipt = backup_database(source, destination, manifest, operation_id="failed-backup")
+    else:
+        receipt = restore_database(source, manifest, destination,
+            artifact_sha256=str(backup["artifact_sha256"]), operation_id="failed-restore")
+    assert_contract_receipt(receipt)
+    assert receipt["reason"] == reason
+    assert receipt["completion_uncertain"] is False
+    assert receipt["destination_state"] == "incomplete_preserved"
+    assert destination.exists()
+    assert manifest.exists() is (operation == "restore")
+    assert len(connections) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        connections[0].execute("SELECT 1")
+
+
 def test_restore_in_place_is_refused_before_creation(private_directory: Path) -> None:
     artifact, manifest, backup = successful_backup(private_directory)
     before = artifact.read_bytes()

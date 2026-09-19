@@ -36,6 +36,25 @@ ancestry and descriptor/path identity, counts busy/lock retries, and retains
 the same closed terminal-receipt vocabulary. It adds no dashboard control,
 timer, watcher, service, or scheduler.
 
+The destination binding is retained immediately after exclusive creation,
+including while the descriptor path and SQLite connection are being validated.
+If its path or parent no longer matches the held descriptors, the terminal
+receipt is `COMPLETION_UNCERTAIN` with destination state `unknown`, even when
+the immediate failure was an I/O error or interruption. With an intact binding,
+those failures retain their specific reason and `incomplete_preserved` state.
+Failed creation closes the held connection and file descriptor; the caller
+retains responsibility for its directory descriptor. Replacement files and
+incomplete artifacts are preserved, never deleted or overwritten.
+
+Issue [#291](https://github.com/bartytime4life/MEGALODON/issues/291) records the
+earlier native backup failure at the #290 checkpoint. Fixed-boundary regression
+cases now move real files before descriptor anchoring, after connection opening,
+during connection-path validation, and before copying, for both backup and
+restore. They also check connection cleanup after ordinary I/O failures and
+interruptions. These synthetic tests explain the earlier classification gap;
+they do not replace owner review, a native operator recovery drill, or release
+acceptance, and do not erase the original failed receipt.
+
 In the original standalone engine, `MAX_BUSY_RETRIES` remains a policy constant:
 CPython's `sqlite3` module does not expose a per-step busy-retry count, so
 that API bounds the whole operation by the monotonic deadline
