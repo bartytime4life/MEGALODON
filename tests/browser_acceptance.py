@@ -227,6 +227,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
                counts["advisory"] == 1)
         await page.locator("#workspace-tab-analysis").click()
         await page.locator(".room-audit-history > summary").click()
+        await page.locator("#triage-tools > summary").click()
         await page.locator("#pause-button").click()
         await expect(page.locator("#pause-button")).to_have_attribute("aria-pressed", "true")
         passed("real HTTP bootstrap " + ("nonempty" if nonempty else "empty"), response.status == 200)
