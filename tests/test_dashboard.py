@@ -1014,7 +1014,7 @@ process.stdin.on('end', async () => {
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, fakeNode(id)); return nodes.get(id); },
       createElement(tag) { return fakeNode(tag); }, createElementNS(ns,tag) { return fakeNode(tag); }, addEventListener() {}};
     class FakeAbortController { constructor() { this.signal = {}; } abort() {} }
-    let failRequests = false, eventTime = '2026-09-10T00:00:00Z', eventRule = 'TEST_RULE';
+    let failRequests = false, noQualifiedTraffic = false, eventTime = '2026-09-10T00:00:00Z', eventRule = 'TEST_RULE';
     const response = value => {let sent=false; const bytes=new TextEncoder().encode(JSON.stringify(value)); return {ok:true,json:async()=>value,body:{getReader:()=>({read:async()=>sent?{done:true}:{done:false,value:(sent=true,bytes)},cancel:async()=>{}})}};};
     const trafficSnapshot = stamp => ({
       schema: 'dashboard-traffic-v1', status: 'available',
@@ -1039,7 +1039,10 @@ process.stdin.on('end', async () => {
           severity: 'HIGH', src_ip: '192.0.2.10', message: 'Synthetic status test'}]));
       }
       if (path === '/api/traffic') {
-        return Promise.resolve(response(trafficSnapshot(eventTime)));
+        const traffic = trafficSnapshot(eventTime);
+        if (noQualifiedTraffic) Object.assign(traffic, {status: 'unavailable', events: [],
+          findings: [], window: {start: null, end: null}, excluded_event_candidates: 3});
+        return Promise.resolve(response(traffic));
       }
       return Promise.reject(new Error(`unexpected path: ${path}`));
     }
@@ -1065,6 +1068,16 @@ process.stdin.on('end', async () => {
     const currentStatusWrites = textWrites.get('snapshot-status');
     await vm.runInContext('refresh(false)', context);
     if (textWrites.get('snapshot-status') !== currentStatusWrites) throw new Error('routine refresh rewrote the live status region');
+    noQualifiedTraffic = true;
+    await vm.runInContext('refresh(false)', context);
+    if (nodes.get('traffic-bytes').textContent !== '—' || nodes.get('traffic-events').textContent !== '—') throw new Error('unqualified traffic became zero measurements');
+    if (vm.runInContext('state.traffic', context) !== null) throw new Error('unqualified traffic remained reportable');
+    if (nodes.get('connection').textContent !== 'Dashboard API · reachable') throw new Error('unavailable traffic hid a reachable audit API');
+    vm.runInContext('updateTrafficFreshness()', context);
+    if (nodes.get('traffic-freshness').textContent !== 'Unavailable') throw new Error('receipt refresh overwrote unavailable traffic');
+    noQualifiedTraffic = false;
+    await vm.runInContext('refresh(false)', context);
+    if (nodes.get('traffic-bytes').textContent !== '64 B') throw new Error('qualified traffic did not recover');
     vm.runInContext("state.activeBin = 0; byId('filter-rule').value = 'TEST_RULE'", context);
     eventTime = '2026-09-10T01:00:00Z';
     eventRule = 'NEW_RULE';

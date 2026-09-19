@@ -37,7 +37,8 @@ server an Internet-facing production service.
 | `/api/config` | None | Read-only flag, refresh interval, event limit, offline-selection availability |
 | `/api/setup` | None | Startup source state plus optional executable-presence and process-name snapshots |
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
-| `/api/traffic` | None | Newest 240 stored event times, protocols and byte counts plus bounded aggregates; no endpoints or payloads |
+| `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
+| `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
 | `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
@@ -71,13 +72,30 @@ and ingestion receipts remain unavailable. Existing unsafe/invalid stores refuse
 startup, and ordinary `dashboard` retains its strict missing-store behavior.
 No database, sample record, migration, sensor, model request or service is created.
 
-`/api/traffic` is part of the periodic telemetry refresh. Its fixed read selects
-only `observed_at`, `protocol`, and `byte_count` from at most the newest 240
-stored events. The response includes total sampled bytes and at most eight
-protocol aggregates; excess protocol names are combined as `OTHER`. Source and
-destination addresses, ports, interfaces, flags, DNS lengths, event identifiers,
-payloads, and metadata are excluded. The chart therefore describes stored
-metadata only, not wire speed, capture continuity, service health, or coverage.
+`/api/traffic` is part of the periodic telemetry refresh. The current
+`dashboard-traffic-v1` contract is defined in
+[control-room-contract.md](control-room-contract.md). One read-only snapshot
+selects at most 500 event candidates and 200 finding candidates, excludes
+sample/unlinked/legacy/reconciliation-required events, and returns qualified
+event IDs, UTC times, endpoints, ports, flags, reported byte counts, source/run
+state, and linked fixed-rule findings. It excludes payloads, arbitrary metadata,
+messages, interfaces, paths and model output. Responses are capped at 256 KiB;
+byte counts are decimal strings to preserve SQLite integers in JavaScript.
+
+A successful empty or sample-only projection returns HTTP 200 with
+`status=unavailable`; a missing or failed store read returns a complete
+unavailable envelope with HTTP 503. Neither becomes measured zero traffic.
+The Evidence chart clears its measurements and report input on a validated
+unavailable projection, while preserving reachable audit counters separately.
+Transport or contract failure preserves the prior valid view as stale.
+
+`/api/traffic-history` accepts an inclusive ordered UTC range ending no later
+than one minute into the future, at most 31 days long, and an optional canonical
+positive safe-integer `before` cursor. Its `dashboard-traffic-history-v1`
+envelope discloses candidate count and the next cursor, even for excluded-only
+pages. Invalid queries return 400; unavailable reads return 503. Browser requests
+cannot choose a store, start ingestion or mutate evidence. Saved metadata is not
+wire speed, capture continuity, service health or whole-network coverage.
 
 Report creation remains browser-local. The overview, detection, and ingestion
 presets use only already validated in-memory projections. JSON/CSV downloads,

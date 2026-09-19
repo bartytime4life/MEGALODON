@@ -1,6 +1,50 @@
 # Defense Console source alignment
 
-## Current readback and comparison scope
+## Current repair — Console v20, local telemetry candidate
+
+Repository baseline: `main@3bdcfb96a155d5dc4d7009e75f3b3c0986e5590b`.
+The bounded repair is on `agent/telemetry-site-errors-20260919`; the associated
+draft PR records its exact head. It is not a merge or local installation.
+
+**VERIFIED:** a new regression failed on the baseline because a valid HTTP 200
+`status=unavailable` projection (including sample-only stores) rendered `0 B`
+and remained reportable in the Evidence chart. The repaired client keeps
+unavailable measurements and report input cleared, preserves reachable audit
+counters independently, and recovers when qualified traffic returns. An
+ingestion-receipt refresh cannot overwrite an unavailable/stale traffic badge.
+The HTTP and operator documents now describe the actual 500-event/200-finding
+projection and bounded history route instead of the superseded 240-row API.
+
+The Site repair restores the brand's Home action, focuses headings after view
+changes, updates saved-console filtering after bookmark changes, replaces the
+stale setup-branch link and source pin, and explains that a phone's loopback
+address cannot open the HUD on a Linux computer. No hosted telemetry connection
+is added.
+
+| Identity | Verified value |
+| --- | --- |
+| Site | [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) |
+| Version | 20 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_ee1f6834152481918ebddbaf243f56e8` |
+| Sites source | `4157a6768180a34ac46e884ccc1eb3a787df7ef7` |
+| Server archive | 10 files, 286,720 bytes; `sha256:4b9162e3b217e2886ade01a62d840f1bb8634d359531703be7d9caac316b3df3` |
+| Deployment | `appgdep_6aaeeb1f6f8c819195645186d04b469e`, succeeded at `2026-09-19T20:05:56.716695+00:00` |
+| Audience | Existing owner-only project, slug and URL; private deployment operation succeeded |
+| Candidate source equality | All thirteen tracked `site/` files match the pushed Sites source byte-for-byte |
+| Main equality | Not claimed: the repair remains a draft candidate |
+| Rollback reference | v19, Sites source `3f21ee3d0a6ee83d54e8f791d6b47fa3612ecf46` |
+
+Local Node tests, focused Python/JavaScript behavior and HTTP tests, syntax,
+compilation, asset references, canonical asset parity, repository hygiene and
+build-input inventory passed. Exact-head hosted checks and review belong to the
+PR. Rendered-browser acceptance remains unverified: this static Site has no
+compatible managed preview. Passing DOM-stub tests are not visual acceptance.
+No sensor, model, firewall, host setup, real metadata ingestion or release was
+performed. Publishing this reference Site does not install the local fix.
+
+## Historical v18 audit — readback and comparison scope
+
+The remainder preserves the earlier v18 audit and its observation basis.
+Its uses of "current" refer to that historical checkpoint, not the repair above.
 
 Readback captured on 2026-09-19 against repository
 `main@440fc176238f6f4c5e4dbb7964f76c30a95bf39d` and the existing Sites project.
@@ -88,7 +132,7 @@ Version 19 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_82f8538dddfc819
 — succeeded at `2026-09-19T14:45:20.189204Z` from Sites source
 `3f21ee3d0a6ee83d54e8f791d6b47fa3612ecf46`; its ten-file archive is recorded
 as `sha256:ca77a9b793361e4153e3f9a0f40f9e1a74546f3d406d83bcec0ceb17fd74e2e1`.
-That successor is the current publication, but its whole-source relationship to
+That successor was the publication at this checkpoint, but its whole-source relationship to
 later repository `main` is outside this version 18 equality receipt.
 
 Version 17/source `50d21d668ae5d86301040aa40c7b37dfb1e11d81`

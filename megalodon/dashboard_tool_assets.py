@@ -350,13 +350,13 @@ const MegalodonControls = (() => {
     saveButton.addEventListener('click', () => {
       try {
         const persistent = save(id, input.value.trim()); repaint();
-        if (typeof options.changed === 'function') options.changed(id);
         feedback.textContent = persistent ? 'Link saved in this browser. No connection was tested.' : 'Link kept for this page only; browser storage is unavailable.';
         editor.open = false;
         (open.hidden ? editor.querySelector('summary') : open).focus();
+        if (typeof options.changed === 'function') options.changed(id);
       } catch (error) { feedback.textContent = error.message; input.focus(); }
     });
-    removeButton.addEventListener('click', () => { save(id, ''); repaint(); if (typeof options.changed === 'function') options.changed(id); feedback.textContent = 'Console link removed.'; input.focus(); });
+    removeButton.addEventListener('click', () => { save(id, ''); repaint(); feedback.textContent = 'Console link removed.'; input.focus(); if (typeof options.changed === 'function') options.changed(id); });
     editor.append(label, saveButton, removeButton, node('p', 'Saved only in this browser and origin. Do not paste credentials. Opens the actual companion app in a new tab; it is not a data connection.', 'companion-help'));
     root.append(open, destination, editor);
     const guide = node('a', 'Official setup guide ↗');

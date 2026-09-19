@@ -196,17 +196,31 @@ test('exchange map separates the implemented offline STIX reader from inert SIEM
 test('whole application initializes and navigates without a feed or browser network API', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   class Element {
-    constructor() { this.children=[]; this.dataset={}; this.textContent=''; this.value=''; this.classList={toggle(){}}; }
-    setAttribute() {} removeAttribute() {} addEventListener() {} focus() {}
+    constructor() { this.children=[]; this.dataset={}; this.textContent=''; this.value=''; this.listeners={}; this.classList={toggle(){}}; }
+    setAttribute() {} removeAttribute() {} addEventListener(name, action) { this.listeners[name]=action; } focus() { document.activeElement=this; }
     replaceChildren(...children) { this.children=children; } append(...children) { this.children.push(...children); }
     querySelector() { return new Element(); }
   }
   const nodes=new Map();
   const document={querySelector(s){ if(!nodes.has(s)) nodes.set(s,new Element()); return nodes.get(s); }, querySelectorAll(){ return []; }, createElement(){ return new Element(); }};
-  const context={document, window:{matchMedia(){return {matches:true};},scrollTo(){}}, localStorage:{getItem(){return null;}}, Date, console};
+  const context={document, URL, window:{matchMedia(){return {matches:true};},scrollTo(){}}, localStorage:{getItem(){return null;},setItem(){}}, Date, console};
   vm.createContext(context);
   for(const path of ['../dist/lifecycle.js','../dist/controls.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
-  for(const view of ['hud','evidence','integrations','missions','boundaries']) vm.runInContext(`switchView('${view}')`,context);
+  for(const view of ['hud','evidence','integrations','missions','boundaries']) {
+    vm.runInContext(`switchView('${view}')`,context);
+    assert.equal(document.activeElement,nodes.get(`[data-view-panel="${view}"] h1`));
+  }
+  let prevented=false;
+  nodes.get('.brand').listeners.click({preventDefault(){prevented=true;}});
+  assert.equal(prevented,true);
+  assert.equal(vm.runInContext('state.activeView',context),'hud');
+  vm.runInContext("MegalodonControls.save('nagios','http://127.0.0.1:8080/'); state.toolFilter='saved'; renderIntegrationGrid(); renderToolInspector();",context);
+  assert.equal(nodes.get('#tool-result-count').textContent,'1 of 14 tools shown');
+  const all=node=>[node,...node.children.flatMap(all)];
+  all(nodes.get('#shared-tool-controls').children.at(-1)).find(node=>node.textContent==='Remove link').listeners.click();
+  assert.equal(nodes.get('#tool-result-count').textContent,'0 of 14 tools shown');
+  assert.equal(nodes.get('#tool-inspector').hidden,true);
+  assert.equal(document.activeElement,nodes.get('#tool-quick-filter'));
   for(const id of Object.keys(lifecycleCommands)) vm.runInContext(`state.selectedTool='${id}'; renderToolInspector()`,context);
   assert.match(nodes.get('#feed-count').textContent, /No network records/);
   assert.match(nodes.get('#tool-inspector').innerHTML, /Manual presence note/);
