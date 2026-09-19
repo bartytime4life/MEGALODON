@@ -454,6 +454,29 @@ def _assert_database_identity(database: _Database, *, source: bool) -> None:
         ) from exc
 
 
+def _classify_destination_binding(
+    failure: _RecoveryFailure, database: _Database | None
+) -> _RecoveryFailure:
+    """Give a broken held destination binding precedence over a lower-level error."""
+
+    if database is None:
+        return failure
+    path_matches = _path_matches_descriptor(database.path, database.descriptor)
+    directory_matches = (
+        database.directory_descriptor is None
+        or _path_matches_descriptor(
+            database.path.parent, database.directory_descriptor
+        )
+    )
+    if path_matches and directory_matches:
+        return failure
+    return _RecoveryFailure(
+        "COMPLETION_UNCERTAIN",
+        source_state="admitted",
+        completion_uncertain=True,
+    )
+
+
 _T = TypeVar("_T")
 
 
@@ -986,24 +1009,31 @@ def backup_database(
         _assert_database_identity(destination_database, source=False)
         return _success_receipt(operation, source_snapshot, destination_snapshot)
     except KeyboardInterrupt:
-        return _failure_receipt(
-            operation,
-            _RecoveryFailure(
-                "INTERRUPTED_AFTER_CREATE"
-                if operation.destination_created
-                else "INTERRUPTED_BEFORE_CREATE",
-                source_state="admitted" if source_database is not None else "not_admitted",
+        failure = _RecoveryFailure(
+            "INTERRUPTED_AFTER_CREATE"
+            if operation.destination_created
+            else "INTERRUPTED_BEFORE_CREATE",
+            source_state=(
+                "admitted" if source_database is not None else "not_admitted"
             ),
         )
-    except _RecoveryFailure as failure:
-        return _failure_receipt(operation, failure)
-    except Exception:
         return _failure_receipt(
             operation,
-            _RecoveryFailure(
-                "IO_ERROR",
-                source_state="admitted" if source_database else "not_admitted",
-            ),
+            _classify_destination_binding(failure, destination_database),
+        )
+    except _RecoveryFailure as failure:
+        return _failure_receipt(
+            operation,
+            _classify_destination_binding(failure, destination_database),
+        )
+    except Exception:
+        failure = _RecoveryFailure(
+            "IO_ERROR",
+            source_state="admitted" if source_database else "not_admitted",
+        )
+        return _failure_receipt(
+            operation,
+            _classify_destination_binding(failure, destination_database),
         )
     finally:
         for database in (destination_database, source_database):
@@ -1106,24 +1136,31 @@ def restore_database(
         _assert_database_identity(destination_database, source=False)
         return _success_receipt(operation, source_snapshot, destination_snapshot)
     except KeyboardInterrupt:
-        return _failure_receipt(
-            operation,
-            _RecoveryFailure(
-                "INTERRUPTED_AFTER_CREATE"
-                if operation.destination_created
-                else "INTERRUPTED_BEFORE_CREATE",
-                source_state="admitted" if source_database is not None else "not_admitted",
+        failure = _RecoveryFailure(
+            "INTERRUPTED_AFTER_CREATE"
+            if operation.destination_created
+            else "INTERRUPTED_BEFORE_CREATE",
+            source_state=(
+                "admitted" if source_database is not None else "not_admitted"
             ),
         )
-    except _RecoveryFailure as failure:
-        return _failure_receipt(operation, failure)
-    except Exception:
         return _failure_receipt(
             operation,
-            _RecoveryFailure(
-                "IO_ERROR",
-                source_state="admitted" if source_database else "not_admitted",
-            ),
+            _classify_destination_binding(failure, destination_database),
+        )
+    except _RecoveryFailure as failure:
+        return _failure_receipt(
+            operation,
+            _classify_destination_binding(failure, destination_database),
+        )
+    except Exception:
+        failure = _RecoveryFailure(
+            "IO_ERROR",
+            source_state="admitted" if source_database else "not_admitted",
+        )
+        return _failure_receipt(
+            operation,
+            _classify_destination_binding(failure, destination_database),
         )
     finally:
         for database in (destination_database, source_database):
