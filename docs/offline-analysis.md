@@ -259,6 +259,18 @@ unsupported protocols, and oversized lines fail. Decimal time/duration parsing
 avoids binary-float timestamp conversion. Durations must be below seven days;
 packet counters are below 2^31 and per-direction IP bytes below 2^40.
 
+For ICMP flows, `id.orig_p` and `id.resp_p` mean message type and code;
+both must be octets (0–255), not transport ports. If `ip_proto` is supplied,
+it must agree with the normalized address family: 1 for IPv4 ICMP and 58 for
+IPv6 ICMP. TCP and UDP declarations remain 6 and 17 for either family.
+Absent/unset `ip_proto` remains accepted, without inventing producer evidence.
+The v1 flow/report protocol label remains `ICMP` for both families; these
+values never enter the TCP/UDP destination-port baseline or port candidates.
+The semantics follow the [Zeek 8.0.10 connection field reference](https://docs.zeek.org/en/v8.0.10/scripts/base/protocols/conn/main.zeek.html).
+This is an importer consistency check, not installed-Zeek qualification or
+adoption of that release. Contradictory input fails the whole analysis, retaining
+only a failed manifest rather than publishing the preceding valid records.
+
 TSV requires the standard tab/comma separators, `(empty)` and `-` markers,
 `#path conn`, matching `#fields`/`#types`, and a closing `#close` record. Schema
 resets, duplicate headers, data after close, and incomplete logs fail. This is

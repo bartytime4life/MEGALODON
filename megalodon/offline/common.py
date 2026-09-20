@@ -134,8 +134,11 @@ class FlowRecord:
             raise OfflineError('ADDRESS_FAMILY_MISMATCH')
         if self.protocol not in {'TCP', 'UDP', 'ICMP'} or self.conn_state not in STATES:
             raise OfflineError('INVALID_FLOW')
-        uint(self.src_port, 65535)
-        uint(self.dst_port, 65535)
+        # Zeek encodes ICMP message type/code in these two fields. They are
+        # octets, not TCP/UDP port numbers, including when ip_proto is absent.
+        port_maximum = 255 if self.protocol == 'ICMP' else 65535
+        uint(self.src_port, port_maximum)
+        uint(self.dst_port, port_maximum)
         uint(self.orig_packets, 2**31 - 1)
         uint(self.resp_packets, 2**31 - 1)
         uint(self.byte_count, 2**41 - 2)
