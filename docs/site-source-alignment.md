@@ -1,5 +1,20 @@
 # Defense Console source alignment
 
+## Proposed navigation successor — not deployed
+
+This candidate starts from `main@2d87e3f2890cd6c0200bffbde64c4932e0a85dac`.
+It changes `site/dist/app.js` and `site/dist/styles.css` for navigation history,
+session-only reading positions, and visible mobile navigation labels. It also
+extends the existing application behavior test. Candidate source is **not equal
+to the deployed v28 source**. The v28 records below remain historical publication
+evidence, not validation of this patch. No Sites version was saved or deployed.
+
+View URLs contain only a closed view name; scroll positions remain in page
+memory and are cleared on reload. No telemetry, filter text, or tool address is
+added to navigation history. Merge, publication and operator acceptance remain
+separate decisions.
+
+
 ## Successor repository readback — merged v28 mirror
 
 OBSERVED 2026-09-20: `main@d71fbc245729b968701fbeba4f7f679c8db24ac7`

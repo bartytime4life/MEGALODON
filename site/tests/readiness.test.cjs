@@ -224,13 +224,31 @@ test('whole application initializes and navigates without a feed or browser netw
   }
   const nodes=new Map();
   const document={querySelector(s){ if(!nodes.has(s)) nodes.set(s,new Element()); return nodes.get(s); }, querySelectorAll(){ return []; }, createElement(){ return new Element(); }};
-  const context={document, URL, window:{matchMedia(){return {matches:true};},scrollTo(){}}, localStorage:{getItem(){return null;},setItem(){}}, Date, console};
+  const context={document, URL, window:{location:{hash:""},scrollY:0,history:{pushState(a,b,hash){context.window.location.hash=hash;}},addEventListener(){},matchMedia(){return {matches:true};},scrollTo({top}){this.scrollY=top;}}, localStorage:{getItem(){return null;},setItem(){}}, Date, console};
   vm.createContext(context);
   for(const path of ['../dist/lifecycle.js','../dist/controls.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
   for(const view of ['hud','evidence','integrations','missions','boundaries']) {
     vm.runInContext(`switchView('${view}')`,context);
     assert.equal(document.activeElement,nodes.get(`[data-view-panel="${view}"] h1`));
   }
+  context.window.scrollY=320;
+  vm.runInContext("switchView('integrations')",context);
+  assert.equal(context.window.scrollY,0);
+  assert.equal(context.window.location.hash,'#view=integrations');
+  context.window.scrollY=180;
+  vm.runInContext("switchView('boundaries')",context);
+  assert.equal(context.window.scrollY,320);
+  context.window.location.hash='#view=integrations';
+  vm.runInContext('restoreViewFromHash()',context);
+  assert.equal(context.window.scrollY,180);
+  for(const hash of ['#view=__proto__','#view=unknown','#view=integrations]']) {
+    context.window.location.hash=hash;
+    vm.runInContext('restoreViewFromHash()',context);
+    assert.equal(vm.runInContext('state.activeView',context),'integrations');
+  }
+  context.window.history.pushState=()=>{throw Error('disabled');};
+  vm.runInContext("switchView('evidence')",context);
+  assert.equal(vm.runInContext('state.activeView',context),'evidence');
   let prevented=false;
   nodes.get('.brand').listeners.click({preventDefault(){prevented=true;}});
   assert.equal(prevented,true);

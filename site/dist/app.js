@@ -240,8 +240,11 @@ async function importReadinessFile(file) {
   renderIntegrationGrid(); renderToolInspector();
 }
 
-function switchView(name) {
+function switchView(name, updateHistory = true) {
+  if (!['hud', 'evidence', 'integrations', 'missions', 'boundaries'].includes(name)) return;
   if (!$( `[data-view-panel="${name}"]`)) return;
+  if (!state.viewScroll) state.viewScroll = Object.create(null);
+  state.viewScroll[state.activeView] = window.scrollY || 0;
   state.activeView = name;
   $$("[data-view-panel]").forEach((panel) => {
     const active = panel.dataset.viewPanel === name;
@@ -257,7 +260,11 @@ function switchView(name) {
   const heading = $(`[data-view-panel="${name}"] h1`);
   heading.setAttribute('tabindex', '-1');
   heading.focus({preventScroll: true});
-  window.scrollTo({ top: 0, behavior: reducedMotion.matches ? "instant" : "smooth" });
+  window.scrollTo({ top: state.viewScroll[name] || 0, behavior: "instant" });
+  const hash = `#view=${name}`;
+  if (updateHistory && window.location && window.location.hash !== hash && window.history) {
+    try { window.history.pushState(null, '', hash); } catch { /* Keep navigation usable when history is unavailable. */ }
+  }
 }
 
 function renderTelemetryUnavailable() {
@@ -461,3 +468,12 @@ renderWorkflow("dashboard");
 $('#copy-hud-start').addEventListener('click', () => copyText('python -m megalodon hud', $('#copy-hud-start')));
 $('#tool-search').addEventListener('input', () => { state.toolQuery = $('#tool-search').value.slice(0, 120).trim().toLowerCase(); renderIntegrationGrid(); renderToolInspector(); });
 $('#tool-quick-filter').addEventListener('change', () => { state.toolFilter = $('#tool-quick-filter').value; renderIntegrationGrid(); renderToolInspector(); });
+
+function restoreViewFromHash() {
+  const hash = window.location.hash;
+  if (hash === '') switchView('hud', false);
+  else if (/^#view=(hud|evidence|integrations|missions|boundaries)$/.test(hash)) switchView(hash.slice(6), false);
+}
+window.addEventListener('popstate', restoreViewFromHash);
+window.addEventListener('hashchange', restoreViewFromHash);
+restoreViewFromHash();

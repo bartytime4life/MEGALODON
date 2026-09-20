@@ -109,6 +109,8 @@ ROOM_CSS = r"""
 .room-chrome { max-height:45vh; overflow:auto; flex-shrink:1; }
 .workspace-scroll { flex:1; min-height:80px; }
 .section-nav { grid-template-columns:repeat(7,minmax(0,1fr)); margin:0; }
+.section-nav button[aria-selected="true"] { box-shadow:inset 0 -3px 0 #a6f4df; }
+.section-nav button:focus-visible { outline:3px solid #a6f4df; outline-offset:-3px; }
 .room-status { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.6rem; margin:.7rem 0; }
 .room-status > div { background:#102632; border:1px solid #325061; border-radius:10px; padding:.75rem; min-width:0; }
 .room-status span { display:block; font-size:.8rem; color:#b7cbd4; margin-bottom:.4rem; }

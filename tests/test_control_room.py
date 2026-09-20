@@ -164,3 +164,54 @@ console.log('bounded projection, exact integer totals, filters, bad inputs and s
                                                                     'unavailable': unavailable()}),
                             text=True, capture_output=True, timeout=10)
     assert result.returncode == 0, result.stderr
+
+
+def test_workspace_navigation_preserves_context_and_uses_closed_fragments():
+    """Run the shipped navigation with a synthetic DOM, not a copied algorithm."""
+    from megalodon.dashboard_assets import DASHBOARD_JS
+    if not shutil.which('node'):
+        pytest.skip('Node required for navigation behavior')
+    constants = DASHBOARD_JS[DASHBOARD_JS.index('const workspaceIds ='):DASHBOARD_JS.index('const state =')]
+    navigation = DASHBOARD_JS[DASHBOARD_JS.index('function byId('):DASHBOARD_JS.index('function textNode(')]
+    harness = r'''
+const assert = require('node:assert/strict');
+const nodes = new Map(), listeners = {}, history = [];
+const document = {getElementById(id) {
+  if (!nodes.has(id)) nodes.set(id, {scrollTop:0, hidden:false, attrs:{},
+    setAttribute(k,v){this.attrs[k]=v;}, addEventListener(){}, focus(){},
+    scrollIntoView(){this.scrolled=true;}});
+  return nodes.get(id);
+}, addEventListener(){}};
+const window = {location:{hash:''}, addEventListener(k,v){listeners[k]=v;},
+  history:{pushState(a,b,hash){history.push(hash);window.location.hash=hash;}}};
+'''
+    checks = r'''
+const scroll = byId('workspace-content');
+scroll.scrollTop = 210;
+navigateWorkspace('traffic');
+assert.equal(scroll.scrollTop, 0);
+assert.equal(window.location.hash, '#workspace-traffic');
+scroll.scrollTop = 95;
+navigateWorkspace('live');
+assert.equal(scroll.scrollTop, 210);
+navigateWorkspace('live');
+assert.equal(scroll.scrollTop, 210);
+assert.equal(history.length, 2);
+window.location.hash = '#workspace-traffic'; listeners.popstate();
+assert.equal(scroll.scrollTop, 95);
+assert.equal(byId('workspace-tab-traffic').attrs['aria-selected'], 'true');
+assert.equal(byId('workspace-live').hidden, true);
+assert.equal(byId('workspace-traffic').scrolled, undefined);
+for (const id of workspaceIds) assert.equal(workspaceFromHash('#workspace-' + id), id);
+for (const hash of ['#constructor', '#__proto__', '#workspace-unknown', '#'.repeat(129)]) {
+  assert.equal(workspaceFromHash(hash), null);
+}
+window.location.hash = '#reference-title'; listeners.hashchange();
+assert.equal(byId('reference-title').scrolled, true);
+window.history.pushState = () => {throw Error('disabled');};
+navigateWorkspace('help');
+assert.equal(byId('workspace-help').hidden, false);
+'''
+    result = subprocess.run([shutil.which('node'), '-e', harness + constants + navigation + checks],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
