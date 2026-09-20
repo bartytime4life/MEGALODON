@@ -71,21 +71,37 @@ not prove resistance to an arbitrary compromised interpreter or provider.
 
 | Scope | What existing code proves | What remains unproved by these tests |
 | --- | --- | --- |
-| Client transport | At most one bounded request to literal `127.0.0.1:11434`, no DNS/proxy/redirect/fallback path | Ownership and integrity of the process bound to that port; the provider's own outbound access or reachable shared services |
+| Client transport | At most one bounded request to literal `127.0.0.1:11434`, no DNS/proxy/redirect/fallback path. [`megalodon/provider_containment.py`](../megalodon/provider_containment.py) additionally observes, read-only and from outside the provider process, whether anything is listening there, whether it is reachable beyond loopback, and (best-effort, permission-gated) that socket's owning UID/PID/cgroup/net-namespace relative to MEGALODON's own | Authenticated identity of the observed process as genuinely Ollama/Qwen; the provider's own outbound access or reachable shared services; anything a hardened deployment correctly denies this unprivileged observer (see the module's own caveats) |
 | Model identity | Request metadata agrees with the independently pinned registry | Authentic publisher provenance and attestation of the bytes actually loaded by the provider |
 | Resource limits | Concurrency one across threads and local Linux processes sharing the fixed `/tmp` mount, bounded request/response and active request deadline | Separate-mount/container concurrency, model-server resource containment and provider-side clients outside MEGALODON |
 | Package/build inputs | Existing platform wheel hashes, pinned Actions and index-free use of verified wheelhouses | Publisher trust, bootstrap/runner integrity, or OS-enforced direct and transitive egress restrictions |
 | Monitoring and audit | Deterministic, bounded, caller-visible refusal receipts | A durable independent monitor, notification delivery or tamper-proof incident log; this API does not persist receipts |
 
-The smallest next operational gate is a separately authorized, read-only
-acceptance record for the operator's actual local provider: service identity,
-model provenance, reachable direct and transitive destinations, privilege and
-resource boundaries, and observation from outside the provider process. Keep
-missing properties UNKNOWN; do not turn them into a self-attested model field
-or weaken admission to get a successful answer. Host isolation changes and
-live exercises require their own scope and approval.
+`megalodon.provider_containment.qwen_provider_posture()` delivers the
+observation slice of that next operational gate: a bounded, read-only,
+Linux-only snapshot (`/proc/net/tcp{,6}` plus best-effort `/proc/<pid>`
+introspection) reporting whether the fixed loopback destination is actually
+bound, whether it is also reachable beyond loopback, and, only when
+permission allows, the owning process's UID match, executable basename,
+cgroup, and network-namespace relative to MEGALODON's own process. It never
+blocks, gates, or feeds back into whether an advisory request is sent, and it
+proves none of: authenticated provider identity, model provenance, reachable
+direct/transitive destinations beyond the one port inspected, or resource
+containment. Missing or denied properties stay `null`/`"unknown"`/
+`"permission_denied"`; nothing here is turned into a self-attested field or
+used to weaken admission. Host isolation changes, live exercises, and turning
+this observation into an enforced gate all still require their own separate
+scope and approval.
 
 See [the advisory contract](local-model-advisory-contract.md) and
 [dependency policy](dependency-policy.md) for the existing application and
 build boundaries. The separate Alert Workload Lab draft #177 models hypothetical
 alert burden; it is not a monitor, evidence source or containment control.
+
+[`docs/qwen-provider-hardening.md`](qwen-provider-hardening.md) is an operator
+hardening recipe (a systemd unit and a rootless-container profile) for
+running the actual Ollama/Qwen provider process this section describes.
+It is guidance only — MEGALODON does not install, apply, or verify it — and
+its own verification step is exactly the `provider_containment` observation
+above, so an operator can check the recipe actually held rather than trust
+that it did.

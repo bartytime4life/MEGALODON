@@ -1,7 +1,7 @@
 """Synthetic baseline consistency, exact comparison, and no-action boundaries."""
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import builtins
 import json
 import os
@@ -30,6 +30,27 @@ def _batch(pairs=None):
 
 def _value(pairs=None):
     return analysis.baseline(_batch(pairs))
+
+
+def _sized_value(byte_counts):
+    records = tuple(PacketEvent(observed_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                               src_ip='192.0.2.1', dst_ip='198.51.100.1', protocol='TCP',
+                               src_port=1234, dst_port=443, byte_count=size)
+                    for size in byte_counts)
+    batch = Batch('tshark-fields-v1', 'packet', records, len(records), 0,
+                 sum(byte_counts), '4.6.0', 'subprocess_version')
+    return analysis.baseline(batch)
+
+
+def _minute_value(minute_counts):
+    records = tuple(PacketEvent(
+        observed_at=datetime(2026, 9, 1, tzinfo=timezone.utc) + timedelta(minutes=minute, seconds=i),
+        src_ip='192.0.2.1', dst_ip='198.51.100.1', protocol='TCP',
+        src_port=1234, dst_port=443, byte_count=64)
+        for minute, count in minute_counts for i in range(count))
+    batch = Batch('tshark-fields-v1', 'packet', records, len(records), 0,
+                 64 * len(records), '4.6.0', 'subprocess_version')
+    return analysis.baseline(batch)
 
 
 def _set(field, value):
@@ -122,6 +143,47 @@ def test_equal_shares_do_not_turn_volume_growth_into_distribution_change():
     after = _value([('TCP', 8443)])
     changes = compare.compare_baselines(before, after)['changed_destination_ports']
     assert [item['change'] for item in changes] == ['not_in_current', 'not_in_reference']
+
+
+def test_byte_bands_always_report_all_three_categories():
+    before = _sized_value([100] * 5)  # all small
+    after = _sized_value([100, 100, 5000, 5000, 5000])  # mixed small/large
+    result = compare.compare_baselines(before, after)
+    assert result['byte_bands'] == [
+        {'band': 'small', 'reference_count': 5, 'current_count': 2, 'change': 'share_decreased'},
+        {'band': 'medium', 'reference_count': 0, 'current_count': 0, 'change': 'share_unchanged'},
+        {'band': 'large', 'reference_count': 0, 'current_count': 3, 'change': 'not_in_reference'},
+    ]
+
+
+def test_changed_relative_minutes_reports_shifted_minutes_only():
+    # Equal totals (15 -> 15) isolate a pure share shift: minute 2 keeps the
+    # same count and total, so its share is exactly unchanged, while minutes
+    # 0 and 1 trade five records between them.
+    before = _minute_value([(0, 5), (1, 5), (2, 5)])
+    after = _minute_value([(0, 3), (1, 7), (2, 5)])
+    result = compare.compare_baselines(before, after)
+    assert result['changed_relative_minutes'] == [
+        {'minute': 0, 'reference_count': 5, 'current_count': 3, 'change': 'share_decreased'},
+        {'minute': 1, 'reference_count': 5, 'current_count': 7, 'change': 'share_increased'},
+    ]
+    assert result['changed_relative_minutes_count'] == 2
+    assert not any(item['minute'] == 2 for item in result['changed_relative_minutes'])
+
+
+def test_identical_relative_minutes_report_no_changes():
+    before = _minute_value([(0, 4), (1, 4)])
+    after = _minute_value([(0, 8), (1, 8)])  # volume doubles; shares stay equal
+    result = compare.compare_baselines(before, after)
+    assert result['changed_relative_minutes'] == []
+    assert result['changed_relative_minutes_count'] == 0
+
+
+def test_changed_relative_minutes_limit_fails_closed():
+    before = _minute_value([(minute, 1) for minute in range(257)])
+    after = _minute_value([(minute, 1 + minute % 2) for minute in range(257)])
+    with pytest.raises(OfflineError, match='^COMPARISON_MINUTE_LIMIT$'):
+        compare.compare_baselines(before, after)
 
 
 @pytest.mark.parametrize('adapter,kind', [('zeek-conn-json-v1', 'flow'),

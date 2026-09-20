@@ -9,7 +9,9 @@ from .baseline import read_reference, validate_baseline
 from .common import Limits, OfflineError, require_unprivileged_linux
 
 MAX_CHANGED_PORTS = 256
+MAX_CHANGED_MINUTES = 256
 MAX_RECEIPT_BYTES = 64 * 1024
+BYTE_BAND_NAMES = ('small', 'medium', 'large')
 LIMITATIONS = (
     'Counts describe only the accepted records in the selected baselines.',
     'Absence in a sample does not establish absence on the network.',
@@ -27,6 +29,8 @@ def _receipt(status: str) -> dict:
 
 
 def _change(before: int, after: int, reference_size: int, current_size: int) -> str:
+    if before == 0 and after == 0:
+        return 'share_unchanged'
     if before == 0:
         return 'not_in_reference'
     if after == 0:
@@ -64,11 +68,28 @@ def compare_baselines(reference: object, current: object) -> dict:
         if len(changed) == MAX_CHANGED_PORTS:
             raise OfflineError('COMPARISON_PORT_LIMIT')
         changed.append(dict(protocol=name, port=port, **counts))
+
+    byte_bands = [dict(band=name, **row(before.byte_bands[index], after.byte_bands[index]))
+                  for index, name in enumerate(BYTE_BAND_NAMES)]
+
+    previous_minutes = dict(before.relative_minutes)
+    current_minutes = dict(after.relative_minutes)
+    changed_minutes = []
+    for minute in sorted(previous_minutes.keys() | current_minutes.keys()):
+        counts = row(previous_minutes.get(minute, 0), current_minutes.get(minute, 0))
+        if counts['change'] == 'share_unchanged':
+            continue
+        if len(changed_minutes) == MAX_CHANGED_MINUTES:
+            raise OfflineError('COMPARISON_MINUTE_LIMIT')
+        changed_minutes.append(dict(minute=minute, **counts))
+
     return dict(_receipt('compared'), adapter=before.adapter, record_kind=before.record_kind,
                 reference_records=before.record_count, current_records=after.record_count,
                 comparison_basis='accepted_record_share', quality_label='uncalibrated',
                 protocols=protocols, changed_destination_ports=changed,
-                changed_destination_ports_count=len(changed), truncated=False,
+                changed_destination_ports_count=len(changed), byte_bands=byte_bands,
+                changed_relative_minutes=changed_minutes,
+                changed_relative_minutes_count=len(changed_minutes), truncated=False,
                 limitations=list(LIMITATIONS))
 
 

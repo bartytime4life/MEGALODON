@@ -147,10 +147,21 @@ display but cannot supply a current comparison denominator.
 | `comparison_basis` | `accepted_record_share`; each row's count divided by its own sample's denominator |
 | `protocols` | Every represented protocol, its two counts, and exact share direction |
 | `changed_destination_ports` | Sorted protocol/port rows whose share differs; at most 256 |
+| `byte_bands` | All three fixed record-size bands (`small`, `medium`, `large`), always present, with the same two counts and share direction as a port row |
+| `changed_relative_minutes` | Sorted relative-minute rows whose share differs, using each baseline's own earliest-record-relative bin numbering; at most 256 |
 | `change` | `not_in_reference`, `not_in_current`, `share_increased`, `share_decreased`, or `share_unchanged` |
 | `quality_label` | Always `uncalibrated` |
-| `truncated` | Always false; more than 256 changed ports fails the whole comparison |
+| `truncated` | Always false; more than 256 changed ports or changed minutes fails the whole comparison |
 | `network_access_performed`, `persistence_status`, `action_status` | False, `not_attempted`, `not_attempted` |
+
+`byte_bands` lists all three categories unconditionally, since it is a closed
+enumeration rather than an open set like ports or minutes: a band with a zero
+count on both sides reports `share_unchanged`, not `not_in_reference`. Because
+mass leaving one band must land in another, a real byte-size shift typically
+surfaces at least two rows together. `changed_relative_minutes` compares bin
+numbers directly; it does not align two baselines to a shared wall-clock
+window; the offline-anomaly dossier's window-qualified comparison in
+[`docs/anomaly-pipeline.md`](anomaly-pipeline.md) is the tool for that.
 
 Shares are compared by integer cross multiplication, without rounding. For
 example, 3 of 6 reference records and 2 of 4 current records have equal shares;
