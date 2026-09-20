@@ -111,6 +111,10 @@ python -m megalodon.evaluation reference port tcp 443
 python -m megalodon.evaluation reference protocol 6
 python -m megalodon.evaluation corpus
 python -m megalodon.evaluation corpus --scenario dns-protocol-gates-v1
+python -m megalodon.evaluation detectors
+python -m megalodon.evaluation corpus-report \
+  --source-commit "$(git rev-parse HEAD)" \
+  --source-tree "$(git rev-parse 'HEAD^{tree}')"
 ```
 
 `reference verify` validates the entire IANA bundle. Port and protocol commands
@@ -120,6 +124,47 @@ selected scenario. Resource failures and unknown scenario IDs produce a fixed
 JSON error object without echoing data or local paths. Command-line syntax and
 type errors exit 2 with a bounded JSON error containing `INVALID_ARGUMENTS` on
 stderr before an operation begins.
+
+## Rule identity and evidence reports
+
+`detectors` emits the closed `detector-registry-v1` JSON description of the
+existing `DNS_TUNNELING`, `PORT_SCAN`, and `SYN_FLOOD` rules, each initially
+versioned `1.0.0`. It records required metadata, eligibility, source unit and
+unknown vantage, inclusive thresholds/windows, per-rule/source cooldown,
+bounded state and eviction, maintainer ownership, fixture IDs and change policy.
+The registry describes current behavior; it does not dispatch rules, change
+thresholds or assign versions retroactively to historical stored findings.
+
+`corpus-report` emits `detector-evidence-report-v1` and accepts optional
+`--scenario`. Both exact, lowercase 40-character Git IDs are mandatory. The
+shell example obtains them from Git; **the evaluator treats them as unverified
+caller declarations**. Run from a clean, independently checked checkout and
+retain the tested tree receipt. Supplying a Git ID does not attest the loaded
+package, an installed version or the working tree. The evaluator never invokes
+Git, reads arbitrary files or acquires data.
+
+Each report includes the complete registry and its SHA-256 (canonical UTF-8 JSON,
+sorted keys, compact separators, no trailing newline), effective settings,
+replay clock and selected event-time span, pinned corpus/expectation manifest,
+per-scenario results, selected/validated event and scenario counts, exclusions,
+source quality, completeness and uncertainty. Every corpus resource is validated
+even for a selected scenario. State starts fresh for each scenario.
+
+Scenario aggregate expected counts and authored intent descriptions are **not
+event-level ground-truth labels**. The binary labeled denominator and
+TP/FP/FN/TN, precision, recall, false-positive rate and accuracy are JSON `null`,
+with `EVENT_LABELS_AND_DENOMINATOR_UNAVAILABLE`. Known synthetic event counts
+remain available separately. Synthetic replay completeness never establishes
+operational source quality, loss, coverage, calibration or a clean verdict;
+those fields explicitly remain unavailable or unknown. ATT&CK context is
+unassessed and cannot serve as validation evidence.
+
+An unexpected emitted rule now fails both `corpus` and `corpus-report` with
+`REFERENCE_DATA:UNKNOWN_DETECTOR`, instead of being silently omitted from
+apparently matching counts. Exit 0 means fixture counts matched, exit 1 means
+a count mismatch, and exit 2 means invalid input or reference integrity failure.
+All commands remain read-only; reports do not create live detections, persist
+records, invoke models or authorize response actions.
 
 ## Local dashboard Reference Library
 

@@ -6,8 +6,10 @@ import argparse
 import json
 
 from .alert_workload import MAX_POPULATION, RATE_SCALE, UNITS, project_alert_workload
+from .detector_registry import registry_document
 from .reference import (
     ReferenceDataError,
+    corpus_evidence_report,
     evaluate_corpus,
     load_iana,
     lookup_port,
@@ -99,6 +101,15 @@ def build_parser() -> argparse.ArgumentParser:
     corpus = groups.add_parser("corpus", allow_abbrev=False)
     corpus.add_argument("--scenario")
 
+    groups.add_parser("detectors", allow_abbrev=False, help="Describe the three fixed rules.")
+    report = groups.add_parser(
+        "corpus-report", allow_abbrev=False,
+        help="Synthetic evidence report; requires caller-declared Git commit and tree.",
+    )
+    report.add_argument("--source-commit", required=True, action=_Once)
+    report.add_argument("--source-tree", required=True, action=_Once)
+    report.add_argument("--scenario", action=_Once)
+
     workload = groups.add_parser(
         "base-rate",
         allow_abbrev=False,
@@ -124,7 +135,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.group == "base-rate":
+        if args.group == "detectors":
+            result = registry_document()
+        elif args.group == "corpus-report":
+            result = corpus_evidence_report(
+                source_commit=args.source_commit, source_tree=args.source_tree,
+                scenario_id=args.scenario,
+            )
+        elif args.group == "base-rate":
             result = project_alert_workload(
                 population=args.population, unit=args.unit,
                 prevalence_ppm=args.prevalence_ppm,
