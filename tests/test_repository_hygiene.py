@@ -79,6 +79,7 @@ def test_sensitive_runtime_and_build_artifacts_are_ignored():
         "dist/megalodon.whl",
         ".coverage",
         ".venv/bin/python",
+        ".venv312/bin/python",
         "megalodon/__pycache__/models.pyc",
     )
     result = _check_ignore(ignored)

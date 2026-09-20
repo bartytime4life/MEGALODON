@@ -1,5 +1,19 @@
 # MEGALODON architecture security review
 
+## Current alignment basis
+
+The [2026-09-20 alignment record](docs/document-alignment-2026-09-20.md) binds
+this working tree to merged recovery, licensing, detector and containment-contract
+work. Current issue state is distinct from control evidence: #254–#258 are
+closed, while #259–#261 remain open. In particular, #258 closure does not supply
+the producer-profile evidence still missing from its body. This alignment is
+not a new security scan or independent acceptance of a model or host.
+
+The manual local launcher selects an existing compatible Python environment.
+Its preflight opens the default store read-only; missing data stays absent.
+Neither preflight nor the hosted setup guide installs tools, starts sensors,
+adds an HTTP write route, or weakens storage/loopback admission.
+
 ## HUD usability boundary
 
 The [control room projection](docs/control-room-contract.md) extends the named

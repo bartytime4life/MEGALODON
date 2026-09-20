@@ -772,7 +772,7 @@ def serve(
     )
     server = ThreadingHTTPServer((host, port), handler)
     try:
-        print(f"MEGALODON dashboard listening on http://{host}:{port}")
+        print(f"MEGALODON dashboard listening on http://{host}:{port}", flush=True)
         server.serve_forever()
     finally:
         server.server_close()

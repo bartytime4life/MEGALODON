@@ -1,4 +1,5 @@
 """Behavioral browser-logic checks with synthetic, explicitly non-live fixtures."""
+from html.parser import HTMLParser
 import json
 import shutil
 import subprocess
@@ -22,6 +23,53 @@ def test_seven_workspaces_and_persistent_return():
     assert 'id="room-report-download" disabled' in INDEX_HTML
     assert 'id="room-report-preview"' in INDEX_HTML
     assert 'Local report preview is unavailable' not in INDEX_HTML
+
+
+def test_startup_controls_belong_to_home_outside_audit_history():
+    detail_ids = {'room-feed-status', 'room-history-status', 'room-range-description'}
+    control_ids = {'room-range', 'room-apply', 'room-refresh', 'room-pause'}
+
+    class OwnershipParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parents = []
+            self.owners = {}
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            element_id = attrs.get('id', '')
+            if element_id.startswith('setup-') or element_id in detail_ids | control_ids:
+                assert element_id not in self.owners, f'Duplicate control: {element_id}'
+                self.owners[element_id] = list(self.parents)
+            if tag not in {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'}:
+                self.parents.append((tag, attrs))
+
+        def handle_endtag(self, tag):
+            for index in range(len(self.parents) - 1, -1, -1):
+                if self.parents[index][0] == tag:
+                    del self.parents[index:]
+                    break
+
+    parser = OwnershipParser()
+    parser.feed(INDEX_HTML)
+    assert {'setup-title', 'setup-source', 'setup-tool-status', 'setup-config',
+            'setup-offline', 'setup-suricata', 'setup-build', 'setup-copy'} <= parser.owners.keys()
+    for element_id, parents in parser.owners.items():
+        if not element_id.startswith('setup-'):
+            continue
+        workspaces = [attrs['id'] for _, attrs in parents if attrs.get('role') == 'tabpanel']
+        assert workspaces == ['workspace-live']
+        assert not any('room-audit-history' in attrs.get('class', '').split() for _, attrs in parents)
+    assert not any(tag == 'details' for tag, _ in parser.owners['setup-title'])
+    assert 'id="setup-title" tabindex="-1"' in INDEX_HTML
+    assert 'href="#setup-title"' in INDEX_HTML
+    for element_id in detail_ids:
+        disclosures = [attrs for tag, attrs in parser.owners[element_id] if tag == 'details']
+        assert len(disclosures) == 1
+        assert disclosures[0].get('class') == 'room-feed-details'
+        assert 'open' not in disclosures[0]
+    for element_id in control_ids:
+        assert not any(tag == 'details' for tag, _ in parser.owners[element_id])
 
 
 def test_projection_browser_filters_truth_and_failure(tmp_path):

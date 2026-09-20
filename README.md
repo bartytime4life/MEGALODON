@@ -25,6 +25,16 @@ threat-intelligence service, packet-forensics suite, or authorization to change
 a host. A detection or offline candidate is evidence for review, not proof of
 malicious activity.
 
+## Start on this Linux PC
+
+From an existing reviewed checkout, run `./scripts/start-local.sh --check`, then
+`./scripts/start-local.sh`. Open the printed localhost address and keep the
+terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
+Python 3.11+ environment and uses this checkout's data path. It does not install
+packages, create sample data, start capture, or enable automatic startup.
+See the [local PC setup guide](docs/local-pc-setup.md) for environment selection,
+data choices and troubleshooting.
+
 ## Safety defaults
 
 The [offline anomaly pipeline](docs/anomaly-pipeline.md) is available with
@@ -90,7 +100,7 @@ record delivery state; they do not override the checked-in contracts.
 | Ubuntu 24.04 non-publishing release-evidence packet | [`docs/ubuntu-release-evidence.md`](docs/ubuntu-release-evidence.md) and [`contracts/release-evidence/v1`](contracts/release-evidence/v1/README.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
-| Latest repository and document reconciliation | [`docs/document-alignment-2026-09-17.md`](docs/document-alignment-2026-09-17.md) |
+| Latest repository and document reconciliation | [`docs/document-alignment-2026-09-20.md`](docs/document-alignment-2026-09-20.md) |
 | Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
 | Repository hygiene guard (tracked-file/secret-marker scan) | [`docs/repository-hygiene.md`](docs/repository-hygiene.md) |
 | Real-browser Linux dashboard acceptance evidence | [`docs/dashboard-browser-acceptance.md`](docs/dashboard-browser-acceptance.md) |

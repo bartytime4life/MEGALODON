@@ -6,12 +6,14 @@ healthy.
 
 ## Start and stop
 
-Run `python -m megalodon hud` from the intended installed environment and open
+From the checkout, use `./scripts/start-local.sh --check` and then
+`./scripts/start-local.sh`, or run `python -m megalodon hud` from the intended
+installed environment. Open
 <http://127.0.0.1:8787/> on the same computer. The process stays in the
 foreground; stop it with Ctrl+C. Do not expose it through a remote bind, reverse
 proxy, tunnel, or port forward.
 
-Use **Choose existing data for the next launch** to prepare a quoted restart
+On Home → **Data and tools**, use **Change data for the next launch** to prepare a quoted restart
 command for a settings file, completed offline run, or Suricata store. The form
 does not browse, open, or validate an arbitrary path. Restarting is required to
 take new startup snapshots.

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import errno
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
@@ -27,6 +29,32 @@ INVALID_HOSTS = (
 
 def _forbidden(*args, **kwargs):
     raise AssertionError("startup crossed a forbidden boundary")
+
+
+@pytest.mark.parametrize("failure, expected_code, message", (
+    (KeyboardInterrupt(), 0, "dashboard stopped"),
+    (OSError(errno.EADDRINUSE, "Address already in use"), 2, "--port 8788"),
+))
+def test_manual_dashboard_exit_closes_reader(monkeypatch, capsys, failure, expected_code, message):
+    closed = []
+
+    @contextmanager
+    def reader(*args, **kwargs):
+        try:
+            yield dashboard.UnconfiguredDashboardReader()
+        finally:
+            closed.append(True)
+
+    def serve(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(cli, "_dashboard_reader", reader)
+    monkeypatch.setattr(dashboard, "serve", serve)
+    assert cli._dashboard(cli.build_parser().parse_args(["hud"])) == expected_code
+    result = capsys.readouterr()
+    assert message in result.out + result.err
+    assert "Traceback" not in result.err
+    assert closed == [True]
 
 
 @pytest.mark.parametrize("host", INVALID_HOSTS)

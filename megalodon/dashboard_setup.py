@@ -4,18 +4,31 @@ SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
     <div class="setup-overview">
       <p class="eyebrow">On this computer</p>
-      <h2 id="setup-title">Data and tools</h2>
+      <h2 id="setup-title" tabindex="-1">Data and tools</h2>
+      <ol class="setup-journey" aria-label="Local PC setup path">
+        <li><strong>1. Prepare</strong><span>Use Python 3.11 or newer. Linux is the reference platform; companion tools are optional.</span></li>
+        <li><strong>2. Launch</strong><span>Open the HUD manually. Keep its terminal open; stop it with Ctrl+C when finished.</span></li>
+        <li><strong>3. Review</strong><span>Check the source and tools below. Traffic and Findings need qualified saved metadata.</span></li>
+      </ol>
       <p id="setup-source" role="status">Checking the selected data source…</p>
       <div class="setup-status-grid" aria-label="Startup status summary">
         <div><span>Tools available</span><b id="setup-installed-count">Checking</b></div>
-        <div><span>Running now</span><b id="setup-running-count">Checking</b></div>
+        <div><span>Processes at launch</span><b id="setup-running-count">Checking</b></div>
       </div>
       <p id="setup-readiness" role="status">Checking for startup tool information…</p>
       <details class="tool-status-details"><summary>Which tools were found?</summary>
-        <p class="setup-boundary">Available means an executable was found. Running means a matching process name was seen at launch. Neither result proves that a tool is healthy or connected.</p>
+        <p class="setup-boundary">Available means an executable was found. Processes at launch means a matching process name was seen when the HUD started. Neither result proves that a tool is healthy or connected.</p>
         <div id="setup-tool-status" class="tool-status-list"></div>
       </details>
     </div>
+    <details class="setup-launch-help">
+      <summary>Manual launch and environment checks</summary>
+      <p>From the repository root, check this checkout, then launch:</p>
+      <code>./scripts/start-local.sh --check</code>
+      <code>./scripts/start-local.sh</code>
+      <p>The launcher uses an available compatible Python environment. It does not install packages, start sensors, or create sample data. For an installed package, activate its environment and run <code>python -m megalodon hud</code></p>
+      <p>See the <a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/platform-baseline.md" target="_blank" rel="noopener noreferrer">platform setup guide</a> for environment preparation. This checkout also includes <code>docs/local-pc-setup.md</code> for manual launch and troubleshooting.</p>
+    </details>
     <details class="setup-actions-card">
       <summary>Change data for the next launch</summary>
       <div class="setup-form">

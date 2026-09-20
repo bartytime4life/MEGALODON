@@ -724,7 +724,7 @@ const maxTimelineBins = 12;
 const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
 const workspaceTargets = {
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
-  'room-home-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
+  'room-home-title': 'live', 'setup-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
   'room-reports-title': 'reports', 'room-help-title': 'help',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',

@@ -258,6 +258,7 @@ process.stdin.on('end', async () => {
     assert.equal(run("workspaceFromHash('#reference-title')"), 'analysis');
     assert.equal(run("workspaceFromHash('#offline-title')"), 'analysis');
     assert.equal(run("workspaceFromHash('#integrations-title')"), 'interfaces');
+    assert.equal(run("workspaceFromHash('#setup-title')"), 'live');
     assert.equal(run("workspaceFromHash('#unknown')"), null);
     context.window.location.hash = '#detections-title'; run('restoreWorkspaceFromHash()');
     assert.equal(nodeFor('workspace-live').hidden, true);
@@ -283,6 +284,14 @@ process.stdin.on('end', async () => {
     clickFragment('#detections-title');
     assert.equal(nodeFor('workspace-analysis').hidden, false);
     assert.equal(document.activeElement, nodeFor('detections-title'));
+    clickFragment('#setup-title');
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(nodeFor('workspace-analysis').hidden, true);
+    assert.equal(document.activeElement, nodeFor('setup-title'));
+    run("activateWorkspace('help')");
+    context.window.location.hash = '#setup-title'; run('restoreWorkspaceFromHash()');
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(nodeFor('workspace-help').hidden, true);
     clickFragment('#page-title');
     for (const options of [{ctrlKey: true}, {metaKey: true}, {shiftKey: true}, {altKey: true}, {button: 1}, {defaultPrevented: true}]) {
       clickFragment('#offline-title', options);
