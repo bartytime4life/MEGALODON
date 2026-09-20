@@ -307,6 +307,37 @@ def test_cli_receipt_size_breach_and_local_io_are_terminal(tmp_path, monkeypatch
     assert json.loads(capsys.readouterr().out)['failure_code'] == 'LOCAL_IO_ERROR'
 
 
+@pytest.mark.parametrize('minute_count', [256, 257])
+def test_cli_combined_port_and_minute_bounds(tmp_path, monkeypatch, capsys, minute_count):
+    args = _files(tmp_path, monkeypatch)
+    before = _value([('TCP', port) for port in range(128)])
+    after = _value([('TCP', port) for port in range(128, 256)]
+                   + [('TCP', 128)] * (minute_count - 255))
+    before['relative_minutes'] = [{'minute': minute, 'count': 1} for minute in range(128)]
+    after['relative_minutes'] = [{'minute': 0, 'count': 1}] + [
+        {'minute': minute, 'count': 1} for minute in range(128, minute_count)]
+    for name, value in [('before.json', before), ('after.json', after)]:
+        (tmp_path / name).write_bytes(reports.json_bytes(value))
+    status = compare.main(args)
+    captured = capsys.readouterr()
+    assert not captured.err
+    assert len(captured.out.splitlines()) == 1
+    result = json.loads(captured.out)
+    if minute_count == 257:
+        assert status == 1
+        assert result == dict(compare._receipt('failed'), failure_code='COMPARISON_MINUTE_LIMIT')
+        return
+    assert status == 0
+    assert result['changed_destination_ports_count'] == 256
+    assert result['changed_relative_minutes_count'] == 256
+    assert len(result['byte_bands']) == 3
+    assert len(captured.out.encode('ascii')) <= compare.MAX_RECEIPT_BYTES
+    assert result['truncated'] is False
+    assert 'Byte bands count records by size, not byte volume or bandwidth.' in result['limitations']
+    assert ("Relative-minute bins use each sample's own earliest record; wall-clock windows are not aligned."
+            in result['limitations'])
+
+
 def test_contradictory_reference_cannot_publish_reports_or_enter_dashboard(tmp_path, monkeypatch):
     batch = _batch()
     reference = _value()

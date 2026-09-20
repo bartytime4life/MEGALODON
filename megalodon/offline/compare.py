@@ -16,6 +16,8 @@ LIMITATIONS = (
     'Counts describe only the accepted records in the selected baselines.',
     'Absence in a sample does not establish absence on the network.',
     'Shares use accepted records, not elapsed time or source-hours.',
+    'Byte bands count records by size, not byte volume or bandwidth.',
+    'Relative-minute bins use each sample\'s own earliest record; wall-clock windows are not aligned.',
     'Collection windows, capture loss, provenance and representativeness are not attested.',
     'Structural compatibility does not establish statistical comparability.',
     'No threat probability, significance, calibration or response authority is inferred.',

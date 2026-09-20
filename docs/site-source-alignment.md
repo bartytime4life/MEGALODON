@@ -1,5 +1,17 @@
 # Defense Console source alignment
 
+## Successor repository readback — merged v28 mirror
+
+OBSERVED 2026-09-20: `main@d71fbc245729b968701fbeba4f7f679c8db24ac7`
+includes the v28 mirror alignment through merged PR #308 (`03e0450`).
+The `site/` tree is unchanged between that merge and this main pin.
+Sites still reports version 28 at the existing URL with owner-only access.
+The candidate-only and baseline-difference statements in the original v28
+receipt below are historical. This readback checks repository continuity and
+Sites metadata; it is not a fresh fetch of deployed source bytes, a rendered
+browser test, or an installed-host acceptance. No Site edit or publication is
+part of this successor record.
+
 ## Current publication — Console v28, merged setup guidance
 
 OBSERVED 2026-09-20: GitHub baseline `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`
