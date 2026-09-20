@@ -118,11 +118,14 @@ def test_report_preserves_legacy_results_and_never_invents_classification_metric
 
 def test_console_corpus_totals_match_the_unfiltered_evaluator_report():
     report = corpus_evidence_report(**SOURCE)
-    html = (
+    site_source = (
         Path(__file__).resolve().parents[1] / "site" / "dist" / "index.html"
-    ).read_text(encoding="utf-8")
+    )
+    if not site_source.is_file():
+        pytest.skip("repository-only Site source is not included in the sdist")
+    html = site_source.read_text(encoding="utf-8")
     displayed = re.search(
-        r"<strong>([\\d,]+) synthetic scenarios · ([\\d,]+) metadata events</strong>",
+        r"<strong>([\d,]+) synthetic scenarios · ([\d,]+) metadata events</strong>",
         html,
     )
 
