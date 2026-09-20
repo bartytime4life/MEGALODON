@@ -146,17 +146,24 @@ filters apply only to the returned view, not the entire history.
 
 ## Create a bounded report
 
-Choose **Create a report** under Common tasks in Overview, then choose **Operations overview**,
-**Detection review**, or **Ingestion health**. Update the preview, then copy its
-plain-language summary, download JSON or CSV, or use **Print / save PDF**. Every
-format includes its generation time, returned-data bounds, and the limitation
-that stored metadata does not prove capture completeness or service health.
+Open **Reports**, confirm the shared UTC range, then select **Preview local
+report**. Review the metadata-only JSON and select **Download JSON report**.
+The visible preview label records its original range, creation time and
+freshness at creation. Automatic refresh and later range changes keep that
+preview intact; select **Preview local report** again to replace it with the
+current selection, or **Discard preview** to clear it from this tab.
 
-Reports are assembled in the browser from the successful projections already on
-screen. The controls do not query additional private fields, POST data, write the
-audit database, or create a server-side report. A failed refresh preserves a
-prior traffic picture as stale; generate a report only when that provenance is
-acceptable for the intended use.
+A held report describes the data reviewed when it was created. It is not a
+live report, a complete detection total, or proof of capture coverage. A failed
+source refresh, an expired snapshot or a future-dated snapshot cannot establish
+freshness. If a replacement has no qualified data, the previous preview is
+cleared. A browser download error preserves the preview for retry or manual
+copying and does not imply that a file was saved.
+
+Reports are assembled in browser memory from validated projections already on
+screen. The controls do not query additional private fields, POST data, write
+the audit database or create a server-side report. Downloads contain the exact
+reviewed JSON; they do not silently substitute data from a later refresh.
 
 ## Operate the Integration Map
 

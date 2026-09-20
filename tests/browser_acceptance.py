@@ -286,6 +286,11 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             await expect(page.locator("#room-report-status")).to_contain_text("Preview ready")
             await expect(page.locator("#room-report-download")).to_be_enabled()
             preview_text = await page.locator("#room-report-preview").inner_text()
+            await page.evaluate("() => renderRoom()")
+            await expect(page.locator("#room-report-download")).to_be_enabled()
+            await expect(page.locator("#room-report-context")).to_contain_text("Held preview created")
+            passed("report review survives a HUD repaint without changing bytes",
+                   await page.locator("#room-report-preview").inner_text() == preview_text)
             report = json.loads(preview_text)
             passed("local report preview uses the closed metadata-only schema",
                    list(report) == ["schema", "generated_at", "title", "range", "sources",
@@ -304,6 +309,12 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
                    download.suggested_filename.endswith(".json") and len(downloaded.encode("utf-8")) <= 65536)
             passed("report preview and download make no page request",
                    counts == request_counts and len(violations) == violation_count)
+            await page.locator("#room-report-discard").click()
+            await expect(page.locator("#room-report-preview")).to_be_hidden()
+            await expect(page.locator("#room-report-download")).to_be_disabled()
+            await expect(page.locator("#room-report-discard")).to_be_disabled()
+            passed("discard removes the held report and disables download",
+                   await page.locator("#room-report-preview").inner_text() == "")
         else:
             await page.locator("#room-report-create").click()
             await expect(page.locator("#room-report-status")).to_contain_text("No qualified data")

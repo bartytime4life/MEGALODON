@@ -147,8 +147,19 @@ The preview and downloaded JSON contain counts, exact reported-byte totals,
 source labels, finding rule/severity aggregates, fixed limitations, range and
 projection-build evidence. They omit addresses, ports, event/finding/run IDs,
 packet bodies, raw logs, messages, recommendations, commands and model output.
-The JSON is capped at 64 KiB. Changing the selected data or rendering a new
-snapshot invalidates the prior preview and disables download.
+The JSON is capped at 64 KiB. The preview is held in browser memory until the
+operator creates a replacement, selects **Discard preview**, or leaves the page.
+Refreshes and range changes do not alter its bytes or disable its download. A
+visible label identifies its creation time, original range and freshness at
+creation; it explicitly distinguishes the held preview from the current view.
+A failed replacement clears the prior preview rather than presenting it as the
+new selection. Discard removes the preview and disables download.
+
+Freshness is assessed when the preview is created, not when it is downloaded.
+A failed source refresh, age over five minutes, or generation timestamp more
+than one minute in the future produces `stale`. This does not establish sensor
+liveness. Browser download failures preserve the preview, expose a fixed retry
+message without exception details, and release any created object URL.
 
 Download is a browser `Blob` created only after preview. It does not call a
 server endpoint, write through the MEGALODON process, upload data, send

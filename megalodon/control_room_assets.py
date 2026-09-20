@@ -54,14 +54,16 @@ TRAFFIC_HTML = """
   <p>Preview the exact metadata-only JSON before downloading it. Nothing is uploaded, sent, or written by the server.</p>
   <div id="room-report-flow" class="room-report-flow">
     <ol class="room-report-steps">
-      <li><strong>1. Confirm range</strong><span>The shared UTC range above controls this report.</span></li>
+      <li><strong>1. Confirm range</strong><span>The shared UTC range controls the next preview.</span></li>
       <li><strong>2. Preview locally</strong><span>Review the complete bounded JSON in this browser tab.</span></li>
       <li><strong>3. Download explicitly</strong><span>Save only after the preview is ready.</span></li>
     </ol>
     <div class="room-report-actions">
       <button type="button" id="room-report-create">Preview local report</button>
       <button type="button" id="room-report-download" disabled>Download JSON report</button>
+      <button type="button" id="room-report-discard" disabled>Discard preview</button>
     </div>
+    <p id="room-report-context" class="room-meta">A preview holds its original range and data until you replace or discard it.</p>
     <p id="room-report-status" class="room-meta" role="status" aria-live="polite">No preview is ready.</p>
     <pre id="room-report-preview" class="room-report-preview" tabindex="0" hidden aria-label="Exact local report preview"></pre>
   </div>
@@ -303,7 +305,7 @@ function roomReportDocument(now=Date.now()) {
     sources:[...new Set(selection.events.map(item=>item.source))].sort(),
     vantage:'unknown',
     quality:snapshot.quality,
-    freshness:roomState.failed || now-Date.parse(snapshot.generated_at)>300000 ? 'stale' : 'current_by_five_minute_ui_threshold',
+    freshness:roomState.failed || now-Date.parse(snapshot.generated_at)>300000 || Date.parse(snapshot.generated_at)>now+60000 ? 'stale' : 'current_by_five_minute_ui_threshold',
     unit:'metadata events / linked findings / reported bytes',
     counts:{
       events:selection.events.length,
@@ -333,6 +335,8 @@ function roomReportDocument(now=Date.now()) {
 function invalidateRoomReport() {
   roomState.report=null;
   byId('room-report-download').disabled=true;
+  byId('room-report-discard').disabled=true;
+  byId('room-report-context').textContent='A preview holds its original range and data until you replace or discard it.';
   const preview=byId('room-report-preview');preview.replaceChildren();preview.hidden=true;
   byId('room-report-status').textContent=roomState.selection && roomState.selection.events.length
     ? 'No preview is ready. Preview the current selected range before downloading.'
@@ -343,23 +347,30 @@ function previewRoomReport() {
     const report=roomReportDocument();roomState.report=report;
     const preview=byId('room-report-preview');preview.replaceChildren(textNode('code',report.json));preview.hidden=false;
     byId('room-report-download').disabled=false;
+    byId('room-report-discard').disabled=false;
+    byId('room-report-context').textContent=`Held preview created ${report.document.generated_at}. Range: ${report.document.range.start} → ${report.document.range.end}. Freshness at creation: ${report.document.freshness}. Refreshes and range changes do not update this preview; preview again to replace it.`;
     byId('room-report-status').textContent='Preview ready in this browser. Review it, then download explicitly.';
     return true;
   } catch(_) {
-    roomState.report=null;byId('room-report-download').disabled=true;
-    const preview=byId('room-report-preview');preview.replaceChildren();preview.hidden=true;
+    invalidateRoomReport();
     byId('room-report-status').textContent='No qualified data is available in the selected range. No report was created.';
     return false;
   }
 }
 function downloadRoomReport() {
   if(!roomState.report) {byId('room-report-status').textContent='Preview the current selected range before downloading.';return false;}
-  const url=URL.createObjectURL(new Blob([roomState.report.json],{type:'application/json'}));
-  const link=document.createElement('a');
-  link.href=url;link.download='megalodon-local-report-'+roomState.report.document.generated_at.replace(/[:.]/g,'-')+'.json';
-  link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
-  byId('room-report-status').textContent='Local JSON download requested. MEGALODON did not upload it.';
-  return true;
+  let url;
+  try {
+    url=URL.createObjectURL(new Blob([roomState.report.json],{type:'application/json'}));
+    const link=document.createElement('a');
+    link.href=url;link.download='megalodon-local-report-'+roomState.report.document.generated_at.replace(/[:.]/g,'-')+'.json';
+    link.click();
+    byId('room-report-status').textContent='Local JSON download requested for the held preview. MEGALODON did not upload it.';
+    return true;
+  } catch(_) {
+    byId('room-report-status').textContent='The browser could not request the download. Your preview is preserved; retry or copy the JSON shown below.';
+    return false;
+  } finally {if(url)setTimeout(()=>URL.revokeObjectURL(url),0);}
 }
 function renderRoom() {
   let selected;
@@ -401,7 +412,7 @@ function renderRoom() {
   const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected);roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected);roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings');
   const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
   const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach(value=>row.append(textNode('td',value)));body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
-  if(typeof invalidateRoomReport==='function')invalidateRoomReport();
+  if(!roomState.report)invalidateRoomReport();
 }
 const roomRequests=new Map();
 function requestRoomSnapshot(path='/api/traffic') {
@@ -479,4 +490,5 @@ byId('room-pause').addEventListener('click',()=>{if(typeof togglePause==='functi
 byId('room-refresh').addEventListener('click',refreshRoom);
 byId('room-report-create').addEventListener('click',previewRoomReport);
 byId('room-report-download').addEventListener('click',downloadRoomReport);
+byId('room-report-discard').addEventListener('click',invalidateRoomReport);
 """
