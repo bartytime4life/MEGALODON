@@ -47,6 +47,12 @@ tool processes or network listeners are created. The check covers only the
 default checkout data path; it rejects extra arguments to avoid implying that a
 different configuration was checked.
 
+The direct entry point, `python -m megalodon.local_setup`, has the same
+default-path-only scope. It rejects options such as `--config` and positional
+arguments before opening a store. Use `python -m megalodon.local_setup --help`
+for help without inspecting data; pass HUD options to the launcher without
+`--check` when you intend to start the HUD with a selected configuration.
+
 Port availability, sensor health, capture permissions, installed optional-tool
 acceptance and native Windows support are outside this check.
 
