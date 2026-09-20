@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha1
 from ipaddress import ip_address
+import re
 from struct import pack
 from typing import Iterable
 
@@ -23,6 +24,8 @@ from .common import Batch, FlowRecord, OfflineError
 _PROTOCOL_NUMBERS = {"TCP": 6, "UDP": 17}
 MAX_SEED = 65535
 MAX_TOTAL_RECORDS = 100_000
+MAX_SOURCES = 64
+_SOURCE_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
 def community_id(record: FlowRecord, *, seed: int = 0) -> str:
@@ -71,16 +74,28 @@ def correlate(sources: Iterable[tuple[str, Batch]], *, seed: int = 0) -> dict[st
     this function only reads already-validated fields and returns a derived
     index describing what it found.
     """
-    materialized = list(sources)
+    if type(seed) is not int or not 0 <= seed <= MAX_SEED:
+        raise OfflineError("INVALID_COMMUNITY_ID_SEED")
+    materialized = []
+    labels: set[str] = set()
     total = 0
-    for label, batch in materialized:
-        if not isinstance(label, str) or not label or len(label) > 64:
+    for entry in sources:
+        if len(materialized) >= MAX_SOURCES:
+            raise OfflineError("CORRELATION_SOURCE_LIMIT")
+        if type(entry) not in (tuple, list) or len(entry) != 2:
+            raise OfflineError("INVALID_CORRELATION_SOURCE")
+        label, batch = entry
+        if type(label) is not str or _SOURCE_LABEL.fullmatch(label) is None:
             raise OfflineError("INVALID_CORRELATION_SOURCE_LABEL")
-        if not isinstance(batch, Batch):
+        if label in labels:
+            raise OfflineError("DUPLICATE_CORRELATION_SOURCE_LABEL")
+        if not isinstance(batch, Batch) or type(batch.records) is not tuple:
             raise OfflineError("INVALID_CORRELATION_BATCH")
         total += len(batch.records)
-    if total > MAX_TOTAL_RECORDS:
-        raise OfflineError("CORRELATION_RECORD_LIMIT")
+        if total > MAX_TOTAL_RECORDS:
+            raise OfflineError("CORRELATION_RECORD_LIMIT")
+        labels.add(label)
+        materialized.append((label, batch))
 
     groups: dict[str, list[CorrelationHit]] = {}
     considered = 0
@@ -92,7 +107,9 @@ def correlate(sources: Iterable[tuple[str, Batch]], *, seed: int = 0) -> dict[st
             considered += 1
             try:
                 identity = community_id(record, seed=seed)
-            except OfflineError:
+            except OfflineError as exc:
+                if str(exc) != "COMMUNITY_ID_UNSUPPORTED_PROTOCOL":
+                    raise
                 excluded += 1
                 continue
             groups.setdefault(identity, []).append(
@@ -112,7 +129,7 @@ def correlate(sources: Iterable[tuple[str, Batch]], *, seed: int = 0) -> dict[st
             for hit in hits
         )
         for identity, hits in groups.items()
-        if len(hits) > 1
+        if len({hit.source for hit in hits}) > 1
     }
     return {
         "schema": "zeek-community-id-correlation-v1",
