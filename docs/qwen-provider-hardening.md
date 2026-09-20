@@ -16,14 +16,17 @@ automatically. It is the operator's own action, on the operator's own host.
 open gap precisely: MEGALODON's client-side controls (one bounded request to
 a compiled-in `127.0.0.1:11434`, no retry/fallback/redirect) say nothing
 about "ownership and integrity of the process bound to that port... the
-provider's own outbound access or reachable shared services." This recipe is
-how an operator closes that gap on their own host, and
+provider's own outbound access or reachable shared services." The systemd
+profile below targets that gap on an operator's own host, and
 [`megalodon/provider_containment.py`](../megalodon/provider_containment.py)
-is how they can check, read-only and after the fact, that it actually held.
+can observe part of the result read-only and after the fact. The rootless
+Podman example supplies a narrower container boundary; it does not deny
+outbound traffic and cannot by itself close the no-egress or identity-
+separation gates.
 
 It does **not**: attest the loaded model artifact's authenticity, sandbox GPU
 driver interaction, cover Windows or macOS, or change what MEGALODON's own
-client already does. Both recipes below assume a Linux host, matching the
+client already does. Both examples below assume a Linux host, matching the
 rest of this repository's platform baseline.
 
 ## Principle
@@ -34,8 +37,11 @@ Ollama, a loaded model, or anything it talks to is fully compromised, it
 should not be able to (a) become reachable from anything other than
 loopback, (b) read or write anything outside its own model-storage
 directory, (c) reach the network beyond loopback itself, or (d) run as, or
-escalate to, a privileged or MEGALODON-owned identity. Pick **one** of the
-two recipes; do not run both against the same instance.
+escalate to, a privileged or MEGALODON-owned identity. Recipe A targets all
+four goals. Recipe B is intentionally partial: it supplies loopback-only
+inbound publication and container/filesystem/resource restrictions, but it
+does not establish no-egress or a UID distinct from the invoking operator.
+Do not run both examples against the same instance.
 
 ## Recipe A: a hardened systemd unit
 
@@ -119,7 +125,7 @@ rw`, or the ROCm/oneAPI equivalent) requires its own review and further
 loosens this profile — treat a GPU-enabled host as a materially different,
 separately reviewed configuration from the CPU-only one above.
 
-## Recipe B: a rootless container
+## Recipe B: a rootless container (partial boundary only)
 
 ```bash
 podman run -d \
@@ -141,23 +147,30 @@ identity and a mutable tag for this exact provider
 `podman images --digests docker.io/ollama/ollama`) and record it, rather than
 trusting the tag to still mean the same bytes later.
 
-The load-bearing flag is `-p 127.0.0.1:11434:11434`, not `--network=host` or
-a bare `-p 11434:11434`: it binds the published port to the loopback address
-only, on every host interface it would otherwise be reachable from. Left
-without a `--userns` flag, rootless Podman maps the container's root (the
-official image runs as root inside its own namespace) to an automatically
-allocated, unprivileged, unrelated host UID from `/etc/subuid`, so even a
-full in-container compromise does not yield host root or a host identity
-that corresponds to anything else on the system. Do not add `--userns=keep-id`
-here: it maps container root to your *own* invoking UID instead, which only
-matters for bind-mount permission matching and otherwise weakens this
-isolation for no benefit, since the recipe uses a named volume, not a bind
-mount. Do **not** add `--network=host`; it defeats the port-binding
-restriction above by sharing the host's network stack directly.
+The load-bearing flag for the **inbound** boundary is
+`-p 127.0.0.1:11434:11434`, not `--network=host` or a bare
+`-p 11434:11434`: it binds the published host port to loopback. It does not
+restrict outbound connections from the container. Rootless Podman's default
+network ordinarily permits outbound traffic, so this example must not be
+recorded as no-egress evidence for issue #261. Do **not** add
+`--network=host`; it also defeats the inbound port-isolation boundary by
+sharing the host's network stack directly.
+
+The identity boundary is similarly limited. Without an explicit `--userns`
+mode, container UID 0 maps to the invoking user in the rootless Podman user
+namespace. That mapping is not host root, but it is also not an identity
+separate from an operator who runs MEGALODON under the same account.
+`--userns=keep-id` maps the invoking UID/GID to the same values inside the
+container; it does not solve that separation requirement. This document does
+not prescribe an alternative user-namespace or no-egress design because one
+has not been exercised against the pinned image and the required host-
+loopback service path. Those controls require a separately tested and
+reviewed design before this container example can support containment
+acceptance.
 
 ## Verifying the result
 
-Neither recipe is proven by writing it down. After starting Ollama, use the
+Neither example is proven by writing it down. After starting Ollama, use the
 read-only observer already in this repository — it contacts nothing and
 changes nothing:
 
@@ -169,11 +182,11 @@ print(json.dumps(qwen_provider_posture(), indent=2, default=dict))
 "
 ```
 
-| Field | Expected after either recipe | What it would mean if wrong |
+| Field | Expected observation | What it would mean if wrong |
 | --- | --- | --- |
 | `listening` | `"yes"` | Ollama did not start, or is on a different port than MEGALODON expects |
 | `loopback_only` | `true` | The service is reachable beyond loopback — recheck `IPAddressAllow`/`-p` above |
-| `bindings[].uid_matches_self` | `false` | Ollama is running as the same identity as whatever ran this check |
+| `bindings[].uid_matches_self` | Recipe A: `false`; Recipe B: may be `true` or unavailable | Recipe A lacks the intended identity separation; Recipe B never claimed it |
 | `owning_process.resolution` | usually `"permission_denied"` | A `"resolved"` result here is expected only if you ran the check as the same user/root as Ollama; it is not itself a finding |
 
 A `"permission_denied"` resolution is the **correct, hardened** outcome per
@@ -181,19 +194,19 @@ the observer's own documentation, not an error to fix. This check proves
 only what it says: current binding scope, and (when resolvable) identity
 separation. It does not prove the running binary is unmodified, that a
 loaded model is authentic, or that egress beyond loopback is blocked from
-inside Ollama's own process — the container/systemd controls above are what
-provide that, and this check cannot see whether they were actually applied
-versus merely intended.
+inside Ollama's own process. Recipe A is intended to supply that network
+control; Recipe B is not. The observer cannot see whether Recipe A's controls
+were actually applied versus merely intended.
 
 ## Explicit non-goals
 
-- MEGALODON does not read, apply, template, or ship either recipe; both are
+- MEGALODON does not read, apply, template, or ship either example; both are
   copy-paste operator actions against operator-owned host configuration.
-- Neither recipe is exercised by this repository's test suite: systemd units
+- Neither example is exercised by this repository's test suite: systemd units
   and container runtimes are not available in CI, so this document is
   reviewed guidance, not a tested contract like `contracts/*/v1`.
 - Model artifact authenticity, GPU driver containment, and Windows/macOS
   equivalents remain open and are not addressed here.
-- Applying this recipe does not change, weaken, or replace any bound in
+- Applying either example does not change, weaken, or replace any bound in
   `docs/local-model-advisory-contract.md`; the client-side request remains
   exactly as bounded as before.
