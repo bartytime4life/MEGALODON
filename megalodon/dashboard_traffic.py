@@ -25,7 +25,7 @@ SCHEMA = "dashboard-traffic-v1"
 DETECTORS = ("SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING")
 PROTOCOLS = ("TCP", "UDP", "ICMP", "ICMPV6", "DNS", "HTTP", "TLS", "OTHER")
 LIMITATIONS = (
-    "Newest 500 stored event candidates and 200 finding candidates only; not complete history.",
+    "Newest 500 stored event candidates and 200 linked finding candidates only; not complete history.",
     "Sample, unlinked and reconciliation-required records are excluded.",
     "JSONL metadata and source receipts are operator supplied; capture authenticity is unverified.",
     "Vantage, local network scope, sensor liveness, drops, rejected records and clock uncertainty are unknown.",
@@ -50,7 +50,9 @@ QUERY = f"""
 WITH newest_events AS (
  SELECT {', '.join(EVENT_COLUMNS)} FROM events ORDER BY id DESC LIMIT 501
 ), newest_findings AS (
- SELECT {', '.join(FINDING_COLUMNS)} FROM detections ORDER BY id DESC LIMIT 201
+ SELECT {', '.join(FINDING_COLUMNS)} FROM detections
+ WHERE event_id IN (SELECT id FROM newest_events ORDER BY id DESC LIMIT 500)
+ ORDER BY id DESC LIMIT 201
 )
 SELECT 'event' AS kind, e.id AS record_id, e.id AS event_id,
  {_text('e.observed_at', 40)} AS timestamp,
@@ -83,10 +85,9 @@ HISTORY_QUERY = QUERY.replace(
     "FROM events WHERE observed_at >= :start AND observed_at <= :end "
     "AND id < :before ORDER BY id DESC LIMIT 501",
 ).replace(
-    "FROM detections ORDER BY id DESC LIMIT 201",
-    "FROM detections WHERE detected_at >= :start AND detected_at <= :end "
-    "AND event_id IN (SELECT id FROM newest_events ORDER BY id DESC LIMIT 500) "
-    "ORDER BY id DESC LIMIT 201",
+    "FROM detections\n WHERE event_id IN",
+    "FROM detections\n WHERE detected_at >= :start AND detected_at <= :end "
+    "AND event_id IN",
 )
 
 

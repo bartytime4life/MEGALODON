@@ -79,6 +79,36 @@ def test_candidate_limit_is_visible_not_silent(audit):
     assert value["truncated"] is True and value["quality"] == "degraded"
 
 
+def test_unrelated_findings_cannot_hide_current_traffic_evidence(tmp_path):
+    path = tmp_path / "private" / "audit.db"
+    with Store(path) as writer:
+        # Legacy, unlinked records remain valid ledger history, but they must
+        # not consume the finding budget for the displayed event window.
+        legacy = writer.record_event(PacketEvent(TIME, "192.0.2.2", "198.51.100.2", "UDP"))
+        current = add_run(writer, finding=True)
+        unrelated = DetectionResult(TIME, "PORT_SCAN", "MEDIUM", "192.0.2.2",
+                                    "198.51.100.2", "PRIVATE_MESSAGE", {}, "PRIVATE_RECOMMENDATION")
+        # Move the legacy event outside the 500-event candidate window.
+        add_run(writer, count=499)
+        for _ in range(201):
+            writer.record_detection(legacy, unrelated)
+        with TrafficDashboardStore(path) as reader:
+            value = reader.traffic()
+            assert str(current) in {event["id"] for event in value["events"]}
+            assert [finding["event_id"] for finding in value["findings"]] == [str(current)]
+            assert "PRIVATE_" not in json.dumps(value)
+
+
+def test_linked_finding_limit_remains_visible(audit):
+    _, writer, reader = audit
+    add_run(writer, count=200, finding=True)
+    value = reader.traffic()
+    assert len(value["findings"]) == 200
+    assert value["truncated"] is True and value["quality"] == "degraded"
+    assert {finding["event_id"] for finding in value["findings"]} <= {
+        event["id"] for event in value["events"]}
+
+
 @pytest.mark.parametrize("column,value", [("src_ip", "PRIVATE_"*20000), ("src_ip", b"bad"),
     ("protocol", "<script>"), ("tcp_flags", "COOKIE_SECRET"), ("observed_at", "invalid"),
     ("byte_count", "PRIVATE_NUMBER"), ("dst_port", 70000)], ids=["oversize", "blob", "protocol", "flags", "time", "integer", "port"])
