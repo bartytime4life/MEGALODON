@@ -39,7 +39,7 @@
       "platform": "linux-x86_64",
       "python": "3.12",
       "role": "wheel-smoke build tools",
-      "source_sha256": "28adef3087639cc2667a51abd650dfd9b19618cd75f8a88a996fb26acc608449"
+      "source_sha256": "680b315e1b79b5d4cab07412032cff16efa23e2ab19b4c6a6025fb5eb5390c6c"
     },
     {
       "direct_packages": [
@@ -110,7 +110,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "required test job",
-      "source_sha256": "702cee3c0bae8ad38c03755104b8ae443df1233bdc331b5bd8617ddf841055eb"
+      "source_sha256": "edd20e2529e1ede4d16d6ab6c702f0261714200f54f97454cc6b62c449864811"
     },
     {
       "direct_packages": [
@@ -176,7 +176,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "wheel-smoke tests",
-      "source_sha256": "ada3a0bee647f21357706d5c8c76b0d3daf545bdfb620276aa632204c0e99894"
+      "source_sha256": "7dbad0cf7af573794da176d50d5b2fa509906b83d3bf793790f5c656fbcb17ca"
     },
     {
       "direct_packages": [
