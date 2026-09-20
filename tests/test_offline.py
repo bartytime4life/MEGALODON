@@ -380,6 +380,65 @@ def test_zeek_json_and_tsv_parity(tmp_path, unprivileged):
     assert a.version_basis == 'operator_declared_unverified'
 
 
+@pytest.mark.parametrize('format', ['json', 'tsv'])
+@pytest.mark.parametrize('addresses,protocol', [
+    (('192.0.2.10', '198.51.100.20'), 58),
+    (('2001:db8::1', '2001:db8::2'), 1),
+])
+def test_zeek_icmp_rejects_address_protocol_mismatch(tmp_path, unprivileged, format, addresses, protocol):
+    data = conn(proto='icmp', ip_proto=protocol,
+                **{'id.orig_h': addresses[0], 'id.resp_h': addresses[1],
+                   'id.orig_p': 8, 'id.resp_p': 0})
+    (tmp_path / 'conn.log').write_text(json.dumps(data) + '\n' if format == 'json' else tsv(data))
+    with pytest.raises(OfflineError, match='^ZEEK_PROTOCOL_MISMATCH$'):
+        zeek.replay(str(tmp_path), 'conn.log', format=format, producer_version='8.2.2')
+
+
+@pytest.mark.parametrize('format', ['json', 'tsv'])
+@pytest.mark.parametrize('field', ['id.orig_p', 'id.resp_p'])
+@pytest.mark.parametrize('value', [256, 65535])
+def test_zeek_icmp_rejects_non_octet_type_code(tmp_path, unprivileged, format, field, value):
+    data = conn(proto='icmp', ip_proto=1, **{'id.orig_p': 8, 'id.resp_p': 0})
+    data[field] = value
+    (tmp_path / 'conn.log').write_text(json.dumps(data) + '\n' if format == 'json' else tsv(data))
+    with pytest.raises(OfflineError, match='^INVALID_INTEGER$'):
+        zeek.replay(str(tmp_path), 'conn.log', format=format, producer_version='8.2.2')
+
+
+@pytest.mark.parametrize('addresses,protocol', [
+    (('192.0.2.10', '198.51.100.20'), 1),
+    (('2001:db8::1', '2001:db8::2'), 58),
+])
+@pytest.mark.parametrize('declaration', ['present', 'absent', 'unset'])
+def test_zeek_icmp_valid_bounds_and_optional_protocol(tmp_path, unprivileged, addresses, protocol, declaration):
+    data = conn(proto='icmp', ip_proto=protocol,
+                **{'id.orig_h': addresses[0], 'id.resp_h': addresses[1],
+                   'id.orig_p': 255, 'id.resp_p': 0})
+    if declaration == 'absent':
+        del data['ip_proto']
+    elif declaration == 'unset':
+        data['ip_proto'] = None
+    (tmp_path / 'conn.jsonl').write_text(json.dumps(data) + '\n')
+    (tmp_path / 'conn.log').write_text(tsv(data))
+    a = zeek.replay(str(tmp_path), 'conn.jsonl', format='json', producer_version='8.2.2')
+    b = zeek.replay(str(tmp_path), 'conn.log', format='tsv', producer_version='8.2.2')
+    assert a.records == b.records
+    assert a.records[0].protocol == 'ICMP'  # Preserve the v1 flow vocabulary.
+    assert a.records[0].src_port == 255 and a.records[0].dst_port == 0
+    assert analysis.baseline(a)['destination_ports'] == []
+    assert analysis.candidates(a) == []
+
+
+def test_invalid_icmp_after_valid_record_publishes_only_failed_manifest(tmp_path, unprivileged, capsys):
+    invalid = conn(proto='icmp', ip_proto=58, **{'id.orig_p': 8, 'id.resp_p': 0})
+    (tmp_path / 'conn.jsonl').write_text(json.dumps(conn()) + '\n' + json.dumps(invalid) + '\n')
+    assert main(cli_args(tmp_path)) == 1
+    assert json.loads(capsys.readouterr().out)['manifest_written'] is True
+    manifest = json.loads((tmp_path / 'run' / 'manifest.json').read_text())
+    assert manifest['status'] == 'failed' and manifest['accepted_records'] == 0
+    assert [p.name for p in (tmp_path / 'run').iterdir()] == ['manifest.json']
+
+
 @pytest.mark.parametrize('alter', [
     lambda text: text.replace('#separator \\x09', '#separator ,'),
     lambda text: text.replace('#path\tconn', '#path\thttp'),
