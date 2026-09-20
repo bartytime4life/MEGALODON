@@ -33,8 +33,8 @@ evidence, not a production benchmark.
 ## Active tracking at this refresh
 
 At the 2026-09-20 readback, #254–#258 are closed completed and #259–#261
-remain open. The repository basis is `main@4c1d685` plus the local setup
-alignment candidate. Issue state does not establish acceptance evidence.
+remain open. The repository basis is merged PR #307 at
+`main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`. Issue state does not establish acceptance evidence.
 
 | Issue | Remaining decision or evidence theme |
 | --- | --- |

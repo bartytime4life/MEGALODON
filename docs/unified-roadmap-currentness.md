@@ -3,8 +3,8 @@
 ## Current readback — issue acceptance reconciliation
 
 OBSERVED on 2026-09-20 at
-[`main@4c1d685a967ed60d87adbef9fb548af96806e5bf`](https://github.com/bartytime4life/MEGALODON/commit/4c1d685a967ed60d87adbef9fb548af96806e5bf).
-PRs #301–#306 are merged. The prior repair backlog below is historical.
+[`main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`](https://github.com/bartytime4life/MEGALODON/commit/f3bf5d6a08c64363651e17fae07ff2e88386c0c0).
+PRs #301–#307 are merged. The prior repair backlog below is historical.
 
 | Issue | Delivered | Remaining gate |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ The merged #260 collector repair preserves historical blocked-license packets bu
 `not_assessed` for new identity collection because it does not inspect license
 or artifact metadata. All other gates and effect prohibitions remain fixed.
 
-The local setup changes are preserved in the alignment candidate. The hosted
+The local setup changes are delivered by merged PR #307. The hosted
 Console is a separate owner-private static publication; current source and
 publication identities are recorded in [the Site receipt](site-source-alignment.md).
 See [the document alignment record](document-alignment-2026-09-20.md) for local,
