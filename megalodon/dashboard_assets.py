@@ -722,7 +722,10 @@ const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
 const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
+const workspaceNavigation = {active: 'live', scroll: Object.create(null)};
 const workspaceTargets = {
+  'workspace-traffic': 'traffic', 'workspace-findings': 'findings',
+  'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
   'room-home-title': 'live', 'setup-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
   'room-reports-title': 'reports', 'room-help-title': 'help',
@@ -782,6 +785,8 @@ const ingestionTerminationReasons = new Set(['source_exhausted', 'event_limit_re
 function byId(value) { return document.getElementById(value); }
 function activateWorkspace(nextWorkspace, moveFocus = false) {
   if (!workspaceIds.includes(nextWorkspace)) return;
+  const scroller = byId('workspace-content');
+  workspaceNavigation.scroll[workspaceNavigation.active] = scroller.scrollTop;
   workspaceIds.forEach(workspace => {
     const selected = workspace === nextWorkspace;
     const tab = byId(`workspace-tab-${workspace}`);
@@ -789,11 +794,20 @@ function activateWorkspace(nextWorkspace, moveFocus = false) {
     tab.tabIndex = selected ? 0 : -1;
     byId(`workspace-${workspace}`).hidden = !selected;
   });
-  byId('workspace-content').scrollTop = 0;
+  scroller.scrollTop = workspaceNavigation.scroll[nextWorkspace] || 0;
+  workspaceNavigation.active = nextWorkspace;
   if (nextWorkspace === 'interfaces' && typeof maybeLoadIntegrationMap === 'function') maybeLoadIntegrationMap();
   if (moveFocus) {
     const tab = byId(`workspace-tab-${nextWorkspace}`);
     if (typeof tab.focus === 'function') tab.focus();
+  }
+}
+function navigateWorkspace(workspace, moveFocus = false) {
+  if (!workspaceIds.includes(workspace)) return;
+  activateWorkspace(workspace, moveFocus);
+  const hash = `#workspace-${workspace}`;
+  if (window.location && window.location.hash !== hash && window.history) {
+    try { window.history.pushState(null, '', hash); } catch { /* Navigation still works without history. */ }
   }
 }
 function workspaceFromHash(value) {
@@ -814,11 +828,11 @@ function restoreWorkspaceFromHash() {
   const targetId = hash.startsWith('#') ? hash.slice(1) : '';
   const target = targetId ? byId(targetId) : null;
   revealTargetDisclosure(target);
-  if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'start'});
+  if (target && !targetId.startsWith('workspace-') && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'start'});
 }
 workspaceIds.forEach((workspace, index) => {
   const tab = byId(`workspace-tab-${workspace}`);
-  tab.addEventListener('click', () => activateWorkspace(workspace));
+  tab.addEventListener('click', () => navigateWorkspace(workspace));
   tab.addEventListener('keydown', event => {
     let nextIndex = null;
     if (event.key === 'ArrowRight') nextIndex = (index + 1) % workspaceIds.length;
@@ -826,7 +840,7 @@ workspaceIds.forEach((workspace, index) => {
     if (event.key === 'Home') nextIndex = 0;
     if (event.key === 'End') nextIndex = workspaceIds.length - 1;
     if (nextIndex === null) return;
-    event.preventDefault(); activateWorkspace(workspaceIds[nextIndex], true);
+    event.preventDefault(); navigateWorkspace(workspaceIds[nextIndex], true);
   });
 });
 document.addEventListener('click', event => {
@@ -844,7 +858,10 @@ document.addEventListener('click', event => {
   if (target && typeof target.focus === 'function') target.focus({preventScroll: true});
   // Keep native fragment history and scrolling after exposing the target.
 });
-if (typeof window.addEventListener === 'function') window.addEventListener('hashchange', restoreWorkspaceFromHash);
+if (typeof window.addEventListener === 'function') {
+  window.addEventListener('hashchange', restoreWorkspaceFromHash);
+  window.addEventListener('popstate', restoreWorkspaceFromHash);
+}
 function textNode(tag, value = '', className) {
   const node = document.createElement(tag);
   if (className) node.className = className;

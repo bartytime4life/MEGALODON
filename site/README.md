@@ -2,6 +2,16 @@
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 
+## Proposed navigation update (not deployed)
+
+The candidate adds view links such as `#view=integrations`, Back/Forward
+navigation, and per-view reading positions for the current page session.
+Reload restores the selected view; it does not retain reading positions or
+imported reports. Mobile navigation keeps text labels visible. Unknown
+fragments are ignored, and navigation remains usable if history is unavailable.
+See `docs/site-source-alignment.md` in the parent repository for publication
+status; these changes are not claimed to be live in v28.
+
 ## Quick-start controls
 
 The first view follows Prepare / Launch / Review: from the repository root,
