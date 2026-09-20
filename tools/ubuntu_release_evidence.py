@@ -9,9 +9,11 @@ from datetime import datetime, timezone
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import platform
 import re
+import stat
 import subprocess
 import sys
 
@@ -91,7 +93,11 @@ def _bounded(value, depth: int = 0) -> None:
     if value is None or type(value) in (bool, int):
         return
     if type(value) is str:
-        if len(value.encode("utf-8")) > MAX_STRING_BYTES:
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeError:
+            _fail("INPUT_INVALID")
+        if size > MAX_STRING_BYTES:
             _fail("INPUT_LIMIT")
         return
     if type(value) is list:
@@ -121,12 +127,30 @@ def load(raw: bytes) -> dict:
             object_pairs_hook=_pairs,
             parse_constant=_reject_constant,
         )
+    except RecursionError:
+        _fail("INPUT_LIMIT")
     except (UnicodeError, ValueError, json.JSONDecodeError):
         _fail("INPUT_INVALID")
     if type(value) is not dict:
         _fail("INPUT_INVALID")
     _bounded(value)
     return value
+
+
+def read_manifest(path: Path) -> bytes:
+    """Read at most one packet plus an excess-byte sentinel from a regular file."""
+    # Nonblocking open lets a FIFO be rejected without waiting for a writer.
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            _fail("INPUT_INVALID")
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_INPUT_BYTES:
+        _fail("INPUT_LIMIT")
+    return raw
 
 
 def canonical(value: dict) -> bytes:
@@ -159,9 +183,9 @@ def validate(manifest: dict) -> dict:
     })
     if manifest["schema_version"] != "ubuntu-24.04-evidence-v1":
         _fail("INPUT_INVALID")
-    if manifest["basis"] not in {"synthetic_contract_fixture", "local_checkout", "github_actions"}:
+    if type(manifest["basis"]) is not str or manifest["basis"] not in {"synthetic_contract_fixture", "local_checkout", "github_actions"}:
         _fail("INPUT_INVALID")
-    if manifest["status"] not in {"incomplete", "candidate_evidence"}:
+    if type(manifest["status"]) is not str or manifest["status"] not in {"incomplete", "candidate_evidence"}:
         _fail("INPUT_INVALID")
     if manifest["repository"] != REPOSITORY:
         _fail("INPUT_INVALID")
@@ -181,6 +205,8 @@ def validate(manifest: dict) -> dict:
         "os_id", "version_id", "version_codename", "kernel_release", "architecture",
         "python_implementation", "python_version", "pip_version", "systemd_version",
     })
+    if any(type(value) is not str for value in platform_data.values()):
+        _fail("INPUT_INVALID")
     if (
         platform_data["os_id"], platform_data["version_id"], platform_data["version_codename"],
         platform_data["python_implementation"], platform_data["architecture"],
@@ -214,7 +240,7 @@ def validate(manifest: dict) -> dict:
     _ordered_ids(manifest["optional_components"], OPTIONAL_IDS, "OPTIONAL_STATE")
     for item in manifest["optional_components"]:
         _exact_keys(item, {"id", "state", "health", "required_for_core"}, "OPTIONAL_STATE")
-        if item["state"] not in {"absent", "disabled", "not_checked", "available_unqualified"}:
+        if type(item["state"]) is not str or item["state"] not in {"absent", "disabled", "not_checked", "available_unqualified"}:
             _fail("OPTIONAL_STATE")
         if item["health"] != "unavailable" or item["required_for_core"] is not False:
             _fail("OPTIONAL_STATE")
@@ -222,7 +248,7 @@ def validate(manifest: dict) -> dict:
     _ordered_ids(manifest["checks"], CHECK_IDS, "CHECK_SET")
     for item in manifest["checks"]:
         _exact_keys(item, {"id", "status", "output_bytes", "result_sha256", "notes"})
-        if item["status"] not in {"passed", "failed", "not_run", "blocked"}:
+        if type(item["status"]) is not str or item["status"] not in {"passed", "failed", "not_run", "blocked"}:
             _fail("INPUT_INVALID")
         if type(item["output_bytes"]) is not int or not 0 <= item["output_bytes"] <= 1_048_576:
             _fail("INPUT_INVALID")
@@ -240,6 +266,8 @@ def validate(manifest: dict) -> dict:
         _exact_keys(item, {"id", "status", "sha256", "size_bytes", "published"}, "ARTIFACT_SET")
         if item["published"] is not False:
             _fail("AUTHORITY_CLAIM")
+        if type(item["status"]) is not str:
+            _fail("ARTIFACT_SET")
         if item["status"] == "built_ephemeral":
             if type(item["sha256"]) is not str or DIGEST.fullmatch(item["sha256"]) is None:
                 _fail("ARTIFACT_SET")
@@ -419,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         if args.command == "validate":
-            raw = Path(args.manifest).read_bytes()
+            raw = read_manifest(Path(args.manifest))
             manifest = validate(load(raw))
         else:
             manifest = collect(Path(args.checkout), args.declared_commit, args.declared_tree)

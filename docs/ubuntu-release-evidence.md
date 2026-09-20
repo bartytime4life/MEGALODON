@@ -48,6 +48,14 @@ unexpected check/component/artifact identity, false optional-health claim,
 oversized output, or any effect/authority claim fails closed with one bounded
 reason.
 
+The validator reads completed regular files, retaining at most 262,144 bytes
+plus one excess-byte sentinel before parsing. Non-regular inputs (including a
+Linux FIFO with no writer), oversized files, invalid Unicode, excessive JSON
+nesting, and containers in scalar fields return a fixed blocked receipt rather
+than a traceback or input excerpt. This is a byte/type boundary, not a
+filesystem-latency guarantee or evidence authentication. Valid packets and
+historical incomplete receipts retain the same schema and canonical digest.
+
 ## What remains before candidate evidence
 
 - Run the exact nine checks on an authorized Ubuntu 24.04 host or runner and
