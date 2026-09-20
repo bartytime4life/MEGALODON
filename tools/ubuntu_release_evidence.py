@@ -54,6 +54,7 @@ KERNEL = re.compile(r"^[A-Za-z0-9._+~-]+$")
 SYSTEMD = re.compile(r"^[0-9]+(?: \([^\r\n]+\))?$")
 REPOSITORY = "bartytime4life/MEGALODON"
 ALLOWED_ORIGIN_URLS = {
+    "https://github.com/bartytime4life/MEGALODON",
     "https://github.com/bartytime4life/MEGALODON.git",
     "git@github.com:bartytime4life/MEGALODON.git",
 }

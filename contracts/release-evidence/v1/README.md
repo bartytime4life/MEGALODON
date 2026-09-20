@@ -8,9 +8,10 @@ deployment, service installation, sensor, model, firewall change, or restored
 database activation.
 
 The accepted fixture is synthetic contract evidence, not a host receipt. A
-real packet must compare externally supplied expected commit and tree values
-with one clean checkout, record exact platform/tool identities, preserve bounded
-command outcomes, and keep unavailable work explicit. Optional analyzers and Qwen are
+real packet must compare an externally supplied expected commit and the tree
+bound by that commit with one clean checkout, record exact platform/tool
+identities, preserve bounded command outcomes, and keep unavailable work
+explicit. Optional analyzers and Qwen are
 not required for core operation and can never be reported healthy merely
 because an executable was found or a component was absent.
 

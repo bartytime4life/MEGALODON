@@ -8,8 +8,9 @@ publication or host-authority claim.
 
 The contract and fixtures are under `contracts/release-evidence/v1`. The local
 collector records an exact clean commit/tree plus Ubuntu, kernel, architecture,
-CPython, pip, and systemd identity. It requires independently supplied expected
-commit and tree identifiers, then performs five fixed read-only commands: Git
+CPython, pip, and systemd identity. It requires an expected commit anchored
+outside the checkout and a tree resolved from that commit, then performs five
+fixed read-only commands: Git
 commit identity, Git tree identity, Git working-tree status, configured origin
 URL, and `systemd --version`. It does not run the nine acceptance checks, inspect
 optional tools, build artifacts, contact a network, or write an evidence file.
@@ -20,7 +21,8 @@ an accidental unrelated checkout, but a Git remote can be rewritten and is not
 an attestation. The manifest digest binds canonical packet bytes only; it does
 not authenticate their origin, reproduce a check, verify a log or artifact, or
 prove that a statement is true. Governed use must source the expected commit
-and tree outside the checkout and independently retain/recompute evidence.
+outside the checkout, verify the tree bound by that commit, and independently
+retain/recompute evidence.
 
 Validate the synthetic contract fixture:
 
@@ -32,10 +34,11 @@ python tools/ubuntu_release_evidence.py validate \
 Collect an incomplete local identity packet from a clean checkout:
 
 ```bash
+EXPECTED_COMMIT="<commit from a trusted GitHub PR or API readback>"
 python tools/ubuntu_release_evidence.py collect \
   --checkout . \
-  --declared-commit "$(git rev-parse --verify HEAD)" \
-  --declared-tree "$(git rev-parse --verify 'HEAD^{tree}')"
+  --declared-commit "$EXPECTED_COMMIT" \
+  --declared-tree "$(git rev-parse --verify "${EXPECTED_COMMIT}^{tree}")"
 ```
 
 The command writes canonical JSON to standard output. Redirecting it is an

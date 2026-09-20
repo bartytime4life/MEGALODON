@@ -147,7 +147,7 @@ def test_collector_reads_identity_only_and_leaves_execution_not_run(monkeypatch,
         if argv[:2] == ["git", "status"]:
             return ""
         if argv == ["git", "remote", "get-url", "origin"]:
-            return "https://github.com/bartytime4life/MEGALODON.git"
+            return "https://github.com/bartytime4life/MEGALODON"
         if argv == ["systemd", "--version"]:
             return "systemd 255 (255.4-1ubuntu8.17)\nfeatures omitted"
         raise AssertionError(argv)
