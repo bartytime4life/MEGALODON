@@ -123,7 +123,7 @@ def _read_bindings(
                     complete = False
                     break
     except OSError:
-        return [], False
+        return bindings, False
     return bindings, complete
 
 
@@ -241,10 +241,12 @@ def qwen_provider_posture(
         MappingProxyType({k: v for k, v in binding.items() if not k.startswith("_")})
         for binding in raw_bindings
     )
-    loopback_only = (
-        all(b["is_loopback"] for b in bindings)
-        if bindings and tables_complete else None
-    )
+    # Partial visibility cannot prove isolation, but cannot erase exposure
+    # already observed in the visible portion of the snapshot either.
+    if any(not b["is_loopback"] for b in bindings):
+        loopback_only = False
+    else:
+        loopback_only = True if bindings and tables_complete else None
 
     owning_process: Mapping[str, Any] = MappingProxyType({
         "resolution": "not_attempted", "pid": None,
