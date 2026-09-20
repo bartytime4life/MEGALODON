@@ -165,6 +165,16 @@ screen. The controls do not query additional private fields, POST data, write
 the audit database or create a server-side report. Downloads contain the exact
 reviewed JSON; they do not silently substitute data from a later refresh.
 
+The separate **Evidence → Audit history → Create a report** builder also offers
+CSV for spreadsheet review. Its export includes the source scope, last dashboard
+refresh, row bounds and interpretation limits. CSV cells beginning with a control
+character or a formula marker (`=`, `+`, `-`, `@`, including after whitespace or
+controls) receive a leading apostrophe. This affects only the exported CSV;
+stored evidence and JSON retain the original text. Spreadsheet import settings
+can affect interpretation; import columns as text and use JSON when exact
+original values are needed. The audit builder may include sample or unlinked
+rows and is distinct from the qualified Reports workspace.
+
 ## Operate the Integration Map
 
 Opening **Tools** loads the selected **Linux** profile once through a

@@ -1492,12 +1492,21 @@ function renderReportPreview() {
   byId('report-feedback').textContent = 'Preview updated. Choose copy, download, or print.'; return report;
 }
 function reportCsv(report) {
-  const quote = value => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const quote = value => {
+    const text = String(value ?? '');
+    // CSV quoting contains delimiters, but does not make formulas inert.
+    // Protect every cell, including metadata; never change the source report.
+    const formulaLike = /^[\x00-\x1f]|^[\s\x00-\x1f]*[=+@-]/u.test(text);
+    const exported = formulaLike ? "'" + text : text;
+    return `"${exported.replaceAll('"', '""')}"`;
+  };
   let rows;
   if (report.detections) rows = [['detected_at', 'severity', 'rule_id', 'src_ip', 'message'], ...report.detections.map(item => [item.detected_at, item.severity, item.rule_id, item.src_ip, item.message])];
   else if (report.ingestion_runs) rows = [['run_id', 'source', 'status', 'started_at', 'finished_at', 'processed_count', 'detection_count', 'action_count', 'termination_reason', 'failure_code'], ...report.ingestion_runs.map(item => [item.run_id, item.source, item.status, item.started_at, item.finished_at, item.processed_count, item.detection_count, item.action_count, item.termination_reason, item.failure_code])];
   else rows = [['metric', 'value'], ['events', report.summary.events], ['detections', report.summary.detections], ['high_or_critical', report.summary.high_or_critical], ['actions', report.summary.actions], ['traffic_sampled_events', report.traffic.sampled_events], ['traffic_total_bytes', report.traffic.total_bytes]];
-  rows = [['report_scope', report.scope], ['source_scope', report.source_scope], ['last_dashboard_refresh', report.last_dashboard_refresh], [], ...rows];
+  rows = [['report_scope', report.scope], ['source_scope', report.source_scope], ['last_dashboard_refresh', report.last_dashboard_refresh],
+    ['bounds', report.bounds], ['limitation', report.limitation],
+    ['csv_text_policy', 'Formula-like cells are prefixed with an apostrophe for spreadsheet review. Use JSON for original text.'], [], ...rows];
   return rows.map(row => row.map(quote).join(',')).join('\n') + '\n';
 }
 function downloadReport(contents, extension, type) {
