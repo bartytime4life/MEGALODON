@@ -59,6 +59,17 @@ verified incomplete JSON as one 30-day Actions artifact; this is CI evidence
 retention, not a package upload or release. See
 [the retention and offline verification guide](../../../docs/ubuntu-release-evidence.md#retain-and-verify-the-identity-packet).
 
-This is not a CycloneDX SBOM, SLSA provenance statement, signature, reproducible
-build claim, redistribution decision, operator recovery drill, release, or
-deployment receipt.
+The identity wrapper is not itself an SBOM or provenance statement. The
+separate `tools/release_evidence_packet.py` command accepts only a complete
+GitHub-Actions `candidate_evidence` wrapper plus the exact manifest-bound wheel
+and sdist. It emits a closed four-file profile: canonical candidate evidence,
+a canonical CycloneDX 1.7 SBOM, an in-toto Statement v1 carrying the SLSA
+provenance v1 predicate, and a digest-binding manifest. Generation and offline
+verification are documented in
+[the packet guide](../../../docs/ubuntu-release-evidence.md#release-evidence-packet).
+
+The generated provenance is unsigned and the packet status remains
+`generated_unreviewed`. Digest/shape verification is not identity
+authentication, a SLSA build-level claim, reproducibility, redistribution
+approval, operator recovery acceptance, release authority, or deployment
+authority.
