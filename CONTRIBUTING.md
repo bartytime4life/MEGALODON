@@ -90,8 +90,17 @@ Synthetic fixtures and redistributable public reference material belong in the
 repository only with their existing schema, provenance, integrity, size, and
 packaging rules. Real captures, private paths, credentials, personal telemetry,
 working databases, generated reports, and installed-tool receipts with sensitive
-content do not belong in a public test fixture. Do not alter the project license
-or third-party distribution posture without the separate owner decision.
+content do not belong in a public test fixture.
+
+## Licensing contributions
+
+MEGALODON is licensed under the [Apache License, Version 2.0](LICENSE). Unless
+you explicitly mark a submission as "Not a Contribution," a contribution
+intentionally submitted for inclusion is provided under the terms described in
+Section 5 of that license. Do not add or bundle third-party code, data, models,
+fonts, or media without recording its exact source, version, license, required
+notices, and distribution boundary. A new bundled or core dependency requires
+a fresh license review; do not infer compatibility from an SPDX label alone.
 
 ## Validation and review evidence
 
