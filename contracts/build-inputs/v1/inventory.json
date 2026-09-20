@@ -2,7 +2,7 @@
   "build_system": {
     "backend": "setuptools.build_meta",
     "requires": [
-      "setuptools>=68"
+      "setuptools>=77"
     ]
   },
   "limitations": [

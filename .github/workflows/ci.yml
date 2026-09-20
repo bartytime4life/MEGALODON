@@ -175,6 +175,8 @@ jobs:
           sdists=("$RUNNER_TEMP"/distributions/megalodon_defense-*.tar.gz)
           [ "${#wheels[@]}" -eq 1 ]
           [ "${#sdists[@]}" -eq 1 ]
+          MEGALODON_TEST_WHEEL="${wheels[0]}" MEGALODON_TEST_SDIST="${sdists[0]}" \
+            python -c 'import runpy; runpy.run_path("tests/test_license_metadata.py")["test_built_distributions_carry_license_metadata"]()'
           sha256sum "${wheels[0]}" "${sdists[0]}"
           mkdir "$RUNNER_TEMP/sdist-check"
           tar -xzf "${sdists[0]}" -C "$RUNNER_TEMP/sdist-check"

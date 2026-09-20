@@ -97,6 +97,7 @@ record delivery state; they do not override the checked-in contracts.
 | Optional Scapy capture failure reporting | [`docs/capture-failure-policy.md`](docs/capture-failure-policy.md) |
 | `python -m megalodon posture` command output | [`docs/local-posture.md`](docs/local-posture.md) |
 | Storage layout: tracked vs. runtime-only, and how the stores connect | [`docs/storage-layout.md`](docs/storage-layout.md) |
+| License decision, dependency boundary, and review triggers | [`docs/license-decision-2026-09-20.md`](docs/license-decision-2026-09-20.md) |
 
 ## Choose a configuration
 
@@ -1247,3 +1248,21 @@ measure false positives; validate live capture and TShark separately; define
 retention and data-sharing policies; keep firewall operation plan-only unless
 the restoration gate above is implemented and independently reviewed; and
 obtain independent security/operations review.
+
+## License
+
+MEGALODON is licensed under the [Apache License, Version 2.0](LICENSE)
+(SPDX `Apache-2.0`). The owner decision, alternatives, implementation scope,
+and review triggers are recorded in
+[`docs/license-decision-2026-09-20.md`](docs/license-decision-2026-09-20.md).
+
+The optional `capture` extra declares `scapy>=2.5,<3`. Scapy is loaded only
+when the operator selects the Scapy capture path, and it is not bundled into
+MEGALODON's wheel. Scapy remains under its own license; the MEGALODON license
+does not relicense it. Redistributors must review the exact Scapy version and
+their distribution arrangement. The bundled IANA registry snapshot retains
+its separate `CC0-1.0` source and license record in
+[`docs/reference-data.md`](docs/reference-data.md).
+
+This repository record is not legal advice and does not publish a package or
+release.
