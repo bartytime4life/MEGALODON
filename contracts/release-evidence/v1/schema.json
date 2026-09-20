@@ -194,10 +194,17 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["status", "blocker"],
-          "properties": {
-            "status": {"const": "blocked"},
-            "blocker": {"const": "https://github.com/bartytime4life/MEGALODON/issues/255"}
-          }
+          "oneOf": [
+            {"properties": {
+              "status": {"const": "blocked"},
+              "blocker": {"const": "https://github.com/bartytime4life/MEGALODON/issues/255"}
+            }},
+            {"properties": {
+              "status": {"const": "not_assessed"},
+              "blocker": {"type": "null"}
+            }}
+          ],
+          "properties": {"status": {}, "blocker": {}}
         },
         "operator_recovery": {"const": "not_run"},
         "sbom": {"const": "not_run"},
