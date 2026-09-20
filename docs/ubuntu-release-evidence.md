@@ -69,6 +69,16 @@ This CI evidence upload contains source/platform identity only, not telemetry,
 raw logs, captures, databases, or model output. It is not a package publication
 and does not add network access to the offline tool or application.
 
+The dependent `identity-artifact-roundtrip` job uses a fresh runner and the
+upload step's exact artifact ID, never a latest-artifact search. It rejects a
+missing ID, fails on an archive-digest mismatch, requires exactly the expected
+non-symlink JSON file, and compares its SHA-256 with the producer job's original
+file digest. It then verifies the wrapper against the event's PR head and the
+tree independently resolved from that checkout, and requires an incomplete
+local-checkout packet with all checks/subjects `not_run` and effects false.
+Success proves a same-run artifact round trip; it is not independent security
+review, host-fact authentication, or completion of the release-candidate checks.
+
 Download and extract that artifact from the matching Actions run, then verify
 it offline from a reviewed checkout. Supply the expected commit and tree from
 an independently trusted repository readback, not from the downloaded packet:
