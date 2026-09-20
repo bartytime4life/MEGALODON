@@ -1,5 +1,7 @@
 """Anchored control-room presentation; all traffic comes from the local reader."""
 
+from .dashboard_setup import SETUP_HTML
+
 STATUS_HTML = """
 <section class="room-status" aria-label="Control room status">
   <div><span>Evidence Status</span><strong id="room-overall">Unknown</strong></div>
@@ -18,9 +20,12 @@ STATUS_HTML = """
   <button type="button" id="room-pause" aria-pressed="false">Pause refresh</button>
   <button type="button" id="room-newer" hidden>Newer page</button><button type="button" id="room-older" hidden>Older page</button>
   <button type="button" id="room-latest" hidden>Return to latest</button>
-  <p id="room-feed-status" role="status">Automatic refresh is waiting for configuration.</p>
-  <p id="room-history-status" role="status"></p>
-  <p id="room-range-description">Time range unavailable</p>
+  <details class="room-feed-details">
+    <summary>Data scope and refresh details</summary>
+    <p id="room-feed-status" role="status">Automatic refresh is waiting for configuration.</p>
+    <p id="room-history-status" role="status"></p>
+    <p id="room-range-description">Time range unavailable</p>
+  </details>
 </div>
 """
 
@@ -28,7 +33,7 @@ HOME_HTML = """
 <section class="room-home panel" aria-labelledby="room-home-title">
   <p class="eyebrow">Your control room</p><h2 id="room-home-title" tabindex="-1">What can I see?</h2>
   <p id="room-home-summary">No qualified data available. Your saved audit data and optional tools are checked separately.</p>
-  <div class="room-actions"><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#integrations-title">Open Apps</a><a href="#room-reports-title">Make a report</a></div>
+  <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#integrations-title">Open Apps</a><a href="#room-reports-title">Make a report</a></div>
   <details><summary>How do we know?</summary><p>Only validated, bounded metadata linked to a non-sample ingestion run appears in Traffic and Findings. Imported JSONL provenance is unverified. Open Evidence for separate saved reports and audit history.</p></details>
 </section>
 """
@@ -63,8 +68,9 @@ TRAFFIC_HTML = """
 </section>
 <section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
   <h2 id="room-help-title" tabindex="-1">Help</h2>
-  <section class="panel"><h3>No qualified data available?</h3><p>Open the HUD from your installed MEGALODON environment with <code>python -m megalodon hud</code>. It never creates sample data or starts a sensor.</p>
-  <p>To learn how to import an authorized metadata file, run <code>python -m megalodon run --help</code>. Choose an existing completed report under Home for the next launch. Evidence shows those separate offline snapshots.</p>
+  <section class="panel"><h3>Start manually on this PC</h3><p>From the repository root, run <code>./scripts/start-local.sh --check</code>, then <code>./scripts/start-local.sh</code>. Keep the terminal open and stop with Ctrl+C. In an activated environment where MEGALODON is installed, use <code>python -m megalodon hud</code>. Launching the HUD never creates sample data or starts a sensor.</p>
+  <h3>No qualified data available?</h3><p>Start with <a href="#setup-title">Home → Data and tools</a> to review the selected store and startup tool checks. Tools found on this PC do not prove that evidence has been collected.</p>
+  <p>To learn how to import an authorized metadata file, run <code>python -m megalodon run --help</code>. Under Data and tools, expand “Change data for the next launch” to select an existing completed offline run. Evidence shows those separate offline snapshots.</p>
   <p>Refresh only reads the selected store. After the first import into a previously missing store, restart this HUD. If the store is unsafe or incompatible, inspect the terminal refusal; never weaken file permissions to force it open.</p>
   <h3>What do the words mean?</h3><p>Unavailable: there is no usable evidence. Unknown: evidence cannot answer that question. Degraded: some evidence is limited or incomplete. Stale: a saved view is older than five minutes or a refresh failed. None means that the network is safe.</p>
   <h3>What stays on this computer?</h3><p>Traffic, findings, tool checks and reports stay local. MEGALODON does not send them to the hosted reference console. Qwen is optional and cannot create findings, commands or reports.</p></section>
@@ -86,8 +92,10 @@ def compose_control_room(html: str) -> str:
     start = html.index('  <section class="trust-strip')
     end = html.index('  <section class="workspace-view" id="workspace-analysis"', start)
     legacy = html[start:end]
-    legacy = legacy[:legacy.rfind('  </section>')]
-    html = html[:start] + HOME_HTML + '</section>\n' + html[end:]
+    legacy = legacy[:legacy.rfind('  </section>')].replace(SETUP_HTML, '', 1)
+    # Setup describes the current launch, so keep it on Home rather than inside
+    # the historical audit inspector. Its IDs and handlers stay unchanged.
+    html = html[:start] + HOME_HTML + SETUP_HTML + '</section>\n' + html[end:]
     marker = '<section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>'
     html = html.replace(marker, marker + '<details class="room-audit-history"><summary>Audit history — may include sample and unlinked rows</summary>' + legacy + '</details>')
     html = html.replace('  <noscript>', TRAFFIC_HTML + '  <noscript>')
@@ -111,6 +119,9 @@ ROOM_CSS = r"""
 .room-range select,.room-range input,.room-range button,.room-back,.room-actions a { min-height:44px; font:inherit; border:1px solid #426173; border-radius:7px; padding:.65rem .8rem; color:#e9f5f9; background:#112b38; }
 .room-range p { flex-basis:100%; font-size:.78rem; color:#b7cbd4; margin:.1rem 0 .6rem; overflow-wrap:anywhere; }
 .room-range button { cursor:pointer; }
+.room-feed-details { flex-basis:100%; min-width:0; }
+.room-feed-details > summary { min-height:44px; padding:.65rem 0; color:#b7cbd4; font-size:.82rem; line-height:1.5; cursor:pointer; overflow-wrap:anywhere; }
+.room-feed-details[open] { padding-bottom:.3rem; }
 .room-back { display:inline-flex; align-items:center; text-decoration:none; align-self:start; margin:.35rem 0; }
 .section-nav { flex-wrap:wrap; }
 .room-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
@@ -134,6 +145,14 @@ ROOM_CSS = r"""
 .room-audit-history > summary { min-height:44px; padding:1rem; color:#d9e8ef; cursor:pointer; }
 .room-home p,.workspace-view > p { color:#bfd0d9; line-height:1.6; }
 .room-home summary { min-height:44px; padding:.8rem 0; cursor:pointer; }
+#setup-title { scroll-margin-top:2.25rem; }
+.setup-journey { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.2rem; margin:1rem 0; padding:0; list-style:none; }
+.setup-journey li { min-width:0; border-left:2px solid #426173; padding-left:.8rem; }
+.setup-journey strong { display:block; color:#a6f4df; font-size:.88rem; }
+.setup-journey span { display:block; margin-top:.3rem; color:#bfd0d9; font-size:.82rem; line-height:1.6; }
+.hud-start .setup-launch-help { border-top:1px solid var(--line); }
+.hud-start .setup-launch-help code { margin:.5rem 0; }
+.hud-start .setup-launch-help a { text-underline-offset:.2rem; }
 .room-report-flow { display:grid; gap:1rem; max-width:900px; }
 .room-report-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; margin:0; padding:0; list-style:none; counter-reset:none; }
 .room-report-steps li { display:grid; gap:.4rem; border:1px solid #335064; border-radius:10px; padding:.85rem; background:#0e2330; }
@@ -143,7 +162,7 @@ ROOM_CSS = r"""
 .room-report-actions button:disabled { cursor:not-allowed; opacity:.58; }
 .room-report-preview { max-height:48vh; overflow:auto; margin:0; padding:1rem; border:1px solid #335064; border-radius:10px; background:#071923; color:#dcebf0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.78rem; line-height:1.5; }
 :is(.room-range,.room-actions,.room-visual,.room-table,.room-report-actions) :focus-visible,.room-report-preview:focus-visible,.room-back:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
-@media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
+@media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps,.setup-journey { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
 @media(max-width:560px) { .room-status { grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; } .room-status > div { padding:.5rem; } .room-status span { font-size:.68rem; } .room-status strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }

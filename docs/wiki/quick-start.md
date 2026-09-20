@@ -4,7 +4,25 @@ Use MEGALODON as an ordinary user in private local storage. The synthetic core
 does not require a capture driver, firewall privilege, companion application,
 GPU, cloud account, or local model.
 
-## Prerequisites
+## Existing Linux checkout: open without generating data
+
+From a checkout containing the local setup update:
+
+```bash
+./scripts/start-local.sh --check
+./scripts/start-local.sh
+```
+
+The launcher selects an existing Python 3.11+ environment, stays in the foreground,
+and leaves missing data absent. Open its printed localhost URL on the same PC;
+Ctrl+C stops it. See [local PC setup](../local-pc-setup.md) for Home → Data and
+tools and next-launch settings. It does not install packages or start capture.
+Older installed environments can still use `python -m megalodon hud`.
+
+The following recipe is a separate, optional synthetic walkthrough for a new
+environment. Do not recreate an existing environment merely to open the HUD.
+
+## Prerequisites for the synthetic walkthrough
 
 - a reviewed MEGALODON checkout;
 - Python 3.11 or newer;

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import errno
 import json
 import logging
 import os
@@ -800,7 +801,19 @@ def _dashboard(args: argparse.Namespace) -> int:
                 ),
                 event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
             )
-    except (OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        print("\nMEGALODON dashboard stopped.")
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            print(
+                "megalodon: dashboard address is already in use; stop the existing "
+                "server or choose another port with --port 8788",
+                file=sys.stderr,
+            )
+        else:
+            print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     return 0

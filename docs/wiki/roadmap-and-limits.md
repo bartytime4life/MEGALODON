@@ -32,26 +32,27 @@ evidence, not a production benchmark.
 
 ## Active tracking at this refresh
 
-The following issues were still open on 2026-09-19. Their issue state does not
-override the code and acceptance boundaries above.
+At the 2026-09-20 readback, #254–#258 are closed completed and #259–#261
+remain open. The repository basis is `main@4c1d685` plus the local setup
+alignment candidate. Issue state does not establish acceptance evidence.
 
 | Issue | Remaining decision or evidence theme |
 | --- | --- |
-| [#254](https://github.com/bartytime4life/MEGALODON/issues/254) | Machine-readable repository currentness and maintainer disposition |
-| [#255](https://github.com/bartytime4life/MEGALODON/issues/255) | Repository license and release metadata decision |
-| [#256](https://github.com/bartytime4life/MEGALODON/issues/256) | Native and operator recovery evidence beyond the delivered contract/runtime |
-| [#257](https://github.com/bartytime4life/MEGALODON/issues/257) | Raw Suricata EVE converter qualification beyond the delivered bounded API |
-| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) | Zeek profile qualification and correlation design |
-| [#259](https://github.com/bartytime4life/MEGALODON/issues/259) | Detector registry and evidence-quality evaluation |
-| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) | Ubuntu 24.04 release-candidate evidence |
-| [#261](https://github.com/bartytime4life/MEGALODON/issues/261) | Operator-owned Ollama/Qwen containment and acceptance |
+| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) (closed) | Community ID vectors and bounded grouping are delivered; its body still lists producer-profile/schema-drift qualification. Closure supplies no missing receipt. |
+| [#259](https://github.com/bartytime4life/MEGALODON/issues/259) | Registry/report delivered; scoped exact-head acceptance remains unrecorded. Synthetic counts are not accuracy. |
+| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) | Contract and #306 collector repair delivered; retained release evidence, recovery drill, SBOM/provenance and acceptance remain. |
+| [#261](https://github.com/bartytime4life/MEGALODON/issues/261) | Contract and input repairs delivered; collector remains unbound pending exact model and authorized host acceptance. |
+
+Apache-2.0 is selected and package metadata is aligned. Currentness, bounded
+recovery and raw Suricata conversion are implemented; their original issues
+are not a pending implementation backlog.
 
 ## Evidence still needed before broader claims
 
-1. Select the license and keep release metadata consistent.
+1. Retain the Apache-2.0 decision and verify exact release artifact notices and metadata.
 2. Produce authorized native recovery, lock, interruption, exhaustion, and long-running evidence.
 3. Qualify installed producers and privacy-reviewed representative data without turning a catalog entry into a connection claim.
-4. Version and measure detector quality before operational interpretation.
+4. Accept the versioned detector report at an exact head and obtain representative quality evidence before operational interpretation.
 5. Complete Ubuntu release and native Windows evidence separately.
 6. Verify the exact local model artifact and provider containment before calling Qwen an accepted capability.
 

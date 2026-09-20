@@ -11,7 +11,7 @@ authoritative.
 
 ## Start here
 
-- [Quick start](quick-start.md) - create an isolated environment, generate synthetic evidence, and open the HUD
+- [Quick start](quick-start.md) - open an existing checkout without data, or follow the optional synthetic walkthrough
 - [Operator guide](operator-guide.md) - read Home, Traffic, Findings, Apps, Reports, Evidence, and Help correctly
 - [Security boundaries](security-boundaries.md) - understand the controls that must remain true
 - [Integrations and Qwen](integrations-and-qwen.md) - distinguish a documented app, an evidence adapter, and an advisory model
@@ -43,10 +43,10 @@ being protected in real time.
 
 ## Evidence basis
 
-All pages were refreshed on 2026-09-19 against
-[`main@5ac382d`](https://github.com/bartytime4life/MEGALODON/commit/5ac382d9516d4c2e979c26ff3068939b8ed0debe).
-That pin records the review basis; it is not a timeless currentness or release
-claim. Follow the repository documents linked above for later changes.
+Current alignment: [2026-09-20 source and document record](../document-alignment-2026-09-20.md),
+based on `main@4c1d685` plus preserved local setup work. The original full-page
+review was at `main@5ac382d` on 2026-09-19. Later source changes and dated
+receipts remain distinct from a release or operational acceptance.
 
 Wiki content is generated from `docs/wiki/`. The native GitHub Wiki is a public
 projection of those reviewed source files, not an independent authority.

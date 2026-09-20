@@ -3,29 +3,29 @@
 ## Current readback — issue acceptance reconciliation
 
 OBSERVED on 2026-09-20 at
-[`main@01559ed118e7d09a2f80781a7d71c2502a883a49`](https://github.com/bartytime4life/MEGALODON/commit/01559ed118e7d09a2f80781a7d71c2502a883a49).
-PRs #301–#305 are merged. The prior repair backlog below is historical.
+[`main@4c1d685a967ed60d87adbef9fb548af96806e5bf`](https://github.com/bartytime4life/MEGALODON/commit/4c1d685a967ed60d87adbef9fb548af96806e5bf).
+PRs #301–#306 are merged. The prior repair backlog below is historical.
 
 | Issue | Delivered | Remaining gate |
 | --- | --- | --- |
-| #258 / M02 | #299 Community ID vectors and pure grouping; #302 bounded inputs, valid seeds and distinct-source matches. | Owner-selected producer profile and closed schema-drift fixtures; installed-producer/loss evidence remains separate. CLI integration is still proposed. |
+| #258 / M02 (closed completed) | #299 Community ID vectors and pure grouping; #302 bounded inputs, valid seeds and distinct-source matches. | Issue body still lists owner-selected producer profile and closed schema-drift fixtures; closure does not prove them. installed-producer/loss evidence remains separate. CLI integration is still proposed. |
 | #259 / M02 | #294 registry/report and #296 corrected fixture mapping plus displayed corpus totals regression. All three rule versions remain 1.0.0; registry metadata is 1.0.1. | Exact-head scoped owner/independent acceptance remains unrecorded. Representative operational accuracy is outside this synthetic delivery and must not be inferred. |
-| #260 / M03 | Currentness, SQLite recovery and Apache-2.0 prerequisites are delivered; #297 provides the closed evidence contract and incomplete identity collector. | Complete nine-check/two-artifact evidence, retained operator drill, SBOM/provenance and exact-candidate disposition. The collector crash and stale license blocker are repaired in this candidate, pending merge. |
+| #260 / M03 | Currentness, SQLite recovery and Apache-2.0 prerequisites are delivered; #297 provides the closed evidence contract and incomplete identity collector. | Complete nine-check/two-artifact evidence, retained operator drill, SBOM/provenance and exact-candidate disposition. The collector crash and stale license blocker were repaired by merged #306. |
 | #261 / M04 | #300 containment contract plus #301 corpus identity and deterministic malformed-input denials. | Exact owner-selected model bytes, authorized host collector, signed adversarial corpus and independent candidate security review. Collection remains unbound. |
 
-The issue audit keeps all four acceptance issues open with specific remaining
-gates, rather than repeating delivered prerequisite work. No issue closure,
+GitHub now shows #259–#261 open and #258 closed completed. The latter
+still describes missing producer qualification; preserve that evidence gap. No issue closure,
 independent review, release, deployment or host acceptance is implied by tests.
-The #260 candidate preserves historical blocked-license packets but emits
+The merged #260 collector repair preserves historical blocked-license packets but emits
 `not_assessed` for new identity collection because it does not inspect license
 or artifact metadata. All other gates and effect prohibitions remain fixed.
 
-Defense Console v26 remains owner-private at Sites source
-`64d626ac40e30e1bd10d18569918364a90e7176a`, with successful deployment
-`appgdep_6aaf6adcb3348191ab0299a5c1c6e0e2`. All thirteen tracked `site/`
-files at this main pin match that source; no republication or runtime feed is
-needed for this issue reconciliation. Matching source does not establish
-sensor health or operator acceptance.
+The local setup changes are preserved in the alignment candidate. The hosted
+Console is a separate owner-private static publication; current source and
+publication identities are recorded in [the Site receipt](site-source-alignment.md).
+See [the document alignment record](document-alignment-2026-09-20.md) for local,
+GitHub, Wiki and Drive ownership. Matching source does not establish sensor
+health or operator acceptance.
 
 ## Historical readback — merged contracts, remaining acceptance
 
