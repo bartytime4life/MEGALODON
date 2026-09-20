@@ -431,11 +431,40 @@ def collect(checkout: Path, declared_commit: str, declared_tree: str) -> dict:
     return validate(manifest)
 
 
+def verify_packet(packet: dict, expected_commit: str, expected_tree: str) -> dict:
+    """Verify packet consistency against external pins, without authenticating it."""
+    for expected in (expected_commit, expected_tree):
+        if type(expected) is not str or HEX40.fullmatch(expected) is None:
+            _fail("INPUT_INVALID")
+    _bounded(packet)
+    _exact_keys(packet, {"schema_version", "status", "manifest_sha256", "manifest"}, "PACKET_INVALID")
+    if (
+        packet["schema_version"] != "ubuntu-24.04-evidence-validation-v1"
+        or packet["status"] != "validated"
+        or type(packet["manifest_sha256"]) is not str
+        or DIGEST.fullmatch(packet["manifest_sha256"]) is None
+    ):
+        _fail("PACKET_INVALID")
+    manifest = validate(packet["manifest"])
+    if packet["manifest_sha256"] != digest(manifest):
+        _fail("DIGEST_MISMATCH")
+    if (
+        manifest["source"]["observed_commit"] != expected_commit
+        or manifest["source"]["observed_tree"] != expected_tree
+    ):
+        _fail("SOURCE_MISMATCH")
+    return manifest
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(allow_abbrev=False)
     group = result.add_subparsers(dest="command", required=True)
     verify = group.add_parser("validate", allow_abbrev=False)
     verify.add_argument("manifest")
+    packet = group.add_parser("verify-packet", allow_abbrev=False)
+    packet.add_argument("packet")
+    packet.add_argument("--expected-commit", required=True)
+    packet.add_argument("--expected-tree", required=True)
     capture = group.add_parser("collect", allow_abbrev=False)
     capture.add_argument("--checkout", default=".")
     capture.add_argument("--declared-commit", required=True)
@@ -449,6 +478,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "validate":
             raw = read_manifest(Path(args.manifest))
             manifest = validate(load(raw))
+        elif args.command == "verify-packet":
+            packet = load(read_manifest(Path(args.packet)))
+            manifest = verify_packet(packet, args.expected_commit, args.expected_tree)
         else:
             manifest = collect(Path(args.checkout), args.declared_commit, args.declared_tree)
         result = {

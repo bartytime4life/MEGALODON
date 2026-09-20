@@ -51,6 +51,14 @@ checkout, but it is not attestation; packet SHA-256 binds canonical bytes, not
 their provenance or truth. Independent evidence must retain and recompute the
 underlying logs and artifact subjects.
 
+`verify-packet` accepts the complete emitted wrapper, recomputes its manifest
+digest, and compares its validated source identity with required external
+commit/tree pins. It performs no host command or network operation and does
+not authenticate self-asserted observations. The PR identity job retains its
+verified incomplete JSON as one 30-day Actions artifact; this is CI evidence
+retention, not a package upload or release. See
+[the retention and offline verification guide](../../../docs/ubuntu-release-evidence.md#retain-and-verify-the-identity-packet).
+
 This is not a CycloneDX SBOM, SLSA provenance statement, signature, reproducible
 build claim, redistribution decision, operator recovery drill, release, or
 deployment receipt.

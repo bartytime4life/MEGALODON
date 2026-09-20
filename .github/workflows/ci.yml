@@ -104,6 +104,9 @@ jobs:
             --checkout . \
             --declared-commit "$EXPECTED_COMMIT" \
             --declared-tree "$observed_tree" | tee "$packet"
+          python tools/ubuntu_release_evidence.py verify-packet "$packet" \
+            --expected-commit "$EXPECTED_COMMIT" \
+            --expected-tree "$observed_tree" >/dev/null
           python - "$packet" <<'PYIDENTITY'
           import json
           from pathlib import Path
@@ -121,6 +124,15 @@ jobs:
           assert all(value is False for value in manifest["effects"].values())
           print(result["manifest_sha256"])
           PYIDENTITY
+      - name: Retain verified incomplete identity packet
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ubuntu-identity-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ubuntu-24.04-incomplete-identity.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+          include-hidden-files: false
 
   wheel-smoke:
     runs-on: ubuntu-24.04
