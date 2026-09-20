@@ -89,12 +89,8 @@ def parse_flow(data: dict) -> FlowRecord:
                 raise OfflineError('INVALID_ZEEK_FIELD')
     if data['proto'] not in {'tcp', 'udp', 'icmp'}:
         raise OfflineError('UNSUPPORTED_ZEEK_PROTOCOL')
-    if data.get('ip_proto') is not None:
-        expected = {'tcp': {6}, 'udp': {17}, 'icmp': {1, 58}}[data['proto']]
-        if uint(data['ip_proto'], 255) not in expected:
-            raise OfflineError('ZEEK_PROTOCOL_MISMATCH')
     duration = data.get('duration')
-    return FlowRecord(
+    record = FlowRecord(
         observed_at=timestamp(data['ts']), src_ip=data['id.orig_h'], dst_ip=data['id.resp_h'],
         protocol=data['proto'].upper(), src_port=uint(data['id.orig_p'], 65535),
         dst_port=uint(data['id.resp_p'], 65535),
@@ -104,6 +100,14 @@ def parse_flow(data: dict) -> FlowRecord:
         byte_count=uint(data['orig_ip_bytes'], 2**40 - 1) + uint(data['resp_ip_bytes'], 2**40 - 1),
         conn_state=data['conn_state'],
     )
+    if data.get('ip_proto') is not None:
+        # FlowRecord has normalized both addresses and required one family.
+        # A declaration of ICMPv6 on IPv4 (or ICMP on IPv6) is contradictory.
+        expected = {'TCP': 6, 'UDP': 17,
+                    'ICMP': 58 if ':' in record.src_ip else 1}[record.protocol]
+        if uint(data['ip_proto'], 255) != expected:
+            raise OfflineError('ZEEK_PROTOCOL_MISMATCH')
+    return record
 
 
 def _tsv_value(value: str, field: str) -> object:
