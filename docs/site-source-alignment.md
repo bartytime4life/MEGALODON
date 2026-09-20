@@ -1,6 +1,39 @@
 # Defense Console source alignment
 
-## Current publication — Console v22 detector-evidence surface
+## Current readback — Console v26 and proposed repository mirror repair
+
+Readback on 2026-09-20 pins the repository to
+`main@9c2675b8dbc8bbae319525803e28a0542031c8b2` and the existing owner-private
+Defense Console to v26. The historical checkpoints below retain their original
+evidence; they do not describe the current publication or current PR states.
+
+**OBSERVED:** deployment `appgdep_6aaf6adcb3348191ab0299a5c1c6e0e2` succeeded
+at `2026-09-20T05:11:37.840507+00:00`.
+
+- Project: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3`.
+- Version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_7da7c502755c8191b40b526c4d30d0a0`.
+- Sites source: `64d626ac40e30e1bd10d18569918364a90e7176a`.
+- Archive: `sha256:17736c30a7c5055baf2824900399444caaca0923c38c04de4661094ed4937d64`, ten deployable files.
+- URL: <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+
+**VERIFIED source comparison:** three of thirteen tracked `site/` files at the
+pinned main differ from the deployed source: `site/README.md`,
+`site/dist/index.html`, and `site/tests/readiness.test.cjs`. The candidate copies
+exactly those three files from the pinned Sites source; all thirteen candidate
+files then match. It restores the existing Apache-2.0 license disclosure and its
+regression check to the GitHub mirror. It does not claim current-main equality
+until an authorized merge and readback establish it.
+
+**VERIFIED local checks:** 41 Node tests and JavaScript syntax checks pass.
+**OBSERVED logs:** the error-only query for the preceding 1,440 minutes returned
+no events. This does not prove a browser walkthrough, complete log retention,
+host installation, telemetry availability, or operational health. No Site source
+was edited, no version was published, and no audience changed in this repair.
+
+The current runtime remains a disconnected reference console. Local telemetry,
+model operation, release publication, and independent acceptance stay separate.
+
+## Historical publication — Console v22 detector-evidence surface
 
 Repository base `main@c8af8993fb258843e2001c1cbdfef1a430026d15`
 contains the detector registry and synthetic evidence report from
@@ -36,7 +69,7 @@ its pull request is reviewed and merged. Site publication, repository merge,
 release, local installation, independent acceptance and rendered-browser
 acceptance remain separate.
 
-## Current readback — merged repairs and Console v21 source parity
+## Historical readback — merged repairs and Console v21 source parity
 
 Repository `main@555874468073a04a7711ec4a96c8cdf810e1051d` includes both
 [#292](https://github.com/bartytime4life/MEGALODON/pull/292), recovery failure

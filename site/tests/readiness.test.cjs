@@ -203,6 +203,17 @@ test('evidence desk separates bundled detector checks from runtime telemetry', (
   assert.doesNotMatch(html, /live detector accuracy|verified safe|real-network coverage confirmed/);
 });
 
+test('license selection reflects merged repository state without claiming a release', () => {
+  const fs = require('node:fs');
+  const html = fs.readFileSync(require.resolve('../dist/index.html'), 'utf8');
+  assert.match(html, /data-license-status/);
+  assert.match(html, /Repository license · Apache-2\.0/);
+  assert.match(html, /Merged PR #298/);
+  assert.match(html, /Issue #255 is complete; no package, tag, or release was published/);
+  assert.match(html, /https:\/\/github\.com\/bartytime4life\/MEGALODON\/pull\/298/);
+  assert.doesNotMatch(html, /Apache-2\.0 package released|release published/);
+});
+
 test('whole application initializes and navigates without a feed or browser network API', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   class Element {
