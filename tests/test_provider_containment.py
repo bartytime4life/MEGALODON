@@ -93,19 +93,21 @@ def test_loopback_listener_is_observed_and_self_owned() -> None:
         server.close()
 
 
-def test_wildcard_listener_breaks_loopback_only() -> None:
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        server.bind(("0.0.0.0", 0))
-        server.listen(1)
-        port = server.getsockname()[1]
+def test_wildcard_listener_breaks_loopback_only(tmp_path, monkeypatch) -> None:
+    port = 48_765
+    tcp_table = tmp_path / "tcp"
+    tcp_table.write_text(
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        f"   0: 00000000:{port:04X} 00000000:0000 0A 00000000:00000000 "
+        f"00:00000000 00000000 {pc.os.geteuid()} 0 12345\n",
+        encoding="ascii",
+    )
+    monkeypatch.setattr(pc, "_TCP_TABLES", (("ipv4", str(tcp_table), 4),))
 
-        result = pc.qwen_provider_posture(host="127.0.0.1", port=port)
-        assert result["listening"] == "yes"
-        assert result["loopback_only"] is False
-        assert result["bindings"][0]["is_loopback"] is False
-    finally:
-        server.close()
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=port)
+    assert result["listening"] == "yes"
+    assert result["loopback_only"] is False
+    assert result["bindings"][0]["is_loopback"] is False
 
 
 def test_result_is_a_fully_immutable_snapshot() -> None:
@@ -145,6 +147,57 @@ def test_unreadable_proc_reports_unknown_not_no(monkeypatch) -> None:
     monkeypatch.setattr(pc, "_TCP_TABLES", (("ipv4", "/nonexistent/tcp", 4), ("ipv6", "/nonexistent/tcp6", 16)))
     result = pc.qwen_provider_posture(host="127.0.0.1", port=59999)
     assert result["listening"] == "unknown"
+    assert result["loopback_only"] is None
+
+
+def test_existing_but_denied_proc_reports_unknown_not_no(monkeypatch) -> None:
+    monkeypatch.setattr(pc, "_TCP_TABLES", (("ipv4", "/proc/net/tcp", 4),))
+
+    def denied_open(*args, **kwargs):
+        raise PermissionError("simulated proc denial")
+
+    monkeypatch.setattr("builtins.open", denied_open)
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=59999)
+    assert result["listening"] == "unknown"
+    assert result["loopback_only"] is None
+
+
+def test_partial_tables_never_claim_loopback_only(tmp_path, monkeypatch) -> None:
+    port = 48_766
+    tcp_table = tmp_path / "tcp"
+    tcp_table.write_text(
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        f"   0: 0100007F:{port:04X} 00000000:0000 0A 00000000:00000000 "
+        f"00:00000000 00000000 {pc.os.geteuid()} 0 12346\n",
+        encoding="ascii",
+    )
+    monkeypatch.setattr(pc, "_TCP_TABLES", (
+        ("ipv4", str(tcp_table), 4),
+        ("ipv6", "/nonexistent/tcp6", 16),
+    ))
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=port)
+    assert result["listening"] == "yes"
+    assert result["loopback_only"] is None
+
+
+def test_binding_cap_never_claims_complete_loopback_scope(tmp_path, monkeypatch) -> None:
+    port = 48_767
+    tcp_table = tmp_path / "tcp"
+    tcp_table.write_text(
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        f"   0: 0100007F:{port:04X} 00000000:0000 0A 00000000:00000000 "
+        f"00:00000000 00000000 {pc.os.geteuid()} 0 12347\n"
+        f"   1: 00000000:{port:04X} 00000000:0000 0A 00000000:00000000 "
+        f"00:00000000 00000000 {pc.os.geteuid()} 0 12348\n",
+        encoding="ascii",
+    )
+    monkeypatch.setattr(pc, "MAX_BINDINGS", 1)
+    monkeypatch.setattr(pc, "_TCP_TABLES", (("ipv4", str(tcp_table), 4),))
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=port)
+    assert result["listening"] == "yes"
+    assert len(result["bindings"]) == 1
     assert result["loopback_only"] is None
 
 
