@@ -44,7 +44,7 @@ being protected in real time.
 ## Evidence basis
 
 Current alignment: [2026-09-20 source and document record](../document-alignment-2026-09-20.md),
-based on `main@4c1d685` plus preserved local setup work. The original full-page
+based on merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`. The original full-page
 review was at `main@5ac382d` on 2026-09-19. Later source changes and dated
 receipts remain distinct from a release or operational acceptance.
 

@@ -1,5 +1,52 @@
 # Document and file alignment — 2026-09-20
 
+## Current reconciliation after merged PR #307
+
+OBSERVED 2026-09-20: repository `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0` is the
+merge of [#307](https://github.com/bartytime4life/MEGALODON/pull/307), whose
+source head was `f21e5c3583ae0f4e52ebc303459b89daf07859ee`.
+The local launcher and associated source/Wiki documentation are delivered on
+main. References below to uncommitted work, a review snapshot, or a pending
+alignment branch describe the original preparation checkpoint only.
+
+| Surface | Reconciled state | Evidence limit |
+| --- | --- | --- |
+| Repository | #306 and #307 merged; readback found only #259–#261 open and no open PRs before this alignment candidate | Queue state is not acceptance; this candidate uses an `agent/*` draft PR |
+| License and recovery | Apache-2.0 root/package metadata and explicit bounded recovery are delivered | Release artifact notices, provenance and operator recovery acceptance remain separate |
+| #258 | Closed completed; Community ID vectors and bounded grouping delivered | Its unchecked producer-profile/schema-drift requirements remain missing evidence |
+| #259 | Registry/report delivered; metadata 1.0.1, rule versions 1.0.0, 12 synthetic scenarios / 6,492 events | Scoped exact-head acceptance remains open; no operational accuracy claim |
+| #260 | Closed evidence contract and #306 collector correction delivered | Nine checks, two artifacts, retained recovery drill and exact-candidate disposition remain |
+| #261 | Containment contract and malformed-input/corpus-ID repairs delivered | Collector remains unbound; exact model, authorized host observations, signed corpus and independent review remain |
+| Sites | Owner-private Console v28 corrects the local setup link to immutable merged #307 source | Separate source/deployment identities and comparison scope are in [the Site receipt](site-source-alignment.md) |
+| Drive | Existing coordination log, integration blueprint and platform roadmap are reconciliation targets | No private document body is copied into GitHub; project instructions already match the runtime authority boundary |
+| Supplied roadmaps | Historical planning inputs receive a correction layer rather than silently replacing historical pins | Proposal adoption, source authenticity and host qualification are not supplied by alignment |
+
+This is a documentation and reference-link correction. It changes no runtime
+code, fixtures, detector thresholds, schema data, dependencies or host authority.
+The original 2,899-test result below is historical; it is not a new test result
+for this alignment. Candidate validation is recorded in the draft PR.
+The generated Wiki updates only after an owner-authorized merge and its normal
+publisher succeeds. No fresh repository-currentness manifest is claimed.
+
+## Supplied planning-input disposition
+
+- The unified architecture's no-license and missing durable-consumer claims are
+  stale. Separate dashboard reads, atomic event persistence, completed raw-EVE
+  conversion, recovery and currentness tooling are already represented in source.
+- Application loopback/digest checks do not prove provider process isolation,
+  no egress, no filesystem writes or accepted model identity. Q0 code delivery
+  is not #261 acceptance. Model output remains untrusted commentary.
+- Q2 reuse of previous model answers conflicts with the no-recursion boundary;
+  retain it as unresolved proposed design. Automation is still schema/fixtures,
+  with no runtime scheduler, per-event executor or automated firewall planning.
+- The research plan's PR #251 repair/no-license/zero-open-issue snapshot is
+  historical. Its version recommendations and external incident descriptions
+  were not re-researched here and do not qualify installed producers.
+- Preserve historical source bytes and approval appendices. Neither attached
+  document becomes an accepted specification through this reconciliation.
+
+## Historical preparation and validation checkpoint
+
 ## Authority and source preservation
 
 The owner selected the current MEGALODON working files as the alignment authority,
