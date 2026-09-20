@@ -80,6 +80,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
+    outputs:
+      artifact-id: ${{ steps.retain.outputs.artifact-id }}
+      packet-sha256: ${{ steps.identity.outputs.packet-sha256 }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,6 +94,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Generate bounded non-root identity packet
+        id: identity
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -124,7 +128,10 @@ jobs:
           assert all(value is False for value in manifest["effects"].values())
           print(result["manifest_sha256"])
           PYIDENTITY
+          packet_sha256="$(sha256sum "$packet" | cut -d ' ' -f 1)"
+          echo "packet-sha256=$packet_sha256" >> "$GITHUB_OUTPUT"
       - name: Retain verified incomplete identity packet
+        id: retain
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ubuntu-identity-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -133,6 +140,72 @@ jobs:
           retention-days: 30
           overwrite: false
           include-hidden-files: false
+
+  identity-artifact-roundtrip:
+    if: github.event_name == 'pull_request'
+    needs: incomplete-identity-packet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check out exact candidate verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Require exact retained artifact ID
+        env:
+          ARTIFACT_ID: ${{ needs.incomplete-identity-packet.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+      - name: Download only the retained identity artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.incomplete-identity-packet.outputs.artifact-id }}
+          path: ${{ runner.temp }}/identity-roundtrip
+          merge-multiple: true
+          digest-mismatch: error
+      - name: Verify downloaded bytes and candidate identity
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_PACKET_SHA256: ${{ needs.incomplete-identity-packet.outputs.packet-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          export EXPECTED_TREE="$(git rev-parse --verify 'HEAD^{tree}')"
+          python - <<'PYROUNDTRIP'
+          import hashlib
+          import os
+          from pathlib import Path
+          import re
+          import runpy
+
+          tool = runpy.run_path("tools/ubuntu_release_evidence.py")
+          directory = Path(os.environ["RUNNER_TEMP"]) / "identity-roundtrip"
+          packet_path = directory / "ubuntu-24.04-incomplete-identity.json"
+          if set(directory.iterdir()) != {packet_path} or packet_path.is_symlink():
+              raise SystemExit("IDENTITY_ROUNDTRIP:FILE_SET")
+          raw = tool["read_manifest"](packet_path)
+          expected_digest = os.environ["EXPECTED_PACKET_SHA256"]
+          if (re.fullmatch(r"[0-9a-f]{64}", expected_digest) is None
+                  or hashlib.sha256(raw).hexdigest() != expected_digest):
+              raise SystemExit("IDENTITY_ROUNDTRIP:BYTES_MISMATCH")
+          manifest = tool["verify_packet"](
+              tool["load"](raw), os.environ["EXPECTED_COMMIT"], os.environ["EXPECTED_TREE"],
+          )
+          if (manifest["basis"] != "local_checkout" or manifest["status"] != "incomplete"
+                  or any(row["status"] != "not_run" for row in manifest["checks"])
+                  or any(row["status"] != "not_run" for row in manifest["artifacts"])
+                  or any(value is not False for value in manifest["effects"].values())):
+              raise SystemExit("IDENTITY_ROUNDTRIP:STATE_MISMATCH")
+          print("IDENTITY_ROUNDTRIP:VERIFIED_INCOMPLETE")
+          PYROUNDTRIP
 
   wheel-smoke:
     runs-on: ubuntu-24.04
