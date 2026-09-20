@@ -193,6 +193,16 @@ test('exchange map separates the implemented offline STIX reader from inert SIEM
   assert.doesNotMatch(html, /Connect TAXII|Send to SIEM|Run playbook|Choose STIX bundle/);
 });
 
+test('evidence desk separates bundled detector checks from runtime telemetry', () => {
+  const fs = require('node:fs');
+  const html = fs.readFileSync(require.resolve('../dist/index.html'), 'utf8');
+  assert.match(html, /id="detector-evidence-title"/);
+  for (const value of ['DNS_TUNNELING', 'PORT_SCAN', 'SYN_FLOOD', '12 synthetic scenarios', '6,492 metadata events']) assert.ok(html.includes(value));
+  assert.match(html, /Source feature · not telemetry/);
+  assert.match(html, /does not establish TP\/FP\/FN\/TN, real-network coverage, detector accuracy, maliciousness, or a safe host/);
+  assert.doesNotMatch(html, /live detector accuracy|verified safe|real-network coverage confirmed/);
+});
+
 test('whole application initializes and navigates without a feed or browser network API', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   class Element {

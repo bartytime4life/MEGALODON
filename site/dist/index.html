@@ -124,6 +124,15 @@
           <div class="view-heading"><div><p class="eyebrow">Follow the evidence</p><h1 id="evidence-title" tabindex="-1">Evidence desk</h1><p>Review actual source, run and completeness information in your local MEGALODON dashboard. This hosted page has received no network evidence.</p></div><div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO RUNTIME RECEIPTS</strong><small>No imported network evidence</small></span></div></div>
           <div class="evidence-summary" aria-label="Evidence availability"><article><strong>—</strong><span>Completeness unknown</span></article><article><strong>—</strong><span>Source health unknown</span></article><article><strong>—</strong><span>Commit state unknown</span></article><article><strong>0</strong><span>Site runtime connectors</span></article></div>
           <div class="evidence-layout"><section class="panel"><div class="panel-heading"><div><p class="panel-kicker">RUN HISTORY</p><h2>Quality before quantity</h2></div></div><div id="run-list" class="run-list" aria-label="Runtime receipts unavailable"></div><p class="panel-footnote">A missing or incomplete source is never a clean bill of health. Packet, flow, and alert counts are different units.</p></section><article id="run-inspector" class="panel run-inspector" aria-live="polite"></article></div>
+          <section class="panel detector-evidence" aria-labelledby="detector-evidence-title">
+            <div class="panel-heading"><div><p class="panel-kicker">BUNDLED SYNTHETIC EVIDENCE</p><h2 id="detector-evidence-title">Fixed detector registry</h2></div><span class="status-pill bounded">Source feature · not telemetry</span></div>
+            <div class="detector-registry" aria-label="Versioned detector rules">
+              <article><span>DNS_TUNNELING</span><strong>Rule 1.0.0</strong><p>Long DNS-shaped metadata at the configured threshold.</p></article>
+              <article><span>PORT_SCAN</span><strong>Rule 1.0.0</strong><p>Distinct TCP destination ports within a bounded window.</p></article>
+              <article><span>SYN_FLOOD</span><strong>Rule 1.0.0</strong><p>Qualifying TCP SYN counts, including source-cap eviction evidence.</p></article>
+            </div>
+            <div class="detector-evidence-note"><strong>12 synthetic scenarios · 6,492 metadata events</strong><p>The offline evaluator verifies the bundled corpus and reports exact denominators, exclusions, source identity declarations, and quality limits. It does not establish TP/FP/FN/TN, real-network coverage, detector accuracy, maliciousness, or a safe host.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/reference-data.md#rule-identity-and-evidence-reports" target="_blank" rel="noreferrer">Review the detector evidence contract ↗</a></div>
+          </section>
         </section>
 
         <section class="view" data-view-panel="integrations" aria-labelledby="integrations-title" hidden>

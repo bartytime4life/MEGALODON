@@ -1,5 +1,41 @@
 # Defense Console source alignment
 
+## Current publication — Console v22 detector-evidence surface
+
+Repository base `main@c8af8993fb258843e2001c1cbdfef1a430026d15`
+contains the detector registry and synthetic evidence report from
+[#294](https://github.com/bartytime4life/MEGALODON/pull/294). Its merged registry
+misbound `source-cap-pressure-v1` to `DNS_TUNNELING` even though the scenario's
+expected counts are DNS 0, port scan 0 and SYN flood 2. The current repair moves
+that fixture to `SYN_FLOOD`, advances only the registry metadata version to
+`1.0.1`, and adds a regression tied to the corpus expectation. The three rule
+versions remain `1.0.0`; no detector behavior, threshold, ingestion path, model,
+host action or runtime authority changes.
+
+The same bounded repair adds a static Evidence Desk summary of the three rules
+and the 12-scenario, 6,492-event bundled synthetic corpus. The page labels it as
+a repository source feature, not runtime telemetry, and states that the corpus
+does not establish classification metrics, real-network coverage, accuracy,
+maliciousness or host safety. The hosted console remains disconnected from
+operator telemetry and exposes no host-control path.
+
+**OBSERVED deployment:** the existing owner-private Defense Console v22
+succeeded at `2026-09-20T03:09:35.819131+00:00`.
+
+- Sites source: `bcf11a8025dcefbaf1768406879e6d59783b0088`.
+- Version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_443cccd3a4308191adb02ad7fc5c047b`.
+- Deployment: `appgdep_6aaf4e6acf20819182dd5432cf81cb13`.
+- Archive: `sha256:4e35e9805c3f713b4f0d51f1fb6aef31a59ba8edfc3acd5c88bce730e2b0f35a`; ten deployable files.
+- URL: <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+
+**VERIFIED candidate evidence:** all thirteen tracked `site/` files match that
+Sites source byte-for-byte; 40 Node tests, JavaScript syntax, local asset
+references and repository/Site mirror equality pass. Focused registry and
+reference tests also pass. The GitHub change remains a draft candidate until
+its pull request is reviewed and merged. Site publication, repository merge,
+release, local installation, independent acceptance and rendered-browser
+acceptance remain separate.
+
 ## Current readback — merged repairs and Console v21 source parity
 
 Repository `main@555874468073a04a7711ec4a96c8cdf810e1051d` includes both

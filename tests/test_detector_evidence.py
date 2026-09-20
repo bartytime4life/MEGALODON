@@ -38,6 +38,7 @@ def test_unregistered_detection_cannot_disappear_from_passing_evaluation(monkeyp
 def test_registry_round_trip_is_closed_detached_and_bound_to_existing_fixtures():
     document = registry_document()
     assert json.loads(json.dumps(document)) == document
+    assert document["registry_version"] == "1.0.1"
     assert [(rule["rule_id"], rule["version"], rule["severity"]) for rule in document["rules"]] == [
         ("DNS_TUNNELING", "1.0.0", "CRITICAL"),
         ("PORT_SCAN", "1.0.0", "MEDIUM"),
@@ -58,6 +59,26 @@ def test_registry_round_trip_is_closed_detached_and_bound_to_existing_fixtures()
     document["default_settings"]["dns_query_length"] = 0
     assert registry_sha256() == digest
     assert "payload" not in DETECTORS[0].required_fields
+
+
+def test_source_capacity_fixture_is_bound_only_to_the_rule_it_exercises():
+    document = registry_document()
+    fixture_rules = {
+        rule["rule_id"]
+        for rule in document["rules"]
+        if "source-cap-pressure-v1" in rule["fixtures"]
+    }
+    scenario = next(
+        item for item in load_corpus().scenarios
+        if item.scenario_id == "source-cap-pressure-v1"
+    )
+
+    assert fixture_rules == {"SYN_FLOOD"}
+    assert dict(scenario.expected) == {
+        "DNS_TUNNELING": 0,
+        "PORT_SCAN": 0,
+        "SYN_FLOOD": 2,
+    }
 
 
 def test_report_preserves_legacy_results_and_never_invents_classification_metrics():

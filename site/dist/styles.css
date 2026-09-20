@@ -572,6 +572,16 @@ input:focus-visible, [tabindex="-1"]:focus-visible { outline: 2px solid var(--cy
 .evidence-summary strong { display: block; font: 2rem/1.3 "SFMono-Regular", Consolas, monospace; color: var(--cyan); }
 .evidence-summary span { color: var(--muted); font-size: 0.8rem; }
 .evidence-layout { display: grid; grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1.3fr); gap: 1rem; align-items: start; }
+.detector-evidence { margin-top: 1rem; }
+.detector-registry { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 0 1rem; border: 1px solid var(--line); background: var(--line); }
+.detector-registry article { padding: 1rem; background: #07131c; }
+.detector-registry span, .detector-registry strong { display: block; }
+.detector-registry span { color: var(--cyan); font: 700 0.68rem/1.3 "SFMono-Regular", Consolas, monospace; letter-spacing: 0.06em; }
+.detector-registry strong { margin-top: 0.35rem; font-size: 0.86rem; }
+.detector-registry p, .detector-evidence-note p { color: var(--muted); font-size: 0.75rem; line-height: 1.55; }
+.detector-evidence-note { margin: 1rem; padding: 1rem; border-left: 2px solid var(--amber); background: rgba(244,196,105,0.045); }
+.detector-evidence-note strong { font-size: 0.82rem; }
+.detector-evidence-note a { color: var(--cyan); font-size: 0.72rem; }
 .run-list { padding: 0 1rem 1rem; }
 .run-item { display: block; width: 100%; margin-bottom: 0.6rem; padding: 1rem; text-align: left; border: 1px solid var(--line); background: transparent; cursor: pointer; }
 .run-item:hover, .run-item.active { background: rgba(78,220,243,0.06); border-color: var(--cyan); }
@@ -603,6 +613,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 @media (max-width: 980px) {
   .readiness-import { grid-template-columns: 1fr; }
   .evidence-layout { grid-template-columns: 1fr; }
+  .detector-registry { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .primary-nav { grid-template-columns: repeat(5, 1fr); }
