@@ -5,6 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
 
 ROOT = Path(__file__).parents[1]
 
@@ -93,28 +94,63 @@ def test_sensitive_runtime_and_build_artifacts_are_ignored():
     assert trackable.stdout == ""
 
 
+def _assert_workflow_credentials(workflow):
+    action_refs = re.findall(
+        r"^\s+(?:- )?uses:\s+([^@\s]+)@([^\s#]+)", workflow, re.MULTILINE,
+    )
+    assert action_refs
+    assert all(re.fullmatch(r"[0-9a-f]{40}", revision) for _, revision in action_refs)
+
+    # This guard supports the repository's block-style, six-space step layout.
+    # Count all checkout references so unsupported layouts fail rather than skip.
+    steps = re.findall(r"(?ms)^      - .*?(?=^      - |^  [^ \n]|\Z)", workflow)
+    checkout_steps = [
+        step for step in steps
+        if re.search(r"^\s+(?:- )?uses:\s+actions/checkout@", step, re.MULTILINE)
+    ]
+    checkout_refs = [name for name, _ in action_refs if name == "actions/checkout"]
+    assert len(checkout_steps) == len(checkout_refs) > 0
+    for step in checkout_steps:
+        inputs = re.findall(r"(?m)^        with:\n((?:^          [^\n]*\n?)*)", step)
+        assert len(inputs) == 1
+        persistence = re.findall(r"(?m)^          persist-credentials:\s*([^\n]+)", inputs[0])
+        assert persistence == ["false"]
+
+
 def test_actions_are_sha_pinned_and_checkouts_do_not_persist_credentials():
     workflow_paths = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
     assert workflow_paths
 
     for path in workflow_paths:
         workflow = path.read_text(encoding="utf-8")
-        action_refs = re.findall(
-            r"^\s+uses:\s+([^@\s]+)@([^\s#]+)", workflow, re.MULTILINE
-        )
-        assert action_refs, path
-        assert all(
-            re.fullmatch(r"[0-9a-f]{40}", revision)
-            for _, revision in action_refs
-        ), path
+        _assert_workflow_credentials(workflow)
 
-        checkout_steps = re.findall(
-            r"(?ms)^      - name: Check out source\n(.*?)(?=^      - name:|\Z)",
-            workflow,
-        )
-        checkout_refs = [name for name, _ in action_refs if name == "actions/checkout"]
-        assert len(checkout_steps) == len(checkout_refs) > 0, path
-        assert all("persist-credentials: false" in step for step in checkout_steps), path
+
+@pytest.mark.parametrize("label", ["Check out source", "Check out exact candidate verifier", "Arbitrary label", None])
+def test_checkout_guard_uses_action_identity_not_display_name(label):
+    action = "actions/checkout@" + "a" * 40
+    start = f"      - name: {label}\n        uses: {action}\n" if label else f"      - uses: {action}\n"
+    _assert_workflow_credentials(start + "        with:\n          persist-credentials: false\n")
+
+
+@pytest.mark.parametrize("unsafe", [
+    "",
+    "        with:\n          persist-credentials: true\n",
+    "        with:\n          # persist-credentials: false\n",
+    "        with:\n          persist-credentials: false\n          persist-credentials: true\n",
+    "        run: |\n          persist-credentials: false\n",
+])
+def test_checkout_guard_cannot_borrow_safe_setting_from_another_step_or_job(unsafe):
+    checkout = "      - name: Different checkout label\n        uses: actions/checkout@" + "a" * 40 + "\n"
+    safe_step = "      - name: Other action\n        uses: actions/setup-python@" + "b" * 40 + "\n        with:\n          persist-credentials: false\n"
+    for separator in ("", "  another-job:\n    steps:\n"):
+        with pytest.raises(AssertionError):
+            _assert_workflow_credentials(checkout + unsafe + separator + safe_step)
+
+
+def test_checkout_guard_still_rejects_unpinned_actions():
+    with pytest.raises(AssertionError):
+        _assert_workflow_credentials("      - uses: actions/checkout@main\n        with:\n          persist-credentials: false\n")
 
 
 def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
