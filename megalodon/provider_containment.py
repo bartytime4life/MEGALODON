@@ -77,8 +77,12 @@ def _parse_address(hex_addr: str, byte_length: int) -> str | None:
         return None
 
 
-def _read_bindings(path: str, family: str, byte_length: int, port: int) -> list[dict[str, Any]]:
+def _read_bindings(
+    path: str, family: str, byte_length: int, port: int, limit: int,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Return matching listeners and whether the whole table was examined."""
     bindings: list[dict[str, Any]] = []
+    complete = True
     try:
         with open(path, "r", encoding="ascii", errors="replace") as handle:
             next(handle, None)  # header
@@ -115,11 +119,12 @@ def _read_bindings(path: str, family: str, byte_length: int, port: int) -> list[
                     "uid_matches_self": uid == os.geteuid(),
                     "_inode": inode,
                 })
-                if len(bindings) >= MAX_BINDINGS:
+                if len(bindings) >= limit:
+                    complete = False
                     break
     except OSError:
-        return []
-    return bindings
+        return [], False
+    return bindings, complete
 
 
 def _find_owning_pid(inode: str, deadline: float) -> tuple[str, int | None]:
@@ -214,18 +219,21 @@ def qwen_provider_posture(
     checked_at = _fmt(datetime.now(timezone.utc))
 
     raw_bindings: list[dict[str, Any]] = []
-    proc_readable = False
+    tables_complete = True
     for family, path, byte_length in _TCP_TABLES:
-        if os.path.exists(path):
-            proc_readable = True
-        raw_bindings.extend(_read_bindings(path, family, byte_length, port))
-        if len(raw_bindings) >= MAX_BINDINGS:
+        remaining = MAX_BINDINGS - len(raw_bindings)
+        if remaining <= 0:
             break
+        table_bindings, table_readable = _read_bindings(
+            path, family, byte_length, port, remaining,
+        )
+        raw_bindings.extend(table_bindings)
+        tables_complete = tables_complete and table_readable
 
-    if not proc_readable:
-        listening = "unknown"
-    elif raw_bindings:
+    if raw_bindings:
         listening = "yes"
+    elif not tables_complete:
+        listening = "unknown"
     else:
         listening = "no"
 
@@ -233,7 +241,10 @@ def qwen_provider_posture(
         MappingProxyType({k: v for k, v in binding.items() if not k.startswith("_")})
         for binding in raw_bindings
     )
-    loopback_only = all(b["is_loopback"] for b in bindings) if bindings else None
+    loopback_only = (
+        all(b["is_loopback"] for b in bindings)
+        if bindings and tables_complete else None
+    )
 
     owning_process: Mapping[str, Any] = MappingProxyType({
         "resolution": "not_attempted", "pid": None,
