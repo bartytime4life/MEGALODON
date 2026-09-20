@@ -93,6 +93,12 @@ used to weaken admission. Host isolation changes, live exercises, and turning
 this observation into an enforced gate all still require their own separate
 scope and approval.
 
+An incomplete snapshot cannot prove `loopback_only=true`. An observed
+non-loopback binding still establishes `loopback_only=false`, even if another
+table is unavailable, the binding cap is reached, or a later read fails.
+Successfully parsed bindings survive a later I/O error; partial observations
+do not establish the absence of other listeners or actual remote reachability.
+
 See [the advisory contract](local-model-advisory-contract.md) and
 [dependency policy](dependency-policy.md) for the existing application and
 build boundaries. The separate Alert Workload Lab draft #177 models hypothetical

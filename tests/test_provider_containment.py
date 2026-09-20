@@ -224,6 +224,39 @@ def test_permission_denied_pid_scan_is_reported_honestly(monkeypatch) -> None:
         server.close()
 
 
+@pytest.mark.parametrize('incomplete', ['missing_table', 'binding_cap', 'read_error'])
+def test_observed_exposure_survives_incomplete_snapshot(monkeypatch, incomplete):
+    import io
+
+    class FailingTable(io.StringIO):
+        def __next__(self):
+            line = super().__next__()
+            if line == 'FAIL\n':
+                raise OSError('synthetic read failure')
+            return line
+
+    row = ('0: 00000000:BE7F 00000000:0000 0A 00000000:00000000 '
+           '00:00000000 00000000 1000 0\n')
+    def open_table(path, *args, **kwargs):
+        if path == '/synthetic/missing':
+            raise FileNotFoundError(path)
+        return FailingTable('header\n' + row + ('FAIL\n' if incomplete == 'read_error' else ''))
+
+    monkeypatch.setattr('builtins.open', open_table)
+    tables = [('ipv4', '/synthetic/tcp', 4)]
+    if incomplete == 'missing_table':
+        tables.append(('ipv6', '/synthetic/missing', 16))
+    if incomplete == 'binding_cap':
+        monkeypatch.setattr(pc, 'MAX_BINDINGS', 1)
+    monkeypatch.setattr(pc, '_TCP_TABLES', tuple(tables))
+    monkeypatch.setattr(pc.socket, 'socket', lambda *a, **k: pytest.fail('socket opened'))
+    result = pc.qwen_provider_posture(port=48_767)
+    assert result['listening'] == 'yes'
+    assert result['loopback_only'] is False
+    assert len(result['bindings']) == 1
+    assert result['bindings'][0]['address'] == '0.0.0.0'
+
+
 @pytest.mark.parametrize(("host", "port"), [
     (127001, 11434),
     ("127.0.0.1", 0),
