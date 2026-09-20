@@ -1,0 +1,49 @@
+{
+  "schema_version": "local-model-containment-acceptance-v1",
+  "basis": "synthetic_contract_fixture",
+  "status": "unbound",
+  "repository": "bartytime4life/MEGALODON",
+  "model_binding": null,
+  "wrapper_reachability": {
+    "literal_loopback_only": "not_checked",
+    "outbound_deny_test": "not_run",
+    "effective_no_cloud_configuration": "unknown"
+  },
+  "process_boundary": {
+    "identity_verified": "not_checked",
+    "lifecycle_observed": "not_observed",
+    "concurrency_slot_rejection": "not_run",
+    "cancellation_timeout": "not_run",
+    "filesystem_mutation_absent": "not_checked",
+    "host_wide_concurrency_absent": "not_checked"
+  },
+  "adversarial_corpus": {
+    "corpus_id": null,
+    "categories_covered": [],
+    "total_cases": 0,
+    "cases_passed": 0,
+    "cases_failed": 0
+  },
+  "evidence_retention": {
+    "privacy_minimized_ids_only": true,
+    "raw_advisory_text_retained": false
+  },
+  "gates": {
+    "operator_model_selection": "blocked",
+    "independent_security_review": "not_recorded"
+  },
+  "effects": {
+    "network_access_performed": false,
+    "model_installed": false,
+    "model_started": false,
+    "artifact_selected": false,
+    "detector_authority_granted": false,
+    "action_authority_granted": false
+  },
+  "limitations": [
+    "No owner-approved exact local model alias or artifact digest is recorded.",
+    "No wrapper reachability, process-boundary, or adversarial-corpus check has been run.",
+    "This is a synthetic contract fixture, not collector output or operational evidence."
+  ],
+  "generated_at": "2026-09-20T00:00:00Z"
+}

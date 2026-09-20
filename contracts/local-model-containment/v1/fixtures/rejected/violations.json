@@ -1,0 +1,84 @@
+[
+  {
+    "id": "binding-present-while-unbound",
+    "changes": {
+      "/model_binding": {
+        "model_alias": "local:qwen-test-1",
+        "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "registry_fingerprint_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "operator_approved": true
+      }
+    },
+    "reason": "BINDING_UNEXPECTED"
+  },
+  {
+    "id": "effect-claims-model-installed",
+    "changes": {"/effects/model_installed": true},
+    "reason": "AUTHORITY_CLAIM"
+  },
+  {
+    "id": "effect-claims-network-access",
+    "changes": {"/effects/network_access_performed": true},
+    "reason": "AUTHORITY_CLAIM"
+  },
+  {
+    "id": "corpus-case-count-mismatch",
+    "changes": {"/adversarial_corpus/total_cases": 1},
+    "reason": "CORPUS_STATE"
+  },
+  {
+    "id": "corpus-unknown-category",
+    "changes": {"/adversarial_corpus/categories_covered": ["injection", "made_up_category"]},
+    "reason": "CORPUS_STATE"
+  },
+  {
+    "id": "wrapper-reachability-invalid-enum",
+    "changes": {"/wrapper_reachability/outbound_deny_test": "skipped"},
+    "reason": "WRAPPER_STATE"
+  },
+  {
+    "id": "process-boundary-invalid-enum",
+    "changes": {"/process_boundary/lifecycle_observed": "maybe"},
+    "reason": "PROCESS_STATE"
+  },
+  {
+    "id": "gates-invalid-value",
+    "changes": {"/gates/operator_model_selection": "approved"},
+    "reason": "INPUT_INVALID"
+  },
+  {
+    "id": "unbound-state-polluted-by-gate-claim",
+    "changes": {"/gates/operator_model_selection": "met"},
+    "reason": "UNBOUND_STATE_MUST_BE_EMPTY"
+  },
+  {
+    "id": "unbound-state-polluted-by-corpus-id",
+    "changes": {"/adversarial_corpus/corpus_id": "synthetic-v1"},
+    "reason": "UNBOUND_STATE_MUST_BE_EMPTY"
+  },
+  {
+    "id": "retention-claims-raw-text-kept",
+    "changes": {"/evidence_retention/raw_advisory_text_retained": true},
+    "reason": "RETENTION_CLAIM"
+  },
+  {
+    "id": "unknown-schema-version",
+    "changes": {"/schema_version": "local-model-containment-acceptance-v2"},
+    "reason": "INPUT_INVALID"
+  },
+  {
+    "id": "unknown-basis",
+    "changes": {"/basis": "operator_assertion"},
+    "reason": "INPUT_INVALID"
+  },
+  {
+    "id": "wrong-repository",
+    "changes": {"/repository": "example/unrelated"},
+    "reason": "INPUT_INVALID"
+  },
+  {
+    "id": "malformed-generated-at",
+    "changes": {"/generated_at": "2026-02-30T00:00:00Z"},
+    "reason": "INPUT_INVALID"
+  }
+]
