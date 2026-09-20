@@ -77,7 +77,11 @@ def _bounded(value, depth: int = 0) -> None:
     if value is None or type(value) in (bool, int):
         return
     if type(value) is str:
-        if len(value.encode("utf-8")) > MAX_STRING_BYTES:
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeError:
+            _fail("INPUT_INVALID")
+        if size > MAX_STRING_BYTES:
             _fail("INPUT_LIMIT")
         return
     if type(value) is list:
@@ -107,6 +111,8 @@ def load(raw: bytes) -> dict:
             object_pairs_hook=_pairs,
             parse_constant=_reject_constant,
         )
+    except RecursionError:
+        _fail("INPUT_LIMIT")
     except (UnicodeError, ValueError, json.JSONDecodeError):
         _fail("INPUT_INVALID")
     if type(value) is not dict:
@@ -133,7 +139,7 @@ def _exact_keys(value, expected, reason="INPUT_INVALID") -> None:
 def _enum_block(value, states: dict, reason="INPUT_INVALID") -> None:
     _exact_keys(value, states.keys(), reason)
     for key, allowed in states.items():
-        if value[key] not in allowed:
+        if type(value[key]) is not str or value[key] not in allowed:
             _fail(reason)
 
 
@@ -147,9 +153,9 @@ def validate(manifest: dict) -> dict:
     })
     if manifest["schema_version"] != "local-model-containment-acceptance-v1":
         _fail("INPUT_INVALID")
-    if manifest["basis"] not in {"synthetic_contract_fixture", "collector_output"}:
+    if type(manifest["basis"]) is not str or manifest["basis"] not in {"synthetic_contract_fixture", "collector_output"}:
         _fail("INPUT_INVALID")
-    if manifest["status"] not in {"unbound", "incomplete", "candidate_evidence"}:
+    if type(manifest["status"]) is not str or manifest["status"] not in {"unbound", "incomplete", "candidate_evidence"}:
         _fail("INPUT_INVALID")
     if manifest["repository"] != REPOSITORY:
         _fail("INPUT_INVALID")
@@ -180,10 +186,13 @@ def validate(manifest: dict) -> dict:
     corpus = manifest["adversarial_corpus"]
     _exact_keys(corpus, {"corpus_id", "categories_covered", "total_cases",
                           "cases_passed", "cases_failed"}, "CORPUS_STATE")
-    if corpus["corpus_id"] is not None and (type(corpus["corpus_id"]) is not str or not corpus["corpus_id"]):
+    if corpus["corpus_id"] is not None and (
+        type(corpus["corpus_id"]) is not str or not 1 <= len(corpus["corpus_id"]) <= 128
+    ):
         _fail("CORPUS_STATE")
     covered = corpus["categories_covered"]
-    if (type(covered) is not list or len(set(covered)) != len(covered)
+    if (type(covered) is not list or any(type(item) is not str for item in covered)
+            or len(set(covered)) != len(covered)
             or not set(covered) <= set(ADVERSARIAL_CATEGORIES)):
         _fail("CORPUS_STATE")
     for key in ("total_cases", "cases_passed", "cases_failed"):
@@ -199,9 +208,9 @@ def validate(manifest: dict) -> dict:
 
     gates = manifest["gates"]
     _exact_keys(gates, {"operator_model_selection", "independent_security_review"})
-    if gates["operator_model_selection"] not in {"blocked", "met"}:
+    if type(gates["operator_model_selection"]) is not str or gates["operator_model_selection"] not in {"blocked", "met"}:
         _fail("INPUT_INVALID")
-    if gates["independent_security_review"] not in {"not_recorded", "recorded"}:
+    if type(gates["independent_security_review"]) is not str or gates["independent_security_review"] not in {"not_recorded", "recorded"}:
         _fail("INPUT_INVALID")
 
     if type(manifest["effects"]) is not dict or set(manifest["effects"]) != set(EFFECT_IDS):
@@ -256,7 +265,8 @@ def validate(manifest: dict) -> dict:
             or process["host_wide_concurrency_absent"] != "verified"
         ):
             _fail("CANDIDATE_INCOMPLETE")
-        if set(covered) != set(ADVERSARIAL_CATEGORIES) or corpus["cases_failed"] != 0 or corpus["cases_passed"] < 1:
+        if (corpus["corpus_id"] is None or set(covered) != set(ADVERSARIAL_CATEGORIES)
+                or corpus["cases_failed"] != 0 or corpus["cases_passed"] < 1):
             _fail("CANDIDATE_INCOMPLETE")
         if gates != {"operator_model_selection": "met", "independent_security_review": "recorded"}:
             _fail("CANDIDATE_INCOMPLETE")
