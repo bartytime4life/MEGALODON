@@ -1,0 +1,45 @@
+[
+  {
+    "id": "ambiguous-platform",
+    "reason": "PLATFORM_UNSUPPORTED",
+    "changes": {"/platform/version_id": "24"}
+  },
+  {
+    "id": "commit-mismatch",
+    "reason": "SOURCE_MISMATCH",
+    "changes": {"/source/observed_commit": "3333333333333333333333333333333333333333"}
+  },
+  {
+    "id": "optional-absent-reported-healthy",
+    "reason": "OPTIONAL_STATE",
+    "changes": {
+      "/optional_components/0/state": "absent",
+      "/optional_components/0/health": "healthy"
+    }
+  },
+  {
+    "id": "unbounded-output",
+    "reason": "INPUT_INVALID",
+    "changes": {"/checks/0/output_bytes": 1048577}
+  },
+  {
+    "id": "missing-recovery-receipt",
+    "reason": "CHECK_SET",
+    "changes": {"/checks/5/id": "compile"}
+  },
+  {
+    "id": "publication-claim",
+    "reason": "AUTHORITY_CLAIM",
+    "changes": {"/effects/release_published": true}
+  },
+  {
+    "id": "dirty-checkout",
+    "reason": "SOURCE_DIRTY",
+    "changes": {"/source/working_tree_dirty": true}
+  },
+  {
+    "id": "candidate-without-evidence",
+    "reason": "CANDIDATE_INCOMPLETE",
+    "changes": {"/status": "candidate_evidence"}
+  }
+]

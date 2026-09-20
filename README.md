@@ -87,6 +87,7 @@ record delivery state; they do not override the checked-in contracts.
 | Suricata record, reader, durable-consumer, and reconciliation gates | [`contracts/suricata-eve/v1`](contracts/suricata-eve/v1/README.md), [`reader`](contracts/suricata-eve/v1/reader/README.md), [`consumer`](contracts/suricata-eve/v1/consumer/README.md), and [`reconciliation`](contracts/suricata-eve/v1/reconciliation/README.md) |
 | Detector and storage evidence receipts | [`docs/detector-acceptance.md`](docs/detector-acceptance.md) and [`docs/storage-failure-policy.md`](docs/storage-failure-policy.md) |
 | SQLite backup/restore contract, engine, and explicit operator workflow | [`docs/sqlite-recovery-contract.md`](docs/sqlite-recovery-contract.md), [`contracts/sqlite-recovery/v1`](contracts/sqlite-recovery/v1/README.md), [`megalodon/sqlite_recovery.py`](megalodon/sqlite_recovery.py), and [`megalodon/sqlite_recovery_workflow.py`](megalodon/sqlite_recovery_workflow.py) |
+| Ubuntu 24.04 non-publishing release-evidence packet | [`docs/ubuntu-release-evidence.md`](docs/ubuntu-release-evidence.md) and [`contracts/release-evidence/v1`](contracts/release-evidence/v1/README.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
 | Latest repository and document reconciliation | [`docs/document-alignment-2026-09-17.md`](docs/document-alignment-2026-09-17.md) |
