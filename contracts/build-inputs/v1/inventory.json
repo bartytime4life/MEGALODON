@@ -176,7 +176,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "wheel-smoke tests",
-      "source_sha256": "7dbad0cf7af573794da176d50d5b2fa509906b83d3bf793790f5c656fbcb17ca"
+      "source_sha256": "8b4fb83421fbbbe9caa14c18239773d840c8ed3cd2ca3661ef26864b9d41add7"
     },
     {
       "direct_packages": [
@@ -204,7 +204,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "browser acceptance additions",
-      "source_sha256": "84b6960043722212b8ed31c7913af58bf87bf426244ee04f8435f18cf1db6218"
+      "source_sha256": "7dbad0cf7af573794da176d50d5b2fa509906b83d3bf793790f5c656fbcb17ca"
     }
   ],
   "project": {
