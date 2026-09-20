@@ -68,6 +68,8 @@ assert.match(byId('room-home-summary').textContent,/1 stored metadata events and
 assert.match(textOf(byId('room-traffic-grid')),/9223372036854775807 reported bytes/);
 assert.equal(byId('room-traffic-grid').children.length,8);
 assert.match(textOf(byId('room-traffic-grid')),/local-subnet or sensor-vantage/);
+assert.match(textOf(byId('room-traffic-grid')),/12345/);
+assert.match(textOf(byId('room-traffic-grid')),/192\.0\.2\.1:12345/);
 assert.equal(run('previewRoomReport()'),true);assert.equal(byId('room-report-download').disabled,false);
 const reportJson=run('roomState.report.json'),report=JSON.parse(reportJson);
 assert.deepEqual(Object.keys(report),['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build']);
