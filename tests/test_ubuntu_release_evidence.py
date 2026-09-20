@@ -4,6 +4,7 @@ from copy import deepcopy
 import importlib.util
 import inspect
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -277,3 +278,112 @@ def test_cli_validation_emits_canonical_packet_without_writing(tmp_path):
     assert result["manifest"] == ACCEPTED
     assert result["manifest_sha256"] == tool.digest(ACCEPTED)
     assert list(tmp_path.iterdir()) == [source]
+
+
+@pytest.mark.parametrize("pointer,reason", [
+    ("/basis", "INPUT_INVALID"),
+    ("/status", "INPUT_INVALID"),
+    ("/platform/os_id", "INPUT_INVALID"),
+    ("/platform/version_id", "INPUT_INVALID"),
+    ("/platform/version_codename", "INPUT_INVALID"),
+    ("/platform/python_implementation", "INPUT_INVALID"),
+    ("/platform/architecture", "INPUT_INVALID"),
+    ("/optional_components/0/state", "OPTIONAL_STATE"),
+    ("/checks/0/status", "INPUT_INVALID"),
+    ("/artifacts/0/status", "ARTIFACT_SET"),
+])
+@pytest.mark.parametrize("value", [[], {"private-sentinel": "do not echo"}])
+def test_container_values_in_scalar_fields_return_closed_refusal(
+    pointer, reason, value, tmp_path, capsys,
+):
+    candidate = mutate(ACCEPTED, {pointer: value})
+    assert not VALIDATOR.is_valid(candidate)
+    with pytest.raises(tool.EvidenceError) as caught:
+        tool.validate(candidate)
+    assert caught.value.code == reason
+    source = tmp_path / "private-sentinel.json"
+    source.write_text(json.dumps(candidate))
+    assert tool.main(["validate", str(source)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "schema_version": "ubuntu-24.04-evidence-validation-v1",
+        "status": "blocked", "reason": reason,
+    }
+    assert "private-sentinel" not in captured.err
+
+
+@pytest.mark.parametrize("raw,reason", [
+    (b'{"private-sentinel":"\\ud800"}', "INPUT_INVALID"),
+    (b'{"\\udfff":"private-sentinel"}', "INPUT_INVALID"),
+    (b'{"x":' + b'[' * 2000 + b'0' + b']' * 2000 + b'}', "INPUT_LIMIT"),
+])
+def test_malformed_unicode_and_nesting_have_bounded_cli_receipts(raw, reason, tmp_path):
+    source = tmp_path / "private-sentinel.json"
+    source.write_bytes(raw)
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / "tools/ubuntu_release_evidence.py"), "validate", str(source)],
+        cwd=ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=5,
+    )
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    assert json.loads(completed.stderr) == {
+        "schema_version": "ubuntu-24.04-evidence-validation-v1",
+        "status": "blocked", "reason": reason,
+    }
+
+
+def test_regular_file_budget_at_limit_and_first_excess_byte(tmp_path, capsys):
+    source = tmp_path / "packet.json"
+    raw = tool.canonical(ACCEPTED)
+    source.write_bytes(raw + b" " * (tool.MAX_INPUT_BYTES - len(raw)))
+    assert tool.main(["validate", str(source)]) == 0
+    assert json.loads(capsys.readouterr().out)["manifest"] == ACCEPTED
+    with source.open("ab") as stream:
+        stream.write(b" ")
+    assert tool.main(["validate", str(source)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["reason"] == "INPUT_LIMIT"
+
+
+def test_reader_requests_only_budget_plus_one_byte(monkeypatch, tmp_path):
+    source = tmp_path / "packet.json"
+    source.write_bytes(b"{}")
+    original = tool.os.fdopen
+    reads = []
+
+    class TrackedStream:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.stream.close()
+
+        def read(self, size):
+            reads.append(size)
+            assert size == tool.MAX_INPUT_BYTES + 1
+            return self.stream.read(size)
+
+    monkeypatch.setattr(tool.os, "fdopen", lambda *args, **kwargs: TrackedStream(original(*args, **kwargs)))
+    assert tool.read_manifest(source) == b"{}"
+    assert reads == [tool.MAX_INPUT_BYTES + 1]
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX FIFO refusal")
+def test_fifo_without_writer_is_refused_without_blocking(tmp_path):
+    source = tmp_path / "private-sentinel.fifo"
+    os.mkfifo(source)
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / "tools/ubuntu_release_evidence.py"), "validate", str(source)],
+        cwd=ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=5,
+    )
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    assert json.loads(completed.stderr) == {
+        "schema_version": "ubuntu-24.04-evidence-validation-v1",
+        "status": "blocked", "reason": "INPUT_INVALID",
+    }
