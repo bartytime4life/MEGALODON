@@ -16,7 +16,7 @@ from types import MappingProxyType
 import pytest
 from jsonschema import Draft202012Validator
 
-from megalodon.offline import suricata_consumer
+from megalodon.offline import common, suricata_consumer, suricata_eve
 from megalodon.offline.suricata_eve import (
     PINNED_SURICATA_VERSION,
     PRODUCER_PROFILE,
@@ -29,6 +29,27 @@ CONTRACT_ROOT = Path(__file__).parents[1] / "contracts" / "suricata-eve" / "v1" 
 SCHEMA = json.loads((CONTRACT_ROOT / "schema.json").read_text(encoding="utf-8"))
 ACCEPTED = json.loads((CONTRACT_ROOT / "fixtures" / "accepted.json").read_text(encoding="utf-8"))
 REJECTED = json.loads((CONTRACT_ROOT / "fixtures" / "rejected.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def unprivileged_runtime(monkeypatch):
+    """Exercise parser contracts independently of the test runner's identity."""
+    monkeypatch.setattr(suricata_eve, "require_unprivileged_linux", lambda: None)
+
+
+@pytest.mark.parametrize("reason", ["NON_ROOT_REQUIRED", "CAPABILITY_FREE_PROCESS_REQUIRED"])
+def test_native_admission_failure_precedes_source_access(monkeypatch, reason):
+    def reject_runtime():
+        raise common.OfflineError(reason)
+
+    def unexpected_source_access(*_args, **_kwargs):
+        pytest.fail("source access must follow native admission")
+
+    monkeypatch.setattr(suricata_eve, "require_unprivileged_linux", reject_runtime)
+    monkeypatch.setattr(suricata_eve.os, "open", unexpected_source_access)
+    with pytest.raises(RawEveError) as caught:
+        _read(Path("/not-opened/completed-eve.json"), "sha256:" + "a" * 64)
+    assert caught.value.code == "SOURCE_PATH"
 
 
 def _validator(name: str) -> Draft202012Validator:
