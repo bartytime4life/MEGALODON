@@ -1,5 +1,38 @@
 # Unified roadmap: repository reconciliation
 
+## Current readback — merged contracts, remaining acceptance
+
+OBSERVED on 2026-09-20 at
+[`main@9c2675b8dbc8bbae319525803e28a0542031c8b2`](https://github.com/bartytime4life/MEGALODON/commit/9c2675b8dbc8bbae319525803e28a0542031c8b2).
+The supplied architecture and research roadmap are historical planning inputs.
+The September 17 baseline and delivery sequence below are retained as historical
+evidence, not a current backlog or authority to operate a sensor or model.
+
+| Track | Implementation now present | Remaining gate |
+| --- | --- | --- |
+| License | [#298](https://github.com/bartytime4life/MEGALODON/pull/298) merged Apache-2.0 and package metadata; #255 is closed. | Release artifacts, SBOM/provenance and publication are separate; do not repeat the old no-license blocker. |
+| Suricata | Completed raw-EVE profile/converter, durable consumer and read-only projection are in source. | Native producer and operator acceptance remain distinct from synthetic tests; no sensor or watcher is started. |
+| Zeek / #258 | [#299](https://github.com/bartytime4life/MEGALODON/pull/299) merged the offline Community ID API and literal vector tests. | Exact producer profiles, schema-drift fixtures and CLI/report integration remain open. Current correlation requires follow-up on invalid seeds, bounded source consumption and source identity. |
+| Detector evidence / #259 | Registry metadata 1.0.1 and the corrected synthetic fixture mapping are present. | Exact-head owner/independent acceptance and representative operational evidence are separate; synthetic counts are not accuracy. |
+| Ubuntu / #260 | Closed release-evidence schema, validator and incomplete identity collector are present. | Operator recovery and retained release evidence remain incomplete; identity collection does not publish a release. |
+| Local model / #261 | [#300](https://github.com/bartytime4life/MEGALODON/pull/300) merged containment-contract scaffolding. The collector still emits unbound. | Corpus-ID completeness/schema parity and malformed-input refusals require repair. No exact model selection or provider containment acceptance follows from this contract. |
+| Defense Console | Owner-private v26 is deployed from Sites source `64d626ac40e30e1bd10d18569918364a90e7176a`. | Three repository mirror files lag at this main pin; this candidate restores parity. No local runtime feed or host control is added. |
+
+The open issue readback contains #258, #259, #260 and #261. PR #300 merged during
+this inspection; its earlier non-draft/open state and original review findings
+remain historical evidence. Its merged validator still accepts a missing
+candidate corpus ID and an overlong ID, despite the review findings. Do not
+equate merged scaffolding or passing checks with acceptance of #261.
+
+The next reviewable work is bounded correlation repair, containment validator
+repair, parser-test isolation, and this source/document alignment. Each belongs
+in an `agent/*` draft PR with current-head tests. These independent slices do
+not select model artifacts, invoke tools on the host, or expand runtime authority.
+See [the current Site receipt](site-source-alignment.md) for exact source and
+deployment identities. This readback is not a validated currentness manifest.
+
+## Historical baseline — September 17
+
 Status: **OBSERVED implementation baseline with remaining acceptance gates**, refreshed 2026-09-17.
 Repository basis: [`main@77f082a0548e64f97090c94dd11503a68ca05d99`](https://github.com/bartytime4life/MEGALODON/commit/77f082a0548e64f97090c94dd11503a68ca05d99).
 This record reconciles the supplied *MEGALODON — Unified Architecture, Safety,
@@ -8,7 +41,7 @@ not adopt the supplied document wholesale or replace the specification and
 security review. Tests described below are existing evidence surfaces, not a
 new claim of native operational acceptance.
 
-## What the supplied synthesis gets right
+## Historical synthesis assessment
 
 Keep the local, metadata-only evidence appliance as the immediate product.
 Separate source observations, fixed detections, policy plans, model advice, and
@@ -17,7 +50,7 @@ provenance and failure states. Preserve a read-only loopback dashboard, inert
 firewall plans, operator-owned retention, and advisory-only AI. Core operation
 must not require a subscription, vendor account, or hosted Site.
 
-## Corrections against the pinned baseline
+## Historical corrections against the September 17 baseline
 
 | Source claim | Disposition at this pin | Repository evidence / remaining gate |
 | --- | --- | --- |
@@ -37,7 +70,7 @@ incident case study is research input; this pass does not authenticate or repeat
 its external incident claims. The existing source-pinned containment review
 preserves the distinction between supplied bytes and publisher authenticity.
 
-## Dependency-ordered delivery
+## Historical dependency-ordered delivery
 
 Slices 1–3 were delivered by merged PRs #239/#241/#243 and corrected by #244.
 Their presence is not installed-producer, visual or operational acceptance.
@@ -59,7 +92,7 @@ dashboard may read bounded local evidence through explicit operator startup;
 the Site is a static reference console with no runtime feed. A Site update or matching GitHub
 source mirror cannot establish local sensor liveness or operational acceptance.
 
-## Current high-level sequence
+## Historical high-level sequence
 
 A historical selected-field currentness capture at 2026-09-17T16:35:48Z–16:35:50Z,
 against `2e5099fcec2d1a08007efab70b4607cd5ba652ac`,
