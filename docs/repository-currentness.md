@@ -99,7 +99,7 @@ candidate cannot know its future squash SHA.
 
 ## Current disposition — 2026-09-20
 
-At `main@4c1d685a967ed60d87adbef9fb548af96806e5bf`, GitHub reads #254,
+At `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`, GitHub reads #254,
 #255 and #256 closed completed. Currentness tooling, Apache-2.0 metadata and
 explicit bounded recovery workflows are delivered. This does not establish
 native failure/operator acceptance, complete release artifacts or provenance.

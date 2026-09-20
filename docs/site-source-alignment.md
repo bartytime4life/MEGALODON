@@ -1,6 +1,38 @@
 # Defense Console source alignment
 
-## Current readback — Console v26 and proposed repository mirror repair
+## Current publication — Console v28, merged setup guidance
+
+OBSERVED 2026-09-20: GitHub baseline `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`
+contains merged PR #307. All 13 tracked Site source files at that baseline
+were verified byte-for-byte equal to v27 source
+`efcbf5c40204fbcc3adbf89646665ed306a55531` before this correction.
+The preceding v26 receipt below is historical, not the current publication.
+
+The new publication changes only `README.md` and `dist/index.html`: setup
+now links to the immutable #307 merge instead of its former working branch,
+and source guidance records that the launcher has merged.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 28 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_fbe533edca508191b881f6e00199b92c` |
+| Sites source | `5d03870143afab716e9e4a097273d2343fb0b6cc` |
+| Archive | `sha256:b116d8677c2c1bfce90d105f1a0c12e8f91b56baaf3c36350c9b02e8d37ff25b`; 10 files, 296,960 bytes |
+| Deployment | `appgdep_6aaf9388e0208191989d1d8f917920ad`; succeeded at `2026-09-20T08:04:29.299330+00:00` |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only project; private publication succeeded |
+| Candidate mirror | All 13 tracked source files match the pushed Sites commit; exact candidate SHA belongs to the draft PR |
+| Main equality | v28 differs from the baseline in the two paths above; candidate equality is not merged-main equality |
+| Rollback reference | v27 / `efcbf5c40204fbcc3adbf89646665ed306a55531` |
+
+VERIFIED: 41 Site Node checks, JavaScript syntax and local asset references pass.
+No new rendered-browser or installed-host acceptance is claimed. The hosted
+reference remains disconnected from local telemetry. Site publication does not
+merge this candidate, publish a software release, invoke a model/sensor or
+accept #259–#261. Historical test and deployment receipts below retain their
+original scope.
+
+## Historical readback — Console v26 and proposed repository mirror repair
 
 Readback on 2026-09-20 pins the repository to
 `main@9c2675b8dbc8bbae319525803e28a0542031c8b2` and the existing owner-private
