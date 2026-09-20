@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/manifest",
+  "$defs": {
+    "sha256hex": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "modelBinding": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model_alias", "artifact_sha256", "registry_fingerprint_sha256", "operator_approved"],
+          "properties": {
+            "model_alias": {
+              "type": "string",
+              "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}$"
+            },
+            "artifact_sha256": {"$ref": "#/$defs/sha256hex"},
+            "registry_fingerprint_sha256": {"$ref": "#/$defs/sha256hex"},
+            "operator_approved": {"const": true}
+          }
+        }
+      ]
+    },
+    "wrapperReachability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["literal_loopback_only", "outbound_deny_test", "effective_no_cloud_configuration"],
+      "properties": {
+        "literal_loopback_only": {"enum": ["not_checked", "verified", "failed"]},
+        "outbound_deny_test": {"enum": ["not_run", "passed", "failed"]},
+        "effective_no_cloud_configuration": {"enum": ["unknown", "verified", "failed"]}
+      }
+    },
+    "processBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_verified", "lifecycle_observed", "concurrency_slot_rejection",
+        "cancellation_timeout", "filesystem_mutation_absent", "host_wide_concurrency_absent"
+      ],
+      "properties": {
+        "identity_verified": {"enum": ["not_checked", "verified", "failed"]},
+        "lifecycle_observed": {"enum": ["not_observed", "observed"]},
+        "concurrency_slot_rejection": {"enum": ["not_run", "passed", "failed"]},
+        "cancellation_timeout": {"enum": ["not_run", "passed", "failed"]},
+        "filesystem_mutation_absent": {"enum": ["not_checked", "verified", "failed"]},
+        "host_wide_concurrency_absent": {"enum": ["not_checked", "verified", "failed"]}
+      }
+    },
+    "adversarialCorpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpus_id", "categories_covered", "total_cases", "cases_passed", "cases_failed"],
+      "properties": {
+        "corpus_id": {"oneOf": [{"type": "string", "minLength": 1, "maxLength": 128}, {"type": "null"}]},
+        "categories_covered": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "injection", "fabricated_evidence_ids", "unicode_control_text", "privacy",
+              "exhaustion", "cancellation", "out_of_distribution"
+            ]
+          },
+          "maxItems": 7
+        },
+        "total_cases": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "cases_passed": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "cases_failed": {"type": "integer", "minimum": 0, "maximum": 100000}
+      }
+    },
+    "evidenceRetention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privacy_minimized_ids_only", "raw_advisory_text_retained"],
+      "properties": {
+        "privacy_minimized_ids_only": {"const": true},
+        "raw_advisory_text_retained": {"const": false}
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operator_model_selection", "independent_security_review"],
+      "properties": {
+        "operator_model_selection": {"enum": ["blocked", "met"]},
+        "independent_security_review": {"enum": ["not_recorded", "recorded"]}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_access_performed", "model_installed", "model_started",
+        "artifact_selected", "detector_authority_granted", "action_authority_granted"
+      ],
+      "properties": {
+        "network_access_performed": {"const": false},
+        "model_installed": {"const": false},
+        "model_started": {"const": false},
+        "artifact_selected": {"const": false},
+        "detector_authority_granted": {"const": false},
+        "action_authority_granted": {"const": false}
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "basis", "status", "repository", "model_binding",
+        "wrapper_reachability", "process_boundary", "adversarial_corpus",
+        "evidence_retention", "gates", "effects", "limitations", "generated_at"
+      ],
+      "properties": {
+        "schema_version": {"const": "local-model-containment-acceptance-v1"},
+        "basis": {"enum": ["synthetic_contract_fixture", "collector_output"]},
+        "status": {"enum": ["unbound", "incomplete", "candidate_evidence"]},
+        "repository": {"const": "bartytime4life/MEGALODON"},
+        "model_binding": {"$ref": "#/$defs/modelBinding"},
+        "wrapper_reachability": {"$ref": "#/$defs/wrapperReachability"},
+        "process_boundary": {"$ref": "#/$defs/processBoundary"},
+        "adversarial_corpus": {"$ref": "#/$defs/adversarialCorpus"},
+        "evidence_retention": {"$ref": "#/$defs/evidenceRetention"},
+        "gates": {"$ref": "#/$defs/gates"},
+        "effects": {"$ref": "#/$defs/effects"},
+        "limitations": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 512},
+          "minItems": 3,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "generated_at": {"$ref": "#/$defs/timestamp"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "unbound"}}},
+          "then": {"properties": {"model_binding": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["incomplete", "candidate_evidence"]}}},
+          "then": {"properties": {"model_binding": {"type": "object"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "candidate_evidence"}}},
+          "then": {"properties": {"basis": {"const": "collector_output"}}}
+        }
+      ]
+    }
+  }
+}
