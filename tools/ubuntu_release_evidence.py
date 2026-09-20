@@ -251,12 +251,20 @@ def validate(manifest: dict) -> dict:
         else:
             _fail("ARTIFACT_SET")
 
+    gates = manifest["gates"]
+    _exact_keys(gates, {"license", "operator_recovery", "sbom", "provenance", "release_authority"}, "AUTHORITY_CLAIM")
+    # Preserve old receipts without treating their historical blocker as current.
+    if gates["license"] not in (
+        {"status": "blocked", "blocker": "https://github.com/bartytime4life/MEGALODON/issues/255"},
+        {"status": "not_assessed", "blocker": None},
+    ):
+        _fail("AUTHORITY_CLAIM")
     expected_gates = {
-        "license": {"status": "blocked", "blocker": "https://github.com/bartytime4life/MEGALODON/issues/255"},
+        "license": gates["license"],
         "operator_recovery": "not_run", "sbom": "not_run", "provenance": "not_run",
         "release_authority": "not_authorized",
     }
-    if manifest["gates"] != expected_gates:
+    if gates != expected_gates:
         _fail("AUTHORITY_CLAIM")
     if type(manifest["effects"]) is not dict or set(manifest["effects"]) != set(EFFECT_IDS):
         _fail("AUTHORITY_CLAIM")
@@ -330,7 +338,10 @@ def collect(checkout: Path, declared_commit: str, declared_tree: str) -> dict:
     origin = _run_fixed(["git", "remote", "get-url", "origin"], checkout)
     if origin not in ALLOWED_ORIGIN_URLS:
         _fail("SOURCE_REPOSITORY")
-    systemd = _run_fixed(["systemd", "--version"], checkout).splitlines()[0]
+    systemd_lines = _run_fixed(["systemd", "--version"], checkout).splitlines()
+    if not systemd_lines:
+        _fail("HOST_TOOL")
+    systemd = systemd_lines[0]
     if not systemd.startswith("systemd "):
         _fail("PLATFORM_UNSUPPORTED")
     release = _os_release()
@@ -376,7 +387,7 @@ def collect(checkout: Path, declared_commit: str, declared_tree: str) -> dict:
             for item in ARTIFACT_IDS
         ],
         "gates": {
-            "license": {"status": "blocked", "blocker": "https://github.com/bartytime4life/MEGALODON/issues/255"},
+            "license": {"status": "not_assessed", "blocker": None},
             "operator_recovery": "not_run", "sbom": "not_run", "provenance": "not_run",
             "release_authority": "not_authorized",
         },
@@ -384,7 +395,7 @@ def collect(checkout: Path, declared_commit: str, declared_tree: str) -> dict:
         "limitations": [
             "Local identity collection only; no repository test or build was run.",
             "Optional component presence and health were not inspected.",
-            "The repository license remains blocked on issue 255.",
+            "License metadata and artifact redistribution requirements were not inspected by this collector.",
             "No tag, release, upload, deployment, service, sensor, model, firewall action, or restored-data activation occurred.",
         ],
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),

@@ -31,9 +31,13 @@ The closed check set is:
 semantic validator only when an observed basis has all nine checks passed and
 both ephemeral subjects were built. Even then, license,
 operator-recovery, SBOM, provenance, independent/owner acceptance, and release
-authority remain separate gates. The v1 packet deliberately fixes the license
-gate to blocked on #255 and the remaining gates to `not_run` or
-`not_authorized`.
+authority remain separate gates. New identity packets report the license gate
+as `not_assessed` with a null blocker: the collector does not inspect license
+or artifact metadata. The repository Apache-2.0 decision merged in #298 and
+#255 is closed. The schema also accepts the original `blocked` / #255 pair
+solely to preserve historical receipts and the byte-identical synthetic fixture;
+that pair is not a current repository claim. Neither shape permits a `passed`
+license gate. Remaining gates stay `not_run` or `not_authorized`.
 
 `tools/ubuntu_release_evidence.py collect` reads only bounded local platform
 facts and fixed Git/systemd commands. It creates an incomplete skeleton: it

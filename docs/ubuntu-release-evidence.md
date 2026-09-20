@@ -56,8 +56,12 @@ reason.
   sizes and SHA-256 values, and install/test them in disposable environments.
 - Retain the complete operator backup/restore/read-only-inspection drill.
 - Produce and review the canonical CycloneDX SBOM and provenance subjects.
-- Resolve the owner license decision in #255 and align package/repository
-  metadata.
+- Independently verify license/notice metadata for the exact built subjects.
+  The repository Apache-2.0 decision and package metadata merged in #298;
+  #255 is closed. This identity-only collector does not inspect license files
+  or built artifacts and reports `license.status: not_assessed`, not a stale
+  open-issue blocker or a redistribution approval. Historical packets with
+  the original #255 blocker remain valid historical contract evidence.
 - Obtain the required owner/independent disposition for the exact candidate.
 
 Synthetic contract fixtures cannot be promoted to `candidate_evidence`.

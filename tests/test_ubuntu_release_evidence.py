@@ -165,6 +165,8 @@ def test_collector_reads_identity_only_and_leaves_execution_not_run(monkeypatch,
     manifest = tool.collect(checkout, commit, tree)
     VALIDATOR.validate(manifest)
     assert manifest["status"] == "incomplete"
+    assert manifest["gates"]["license"] == {"status": "not_assessed", "blocker": None}
+    assert "255" not in " ".join(manifest["limitations"])
     assert {item["status"] for item in manifest["checks"]} == {"not_run"}
     assert {item["state"] for item in manifest["optional_components"]} == {"not_checked"}
     assert {item["status"] for item in manifest["artifacts"]} == {"not_run"}
@@ -196,6 +198,48 @@ def test_collector_rejects_wrong_repository_origin(monkeypatch, tmp_path):
     monkeypatch.setattr(tool, "_run_fixed", fixed)
     with pytest.raises(tool.EvidenceError, match="SOURCE_REPOSITORY"):
         tool.collect(checkout, "5" * 40, "6" * 40)
+
+
+def test_empty_systemd_output_returns_bounded_cli_refusal(monkeypatch, tmp_path, capsys):
+    def fixed(argv, _cwd):
+        if argv == ["git", "remote", "get-url", "origin"]:
+            return "https://github.com/bartytime4life/MEGALODON"
+        if argv[-1] == "HEAD":
+            return "5" * 40
+        if argv[-1] == "HEAD^{tree}":
+            return "6" * 40
+        return ""
+
+    monkeypatch.setattr(tool, "_run_fixed", fixed)
+    assert tool.main([
+        "collect", "--checkout", str(tmp_path),
+        "--declared-commit", "5" * 40, "--declared-tree", "6" * 40,
+    ]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "schema_version": "ubuntu-24.04-evidence-validation-v1",
+        "status": "blocked", "reason": "HOST_TOOL",
+    }
+
+
+def test_unassessed_license_preserves_historical_packet_and_all_other_gates():
+    candidate = deepcopy(ACCEPTED)
+    candidate["gates"]["license"] = {"status": "not_assessed", "blocker": None}
+    VALIDATOR.validate(candidate)
+    assert tool.validate(candidate) == candidate
+    assert tool.validate(deepcopy(ACCEPTED)) == ACCEPTED
+    for license_gate in (
+        {"status": "passed", "blocker": None},
+        {"status": "not_assessed", "blocker": "https://github.com/bartytime4life/MEGALODON/issues/255"},
+        {"status": "blocked", "blocker": None},
+        {"status": "not_assessed", "blocker": None, "approved": True},
+    ):
+        invalid = deepcopy(candidate)
+        invalid["gates"]["license"] = license_gate
+        assert not VALIDATOR.is_valid(invalid)
+        with pytest.raises(tool.EvidenceError, match="AUTHORITY_CLAIM"):
+            tool.validate(invalid)
 
 
 def test_host_commands_are_fixed_bounded_and_never_use_shell(monkeypatch, tmp_path):
