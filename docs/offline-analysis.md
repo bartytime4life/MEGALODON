@@ -162,6 +162,9 @@ surfaces at least two rows together. `changed_relative_minutes` compares bin
 numbers directly; it does not align two baselines to a shared wall-clock
 window; the offline-anomaly dossier's window-qualified comparison in
 [`docs/anomaly-pipeline.md`](anomaly-pipeline.md) is the tool for that.
+The exported receipt's `limitations` carries both this independent-origin
+caution and the distinction between record-size counts and byte volume or
+bandwidth, so the context survives when JSON is reviewed outside this guide.
 
 Shares are compared by integer cross multiplication, without rounding. For
 example, 3 of 6 reference records and 2 of 4 current records have equal shares;
