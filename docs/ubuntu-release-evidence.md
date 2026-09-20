@@ -58,6 +58,44 @@ historical incomplete receipts retain the same schema and canonical digest.
 
 ## What remains before candidate evidence
 
+### Retain and verify the identity packet
+
+The PR-only `incomplete-identity-packet` CI job verifies the emitted wrapper,
+recomputes its manifest digest, and checks the exact PR head and checked-out
+tree before retaining the single JSON file as a GitHub Actions artifact for
+30 days. Its name includes the head SHA, run ID, and run attempt. Upload runs
+only after successful collection and validation; a missing file fails the job.
+This CI evidence upload contains source/platform identity only, not telemetry,
+raw logs, captures, databases, or model output. It is not a package publication
+and does not add network access to the offline tool or application.
+
+Download and extract that artifact from the matching Actions run, then verify
+it offline from a reviewed checkout. Supply the expected commit and tree from
+an independently trusted repository readback, not from the downloaded packet:
+
+```bash
+python tools/ubuntu_release_evidence.py verify-packet \
+  /path/to/ubuntu-24.04-incomplete-identity.json \
+  --expected-commit '<trusted 40-character commit SHA>' \
+  --expected-tree '<trusted 40-character tree SHA>'
+```
+
+`validate` reads a bare manifest; `verify-packet` reads the complete output of
+`collect` or `validate`. The latter rejects extra wrapper keys, malformed or
+changed digests, invalid manifests, and mismatched external pins. It uses the
+same 256 KiB completed-file input budget and emits the existing canonical
+wrapper on success. Verification reads no checkout metadata, invokes no host
+commands, and makes no network request. Synthetic packets remain synthetic.
+
+The digest detects inconsistent bytes, not an adversary who changes a manifest
+and recomputes its digest. Source pins do not authenticate reported host facts.
+Retain the run URL, run attempt, artifact ID and downloaded artifact separately
+before expiry if longer retention is needed. Neither this artifact nor a green
+identity job supplies the nine execution checks or two built subjects: they
+remain `not_run`, and release authority remains `not_authorized`.
+
+### Remaining candidate gates
+
 - Run the exact nine checks on an authorized Ubuntu 24.04 host or runner and
   retain bounded, digest-bound outcomes.
 - Build wheel and source distribution only as ephemeral subjects, bind their

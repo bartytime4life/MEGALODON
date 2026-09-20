@@ -387,3 +387,96 @@ def test_fifo_without_writer_is_refused_without_blocking(tmp_path):
         "schema_version": "ubuntu-24.04-evidence-validation-v1",
         "status": "blocked", "reason": "INPUT_INVALID",
     }
+
+
+def identity_wrapper():
+    return {
+        "schema_version": "ubuntu-24.04-evidence-validation-v1",
+        "status": "validated",
+        "manifest_sha256": tool.digest(ACCEPTED),
+        "manifest": deepcopy(ACCEPTED),
+    }
+
+
+def test_verify_packet_cli_round_trip_is_offline_and_read_only(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "identity.json"
+    source.write_bytes(tool.canonical(identity_wrapper()))
+    original = source.read_bytes()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("packet verification must not inspect host identity or run a command")
+
+    monkeypatch.setattr(tool, "collect", forbidden)
+    monkeypatch.setattr(tool, "_run_fixed", forbidden)
+    monkeypatch.setattr(tool.subprocess, "run", forbidden)
+    assert tool.main([
+        "verify-packet", str(source),
+        "--expected-commit", ACCEPTED["source"]["observed_commit"],
+        "--expected-tree", ACCEPTED["source"]["observed_tree"],
+    ]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out.encode() == original + b"\n"
+    assert source.read_bytes() == original
+    assert list(tmp_path.iterdir()) == [source]
+
+
+@pytest.mark.parametrize("changes,reason", [
+    ({"/status": "blocked"}, "PACKET_INVALID"),
+    ({"/schema_version": "unknown"}, "PACKET_INVALID"),
+    ({"/manifest_sha256": "sha256:" + "0" * 64}, "DIGEST_MISMATCH"),
+    ({"/manifest_sha256": []}, "PACKET_INVALID"),
+    ({"/manifest_sha256": "private-sentinel"}, "PACKET_INVALID"),
+    ({"/manifest": None}, "INPUT_INVALID"),
+    ({"/manifest/generated_at": "2026-09-21T00:00:00Z"}, "DIGEST_MISMATCH"),
+    ({"/manifest/effects/model_invoked": True}, "AUTHORITY_CLAIM"),
+])
+def test_verify_packet_rejects_tampering_with_fixed_receipt(changes, reason, tmp_path, capsys):
+    packet = mutate(identity_wrapper(), changes)
+    source = tmp_path / "private-sentinel.json"
+    source.write_text(json.dumps(packet))
+    assert tool.main([
+        "verify-packet", str(source),
+        "--expected-commit", ACCEPTED["source"]["observed_commit"],
+        "--expected-tree", ACCEPTED["source"]["observed_tree"],
+    ]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "schema_version": "ubuntu-24.04-evidence-validation-v1",
+        "status": "blocked", "reason": reason,
+    }
+
+
+def test_verify_packet_requires_closed_wrapper_and_external_source_pins():
+    packet = identity_wrapper()
+    commit = ACCEPTED["source"]["observed_commit"]
+    tree = ACCEPTED["source"]["observed_tree"]
+    for key in packet:
+        missing = deepcopy(packet)
+        del missing[key]
+        with pytest.raises(tool.EvidenceError, match="PACKET_INVALID"):
+            tool.verify_packet(missing, commit, tree)
+    with pytest.raises(tool.EvidenceError, match="PACKET_INVALID"):
+        tool.verify_packet({**packet, "approved": True}, commit, tree)
+    for expected_commit, expected_tree, reason in (
+        ("f" * 40, tree, "SOURCE_MISMATCH"),
+        (commit, "e" * 40, "SOURCE_MISMATCH"),
+        ([], tree, "INPUT_INVALID"),
+        (commit, "not-a-sha", "INPUT_INVALID"),
+    ):
+        with pytest.raises(tool.EvidenceError, match=reason):
+            tool.verify_packet(packet, expected_commit, expected_tree)
+
+
+def test_consistent_packet_does_not_authenticate_self_asserted_host_facts():
+    packet = identity_wrapper()
+    packet["manifest"]["platform"]["kernel_release"] = "6.8.0-self-asserted"
+    packet["manifest_sha256"] = tool.digest(packet["manifest"])
+    manifest = tool.verify_packet(
+        packet, ACCEPTED["source"]["observed_commit"], ACCEPTED["source"]["observed_tree"],
+    )
+    assert manifest["basis"] == "synthetic_contract_fixture"
+    assert manifest["status"] == "incomplete"
+    assert {row["status"] for row in manifest["checks"]} == {"not_run"}
+    assert manifest["gates"]["release_authority"] == "not_authorized"
