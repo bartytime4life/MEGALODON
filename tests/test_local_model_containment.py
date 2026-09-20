@@ -159,6 +159,67 @@ def test_candidate_evidence_requires_zero_failed_cases():
         tool.validate(failing)
 
 
+def test_candidate_requires_an_identifiable_corpus_in_both_validators():
+    candidate = mutate(ACCEPTED, {
+        "/basis": "collector_output", **_passing_candidate_changes(),
+        "/adversarial_corpus/corpus_id": None,
+    })
+    assert not VALIDATOR.is_valid(candidate)
+    with pytest.raises(tool.ContainmentError, match="CANDIDATE_INCOMPLETE"):
+        tool.validate(candidate)
+
+
+@pytest.mark.parametrize("corpus_id", ["x", "x" * 128, "é" * 128])
+def test_corpus_id_character_boundary_is_accepted(corpus_id):
+    candidate = mutate(ACCEPTED, {
+        "/basis": "collector_output", **_passing_candidate_changes(),
+        "/adversarial_corpus/corpus_id": corpus_id,
+    })
+    VALIDATOR.validate(candidate)
+    assert tool.validate(candidate) == candidate
+
+
+@pytest.mark.parametrize("corpus_id", ["", "x" * 129, "é" * 129])
+def test_corpus_id_length_parity_through_cli(tmp_path, corpus_id):
+    candidate = mutate(ACCEPTED, {
+        "/basis": "collector_output", **_passing_candidate_changes(),
+        "/adversarial_corpus/corpus_id": corpus_id,
+    })
+    assert not VALIDATOR.is_valid(candidate)
+    with pytest.raises(tool.ContainmentError, match="CORPUS_STATE"):
+        tool.validate(candidate)
+    source = tmp_path / "packet.json"
+    source.write_text(json.dumps(candidate))
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / "tools/local_model_containment.py"), "validate", str(source)],
+        cwd=ROOT, capture_output=True, timeout=10, check=False,
+    )
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    assert json.loads(completed.stderr)["reason"] == "CORPUS_STATE"
+
+
+@pytest.mark.parametrize("field", [
+    "/basis", "/status", "/wrapper_reachability/literal_loopback_only",
+    "/process_boundary/identity_verified", "/adversarial_corpus/categories_covered",
+    "/gates/operator_model_selection", "/gates/independent_security_review",
+])
+def test_wrong_collection_types_return_closed_denials(field):
+    candidate = mutate(ACCEPTED, {field: [{}]})
+    with pytest.raises(tool.ContainmentError):
+        tool.validate(candidate)
+
+
+@pytest.mark.parametrize("raw,reason", [
+    (b'{"x":"\\ud800"}', "INPUT_INVALID"),
+    (b'{"x":' + b'[' * 2000 + b']' * 2000 + b'}', "INPUT_LIMIT"),
+])
+def test_unencodable_or_deep_json_returns_closed_denial(raw, reason):
+    with pytest.raises(tool.ContainmentError) as caught:
+        tool.load(raw)
+    assert caught.value.code == reason
+
+
 def test_incomplete_status_requires_a_binding():
     candidate = mutate(ACCEPTED, {"/status": "incomplete"})
     with pytest.raises(tool.ContainmentError, match="BINDING_REQUIRED"):
