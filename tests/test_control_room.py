@@ -53,6 +53,9 @@ knownSeverities:new Set(['LOW','MEDIUM','HIGH','CRITICAL']),
 fetch:async(path,options)=>{calls.push({path,options});throw Error('PRIVATE_FAILURE')}};
 vm.createContext(context);vm.runInContext(code,context,{timeout:1000});
 const run=code=>vm.runInContext(code,context,{timeout:1000});run('renderRoom()');
+assert.equal(run('roomEndpoint("192.0.2.1",0)'),'192.0.2.1:0');
+assert.equal(run('roomEndpoint("2001:db8::1",443)'),'[2001:db8::1]:443');
+assert.equal(run('roomEndpoint("2001:db8::1",null)'),'2001:db8::1');
 assert.match(byId('room-home-summary').textContent,/No qualified data available/);
 assert.equal(byId('room-count').textContent,'Unavailable');assert.equal(calls.length,0);
 assert.equal(byId('room-connection').textContent,'Not checked');
@@ -68,6 +71,8 @@ assert.match(byId('room-home-summary').textContent,/1 stored metadata events and
 assert.match(textOf(byId('room-traffic-grid')),/9223372036854775807 reported bytes/);
 assert.equal(byId('room-traffic-grid').children.length,8);
 assert.match(textOf(byId('room-traffic-grid')),/local-subnet or sensor-vantage/);
+assert.match(textOf(byId('room-traffic-grid')),/12345/);
+assert.match(textOf(byId('room-traffic-grid')),/192\.0\.2\.1:12345/);
 assert.equal(run('previewRoomReport()'),true);assert.equal(byId('room-report-download').disabled,false);
 const reportJson=run('roomState.report.json'),report=JSON.parse(reportJson);
 assert.deepEqual(Object.keys(report),['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build']);

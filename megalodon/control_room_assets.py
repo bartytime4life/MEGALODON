@@ -232,6 +232,7 @@ function roomSelection(snapshot, range, custom, now=Date.now()) {
   return {start,end,events,findings};
 }
 function roomCounts(values) {const counts=new Map();values.forEach(v=>counts.set(v,(counts.get(v)||0)+1));return [...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,10);}
+function roomEndpoint(address,port) {return port===null?address:`${address.includes(':')?`[${address}]`:address}:${port}`;}
 function roomMeta(selection) {
   const value=roomState.snapshot;
   return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · source: ${[...new Set(selection.events.map(e=>e.source))].join(', ')||'unavailable'} · vantage: unknown · last update: ${value?.generated_at||'unavailable'} · unit: metadata events / reported bytes · quality: ${roomState.failed?'stale':value?.quality||'unavailable'} · bounded candidate window (top lists omit lower-ranked rows)`;
@@ -363,9 +364,8 @@ function renderRoom() {
   const activityHead=textNode('tr');['Observed (UTC)','Source → destination','Protocol / flags','Reported bytes','Source / run / state','Event ID'].forEach(label=>{const th=textNode('th',label);th.scope='col';activityHead.append(th);});
   const activityHeader=textNode('thead');activityHeader.append(activityHead);activity.append(activityHeader);
   const activityBody=textNode('tbody');
-  const endpoint=(ip,port)=>(ip.includes(':')?'['+ip+']':ip)+(port===null?'':':'+port);
   [...selected.events].sort((a,b)=>Date.parse(b.observed_at)-Date.parse(a.observed_at)||Number(b.id)-Number(a.id)).forEach(e=>{
-    const row=textNode('tr');[e.observed_at,endpoint(e.src_ip,e.src_port)+' → '+endpoint(e.dst_ip,e.dst_port),e.protocol+' / '+(e.tcp_flags.join(', ')||'—'),e.byte_count,e.source+' / '+e.run_id+' / '+e.run_status,e.id].forEach(value=>row.append(textNode('td',value)));activityBody.append(row);
+    const row=textNode('tr');[e.observed_at,roomEndpoint(e.src_ip,e.src_port)+' → '+roomEndpoint(e.dst_ip,e.dst_port),e.protocol+' / '+(e.tcp_flags.join(', ')||'—'),e.byte_count,e.source+' / '+e.run_id+' / '+e.run_status,e.id].forEach(value=>row.append(textNode('td',value)));activityBody.append(row);
   });activity.append(activityBody);byId('room-activity-table').replaceChildren(activity);
   const grid=byId('room-traffic-grid');grid.replaceChildren();
   let panel=roomVisual(grid,'Traffic volume over time',selected);roomTimeline(panel,selected,selected.events,'observed_at');
@@ -373,9 +373,9 @@ function renderRoom() {
   panel=roomVisual(grid,'Protocol mix',selected);roomBars(panel,roomCounts(selected.events.map(e=>e.protocol)));panel.append(textNode('p','Recorded labels only. A port number does not prove DNS, HTTP or TLS.','room-meta'));
   panel=roomVisual(grid,'Inbound, outbound and internal',selected);panel.append(textNode('p','Unavailable — no qualified local-subnet or sensor-vantage contract. Private addresses alone do not establish direction.','room-empty'));
   panel=roomVisual(grid,'Top observed endpoints',selected);roomBars(panel,roomCounts(selected.events.flatMap(e=>[e.src_ip,e.dst_ip])),'endpoint appearances');panel.append(textNode('p','Which endpoints are local is unknown. Each event contributes both endpoint appearances.','room-meta'));
-  panel=roomVisual(grid,'Top conversations',selected);roomBars(panel,roomCounts(selected.events.map(e=>`${e.src_ip} → ${e.dst_ip} · ${e.protocol}`)));
-  panel=roomVisual(grid,'Ports and connection indicators',selected);roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / destination ${e.dst_port===null?'not recorded':e.dst_port}`)));roomBars(panel,roomCounts(selected.events.filter(e=>e.protocol==='TCP').map(e=>'Flags: '+(e.tcp_flags.join(', ')||'none recorded'))));panel.append(textNode('p','TCP flags are indicators; connection state and actual service identity are unavailable.','room-meta'));
-  panel=roomVisual(grid,'Source → destination → protocol / port',selected);const flow=textNode('div','','room-flow');roomCounts(selected.events.map(e=>`${e.src_ip} → ${e.dst_ip} → ${e.protocol} / ${e.dst_port??'unknown'}`)).slice(0,8).forEach(([label,count])=>flow.append(textNode('p',`${label} · ${count} events`)));panel.append(flow);if(!has)roomBars(panel,[]);
+  panel=roomVisual(grid,'Top conversations',selected);roomBars(panel,roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} · ${e.protocol}`)));
+  panel=roomVisual(grid,'Ports and connection indicators',selected);roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / source ${e.src_port===null?'not recorded':e.src_port}`)));roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / destination ${e.dst_port===null?'not recorded':e.dst_port}`)));roomBars(panel,roomCounts(selected.events.filter(e=>e.protocol==='TCP').map(e=>'Flags: '+(e.tcp_flags.join(', ')||'none recorded'))));panel.append(textNode('p','TCP flags are indicators; connection state and actual service identity are unavailable.','room-meta'));
+  panel=roomVisual(grid,'Source → destination → protocol / port',selected);const flow=textNode('div','','room-flow');roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} → ${e.protocol}`)).slice(0,8).forEach(([label,count])=>flow.append(textNode('p',`${label} · ${count} events`)));panel.append(flow);if(!has)roomBars(panel,[]);
   panel=roomVisual(grid,'Coverage and gaps',selected);panel.append(textNode('p',`Candidate window limited: ${snapshot?.truncated?'Yes':'Unknown beyond returned window'}. Excluded sample/unlinked/legacy/held event candidates: ${snapshot?snapshot.excluded_event_candidates:'Unknown'}. Drops: Unknown. Rejected records: Unknown. Missing intervals: Unknown. Clock accuracy: Unknown.`,'room-meta'));
   const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected);roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected);roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings');
   const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
