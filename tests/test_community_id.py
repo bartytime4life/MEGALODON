@@ -158,3 +158,77 @@ def test_correlate_enforces_total_record_limit(monkeypatch):
 
 def test_default_record_limit_is_bounded():
     assert 0 < MAX_TOTAL_RECORDS <= 1_000_000
+
+
+@pytest.mark.parametrize("seed", [-1, 65536, 1.0, True, "0"])
+@pytest.mark.parametrize("empty", [True, False])
+def test_correlate_rejects_invalid_seed_even_without_records(seed, empty):
+    sources = [] if empty else [("zeek", _batch("zeek", [_flow(*TCP_V4)]))]
+    with pytest.raises(OfflineError, match="INVALID_COMMUNITY_ID_SEED"):
+        correlate(sources, seed=seed)
+
+
+def test_seed_is_validated_before_consuming_sources():
+    def sources():
+        pytest.fail("invalid seed must fail before consuming input")
+        yield
+
+    with pytest.raises(OfflineError, match="INVALID_COMMUNITY_ID_SEED"):
+        correlate(sources(), seed=-1)
+
+
+def test_repeated_observations_from_one_source_are_not_cross_source_matches():
+    batch = _batch("zeek", [_flow(*TCP_V4), _flow(*TCP_V4, ts=60)])
+    result = correlate([("zeek", batch)])
+    assert result["considered_flow_records"] == 2
+    assert result["correlated_community_ids"] == 0
+    assert result["groups"] == {}
+
+
+@pytest.mark.parametrize("label", ["zeek\nforged", "zeek\x00", "zeek\u202e", " ", "x" * 65])
+def test_source_labels_are_bounded_display_safe_identifiers(label):
+    with pytest.raises(OfflineError, match="INVALID_CORRELATION_SOURCE_LABEL"):
+        correlate([(label, _batch("zeek", []))])
+
+
+def test_duplicate_source_labels_cannot_make_record_references_ambiguous():
+    batch = _batch("zeek", [_flow(*TCP_V4)])
+    with pytest.raises(OfflineError, match="DUPLICATE_CORRELATION_SOURCE_LABEL"):
+        correlate([("zeek", batch), ("zeek", batch)])
+
+
+def test_empty_batch_stream_is_bounded(monkeypatch):
+    monkeypatch.setattr("megalodon.offline.community_id.MAX_SOURCES", 2)
+    consumed = []
+
+    def sources():
+        for index in range(4):
+            consumed.append(index)
+            yield (f"source-{index}", _batch("zeek", []))
+
+    with pytest.raises(OfflineError, match="CORRELATION_SOURCE_LIMIT"):
+        correlate(sources())
+    assert consumed == [0, 1, 2]
+
+
+def test_record_limit_stops_before_requesting_another_batch(monkeypatch):
+    monkeypatch.setattr("megalodon.offline.community_id.MAX_TOTAL_RECORDS", 1)
+
+    def sources():
+        yield ("zeek", _batch("zeek", [_flow(*TCP_V4)] * 2))
+        pytest.fail("record limit must stop consuming input immediately")
+
+    with pytest.raises(OfflineError, match="CORRELATION_RECORD_LIMIT"):
+        correlate(sources())
+
+
+@pytest.mark.parametrize("entry", [None, (), ("zeek",), ("zeek", None, "extra"), "zeek"])
+def test_malformed_source_entries_fail_with_a_fixed_code(entry):
+    with pytest.raises(OfflineError, match="INVALID_CORRELATION_SOURCE"):
+        correlate([entry])
+
+
+def test_non_tuple_batch_records_are_rejected():
+    batch = Batch("zeek", "flow", iter(()), 0, 0, 0, "1.0.0", "operator_declared_unverified")
+    with pytest.raises(OfflineError, match="INVALID_CORRELATION_BATCH"):
+        correlate([("zeek", batch)])

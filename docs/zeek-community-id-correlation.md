@@ -21,6 +21,22 @@ SQLite store, or grants detection/action authority. `correlate()` never
 mutates, reorders, or merges the `Batch`/`FlowRecord` objects it is given; it
 only reads already-validated fields and returns a new, derived index.
 
+The index accepts at most 64 source batches and 100,000 total records, checking
+both limits while consuming the input. Empty batches still count toward the
+source limit. Each source label must be unique, start with an ASCII letter or
+digit, and contain only ASCII letters, digits, dots, underscores or hyphens
+(at most 64 characters). A hit's source label and record index therefore name
+one input position unambiguously. Labels are operator declarations, not proof
+that sensors are independent. Batches must hold a tuple of records.
+
+The seed must be an integer from 0 to 65,535 (booleans are refused), even for
+empty input. Invalid seeds fail the call; they are never counted as unsupported
+traffic. Only matching records with at least two distinct source labels enter
+the cross-source groups. Repeated observations from one source still contribute
+to the considered-record count, but cannot create a cross-source match alone.
+This is an in-memory API bound, not a deadline guarantee for caller-supplied
+iterators that stall before yielding.
+
 ## What a shared Community ID does and does not mean
 
 A shared identifier means two records hash the same normalized 5-tuple
