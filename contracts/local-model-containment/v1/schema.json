@@ -152,7 +152,12 @@
         },
         {
           "if": {"properties": {"status": {"const": "candidate_evidence"}}},
-          "then": {"properties": {"basis": {"const": "collector_output"}}}
+          "then": {"properties": {
+            "basis": {"const": "collector_output"},
+            "adversarial_corpus": {"properties": {
+              "corpus_id": {"type": "string", "minLength": 1, "maxLength": 128}
+            }}
+          }}
         }
       ]
     }
