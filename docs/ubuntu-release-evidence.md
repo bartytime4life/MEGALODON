@@ -8,11 +8,11 @@ publication or host-authority claim.
 
 The contract and fixtures are under `contracts/release-evidence/v1`. The local
 collector records an exact clean commit/tree plus Ubuntu, kernel, architecture,
-CPython, pip, and systemd identity. It performs three fixed read-only commands:
-Git commit identity, Git tree identity/status, and `systemd --version`. It does
-not run the nine acceptance checks, inspect optional tools, build artifacts,
-contact a network, or write an evidence file. Every omitted result stays
-`not_run` or `not_checked`.
+CPython, pip, and systemd identity. It performs four fixed read-only commands:
+Git commit identity, Git tree identity, Git working-tree status, and
+`systemd --version`. It does not run the nine acceptance checks, inspect
+optional tools, build artifacts, contact a network, or write an evidence file.
+Every omitted result stays `not_run` or `not_checked`.
 
 Validate the synthetic contract fixture:
 
