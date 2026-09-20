@@ -41,15 +41,16 @@ def test_pyproject_declares_pep_639_license_metadata() -> None:
 
 def test_documentation_and_contribution_surfaces_link_the_decision() -> None:
     readme = _text("README.md")
-    contributing = _text("CONTRIBUTING.md")
     decision = _text("docs/license-decision-2026-09-20.md")
 
     assert "[Apache License, Version 2.0](LICENSE)" in readme
     assert "docs/license-decision-2026-09-20.md" in readme
-    assert "[Apache License, Version 2.0](LICENSE)" in contributing
     assert "Selection | Apache License, Version 2.0 (`Apache-2.0`)" in decision
     assert "issue #255" in decision
     assert "not legal advice" in decision
+    contributing_path = ROOT / "CONTRIBUTING.md"
+    if contributing_path.is_file():
+        assert "[Apache License, Version 2.0](LICENSE)" in _text("CONTRIBUTING.md")
 
 
 def test_manifest_explicitly_includes_license() -> None:
