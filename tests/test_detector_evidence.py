@@ -3,6 +3,8 @@
 from dataclasses import asdict
 import hashlib
 import json
+from pathlib import Path
+import re
 import socket
 import sqlite3
 import subprocess
@@ -38,6 +40,7 @@ def test_unregistered_detection_cannot_disappear_from_passing_evaluation(monkeyp
 def test_registry_round_trip_is_closed_detached_and_bound_to_existing_fixtures():
     document = registry_document()
     assert json.loads(json.dumps(document)) == document
+    assert document["registry_version"] == "1.0.1"
     assert [(rule["rule_id"], rule["version"], rule["severity"]) for rule in document["rules"]] == [
         ("DNS_TUNNELING", "1.0.0", "CRITICAL"),
         ("PORT_SCAN", "1.0.0", "MEDIUM"),
@@ -58,6 +61,26 @@ def test_registry_round_trip_is_closed_detached_and_bound_to_existing_fixtures()
     document["default_settings"]["dns_query_length"] = 0
     assert registry_sha256() == digest
     assert "payload" not in DETECTORS[0].required_fields
+
+
+def test_source_capacity_fixture_is_bound_only_to_the_rule_it_exercises():
+    document = registry_document()
+    fixture_rules = {
+        rule["rule_id"]
+        for rule in document["rules"]
+        if "source-cap-pressure-v1" in rule["fixtures"]
+    }
+    scenario = next(
+        item for item in load_corpus().scenarios
+        if item.scenario_id == "source-cap-pressure-v1"
+    )
+
+    assert fixture_rules == {"SYN_FLOOD"}
+    assert dict(scenario.expected) == {
+        "DNS_TUNNELING": 0,
+        "PORT_SCAN": 0,
+        "SYN_FLOOD": 2,
+    }
 
 
 def test_report_preserves_legacy_results_and_never_invents_classification_metrics():
@@ -91,6 +114,26 @@ def test_report_preserves_legacy_results_and_never_invents_classification_metric
     assert report["exclusions"]["scenario_ids"] == []
     assert report["exclusions"]["events"] == 0
     assert len(json.dumps(report, allow_nan=False).encode()) < 32 * 1024
+
+
+def test_console_corpus_totals_match_the_unfiltered_evaluator_report():
+    report = corpus_evidence_report(**SOURCE)
+    site_source = (
+        Path(__file__).resolve().parents[1] / "site" / "dist" / "index.html"
+    )
+    if not site_source.is_file():
+        pytest.skip("repository-only Site source is not included in the sdist")
+    html = site_source.read_text(encoding="utf-8")
+    displayed = re.search(
+        r"<strong>([\d,]+) synthetic scenarios · ([\d,]+) metadata events</strong>",
+        html,
+    )
+
+    assert displayed is not None
+    assert tuple(int(value.replace(",", "")) for value in displayed.groups()) == (
+        report["denominators"]["selected_scenarios"],
+        report["denominators"]["selected_events"],
+    )
 
 
 def test_selected_report_accounts_for_exclusions_and_uses_selected_event_times():

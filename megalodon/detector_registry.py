@@ -29,7 +29,7 @@ DETECTORS = (
         "protocol is DNS or UDP and dns_query_length is present; no port gate",
         "current event dns_query_length", "dns_query_length", None,
         ("dns-protocol-gates-v1", "threshold-matrix-v1", "cooldown-boundaries-v1",
-         "authorized-lookalikes-v1", "source-cap-pressure-v1"),
+         "authorized-lookalikes-v1"),
     ),
     DetectorDefinition(
         "PORT_SCAN", "1.0.0", "MEDIUM",
@@ -47,7 +47,8 @@ DETECTORS = (
         "qualifying TCP SYN event count per source across destination addresses",
         "syn_flood_threshold", "syn_flood_window_seconds",
         ("syn-window-cutoff-v1", "syn-window-outside-v1", "threshold-matrix-v1",
-         "cooldown-boundaries-v1", "ipv6-parity-v1", "authorized-lookalikes-v1"),
+         "cooldown-boundaries-v1", "ipv6-parity-v1", "authorized-lookalikes-v1",
+         "source-cap-pressure-v1"),
     ),
 )
 RULE_IDS = tuple(item.rule_id for item in DETECTORS)
@@ -76,7 +77,7 @@ def registry_document() -> dict[str, object]:
         rules.append(rule)
     return {
         "schema": "detector-registry-v1",
-        "registry_version": "1.0.0",
+        "registry_version": "1.0.1",
         "rules": rules,
         "default_settings": asdict(DetectionSettings()),
         "state": {

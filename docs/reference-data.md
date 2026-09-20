@@ -134,6 +134,11 @@ unknown vantage, inclusive thresholds/windows, per-rule/source cooldown,
 bounded state and eviction, maintainer ownership, fixture IDs and change policy.
 The registry describes current behavior; it does not dispatch rules, change
 thresholds or assign versions retroactively to historical stored findings.
+Registry version `1.0.1` corrects the fixture traceability for
+`source-cap-pressure-v1`: its 4,096-source eviction and cooldown-reset exercise
+belongs to `SYN_FLOOD`, whose expected count is two, rather than to
+`DNS_TUNNELING`, whose expected count is zero. Detector behavior and the three
+rule versions remain unchanged.
 
 `corpus-report` emits `detector-evidence-report-v1` and accepts optional
 `--scenario`. Both exact, lowercase 40-character Git IDs are mandatory. The
