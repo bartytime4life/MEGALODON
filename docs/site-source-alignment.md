@@ -1,6 +1,24 @@
 # Defense Console source alignment
 
-## Current repair — Console v21, setup and evidence wording
+## Current readback — merged repairs and Console v21 source parity
+
+Repository `main@555874468073a04a7711ec4a96c8cdf810e1051d` includes both
+[#292](https://github.com/bartytime4life/MEGALODON/pull/292), recovery failure
+classification and connection cleanup, and
+[#293](https://github.com/bartytime4life/MEGALODON/pull/293), Site setup and
+evidence wording. [#291](https://github.com/bartytime4life/MEGALODON/issues/291)
+is closed as completed; its owner recorded scoped acceptance of #292. The
+earlier draft and candidate-only statements below describe historical checkpoints.
+
+**VERIFIED:** all thirteen tracked `site/` files at that exact main revision
+match Sites source `d89b8af91405066cdffaa72b2491d07a3dd8b61b` byte-for-byte.
+The existing owner-private project still reports live version 21, with the
+version, archive and deployment identities recorded below. Its 39 Node tests
+pass. This pass did not republish or change the Site's audience. Rendered-browser
+acceptance and installation on the owner's computer remain unverified; source
+parity and scoped issue closure do not establish either.
+
+## Historical repair — Console v21, setup and evidence wording
 
 Repository readback: PR [#290](https://github.com/bartytime4life/MEGALODON/pull/290)
 is merged at `643cb30f058957aa87b84d2de89b6d1782d5c42d`. Its unavailable-traffic

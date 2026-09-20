@@ -15,6 +15,7 @@ from typing import Any, Mapping
 
 from ..config import DetectionSettings
 from ..detector import Detector
+from ..detector_registry import RULE_IDS, registry_document, registry_sha256
 from ..models import PacketEvent
 from ..validation import safe_text, ValidationError
 
@@ -39,7 +40,7 @@ CORPUS_LIMITS = {
     "max_total_bytes": 4_194_304,
     "max_total_records": 10_000,
 }
-RULES = ("DNS_TUNNELING", "PORT_SCAN", "SYN_FLOOD")
+RULES = RULE_IDS
 TRANSPORTS = frozenset({"tcp", "udp", "sctp", "dccp"})
 DOCUMENTATION_NETWORKS = (
     ipaddress.ip_network("192.0.2.0/24"),
@@ -992,6 +993,10 @@ def load_corpus() -> CorpusBundle:
 def evaluate_corpus(scenario_id: str | None = None) -> dict[str, object]:
     """Validate every corpus byte before running the detector in memory."""
     bundle = load_corpus()
+    return _evaluate_bundle(bundle, scenario_id)
+
+
+def _evaluate_bundle(bundle: CorpusBundle, scenario_id: str | None) -> dict[str, object]:
     selected = bundle.scenarios
     if scenario_id is not None:
         selected = tuple(item for item in selected if item.scenario_id == scenario_id)
@@ -1004,6 +1009,8 @@ def evaluate_corpus(scenario_id: str | None = None) -> dict[str, object]:
         observed_counter: Counter[str] = Counter()
         for event in scenario.records:
             for detection in detector.analyze(event):
+                if detection.rule_id not in RULES:
+                    _fail("UNKNOWN_DETECTOR")
                 observed_counter[detection.rule_id] += 1
         observed = {rule: observed_counter[rule] for rule in RULES}
         expected = dict(scenario.expected)
@@ -1040,4 +1047,96 @@ def evaluate_corpus(scenario_id: str | None = None) -> dict[str, object]:
         "action_status": "not_attempted",
         "scenarios": outcomes,
         "limitations": list(bundle.limitations),
+    }
+
+
+def corpus_evidence_report(
+    *, source_commit: str, source_tree: str, scenario_id: str | None = None,
+) -> dict[str, object]:
+    """Describe bounded synthetic checks without inventing accuracy or source provenance.
+
+    Git references are required declarations. The offline evaluator cannot attest
+    checkout identity; reviewers must bind these declarations to the tested tree.
+    """
+    for value in (source_commit, source_tree):
+        if type(value) is not str or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+            _fail("INVALID_SOURCE_IDENTITY")
+    bundle = load_corpus()
+    evaluation = _evaluate_bundle(bundle, scenario_id)
+    selected = tuple(
+        item for item in bundle.scenarios
+        if scenario_id is None or item.scenario_id == scenario_id
+    )
+    selected_ids = {item.scenario_id for item in selected}
+    excluded = tuple(item for item in bundle.scenarios if item.scenario_id not in selected_ids)
+    times = [event.observed_at for item in selected for event in item.records]
+    selected_records = sum(len(item.records) for item in selected)
+    rules = registry_document()
+    return {
+        "schema": "detector-evidence-report-v1",
+        "source_identity": {
+            "commit": source_commit,
+            "tree": source_tree,
+            "status": "caller_declared_unverified",
+            "registry_sha256": registry_sha256(),
+        },
+        "registry": rules,
+        "effective_settings": asdict(bundle.detector_profile),
+        "replay": {
+            "clock": bundle.detector_clock.isoformat().replace("+00:00", "Z"),
+            "state_policy": "fresh detector per scenario",
+            "time_window": {
+                "start": min(times).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+                "end": max(times).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+                "basis": "selected synthetic event times; inclusive endpoints",
+            },
+        },
+        "labels": {
+            "identity": bundle.manifest_sha256,
+            "scheme": "scenario aggregate expected rule counts",
+            "event_class_labels": "unavailable",
+            "interpretation": "scenario intent text and expected counts are not event ground truth",
+        },
+        "denominators": {
+            "selected_scenarios": len(selected),
+            "selected_events": selected_records,
+            "validated_scenarios": len(bundle.scenarios),
+            "validated_events": bundle.total_records,
+            "binary_labeled_units": None,
+        },
+        "quality": {
+            "source": bundle.quality_label,
+            "calibration": bundle.calibration,
+            "bundle_integrity": "verified",
+            "selected_replay": "complete",
+            "corpus_selection": "subset" if excluded else "all_bundled_scenarios",
+            "operational_source_quality": "unavailable",
+            "capture_loss": "unknown",
+            "operational_coverage": "unknown",
+            "clean_interpretation": "unavailable",
+        },
+        "exclusions": {
+            "scenario_ids": [item.scenario_id for item in excluded],
+            "events": sum(len(item.records) for item in excluded),
+            "reason": "explicit scenario selection" if excluded else None,
+            "outside_scope": ["live telemetry", "representative operational traffic", "payloads"],
+        },
+        "classification_metrics": {
+            "status": "unavailable",
+            "reason": "EVENT_LABELS_AND_DENOMINATOR_UNAVAILABLE",
+            **{name: None for name in (
+                "tp", "fp", "fn", "tn", "precision", "recall", "false_positive_rate", "accuracy",
+            )},
+        },
+        "uncertainty": [
+            "Matching aggregate counts does not establish event-level detection correctness.",
+            "Synthetic fixture success cannot establish operational accuracy, coverage or calibration.",
+            "Caller-declared commit/tree require independent source-equality verification.",
+            "Rule versions describe this evaluator; historical stored findings remain unversioned.",
+        ],
+        "all_match": evaluation["all_match"],
+        "evaluation": evaluation,
+        "network_access_performed": False,
+        "persistence_status": "not_attempted",
+        "action_status": "not_attempted",
     }
