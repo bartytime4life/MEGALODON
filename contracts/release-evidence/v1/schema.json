@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/manifest",
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declared_commit",
+        "observed_commit",
+        "declared_tree",
+        "observed_tree",
+        "working_tree_dirty"
+      ],
+      "properties": {
+        "declared_commit": {"$ref": "#/$defs/sha1"},
+        "observed_commit": {"$ref": "#/$defs/sha1"},
+        "declared_tree": {"$ref": "#/$defs/sha1"},
+        "observed_tree": {"$ref": "#/$defs/sha1"},
+        "working_tree_dirty": {"const": false}
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_id",
+        "version_id",
+        "version_codename",
+        "kernel_release",
+        "architecture",
+        "python_implementation",
+        "python_version",
+        "pip_version",
+        "systemd_version"
+      ],
+      "properties": {
+        "os_id": {"const": "ubuntu"},
+        "version_id": {"const": "24.04"},
+        "version_codename": {"const": "noble"},
+        "kernel_release": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._+~-]+$"
+        },
+        "architecture": {"enum": ["x86_64", "aarch64"]},
+        "python_implementation": {"const": "CPython"},
+        "python_version": {
+          "type": "string",
+          "pattern": "^3\\.(11|12)\\.[0-9]+$"
+        },
+        "pip_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[0-9]+(\\.[0-9]+){1,3}$"
+        },
+        "systemd_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[0-9]+( \\([^\\r\\n]+\\))?$"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_input_bytes",
+        "max_depth",
+        "max_collection_items",
+        "max_string_bytes",
+        "max_command_output_bytes",
+        "max_checks",
+        "max_artifacts"
+      ],
+      "properties": {
+        "max_input_bytes": {"const": 262144},
+        "max_depth": {"const": 16},
+        "max_collection_items": {"const": 256},
+        "max_string_bytes": {"const": 4096},
+        "max_command_output_bytes": {"const": 1048576},
+        "max_checks": {"const": 9},
+        "max_artifacts": {"const": 2}
+      }
+    },
+    "optionalComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "health", "required_for_core"],
+      "properties": {
+        "id": {"enum": ["tshark", "suricata", "zeek", "ollama", "qwen_model"]},
+        "state": {"enum": ["absent", "disabled", "not_checked", "available_unqualified"]},
+        "health": {"const": "unavailable"},
+        "required_for_core": {"const": false}
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "output_bytes", "result_sha256", "notes"],
+      "properties": {
+        "id": {
+          "enum": [
+            "compile",
+            "repository_tests",
+            "cli_smoke",
+            "loopback_browser",
+            "sample_jsonl",
+            "backup_restore",
+            "native_failure_paths",
+            "wheel_install_smoke",
+            "sdist_install_smoke"
+          ]
+        },
+        "status": {"enum": ["passed", "failed", "not_run", "blocked"]},
+        "output_bytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+        "result_sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"type": "null"}
+          ]
+        },
+        "notes": {"type": "string", "maxLength": 512}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "passed"}}},
+          "then": {"properties": {"result_sha256": {"$ref": "#/$defs/sha256"}}},
+          "else": {"properties": {"result_sha256": {"type": "null"}}}
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "sha256", "size_bytes", "published"],
+      "properties": {
+        "id": {"enum": ["wheel", "sdist"]},
+        "status": {"enum": ["built_ephemeral", "not_run", "blocked"]},
+        "sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"type": "null"}
+          ]
+        },
+        "size_bytes": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1, "maximum": 67108864},
+            {"type": "null"}
+          ]
+        },
+        "published": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "built_ephemeral"}}},
+          "then": {
+            "properties": {
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "size_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864}
+            }
+          },
+          "else": {
+            "properties": {
+              "sha256": {"type": "null"},
+              "size_bytes": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["license", "operator_recovery", "sbom", "provenance", "release_authority"],
+      "properties": {
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "blocker"],
+          "properties": {
+            "status": {"const": "blocked"},
+            "blocker": {"const": "https://github.com/bartytime4life/MEGALODON/issues/255"}
+          }
+        },
+        "operator_recovery": {"const": "not_run"},
+        "sbom": {"const": "not_run"},
+        "provenance": {"const": "not_run"},
+        "release_authority": {"const": "not_authorized"}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_fallback_used",
+        "tag_created",
+        "release_published",
+        "package_uploaded",
+        "deployment_performed",
+        "service_installed",
+        "firewall_changed",
+        "sensor_started",
+        "model_invoked",
+        "restored_data_activated"
+      ],
+      "properties": {
+        "network_fallback_used": {"const": false},
+        "tag_created": {"const": false},
+        "release_published": {"const": false},
+        "package_uploaded": {"const": false},
+        "deployment_performed": {"const": false},
+        "service_installed": {"const": false},
+        "firewall_changed": {"const": false},
+        "sensor_started": {"const": false},
+        "model_invoked": {"const": false},
+        "restored_data_activated": {"const": false}
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "basis",
+        "status",
+        "repository",
+        "source",
+        "platform",
+        "limits",
+        "optional_components",
+        "checks",
+        "artifacts",
+        "gates",
+        "effects",
+        "limitations",
+        "generated_at"
+      ],
+      "properties": {
+        "schema_version": {"const": "ubuntu-24.04-evidence-v1"},
+        "basis": {"enum": ["synthetic_contract_fixture", "local_checkout", "github_actions"]},
+        "status": {"enum": ["incomplete", "candidate_evidence"]},
+        "repository": {"const": "bartytime4life/MEGALODON"},
+        "source": {"$ref": "#/$defs/source"},
+        "platform": {"$ref": "#/$defs/platform"},
+        "limits": {"$ref": "#/$defs/limits"},
+        "optional_components": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/optionalComponent"},
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "checks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/check"},
+          "minItems": 9,
+          "maxItems": 9
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifact"},
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "gates": {"$ref": "#/$defs/gates"},
+        "effects": {"$ref": "#/$defs/effects"},
+        "limitations": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 512},
+          "minItems": 4,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "generated_at": {"$ref": "#/$defs/timestamp"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "candidate_evidence"}}},
+          "then": {"properties": {"basis": {"enum": ["local_checkout", "github_actions"]}}}
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema_version": "ubuntu-24.04-evidence-v1",
+  "basis": "synthetic_contract_fixture",
+  "status": "incomplete",
+  "repository": "bartytime4life/MEGALODON",
+  "source": {
+    "declared_commit": "1111111111111111111111111111111111111111",
+    "observed_commit": "1111111111111111111111111111111111111111",
+    "declared_tree": "2222222222222222222222222222222222222222",
+    "observed_tree": "2222222222222222222222222222222222222222",
+    "working_tree_dirty": false
+  },
+  "platform": {
+    "os_id": "ubuntu",
+    "version_id": "24.04",
+    "version_codename": "noble",
+    "kernel_release": "6.8.0-79-generic",
+    "architecture": "x86_64",
+    "python_implementation": "CPython",
+    "python_version": "3.12.3",
+    "pip_version": "25.0.1",
+    "systemd_version": "255 (255.4-1ubuntu8.17)"
+  },
+  "limits": {
+    "max_input_bytes": 262144,
+    "max_depth": 16,
+    "max_collection_items": 256,
+    "max_string_bytes": 4096,
+    "max_command_output_bytes": 1048576,
+    "max_checks": 9,
+    "max_artifacts": 2
+  },
+  "optional_components": [
+    {"id": "tshark", "state": "not_checked", "health": "unavailable", "required_for_core": false},
+    {"id": "suricata", "state": "not_checked", "health": "unavailable", "required_for_core": false},
+    {"id": "zeek", "state": "not_checked", "health": "unavailable", "required_for_core": false},
+    {"id": "ollama", "state": "disabled", "health": "unavailable", "required_for_core": false},
+    {"id": "qwen_model", "state": "disabled", "health": "unavailable", "required_for_core": false}
+  ],
+  "checks": [
+    {"id": "compile", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "repository_tests", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "cli_smoke", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "loopback_browser", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "sample_jsonl", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "backup_restore", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "native_failure_paths", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "wheel_install_smoke", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."},
+    {"id": "sdist_install_smoke", "status": "not_run", "output_bytes": 0, "result_sha256": null, "notes": "Synthetic contract fixture."}
+  ],
+  "artifacts": [
+    {"id": "wheel", "status": "not_run", "sha256": null, "size_bytes": null, "published": false},
+    {"id": "sdist", "status": "not_run", "sha256": null, "size_bytes": null, "published": false}
+  ],
+  "gates": {
+    "license": {"status": "blocked", "blocker": "https://github.com/bartytime4life/MEGALODON/issues/255"},
+    "operator_recovery": "not_run",
+    "sbom": "not_run",
+    "provenance": "not_run",
+    "release_authority": "not_authorized"
+  },
+  "effects": {
+    "network_fallback_used": false,
+    "tag_created": false,
+    "release_published": false,
+    "package_uploaded": false,
+    "deployment_performed": false,
+    "service_installed": false,
+    "firewall_changed": false,
+    "sensor_started": false,
+    "model_invoked": false,
+    "restored_data_activated": false
+  },
+  "limitations": [
+    "Synthetic fixture; no host operation was performed.",
+    "The repository license remains blocked on issue 255.",
+    "No operator recovery drill, SBOM, or provenance statement exists here.",
+    "No tag, release, upload, deployment, sensor, model, or firewall action is authorized."
+  ],
+  "generated_at": "2026-09-20T00:00:00Z"
+}
