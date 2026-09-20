@@ -76,6 +76,52 @@ jobs:
           python -m megalodon firewall-plan 8.8.8.8 --reason "CI smoke"
           python -m megalodon posture --platform windows
 
+  incomplete-identity-packet:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Generate bounded non-root identity packet
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          observed_tree="$(git rev-parse --verify 'HEAD^{tree}')"
+          packet="$RUNNER_TEMP/ubuntu-24.04-incomplete-identity.json"
+          python tools/ubuntu_release_evidence.py collect \
+            --checkout . \
+            --declared-commit "$EXPECTED_COMMIT" \
+            --declared-tree "$observed_tree" | tee "$packet"
+          python - "$packet" <<'PYIDENTITY'
+          import json
+          from pathlib import Path
+          import sys
+
+          result = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          manifest = result["manifest"]
+          assert result["status"] == "validated"
+          assert manifest["basis"] == "local_checkout"
+          assert manifest["status"] == "incomplete"
+          assert manifest["source"]["declared_commit"] == manifest["source"]["observed_commit"]
+          assert manifest["source"]["declared_tree"] == manifest["source"]["observed_tree"]
+          assert {row["status"] for row in manifest["checks"]} == {"not_run"}
+          assert {row["status"] for row in manifest["artifacts"]} == {"not_run"}
+          assert all(value is False for value in manifest["effects"].values())
+          print(result["manifest_sha256"])
+          PYIDENTITY
+
   wheel-smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

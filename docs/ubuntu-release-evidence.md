@@ -1,0 +1,67 @@
+# Ubuntu 24.04 release-evidence boundary
+
+Issue [#260](https://github.com/bartytime4life/MEGALODON/issues/260)
+requires an exact-platform evidence packet before MEGALODON can be evaluated as
+a Linux release candidate. The v1 contract is deliberately narrower than a
+release workflow: it makes missing evidence machine-readable and refuses every
+publication or host-authority claim.
+
+The contract and fixtures are under `contracts/release-evidence/v1`. The local
+collector records an exact clean commit/tree plus Ubuntu, kernel, architecture,
+CPython, pip, and systemd identity. It requires an expected commit anchored
+outside the checkout and a tree resolved from that commit, then performs five
+fixed read-only commands: Git
+commit identity, Git tree identity, Git working-tree status, configured origin
+URL, and `systemd --version`. It does not run the nine acceptance checks, inspect
+optional tools, build artifacts, contact a network, or write an evidence file.
+Every omitted result stays `not_run` or `not_checked`.
+
+Validation is structural and self-asserted. The configured-origin check catches
+an accidental unrelated checkout, but a Git remote can be rewritten and is not
+an attestation. The manifest digest binds canonical packet bytes only; it does
+not authenticate their origin, reproduce a check, verify a log or artifact, or
+prove that a statement is true. Governed use must source the expected commit
+outside the checkout, verify the tree bound by that commit, and independently
+retain/recompute evidence.
+
+Validate the synthetic contract fixture:
+
+```bash
+python tools/ubuntu_release_evidence.py validate \
+  contracts/release-evidence/v1/fixtures/accepted/synthetic-incomplete.json
+```
+
+Collect an incomplete local identity packet from a clean checkout:
+
+```bash
+EXPECTED_COMMIT="<commit from a trusted GitHub PR or API readback>"
+python tools/ubuntu_release_evidence.py collect \
+  --checkout . \
+  --declared-commit "$EXPECTED_COMMIT" \
+  --declared-tree "$(git rev-parse --verify "${EXPECTED_COMMIT}^{tree}")"
+```
+
+The command writes canonical JSON to standard output. Redirecting it is an
+operator choice; the collector itself creates no file. A dirty checkout,
+declared/observed Git mismatch, non-Ubuntu-24.04 platform, duplicate JSON key,
+unexpected check/component/artifact identity, false optional-health claim,
+oversized output, or any effect/authority claim fails closed with one bounded
+reason.
+
+## What remains before candidate evidence
+
+- Run the exact nine checks on an authorized Ubuntu 24.04 host or runner and
+  retain bounded, digest-bound outcomes.
+- Build wheel and source distribution only as ephemeral subjects, bind their
+  sizes and SHA-256 values, and install/test them in disposable environments.
+- Retain the complete operator backup/restore/read-only-inspection drill.
+- Produce and review the canonical CycloneDX SBOM and provenance subjects.
+- Resolve the owner license decision in #255 and align package/repository
+  metadata.
+- Obtain the required owner/independent disposition for the exact candidate.
+
+Synthetic contract fixtures cannot be promoted to `candidate_evidence`.
+Even a structurally valid observed `candidate_evidence` packet is not attested,
+authenticated, independently reproduced, or a tag, GitHub release, package
+publication, deployment, installation, supported-platform promise, sensor/model
+operation, firewall authority, or operator acceptance.
