@@ -100,6 +100,14 @@ There are six distinct surfaces. Do not combine their meanings:
 | Qwen advisory receipt | One startup-supplied, validated, display-only bounded result | An installed/reachable model, an invocation control, live traffic analysis, an evidence source, or a response authority |
 | Suricata evidence | A bounded startup snapshot from one explicitly selected separate durable store | A live sensor, continuous EVE feed, MEGALODON detection, independent source attestation, or applied response |
 
+The stored traffic projection selects its newest 500 event candidates first,
+then at most 200 finding candidates linked to that window. Newer findings for
+older events cannot displace findings for the displayed window. A sentinel row
+reports truncation; receipt qualification still excludes sample, unlinked, and
+reconciliation-required events. History uses the same linked-window limit and
+also filters finding timestamps to the requested UTC range. These are bounded
+views, not complete detection totals; query-budget exhaustion remains unavailable.
+
 ## Inspect separately stored Suricata evidence
 
 When an existing compatible private Suricata store has already been populated
