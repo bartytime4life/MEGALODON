@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import platform
 import shlex
 import sqlite3
@@ -13,8 +14,17 @@ from .config import load_settings
 from .dashboard import UnconfiguredDashboardReader
 
 
-def main() -> int:
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.exit(2, 'Local preflight accepts no options or positional arguments except --help; '
+                  'it checks only the default data path.\n')
+
+
+def main(argv: list[str] | None = None) -> int:
     """Check the actual reader boundary without creating data or probing tools."""
+    parser = _Parser(description='Read-only check of the default local data path; no HUD options.',
+                     allow_abbrev=False)
+    parser.parse_args(argv)
     print(f"MEGALODON {__version__}")
     print(f"Python: {platform.python_version()} ({sys.executable})")
     print(f"Platform: {sys.platform}; SQLite: {sqlite3.sqlite_version}")

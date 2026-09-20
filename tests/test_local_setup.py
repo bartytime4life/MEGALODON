@@ -17,7 +17,7 @@ from megalodon.storage import Store
 def test_preflight_missing_data_does_not_create_it(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(local_setup.sys, "platform", "linux")
-    assert local_setup.main() == 0
+    assert local_setup.main([]) == 0
     output = capsys.readouterr().out
     assert "not configured" in output
     # An installed wheel has no checkout script: its next command must work too.
@@ -31,7 +31,7 @@ def test_preflight_reads_existing_store_without_changing_it(tmp_path, monkeypatc
     with Store(path):
         pass
     before = path.read_bytes()
-    assert local_setup.main() == 0
+    assert local_setup.main([]) == 0
     assert "bounded read-only check" in capsys.readouterr().out
     assert path.read_bytes() == before
 
@@ -42,14 +42,14 @@ def test_preflight_refuses_invalid_store(tmp_path, monkeypatch, capsys):
     path.parent.mkdir(mode=0o700)
     path.write_bytes(b"not a database")
     path.chmod(0o600)
-    assert local_setup.main() == 2
+    assert local_setup.main([]) == 2
     assert "refused" in capsys.readouterr().err
     assert path.read_bytes() == b"not a database"
 
 
 def test_preflight_does_not_claim_unsupported_platform(monkeypatch, capsys):
     monkeypatch.setattr(local_setup.sys, "platform", "win32")
-    assert local_setup.main() == 2
+    assert local_setup.main([]) == 2
     assert "Linux only" in capsys.readouterr().err
 
 
@@ -119,3 +119,29 @@ def test_launcher_rejects_check_options_instead_of_ignoring_them(launcher):
     )
     assert result.returncode == 2
     assert "accepts no HUD options" in result.stderr
+
+
+@pytest.mark.parametrize('args', [['--config', '/SECRET/other.toml'], ['unexpected'], ['--help']])
+def test_module_preflight_admits_arguments_before_reading_data(tmp_path, args):
+    # A malformed store proves help/refusal happens before reader admission.
+    data = tmp_path / 'data'
+    data.mkdir(mode=0o700)
+    database = data / 'megalodon.db'
+    database.write_bytes(b'invalid database')
+    database.chmod(0o600)
+    source = str(Path(__file__).resolve().parents[1])
+    result = subprocess.run(
+        [sys.executable, '-m', 'megalodon.local_setup', *args], cwd=tmp_path,
+        env={**os.environ, 'PYTHONPATH': source},
+        text=True, capture_output=True, timeout=10,
+    )
+    assert result.returncode == (0 if args == ['--help'] else 2)
+    assert 'Default data path:' not in result.stdout
+    assert 'Ready for manual HUD launch' not in result.stdout
+    assert 'SECRET' not in result.stdout + result.stderr
+    if args == ['--help']:
+        assert 'usage:' in result.stdout
+    else:
+        assert 'accepts no options or positional arguments' in result.stderr
+    assert database.read_bytes() == b'invalid database'
+    assert list(data.iterdir()) == [database]
