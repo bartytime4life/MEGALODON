@@ -106,6 +106,22 @@ remain `not_run`, and release authority remains `not_authorized`.
 
 ### Remaining candidate gates
 
+The separate PR workflow `Ubuntu synthetic recovery rehearsal` runs the real
+sample ingestion, backup and restore CLI paths as a non-root user on Ubuntu
+24.04. It uses 13 synthetic events in private temporary directories, compares
+the backup/manifest digests reported by both operations, verifies source and
+restored databases read-only (integrity, foreign keys and event counts), and
+confirms a second restore refuses the existing destination without replacing
+it. It emits a small source-pinned summary; it uploads no database or raw log.
+Temporary rehearsal files are removed when the test ends. No restored store
+is activated and no operator database is inspected or modified.
+
+This exercise is repeatable synthetic CLI integration evidence. It does not
+populate the release packet's nine checks, retain a recovery backup for an
+operator, or establish physical disk-full, power-loss, high-write WAL, clock
+rollback, installed-package recovery, independent review or owner acceptance.
+Those candidate gates remain below.
+
 - Run the exact nine checks on an authorized Ubuntu 24.04 host or runner and
   retain bounded, digest-bound outcomes.
 - Build wheel and source distribution only as ephemeral subjects, bind their
