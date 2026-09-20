@@ -52,6 +52,11 @@ VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}$")
 PYTHON_VERSION = re.compile(r"^3\.(11|12)\.[0-9]+$")
 KERNEL = re.compile(r"^[A-Za-z0-9._+~-]+$")
 SYSTEMD = re.compile(r"^[0-9]+(?: \([^\r\n]+\))?$")
+REPOSITORY = "bartytime4life/MEGALODON"
+ALLOWED_ORIGIN_URLS = {
+    "https://github.com/bartytime4life/MEGALODON.git",
+    "git@github.com:bartytime4life/MEGALODON.git",
+}
 
 
 class EvidenceError(ValueError):
@@ -157,7 +162,7 @@ def validate(manifest: dict) -> dict:
         _fail("INPUT_INVALID")
     if manifest["status"] not in {"incomplete", "candidate_evidence"}:
         _fail("INPUT_INVALID")
-    if manifest["repository"] != "bartytime4life/MEGALODON":
+    if manifest["repository"] != REPOSITORY:
         _fail("INPUT_INVALID")
 
     source = manifest["source"]
@@ -188,6 +193,8 @@ def validate(manifest: dict) -> dict:
             _fail("INPUT_INVALID")
     if (
         len(platform_data["kernel_release"]) > 128
+        or len(platform_data["pip_version"]) > 32
+        or len(platform_data["systemd_version"]) > 64
         or KERNEL.fullmatch(platform_data["kernel_release"]) is None
         or PYTHON_VERSION.fullmatch(platform_data["python_version"]) is None
         or VERSION.fullmatch(platform_data["pip_version"]) is None
@@ -252,7 +259,7 @@ def validate(manifest: dict) -> dict:
         _fail("AUTHORITY_CLAIM")
     if type(manifest["effects"]) is not dict or set(manifest["effects"]) != set(EFFECT_IDS):
         _fail("AUTHORITY_CLAIM")
-    if any(manifest["effects"].values()):
+    if any(value is not False for value in manifest["effects"].values()):
         _fail("AUTHORITY_CLAIM")
     if (
         type(manifest["limitations"]) is not list or not 4 <= len(manifest["limitations"]) <= 16
@@ -260,12 +267,19 @@ def validate(manifest: dict) -> dict:
         or len(set(manifest["limitations"])) != len(manifest["limitations"])
     ):
         _fail("INPUT_INVALID")
-    if type(manifest["generated_at"]) is not str or re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", manifest["generated_at"],
+    generated_at = manifest["generated_at"]
+    if type(generated_at) is not str or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", generated_at,
     ) is None:
+        _fail("INPUT_INVALID")
+    try:
+        datetime.strptime(generated_at, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
         _fail("INPUT_INVALID")
 
     if manifest["status"] == "candidate_evidence":
+        if manifest["basis"] == "synthetic_contract_fixture":
+            _fail("CANDIDATE_INCOMPLETE")
         if any(item["status"] != "passed" for item in manifest["checks"]):
             _fail("CANDIDATE_INCOMPLETE")
         if any(item["status"] != "built_ephemeral" for item in manifest["artifacts"]):
@@ -306,12 +320,15 @@ def _os_release(path: Path = Path("/etc/os-release")) -> dict[str, str]:
     return result
 
 
-def collect(checkout: Path, declared_commit: str | None = None, declared_tree: str | None = None) -> dict:
+def collect(checkout: Path, declared_commit: str, declared_tree: str) -> dict:
     """Collect local identity only; intentionally leave every execution check not-run."""
     checkout = checkout.resolve(strict=True)
     observed_commit = _run_fixed(["git", "rev-parse", "--verify", "HEAD"], checkout)
     observed_tree = _run_fixed(["git", "rev-parse", "--verify", "HEAD^{tree}"], checkout)
     status = _run_fixed(["git", "status", "--porcelain", "--untracked-files=normal"], checkout)
+    origin = _run_fixed(["git", "remote", "get-url", "origin"], checkout)
+    if origin not in ALLOWED_ORIGIN_URLS:
+        _fail("SOURCE_REPOSITORY")
     systemd = _run_fixed(["systemd", "--version"], checkout).splitlines()[0]
     if not systemd.startswith("systemd "):
         _fail("PLATFORM_UNSUPPORTED")
@@ -320,11 +337,11 @@ def collect(checkout: Path, declared_commit: str | None = None, declared_tree: s
         "schema_version": "ubuntu-24.04-evidence-v1",
         "basis": "local_checkout",
         "status": "incomplete",
-        "repository": "bartytime4life/MEGALODON",
+        "repository": REPOSITORY,
         "source": {
-            "declared_commit": declared_commit or observed_commit,
+            "declared_commit": declared_commit,
             "observed_commit": observed_commit,
-            "declared_tree": declared_tree or observed_tree,
+            "declared_tree": declared_tree,
             "observed_tree": observed_tree,
             "working_tree_dirty": bool(status),
         },
@@ -381,8 +398,8 @@ def parser() -> argparse.ArgumentParser:
     verify.add_argument("manifest")
     capture = group.add_parser("collect", allow_abbrev=False)
     capture.add_argument("--checkout", default=".")
-    capture.add_argument("--declared-commit")
-    capture.add_argument("--declared-tree")
+    capture.add_argument("--declared-commit", required=True)
+    capture.add_argument("--declared-tree", required=True)
     return result
 
 

@@ -75,6 +75,7 @@ def test_malformed_input_is_bounded_and_never_echoed(raw):
 
 def test_candidate_requires_every_check_and_both_ephemeral_subjects():
     candidate = deepcopy(ACCEPTED)
+    candidate["basis"] = "github_actions"
     candidate["status"] = "candidate_evidence"
     for check in candidate["checks"]:
         check.update(status="passed", result_sha256="sha256:" + "3" * 64)
@@ -98,6 +99,38 @@ def test_candidate_requires_every_check_and_both_ephemeral_subjects():
             tool.validate(incomplete)
 
 
+@pytest.mark.parametrize("changes,reason,schema_rejects", [
+    ({"/effects/release_published": 0}, "AUTHORITY_CLAIM", True),
+    ({"/effects/model_invoked": None}, "AUTHORITY_CLAIM", True),
+    ({"/generated_at": "2026-02-30T00:00:00Z"}, "INPUT_INVALID", False),
+    ({"/platform/pip_version": "1." + "2" * 31}, "INPUT_INVALID", True),
+    ({"/platform/systemd_version": "255 (" + "a" * 59 + ")"}, "INPUT_INVALID", True),
+])
+def test_semantic_validator_rejects_contract_invalid_edge_cases(
+    changes, reason, schema_rejects,
+):
+    candidate = mutate(ACCEPTED, changes)
+    if schema_rejects:
+        assert not VALIDATOR.is_valid(candidate)
+    with pytest.raises(tool.EvidenceError) as caught:
+        tool.validate(candidate)
+    assert caught.value.code == reason
+
+
+def test_synthetic_fixture_cannot_be_promoted_to_candidate_evidence():
+    candidate = deepcopy(ACCEPTED)
+    candidate["status"] = "candidate_evidence"
+    for check in candidate["checks"]:
+        check.update(status="passed", result_sha256="sha256:" + "3" * 64)
+    for artifact in candidate["artifacts"]:
+        artifact.update(
+            status="built_ephemeral", sha256="sha256:" + "4" * 64, size_bytes=1024,
+        )
+    assert not VALIDATOR.is_valid(candidate)
+    with pytest.raises(tool.EvidenceError, match="CANDIDATE_INCOMPLETE"):
+        tool.validate(candidate)
+
+
 def test_collector_reads_identity_only_and_leaves_execution_not_run(monkeypatch, tmp_path):
     checkout = tmp_path / "checkout"
     checkout.mkdir()
@@ -113,6 +146,8 @@ def test_collector_reads_identity_only_and_leaves_execution_not_run(monkeypatch,
             return tree
         if argv[:2] == ["git", "status"]:
             return ""
+        if argv == ["git", "remote", "get-url", "origin"]:
+            return "https://github.com/bartytime4life/MEGALODON.git"
         if argv == ["systemd", "--version"]:
             return "systemd 255 (255.4-1ubuntu8.17)\nfeatures omitted"
         raise AssertionError(argv)
@@ -138,8 +173,29 @@ def test_collector_reads_identity_only_and_leaves_execution_not_run(monkeypatch,
         ("git", "rev-parse", "--verify", "HEAD"),
         ("git", "rev-parse", "--verify", "HEAD^{tree}"),
         ("git", "status", "--porcelain", "--untracked-files=normal"),
+        ("git", "remote", "get-url", "origin"),
         ("systemd", "--version"),
     ]
+
+
+def test_collector_rejects_wrong_repository_origin(monkeypatch, tmp_path):
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+
+    def fixed(argv, _cwd):
+        if argv == ["git", "rev-parse", "--verify", "HEAD"]:
+            return "5" * 40
+        if argv == ["git", "rev-parse", "--verify", "HEAD^{tree}"]:
+            return "6" * 40
+        if argv[:2] == ["git", "status"]:
+            return ""
+        if argv == ["git", "remote", "get-url", "origin"]:
+            return "https://github.com/example/unrelated.git"
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(tool, "_run_fixed", fixed)
+    with pytest.raises(tool.EvidenceError, match="SOURCE_REPOSITORY"):
+        tool.collect(checkout, "5" * 40, "6" * 40)
 
 
 def test_host_commands_are_fixed_bounded_and_never_use_shell(monkeypatch, tmp_path):

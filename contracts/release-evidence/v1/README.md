@@ -8,9 +8,9 @@ deployment, service installation, sensor, model, firewall change, or restored
 database activation.
 
 The accepted fixture is synthetic contract evidence, not a host receipt. A
-real packet must bind the declared and observed commit and tree, require a clean
-checkout, record exact platform/tool identities, preserve bounded command
-outcomes, and keep unavailable work explicit. Optional analyzers and Qwen are
+real packet must compare externally supplied expected commit and tree values
+with one clean checkout, record exact platform/tool identities, preserve bounded
+command outcomes, and keep unavailable work explicit. Optional analyzers and Qwen are
 not required for core operation and can never be reported healthy merely
 because an executable was found or a component was absent.
 
@@ -26,8 +26,9 @@ The closed check set is:
 8. ephemeral wheel install smoke; and
 9. ephemeral source-distribution install smoke.
 
-`candidate_evidence` is accepted by the semantic validator only when all nine
-checks passed and both ephemeral subjects were built. Even then, license,
+`candidate_evidence` is rejected for a synthetic fixture and accepted by the
+semantic validator only when an observed basis has all nine checks passed and
+both ephemeral subjects were built. Even then, license,
 operator-recovery, SBOM, provenance, independent/owner acceptance, and release
 authority remain separate gates. The v1 packet deliberately fixes the license
 gate to blocked on #255 and the remaining gates to `not_run` or
@@ -39,7 +40,11 @@ does not run tests, build artifacts, inspect optional executables, use a network
 fallback, or write a file. `validate` accepts one packet, rejects duplicate
 keys and oversized/nested input, enforces the exact ordered identities and
 source equality, then emits canonical JSON plus a SHA-256. Errors use one closed
-reason and never echo input or local paths.
+reason and never echo input or local paths. Validation remains structural and
+self-asserted: the configured-origin check prevents an accidental unrelated
+checkout, but it is not attestation; packet SHA-256 binds canonical bytes, not
+their provenance or truth. Independent evidence must retain and recompute the
+underlying logs and artifact subjects.
 
 This is not a CycloneDX SBOM, SLSA provenance statement, signature, reproducible
 build claim, redistribution decision, operator recovery drill, release, or

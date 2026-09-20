@@ -288,7 +288,13 @@
           "uniqueItems": true
         },
         "generated_at": {"$ref": "#/$defs/timestamp"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "candidate_evidence"}}},
+          "then": {"properties": {"basis": {"enum": ["local_checkout", "github_actions"]}}}
+        }
+      ]
     }
   }
 }

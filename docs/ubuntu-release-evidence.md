@@ -8,11 +8,19 @@ publication or host-authority claim.
 
 The contract and fixtures are under `contracts/release-evidence/v1`. The local
 collector records an exact clean commit/tree plus Ubuntu, kernel, architecture,
-CPython, pip, and systemd identity. It performs four fixed read-only commands:
-Git commit identity, Git tree identity, Git working-tree status, and
-`systemd --version`. It does not run the nine acceptance checks, inspect
+CPython, pip, and systemd identity. It requires independently supplied expected
+commit and tree identifiers, then performs five fixed read-only commands: Git
+commit identity, Git tree identity, Git working-tree status, configured origin
+URL, and `systemd --version`. It does not run the nine acceptance checks, inspect
 optional tools, build artifacts, contact a network, or write an evidence file.
 Every omitted result stays `not_run` or `not_checked`.
+
+Validation is structural and self-asserted. The configured-origin check catches
+an accidental unrelated checkout, but a Git remote can be rewritten and is not
+an attestation. The manifest digest binds canonical packet bytes only; it does
+not authenticate their origin, reproduce a check, verify a log or artifact, or
+prove that a statement is true. Governed use must source the expected commit
+and tree outside the checkout and independently retain/recompute evidence.
 
 Validate the synthetic contract fixture:
 
@@ -49,6 +57,8 @@ reason.
   metadata.
 - Obtain the required owner/independent disposition for the exact candidate.
 
-Even a structurally valid `candidate_evidence` packet is not a tag, GitHub
-release, package publication, deployment, installation, supported-platform
-promise, sensor/model operation, firewall authority, or operator acceptance.
+Synthetic contract fixtures cannot be promoted to `candidate_evidence`.
+Even a structurally valid observed `candidate_evidence` packet is not attested,
+authenticated, independently reproduced, or a tag, GitHub release, package
+publication, deployment, installation, supported-platform promise, sensor/model
+operation, firewall authority, or operator acceptance.
