@@ -106,7 +106,7 @@ jobs:
             [xml]$junit = Get-Content -LiteralPath $report -Raw
             $suite = $junit.testsuites.testsuite
             if ($null -eq $suite) { throw 'WINDOWS_SYNTHETIC:JUNIT_INVALID' }
-            $result = "Selected test execution: tests=$($suite.tests), failures=$($suite.failures), errors=$($suite.errors), skips=$($suite.skipped). See the test log for individual results and reasons."
+            $result = "Selected test execution (JUnit cases, including subtests): tests=$($suite.tests), failures=$($suite.failures), errors=$($suite.errors), skips=$($suite.skipped). See the pytest log for pass counts, subtests and skip reasons."
           } else {
             $result = 'Selected test execution: not_run; no JUnit result was produced. See preceding steps for the failure.'
           }
