@@ -38,6 +38,20 @@ from .validation import parse_timestamp, safe_text, ValidationError
 MAX_RUN_EVENTS = 10_000_000
 MAX_RUN_SECONDS = 86_400
 _LIMITED_RUN_SOURCES = frozenset({"jsonl", "scapy"})
+_AI_SUCCESS_STATES = frozenset({"observed", "applied", "awaiting_confirmation"})
+
+
+def _ai_receipt_path(db_path: Path) -> Path:
+    """Keep the AI ledger distinct from the configured telemetry database."""
+    candidate = db_path.with_name("megalodon-ai-receipts.db")
+    if candidate == db_path:
+        return db_path.with_name("megalodon-ai-receipts-ledger.db")
+    return candidate
+
+
+def _ai_result_succeeded(result: object) -> bool:
+    """Treat a validated proposal as CLI success without implying application."""
+    return type(result) is dict and result.get("state", result.get("execution_state")) in _AI_SUCCESS_STATES
 
 
 def _bounded_cli_integer(name: str, minimum: int, maximum: int):
@@ -814,7 +828,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                 event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
                 open_browser=getattr(args, "open_browser", False),
                 ai_settings=getattr(settings, "ai", AISettings()),
-                ai_receipt_path=settings.db_path.with_name("megalodon-ai-receipts.db"),
+                ai_receipt_path=_ai_receipt_path(settings.db_path),
                 ai_blocking=getattr(settings, "blocking", BlockingSettings()),
             )
     except KeyboardInterrupt:
@@ -865,7 +879,7 @@ def _ai(args: argparse.Namespace) -> int:
 
     try:
         settings = _load(args.config)
-        receipt_path = settings.db_path.with_name("megalodon-ai-receipts.db")
+        receipt_path = _ai_receipt_path(settings.db_path)
         if args.operation == "doctor":
             posture = qwen_provider_posture()
             bound_uids = [binding["uid"] for binding in posture["bindings"]]
@@ -935,7 +949,7 @@ def _ai(args: argparse.Namespace) -> int:
                     raise BrokerError("UNKNOWN_QUESTION")
                 result = ask(args.question, broker)
             print(json.dumps(result, sort_keys=True, allow_nan=False))
-            return 0 if result.get("state", result.get("execution_state")) in {"observed", "applied"} else 1
+            return 0 if _ai_result_succeeded(result) else 1
     except (AIProviderError, BrokerError, OSError, ValueError, sqlite3.Error) as exc:
         print(f"megalodon ai: {getattr(exc, 'code', 'UNAVAILABLE')}", file=sys.stderr)
         return 2
