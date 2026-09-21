@@ -34,6 +34,8 @@ CHECKS = {
     "existing_destination": "refused_and_preserved",
     "temporary_data": "removed",
 }
+PHASES = ("backup", "inspection", "restore", "overwrite_refusal")
+PHASE_STATUS = ("completed", "passed", "completed", "refused_and_preserved")
 EXCLUSIONS = (
     "release", "tag", "publication", "trusted_publishing", "deployment",
     "host_installation", "activation", "network_access", "remote_ui",
@@ -206,7 +208,20 @@ def completed(receipt, operation):
                 and receipt[side]["foreign_key_check"] == "ok", "RECOVERY_VERIFICATION")
 
 
-def rehearsal():
+def phase_receipt(phase, status, commit, tree, wheel_sha256, source_sha256,
+                  artifact_sha256, manifest_sha256, destination_sha256=None,
+                  cli_receipt=None):
+    """Retain only bounded digests and closed outcomes from a temporary drill."""
+    return {
+        "phase": phase, "status": status, "commit": commit, "tree": tree,
+        "wheel_sha256": wheel_sha256, "source_sha256": source_sha256,
+        "artifact_sha256": artifact_sha256, "manifest_sha256": manifest_sha256,
+        "destination_sha256": destination_sha256,
+        "cli_receipt_sha256": digest(canonical(cli_receipt)) if cli_receipt is not None else None,
+    }
+
+
+def rehearsal(commit, tree, wheel_sha256):
     with tempfile.TemporaryDirectory(prefix="megalodon-installed-recovery-") as directory:
         root = Path(directory)
         for name in ("source", "backup", "restored"):
@@ -225,9 +240,17 @@ def rehearsal():
         backup = cli(["database-backup", str(artifact), "--manifest", str(manifest),
                       "--operation-id", "installed-synthetic-backup", "--config", str(config)], root)
         completed(backup, "backup")
-        require(digest(read_bounded(artifact)) == backup["artifact_sha256"], "ARTIFACT_DIGEST")
-        require(digest(read_bounded(manifest, MAX_OUTPUT)) == backup["manifest_sha256"], "MANIFEST_DIGEST")
+        source_sha256 = digest(source_bytes)
+        artifact_sha256 = digest(read_bounded(artifact))
+        manifest_sha256 = digest(read_bounded(manifest, MAX_OUTPUT))
+        require(artifact_sha256 == backup["artifact_sha256"], "ARTIFACT_DIGEST")
+        require(manifest_sha256 == backup["manifest_sha256"], "MANIFEST_DIGEST")
         require(snapshot(artifact, immutable=True) == original, "BACKUP_CONTENT")
+        receipts = [phase_receipt("backup", "completed", commit, tree, wheel_sha256,
+                                  source_sha256, artifact_sha256, manifest_sha256,
+                                  cli_receipt=backup)]
+        receipts.append(phase_receipt("inspection", "passed", commit, tree, wheel_sha256,
+                                      source_sha256, artifact_sha256, manifest_sha256))
         destination = root / "restored/audit.db"
         args = ["database-restore", str(artifact), str(destination), "--manifest", str(manifest),
                 "--artifact-sha256", backup["artifact_sha256"], "--operation-id", "installed-synthetic-restore"]
@@ -235,6 +258,10 @@ def rehearsal():
         completed(restored, "restore")
         require(all(restored[key] == backup[key] for key in ("artifact_sha256", "manifest_sha256")), "DIGEST_BINDING")
         require(snapshot(destination, immutable=True) == original, "RESTORE_CONTENT")
+        destination_sha256 = digest(read_bounded(destination))
+        receipts.append(phase_receipt("restore", "completed", commit, tree, wheel_sha256,
+                                      source_sha256, artifact_sha256, manifest_sha256,
+                                      destination_sha256, restored))
         before = destination.stat()
         before_bytes = read_bounded(destination)
         collision = cli(args, root, expected_code=2)
@@ -248,8 +275,15 @@ def rehearsal():
                 and read_bounded(destination) == before_bytes
                 and snapshot(destination, immutable=True) == original, "DESTINATION_CHANGED")
         require(read_bounded(source) == source_bytes and snapshot(source) == original, "SOURCE_CHANGED")
+        require(digest(read_bounded(artifact)) == artifact_sha256
+                and digest(read_bounded(manifest, MAX_OUTPUT)) == manifest_sha256,
+                "BACKUP_CHANGED")
+        receipts.append(phase_receipt("overwrite_refusal", "refused_and_preserved",
+                                      commit, tree, wheel_sha256, source_sha256,
+                                      artifact_sha256, manifest_sha256,
+                                      destination_sha256, collision))
     require(not root.exists(), "CLEANUP")
-    return dict(CHECKS)
+    return receipts
 
 
 def host_facts(build_python, checkout):
@@ -282,8 +316,9 @@ def validate(receipt, commit, tree):
         require(type(value) is dict and set(value) == set(expected), "RECEIPT_FIELDS")
     def match(value, pattern):
         require(type(value) is str and re.fullmatch(pattern, value) is not None, "RECEIPT_VALUE")
-    keys(receipt, ("schema_version", "status", "source", "wheel", "platform", "checks", "exclusions", "authentication"))
-    require(receipt["schema_version"] == "installed-wheel-recovery-v1"
+    keys(receipt, ("schema_version", "status", "source", "wheel", "platform", "checks",
+                   "phase_receipts", "exclusions", "authentication"))
+    require(receipt["schema_version"] == "installed-wheel-recovery-v2"
             and receipt["status"] == "synthetic_slice_passed"
             and receipt["authentication"] == "not_performed", "RECEIPT_STATUS")
     match(commit, r"[0-9a-f]{40}")
@@ -318,6 +353,33 @@ def validate(receipt, commit, tree):
         match(version, r"[0-9]+(?:\.[0-9]+){1,3}")
     match(host["build_requirements_sha256"], r"sha256:[0-9a-f]{64}")
     require(canonical(receipt["checks"]) == canonical(CHECKS), "CHECKS")
+    phases = receipt["phase_receipts"]
+    require(type(phases) is list and len(phases) == len(PHASES), "PHASE_RECEIPTS")
+    reference = None
+    for index, row in enumerate(phases):
+        keys(row, ("phase", "status", "commit", "tree", "wheel_sha256", "source_sha256",
+                   "artifact_sha256", "manifest_sha256", "destination_sha256",
+                   "cli_receipt_sha256"))
+        require(row["phase"] == PHASES[index] and row["status"] == PHASE_STATUS[index]
+                and row["commit"] == commit and row["tree"] == tree
+                and row["wheel_sha256"] == wheel["sha256"], "PHASE_BINDING")
+        for name in ("source_sha256", "artifact_sha256", "manifest_sha256"):
+            match(row[name], r"sha256:[0-9a-f]{64}")
+        binding = tuple(row[name] for name in ("source_sha256", "artifact_sha256", "manifest_sha256"))
+        if reference is None:
+            reference = binding
+        require(binding == reference, "PHASE_BINDING")
+        if index < 2:
+            require(row["destination_sha256"] is None, "PHASE_BINDING")
+        else:
+            match(row["destination_sha256"], r"sha256:[0-9a-f]{64}")
+            if index == 3:
+                require(row["destination_sha256"] == phases[2]["destination_sha256"],
+                        "PHASE_BINDING")
+        if index == 1:
+            require(row["cli_receipt_sha256"] is None, "PHASE_BINDING")
+        else:
+            match(row["cli_receipt_sha256"], r"sha256:[0-9a-f]{64}")
     require(receipt["exclusions"] == list(EXCLUSIONS), "EXCLUSIONS")
     require(len(canonical(receipt)) <= MAX_OUTPUT, "RECEIPT_LIMIT")
 
@@ -356,13 +418,13 @@ def main(argv=None):
             source = source_identity(args.checkout, args.expected_commit, args.expected_tree)
             host = host_facts(args.build_python, args.checkout)
             wheel = installed_wheel(args.wheel, args.checkout)
-            receipt = {"schema_version": "installed-wheel-recovery-v1", "status": "synthetic_slice_passed",
-                       "source": source, "wheel": wheel, "platform": host, "checks": dict(CHECKS),
-                       "exclusions": list(EXCLUSIONS), "authentication": "not_performed"}
-            validate(receipt, args.expected_commit, args.expected_tree)
-            receipt["checks"] = rehearsal()
+            phases = rehearsal(args.expected_commit, args.expected_tree, wheel["sha256"])
             source_identity(args.checkout, args.expected_commit, args.expected_tree)
             require(installed_wheel(args.wheel, args.checkout) == wheel, "WHEEL_CHANGED")
+            receipt = {"schema_version": "installed-wheel-recovery-v2", "status": "synthetic_slice_passed",
+                       "source": source, "wheel": wheel, "platform": host, "checks": dict(CHECKS),
+                       "phase_receipts": phases, "exclusions": list(EXCLUSIONS),
+                       "authentication": "not_performed"}
             validate(receipt, args.expected_commit, args.expected_tree)
             sys.stdout.buffer.write(canonical(packet(receipt)))
         return 0
