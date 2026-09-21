@@ -57,6 +57,7 @@ sed -i \
   -e "s#(../gui-quick-start.md#(${repo_blob_root}/docs/gui-quick-start.md#g" \
   -e "s#(../software-downloads.md#(${repo_blob_root}/docs/software-downloads.md#g" \
   -e "s#(../document-alignment-2026-09-20.md#(${repo_blob_root}/docs/document-alignment-2026-09-20.md#g" \
+  -e "s#(../document-alignment-2026-09-21.md#(${repo_blob_root}/docs/document-alignment-2026-09-21.md#g" \
   -e "s#(../dashboard-operations.md#(${repo_blob_root}/docs/dashboard-operations.md#g" \
   -e "s#(../integration-hub.md#(${repo_blob_root}/docs/integration-hub.md#g" \
   -e "s#(../local-model-advisory-contract.md#(${repo_blob_root}/docs/local-model-advisory-contract.md#g" \

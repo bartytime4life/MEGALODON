@@ -2,16 +2,16 @@
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 
-## Current candidate navigation and install path
+## Current navigation and install path
 
-The candidate adds view links such as `#view=integrations`, Back/Forward
+The merged source adds view links such as `#view=integrations`, Back/Forward
 navigation, and per-view reading positions for the current page session.
 Reload restores the selected view; it does not retain reading positions or
 imported reports. Mobile navigation keeps text labels visible. Unknown
 fragments are ignored, and navigation remains usable if history is unavailable.
-See `docs/site-source-alignment.md` in the parent repository for publication
-status. Publication identity remains separate until a new Sites version is
-saved and deployed.
+The hosted install guide was published in Sites v29. See
+`docs/site-source-alignment.md` in the parent repository for the exact current
+publication receipt; later source edits require their own version and deployment.
 
 ## Quick-start controls
 
@@ -62,7 +62,7 @@ presence-report import remains optional for this hosted page.
 
 Repository license checkpoint: merged PR #298 is now `main@a0b140093ca17ea64fbfe0354966379a3d5fc7ce`, tree `69aac8e40c0dad550304f52777934d30296d7b59`, and records the owner's Apache-2.0 selection with aligned package metadata. Exact-head CI, Linux browser acceptance and CodeQL passed, the merged tree matches the tested candidate, and issue #255 is closed completed. No package, tag or release was published.
 
-Historical alignment baseline: merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0` delivered the source launcher, not this candidate user installer. See `docs/document-alignment-2026-09-20.md` in the repository for that exact historical baseline and validation receipt. The current candidate adds user-scoped install guidance and remains separate from publication, release, and operator acceptance. PR #294 delivered the closed detector registry and bounded synthetic evidence report; this Site presents that repository capability without representing it as runtime telemetry or operational accuracy. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
+Historical alignment baseline: merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0` delivered the source launcher. Merged PR #323 at `main@16742fed020283aafad35e30238986c851d7542a` added the user-scoped installer and guided readiness; its Site guide was published in v29. See `docs/document-alignment-2026-09-20.md` in the repository for the older baseline and validation receipt. Installation and Site publication remain separate from a software release and operator acceptance. PR #294 delivered the closed detector registry and bounded synthetic evidence report; this Site presents that repository capability without representing it as runtime telemetry or operational accuracy. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
 
 Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites cover the actual parser, lifecycle semantics, empty telemetry, detector-evidence and license labeling, navigation/focus, bookmark filter updates, and the user-install quick start. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 

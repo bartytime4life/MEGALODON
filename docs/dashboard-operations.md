@@ -4,7 +4,10 @@ Status: read-only dashboard behavior and a same-origin **static Integration
 Map**. This guide does not authorize a deployment, remote listener, service,
 capture, analyzer installation, or response action. See the
 [HTTP contract](dashboard-http-contract.md) for exact request semantics and the
-[integration hub contract](integration-hub.md) for workflow ownership.
+[integration hub contract](integration-hub.md) for workflow ownership. The
+[2026-09-21 telemetry check](document-alignment-2026-09-21.md#telemetry-verification-and-meaning)
+records synthetic test results and their environment limit; it is not an
+installed-sensor or live-network receipt.
 
 ## Open the HUD
 

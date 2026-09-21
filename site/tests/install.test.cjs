@@ -25,9 +25,9 @@ test('quick-start copy buttons copy only the documented local commands', () => {
   assert.doesNotMatch(app, /copyText\([^\n]*(?:sudo|curl|wget)/);
 });
 
-test('candidate links identify the reviewable branch and protect new tabs', () => {
+test('install links identify the merged source and protect new tabs', () => {
   const links = [...html.matchAll(/<a\s+href="([^"]+)"[^>]*>/g)]
-    .filter(([, href]) => href.includes('/codex/local-pc-readiness'));
+    .filter(([, href]) => href.includes('/16742fed020283aafad35e30238986c851d7542a'));
   assert.equal(links.length, 2);
   for (const match of links) {
     assert.match(match[0], /target="_blank"/);

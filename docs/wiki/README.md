@@ -45,10 +45,11 @@ being protected in real time.
 
 ## Evidence basis
 
-Current alignment: [2026-09-20 source and document record](../document-alignment-2026-09-20.md),
-based on merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`. The original full-page
-review was at `main@5ac382d` on 2026-09-19. Later source changes and dated
-receipts remain distinct from a release or operational acceptance.
+Current alignment: [2026-09-21 repository, Console, and telemetry record](../document-alignment-2026-09-21.md),
+based on `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971` and the separate
+owner-only Console v30 publication. The original full-page review was at
+`main@5ac382d` on 2026-09-19. Dated receipts remain distinct from a release
+or operational acceptance.
 
 Wiki content is generated from `docs/wiki/`. The native GitHub Wiki is a public
 projection of those reviewed source files, not an independent authority.

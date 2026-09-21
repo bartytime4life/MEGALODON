@@ -127,7 +127,8 @@ The private [MEGALODON Defense Console](https://megalodon-defense-console.blackb
 is a hosted reference surface with no network feed connected. It shows unavailable
 telemetry until a separately reviewed real-data connection exists; it does not
 substitute generated traffic or zeros for missing observations. Its deployable source and
-alignment record are versioned under [`site/`](site/README.md); the repository
+alignment record are versioned under [`site/`](site/README.md) and
+[`docs/site-source-alignment.md`](docs/site-source-alignment.md); the repository
 contracts remain authoritative.
 
 ## Documentation map
@@ -160,7 +161,7 @@ record delivery state; they do not override the checked-in contracts.
 | Ubuntu 24.04 non-publishing release-evidence packet | [`docs/ubuntu-release-evidence.md`](docs/ubuntu-release-evidence.md) and [`contracts/release-evidence/v1`](contracts/release-evidence/v1/README.md) |
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
-| Latest repository and document reconciliation | [`docs/document-alignment-2026-09-20.md`](docs/document-alignment-2026-09-20.md) |
+| Latest repository, Console, and telemetry reconciliation | [`docs/document-alignment-2026-09-21.md`](docs/document-alignment-2026-09-21.md) |
 | Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
 | Repository hygiene guard (tracked-file/secret-marker scan) | [`docs/repository-hygiene.md`](docs/repository-hygiene.md) |
 | Real-browser Linux dashboard acceptance evidence | [`docs/dashboard-browser-acceptance.md`](docs/dashboard-browser-acceptance.md) |

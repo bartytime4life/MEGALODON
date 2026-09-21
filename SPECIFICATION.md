@@ -11,9 +11,10 @@ configuration baseline is [docs/platform-baseline.md](docs/platform-baseline.md)
 
 ## Document status and authority
 
-The [2026-09-20 alignment record](docs/document-alignment-2026-09-20.md) pins
-current implementation, local setup changes, document ownership and remaining
-acceptance gates. Dated historical receipts retain their original scope.
+The [2026-09-21 alignment record](docs/document-alignment-2026-09-21.md) pins
+the current local setup, hosted Console, telemetry verification limit, document
+ownership and remaining acceptance gates. Dated historical receipts retain
+their original scope.
 
 This specification describes behavior present in the repository unless a
 section is explicitly labeled proposed, contract-only, optional, or a future

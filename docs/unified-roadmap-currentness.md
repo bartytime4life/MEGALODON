@@ -1,6 +1,21 @@
 # Unified roadmap: repository reconciliation
 
-## Current readback — issue acceptance reconciliation
+## Current readback — 2026-09-21
+
+At `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971`, the local desktop
+installer and guided checks from #323 are merged, while the owner-only hosted
+Console v30 remains a disconnected reference surface. GitHub records #259
+closed after scoped owner acceptance; that accepts the bounded synthetic
+registry/report implementation, not independent review or operational accuracy.
+#327 is open for the exact Zeek producer profile and schema-drift evidence left
+after #258 closed. #260 remains open despite #318–#322 and #324/#326 tooling
+and synthetic CI recovery receipts. #261 remains open with an unbound collector.
+See the [current alignment record](document-alignment-2026-09-21.md) for the
+telemetry test limit and the [Site receipt](site-source-alignment.md) for the
+publication identity. Due dates, release, sensor operation, and model
+acceptance are not supplied by this readback.
+
+## Historical readback — issue acceptance reconciliation
 
 OBSERVED on 2026-09-20 at
 [`main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`](https://github.com/bartytime4life/MEGALODON/commit/f3bf5d6a08c64363651e17fae07ff2e88386c0c0).
