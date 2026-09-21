@@ -104,6 +104,87 @@ before expiry if longer retention is needed. Neither this artifact nor a green
 identity job supplies the nine execution checks or two built subjects: they
 remain `not_run`, and release authority remains `not_authorized`.
 
+## Release-evidence packet
+
+`tools/release_evidence_packet.py` is the narrow handoff after a complete
+GitHub-Actions `candidate_evidence` wrapper exists. It does not build or install
+packages, execute a host command, inspect the environment, contact a network,
+sign, tag, publish, upload, or deploy. It accepts exactly one pure-Python wheel
+and one sdist for `megalodon-defense`, recomputes their bounded SHA-256 values
+and sizes, and requires exact equality with the candidate manifest. A
+synthetic, local-checkout, incomplete, source-mismatched, non-canonical, or
+artifact-mismatched input is refused with a fixed reason that does not include
+input data or local paths.
+
+Generation requires the expected commit and tree from an independently trusted
+readback and an explicit UTC timestamp. The tool never reads the host clock.
+The destination must not exist; output is first written with private file modes
+to a sibling staging directory, verified there, and atomically renamed. It
+never overwrites an existing path.
+
+```bash
+python tools/release_evidence_packet.py generate \
+  --candidate /path/to/candidate-evidence.json \
+  --wheel /path/to/megalodon_defense-0.1.0-py3-none-any.whl \
+  --sdist /path/to/megalodon_defense-0.1.0.tar.gz \
+  --output /new/path/megalodon-release-evidence \
+  --package-version 0.1.0 \
+  --generated-at '2026-09-20T23:59:59Z' \
+  --expected-commit '<trusted 40-character commit SHA>' \
+  --expected-tree '<trusted 40-character tree SHA>'
+```
+
+The closed output set is:
+
+- `candidate-evidence.json`: the canonical validated input wrapper;
+- `megalodon.cdx.json`: CycloneDX 1.7 JSON for the core package, its declared
+  empty runtime dependency set, and the exact wheel/sdist subjects;
+- `provenance.intoto.json`: an in-toto Statement v1 with the SLSA provenance v1
+  predicate, source identities, candidate digest, and both artifact subjects;
+- `packet.json`: the source, artifact, candidate, SBOM, and provenance digest
+binding plus privacy, effect, and limitation statements.
+
+The provenance profile's `buildType` is this section at the exact source
+commit. Its closed `externalParameters` name the repository, commit, tree,
+package, version, `.github/workflows/ci.yml`, the `wheel-smoke` job, and the
+canonical candidate-evidence digest. `resolvedDependencies` binds the Git
+commit, Git tree, and candidate-evidence bytes. `runDetails.builder.id` binds
+the workflow path to the same commit. `internalParameters` is empty and the
+profile deliberately omits an invocation ID, runner name, environment, command
+line, and build timestamps; those values are not required to recompute the
+subject binding and would expand the receipt's identifying surface. The
+repository-controlled workflow is the described build entrypoint; the packet
+generator only records the already built subjects and never initiates it.
+
+Every JSON file is UTF-8, key-sorted, compact, newline-terminated canonical
+JSON. The packet and command receipts include source identities, artifact
+basenames/sizes/digests, document digests, package identity, and the explicit
+timestamp. They exclude absolute paths, usernames, hostnames, environment
+variables, command lines, logs, telemetry, and credentials. The SBOM scope is
+intentionally the core distribution and declared runtime dependencies; optional,
+build, test, OS, and browser components are not silently presented as covered.
+
+Offline verification reads exactly the four regular packet files and the two
+artifact subjects, recomputes every digest, rebuilds the expected SBOM and
+provenance shapes, and compares the source to external pins. It invokes no host
+command and performs no network request or write:
+
+```bash
+python tools/release_evidence_packet.py verify \
+  /path/to/megalodon-release-evidence \
+  --wheel /path/to/megalodon_defense-0.1.0-py3-none-any.whl \
+  --sdist /path/to/megalodon_defense-0.1.0.tar.gz \
+  --expected-commit '<trusted 40-character commit SHA>' \
+  --expected-tree '<trusted 40-character tree SHA>'
+```
+
+Successful output says only `binding_verified` and
+`authentication: not_performed`. The provenance is unsigned and self-asserted;
+the source-pinned workflow builder identity does not establish a SLSA build level. The
+packet remains `generated_unreviewed` and does not convert the existing SBOM or
+provenance gates to accepted, authenticate the runner or host facts, prove a
+reproducible build, review artifact notices, or grant release authority.
+
 ### Remaining candidate gates
 
 The separate PR workflow `Ubuntu synthetic recovery rehearsal` runs the real
@@ -127,7 +208,8 @@ Those candidate gates remain below.
 - Build wheel and source distribution only as ephemeral subjects, bind their
   sizes and SHA-256 values, and install/test them in disposable environments.
 - Retain the complete operator backup/restore/read-only-inspection drill.
-- Produce and review the canonical CycloneDX SBOM and provenance subjects.
+- Generate the digest-bound CycloneDX/provenance packet for the exact candidate,
+  retain it with the subjects, and complete independent review/authentication.
 - Independently verify license/notice metadata for the exact built subjects.
   The repository Apache-2.0 decision and package metadata merged in #298;
   #255 is closed. This identity-only collector does not inspect license files
