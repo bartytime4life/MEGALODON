@@ -104,6 +104,37 @@ before expiry if longer retention is needed. Neither this artifact nor a green
 identity job supplies the nine execution checks or two built subjects: they
 remain `not_run`, and release authority remains `not_authorized`.
 
+### Retain exact-head wheel and sdist subjects
+
+The PR-only `Ubuntu release subject evidence` workflow builds one wheel and one
+sdist from the exact PR head on Ubuntu 24.04 with the existing hash-locked
+CPython 3.12 build requirements. It requires a clean checkout and a matching
+commit/tree before reading the artifacts. It retains exactly those two
+distribution files and `subjects.json` for 14 days under an artifact name that
+includes the head, run ID, and attempt. A second runner downloads that exact
+artifact ID, compares the manifest file hash from the producer job, and
+recomputes both artifact digests and sizes against independently resolved
+source pins. No database, capture, model output, raw log, or private host path
+is retained in this artifact.
+
+After downloading the matching artifact from its Actions run, verify it from
+the reviewed checkout with externally obtained source pins:
+
+```bash
+python tools/release_subjects.py verify \
+  --directory /path/to/downloaded/release-subjects \
+  --expected-commit '<trusted 40-character PR head>' \
+  --expected-tree '<trusted 40-character tree>'
+```
+
+`binding_verified` means the three retained files are internally consistent
+with those pins. `authentication: not_performed` remains explicit. This separate
+manifest does not populate the nine-check `candidate_evidence` packet, prove
+runner or builder identity, authenticate publisher provenance, review artifact
+licenses/notices, perform operator recovery, or grant release authority. The
+later packet generator must still receive a complete candidate wrapper and
+the exact retained subjects; it refuses a subjects-only handoff.
+
 ## Release-evidence packet
 
 `tools/release_evidence_packet.py` is the narrow handoff after a complete
