@@ -70,8 +70,15 @@ process model.
 ## Evidence and lifecycle rules
 
 Keep the Ubuntu 24.04/Python 3.11 job named `test` unchanged and required. A
-future Windows job is additive and must name its narrower profile; skipped
-Linux-only operations are negative evidence, not positive feature passes. Do not
-promote the capability catalog from `evaluation_only` until the native receipts
+`windows-synthetic-core` pull-request job is additive. It selects only the
+matrix's `synthetic_reusable` tests, records the exact PR head/tree and hosted
+runner details, reports actual pytest counts or `not_run`, and names the
+`native_receipt_required` checks it leaves unrun. It does not run the
+unsupported-operation negative controls. This hosted Windows Server result is
+not a native Windows 11 W1 receipt; dependency versions are constrained but
+Windows wheel bytes and the runner image are not locked by the Linux CI
+wheelhouse. Skipped Linux-only operations are negative evidence, not positive
+feature passes. Do not promote the capability catalog from `evaluation_only`
+until the native receipts
 above exist at one exact head and have independent review. Green hosted checks,
 a merged PR, or issue closure do not supply that review.
