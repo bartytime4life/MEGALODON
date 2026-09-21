@@ -2,6 +2,13 @@
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 
+The local dashboard's core telemetry routes are read-only. Its separately
+enabled AI question POST requires a per-launch operator token and can write
+private AI receipts and bounded report snapshots; see
+[`docs/ai-control-plane.md`](../docs/ai-control-plane.md). This hosted Site has
+no connection to those routes. The changed source here is a repository mirror,
+not a new Site publication.
+
 ## Current navigation and install path
 
 The merged source adds view links such as `#view=integrations`, Back/Forward
