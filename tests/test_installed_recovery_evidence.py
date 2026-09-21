@@ -23,8 +23,16 @@ COMMIT, TREE = "a" * 40, "b" * 40
 
 @pytest.fixture
 def receipt():
+    phases = [
+        tool.phase_receipt(phase, status, COMMIT, TREE, "sha256:" + "c" * 64,
+                           "sha256:" + "e" * 64, "sha256:" + "f" * 64,
+                           "sha256:" + "1" * 64,
+                           "sha256:" + "2" * 64 if index >= 2 else None,
+                           {"operation": phase} if index != 1 else None)
+        for index, (phase, status) in enumerate(zip(tool.PHASES, tool.PHASE_STATUS))
+    ]
     return {
-        "schema_version": "installed-wheel-recovery-v1", "status": "synthetic_slice_passed",
+        "schema_version": "installed-wheel-recovery-v2", "status": "synthetic_slice_passed",
         "source": {"commit": COMMIT, "tree": TREE, "working_tree_dirty": False},
         "wheel": {"distribution": "megalodon-defense", "version": "0.1.0",
                   "sha256": "sha256:" + "c" * 64, "size_bytes": 200_000},
@@ -36,7 +44,8 @@ def receipt():
             "build_tools": {name: "1.2.3" for name in tool.BUILD_TOOLS},
             "build_requirements_sha256": "sha256:" + "d" * 64,
         },
-        "checks": dict(tool.CHECKS), "exclusions": list(tool.EXCLUSIONS),
+        "checks": dict(tool.CHECKS), "phase_receipts": phases,
+        "exclusions": list(tool.EXCLUSIONS),
         "authentication": "not_performed",
     }
 
@@ -70,6 +79,7 @@ def test_receipt_offline_roundtrip_requires_external_source_pins(receipt):
     ("checks", "source_events", 12),
     ("checks", "existing_destination", "overwritten"),
     ("checks", "raw_receipt", {"inode": 12345}),
+    ("phase_receipts", 0, {"raw_path": "/private/audit.db"}),
 ])
 def test_closed_receipt_refuses_privacy_leaks_and_claim_escalation(receipt, section, key, value):
     target = receipt if section is None else receipt[section]
@@ -100,6 +110,28 @@ def test_local_validation_cannot_claim_a_hosted_runner_image(receipt):
     tool.validate(receipt, COMMIT, TREE)
 
 
+@pytest.mark.parametrize("index,key,value", [
+    (0, "commit", "e" * 40),
+    (1, "wheel_sha256", "sha256:" + "9" * 64),
+    (2, "artifact_sha256", "sha256:" + "9" * 64),
+    (3, "manifest_sha256", "sha256:" + "9" * 64),
+    (3, "destination_sha256", "sha256:" + "9" * 64),
+    (3, "status", "completed"),
+    (1, "cli_receipt_sha256", "sha256:" + "9" * 64),
+    (0, "destination_sha256", "sha256:" + "9" * 64),
+])
+def test_phase_receipts_refuse_cross_candidate_and_artifact_mismatch(receipt, index, key, value):
+    receipt["phase_receipts"][index][key] = value
+    with pytest.raises(tool.EvidenceError):
+        tool.verify(tool.canonical(tool.packet(receipt)), COMMIT, TREE)
+
+
+def test_prior_aggregate_receipt_cannot_claim_per_phase_binding(receipt):
+    receipt["schema_version"] = "installed-wheel-recovery-v1"
+    with pytest.raises(tool.EvidenceError, match="RECEIPT_STATUS"):
+        tool.verify(tool.canonical(tool.packet(receipt)), COMMIT, TREE)
+
+
 @pytest.fixture
 def local_cli(monkeypatch, tmp_path):
     """Exercise real SQLite/CLI semantics; installed isolation is tested in CI."""
@@ -121,7 +153,11 @@ def local_cli(monkeypatch, tmp_path):
 
 @pytest.mark.skipif(sys.platform != "linux", reason="POSIX recovery workflow")
 def test_real_rehearsal_checks_all_rows_refusal_and_cleans_temporary_data(local_cli, tmp_path):
-    assert tool.rehearsal() == tool.CHECKS
+    phases = tool.rehearsal(COMMIT, TREE, "sha256:" + "c" * 64)
+    assert [row["phase"] for row in phases] == list(tool.PHASES)
+    assert all(row["commit"] == COMMIT and row["tree"] == TREE for row in phases)
+    assert all(row["artifact_sha256"] == phases[0]["artifact_sha256"] for row in phases)
+    assert phases[2]["destination_sha256"] == phases[3]["destination_sha256"]
     assert list(tmp_path.iterdir()) == []
 
 
@@ -157,7 +193,7 @@ def test_rehearsal_fails_closed_on_bad_recovery(local_cli, monkeypatch, tmp_path
 
     monkeypatch.setattr(tool, "cli", corrupted)
     with pytest.raises(tool.EvidenceError, match=reason):
-        tool.rehearsal()
+        tool.rehearsal(COMMIT, TREE, "sha256:" + "c" * 64)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -266,7 +302,7 @@ def test_failure_cli_never_echoes_paths_or_raw_errors(tmp_path, capsys):
     assert captured.err == '{"reason":"INSTALLED_RECOVERY_EVIDENCE_FAILED","status":"failed"}\n'
 
 
-def test_workflow_preserves_install_isolation_and_receipt_only_retention():
+def test_workflow_preserves_install_isolation_and_exact_artifact_roundtrip():
     workflow = (ROOT / ".github/workflows/installed-recovery-evidence.yml").read_text()
     assert "runs-on: ubuntu-24.04" in workflow
     assert "timeout-minutes: 10" in workflow
@@ -283,3 +319,8 @@ def test_workflow_preserves_install_isolation_and_receipt_only_retention():
     assert workflow.count("uses: actions/upload-artifact@") == 1
     assert "path: ${{ runner.temp }}/recovery-receipts/installed-wheel-recovery.json" in workflow
     assert "retention-days: 14" in workflow
+    assert "needs: installed-recovery-evidence" in workflow
+    assert "artifact-ids: ${{ needs.installed-recovery-evidence.outputs.artifact-id }}" in workflow
+    assert "digest-mismatch: error" in workflow
+    assert "EXPECTED_PACKET_SHA256: ${{ needs.installed-recovery-evidence.outputs.packet-sha256 }}" in workflow
+    assert "--expected-commit \"$EXPECTED_COMMIT\" --expected-tree \"$EXPECTED_TREE\"" in workflow

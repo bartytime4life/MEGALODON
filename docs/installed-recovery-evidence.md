@@ -44,6 +44,11 @@ draining pipes. Files are limited to 8 MiB; manifests and receipts to 16 KiB;
 table reads to 1,024 rows per table with a five-second SQLite query deadline.
 The workflow has a ten-minute limit. Failure emits one fixed reason with no
 raw exception, command output, or path; the success artifact step does not run.
+The dependent `installed-recovery-roundtrip` job downloads the producer's exact
+artifact ID on a fresh runner. It requires the one expected regular JSON file,
+compares its bytes with the producer's SHA-256, resolves the PR head/tree from
+its own clean checkout, and verifies every phase binding offline. It does not
+repeat the recovery drill or turn a self-asserted receipt into acceptance.
 
 Python CLI subprocesses reject socket and process-launch audit events. This is
 an accidental-effect guard, not an OS sandbox or hostile-native-code containment
@@ -61,7 +66,7 @@ the collector never prints raw recovery output into those logs.
 
 The canonical JSON wrapper contains `receipt` and `receipt_sha256`, a SHA-256
 over the key-sorted compact UTF-8 receipt **including its final newline**. The
-closed `installed-wheel-recovery-v1` receipt retains only:
+closed `installed-wheel-recovery-v2` receipt retains only:
 
 - Exact observed commit/tree and clean-source result; wheel distribution,
   version, size and SHA-256.
@@ -69,10 +74,17 @@ closed `installed-wheel-recovery-v1` receipt retains only:
   pip, actual build-tool versions and build-requirements digest; non-root as a
   boolean, never a numeric UID. Local validation is explicitly a different
   basis with no hosted-runner image claim.
+- Four ordered, closed phase receipts for backup, read-only inspection,
+  restore, and overwrite refusal. Each repeats the exact commit/tree, installed
+  wheel digest, original source digest, backup digest and manifest digest.
+  Restore and refusal additionally bind the restored database digest. CLI
+  phases retain only the digest of the canonical raw CLI receipt, never its
+  host paths. The verifier requires matching subject digests across phases and
+  the same restored database digest before and after refusal.
 - Fixed aggregate outcomes and explicit exclusions. It contains no paths,
   usernames, hostnames, environment dumps, timestamps, device/inode identities,
-  synthetic event data, raw receipts, or database/manifest digests. Temporary
-  database digests and identities are used for comparisons only and discarded.
+  synthetic event data, or raw CLI receipts. The synthetic artifact bytes are
+  removed after inspection; their digests remain as self-asserted bindings.
 
 Obtain the expected commit and tree from the reviewed PR source independently
 of the downloaded receipt. From that exact checkout, verify offline:
@@ -85,11 +97,14 @@ python tools/installed_recovery_evidence.py \
 ```
 
 Verification reads bounded receipt bytes, checks the closed fields and values,
-canonical encoding, digest, and both external source pins. It invokes no host
+canonical encoding, digest, phase relationships, and both external source pins.
+It invokes no host
 commands and performs no network request or write. Successful output is
 `binding_verified` with `authentication: not_performed`. The wheel digest binds
-the described ephemeral subject; the wheel itself is deliberately not retained
-by this slice. This is self-asserted CI evidence, not signature verification,
+the described ephemeral subject; the wheel, backup, manifest and restored
+database themselves are deliberately not retained by this slice. Their digests
+cannot independently prove the temporary artifact bytes after cleanup. This
+is self-asserted CI evidence, not signature verification,
 independent reproduction, or an authenticated artifact/build provenance claim.
 
 ## Scope and remaining gates
