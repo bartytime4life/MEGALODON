@@ -14,6 +14,7 @@ import pytest
 from megalodon.ai_broker import Broker, BrokerError, ReceiptStore, validate_request
 from megalodon.ai_interface import ask
 from megalodon.ai_provider import AIProviderError, status
+from megalodon.cli import _ai_receipt_path, _ai_result_succeeded
 from megalodon.config import AISettings, load_settings
 
 
@@ -57,6 +58,16 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
 
     monkeypatch.setattr(provider, "_request", fake)
     assert status(AISettings(enabled=True))["state"] == "model_ready"
+
+    def wrong_challenge(path, method, body, timeout):
+        if path == "/api/tags":
+            return json.dumps({"models": [{"name": AISettings.model, "digest": AISettings.model_digest}]}).encode()
+        return json.dumps({"model": AISettings.model, "response": "BROKEN", "done": True,
+                           "done_reason": "stop"}).encode()
+
+    monkeypatch.setattr(provider, "_request", wrong_challenge)
+    wrong = status(AISettings(enabled=True))
+    assert wrong["state"] == "invalid_response" and wrong["inference_verified"] is False
     monkeypatch.setattr(provider, "_request", lambda *_: b"not json")
     assert status(AISettings(enabled=True))["state"] == "invalid_response"
     monkeypatch.setattr(provider, "_request", lambda *_: (_ for _ in ()).throw(AIProviderError("REQUEST_TIMEOUT")))
@@ -65,6 +76,22 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     assert status(AISettings(enabled=True))["state"] == "model_loading"
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": False})
     assert status(AISettings(enabled=True))["state"] == "policy_rejection"
+
+
+def test_ai_receipt_path_never_collides_with_telemetry_database():
+    normal = Path("/private/megalodon.db")
+    assert _ai_receipt_path(normal) == Path("/private/megalodon-ai-receipts.db")
+    collision = Path("/private/megalodon-ai-receipts.db")
+    assert _ai_receipt_path(collision) == Path("/private/megalodon-ai-receipts-ledger.db")
+    assert _ai_receipt_path(collision) != collision
+
+
+def test_ai_cli_treats_valid_proposal_as_success_without_application():
+    assert _ai_result_succeeded({"state": "awaiting_confirmation"}) is True
+    assert _ai_result_succeeded({"state": "observed"}) is True
+    assert _ai_result_succeeded({"state": "applied"}) is True
+    assert _ai_result_succeeded({"state": "approved"}) is False
+    assert _ai_result_succeeded({"state": "failed"}) is False
 
 
 def test_closed_requests_reject_command_path_network_and_excess():
