@@ -59,14 +59,14 @@ yet). This closes the "no writer construction, no migration, no telemetry
 ingestion, no filesystem browser" requirement below and the smallest form of
 the unavailable-versus-empty requirement.
 
-Still open, and not yet delivered by that route: selecting or qualifying by
-one specific `source` rather than returning the newest rows across all
-sources; a separate "adapter identity" distinct from `source`; explicitly
-labeling an absent field `not_recorded` rather than leaving it JSON `null`;
-and disclosing the response's cardinality/byte ceiling inside the envelope
-itself rather than only in this document and the route's fixed limit
-constants. The rest of this section states the original, still-relevant
-acceptance bar for that remaining slice.
+The source-qualified `/api/ingestion-runs-v2` route now filters one of the
+three recorded core sources before the row limit, discloses its cardinality
+and byte ceiling, and lists adapter identity and accepted/rejected counts as
+`not_recorded`. The HUD binds the selected source to the response and clears
+old rows while loading. The original v1 route remains available. A separate
+adapter identity and accepted/rejected counts are still not stored; the v2
+response does not invent them. The rest of this section retains the original
+acceptance bar for future source receipts and adapters.
 
 **Proposed smallest read-model slice:** expose one already recorded source run,
 using the existing read-only store seam, with a closed response schema and
@@ -205,10 +205,8 @@ source panel. A rejected response is a failure, not proof of malicious input.
 
 No date substitutes for these gates. Resolve the current delivery's independent
 review and browser acceptance first. The smallest truthful accepted-run
-projection described in Phase A is now implemented; the next implementation
-after that should be its remaining refinements (source qualification, an
-explicit `not_recorded` label, and in-envelope cardinality/byte-ceiling
-disclosure) or Phase C's source-qualified receipt checklist, while
+projection and its core-source refinements are implemented; the next
+integration should follow Phase C's source-qualified receipt checklist while
 resource/cleanup work continues in its own issue-owned slices. Runtime
 integration expansion must wait for the relevant trust-kernel gates or remain
 explicitly release-excluded.

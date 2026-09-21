@@ -245,11 +245,19 @@ INDEX_HTML = """<!doctype html>
       <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
       <span class="timestamp" id="ingestion-runs-status">Loading receipts…</span>
     </summary>
-    <div class="ingestion-runs-note" role="note">Source, terminal reason, counts, and recorded time basis remain separate. Missing values are shown as not recorded rather than inferred.</div>
+    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Adapter identity and accepted/rejected counts are not recorded. A completed run does not prove sensor liveness or complete coverage.</div>
     <div class="ingestion-runs-list" id="ingestion-runs-list" role="list" aria-live="polite" aria-atomic="true">
       <p class="ingestion-runs-empty">Loading bounded ingestion receipts…</p>
     </div>
     <div class="ingestion-runs-actions">
+      <label class="ingestion-source-control" for="ingestion-source">Stored source
+        <select id="ingestion-source">
+          <option value="all">All stored runs</option>
+          <option value="sample">Sample</option>
+          <option value="jsonl">JSONL</option>
+          <option value="scapy">Scapy</option>
+        </select>
+      </label>
       <button id="ingestion-runs-retry" type="button" class="button-secondary">Reload receipts</button>
     </div>
   </details>
@@ -428,7 +436,8 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
 .ingestion-run-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: .75rem; }
 .ingestion-run-reason { margin: 10px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
 .ingestion-runs-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: .78rem; }
-.ingestion-runs-actions { padding: 14px 22px 20px; }
+.ingestion-runs-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 22px 20px; }
+.ingestion-source-control { display: grid; gap: 5px; width: min(100%, 230px); color: var(--muted); font-size: .75rem; font-weight: 700; }
 .trust-strip {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px;
   align-items: center; margin: 0 0 10px; padding: 12px 14px; border: 1px solid var(--line);
@@ -738,6 +747,7 @@ const state = {
   summary: null,
   traffic: null,
   ingestionRuns: [],
+  ingestionRunsFetchedAt: null,
   activeBin: null,
   timelineBins: [],
   timelineNotice: '',
@@ -1048,12 +1058,17 @@ function validIngestionRunSemantics(run) {
     ? run.termination_reason === 'interrupted'
     : run.termination_reason === 'failed';
 }
-function validatedIngestionRuns(value) {
+function validatedIngestionRuns(value, expectedSource) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
-      || value.schema !== 'dashboard-ingestion-runs-v1'
-      || !Number.isSafeInteger(value.limit) || value.limit < 1 || value.limit > 25
+      || value.schema !== 'dashboard-ingestion-runs-v2'
+      || value.limit !== 8
+      || value.max_runs !== 25 || value.max_response_bytes !== maxIngestionRunsResponseBytes
+      || !['adapter_identity', 'accepted_count', 'rejected_count'].every((item, index) =>
+        Array.isArray(value.not_recorded) && value.not_recorded[index] === item)
+      || value.not_recorded.length !== 3
+      || value.source_filter !== expectedSource
       || !Array.isArray(value.runs) || value.runs.length > value.limit
-      || Object.keys(value).sort().join(',') !== 'limit,runs,schema') {
+      || Object.keys(value).sort().join(',') !== 'limit,max_response_bytes,max_runs,not_recorded,runs,schema,source_filter') {
     throw new Error('invalid ingestion run response');
   }
   return Object.freeze(value.runs.map(run => {
@@ -1063,6 +1078,7 @@ function validatedIngestionRuns(value) {
         || ![run.processed_count, run.detection_count, run.action_count].every(item => Number.isSafeInteger(item) && item >= 0)
         || ![2, 3].includes(run.receipt_version)
         || !ingestionRunSources.has(run.source) || !ingestionRunStatuses.has(run.status)
+        || (expectedSource !== 'all' && run.source !== expectedSource)
         || !validRecordedTime(run.started_at)
         || (run.finished_at !== null && !validRecordedTime(run.finished_at))
         || (run.failure_code !== null && !ingestionFailureCodes.has(run.failure_code))
@@ -1078,17 +1094,22 @@ function ingestionFact(label, value) {
   wrapper.append(textNode('dt', label), textNode('dd', value));
   return wrapper;
 }
-function renderIngestionRuns(runs) {
-  state.ingestionRuns = [...runs];
-  if (state.traffic) updateTrafficFreshness();
+function renderIngestionRuns(runs, selectedSource = 'all') {
+  if (selectedSource === 'all') {
+    state.ingestionRuns = [...runs];
+    state.ingestionRunsFetchedAt = new Date().toISOString();
+    if (state.traffic) updateTrafficFreshness();
+  }
   const panel = byId('ingestion-runs-panel');
   const list = byId('ingestion-runs-list');
   panel.setAttribute('aria-busy', 'false');
   byId('ingestion-runs-status').textContent = runs.length === 0
-    ? 'No recorded runs'
-    : `${formatNumber(runs.length)} newest receipt${runs.length === 1 ? '' : 's'}`;
+    ? `No recorded ${selectedSource === 'all' ? '' : `${selectedSource} `}runs`
+    : `${formatNumber(runs.length)} newest ${selectedSource === 'all' ? '' : `${selectedSource} `}receipt${runs.length === 1 ? '' : 's'}`;
   if (runs.length === 0) {
-    list.replaceChildren(textNode('p', 'No ingestion run receipt is recorded in this database.', 'ingestion-runs-empty'));
+    list.replaceChildren(textNode('p', selectedSource === 'all'
+      ? 'No ingestion run receipt is recorded in this database.'
+      : `No ${selectedSource} ingestion run receipt is recorded in this bounded result.`, 'ingestion-runs-empty'));
     return;
   }
   const cards = runs.map(run => {
@@ -1114,8 +1135,12 @@ function renderIngestionRuns(runs) {
   });
   list.replaceChildren(...cards);
 }
-function renderIngestionRunsUnavailable() {
-  state.ingestionRuns = [];
+function renderIngestionRunsUnavailable(selectedSource = 'all') {
+  if (selectedSource === 'all') {
+    state.ingestionRuns = [];
+    state.ingestionRunsFetchedAt = null;
+    if (state.traffic) updateTrafficFreshness();
+  }
   byId('ingestion-runs-panel').setAttribute('aria-busy', 'false');
   byId('ingestion-runs-status').textContent = 'Unavailable';
   byId('ingestion-runs-list').replaceChildren(
@@ -1125,17 +1150,31 @@ function renderIngestionRunsUnavailable() {
 async function loadIngestionRuns() {
   if (ingestionRunsLoading) return;
   ingestionRunsLoading = true;
+  const sourceSelect = byId('ingestion-source');
+  const selectedSource = sourceSelect.value;
   const button = byId('ingestion-runs-retry'); button.disabled = true;
+  sourceSelect.disabled = true;
   const panel = byId('ingestion-runs-panel'); panel.setAttribute('aria-busy', 'true');
   byId('ingestion-runs-status').textContent = 'Loading receipts…';
+  if (selectedSource === 'all') {
+    state.ingestionRuns = [];
+    state.ingestionRunsFetchedAt = null;
+    if (state.traffic) updateTrafficFreshness();
+  }
+  byId('ingestion-runs-list').replaceChildren(
+    textNode('p', 'Loading selected source receipts…', 'ingestion-runs-empty')
+  );
   try {
+    if (selectedSource !== 'all' && !ingestionRunSources.has(selectedSource)) throw new Error('invalid source');
     renderIngestionRuns(validatedIngestionRuns(
-      await requestBoundedJSON('/api/ingestion-runs?limit=8', maxIngestionRunsResponseBytes)
-    ));
-  } catch (_) { renderIngestionRunsUnavailable(); }
+      await requestBoundedJSON(`/api/ingestion-runs-v2?limit=8&source=${selectedSource}`, maxIngestionRunsResponseBytes),
+      selectedSource
+    ), selectedSource);
+  } catch (_) { renderIngestionRunsUnavailable(selectedSource); }
   finally {
     ingestionRunsLoading = false;
     button.disabled = false;
+    sourceSelect.disabled = false;
   }
 }
 function suricataInteger(value, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) {
@@ -1457,9 +1496,13 @@ function reportSnapshot() {
   if (scope === 'detections') return {...common,
     source_scope: `${state.events.length} stored alerts shown from a maximum of ${state.config.event_limit}. Updated ${refreshedLabel}.`,
     detections: state.events.map(item => ({...item}))};
-  if (scope === 'ingestion') return {...common,
-    source_scope: `${state.ingestionRuns.length} import runs shown from a maximum of 5. Updated ${refreshedLabel}.`,
-    ingestion_runs: state.ingestionRuns.map(item => ({...item}))};
+  if (scope === 'ingestion') {
+    if (!state.ingestionRunsFetchedAt) return null;
+    return {...common,
+      bounds: 'Newest 8 stored core ingestion receipts maximum, across all recorded sources.',
+      source_scope: `${state.ingestionRuns.length} all-source run receipts loaded ${formatRefreshTime(new Date(state.ingestionRunsFetchedAt))}. Panel source filters do not change this report.`,
+      ingestion_runs: state.ingestionRuns.map(item => ({...item}))};
+  }
   return {...common,
     source_scope: `The counts above plus ${state.traffic.sampled_events} traffic records from a maximum of ${state.traffic.sample_limit}. Updated ${refreshedLabel}.`,
     summary: {...state.summary}, traffic: {
@@ -1478,8 +1521,11 @@ function reportPlainText(report) {
 function renderReportPreview() {
   const report = reportSnapshot(), card = byId('report-preview-card');
   if (!report) {
-    card.replaceChildren(textNode('p', 'Preview', 'eyebrow'), textNode('h3', 'Report unavailable'), textNode('p', 'Wait for one successful summary and traffic refresh.'));
-    byId('report-feedback').textContent = 'A report needs one successful dashboard snapshot.'; return null;
+    const reason = byId('report-scope').value === 'ingestion' && !state.ingestionRunsFetchedAt
+      ? 'Load the all-source ingestion receipts before creating this report.'
+      : 'Wait for one successful summary and traffic refresh.';
+    card.replaceChildren(textNode('p', 'Preview', 'eyebrow'), textNode('h3', 'Report unavailable'), textNode('p', reason));
+    byId('report-feedback').textContent = reason; return null;
   }
   const facts = document.createElement('dl');
   const entries = report.summary
@@ -2152,6 +2198,7 @@ byId('clear-time-filter').addEventListener('click', () => { state.activeBin = nu
 byId('refresh-button').addEventListener('click', () => refresh(true));
 byId('pause-button').addEventListener('click', togglePause);
 byId('ingestion-runs-retry').addEventListener('click', loadIngestionRuns);
+byId('ingestion-source').addEventListener('change', loadIngestionRuns);
 byId('reference-port-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('port'); });
 byId('reference-protocol-form').addEventListener('submit', event => { event.preventDefault(); lookupReference('protocol'); });
 byId('reference-retry').addEventListener('click', loadReferenceStatus);

@@ -2593,8 +2593,8 @@ class DashboardStore:
                     cursor.close()
             return result
 
-    def ingestion_runs(self, limit: int = 8) -> list[dict[str, Any]]:
-        """Return a bounded, receipt-only view of the newest ingestion runs."""
+    def ingestion_runs(self, limit: int = 8, *, source: str | None = None) -> list[dict[str, Any]]:
+        """Return bounded receipts, optionally qualified by one stored source."""
 
         if (
             isinstance(limit, bool)
@@ -2602,19 +2602,25 @@ class DashboardStore:
             or not 1 <= limit <= 25
         ):
             raise ValueError("DASHBOARD_STORE:INVALID_LIMIT")
+        if source is not None and (
+            type(source) is not str or source not in {"sample", "jsonl", "scapy"}
+        ):
+            raise ValueError("DASHBOARD_STORE:INVALID_SOURCE")
         with self._bounded_read():
             cursor: sqlite3.Cursor | None = None
             try:
-                cursor = self._connection.execute(
-                    """
+                query = """
                     SELECT id, started_at, finished_at, source, status,
                            processed_count, detection_count, action_count,
                            receipt_version, failure_code, termination_reason
                     FROM ingestion_runs
-                    ORDER BY started_at DESC, id DESC LIMIT ?
-                    """,
-                    (limit,),
-                )
+                    """
+                parameters: tuple[object, ...] = (limit,)
+                if source is not None:
+                    query += "WHERE source = ?\n"
+                    parameters = (source, limit)
+                query += "ORDER BY started_at DESC, id DESC LIMIT ?"
+                cursor = self._connection.execute(query, parameters)
                 rows = cursor.fetchall()
                 result = [
                     {

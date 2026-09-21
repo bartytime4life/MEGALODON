@@ -42,7 +42,8 @@ production service.
 | `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
 | `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
-| `/api/ingestion-runs` | Optional `limit` | Newest 1–25 stored ingestion receipts, not source liveness |
+| `/api/ingestion-runs` | Optional `limit` | Existing v1 newest 1–25 stored ingestion receipts across core sources, not source liveness |
+| `/api/ingestion-runs-v2` | Optional `limit` and `source` | Source-qualified core ingestion receipts with explicit bounds and unrecorded fields |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
 | `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
 | `/api/suricata` | None | Not configured, unavailable, or one startup snapshot of the separate Suricata store |
@@ -140,6 +141,17 @@ Report creation remains browser-local. The overview, detection, and ingestion
 presets use only already validated in-memory projections. JSON/CSV downloads,
 clipboard copy, and print/PDF require an explicit user action and do not call a
 write endpoint or create a server-side file.
+
+The v2 ingestion-run route accepts `source=all|sample|jsonl|scapy` and a
+canonical `limit` from 1 to 25; the default is `all` and eight runs. It returns
+`dashboard-ingestion-runs-v2` with the requested source, maximum row and byte
+bounds (25 and 32 KiB), and a fixed `not_recorded` list for adapter identity
+and accepted/rejected counts. The server filters before the read limit and
+refuses an oversized response; unknown or repeated source input returns 400.
+The v1 route retains its original cross-source response for existing clients.
+Both routes read only recorded core ingestion receipts. A matching source label
+does not establish adapter version, sensor liveness, completeness, or
+connectivity. An unavailable store returns 503, not an empty healthy result.
 
 The local and hosted HUDs share canonical controls, lifecycle text and parser in
 `megalodon/dashboard_tool_assets.py`. `scripts/sync-hud-assets.py` materializes

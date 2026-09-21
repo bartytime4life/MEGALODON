@@ -34,6 +34,7 @@ MAX_REFRESH_SECONDS = 300
 MAX_EVENT_LIMIT = 200
 DEFAULT_INGESTION_RUN_LIMIT = 8
 MAX_INGESTION_RUN_LIMIT = 25
+MAX_INGESTION_RUN_RESPONSE_BYTES = 32 * 1024
 DASHBOARD_EVENT_FIELDS = ("detected_at", "rule_id", "severity", "src_ip", "message")
 MAX_DASHBOARD_QUERY_LENGTH = 256
 MAX_INTEGRATION_WORKFLOWS = 14
@@ -57,7 +58,7 @@ class DashboardReader(Protocol):
     def recent(self, limit: int = 50) -> list[dict[str, Any]]: ...
 
     def ingestion_runs(
-        self, limit: int = DEFAULT_INGESTION_RUN_LIMIT
+        self, limit: int = DEFAULT_INGESTION_RUN_LIMIT, *, source: str | None = None
     ) -> list[dict[str, Any]]: ...
 
     def traffic(self) -> dict[str, Any]: ...
@@ -72,7 +73,7 @@ class UnconfiguredDashboardReader:
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:
         raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
 
-    def ingestion_runs(self, limit: int = DEFAULT_INGESTION_RUN_LIMIT) -> list[dict[str, Any]]:
+    def ingestion_runs(self, limit: int = DEFAULT_INGESTION_RUN_LIMIT, *, source: str | None = None) -> list[dict[str, Any]]:
         raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
 
     def traffic(self) -> dict[str, Any]:
@@ -513,13 +514,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(events)
             return
-        if route.path == "/api/ingestion-runs":
+        if route.path in {"/api/ingestion-runs", "/api/ingestion-runs-v2"}:
+            qualified = route.path == "/api/ingestion-runs-v2"
             try:
-                params = _bounded_query(route.query, max_fields=1)
+                params = _bounded_query(route.query, max_fields=2 if qualified else 1)
             except ValueError:
                 self._send_json({"error": "invalid ingestion run query"}, status=400)
                 return
-            if set(params) - {"limit"}:
+            if set(params) - ({"limit", "source"} if qualified else {"limit"}):
                 self._send_json({"error": "unsupported query parameter"}, status=400)
                 return
             values = params.get("limit")
@@ -545,18 +547,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     {"error": "limit must be between 1 and 25"}, status=400
                 )
                 return
+            source = "all"
+            if qualified and "source" in params:
+                selected = params["source"]
+                if len(selected) != 1 or selected[0] not in {"all", "sample", "jsonl", "scapy"}:
+                    self._send_json({"error": "unsupported ingestion source"}, status=400)
+                    return
+                source = selected[0]
             try:
-                runs = self.store.ingestion_runs(limit)
+                runs = self.store.ingestion_runs(
+                    limit, source=None if source == "all" else source
+                ) if qualified else self.store.ingestion_runs(limit)
             except StorageSchemaError:
                 self._send_json({"error": "telemetry unavailable"}, status=503)
                 return
-            self._send_json(
-                {
+            if not qualified:
+                self._send_json({
                     "schema": "dashboard-ingestion-runs-v1",
                     "limit": limit,
                     "runs": runs,
-                }
-            )
+                })
+                return
+            payload = json.dumps({
+                "schema": "dashboard-ingestion-runs-v2",
+                "limit": limit,
+                "source_filter": source,
+                "max_runs": MAX_INGESTION_RUN_LIMIT,
+                "max_response_bytes": MAX_INGESTION_RUN_RESPONSE_BYTES,
+                "not_recorded": ["adapter_identity", "accepted_count", "rejected_count"],
+                "runs": runs,
+            }, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+            if len(payload) > MAX_INGESTION_RUN_RESPONSE_BYTES:
+                self._send_json({"error": "ingestion receipts unavailable"}, status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
             return
         if route.path == "/api/offline-summary":
             self._send_json(
