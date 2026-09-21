@@ -1,0 +1,114 @@
+name: Windows synthetic core
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+  PYTEST_PLUGINS: ""
+  PYTEST_ADDOPTS: ""
+
+jobs:
+  windows-synthetic-core:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Inventory exact candidate and excluded native gates
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $commit = (git rev-parse --verify HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $commit -ne $env:EXPECTED_COMMIT) {
+            throw 'WINDOWS_SYNTHETIC:COMMIT_MISMATCH'
+          }
+          $tree = (git rev-parse --verify 'HEAD^{tree}').Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'WINDOWS_SYNTHETIC:TREE_UNAVAILABLE' }
+          $matrix = Get-Content -LiteralPath 'contracts/platform/windows-core-v1/acceptance.json' -Raw | ConvertFrom-Json
+          if ($matrix.schema -ne 'windows-core-acceptance-v1') {
+            throw 'WINDOWS_SYNTHETIC:MATRIX_SCHEMA'
+          }
+          $features = @($matrix.features)
+          if (@($features | Where-Object { $_.status -notin @('synthetic_reusable', 'native_receipt_required') }).Count -gt 0) {
+            throw 'WINDOWS_SYNTHETIC:UNKNOWN_FEATURE_STATUS'
+          }
+          $reusable = @($features | Where-Object { $_.status -eq 'synthetic_reusable' })
+          $native = @($features | Where-Object { $_.status -eq 'native_receipt_required' })
+          $selectors = @($reusable | ForEach-Object { $_.tests } | ForEach-Object { $_ })
+          if ($reusable.Count -eq 0 -or $native.Count -eq 0 -or $selectors.Count -eq 0 -or
+              @($selectors | Select-Object -Unique).Count -ne $selectors.Count) {
+            throw 'WINDOWS_SYNTHETIC:MATRIX_SELECTION'
+          }
+          foreach ($selector in $selectors) {
+            if ($selector -notmatch '^tests/[A-Za-z0-9_./]+(?:::[A-Za-z_][A-Za-z0-9_]*)*$') {
+              throw 'WINDOWS_SYNTHETIC:INVALID_SELECTOR'
+            }
+          }
+          $python = (python -VV) -join ' '
+          if ($LASTEXITCODE -ne 0) { throw 'WINDOWS_SYNTHETIC:PYTHON_UNAVAILABLE' }
+          $summary = @(
+            '## Hosted Windows synthetic core receipt'
+            ''
+            "PR head: ``$commit``; tree: ``$tree``."
+            "Runner image: ``$env:ImageOS`` / ``$env:ImageVersion``."
+            "OS: ``$([System.Runtime.InteropServices.RuntimeInformation]::OSDescription)``; architecture: ``$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)``; $python."
+            ''
+            'The selected tests are synthetic checks from the matrix, not W1 native acceptance:'
+          )
+          foreach ($feature in $reusable) { $summary += "- ``$($feature.id)``: $($feature.tests -join ', ')" }
+          $summary += ''
+          $summary += 'Native-receipt-required feature checks **not run** by this job:'
+          foreach ($feature in $native) { $summary += "- ``$($feature.id)``" }
+          $summary += ''
+          $summary += 'Native W1 receipt items **not established** by this job:'
+          foreach ($item in $matrix.native_receipts_required) { $summary += "- ``$item``" }
+          $summary += ''
+          $summary += 'Unsupported-operation negative controls are not selected here. A hosted Windows Server runner is not the Windows 11 W1 target.'
+          $summary | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          $summary | Write-Output
+      - name: Install core and test dependencies
+        run: |
+          python -m pip install -c constraints/ci.txt -e ".[test]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip show pytest jsonschema setuptools
+          exit $LASTEXITCODE
+      - name: Run matrix-selected synthetic tests
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $matrix = Get-Content -LiteralPath 'contracts/platform/windows-core-v1/acceptance.json' -Raw | ConvertFrom-Json
+          $selectors = @($matrix.features | Where-Object { $_.status -eq 'synthetic_reusable' } |
+            ForEach-Object { $_.tests } | ForEach-Object { $_ })
+          $report = Join-Path $env:RUNNER_TEMP 'windows-synthetic-core.xml'
+          python -m pytest -ra "--junitxml=$report" @selectors
+          exit $LASTEXITCODE
+      - name: Report actual selected-test outcome
+        if: always()
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'windows-synthetic-core.xml'
+          if (Test-Path -LiteralPath $report -PathType Leaf) {
+            [xml]$junit = Get-Content -LiteralPath $report -Raw
+            $suite = $junit.testsuites.testsuite
+            if ($null -eq $suite) { throw 'WINDOWS_SYNTHETIC:JUNIT_INVALID' }
+            $result = "Selected test execution: tests=$($suite.tests), failures=$($suite.failures), errors=$($suite.errors), skips=$($suite.skipped). See the test log for individual results and reasons."
+          } else {
+            $result = 'Selected test execution: not_run; no JUnit result was produced. See preceding steps for the failure.'
+          }
+          $result | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          Write-Output $result
