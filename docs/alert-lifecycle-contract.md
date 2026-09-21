@@ -38,3 +38,6 @@ The engine tests additionally prove that `megalodon.alert_lifecycle.apply_transi
 ## Adoption gates
 
 Runtime adoption still needs an explicit operator identity/authentication/authorization design, native Windows storage confidentiality evidence where applicable, and one adapter-specific privacy/secret/egress/failure review. Closed #68 delivered bounded resource controls but did not select operator retention values or prove native sustained capacity. Closed #3 records the owner-directed review workflow, not an enforced independent-human approval floor. Apply the current control register and preserve separate operational acceptance. No code path may consume these fixtures as authorization.
+
+The [proposed wiring survey](alert-lifecycle-wiring-survey.md) maps storage,
+CLI, and dashboard decisions without implementing them.
