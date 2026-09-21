@@ -65,7 +65,7 @@
             </div>
             <div class="hud-controls" aria-label="Connection status">
               <div class="mode-badge"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NOT CONNECTED</strong><small>No network observations received</small></span></div>
-              <button class="control-button" type="button" data-jump="missions">Open local workflow</button>
+              <button class="control-button" type="button" data-jump="missions">View evidence workflows</button>
             </div>
           </div>
 
@@ -77,7 +77,7 @@
               <li><span class="launch-step-number" aria-hidden="true">03</span><div><h3>Open and check</h3><p>Open MEGALODON from the application menu, then choose Home → Data and tools → Check this computer.</p><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open a running local HUD ↗</a><p class="launch-note">The app opens your browser after its local server binds. On a phone, 127.0.0.1 points to the phone. This Site cannot tell whether your HUD is running.</p></div></li>
             </ol>
             <details class="launch-installed"><summary>Prefer to run the checkout without installing?</summary><p>Use the source launcher from the repository root:</p><div class="installed-command"><code>./scripts/start-local.sh</code><button id="copy-hud-start" type="button">Copy source command</button></div><p>Keep its terminal open and stop with Ctrl+C. The source launcher does not add an app-menu entry or change an existing Python installation.</p></details>
-            <div class="launch-footer"><p>This hosted reference does not read your tools, files, or network. An empty local HUD means evidence is unavailable.</p><button type="button" data-jump="integrations">Explore optional tools</button></div>
+            <div class="launch-footer"><p>An empty local HUD means evidence is unavailable, not zero traffic.</p><button type="button" data-jump="integrations">Explore optional tools</button></div>
           </section>
           <details class="disconnected-details"><summary>Hosted network feed · not connected</summary><p>Actual measurements are available only in your local HUD after real evidence is ingested.</p>
           <section class="kpi-grid" aria-label="Network measurements unavailable">
