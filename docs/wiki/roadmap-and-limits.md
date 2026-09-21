@@ -32,15 +32,16 @@ evidence, not a production benchmark.
 
 ## Active tracking at this refresh
 
-At the 2026-09-20 readback, #254–#258 are closed completed and #259–#261
-remain open. The repository basis is merged PR #307 at
-`main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`. Issue state does not establish acceptance evidence.
+At the 2026-09-21 readback, #254–#259 are closed completed, #260–#261 remain
+open, and #327 is open for Zeek producer-profile qualification. The repository
+basis is `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971`. Issue state
+does not establish broader operational acceptance evidence.
 
 | Issue | Remaining decision or evidence theme |
 | --- | --- |
-| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) (closed) | Community ID vectors and bounded grouping are delivered; its body still lists producer-profile/schema-drift qualification. Closure supplies no missing receipt. |
-| [#259](https://github.com/bartytime4life/MEGALODON/issues/259) | Registry/report delivered; scoped exact-head acceptance remains unrecorded. Synthetic counts are not accuracy. |
-| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) | Contract and #306 collector repair delivered; retained release evidence, recovery drill, SBOM/provenance and acceptance remain. |
+| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) (closed) and [#327](https://github.com/bartytime4life/MEGALODON/issues/327) (open) | Community ID vectors and bounded grouping are delivered; exact producer profiles and schema-drift fixtures remain the #327 gate. |
+| [#259](https://github.com/bartytime4life/MEGALODON/issues/259) (closed) | Scoped owner acceptance covers the registry and synthetic report at `main@16742fed`; independent review and operational accuracy remain unproved. |
+| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) | Contract, packet tooling, and temporary synthetic installed-wheel recovery receipts are delivered; the complete candidate packet, artifact review, operator drill, and acceptance remain. |
 | [#261](https://github.com/bartytime4life/MEGALODON/issues/261) | Contract and input repairs delivered; collector remains unbound pending exact model and authorized host acceptance. |
 
 Apache-2.0 is selected and package metadata is aligned. Currentness, bounded
@@ -52,7 +53,7 @@ are not a pending implementation backlog.
 1. Retain the Apache-2.0 decision and verify exact release artifact notices and metadata.
 2. Produce authorized native recovery, lock, interruption, exhaustion, and long-running evidence.
 3. Qualify installed producers and privacy-reviewed representative data without turning a catalog entry into a connection claim.
-4. Accept the versioned detector report at an exact head and obtain representative quality evidence before operational interpretation.
+4. Keep the scoped detector-report acceptance separate from independent review and obtain representative quality evidence before operational interpretation.
 5. Complete Ubuntu release and native Windows evidence separately.
 6. Verify the exact local model artifact and provider containment before calling Qwen an accepted capability.
 

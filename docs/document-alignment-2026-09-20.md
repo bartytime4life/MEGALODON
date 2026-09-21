@@ -1,6 +1,10 @@
 # Document and file alignment — 2026-09-20
 
-## Current reconciliation after merged PR #307
+Historical checkpoint. The [2026-09-21 alignment record](document-alignment-2026-09-21.md)
+contains the current GitHub issue, Console publication, and telemetry verification
+readback. The observations below retain their original 2026-09-20 scope.
+
+## Reconciliation after merged PR #307 at the original checkpoint
 
 OBSERVED 2026-09-20: repository `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0` is the
 merge of [#307](https://github.com/bartytime4life/MEGALODON/pull/307), whose

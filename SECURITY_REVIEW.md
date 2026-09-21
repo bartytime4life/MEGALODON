@@ -2,12 +2,14 @@
 
 ## Current alignment basis
 
-The [2026-09-20 alignment record](docs/document-alignment-2026-09-20.md) binds
-this working tree to merged recovery, licensing, detector and containment-contract
-work. Current issue state is distinct from control evidence: #254–#258 are
-closed, while #259–#261 remain open. In particular, #258 closure does not supply
-the producer-profile evidence still missing from its body. This alignment is
-not a new security scan or independent acceptance of a model or host.
+The [2026-09-21 alignment record](docs/document-alignment-2026-09-21.md) binds
+this working tree to merged recovery, licensing, detector, installer and
+containment-contract work. Current issue state is distinct from control evidence:
+#254–#259 are closed, #260–#261 remain open, and #327 now tracks the exact Zeek
+producer-profile evidence left after #258 closed. The scoped owner acceptance
+that closed #259 does not establish independent review or operational detector
+accuracy. This alignment is not a new security scan or independent acceptance
+of a model or host.
 
 The source launcher selects an existing compatible Python environment. Its
 preflight opens the default store read-only; missing data stays absent. The

@@ -1,6 +1,36 @@
 # Defense Console source alignment
 
-## Current publication — Console v29, guided local install
+## Current publication — Console v30, merged installer links
+
+OBSERVED 2026-09-21: the existing owner-only Console serves version 30. Its
+install links use the immutable #323 merge
+`16742fed020283aafad35e30238986c851d7542a` instead of the former candidate
+branch. The Site source commit is `7a96f64b8e9cd5974c9f872c5346726d129f91c0`;
+the changed `README.md`, `dist/index.html`, and `tests/install.test.cjs` have
+the same bytes in this repository candidate. All 14 tracked `site/` files
+match that pushed Site source. Repository `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971`
+still contains the older v29 mirror in those three files until this change is
+merged. Source matching is scoped to this candidate, not current `main`.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 30 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_76f5c1587df48191b6a194fcc9024cc4` |
+| Sites source | `7a96f64b8e9cd5974c9f872c5346726d129f91c0` |
+| Archive | `sha256:65d619dabb7afd61e3ae39f12b5cfb6d76c6f7fc80f53287dd882f93385eed22`; 10 files, 296,960 bytes |
+| Deployment | `appgdep_6ab15697cb048191ba52a40efd159581`; succeeded at `2026-09-21T16:09:02.243293+00:00` |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access, unchanged |
+| Rollback reference | v29 / `49bfe9f527db5c7e71d0724d3e0b5b0e5c19295f` |
+
+All 44 Site Node checks and JavaScript syntax checks passed on the pushed
+source. They cover disconnected measurements and client behavior, not a
+rendered hosted-browser walkthrough, live telemetry, a local installation, or
+operator acceptance. The Site cannot reach the local HUD or establish sensor
+health. See the [current alignment record](document-alignment-2026-09-21.md)
+for the separate local telemetry test limit.
+
+## Historical publication — Console v29, guided local install
 
 OBSERVED 2026-09-21: the existing owner-private Defense Console now serves
 version 29 from Sites source `49bfe9f527db5c7e71d0724d3e0b5b0e5c19295f`.
@@ -59,7 +89,7 @@ Sites metadata; it is not a fresh fetch of deployed source bytes, a rendered
 browser test, or an installed-host acceptance. No Site edit or publication is
 part of this successor record.
 
-## Current publication — Console v28, merged setup guidance
+## Historical publication — Console v28, merged setup guidance
 
 OBSERVED 2026-09-20: GitHub baseline `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`
 contains merged PR #307. All 13 tracked Site source files at that baseline
