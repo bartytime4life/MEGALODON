@@ -65,7 +65,9 @@ and inference accuracy remain unproved.
 ## Receipts and HUD
 
 `megalodon-ai-receipts.db` is an application-owned private SQLite database
-beside the configured audit database. The broker writes `not_attempted` before
+beside the configured audit database. If the telemetry database already uses
+that basename, the AI ledger uses `megalodon-ai-receipts-ledger.db` instead so
+the two stores remain distinct. The broker writes `not_attempted` before
 execution, then a terminal event (`observed`, `applied`, `failed`, or
 `awaiting_confirmation`). Events contain UUID, UTC timestamp, model, request
 digest, tool, validated arguments, authority level, authorization source,
