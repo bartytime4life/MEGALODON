@@ -42,9 +42,15 @@ _AI_SUCCESS_STATES = frozenset({"observed", "applied", "awaiting_confirmation"})
 
 
 def _ai_receipt_path(db_path: Path) -> Path:
-    """Keep the AI ledger distinct from the configured telemetry database."""
+    """Keep telemetry outside the AI ledger's main and SQLite sidecar namespace."""
     candidate = db_path.with_name("megalodon-ai-receipts.db")
-    if candidate == db_path:
+    reserved = {
+        candidate,
+        candidate.with_name(candidate.name + "-wal"),
+        candidate.with_name(candidate.name + "-shm"),
+        candidate.with_name(candidate.name + "-journal"),
+    }
+    if db_path in reserved:
         return db_path.with_name("megalodon-ai-receipts-ledger.db")
     return candidate
 
