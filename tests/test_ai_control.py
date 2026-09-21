@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 import json
 from pathlib import Path
+import sqlite3
+from uuid import uuid4
 
 import pytest
 
-from megalodon.ai_broker import Broker, ReceiptStore, validate_request
+from megalodon.ai_broker import Broker, BrokerError, ReceiptStore, validate_request
 from megalodon.ai_interface import ask
 from megalodon.ai_provider import AIProviderError, status
 from megalodon.config import AISettings, load_settings
@@ -151,3 +154,80 @@ def test_untrusted_detector_field_is_rejected_before_model_projection(broker):
     broker.reader = HostileReader()
     receipt = broker.dispatch(request("megalodon.alerts.query"))
     assert receipt["state"] == "failed" and receipt["error_code"] == "EVIDENCE_INVALID"
+
+
+def test_ai_receipt_chain_verifies_complete_and_interrupted_history(broker):
+    completed = broker.dispatch(request("megalodon.status"))
+    interrupted_id = str(uuid4())
+    broker.receipts.append(interrupted_id, {"state": "not_attempted", "tool": "megalodon.status"})
+    verified = broker.receipts.verify_chain()
+    assert verified == {"sequence": 3, "head": broker.receipts.latest(interrupted_id)["event_hash"],
+                        "incomplete_count": 1}
+    assert broker.receipts.verify_chain(expected_head=verified["head"]) == verified
+    assert broker.receipts.latest(completed["receipt_id"])["state"] == "observed"
+    with pytest.raises(BrokerError, match="AUDIT_INTEGRITY"):
+        broker.receipts.verify_chain(expected_head="f" * 64)
+
+
+@pytest.mark.parametrize("mutation", ["payload", "link", "gap"])
+def test_ai_action_status_refuses_corrupted_receipt_history(broker, mutation):
+    first = broker.dispatch(request("megalodon.status"))
+    broker.dispatch(request("megalodon.status"))
+    connection = broker.receipts.connection
+    assert isinstance(connection, sqlite3.Connection)
+    if mutation == "payload":
+        connection.execute(
+            "UPDATE ai_receipt_events SET payload_json=? WHERE sequence=2",
+            ('{"state":"applied","tool":"megalodon.status"}',),
+        )
+    elif mutation == "link":
+        connection.execute(
+            "UPDATE ai_receipt_events SET previous_hash=? WHERE sequence=3", ("0" * 64,)
+        )
+    else:
+        connection.execute("DELETE FROM ai_receipt_events WHERE sequence=2")
+    connection.commit()
+    with pytest.raises(BrokerError, match="AUDIT_INTEGRITY"):
+        broker.receipts.latest(first["receipt_id"])
+    with pytest.raises(BrokerError, match="AUDIT_INTEGRITY"):
+        broker.dispatch(request("megalodon.action.status", {"receipt_id": first["receipt_id"]}))
+
+
+def test_ai_receipt_chain_accepts_explicit_doctor_event_and_refuses_invalid_state(broker):
+    identifier = str(uuid4())
+    broker.receipts.append(identifier, {"state": "observed", "tool": "megalodon.ai.doctor"})
+    assert broker.receipts.verify_chain()["sequence"] == 1
+    connection = broker.receipts.connection
+    assert isinstance(connection, sqlite3.Connection)
+    row = connection.execute(
+        "SELECT receipt_id,timestamp,previous_hash FROM ai_receipt_events WHERE sequence=1"
+    ).fetchone()
+    changed = '{"state":"applied","tool":"megalodon.ai.doctor"}'
+    connection.execute(
+        "UPDATE ai_receipt_events SET payload_json=?,event_hash=? WHERE sequence=1",
+        (changed, sha256((row[2] + row[0] + row[1] + changed).encode()).hexdigest()),
+    )
+    connection.commit()
+    with pytest.raises(BrokerError, match="AUDIT_INTEGRITY"):
+        broker.receipts.verify_chain()
+
+
+def test_external_head_is_required_to_detect_a_complete_local_rewrite(broker):
+    receipt = broker.dispatch(request("megalodon.status"))
+    trusted_head = receipt["event_hash"]
+    connection = broker.receipts.connection
+    assert isinstance(connection, sqlite3.Connection)
+    row = connection.execute(
+        "SELECT receipt_id,timestamp,previous_hash,payload_json FROM ai_receipt_events WHERE sequence=2"
+    ).fetchone()
+    payload = json.loads(row[3])
+    payload["result"]["events"] = 999
+    changed = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    connection.execute(
+        "UPDATE ai_receipt_events SET payload_json=?,event_hash=? WHERE sequence=2",
+        (changed, sha256((row[2] + row[0] + row[1] + changed).encode()).hexdigest()),
+    )
+    connection.commit()
+    assert broker.receipts.verify_chain()["head"] != trusted_head
+    with pytest.raises(BrokerError, match="AUDIT_INTEGRITY"):
+        broker.receipts.verify_chain(expected_head=trusted_head)

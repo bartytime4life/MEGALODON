@@ -188,25 +188,34 @@ class ReceiptStore:
     def __exit__(self, *_: object) -> None:
         self.close()
 
+    def _occupied_bytes(self) -> int:
+        if self._descriptor is None or self.connection is None:
+            raise BrokerError("AUDIT_UNAVAILABLE")
+        try:
+            occupied = os.fstat(self._descriptor).st_size
+            for suffix in ("-wal", "-shm"):
+                sidecar = self.path.name + suffix
+                try:
+                    info = (os.stat(sidecar, dir_fd=self._directory, follow_symlinks=False)
+                            if self._directory is not None else self.path.with_name(sidecar).lstat())
+                except FileNotFoundError:
+                    continue
+                if not stat.S_ISREG(info.st_mode):
+                    raise BrokerError("AUDIT_UNAVAILABLE")
+                occupied += info.st_size
+        except OSError:
+            raise BrokerError("AUDIT_UNAVAILABLE") from None
+        return occupied
+
     def append(self, receipt_id: str, payload: dict[str, object]) -> dict[str, object]:
-        if payload.get("state") not in STATES:
+        state = payload.get("state")
+        if (type(state) is not str or state not in STATES
+                or {"receipt_id", "timestamp", "previous_hash", "event_hash"} & payload.keys()):
             raise BrokerError("INVALID_RECEIPT_STATE")
         encoded = _json(payload)
         if len(encoded.encode()) > MAX_RESULT_BYTES:
             raise BrokerError("RESULT_TOO_LARGE")
-        if self._descriptor is None or self.connection is None:
-            raise BrokerError("AUDIT_UNAVAILABLE")
-        occupied = os.fstat(self._descriptor).st_size
-        for suffix in ("-wal", "-shm"):
-            sidecar = self.path.name + suffix
-            try:
-                info = (os.stat(sidecar, dir_fd=self._directory, follow_symlinks=False)
-                        if self._directory is not None else self.path.with_name(sidecar).lstat())
-            except FileNotFoundError:
-                continue
-            if not stat.S_ISREG(info.st_mode):
-                raise BrokerError("AUDIT_UNAVAILABLE")
-            occupied += info.st_size
+        occupied = self._occupied_bytes()
         if occupied > MAX_LEDGER_BYTES:
             raise BrokerError("AUDIT_UNAVAILABLE")
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -226,13 +235,86 @@ class ReceiptStore:
         return {"receipt_id": receipt_id, "timestamp": now, "event_hash": event_hash,
                 "previous_hash": previous, **payload}
 
+    def verify_chain(self, *, expected_head: str | None = None) -> dict[str, object]:
+        """Check the bounded local chain; an external head detects full rewrites."""
+        if self.connection is None:
+            raise BrokerError("AUDIT_UNAVAILABLE")
+        if expected_head is not None and (
+            type(expected_head) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", expected_head) is None
+        ):
+            raise BrokerError("AUDIT_INTEGRITY")
+        if self._occupied_bytes() > MAX_LEDGER_BYTES:
+            raise BrokerError("AUDIT_UNAVAILABLE")
+        previous = "0" * 64
+        sequence = 0
+        total_bytes = 0
+        states: dict[str, str] = {}
+        cursor = None
+        try:
+            cursor = self.connection.execute(
+                "SELECT sequence,receipt_id,timestamp,payload_json,previous_hash,event_hash "
+                "FROM ai_receipt_events ORDER BY sequence"
+            )
+            for row in cursor:
+                number, identifier, stamp, encoded, linked, event_hash = row
+                if (
+                    type(number) is not int or number != sequence + 1
+                    or any(type(value) is not str for value in (identifier, stamp, encoded, linked, event_hash))
+                ):
+                    raise BrokerError("AUDIT_INTEGRITY")
+                total_bytes += sum(len(value.encode("utf-8")) for value in (identifier, stamp, encoded, linked, event_hash))
+                if total_bytes > MAX_LEDGER_BYTES or len(encoded.encode("utf-8")) > MAX_RESULT_BYTES:
+                    raise BrokerError("AUDIT_INTEGRITY")
+                try:
+                    payload = json.loads(encoded, parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+                    canonical = _json(payload)
+                except (ValueError, TypeError, RecursionError):
+                    raise BrokerError("AUDIT_INTEGRITY") from None
+                state = payload.get("state") if type(payload) is dict else None
+                prior_state = states.get(identifier)
+                if (
+                    canonical != encoded or type(state) is not str or state not in STATES
+                    or {"receipt_id", "timestamp", "previous_hash", "event_hash"} & payload.keys()
+                    or linked != previous
+                    or re.fullmatch(r"[0-9a-f]{64}", event_hash) is None
+                    or sha256((linked + identifier + stamp + encoded).encode()).hexdigest() != event_hash
+                    or (prior_state is None and state not in {"not_attempted", "observed"})
+                    or (prior_state is None and state == "observed" and payload.get("tool") != "megalodon.ai.doctor")
+                    or (prior_state is not None and (prior_state != "not_attempted" or state not in {"observed", "applied", "failed", "awaiting_confirmation"}))
+                ):
+                    raise BrokerError("AUDIT_INTEGRITY")
+                states[identifier] = state
+                sequence = number
+                previous = event_hash
+        except sqlite3.Error:
+            raise BrokerError("AUDIT_UNAVAILABLE") from None
+        finally:
+            if cursor is not None:
+                cursor.close()
+        if expected_head is not None and previous != expected_head:
+            raise BrokerError("AUDIT_INTEGRITY")
+        return {"sequence": sequence, "head": previous, "incomplete_count": sum(
+            state == "not_attempted" for state in states.values()
+        )}
+
     def latest(self, receipt_id: str) -> dict[str, object] | None:
         if self.connection is None:
             raise BrokerError("AUDIT_UNAVAILABLE")
-        row = self.connection.execute(
-            "SELECT timestamp,payload_json,previous_hash,event_hash FROM ai_receipt_events "
-            "WHERE receipt_id=? ORDER BY sequence DESC LIMIT 1", (receipt_id,),
-        ).fetchone()
+        try:
+            self.connection.execute("BEGIN")
+            self.verify_chain()
+            row = self.connection.execute(
+                "SELECT timestamp,payload_json,previous_hash,event_hash FROM ai_receipt_events "
+                "WHERE receipt_id=? ORDER BY sequence DESC LIMIT 1", (receipt_id,),
+            ).fetchone()
+            self.connection.commit()
+        except BrokerError:
+            self.connection.rollback()
+            raise
+        except sqlite3.Error:
+            self.connection.rollback()
+            raise BrokerError("AUDIT_UNAVAILABLE") from None
         if row is None:
             return None
         return {"receipt_id": receipt_id, "timestamp": row[0], "previous_hash": row[2],
@@ -304,6 +386,8 @@ class Broker:
             references = ["finding:" + item["id"] for item in result.get("qualified_findings", [])] if type(result) is dict else []
             base.update(result=result, evidence_references=references[:8])
         except BrokerError as exc:
+            if exc.code in {"AUDIT_INTEGRITY", "AUDIT_UNAVAILABLE"}:
+                raise
             state = "failed"
             base["error_code"] = exc.code
         except (OSError, sqlite3.Error, ValueError, TypeError, KeyError):
