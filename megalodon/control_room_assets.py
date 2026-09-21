@@ -280,18 +280,6 @@ ROOM_CSS += r"""
 @media(max-width:940px) { .setup-main { gap:22px; } .setup-health { padding-right:22px; } .setup-software-filters { grid-template-columns:1fr; } .setup-check-actions { flex-direction:column; align-items:stretch; } }
 @media(max-width:760px) { .setup-main,.setup-bottom,.room-help-grid { grid-template-columns:1fr; } .setup-health { padding-right:0; border-right:0; padding-bottom:22px; border-bottom:1px solid #304953; } .setup-check-actions { flex-direction:row; } .setup-software-filters { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); } .hud-start .setup-heading { gap:12px; flex-direction:column; } .hud-start .setup-help-link { padding:0; min-height:32px; } .setup-bottom { gap:0; } .hud-start .setup-bottom > details + details { border-top:1px solid #304953; } }
 @media(max-width:440px) { .hud-start { padding:17px; } .setup-software-filters { grid-template-columns:1fr; } .hud-start .setup-heading h2 { font-size:1.7rem; } .setup-check-actions { flex-direction:column; } .software-actions { flex-direction:column; align-items:stretch; } .hud-start .tool-status-row { grid-template-columns:1fr; } .hud-start .tool-status-badges { justify-content:flex-start; } }
-/* Small and short screens use one document scroll, without a pinned chrome pane. */
-@media(max-width:760px), (max-height:760px) {
-  html { height:auto; min-height:100%; overflow:visible; }
-  body { height:auto; min-height:100vh; min-height:100dvh; overflow:visible; }
-  .shell { height:auto; min-height:100vh; min-height:100dvh; padding-top:16px; }
-  .topbar { display:flex; }
-  .room-chrome { flex:none; max-height:none; overflow:visible; }
-  .workspace-scroll { flex:none; min-height:0; overflow:visible; overscroll-behavior:auto; }
-  .workspace-view { min-height:0; }
-  .tool-status-list { max-height:none; overflow:visible; padding-right:0; }
-  .room-table { max-height:none; overflow-x:auto; }
-}
 """
 
 ROOM_JS = r"""
