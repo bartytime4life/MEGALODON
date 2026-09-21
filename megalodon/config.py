@@ -42,6 +42,17 @@ class DashboardSettings:
     event_limit: int = 50
 
 
+@dataclass(frozen=True)
+class AISettings:
+    enabled: bool = False
+    provider: str = "ollama"
+    endpoint: str = "http://127.0.0.1:11434"
+    model: str = "qwen2.5:7b-instruct-fp16"
+    model_digest: str = "59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c"
+    timeout_seconds: int = 15
+    max_context: int = 2048
+
+
 DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
 MIN_MAX_DATABASE_BYTES = 1 * 1024 * 1024
 MAX_MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024
@@ -63,6 +74,7 @@ class Settings:
     blocking: BlockingSettings = field(default_factory=BlockingSettings)
     storage: StorageSettings = field(default_factory=StorageSettings)
     dashboard: DashboardSettings = field(default_factory=DashboardSettings)
+    ai: AISettings = field(default_factory=AISettings)
 
 
 DEFAULT_ALLOWLIST = (
@@ -130,6 +142,16 @@ def load_settings(path: str | Path | None = None) -> Settings:
     blocking = _table(raw.get("blocking", {}), "blocking")
     dashboard = _table(raw.get("dashboard", {}), "dashboard")
     storage = _table(raw.get("storage", {}), "storage")
+    ai = _table(raw.get("ai", {}), "ai")
+    if set(ai) - {"enabled", "provider", "endpoint", "model", "model_digest", "timeout_seconds", "max_context"}:
+        raise ValidationError("ai contains unsupported settings")
+    if ai.get("provider", "ollama") != "ollama" or ai.get("endpoint", "http://127.0.0.1:11434") != "http://127.0.0.1:11434":
+        raise ValidationError("ai provider must be Ollama at literal loopback")
+    import re
+    model = _text(ai.get("model", AISettings.model), "ai.model", 96)
+    digest = _text(ai.get("model_digest", AISettings.model_digest), "ai.model_digest", 64)
+    if re.fullmatch(r"qwen[A-Za-z0-9._:-]{1,91}", model) is None or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
+        raise ValidationError("ai model or digest is invalid")
 
     allowlist_values = blocking.get("allowlist", list(DEFAULT_ALLOWLIST))
     if not isinstance(allowlist_values, list) or not all(
@@ -262,5 +284,11 @@ def load_settings(path: str | Path | None = None) -> Settings:
                 dashboard.get("refresh_seconds", 5), "dashboard.refresh_seconds", 2, 300
             ),
             event_limit=_bounded_integer(dashboard.get("event_limit", 50), "dashboard.event_limit", 1, 200),
+        ),
+        ai=AISettings(
+            enabled=_boolean(ai.get("enabled", False), "ai.enabled"),
+            model=model, model_digest=digest,
+            timeout_seconds=_bounded_integer(ai.get("timeout_seconds", 15), "ai.timeout_seconds", 1, 15),
+            max_context=_bounded_integer(ai.get("max_context", 2048), "ai.max_context", 256, 4096),
         ),
     )

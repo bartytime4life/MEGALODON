@@ -359,6 +359,14 @@ not change workspace state or become selectors.
 
 ## Validation and residual risk
 
+The optional, disabled-by-default AI routes are specified separately in
+[AI control plane](ai-control-plane.md): `GET /api/ai/status` requires an
+explicit check header and `POST /api/ai/ask` requires a per-launch operator
+token, exact same-origin request, and one fixed question ID. They are not part
+of the original read-only telemetry routes described above. The POST writes
+only the separate private AI receipt ledger and bounded report snapshots;
+it has no host-security or firewall apply capability.
+
 `tests/test_dashboard_boundaries.py` covers oversized, duplicate, type-confused,
 malformed, and aliased inputs; refusal before store access; post-error liveness;
 existing projection fields; exact hub-plan parity; response budgets; static-plan

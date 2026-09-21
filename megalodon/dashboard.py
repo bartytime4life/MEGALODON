@@ -9,18 +9,21 @@ from __future__ import annotations
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
+import hmac
 import json
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 import webbrowser
+import secrets
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .dashboard_commands import local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .hub import integration_plan
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
+from .config import AISettings, BlockingSettings
 from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
 from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYTES, read_suricata_projection
@@ -366,6 +369,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
     setup_evidence: bytes | None = None
     local_checks: LocalChecks | None = None
     javascript: bytes = DASHBOARD_JS.encode()
+    ai_settings: AISettings = AISettings()
+    ai_receipt_path: Path | None = None
+    ai_operator_token: str | None = None
+    ai_blocking: BlockingSettings = BlockingSettings()
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -390,6 +397,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path == "/api/ai/status":
+            from .ai_provider import status
+            if not self.ai_settings.enabled and not route.query:
+                self._send_json(status(self.ai_settings, probe=False))
+                return
+            token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
+            if (route.query or self.headers.get_all("X-Megalodon-AI-Check", []) != ["1"]
+                    or self.ai_operator_token is None or len(token_values) != 1
+                    or not hmac.compare_digest(token_values[0], self.ai_operator_token)):
+                self._send_json({"error": "explicit local AI check required"}, status=403)
+                return
+            self._send_json(status(self.ai_settings, probe=True))
             return
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
@@ -641,7 +661,47 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
+        if self.path == "/api/ai/ask":
+            self._ai_ask()
+            return
         self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
+
+    def _ai_ask(self) -> None:
+        token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
+        expected_origin = f"http://{self.headers.get('Host')}"
+        if (not self.ai_settings.enabled or self.ai_operator_token is None
+                or len(token_values) != 1
+                or not hmac.compare_digest(token_values[0], self.ai_operator_token)
+                or self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "AI operator authorization required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 3 or not lengths[0].isascii()
+                or not lengths[0].isdigit() or not 1 <= int(lengths[0]) <= 256):
+            self._send_json({"error": "invalid AI request length"}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            from .ai_broker import Broker, ReceiptStore
+            from .ai_interface import QUESTIONS, ask
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
+            if (type(body) is not dict or set(body) != {"question"}
+                    or type(body["question"]) is not str or body["question"] not in QUESTIONS):
+                raise ValueError("invalid AI question")
+            if self.ai_receipt_path is None:
+                raise ValueError("AI audit path unavailable")
+            with ReceiptStore(self.ai_receipt_path) as receipts:
+                answer = ask(body["question"], Broker(
+                    self.store, receipts, self.ai_settings, self.ai_blocking))
+            self._send_json(answer)
+        except (ValueError, OSError, RuntimeError) as exc:
+            self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
+                             "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
 
     def _reference_library(self) -> ReferenceLibrary:
         library = self.reference_library
@@ -764,6 +824,9 @@ def serve(
     inspect_tools: bool = False, source_available: bool = True,
     refresh_seconds: int = 5, event_limit: int = 50,
     open_browser: bool = False,
+    ai_settings: AISettings | None = None,
+    ai_receipt_path: Path | None = None,
+    ai_blocking: BlockingSettings | None = None,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
@@ -772,6 +835,7 @@ def serve(
     )
     event_limit = _bounded_dashboard_integer(event_limit, "dashboard event_limit", 1, MAX_EVENT_LIMIT)
     advisory_snapshot = advisory_receipt_snapshot(advisory_receipt)
+    ai_operator_token = secrets.token_urlsafe(24) if ai_settings is not None and ai_settings.enabled else None
     host = loopback_host(host, allow_remote=allow_remote)
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
@@ -794,12 +858,18 @@ def serve(
             "setup_evidence": setup_evidence,
             "local_checks": LocalChecks(store, source_available=source_available) if inspect_tools else None,
             "javascript": javascript,
+            "ai_settings": ai_settings or AISettings(),
+            "ai_receipt_path": ai_receipt_path,
+            "ai_operator_token": ai_operator_token,
+            "ai_blocking": ai_blocking or BlockingSettings(),
         },
     )
     server = ThreadingHTTPServer((host, port), handler)
     try:
         url = f"http://{host}:{port}/"
         print(f"MEGALODON dashboard listening on {url}", flush=True)
+        if ai_operator_token is not None:
+            print(f"MEGALODON AI operator token (this launch only): {ai_operator_token}", flush=True)
         if open_browser:
             def open_bound_dashboard() -> None:
                 try:
