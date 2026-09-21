@@ -64,7 +64,7 @@ jobs:
               ("demo-threat-114", ("--demo-threat", "--max-events", "115"), 114),
           )
           results = []
-          with tempfile.TemporaryDirectory(prefix="megalodon-m1-", dir=Path.cwd()) as private_dir:
+          with tempfile.TemporaryDirectory(prefix="megalodon-m1-") as private_dir:
               for name, options, expected in cases:
                   command = (sys.executable, "-m", "megalodon", "run", "--source", "sample", *options)
                   try:

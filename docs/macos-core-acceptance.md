@@ -1,7 +1,7 @@
 # macOS core acceptance
 
-Status: **Proposed M-track; hosted M1 sample CI scaffold only; native macOS
-acceptance unproved.**
+Status: **Proposed M-track; hosted M1 sample CI probe currently fails; native
+macOS acceptance unproved.**
 
 This document is the macOS counterpart to `docs/windows-core-acceptance.md`.
 It tracks what has and has not been evaluated on macOS, following the same
@@ -21,7 +21,7 @@ Windows track, starting from the narrowest, lowest-risk surface.
 | Stage | Scope | Status |
 | --- | --- | --- |
 | M0 | This document; no code change | Proposed |
-| M1 | Synthetic/JSONL-only core evaluation; no capture, no adapters, no firewall backend | Hosted sample-only CI candidate; acceptance open |
+| M1 | Synthetic/JSONL-only core evaluation; no capture, no adapters, no firewall backend | Hosted sample probe failed; M1 remains open |
 | M2 | Offline TShark adapter, mirroring the Linux contract | Not started |
 | M3 (deferred) | Native live capture evaluation (BPF-based) | Not proposed; gated on M1/M2 evidence and a separate permission/isolation review |
 
@@ -67,6 +67,15 @@ private temporary directory. It does not run JSONL replay or a dashboard
 listener/browser check. `macos-latest` is a mutable hosted runner label, and a
 result on one architecture cannot satisfy the separate Apple Silicon and Intel
 rows or operator review. The unsupported platform catalog remains unchanged.
+
+At PR #339 head `af43e527fdaeb17bc7fea7bbd70b7969b743ab96`, hosted
+[run 35639424857](https://github.com/bartytime4life/MEGALODON/actions/runs/35639424857)
+recorded macOS 26.6.2 (build 25G83), arm64, Python 3.12.10, and a failed first
+sample command with `STORAGE_PATH:DATABASE_CHANGED`. The demo-threat command
+did not run. This is a failure receipt, not a diagnosed cause or M1 acceptance.
+The storage path-identity guard must not be relaxed to make the probe pass;
+investigate the macOS descriptor/SQLite behavior and review any runtime change
+separately.
 
 ## M2 — offline TShark adapter
 
