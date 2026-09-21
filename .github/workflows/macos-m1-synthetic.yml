@@ -51,6 +51,7 @@ jobs:
           import json
           import os
           from pathlib import Path
+          import re
           import subprocess
           import sys
           import tempfile
@@ -63,7 +64,7 @@ jobs:
               ("demo-threat-114", ("--demo-threat", "--max-events", "115"), 114),
           )
           results = []
-          with tempfile.TemporaryDirectory(prefix="megalodon-m1-") as private_dir:
+          with tempfile.TemporaryDirectory(prefix="megalodon-m1-", dir=Path.cwd()) as private_dir:
               for name, options, expected in cases:
                   command = (sys.executable, "-m", "megalodon", "run", "--source", "sample", *options)
                   try:
@@ -75,7 +76,13 @@ jobs:
                       results.append({"case": name, "status": "timeout"})
                       break
                   if completed.returncode != 0:
-                      results.append({"case": name, "status": "failed", "exit_code": completed.returncode})
+                      diagnostic = completed.stderr.strip()
+                      if re.fullmatch(r"megalodon: [A-Z_]+(?::[A-Z_]+)?", diagnostic) is None:
+                          diagnostic = "unclassified"
+                      results.append({
+                          "case": name, "status": "failed", "exit_code": completed.returncode,
+                          "diagnostic": diagnostic,
+                      })
                       break
                   try:
                       receipt = json.loads(completed.stdout)
@@ -110,6 +117,7 @@ jobs:
               message = "Sample command outcomes: " + "; ".join(
                   f"{row['case']}={row['status']}"
                   + (f" (processed={row['processed']})" if "processed" in row else "")
+                  + (f" ({row['diagnostic']})" if "diagnostic" in row else "")
                   for row in rows
               )
           else:
