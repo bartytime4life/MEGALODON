@@ -67,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    ai = sub.add_parser("ai", help="bounded local AI doctor, question and tool broker")
+    ai.add_argument("operation", choices=("doctor", "ask", "tool"))
+    ai.add_argument("--config", help="explicit TOML settings file")
+    ai.add_argument("--question", choices=("seeing", "changed", "alerts", "integrations", "model", "safe", "plan", "report"))
+    ai.add_argument("--request", help="one closed JSON tool request; no commands or paths")
+
     capabilities = sub.add_parser("capabilities", help="print the static platform and free-software catalog")
     capabilities.add_argument(
         "--platform",
@@ -779,6 +785,7 @@ def _run(args: argparse.Namespace) -> int:
 def _dashboard(args: argparse.Namespace) -> int:
     from .dashboard import loopback_host, serve, UnconfiguredDashboardReader
     from .offline_projection import load_offline_projection
+    from .config import AISettings, BlockingSettings
 
     try:
         settings = _load(args.config)
@@ -806,6 +813,9 @@ def _dashboard(args: argparse.Namespace) -> int:
                 ),
                 event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
                 open_browser=getattr(args, "open_browser", False),
+                ai_settings=getattr(settings, "ai", AISettings()),
+                ai_receipt_path=settings.db_path.with_name("megalodon-ai-receipts.db"),
+                ai_blocking=getattr(settings, "blocking", BlockingSettings()),
             )
     except KeyboardInterrupt:
         print("\nMEGALODON dashboard stopped.")
@@ -841,6 +851,94 @@ def _dashboard_reader(path: Path, *, allow_missing: bool = False):
         return
     with store:
         yield store
+
+
+def _ai(args: argparse.Namespace) -> int:
+    from dataclasses import replace
+    from uuid import uuid4
+    from .ai_broker import Broker, BrokerError, ReceiptStore
+    from .ai_interface import ask
+    from .ai_provider import AIProviderError, inventory, status
+    from .provider_containment import qwen_provider_posture
+    import shutil
+    import subprocess
+
+    try:
+        settings = _load(args.config)
+        receipt_path = settings.db_path.with_name("megalodon-ai-receipts.db")
+        if args.operation == "doctor":
+            posture = qwen_provider_posture()
+            bound_uids = [binding["uid"] for binding in posture["bindings"]]
+            model_status = status(replace(settings.ai, enabled=True), probe=True)
+            model_inventory = inventory(settings.ai)
+            try:
+                gpu = subprocess.run(["/usr/bin/nvidia-smi", "--query-gpu=name,driver_version,compute_cap",
+                                      "--format=csv,noheader"], capture_output=True, text=True,
+                                     timeout=3, check=False)
+                driver_usable = gpu.returncode == 0 and bool(gpu.stdout.strip())
+            except (OSError, subprocess.TimeoutExpired):
+                driver_usable = False
+            try:
+                unit = subprocess.run(["/usr/bin/systemctl", "show", "ollama",
+                                       "-p", "IPAddressDeny", "-p", "IPAddressAllow",
+                                       "--no-pager"], capture_output=True, text=True,
+                                      timeout=3, check=False)
+                unit_fields = dict(line.split("=", 1) for line in unit.stdout.splitlines() if "=" in line) if unit.returncode == 0 else {}
+                deny = unit_fields.get("IPAddressDeny", "")
+                allow = unit_fields.get("IPAddressAllow", "")
+                egress_restricted = ("any" in deny or ("0.0.0.0/0" in deny and "::/0" in deny)) and "127.0.0.0/8" in allow
+            except (OSError, subprocess.TimeoutExpired):
+                egress_restricted = False
+            checks = {
+                "ollama_installed": shutil.which("ollama") is not None,
+                "ollama_loopback_only": posture["loopback_only"] is True,
+                "ollama_egress_restricted": egress_restricted,
+                "ollama_service_non_root": bool(bound_uids) and all(uid != 0 for uid in bound_uids),
+                "nvidia_gpu_detected": Path("/proc/driver/nvidia/version").exists() and Path("/dev/nvidia0").exists(),
+                "nvidia_driver_usable": driver_usable,
+                "qwen_model_installed": model_inventory["model_present"] is True and model_inventory["digest_matches"] is True,
+                "qwen_inference_healthy": model_status["state"] == "model_ready",
+                "adapter_connected": model_status["state"] == "model_ready",
+                "tool_broker_available": True,
+                "audit_database_writable": False,
+                "firewall_authority_disabled": True,
+            }
+            try:
+                with ReceiptStore(receipt_path) as receipts:
+                    receipts.append(str(uuid4()), {"state": "observed", "tool": "megalodon.ai.doctor",
+                                                  "authority_level": 0, "authorization_source": "operator_cli",
+                                                  "model": settings.ai.model, "model_request": "none",
+                                                  "validated_arguments": {}, "result": {"checked": True},
+                                                  "error_code": None, "duration_ms": 0,
+                                                  "evidence_references": []})
+                checks["audit_database_writable"] = True
+            except (OSError, ValueError, sqlite3.Error):
+                pass
+            print(json.dumps({"schema": "megalodon-ai-doctor-v1", "checks": checks,
+                              "model_status": model_status, "model_inventory": model_inventory,
+                              "operator_action": "Apply the loopback and egress-restricted override in docs/ai-control-plane.md, then restart Ollama" if (posture["loopback_only"] is not True or not egress_restricted) else None},
+                             sort_keys=True))
+            return 0 if all(checks.values()) else 1
+        with ReceiptStore(receipt_path) as receipts, _dashboard_reader(settings.db_path, allow_missing=True) as reader:
+            broker = Broker(reader, receipts, settings.ai, settings.blocking)
+            if args.operation == "tool":
+                if args.request is None or len(args.request.encode()) > 2048:
+                    raise BrokerError("INVALID_REQUEST")
+                try:
+                    from .ai_provider import _strict_pairs
+                    request = json.loads(args.request, object_pairs_hook=_strict_pairs)
+                except ValueError:
+                    request = None
+                result = broker.dispatch(request, authorization_source="operator_cli")
+            else:
+                if args.question is None:
+                    raise BrokerError("UNKNOWN_QUESTION")
+                result = ask(args.question, broker)
+            print(json.dumps(result, sort_keys=True, allow_nan=False))
+            return 0 if result.get("state", result.get("execution_state")) in {"observed", "applied"} else 1
+    except (AIProviderError, BrokerError, OSError, ValueError, sqlite3.Error) as exc:
+        print(f"megalodon ai: {getattr(exc, 'code', 'UNAVAILABLE')}", file=sys.stderr)
+        return 2
 
 
 def _database_migrate(args: argparse.Namespace) -> int:
@@ -997,6 +1095,8 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(raw_argv)
     if args.command == "capabilities":
         code = _capabilities(args)
+    elif args.command == "ai":
+        code = _ai(args)
     elif args.command == "readiness":
         code = _readiness(args)
     elif args.command == "posture":

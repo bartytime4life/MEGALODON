@@ -17,6 +17,9 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(settings.blocking.dry_run)
         self.assertFalse(settings.blocking.auto_block)
         self.assertEqual(settings.storage.max_database_bytes, 256 * 1024 * 1024)
+        self.assertFalse(settings.ai.enabled)
+        self.assertEqual(settings.ai.endpoint, "http://127.0.0.1:11434")
+        self.assertEqual(settings.ai.model, "qwen2.5:7b-instruct-fp16")
         self.assertEqual(
             tuple(str(network) for network in settings.blocking.allowlist),
             (
@@ -67,6 +70,25 @@ class ConfigTests(unittest.TestCase):
                     config.write_text(f"[dashboard]\n{value}\n", encoding="utf-8")
                     with self.assertRaises(ValidationError):
                         load_settings(config)
+
+    def test_ai_configuration_refuses_remote_or_unpinned_provider(self):
+        invalid = (
+            'endpoint = "http://0.0.0.0:11434"',
+            'endpoint = "https://example.invalid"',
+            'provider = "cloud"',
+            'model = "llama3"',
+            'model_digest = "missing"',
+            'timeout_seconds = 16',
+            'max_context = 100000',
+            'tool = "shell"',
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.toml"
+            for line in invalid:
+                with self.subTest(line=line):
+                    path.write_text("[ai]\n" + line + "\n", encoding="utf-8")
+                    with self.assertRaises(ValidationError):
+                        load_settings(path)
 
     def test_detection_settings_reject_lossy_numeric_coercion_and_unsafe_caps(self):
         invalid_values = (

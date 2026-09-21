@@ -67,6 +67,12 @@ display text. Invalid returned objects or serialization failures cannot discard
 the command's completed dossier. The original dashboard remains v1-only and
 does not gain an anomaly consumer or invocation endpoint from this validation.
 
+A separate, opt-in [AI control plane](docs/ai-control-plane.md) now has fixed
+metadata-only tools, a private AI receipt ledger, explicit model health, and
+an operator-token-gated HUD question route. This is a draft capability, not
+acceptance of Ollama process containment or loaded model provenance. It does
+not expand either original advisory policy or enable firewall application.
+
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
 metadata queue. The callback does not block; the first overflow makes the
@@ -102,10 +108,12 @@ capture-buffer sizing or loss-free operation under production load.
    `planned`, or `failed` status are stored in the action ledger. `applied`
    remains a closed compatibility value, but the evaluation-release candidate
    has no firewall path that produces it.
-8. **Dashboard is read-only.** The HTTP surface has no mutation endpoint, and
-   its separate store uses SQLite `mode=ro`, `query_only`, and a deny-by-default
-   SQL authorizer. POSIX additionally requires an existing compatible private
-   database; native Windows confidentiality remains an ACL acceptance gate.
+8. **Core telemetry dashboard is read-only.** Its separate store uses SQLite
+   `mode=ro`, `query_only`, and a deny-by-default SQL authorizer. POSIX
+   additionally requires an existing compatible private database; native
+   Windows confidentiality remains an ACL acceptance gate. The optional,
+   token-gated AI question POST writes only a separate private AI receipt and
+   bounded report snapshot; it cannot mutate core telemetry or the firewall.
 9. **Loopback binds only.** The dashboard refuses non-loopback addresses and
    the legacy remote opt-in. It does not provide remote authentication.
 10. **Fail closed for live response.** Every CLI and direct-backend apply
@@ -137,6 +145,11 @@ capture-buffer sizing or loss-free operation under production load.
     monotonic deadline, active cancellation, bounded HTTP protocol framing and body,
     fixed inference options, and token/text limits. Model output cannot become
     a detection, evidence item, command, target, query, or response action.
+    This statement describes the original run-count advisory API; the separate
+    control plane has its own closed broker and authority classes.
+17. **Model requests cannot grant authority.** The opt-in broker validates
+    structured tool requests against fixed schemas and writes distinct intent
+    and outcome receipts. Level 2 proposals cannot be applied in this release.
 
 ## 3. Data contracts
 
@@ -410,7 +423,7 @@ links in a separate least-data reader subclass; sample and unlinked records
 are excluded. Missing or invalid data stays unavailable. The existing
 five-field recent-detection API remains compatible. Traffic validation is not
 proof of capture authenticity, full coverage, local direction or sensor health.
-The HUD reports successful same-origin read-only service connectivity separately
+The HUD reports successful same-origin telemetry connectivity separately
 from telemetry availability. Its complete 503 envelope is validated like a data
 response; malformed transport or calendar-normalized timestamps fail closed.
 
@@ -520,6 +533,11 @@ The dashboard exposes only:
 - `GET /api/reference/port` — one `transport=tcp|udp|sctp|dccp` and one
   canonical decimal `port=0..65535`;
 - `GET /api/reference/protocol` — one canonical decimal `number=0..255`.
+- `GET /api/ai/status` — an explicit-header and operator-token-gated local inference health
+  check; never automatic polling or a TCP-only ready claim;
+- `POST /api/ai/ask` — an optional fixed-question AI route with an ephemeral
+  operator token, exact same-origin and Host checks, closed 256-byte JSON body,
+  a fixed tool subset, and private AI receipts; it has no firewall apply path.
 
 The Integration Map and Reference Library routes do not read the telemetry
 store, start an analyzer, or call another service. Their query grammars reject

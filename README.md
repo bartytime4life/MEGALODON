@@ -10,7 +10,7 @@
 MEGALODON is a local-first defensive network telemetry MVP with a Python
 metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
-audit trail, and offers a read-only localhost dashboard projection. Live capture, offline
+audit trail, and offers a read-only localhost telemetry projection. Live capture, offline
 analysis, and firewall planning are separate choices, not mandatory parts of
 every configuration. The evaluation-release candidate is plan-only and does
 not support live firewall application.
@@ -93,11 +93,19 @@ reject non-normal completions and misleading text controls, while preserving
 deterministic evidence on malformed AI results. Anomaly dashboard display,
 installed-model acceptance and measured detection accuracy remain separate gates.
 
+The opt-in [local AI control plane](docs/ai-control-plane.md) adds fixed
+metadata tools, explicit model health, a bounded report action and auditable
+firewall proposals. It is disabled by default and does not enable live
+firewall application. The [2026-09-21 host observation](docs/ai-host-observation-2026-09-21.md)
+records the operator's current Ollama exposure and GPU uncertainty.
+
 - observe only: a fresh configuration does not mutate the firewall;
 - metadata only: packet payloads and payload-derived hashes are not represented;
 - closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
   provenance and cannot carry arbitrary payload-like fields;
-- local only: the dashboard defaults to `127.0.0.1:8787` and has no write API;
+- local only: the dashboard defaults to `127.0.0.1:8787`; its optional AI
+  question POST requires an ephemeral operator token and can write only the
+  separate AI receipt ledger and bounded report snapshots;
 - isolated dashboard storage: on POSIX, reading telemetry requires an existing compatible private
   database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
   authorizer; it cannot create or migrate the audit database;
@@ -263,7 +271,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Python `venv` and `pip` | Isolated editable installation | Recommended |
 | SQLite (`sqlite3`) | Local audit database | Included in the Python standard library; the dashboard refuses SQLite older than 3.22.0 because read-only WAL support is required |
 | Scapy `>=2.5,<3` | Optional Linux live metadata capture | Install with the `capture` extra only for that workflow |
-| Qwen through a local Ollama provider | Optional manual advisory explanation only | Operator-installed and separately run; the adapter and one-shot anomaly command never configure a service, background monitor, remote endpoint, tool-use mode, or automatic response. [`docs/qwen-provider-hardening.md`](docs/qwen-provider-hardening.md) is an optional, operator-applied hardening recipe for that separate installation; MEGALODON does not install, apply, or verify it beyond the read-only observation in [`megalodon/provider_containment.py`](megalodon/provider_containment.py) |
+| Qwen through a local Ollama provider | Optional original advisory plus separate opt-in broker | Operator-installed and separately run. The original advisory and anomaly policies remain closed; the draft [AI control plane](docs/ai-control-plane.md) adds fixed tools and private receipts but no arbitrary command or firewall apply. [`docs/qwen-provider-hardening.md`](docs/qwen-provider-hardening.md) remains an operator-applied host recipe. |
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
 | Suricata | Optional external producer for the closed alert envelope | The Linux file reader and durable consumer never invoke or require the Suricata binary; they accept only the separately prepared contract envelope/publication |

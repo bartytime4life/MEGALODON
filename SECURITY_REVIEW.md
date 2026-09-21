@@ -107,6 +107,17 @@ explicitly enabled Qwen provider entry point. Application-level refusal and
 literal-loopback transport do not establish containment of the separately
 operated provider, its shared services or its own outbound connections.
 
+The opt-in [AI control plane](docs/ai-control-plane.md) is a separate draft
+interface. It gates inference on an observed loopback-only listener and exact
+local manifest digest, uses fixed metadata tools, and records AI tool events
+in a private SQLite ledger. A model-selected request cannot authorize itself,
+invoke a command, access arbitrary files or network destinations, or apply a
+firewall rule. The HUD's question POST requires a per-launch operator token,
+exact Origin and bound Host. Model-process egress, artifact authenticity,
+GPU compatibility and independent review remain open under #261. The observed
+operator host currently exposes Ollama on `0.0.0.0:11434`, so the new adapter
+refuses inference until the operator corrects the systemd override.
+
 The offline reference and synthetic evaluation commands are documented in
 [docs/reference-data.md](docs/reference-data.md). They do not start ingestion
 or the dashboard, populate the audit store, or invoke response policy. The
@@ -164,7 +175,7 @@ homoglyph risks or attest provider egress containment.
 | High | Critical findings permanently auto-block an IP | False positives can cut off users, services, or an upstream network | Automatic and operator-requested live blocking are unsupported; proposed blocks remain time-limited plans only |
 | High | No allowlist precedence or protected-network policy | A detector can block loopback, private ranges, or management paths | Allowlist precedence and non-global rejection are enforced while producing plans; no live action follows |
 | High | No rollback, expiry, or action ledger | Operators cannot explain or safely undo a response | Supported plans are recorded in SQLite and block plans are time-limited; an unsupported apply request produces no false `applied` receipt, and live mutation stays disabled until the restoration gate below is met |
-| High | GUI design does not define authentication or bind address | A dashboard could expose threat data and controls on the LAN/WAN | Read-only dashboard binds to `127.0.0.1`, has no control endpoints, uses a separate `mode=ro`/`query_only`/SQL-authorized store, bounds its polling and recent-row budget, selects only the five recent-detection fields used by the UI, validates closed response shapes before replacing state, and serves same-origin assets under a no-inline CSP |
+| High | GUI design does not define authentication or bind address | A dashboard could expose threat data and controls on the LAN/WAN | The core telemetry dashboard binds to `127.0.0.1` and uses a separate `mode=ro`/`query_only`/SQL-authorized store. The optional AI question POST requires a per-launch operator token and exact Origin/Host, writes only the separate AI ledger, and has no firewall apply path. Same-origin assets retain a no-inline CSP. |
 | High | A loopback listener trusts any HTTP `Host` value | DNS rebinding could let a foreign browser origin read local telemetry | Every dashboard `GET` requires one exact bound-loopback `Host` value and is rejected before routing or SQLite access when the value is missing, repeated, foreign, non-canonical, or names the wrong port |
 | High | Offline reports could become a path-driven disclosure or analyzer trigger | A web request could expose case data, traverse local files, or start hostile-input processing | One operator-selected private report set is checked and its summary inputs are validated at startup; paths, records, evidence details, remote binds, uploads, and analyzer controls are excluded |
 | High | Raw payload hash/contents are part of the capture concept | Payload-derived identifiers can still disclose sensitive data; storage creates a forensic liability | Metadata-only event model; payloads are not represented or stored |
@@ -296,8 +307,9 @@ interpose on port 11434 remains outside this slice's trust proof.
    bind the registry model ID to an operator-verified local Ollama alias and
    artifact receipt, validate installed-provider compatibility and cancellation
    behavior, and obtain independent security review. Dashboard projection,
-   persistence, background execution, and model-driven action remain separate
-   gates.
+   persistence, background execution, and model-driven action require separate
+   review. The draft broker and AI ledger implement bounded pieces of these
+   capabilities; tests alone do not close the provider or independent-review gates.
 
 ## Open control register
 
@@ -375,7 +387,7 @@ validation result is not independent approval or a timeless security posture.
 | Retention/storage ([#28](https://github.com/bartytime4life/MEGALODON/issues/28)) | Per-write rollback coverage, a storage high-water stop, and preview-bound finite deletion batches exist | Select finite policy values and validate native operational failure/recovery; no cleanup job or secure-erasure claim exists |
 | SQLite recovery contract ([#256](https://github.com/bartytime4life/MEGALODON/issues/256)) | Explicit CLI routes use descriptor-pinned private files and SQLite online backup only; enforce new destinations, fixed capacity/deadline/retry/page bounds, artifact/manifest digests, full integrity/FK checks, path-free terminal receipts, and preservation of incomplete outputs. Focused Linux tests exercise real exclusive locking, `SIGINT`, destination replacement, and `RLIMIT_FSIZE` for both copy directions | Obtain concurrent high-write WAL, physical exhaustion, hard-kill/power-loss, native clock rollback, Windows ACL, and operator recovery evidence on authorized hosts. The focused tests are not operational acceptance, and no automatic cleanup, activation, release, or deployment follows |
 | Reference/evaluation integrity | Privacy-minimized IANA data is manifest-pinned in deterministic shards no larger than 76 KiB; the complete 12-scenario synthetic corpus validates before an in-memory detector run | Establish a reviewed maintenance cadence and provenance receipt for each future snapshot; use representative authorized replay before any accuracy or operational-efficacy claim |
-| Local Qwen advisory ([#165](https://github.com/bartytime4life/MEGALODON/issues/165)) | Fingerprint-pinned Airlock, an internal literal-loopback concurrency-one provider boundary, and one immutable startup-supplied receipt projected read-only in **Deep analysis & context**, with bounded routing/rendering and adversarial negative controls | Verify a real operator-owned model alias/artifact and installed Ollama lifecycle on an authorized host; keep dashboard invocation/retry/polling, persistence, background operation, detection authority, and action authority absent |
+| Local Qwen advisory ([#165](https://github.com/bartytime4life/MEGALODON/issues/165)) | Fingerprint-pinned Airlock and internal literal-loopback concurrency-one provider boundary remain unchanged. A separate draft AI broker adds token-gated HUD requests and private receipts. | Verify real artifact provenance, installed Ollama lifecycle/egress, adversarial corpus and independent review under #261 before accepting the new capability; no detection or firewall application authority follows. |
 
 Suricata issues [#9](https://github.com/bartytime4life/MEGALODON/issues/9)
 and [#24](https://github.com/bartytime4life/MEGALODON/issues/24) closed their
@@ -433,7 +445,9 @@ jobs, and SOAR mutation remain unimplemented and unauthorized.
 
 The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.
-The dashboard remains read-only and loopback-bound; no remote exposure exception
+The core telemetry dashboard remains read-only and loopback-bound; the optional
+AI question route is separately token-gated and writes only its private ledger.
+No remote exposure exception
 is created. External application installation is not evidence that MEGALODON
 has gained that application's protection or detection capability.
 
