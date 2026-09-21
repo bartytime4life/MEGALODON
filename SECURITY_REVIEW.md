@@ -9,10 +9,23 @@ closed, while #259–#261 remain open. In particular, #258 closure does not supp
 the producer-profile evidence still missing from its body. This alignment is
 not a new security scan or independent acceptance of a model or host.
 
-The manual local launcher selects an existing compatible Python environment.
-Its preflight opens the default store read-only; missing data stays absent.
-Neither preflight nor the hosted setup guide installs tools, starts sensors,
-adds an HTTP write route, or weakens storage/loopback admission.
+The source launcher selects an existing compatible Python environment. Its
+preflight opens the default store read-only; missing data stays absent. The
+separate Linux desktop installer refuses root, creates versioned releases under
+an owner-private user directory, installs only the core package, smoke-checks
+the installed import before an atomic active-release switch, and refuses unsafe,
+modified, mode-changed, symlinked, or untracked managed artifacts. Directory
+ancestry must be root/current-user-owned and non-writable by group/other unless
+a sticky directory protects its entries; public artifact parents themselves
+must not be group/world writable. An owner-private application lock refuses overlapping
+install, repair, and uninstall actions. Repair validates every replacement hash
+before its first artifact write. Uninstall removes only manifest-owned code and
+desktop files and preserves data/settings. Pip configuration and destination
+overrides are removed from installer subprocesses; explicit index/find-links,
+proxy, certificate, and timeout environment values may still select the source
+of downloaded build requirements. The source checkout is therefore not
+described as an offline artifact. Neither path installs companion tools, starts
+sensors, adds an HTTP write route, or weakens storage/loopback admission.
 
 ## HUD usability boundary
 
@@ -25,10 +38,18 @@ whole projection. Newest-candidate caps and missing provenance remain visible.
 An operator-supplied JSONL source is not authenticated capture evidence.
 
 The `hud` launch alias inspects bounded executable metadata once before listening,
-using the existing readiness contract. HTTP only returns that cached snapshot;
-there is no probe, installation, service-control or model-invocation endpoint.
+using the existing readiness contract. `/api/setup` returns that cached snapshot.
+An explicit **Check this computer** click uses the separate fixed
+`/api/local-checks` route, requiring `X-Megalodon-Check: 1` and no query arguments.
+It reads the selected store, reports the running Python/SQLite versions, and
+refreshes the same metadata-only executable and process-name observations.
+There is one collector per HUD, no overlapping probes, a five-second cache,
+and a 20 KiB response cap. No request selects paths or tools. There is no
+installation, command-execution, service-control or model-invocation endpoint.
 PATH entries can refer to mounts/symlinks, so the finite probe count is not a
 filesystem-latency guarantee. Ordinary `dashboard` startup does not inspect tools.
+Ordinary `dashboard` also refuses the local-check route. Failed checks expose
+fixed errors and cannot present expired observations as current success.
 The first-launch exception tolerates only a missing audit source, with 503
 telemetry responses. Unsafe or invalid existing stores remain refused.
 
@@ -50,9 +71,13 @@ Embedding refusal and external sign-in retain an explicit external-open fallback
 The companion app retains its own action permissions, independent of MEGALODON's
 read-only API. Changing/removing the selected bookmark unloads its frame.
 
-Terminal commands are copied only after a click, never executed. Optional startup
-paths are quoted as single POSIX shell arguments and are not stored or opened by
-the browser. These controls do not assert installation, health or authority.
+Terminal commands are copied only after a click, never executed. The relaunch
+builder uses the exact validated desktop launcher or serving Python interpreter;
+optional paths are quoted as single POSIX shell arguments and are not stored or
+opened by the browser. `--open-browser` starts one daemon browser-open attempt
+only after the loopback socket binds, so a blocking browser command cannot
+prevent request handling. These controls do not assert installation, health or
+authority.
 
 ## Executive result
 

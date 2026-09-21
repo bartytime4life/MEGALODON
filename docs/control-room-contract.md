@@ -80,8 +80,10 @@ by themselves certify WCAG conformance or a physical screen-reader experience.
 ## App capability truth matrix (third reviewed slice)
 
 The Apps view keeps four different claims separate for every supported tool.
-**Presence** is only the startup PATH observation returned by the bounded
-readiness snapshot: green means an executable candidate was found, red means
+**Presence** in the Apps matrix is the startup PATH observation returned by the
+bounded readiness snapshot. Home's **Check this computer** and software list
+show separately timestamped, explicitly refreshed observations. In the matrix,
+green means an executable candidate was found, red means
 none was found on the checked PATH, and gray means presence was not checked.
 None of those states proves package installation, version compatibility,
 configuration, usability, process state or health.
@@ -89,8 +91,8 @@ configuration, usability, process state or health.
 **MEGALODON support** describes whether the static integration profile has a
 documented command contract. **Administration** remains external because the
 HUD cannot install, update, remove or configure companion applications.
-**Health** remains unverified because the HUD does not start, stop, attach to or
-probe their processes or services. These rows must not be collapsed into one
+**Health** remains unverified: process-name observation does not start, stop,
+attach to, or request a response from a companion service. These rows must not be collapsed into one
 overall readiness badge.
 
 Operator console links are browser-only destinations. The local HUD's App viewer

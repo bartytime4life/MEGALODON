@@ -1,6 +1,7 @@
 """Display-only Linux package commands captured before dashboard startup."""
 
 from pathlib import Path
+import os
 import shlex
 import sys
 import tomllib
@@ -76,4 +77,28 @@ def local_python_lifecycle() -> dict[str, dict[str, str | None]] | None:
                 "The version range is not a pinned artifact."
             ),
         },
+    }
+
+
+def local_hud_launch() -> dict[str, str]:
+    """Return one closed relaunch context for the currently serving HUD.
+
+    The desktop installer supplies only a validated absolute launcher path. A
+    source or ordinary package launch uses the exact Python interpreter that is
+    already serving this dashboard. Nothing here executes a command.
+    """
+    launcher = os.environ.get("MEGALODON_LAUNCHER_PATH", "")
+    if os.environ.get("MEGALODON_INSTALL_MODE") == "desktop" and _absolute_command_path(launcher):
+        try:
+            candidate = Path(launcher)
+            valid_launcher = candidate.is_file() and not candidate.is_symlink()
+        except OSError:
+            valid_launcher = False
+        if valid_launcher:
+            return {"mode": "desktop", "command": shlex.join([launcher])}
+    if not _absolute_command_path(sys.executable):
+        return {"mode": "source", "command": ""}
+    return {
+        "mode": "source",
+        "command": shlex.join([sys.executable, "-m", "megalodon", "hud"]),
     }

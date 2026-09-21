@@ -7,7 +7,7 @@ import errno
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
-from threading import Thread
+from threading import Event, Thread
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -94,6 +94,35 @@ def test_loopback_server_gets_numeric_host_and_closes(monkeypatch, host, expecte
     assert handler.offline_summary == {}
     assert handler.refresh_seconds == 12
     assert handler.event_limit == 25
+    server.server_close.assert_called_once_with()
+
+
+def test_browser_opens_only_after_loopback_server_binds(monkeypatch):
+    server = Mock()
+    opener_started = Event()
+    server_started = Event()
+    opener_finished = Event()
+
+    def open_tab(url):
+        assert url == "http://127.0.0.1:8787/"
+        opener_started.set()
+        assert server_started.wait(2), "browser opener blocked the HTTP server"
+        opener_finished.set()
+        return True
+
+    def serve_forever():
+        assert opener_started.wait(2)
+        server_started.set()
+        raise KeyboardInterrupt
+
+    server.serve_forever.side_effect = serve_forever
+    factory = Mock(return_value=server)
+    monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard.webbrowser, "open_new_tab", open_tab)
+    with pytest.raises(KeyboardInterrupt):
+        dashboard.serve(object(), "127.0.0.1", 8787, open_browser=True)
+    assert factory.call_count == 1
+    assert opener_finished.wait(2)
     server.server_close.assert_called_once_with()
 
 

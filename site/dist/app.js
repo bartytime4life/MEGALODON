@@ -103,8 +103,8 @@ const integrations = [
 const workflows = {
   dashboard: {
     status: "Implemented", statusClass: "implemented", platform: "Local Linux reference", title: "Open your local evidence dashboard",
-    summary: "Run from your installed MEGALODON environment. The HUD opens with or without an audit store, checks executable presence once, and provides tool controls. Open the local address on the same computer. No cloud account or readiness-file export is needed locally.",
-    command: "python -m megalodon hud",
+    summary: "Install the reviewed checkout for your user, then open MEGALODON from the application menu. The HUD opens with or without an audit store and provides explicit local checks. No cloud account or readiness-file export is needed locally.",
+    command: "./scripts/install-local.sh",
     produces: ["Read-only view of your stored events", "Source-qualified detection links", "Available run receipts"],
     refuses: ["Remote exposure", "Host control", "Automatic sensor startup"],
     boundary: "Stored evidence is not proof of a currently running sensor. Check run timestamps and terminal outcomes."
@@ -465,7 +465,8 @@ renderIntegrationGrid();
 renderToolInspector();
 renderWorkflow("dashboard");
 
-$('#copy-hud-start').addEventListener('click', () => copyText('python -m megalodon hud', $('#copy-hud-start')));
+$('#copy-local-install').addEventListener('click', () => copyText('./scripts/install-local.sh', $('#copy-local-install')));
+$('#copy-hud-start').addEventListener('click', () => copyText('./scripts/start-local.sh', $('#copy-hud-start')));
 $('#tool-search').addEventListener('input', () => { state.toolQuery = $('#tool-search').value.slice(0, 120).trim().toLowerCase(); renderIntegrationGrid(); renderToolInspector(); });
 $('#tool-quick-filter').addEventListener('change', () => { state.toolFilter = $('#tool-quick-filter').value; renderIntegrationGrid(); renderToolInspector(); });
 

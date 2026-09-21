@@ -25,15 +25,65 @@ threat-intelligence service, packet-forensics suite, or authorization to change
 a host. A detection or offline candidate is evidence for review, not proof of
 malicious activity.
 
-## Start on this Linux PC
+## Install on this Linux PC
 
-From an existing reviewed checkout, run `./scripts/start-local.sh --check`, then
-`./scripts/start-local.sh`. Open the printed localhost address and keep the
+From an existing reviewed checkout, install MEGALODON for your current Linux
+user:
+
+```bash
+./scripts/install-local.sh
+```
+
+Then open **MEGALODON** from the application menu. The desktop launcher starts
+the loopback HUD in a terminal and opens your browser only after the server has
+bound successfully. Keep that terminal open; **Ctrl+C** stops the HUD.
+
+The installer creates a private application environment, stable launchers, an
+application-menu entry, and an owner-private settings file. It refuses root and
+`sudo`, does not install optional tools, and never starts sensors, capture, or
+automatic login startup. Python may download the package's declared build
+requirements while installing this checkout. Pip destination overrides and pip
+configuration files are ignored so the package cannot be redirected outside the
+private application release.
+
+Use the included manager for maintenance:
+
+```bash
+~/.local/bin/megalodon-manage status
+~/.local/bin/megalodon-manage repair
+~/.local/bin/megalodon-manage uninstall
+```
+
+Running the installer from a newer reviewed checkout upgrades the application
+only after the new private release passes an import check. A failed upgrade
+keeps the selected release intact. Uninstall removes managed code and desktop
+artifacts while preserving local data and settings.
+
+## Run the checkout without installing
+
+For a temporary source launch, run:
+
+```bash
+./scripts/start-local.sh
+```
+
+Open the printed localhost address and choose **Home → Data and tools →
+Check this computer**. The buttons check the running environment, selected
+data file, and optional tool availability. Use the software list to open
+official download pages, and **Help** to find the next step. Keep the
 terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
 Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
-See the [local PC setup guide](docs/local-pc-setup.md) for environment selection,
-data choices and troubleshooting.
+
+**[Start with the visual guide](docs/gui-quick-start.md)** ·
+**[Find software downloads](docs/software-downloads.md)** ·
+**[Fix a startup problem](docs/local-pc-setup.md#troubleshooting)**
+
+Only Python 3.11+ with SQLite support is needed to open the HUD from this
+checkout. SQLite comes with the standard Python build; optional tools are
+organized by purpose. The [local PC setup guide](docs/local-pc-setup.md) covers
+environment selection, data choices and the optional terminal preflight
+`./scripts/start-local.sh --check`.
 
 ## Safety defaults
 
@@ -79,7 +129,9 @@ record delivery state; they do not override the checked-in contracts.
 
 | Need | Canonical document |
 | --- | --- |
-| Product boundary, commands, and first run | This README |
+| Product boundary, desktop install, commands, and first run | This README and [local PC setup](docs/local-pc-setup.md) |
+| Click-by-click setup, checks, downloads, and navigation | [Visual quick start](docs/gui-quick-start.md) |
+| Required software and optional tools, with official links | [Software downloads](docs/software-downloads.md) |
 | Runtime behavior and acceptance boundary | [`SPECIFICATION.md`](SPECIFICATION.md) |
 | Threat model and production controls | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
 | Red/blue/purple validation and future AI gates | [`docs/red-blue-security-guide.md`](docs/red-blue-security-guide.md) |

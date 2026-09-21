@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="ocean" x1="18" y1="12" x2="108" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#102c3b"/>
+      <stop offset="1" stop-color="#061017"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ocean)" stroke="#51e6cf" stroke-width="5" d="M64 7 111 25v35c0 29-18 51-47 62C35 111 17 89 17 60V25L64 7Z"/>
+  <path fill="none" stroke="#6ed8ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="9" d="m35 85 8-44 21 30 21-30 8 44"/>
+  <circle cx="64" cy="91" r="5" fill="#51e6cf"/>
+</svg>

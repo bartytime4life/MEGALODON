@@ -36,6 +36,7 @@ server an Internet-facing production service.
 | `/assets/dashboard.js` | No application query contract | Composed local script, one final bootstrap |
 | `/api/config` | None | Read-only flag, refresh interval, event limit, offline-selection availability |
 | `/api/setup` | None | Startup source state plus optional executable-presence and process-name snapshots |
+| `/api/local-checks` | None; requires `X-Megalodon-Check: 1` | Explicit HUD-only read of runtime versions, selected-store readability, executable presence and process names |
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
 | `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
 | `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
@@ -65,6 +66,37 @@ pairs; it omits process IDs, command lines, paths, users and host identity.
 Standalone tools report `not_applicable`. Query arguments and POST are refused.
 Repeated GETs and browser refresh never repeat either startup observation. The
 client validates both receipts; no report import is needed locally.
+
+**Check this computer** uses a separate `/api/local-checks` endpoint. It is
+enabled only for `serve(..., inspect_tools=True)` (the `hud` command), accepts no
+query options, and requires exactly one `X-Megalodon-Check: 1` header. The browser
+calls it only on an explicit check click, using its five-second abort budget;
+it is not part of startup or telemetry polling. No CORS permission is supplied.
+The startup `/api/setup` snapshot remains unchanged.
+
+The closed `dashboard-local-checks-v1` result contains `checked_at`, `environment`
+(`python_version`, `sqlite_version`, `platform`), `source` (one `status`),
+`readiness`, and `runtime`. Source status is `available`, `not_configured`, or
+`unavailable`: a bounded summary read on the already selected reader establishes
+readability only, not qualified traffic or collection health. A missing-at-start
+source is not reopened. No request can choose a path, command, tool or target.
+
+One collector per server serializes checks without waiting on its lock. An
+in-flight check returns fixed HTTP 429 plus `Retry-After: 5`; successful bytes
+are cached for five seconds. Missing header or non-HUD mode returns 403, invalid
+query returns 400, and collection/serialization failure returns a fixed 503.
+The response is at most 20 KiB. A failed refresh cannot return an expired cached
+result as fresh. The browser validates the complete receipt and offers a local
+JSON download; it reports failed/previous results as unavailable or stale.
+
+Discovery uses fixed executable names and bounded PATH metadata operations.
+Process observation reads at most 4,096 numeric `/proc` entries and at most 129
+bytes from each `comm` file. These are operation/size bounds, not an OS or
+filesystem latency deadline; browser abort does not cancel a kernel read. The
+single collector prevents overlapping discovery if an underlying read stalls.
+No executable is launched, imported or read for content; no network destination
+is contacted by the collector and no configuration, database, service or
+firewall is changed. Filesystem metadata can still resolve through host mounts.
 
 Only `DASHBOARD_STORE:NO_DIRECTORY` and `DASHBOARD_STORE:NO_DATABASE` can produce
 the unconfigured first-launch reader. It returns no telemetry; summary, events
@@ -113,6 +145,11 @@ Links open a separate tab with no opener/referrer; they do not prove connectivit
 The optional startup form builds quoted Linux commands without path access or
 execution. Clipboard operations require a user click and expose a manual-copy
 fallback message.
+
+Home's software list separates runtime essentials from optional workflows. Its
+download buttons and Apps acquisition buttons open fixed publisher pages with
+no opener/referrer. They do not fetch or execute installers. The hosted site
+shares acquisition links only; it cannot invoke the localhost machine check.
 
 ## Optional Suricata evidence snapshot
 
