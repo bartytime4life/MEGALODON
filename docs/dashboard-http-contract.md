@@ -21,11 +21,12 @@ retains its same-origin CSP, no-store responses, no-referrer policy, framing
 prohibition, MIME sniffing protection, and restricted browser permissions. There
 is no CORS permission or external script/font fetch.
 
-`POST` is refused with 405 and `Allow: GET`. Other unsupported methods remain
-unsupported; this change does not add HEAD or a mutation API. Unknown paths return
-404. Fixed validation errors do not echo request values, private paths, or stack
-traces. None of these HTTP guards makes Python's threaded development-style HTTP
-server an Internet-facing production service.
+`POST` is accepted only for the optional, token-gated `/api/ai/ask` route.
+Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
+methods remain unsupported. Unknown paths return 404. Fixed validation errors
+do not echo request values, private paths, or stack traces. None of these HTTP
+guards makes Python's threaded development-style HTTP server an Internet-facing
+production service.
 
 ## Route inventory
 
@@ -41,6 +42,7 @@ server an Internet-facing production service.
 | `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
 | `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
+| `/api/ingestion-runs` | Optional `limit` | Newest 1–25 stored ingestion receipts, not source liveness |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
 | `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
 | `/api/suricata` | None | Not configured, unavailable, or one startup snapshot of the separate Suricata store |
@@ -48,6 +50,11 @@ server an Internet-facing production service.
 | `/api/reference/port` | Exactly `transport` and `port` | One bounded registration-context lookup |
 | `/api/reference/protocol` | Exactly `number` | One bounded IP-protocol registration lookup |
 | `/api/integrations` | Optional `platform` | Existing static hub plan for one documentation profile |
+| `/api/ai/status` | None; explicit check header and operator token | One optional local model status check |
+
+`POST /api/ai/ask` has a separate fixed-question body and per-launch token,
+Origin, Host, content-type, and length checks. It writes to the separate
+private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
 
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
