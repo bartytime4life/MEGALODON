@@ -4,6 +4,9 @@ about: Report a reproducible repository or local MVP defect
 title: "[Bug] "
 ---
 
+Template status: **Contract only.** This form collects a report, not an
+acceptance receipt.
+
 ## Observed behavior
 
 Describe what happened, including whether the state was failed, unavailable,

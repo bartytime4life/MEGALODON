@@ -4,6 +4,9 @@ about: Propose a bounded change or identify a missing acceptance receipt
 title: "[Proposal] "
 ---
 
+Template status: **Contract only.** This form records a proposal or missing
+receipt, not implementation or acceptance.
+
 ## Operator task or evidence gap
 
 Describe the concrete task or missing receipt. Link the relevant contract,

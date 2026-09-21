@@ -1,3 +1,6 @@
+Template status: **Contract only.** This form collects review evidence; the
+submission's own status must be stated from its actual change and tests.
+
 ## Defect or operator task
 
 Describe the specific defect, evidence gap, or task. Link the motivating
