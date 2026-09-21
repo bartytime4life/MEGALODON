@@ -1,6 +1,17 @@
 # Unified roadmap: repository reconciliation
 
-## Current readback — 2026-09-21, later main
+## Current readback — 2026-09-21, later observed main
+
+At `main@97c5798f53b539bbcb487eaa7c8ff07ac0344041` (tree
+`6384a3fe4e743cbce274d654b413f8a07c1e4cff`), #334 has merged the
+browser-local ingestion report change: a valid all-source run receipt can be
+exported when the separate traffic projection is unavailable. It preserves
+the v1/v2 API and store schema and does not record adapter identity or
+accepted/rejected input counts. This merge is a code disposition, not a
+sensor-health or release-acceptance receipt. Issues #260, #261, and #327
+remain open at this readback.
+
+## Earlier readback — 2026-09-21, main after #333
 
 At `main@374190a57791f9ac19afeefd78afbd18d9b68919` (tree
 `376a6151a11faae2e055ec711a081de785e3f9e2`), #330 adds verification

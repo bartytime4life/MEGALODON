@@ -2,8 +2,8 @@
 
 Status: **Proposed**. This is a design and sequencing record, not an
 implementation or acceptance receipt. Basis: GitHub
-`main@374190a57791f9ac19afeefd78afbd18d9b68919` (tree
-`376a6151a11faae2e055ec711a081de785e3f9e2`) and repository files read on
+`main@97c5798f53b539bbcb487eaa7c8ff07ac0344041` (tree
+`6384a3fe4e743cbce274d654b413f8a07c1e4cff`) and repository files read on
 2026-09-21. Recheck mutable issue, PR, workflow, and Site state before acting.
 
 The current core ingestion path admits `sample`, `jsonl`, or `scapy`, commits an
