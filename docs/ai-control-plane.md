@@ -73,6 +73,13 @@ state, bounded result/error, duration and finding references. Each event hashes
 the previous event hash and its own canonical content. This is a local
 integrity chain against a trusted checkpoint, **not** a signature or protection
 against someone who can rewrite the database and its head.
+Action-status lookups now verify the retained sequence, canonical payloads,
+hash links, and receipt state transitions before returning a stored state. A
+broken chain returns `AUDIT_INTEGRITY`; an interrupted request remains
+`not_attempted`, never a completed action. `ReceiptStore.verify_chain()` also
+returns the current sequence and head for comparison with an independently
+retained head. Without that external checkpoint, a complete rewrite of the
+database and its hashes remains undetectable.
 
 `GET /api/ai/status` requires `X-Megalodon-AI-Check: 1` plus the per-launch
 operator token and performs one
