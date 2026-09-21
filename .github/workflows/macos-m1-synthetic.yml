@@ -44,7 +44,7 @@ jobs:
           set -euo pipefail
           python -m pip install -e .
           python -m pip check
-          python -m pip show setuptools
+          python -m pip show megalodon-defense
       - name: Run bounded sample commands in a private temporary directory
         run: |
           python - <<'PY'
