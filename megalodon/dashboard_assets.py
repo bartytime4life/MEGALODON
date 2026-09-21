@@ -208,7 +208,7 @@ INDEX_HTML = """<!doctype html>
     <div>
       <p class="eyebrow">AI advisory status</p>
       <h3 id="analysis-window-title" tabindex="-1">Qwen advisory receipt · checking</h3>
-      <p id="analysis-summary">Checking for one startup-supplied, display-only advisory receipt. This page cannot start Qwen or request an analysis.</p>
+      <p id="analysis-summary">Checking for one startup-supplied, display-only legacy advisory receipt. Explicit local requests use the separate control above.</p>
       <p class="analysis-trust" role="note">AI advisory; not evidence or an action.</p>
       <ul class="analysis-limitations" id="analysis-limitations" aria-label="Advisory limitations"></ul>
     </div>
@@ -1262,7 +1262,7 @@ async function loadAdvisoryReceipt() {
       await requestBoundedJSON('/api/advisory-receipt', maxAdvisoryResponseBytes)
     );
     if (receipt === null) {
-      renderAdvisoryUnavailable('No startup-supplied advisory receipt is available. This page cannot start Qwen or request an analysis.');
+      renderAdvisoryUnavailable('No startup-supplied legacy advisory receipt is available. Explicit local requests use the separate control above.');
     } else {
       renderAdvisoryReceipt(receipt);
     }
@@ -2204,9 +2204,11 @@ document.addEventListener('visibilitychange', () => {
 
 from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
 from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
+from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS + AI_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + APP_VIEWER_JS + "\nbootstrap();\n"
+INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + APP_VIEWER_JS + AI_JS + "\nbootstrap();\n"

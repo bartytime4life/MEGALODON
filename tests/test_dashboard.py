@@ -347,7 +347,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "What MEGALODON has stored" in INDEX_HTML
     assert "Inspect one source at a time" in INDEX_HTML
     assert "Qwen advisory receipt · checking" in INDEX_HTML
-    assert "This page cannot start Qwen or request an analysis." in INDEX_HTML
+    assert "Explicit local requests use the separate control above." in INDEX_HTML
+    assert "Local AI control" in INDEX_HTML
     assert "AI advisory; not evidence or an action." in INDEX_HTML
     assert "Ingestion run receipts" in INDEX_HTML
     assert 'id="ingestion-runs-panel"' in INDEX_HTML

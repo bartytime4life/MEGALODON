@@ -48,3 +48,14 @@ port = 8787
 # UI-only polling controls. They do not enable writes or network egress.
 refresh_seconds = 5
 event_limit = 50
+
+[ai]
+# Enable only after `megalodon ai doctor` confirms a loopback-only Ollama listener.
+enabled = false
+provider = "ollama"
+endpoint = "http://127.0.0.1:11434"
+model = "qwen2.5:7b-instruct-fp16"
+# Ollama's locally observed manifest digest; verify model provenance separately.
+model_digest = "59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c"
+timeout_seconds = 15
+max_context = 2048
