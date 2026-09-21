@@ -1,6 +1,28 @@
 # Unified roadmap: repository reconciliation
 
-## Current readback — 2026-09-21
+## Current readback — 2026-09-21, later main
+
+At `main@374190a57791f9ac19afeefd78afbd18d9b68919` (tree
+`376a6151a11faae2e055ec711a081de785e3f9e2`), #330 adds verification
+before AI action-status readback, #331 retains exact-head temporary wheel/sdist
+subjects, #332 adds source-qualified ingestion-run v2 reads, and #333 corrects
+current Site/wiki copy about the optional AI POST. GitHub reports CI, Linux
+browser acceptance, CodeQL, and wiki publication workflows successful on this
+commit. Those are exact-revision execution receipts, not host, producer,
+operator, platform, or release acceptance.
+
+Issues #260, #261, and #327 remain open at this readback. The release packet
+generator already produces digest-bound SBOM/provenance output from a complete
+candidate; the newer subject workflow alone does not supply that candidate's
+nine-check packet or disposition. No Zeek producer profile has been selected
+in #327. The model containment gate in #261 remains open. The last documented
+owner-only Console publication is v30 in
+[the Site receipt](site-source-alignment.md); repository source changes and a
+successful repository workflow do not establish a newer hosted version or local
+telemetry connection. See the [proposed opportunity map](system-opportunity-map.md)
+for candidate slices and their separate evidence gates.
+
+## Earlier readback — 2026-09-21
 
 At `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971`, the local desktop
 installer and guided checks from #323 are merged, while the owner-only hosted
