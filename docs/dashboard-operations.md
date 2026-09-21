@@ -187,6 +187,15 @@ can affect interpretation; import columns as text and use JSON when exact
 original values are needed. The audit builder may include sample or unlinked
 rows and is distinct from the qualified Reports workspace.
 
+The ingestion preset uses the last successful all-source ingestion-receipt read
+even when the separate summary or traffic projection is unavailable. Its
+`last_dashboard_refresh` is that receipt read time. A panel source filter does
+not change the all-source export. Run counts describe stored events, findings,
+and plan-only action records as separate units; adapter identity and
+accepted/rejected counts remain unrecorded. An empty receipt set does not
+establish zero traffic, and a running or completed receipt does not establish
+current process or sensor health.
+
 ## Operate the Integration Map
 
 Opening **Tools** loads the selected **Linux** profile once through a
