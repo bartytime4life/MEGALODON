@@ -187,6 +187,13 @@ reproducible build, review artifact notices, or grant release authority.
 
 ### Remaining candidate gates
 
+The separate [installed-wheel recovery slice](installed-recovery-evidence.md)
+adds a PR-only Ubuntu 24.04 job that installs the built wheel offline into a
+fresh virtual environment, verifies its installed origin/bytes, and rehearses
+synthetic recovery outside the checkout. It retains only a privacy-minimized,
+commit/tree/wheel-bound receipt. It does not populate this packet's checks or
+artifacts, activate restored data, or supply operator/independent acceptance.
+
 The separate PR workflow `Ubuntu synthetic recovery rehearsal` runs the real
 sample ingestion, backup and restore CLI paths as a non-root user on Ubuntu
 24.04. It uses 13 synthetic events in private temporary directories, compares
