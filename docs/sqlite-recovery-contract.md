@@ -206,6 +206,11 @@ does not change configuration or activate it.
 
 ## Validation and remaining gates
 
+The separate [Ubuntu installed-wheel evidence slice](installed-recovery-evidence.md)
+exercises these CLI paths from an offline-installed wheel using only temporary
+synthetic data. Its retained aggregate receipt binds the commit, tree and wheel
+digest; it adds no recovery runtime authority or operator acceptance.
+
 From the repository root:
 
 ```bash

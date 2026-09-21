@@ -1,0 +1,77 @@
+name: Ubuntu installed wheel recovery evidence
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-recovery-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Pin clean non-root source and create disposable environments
+        id: source
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          echo "tree=$(git rev-parse --verify 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+          unset PYTHONPATH PYTHONHOME
+          python -I -m venv "$RUNNER_TEMP/recovery-build"
+          python -I -m venv "$RUNNER_TEMP/recovery-installed"
+          mkdir -m 700 "$RUNNER_TEMP/recovery-wheels" "$RUNNER_TEMP/recovery-run" "$RUNNER_TEMP/recovery-receipts"
+      - name: Build ephemeral wheel with hash-locked build tools
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/recovery-build/bin/python" -I -m pip install \
+            --require-hashes --only-binary=:all: --no-cache-dir \
+            -r constraints/build-linux-cp312.txt
+          "$RUNNER_TEMP/recovery-build/bin/python" -I -m pip check
+          PIP_NO_INDEX=1 "$RUNNER_TEMP/recovery-build/bin/python" -I -m build \
+            --no-isolation --wheel --outdir "$RUNNER_TEMP/recovery-wheels"
+      - name: Install local wheel offline and rehearse outside checkout
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_TREE: ${{ steps.source.outputs.tree }}
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          wheels=("$RUNNER_TEMP"/recovery-wheels/megalodon_defense-*.whl)
+          test "${#wheels[@]}" -eq 1
+          "$RUNNER_TEMP/recovery-installed/bin/python" -I -m pip install \
+            --no-index --no-deps --no-cache-dir "${wheels[0]}"
+          "$RUNNER_TEMP/recovery-installed/bin/python" -I -m pip check
+          cd "$RUNNER_TEMP/recovery-run"
+          receipt="$RUNNER_TEMP/recovery-receipts/installed-wheel-recovery.json"
+          "$RUNNER_TEMP/recovery-installed/bin/python" -I \
+            "$GITHUB_WORKSPACE/tools/installed_recovery_evidence.py" \
+            --expected-commit "$EXPECTED_COMMIT" --expected-tree "$EXPECTED_TREE" collect \
+            --checkout "$GITHUB_WORKSPACE" --wheel "${wheels[0]}" \
+            --build-python "$RUNNER_TEMP/recovery-build/bin/python" > "$receipt"
+          "$RUNNER_TEMP/recovery-installed/bin/python" -I \
+            "$GITHUB_WORKSPACE/tools/installed_recovery_evidence.py" \
+            --expected-commit "$EXPECTED_COMMIT" --expected-tree "$EXPECTED_TREE" verify "$receipt"
+      - name: Retain only the verified synthetic receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installed-recovery-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/recovery-receipts/installed-wheel-recovery.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: false
+          include-hidden-files: false
