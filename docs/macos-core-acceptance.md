@@ -1,5 +1,8 @@
 # macOS core acceptance
 
+Status: **Proposed M-track; hosted M1 sample CI probe currently fails; native
+macOS acceptance unproved.**
+
 This document is the macOS counterpart to `docs/windows-core-acceptance.md`.
 It tracks what has and has not been evaluated on macOS, following the same
 acceptance-gate discipline used for the Linux reference lane and the Windows
@@ -18,7 +21,7 @@ Windows track, starting from the narrowest, lowest-risk surface.
 | Stage | Scope | Status |
 | --- | --- | --- |
 | M0 | This document; no code change | Proposed |
-| M1 | Synthetic/JSONL-only core evaluation; no capture, no adapters, no firewall backend | Not started |
+| M1 | Synthetic/JSONL-only core evaluation; no capture, no adapters, no firewall backend | Hosted sample probe failed; M1 remains open |
 | M2 | Offline TShark adapter, mirroring the Linux contract | Not started |
 | M3 (deferred) | Native live capture evaluation (BPF-based) | Not proposed; gated on M1/M2 evidence and a separate permission/isolation review |
 
@@ -46,14 +49,33 @@ privilege):
 ```
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
-.venv/bin/python -m megalodon run --source sample --max-events 13
-.venv/bin/python -m megalodon run --source sample --demo-threat --max-events 114
+.venv/bin/python -m megalodon run --source sample --max-events 14
+.venv/bin/python -m megalodon run --source sample --demo-threat --max-events 115
 .venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8787
 ```
 
 Record `sw_vers`, `python3 --version`, `uname -m`, and the pass/fail of each
 command, matching the evidence format used for the existing W1 acceptance
 record.
+
+The caps exceed the finite 13- and 114-event sample lengths by one so the
+terminal receipt can record `source_exhausted` rather than `event_limit_reached`.
+The PR-only `macos-m1-sample` job records its exact candidate head/tree,
+hosted runner image, `sw_vers`, architecture, Python, and outcomes for the two
+built-in sample commands above. It installs only the core package and runs in a
+private temporary directory. It does not run JSONL replay or a dashboard
+listener/browser check. `macos-latest` is a mutable hosted runner label, and a
+result on one architecture cannot satisfy the separate Apple Silicon and Intel
+rows or operator review. The unsupported platform catalog remains unchanged.
+
+At PR #339 head `af43e527fdaeb17bc7fea7bbd70b7969b743ab96`, hosted
+[run 35639424857](https://github.com/bartytime4life/MEGALODON/actions/runs/35639424857)
+recorded macOS 26.6.2 (build 25G83), arm64, Python 3.12.10, and a failed first
+sample command with `STORAGE_PATH:DATABASE_CHANGED`. The demo-threat command
+did not run. This is a failure receipt, not a diagnosed cause or M1 acceptance.
+The storage path-identity guard must not be relaxed to make the probe pass;
+investigate the macOS descriptor/SQLite behavior and review any runtime change
+separately.
 
 ## M2 — offline TShark adapter
 
