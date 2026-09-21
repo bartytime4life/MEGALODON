@@ -8,7 +8,7 @@ following controls are product boundaries, not optional setup advice.
 - **Observe only.** Installation does not activate a service, scheduler, sensor, model, or firewall mutation.
 - **Metadata only.** Packet payloads, payload-derived hashes, credentials, raw bodies, and arbitrary protocol trees do not enter core events, reports, prompts, or dashboards.
 - **Closed and bounded inputs.** Every admitted source has a typed schema, quotas, provenance fields, and explicit rejection behavior.
-- **Local read-only HUD.** The server binds to numeric loopback, has no write API, and reads an existing compatible store through a constrained SQLite path.
+- **Local telemetry reads.** The server binds to numeric loopback and reads an existing compatible core store through a constrained SQLite path. Core telemetry routes are read-only. The separately enabled, token-gated AI question POST writes only its private AI receipt ledger and bounded report snapshots; it has no firewall apply route.
 - **No untrusted control plane.** Events, prompts, documents, model text, and browser fields cannot select arbitrary executables, arguments, SQL, credentials, endpoints, or actions.
 - **Evidence is not proof.** A finding, signature alert, severity, registration, recommendation, or process observation does not authorize a response.
 - **Fail closed.** Ambiguous identity, provenance, privacy, authority, schema, storage, or resource state is unavailable rather than partially accepted.
