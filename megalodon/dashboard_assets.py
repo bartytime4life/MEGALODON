@@ -245,7 +245,7 @@ INDEX_HTML = """<!doctype html>
       <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
       <span class="timestamp" id="ingestion-runs-status">Loading receipts…</span>
     </summary>
-    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Adapter identity and accepted/rejected counts are not recorded. A completed run does not prove sensor liveness or complete coverage.</div>
+    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Stored events, findings, and action records are different units; action records are plans, not host changes. Adapter identity and accepted/rejected counts are not recorded. A running receipt does not prove a process is still active; a completed run does not prove sensor liveness or complete coverage.</div>
     <div class="ingestion-runs-list" id="ingestion-runs-list" role="list" aria-live="polite" aria-atomic="true">
       <p class="ingestion-runs-empty">Loading bounded ingestion receipts…</p>
     </div>
@@ -1121,9 +1121,9 @@ function renderIngestionRuns(runs, selectedSource = 'all') {
     );
     const facts = document.createElement('dl'); facts.className = 'ingestion-run-facts';
     facts.append(
-      ingestionFact('Processed', formatNumber(run.processed_count)),
-      ingestionFact('Detections', formatNumber(run.detection_count)),
-      ingestionFact('Actions', formatNumber(run.action_count)),
+      ingestionFact('Stored events', formatNumber(run.processed_count)),
+      ingestionFact('Stored findings', formatNumber(run.detection_count)),
+      ingestionFact('Action records', formatNumber(run.action_count)),
       ingestionFact('Started', displayTime(new Date(run.started_at))),
       ingestionFact('Finished', run.finished_at === null ? 'Not recorded' : displayTime(new Date(run.finished_at))),
       ingestionFact('Receipt', `v${run.receipt_version}`)
@@ -1482,24 +1482,27 @@ function renderTrafficUnavailable(preserve = false) {
   }
 }
 function reportSnapshot() {
-  if (!state.summary || !state.traffic || !state.lastSuccessfulRefresh) return null;
   const scope = byId('report-scope').value;
+  const ingestion = scope === 'ingestion';
+  if (ingestion ? !state.ingestionRunsFetchedAt : !state.summary || !state.traffic || !state.lastSuccessfulRefresh) return null;
   const title = byId('report-title-input').value.trim() || 'MEGALODON local telemetry report';
   const generatedAt = new Date().toISOString();
-  const refreshedLabel = formatRefreshTime(state.lastSuccessfulRefresh);
+  const refreshedAt = ingestion ? new Date(state.ingestionRunsFetchedAt) : state.lastSuccessfulRefresh;
+  const refreshedLabel = formatRefreshTime(refreshedAt);
   const common = {
     schema: 'megalodon-browser-report-v1', title, scope, generated_at: generatedAt,
-    last_dashboard_refresh: state.lastSuccessfulRefresh.toISOString(),
-    bounds: `Newest ${state.config.event_limit} detections and ${state.traffic.sample_limit} traffic records maximum`,
-    limitation: 'Stored metadata only; not capture completeness, wire speed, service health, or incident state.'
+    last_dashboard_refresh: refreshedAt.toISOString(),
+    bounds: ingestion ? 'Newest 8 stored core ingestion receipts maximum, across all recorded sources.'
+      : `Newest ${state.config.event_limit} detections and ${state.traffic.sample_limit} traffic records maximum`,
+    limitation: ingestion
+      ? 'Stored run counts are events, findings, and plan-only action records; adapter identity and accepted/rejected counts are not recorded. No sensor liveness, coverage, or host action is established.'
+      : 'Stored metadata only; not capture completeness, wire speed, service health, or incident state.'
   };
   if (scope === 'detections') return {...common,
     source_scope: `${state.events.length} stored alerts shown from a maximum of ${state.config.event_limit}. Updated ${refreshedLabel}.`,
     detections: state.events.map(item => ({...item}))};
   if (scope === 'ingestion') {
-    if (!state.ingestionRunsFetchedAt) return null;
     return {...common,
-      bounds: 'Newest 8 stored core ingestion receipts maximum, across all recorded sources.',
       source_scope: `${state.ingestionRuns.length} all-source run receipts loaded ${formatRefreshTime(new Date(state.ingestionRunsFetchedAt))}. Panel source filters do not change this report.`,
       ingestion_runs: state.ingestionRuns.map(item => ({...item}))};
   }
