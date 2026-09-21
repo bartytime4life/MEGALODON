@@ -171,6 +171,70 @@ def test_ai_outage_does_not_break_core_reader(monkeypatch, broker):
     assert broker.reader.summary()["events"] == 4
 
 
+@pytest.mark.parametrize("tool", [[], ["megalodon.alerts.query"], {},
+                                 {"name": "megalodon.alerts.query"}, None, True, 7])
+def test_invalid_model_tool_type_records_refusal_before_execution(monkeypatch, broker, tool):
+    calls = []
+
+    def fake_generate(*_args, **_kwargs):
+        calls.append("selection")
+        return json.dumps(request(tool, reason="PRIVATE_MODEL_SELECTION_CANARY"))
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("invalid selection reached tool execution")
+
+    monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
+    monkeypatch.setattr(broker, "_execute", forbidden)
+    monkeypatch.setattr(broker, "_plan", forbidden)
+    answer = ask("alerts", broker)
+    assert answer["execution_state"] == "failed"
+    assert answer["error_code"] == "UNKNOWN_TOOL"
+    assert answer["observed"] is None and answer["inferred"] is None
+    assert answer["evidence_references"] == []
+    assert calls == ["selection"]
+    receipt = broker.receipts.latest(answer["receipt_id"])
+    assert receipt["state"] == "failed" and receipt["tool"] == "invalid"
+    chain = broker.receipts.verify_chain()
+    assert chain["sequence"] == 2 and chain["incomplete_count"] == 0
+    saved = broker.receipts.connection.execute(
+        "SELECT payload_json FROM ai_receipt_events ORDER BY sequence"
+    ).fetchall()
+    assert "PRIVATE_MODEL_SELECTION_CANARY" not in json.dumps(saved)
+
+
+@pytest.mark.parametrize("tool, arguments", [
+    ("megalodon.telemetry.summary", {"window_minutes": 60, "limit": 1}),
+    ("megalodon.telemetry.summary", {"limit": {"path": "PRIVATE_ARGUMENT_CANARY"}}),
+    ("megalodon.report.generate", {"report_type": []}),
+    ("megalodon.report.generate", {"report_type": {"path": "PRIVATE_ARGUMENT_CANARY"}}),
+])
+def test_tool_argument_schema_refuses_invalid_fields_before_execution(monkeypatch, broker, tool, arguments):
+    value = request(tool, arguments)
+    with pytest.raises(BrokerError, match="INVALID_ARGUMENTS"):
+        validate_request(value)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("invalid arguments reached tool execution")
+
+    monkeypatch.setattr(broker, "_execute", forbidden)
+    receipt = broker.dispatch(value)
+    assert receipt["state"] == "failed" and receipt["error_code"] == "INVALID_ARGUMENTS"
+    assert receipt["validated_arguments"] == {} and receipt["result"] is None
+    assert broker.receipts.verify_chain()["incomplete_count"] == 0
+    saved = broker.receipts.connection.execute("SELECT payload_json FROM ai_receipt_events").fetchall()
+    assert "PRIVATE_ARGUMENT_CANARY" not in json.dumps(saved)
+
+
+@pytest.mark.parametrize("tool, arguments, expected", [
+    ("megalodon.telemetry.summary", {}, {"window_minutes": 60}),
+    ("megalodon.telemetry.summary", {"window_minutes": 1440}, {"window_minutes": 1440}),
+    ("megalodon.alerts.query", {"window_minutes": 1, "limit": 2}, {"window_minutes": 1, "limit": 2}),
+])
+def test_closed_tool_arguments_preserve_valid_windows_and_alert_limits(tool, arguments, expected):
+    selected_tool, admitted, _, _ = validate_request(request(tool, arguments))
+    assert selected_tool == tool and admitted == expected
+
+
 def test_audit_failure_precedes_any_tool_execution(monkeypatch, broker):
     monkeypatch.setattr(broker.receipts, "append", lambda *_: (_ for _ in ()).throw(OSError("disk full")))
     monkeypatch.setattr(broker, "_execute", lambda *_: (_ for _ in ()).throw(AssertionError("executed")))
