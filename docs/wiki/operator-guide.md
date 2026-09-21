@@ -6,17 +6,24 @@ healthy.
 
 ## Start and stop
 
-From the checkout, use `./scripts/start-local.sh --check` and then
-`./scripts/start-local.sh`, or run `python -m megalodon hud` from the intended
-installed environment. Open
-<http://127.0.0.1:8787/> on the same computer. The process stays in the
-foreground; stop it with Ctrl+C. Do not expose it through a remote bind, reverse
-proxy, tunnel, or port forward.
+For the desktop installation, open **MEGALODON** from the application menu or
+run `~/.local/bin/megalodon-hud`. From a checkout, use
+`./scripts/start-local.sh`; its optional `--check` preflight is useful when the
+HUD cannot start. An ordinary installed environment can run
+`python -m megalodon hud`. Use <http://127.0.0.1:8787/> on the same computer.
+The process stays in the foreground; stop it with Ctrl+C. Do not expose it
+through a remote bind, reverse proxy, tunnel, or port forward.
 
 On Home → **Data and tools**, use **Change data for the next launch** to prepare a quoted restart
 command for a settings file, completed offline run, or Suricata store. The form
 does not browse, open, or validate an arbitrary path. Restarting is required to
 take new startup snapshots.
+
+Use **Check this computer** to refresh tool observations and check the runtime
+and selected store without restarting. Download buttons open publisher pages;
+the software list groups essentials and optional workflows. Follow the
+[visual quick start](../gui-quick-start.md) for a click-by-click tour. The optional
+terminal preflight `./scripts/start-local.sh --check` helps when startup fails.
 
 ## Read the seven workspaces
 

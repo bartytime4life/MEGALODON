@@ -2,7 +2,7 @@
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 
-## Proposed navigation update (not deployed)
+## Current candidate navigation and install path
 
 The candidate adds view links such as `#view=integrations`, Back/Forward
 navigation, and per-view reading positions for the current page session.
@@ -10,17 +10,20 @@ Reload restores the selected view; it does not retain reading positions or
 imported reports. Mobile navigation keeps text labels visible. Unknown
 fragments are ignored, and navigation remains usable if history is unavailable.
 See `docs/site-source-alignment.md` in the parent repository for publication
-status; these changes are not claimed to be live in v28.
+status. Publication identity remains separate until a new Sites version is
+saved and deployed.
 
 ## Quick-start controls
 
-The first view follows Prepare / Launch / Review: from the repository root,
-run `./scripts/start-local.sh --check`, then `./scripts/start-local.sh`, and open
-the local HUD. Python >=3.11 is required; Linux is the reference platform. See
+The first view follows Review / Install / Open: from a reviewed repository root,
+run `./scripts/install-local.sh`, open **MEGALODON** from the application menu,
+and use Home → Data and tools → Check this computer. Python >=3.11 is required;
+Linux is the reference platform. See
 [`docs/local-pc-setup.md`](../docs/local-pc-setup.md) for preparation and
-troubleshooting. The launcher uses an available compatible environment without
-installing packages. An activated installed-package environment can still use
-`python -m megalodon hud` through the separate command disclosure.
+troubleshooting. The installer creates a private user application and stable
+launchers, may obtain declared Python build requirements, and does not install
+companion tools or create telemetry. The separate disclosure keeps
+`./scripts/start-local.sh` available for a source-only launch.
 
 The local HUD opens before data exists and performs startup presence checks;
 Home → Data and tools contains those checks and next-launch options. Keep the
@@ -59,9 +62,9 @@ presence-report import remains optional for this hosted page.
 
 Repository license checkpoint: merged PR #298 is now `main@a0b140093ca17ea64fbfe0354966379a3d5fc7ce`, tree `69aac8e40c0dad550304f52777934d30296d7b59`, and records the owner's Apache-2.0 selection with aligned package metadata. Exact-head CI, Linux browser acceptance and CodeQL passed, the merged tree matches the tested candidate, and issue #255 is closed completed. No package, tag or release was published.
 
-Alignment baseline: merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0`. The local setup guide links to that immutable merged commit; the launcher is delivered, while installation and operator acceptance remain separate. See `docs/document-alignment-2026-09-20.md` in the repository for the exact baseline and validation receipt. PR #294 delivered the closed detector registry and bounded synthetic evidence report; this Site presents that repository capability without representing it as runtime telemetry or operational accuracy. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
+Historical alignment baseline: merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0` delivered the source launcher, not this candidate user installer. See `docs/document-alignment-2026-09-20.md` in the repository for that exact historical baseline and validation receipt. The current candidate adds user-scoped install guidance and remains separate from publication, release, and operator acceptance. PR #294 delivered the closed detector registry and bounded synthetic evidence report; this Site presents that repository capability without representing it as runtime telemetry or operational accuracy. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
 
-Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites have 41 checks for the actual parser, lifecycle semantics, empty telemetry, detector-evidence and license labeling, navigation/focus, and bookmark filter updates. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
+Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites cover the actual parser, lifecycle semantics, empty telemetry, detector-evidence and license labeling, navigation/focus, bookmark filter updates, and the user-install quick start. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 
 Local browser verification at desktop, tablet and mobile widths is recorded in
 [`docs/local-pc-readiness-review.md`](../docs/local-pc-readiness-review.md).

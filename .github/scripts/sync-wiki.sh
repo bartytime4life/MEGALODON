@@ -54,6 +54,8 @@ sed -i \
   -e "s#(../../README.md#(${repo_blob_root}/README.md#g" \
   -e "s#(../platform-baseline.md#(${repo_blob_root}/docs/platform-baseline.md#g" \
   -e "s#(../local-pc-setup.md#(${repo_blob_root}/docs/local-pc-setup.md#g" \
+  -e "s#(../gui-quick-start.md#(${repo_blob_root}/docs/gui-quick-start.md#g" \
+  -e "s#(../software-downloads.md#(${repo_blob_root}/docs/software-downloads.md#g" \
   -e "s#(../document-alignment-2026-09-20.md#(${repo_blob_root}/docs/document-alignment-2026-09-20.md#g" \
   -e "s#(../dashboard-operations.md#(${repo_blob_root}/docs/dashboard-operations.md#g" \
   -e "s#(../integration-hub.md#(${repo_blob_root}/docs/integration-hub.md#g" \

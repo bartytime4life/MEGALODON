@@ -11,6 +11,8 @@ authoritative.
 
 ## Start here
 
+- [Visual quick start](../gui-quick-start.md) - buttons, checks, downloads, and where to go next
+- [Software downloads](../software-downloads.md) - required runtime and optional tools with official links
 - [Quick start](quick-start.md) - open an existing checkout without data, or follow the optional synthetic walkthrough
 - [Operator guide](operator-guide.md) - read Home, Traffic, Findings, Apps, Reports, Evidence, and Help correctly
 - [Security boundaries](security-boundaries.md) - understand the controls that must remain true

@@ -70,6 +70,29 @@ def test_checkout_comes_from_package_location_not_cwd(tmp_path, monkeypatch):
     assert commands._source_checkout() == checkout
 
 
+def test_hud_relaunch_uses_serving_interpreter_and_shell_quotes_it(monkeypatch):
+    executable = "/private/operator's env $(touch NEVER)/bin/python"
+    monkeypatch.setattr(commands.sys, "executable", executable)
+    monkeypatch.delenv("MEGALODON_INSTALL_MODE", raising=False)
+    monkeypatch.delenv("MEGALODON_LAUNCHER_PATH", raising=False)
+    launch = commands.local_hud_launch()
+    assert launch["mode"] == "source"
+    assert shlex.split(launch["command"]) == [executable, "-m", "megalodon", "hud"]
+
+
+def test_desktop_hud_relaunch_accepts_only_a_real_absolute_launcher(tmp_path, monkeypatch):
+    launcher = tmp_path / "bin" / "megalodon-hud"
+    launcher.parent.mkdir()
+    launcher.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("MEGALODON_INSTALL_MODE", "desktop")
+    monkeypatch.setenv("MEGALODON_LAUNCHER_PATH", str(launcher))
+    assert commands.local_hud_launch() == {
+        "mode": "desktop", "command": shlex.join([str(launcher)]),
+    }
+    launcher.unlink()
+    assert commands.local_hud_launch()["mode"] == "source"
+
+
 def test_startup_captures_local_commands_and_shared_assets_remain_generic(monkeypatch):
     node = shutil.which("node")
     if not node:
@@ -83,12 +106,20 @@ def test_startup_captures_local_commands_and_shared_assets_remain_generic(monkey
         snapshots.append(1)
         return local
     monkeypatch.setattr(dashboard, "local_python_lifecycle", snapshot)
+    monkeypatch.setattr(
+        dashboard,
+        "local_hud_launch",
+        lambda: {"mode": "source", "command": "'/private/env/bin/python' -m megalodon hud"},
+    )
     server = Mock()
     factory = Mock(return_value=server)
     monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
     dashboard.serve(object(), "127.0.0.1", 8787)
     handler = factory.call_args.args[1]
     script = handler.javascript.decode()
+    assert script.startswith(
+        "const localHudLaunch = {\"mode\": \"source\", \"command\": \"'/private/env/bin/python' -m megalodon hud\"};\n"
+    )
     start = script.index("const localPythonLifecycle = ")
     end = script.index("const readinessToolIds", start)
     harness = script[start:end] + "\nconsole.log(JSON.stringify([resolveLifecycle('core'), resolveLifecycle('scapy'), resolveLifecycle('tshark')]));"

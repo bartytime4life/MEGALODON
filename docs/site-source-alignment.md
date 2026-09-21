@@ -1,13 +1,45 @@
 # Defense Console source alignment
 
-## Proposed navigation successor — not deployed
+## Current publication — Console v29, guided local install
 
-This candidate starts from `main@2d87e3f2890cd6c0200bffbde64c4932e0a85dac`.
+OBSERVED 2026-09-21: the existing owner-private Defense Console now serves
+version 29 from Sites source `49bfe9f527db5c7e71d0724d3e0b5b0e5c19295f`.
+That source contains the exact 14 tracked files under `site/` on
+`codex/local-pc-readiness@5d6970ed05844271a6d91d91e6013683a56b03ed`,
+the head of draft [PR #323](https://github.com/bartytime4life/MEGALODON/pull/323)
+at publication time. The Site now presents the reviewed user-scoped installer
+as the primary local path, keeps the source launch available for contributors,
+and links its copy actions to the same commands documented in the repository.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 29 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_d3b4a30c7e888191bd3056a653a13d3c` |
+| Sites source | `49bfe9f527db5c7e71d0724d3e0b5b0e5c19295f` |
+| Archive | `sha256:3b83f512a250e4646d1ea3396acec086e24013ed4735593db87ae17a1328025a`; 10 files, 296,960 bytes |
+| Deployment | `appgdep_6ab08ed39094819185340d3ac8bdcd52`; succeeded at `2026-09-21T01:56:43.208614+00:00` |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only project; private publication succeeded |
+| Repository mirror | All 14 tracked Site source files match the pushed Sites commit |
+| Merge state | Draft PR #323; publication does not merge the repository candidate |
+| Rollback reference | v28 / `5d03870143afab716e9e4a097273d2343fb0b6cc` |
+
+VERIFIED: all 44 Site Node checks and JavaScript syntax checks pass. The hosted
+console remains a disconnected reference interface: it cannot run the local
+installer, inspect the computer, reach loopback telemetry, or prove that any
+program is installed or running. Local installation, repository merge, software
+release, rendered-browser acceptance, and operator acceptance remain separate.
+
+## Historical navigation candidate — superseded by v29
+
+At its original checkpoint, this candidate started from
+`main@2d87e3f2890cd6c0200bffbde64c4932e0a85dac`.
 It changes `site/dist/app.js` and `site/dist/styles.css` for navigation history,
 session-only reading positions, and visible mobile navigation labels. It also
-extends the existing application behavior test. Candidate source is **not equal
-to the deployed v28 source**. The v28 records below remain historical publication
-evidence, not validation of this patch. No Sites version was saved or deployed.
+extends the existing application behavior test. At that checkpoint, candidate
+source was **not equal to the deployed v28 source**, and no Sites version had
+been saved or deployed. Version 29 later superseded that publication state; the
+v28 records below remain historical evidence.
 
 View URLs contain only a closed view name; scroll positions remain in page
 memory and are cleared on reload. No telemetry, filter text, or tool address is

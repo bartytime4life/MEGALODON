@@ -1,5 +1,16 @@
 # Local tool readiness receipt
 
+For a point-and-click check, start the local HUD and choose **Home → Data and
+tools → Check this computer**. It refreshes executable presence and process-name
+observations, checks the selected data file and shows the running Python/SQLite
+versions. You can download that combined local-check report from the interface.
+See the [visual quick start](gui-quick-start.md) for the steps and
+[HTTP contract](dashboard-http-contract.md#first-launch-hud-and-companion-controls)
+for the explicit request boundary. The combined report has its own schema; it is
+not the standalone readiness-only import file described below.
+
+## Terminal alternative
+
 `python -m megalodon readiness` prints a bounded JSON receipt describing whether
 one fixed executable name for each companion tool can be found on the current
 Linux process's `PATH`. It never runs those executables. The separate

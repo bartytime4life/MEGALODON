@@ -371,6 +371,36 @@ implementation provide all of the following:
 - exact-head hosted validation and independent security/operations review,
   recorded separately from authorization to use the restored path.
 
+### Local desktop installation boundary
+
+`scripts/install-local.sh` is a Linux, user-scoped package installer distinct
+from `scripts/start-local.sh`, which continues to run a reviewed checkout in
+place. The installer refuses UID 0, relative XDG base paths, unsafe application
+directories, symlink substitutions, and untracked files at managed artifact
+names. Existing directory ancestry must be root/current-user-owned and cannot be
+group/world writable without sticky entry protection. Artifact directories must
+be owner controlled, and launcher/file and release-interpreter modes must match
+the installer contract. One owner-private lock serializes every
+mutating maintenance action. Installer subprocesses use isolated Python,
+disable pip configuration files and caches, remove destination/import overrides,
+and retain only explicit package-source/network environment values. The
+installer creates a permanent versioned virtual environment before pip install,
+imports the installed package from that environment, and switches one stable
+`current` symlink only after the check succeeds. Existing selected code remains
+active on preparation or activation failure.
+
+The installer owns its manifest-listed releases, HUD/manager launchers, desktop
+entry and icon, plus the persistent owner-private maintenance lock in its
+application directory. It creates default owner-private settings only when
+absent. Repair validates all expected bytes first, restores missing managed
+artifacts, and refuses modified bytes or modes.
+Uninstall removes manifest-owned code and desktop artifacts while retaining the
+settings and data directories. No service, scheduler, login item, capture,
+companion package, telemetry, database, firewall change, or privileged action is
+created. Python build requirements may be obtained from pip's standard index or
+explicit allowed source environment values; this is an installation side effect,
+not runtime egress or an offline-artifact claim.
+
 ## 6. Dashboard contract
 
 The bounded [control room traffic projection](docs/control-room-contract.md)
@@ -398,6 +428,18 @@ snapshot and permits only `NO_DIRECTORY`/`NO_DATABASE` to open an unconfigured
 workspace. Its telemetry endpoints return 503, never fabricated zero counters.
 Unsafe, corrupt or incompatible existing stores still refuse startup. The
 original `dashboard` command retains its existing-store/no-probe behavior.
+The HUD's **Check this computer** button adds an explicit metadata-only refresh
+through `/api/local-checks`; it does not change the startup snapshot. It reports
+the running Python/SQLite versions, a bounded read of the already selected
+store, fixed executable presence, and process-name observations. A five-second
+cache and one non-overlapping collector per server bound repeated discovery;
+no user-supplied command, path, target or tool selection is accepted.
+The optional `--open-browser` flag starts one daemon default-browser attempt only
+after the loopback server binds; a blocking opener cannot delay HTTP handling,
+and failure leaves the printed local URL available without altering the server
+boundary. Relaunch text served to the browser is a
+startup snapshot containing either the validated stable desktop launcher or the
+absolute Python interpreter already serving the HUD. It is display/copy-only.
 An enabled dashboard never creates a parent, database, or schema; runs a
 migration; changes `user_version` or journal mode; or exposes the writer API.
 On POSIX it requires an owner-controlled mode-`0700` leaf directory and an
@@ -446,6 +488,12 @@ The dashboard exposes only:
 - `GET /api/setup` — immutable `dashboard-setup-v2` startup source-selection
   status and optional bounded readiness plus process-name observation reports;
   no request-triggered probe;
+- `GET /api/local-checks` — HUD-only `dashboard-local-checks-v1`, at most 20 KiB,
+  requiring exactly one `X-Megalodon-Check: 1` header and no query arguments;
+  returns environment versions, source readability and bounded tool observations.
+  Disabled/missing-header requests return 403; overlapping checks return 429
+  with `Retry-After: 5`; failed collection returns a fixed 503. The client checks
+  only on a click, never as telemetry polling or automatic startup work;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
 - `GET /api/traffic` — newest 500 event candidates and 200 finding candidates,
   with qualified endpoint/port/flag metadata, exact reported bytes and run links;

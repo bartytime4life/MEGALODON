@@ -8,17 +8,25 @@ capture, analyzer installation, or response action. See the
 
 ## Open the HUD
 
-Run `python -m megalodon hud` from the installed environment and open
-`http://127.0.0.1:8787` on that computer. There is no local cloud login or
-subscription. Companion installations and a configuration file are optional.
-The default store is `data/megalodon.db`, relative to the launch directory;
-use the same working directory/configuration as your ingestion workflow.
+For the user-scoped desktop installation, open **MEGALODON** from the application
+menu or run `~/.local/bin/megalodon-hud`. The browser opens only after the
+loopback server binds. From a reviewed source checkout, use
+`./scripts/start-local.sh`. An ordinary installed environment can still run
+`python -m megalodon hud` and open `http://127.0.0.1:8787` on that computer.
+There is no local cloud login or subscription.
+
+The desktop installer selects its owner-private XDG settings and data path.
+Other launches use `data/megalodon.db` relative to the launch directory unless
+an explicit configuration says otherwise. Companion installations are optional.
 An absent store opens an unconfigured workspace instead of creating a database
 or sample data. The source notice explains the missing input; measurements
 remain unavailable. Unsafe or invalid existing data is still refused.
 
 Tool presence is checked once at launch, with no executable run, version probe
-or service connection. Restart to recheck. Readiness describes the dashboard
+or service connection. Use **Home → Data and tools → Check this computer** for
+an explicit fresh metadata check, including the running Python/SQLite versions
+and selected-store readability. Checks within five seconds share a result.
+Readiness describes the dashboard
 process's PATH, not every installed package or other user's environment. The
 original `dashboard` command still requires a store and omits tool checks.
 
@@ -29,12 +37,15 @@ integration; standalone tools show **Runtime not applicable**. The receipt omits
 process IDs, command lines, paths, users, and host identity. Restart the HUD to
 refresh this snapshot.
 
-Use **Tools** to find a tool, open its official setup guide, inspect
+Use **Home → Data and tools** to search official publisher downloads and run a
+fresh availability check. Use **Apps** to inspect
 copy-only verification/maintenance commands, or save its existing web-console
 address once. Saved console links open the companion app in another tab, where
 that app retains its own authentication and controls. Desktop-only tools still
 use their normal application launcher or the displayed terminal commands.
-MEGALODON does not install/start tools or embed their admin interfaces.
+MEGALODON does not install or start tools. Its local **View in HUD** control
+can open an explicitly selected console in a sandboxed frame; use the external
+fallback when the companion refuses embedding.
 Addresses persist only in this browser and origin; the hosted Site and local HUD
 have separate bookmarks. Remove a link from its editor. No credentials belong
 in a saved address. No background connection test is performed.
@@ -49,7 +60,8 @@ reviewed package source to reinstall. These command paths are captured at startu
 and displayed only in the local command cards. The hosted Site keeps generic
 examples, which require activating the intended environment in each terminal.
 
-The home **Choose existing data for the next launch** form prepares a command
+The Home **Change data for the next launch** form starts with the exact launcher
+or Python interpreter serving this HUD. It prepares a command
 for optional settings, completed offline evidence and a Suricata store. Fields
 remain in page memory; editing invalidates the previous copy action until the
 command is prepared again. Absolute Linux paths are shell-quoted. Stop with
@@ -58,25 +70,22 @@ and sensor operation remain explicit separate workflows.
 
 ## Read the interface in evidence order
 
-The command center stays pinned to one browser viewport. Its persistent tabs
-switch among three internally scrolling workspaces without reloading the page:
-**Overview** reads from top to bottom as data freshness, four stored counters,
-bounded recent traffic, local data/tool observations, three common tasks, and
-the stored-alert table. The report builder and advanced alert filters stay
-collapsed until requested. **Investigate** keeps its Reference Library, offline
-snapshot, optional Suricata evidence, and ingestion receipts closed until one
-source is opened; the display-only Qwen receipt boundary remains visible at the
-top. **Tools** presents every application as a compact row and reveals setup,
-console, and data-boundary controls only for the row that is opened.
-Switching workspaces preserves local filters and never fetches external data or
-starts an analysis.
+Seven persistent tabs organize the interface without reloading the page:
+**Home** starts with local checks and workflow-specific downloads; **Traffic**
+and **Findings** show qualified saved evidence; **Apps** explains integrations
+and saved console links; **Reports** previews local exports; **Evidence** holds
+the reference library, offline snapshot, optional Suricata view, ingestion
+receipts, audit history, and display-only Qwen receipt; **Help** explains states
+and recovery. Narrow and short viewports use natural document scrolling.
+Switching tabs preserves local filters and never starts an analysis or fetches
+external evidence.
 
 Existing fragment links continue to select the workspace that owns their target.
 This includes live-review/detection, deep-analysis/reference/offline, and
 integration-map fragments; browser back/forward fragment changes use the same
 closed mapping and never choose an arbitrary selector or route.
 
-The Analysis workspace shows one **Qwen advisory receipt** card. An embedding
+The Evidence workspace shows one **Qwen advisory receipt** card. An embedding
 caller may supply one already-produced frozen result when starting the server;
 the dashboard validates and copies it before listening, then the browser reads
 it once. If none is supplied, or the response is invalid, the card says

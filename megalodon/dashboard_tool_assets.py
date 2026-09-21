@@ -279,6 +279,13 @@ CONTROLS_JS = r"""const toolAcquisition = {
   }
 };
 
+// Publisher pages are separate from repository-specific integration recipes.
+const toolPublisherDownloads = {
+  tshark: {url: 'https://www.wireshark.org/download.html', label: 'Wireshark / TShark downloads'},
+  zeek: {url: 'https://zeek.org/get-zeek/', label: 'Zeek downloads'},
+  nftables: {url: 'https://netfilter.org/projects/nftables/index.html', label: 'nftables install guide'}
+};
+
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
   const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
@@ -359,12 +366,22 @@ const MegalodonControls = (() => {
     removeButton.addEventListener('click', () => { save(id, ''); repaint(); feedback.textContent = 'Console link removed.'; input.focus(); if (typeof options.changed === 'function') options.changed(id); });
     editor.append(label, saveButton, removeButton, node('p', 'Saved only in this browser and origin. Do not paste credentials. Opens the actual companion app in a new tab; it is not a data connection.', 'companion-help'));
     root.append(open, destination, editor);
-    const guide = node('a', 'Official setup guide ↗');
-    guide.href = toolAcquisition[id].url; guide.target = '_blank'; guide.rel = 'noopener noreferrer';
+    const acquisition = toolAcquisition[id];
+    const publisher = toolPublisherDownloads[id];
+    const guide = node('a', `${publisher ? publisher.label : acquisition.linkLabel} ↗`, 'companion-download');
+    guide.href = publisher ? publisher.url : acquisition.url; guide.target = '_blank'; guide.rel = 'noopener noreferrer';
     root.append(guide);
+    if (publisher) {
+      const recipe = node('a', 'MEGALODON setup guidance ↗'); recipe.href = acquisition.url; recipe.target = '_blank'; recipe.rel = 'noopener noreferrer'; root.append(recipe);
+    }
+    root.append(node('p', 'Opens the publisher or project page in a new tab. Downloading and installation happen outside this HUD.', 'companion-help'));
+    if (typeof runLocalChecks === 'function') {
+      const check = node('a', 'Check availability in Home →', 'companion-button'); check.href = '#setup-title';
+      check.addEventListener('click', () => runLocalChecks(id)); root.append(check);
+    }
 
     const lifecycle = node('details', '', 'companion-lifecycle');
-    lifecycle.append(node('summary', 'Verify or maintain this tool'));
+    lifecycle.append(node('summary', 'Advanced: terminal checks and maintenance'));
     const commands = node('div');
     const renderCommands = variant => {
       commands.replaceChildren();

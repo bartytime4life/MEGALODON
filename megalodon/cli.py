@@ -203,6 +203,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="existing private Suricata store; bounded read-only startup snapshot",
     )
+    dashboard.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="open the loopback HUD in the default browser after the server binds",
+    )
 
     plan = sub.add_parser("firewall-plan", help="print a non-mutating nftables plan")
     plan.add_argument("ip")
@@ -800,6 +805,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                     args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
                 ),
                 event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
+                open_browser=getattr(args, "open_browser", False),
             )
     except KeyboardInterrupt:
         print("\nMEGALODON dashboard stopped.")

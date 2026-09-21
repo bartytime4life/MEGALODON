@@ -105,10 +105,11 @@ class CliTests(unittest.TestCase):
 
     def test_dashboard_parser_accepts_bounded_view_overrides(self):
         args = build_parser().parse_args(
-            ["dashboard", "--refresh-seconds", "12", "--event-limit", "125"]
+            ["dashboard", "--refresh-seconds", "12", "--event-limit", "125", "--open-browser"]
         )
         self.assertEqual(args.refresh_seconds, 12)
         self.assertEqual(args.event_limit, 125)
+        self.assertTrue(args.open_browser)
 
     def test_run_parser_accepts_bounded_elapsed_deadline(self):
         args = build_parser().parse_args(["run", "--max-seconds", "120"])

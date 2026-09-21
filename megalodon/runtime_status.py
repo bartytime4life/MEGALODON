@@ -1,4 +1,4 @@
-"""Bounded startup-only observation of known local service process names."""
+"""Bounded point-in-time observation of known local service process names."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ _PROCESS_NAMES: dict[str, frozenset[str] | None] = {
 }
 
 BOUNDARIES = (
-    "One startup-only process-name observation; service health, configuration and coverage are not verified.",
+    "One point-in-time process-name observation; service health, configuration and coverage are not verified.",
     "No programs executed; no process identifiers, command lines, paths, usernames or hostnames are returned.",
     "Standalone tools report not_applicable because process absence is not a meaningful runtime signal.",
     "Unreadable or excessive process metadata yields not_checked rather than a false stopped claim.",
@@ -54,13 +54,18 @@ def runtime_report(proc_root: Path = Path("/proc")) -> dict[str, Any]:
     complete = platform == "linux"
     if complete:
         try:
-            entries = [entry for entry in proc_root.iterdir() if _PID.fullmatch(entry.name)]
-            if len(entries) > MAX_PROCESS_ENTRIES:
-                complete = False
-                entries = []
+            entries = []
+            for entry in proc_root.iterdir():
+                if _PID.fullmatch(entry.name):
+                    entries.append(entry)
+                    if len(entries) > MAX_PROCESS_ENTRIES:
+                        complete = False
+                        entries = []
+                        break
             for entry in entries:
                 try:
-                    raw = (entry / "comm").read_bytes()
+                    with (entry / "comm").open("rb") as source:
+                        raw = source.read(MAX_COMM_BYTES + 1)
                     if not 1 <= len(raw) <= MAX_COMM_BYTES or b"\x00" in raw:
                         complete = False
                         continue

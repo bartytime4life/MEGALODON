@@ -112,14 +112,24 @@ def test_launch_builder_quotes_paths_and_rejects_incomplete_values():
     if node is None:
         pytest.skip("Node required for command builder")
     start = SETUP_JS.index("function hudLaunchCommand")
-    end = SETUP_JS.index("byId('setup-build')", start)
+    end = SETUP_JS.index("function renderLaunchHelp", start)
     harness = SETUP_JS[start:end] + r'''
 const assert = require('node:assert/strict');
-assert.equal(hudLaunchCommand({}), 'python -m megalodon hud');
+const localHudLaunch = {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"};
+assert.equal(hudLaunchCommand({}), localHudLaunch.command);
 assert.throws(() => hudLaunchCommand({offline: 'relative/path'}));
 assert.throws(() => hudLaunchCommand({config: '/tmp/a\nb'}));
 console.log(hudLaunchCommand({offline: "/tmp/one ' $(touch NEVER_EXECUTE)"}));
 '''
     result = subprocess.run([node, "-e", harness], text=True, capture_output=True, timeout=5, check=True)
     import shlex
-    assert shlex.split(result.stdout.strip()) == ["python", "-m", "megalodon", "hud", "--offline-run", "/tmp/one ' $(touch NEVER_EXECUTE)"]
+    assert shlex.split(result.stdout.strip()) == ["/tmp/reviewed checkout/.venv/bin/python", "-m", "megalodon", "hud", "--offline-run", "/tmp/one ' $(touch NEVER_EXECUTE)"]
+
+
+def test_explicit_settings_override_wins_over_installed_launcher_default():
+    from megalodon.cli import build_parser
+
+    args = build_parser().parse_args(
+        ["hud", "--config", "/tmp/installed.toml", "--config", "/tmp/override.toml"]
+    )
+    assert args.config == "/tmp/override.toml"

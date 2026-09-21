@@ -728,7 +728,7 @@ const workspaceTargets = {
   'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
   'room-home-title': 'live', 'setup-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
-  'room-reports-title': 'reports', 'room-help-title': 'help',
+  'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'live',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis'
@@ -2126,6 +2126,7 @@ function applyConfig(payload) {
 }
 async function bootstrap() {
   renderRoom();
+  renderSoftwareShelf();
   restoreWorkspaceFromHash();
   try { applyConfig(await requestJSON('/api/config')); }
   catch (_) {

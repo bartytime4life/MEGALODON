@@ -11,12 +11,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import json
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
+import webbrowser
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
-from .dashboard_commands import local_python_lifecycle
+from .dashboard_commands import local_hud_launch, local_python_lifecycle
+from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .hub import integration_plan
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .reference import IanaBundle, ReferenceDataError, load_iana
@@ -362,6 +364,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     refresh_seconds: int = 5
     event_limit: int = 50
     setup_evidence: bytes | None = None
+    local_checks: LocalChecks | None = None
     javascript: bytes = DASHBOARD_JS.encode()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -385,11 +388,31 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", self.javascript)
             return
-        if route.path in {"/api/config", "/api/setup", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
+            return
+        if route.path == "/api/local-checks":
+            # An explicit same-origin fetch can set this header; cross-origin
+            # browser requests need a CORS preflight, which we do not permit.
+            if self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+                return
+            if self.local_checks is None:
+                self._send_json({"error": "local checks require HUD mode"}, status=403)
+                return
+            try:
+                payload = self.local_checks.snapshot()
+            except LocalCheckBusy:
+                self._send_json({"error": "local check in progress"}, status=429,
+                                extra_headers={"Retry-After": str(CHECK_CACHE_SECONDS)})
+                return
+            except (OSError, ValueError, TypeError, OverflowError):
+                self._send_json({"error": "local checks unavailable"}, status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
             return
         if route.path == "/api/traffic":
             from .dashboard_traffic import MAX_BYTES, unavailable
@@ -740,6 +763,7 @@ def serve(
     suricata_db: str | Path | None = None,
     inspect_tools: bool = False, source_available: bool = True,
     refresh_seconds: int = 5, event_limit: int = 50,
+    open_browser: bool = False,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
@@ -754,11 +778,12 @@ def serve(
     # Capture inert command text once. HTTP input cannot choose an interpreter
     # or checkout, execute commands, or trigger filesystem discovery.
     lifecycle = json.dumps(local_python_lifecycle(), ensure_ascii=True, allow_nan=False)
-    javascript = DASHBOARD_JS.replace(
+    launch = json.dumps(local_hud_launch(), ensure_ascii=True, allow_nan=False)
+    javascript = (f"const localHudLaunch = {launch};\n" + DASHBOARD_JS.replace(
         "const localPythonLifecycle = null;",
         f"const localPythonLifecycle = {lifecycle};",
         1,
-    ).encode()
+    )).encode()
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
@@ -767,12 +792,28 @@ def serve(
             "reference_library": reference_library, "refresh_seconds": refresh_seconds,
             "event_limit": event_limit,
             "setup_evidence": setup_evidence,
+            "local_checks": LocalChecks(store, source_available=source_available) if inspect_tools else None,
             "javascript": javascript,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)
     try:
-        print(f"MEGALODON dashboard listening on http://{host}:{port}", flush=True)
+        url = f"http://{host}:{port}/"
+        print(f"MEGALODON dashboard listening on {url}", flush=True)
+        if open_browser:
+            def open_bound_dashboard() -> None:
+                try:
+                    opened = webbrowser.open_new_tab(url)
+                except (OSError, webbrowser.Error):
+                    opened = False
+                if not opened:
+                    print(f"Open {url} in your browser.", flush=True)
+
+            Thread(
+                target=open_bound_dashboard,
+                name="megalodon-browser-open",
+                daemon=True,
+            ).start()
         server.serve_forever()
     finally:
         server.server_close()

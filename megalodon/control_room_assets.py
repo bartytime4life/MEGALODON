@@ -31,7 +31,7 @@ STATUS_HTML = """
 
 HOME_HTML = """
 <section class="room-home panel" aria-labelledby="room-home-title">
-  <p class="eyebrow">Your control room</p><h2 id="room-home-title" tabindex="-1">What can I see?</h2>
+  <p class="eyebrow">Continue exploring</p><h2 id="room-home-title" tabindex="-1">Review your saved evidence</h2>
   <p id="room-home-summary">No qualified data available. Your saved audit data and optional tools are checked separately.</p>
   <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#integrations-title">Open Apps</a><a href="#room-reports-title">Make a report</a></div>
   <details><summary>How do we know?</summary><p>Only validated, bounded metadata linked to a non-sample ingestion run appears in Traffic and Findings. Imported JSONL provenance is unverified. Open Evidence for separate saved reports and audit history.</p></details>
@@ -69,13 +69,31 @@ TRAFFIC_HTML = """
   </div>
 </section>
 <section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
-  <h2 id="room-help-title" tabindex="-1">Help</h2>
-  <section class="panel"><h3>Start manually on this PC</h3><p>From the repository root, run <code>./scripts/start-local.sh --check</code>, then <code>./scripts/start-local.sh</code>. Keep the terminal open and stop with Ctrl+C. In an activated environment where MEGALODON is installed, use <code>python -m megalodon hud</code>. Launching the HUD never creates sample data or starts a sensor.</p>
-  <h3>No qualified data available?</h3><p>Start with <a href="#setup-title">Home → Data and tools</a> to review the selected store and startup tool checks. Tools found on this PC do not prove that evidence has been collected.</p>
-  <p>To learn how to import an authorized metadata file, run <code>python -m megalodon run --help</code>. Under Data and tools, expand “Change data for the next launch” to select an existing completed offline run. Evidence shows those separate offline snapshots.</p>
-  <p>Refresh only reads the selected store. After the first import into a previously missing store, restart this HUD. If the store is unsafe or incompatible, inspect the terminal refusal; never weaken file permissions to force it open.</p>
-  <h3>What do the words mean?</h3><p>Unavailable: there is no usable evidence. Unknown: evidence cannot answer that question. Degraded: some evidence is limited or incomplete. Stale: a saved view is older than five minutes or a refresh failed. None means that the network is safe.</p>
-  <h3>What stays on this computer?</h3><p>Traffic, findings, tool checks and reports stay local. MEGALODON does not send them to the hosted reference console. Qwen is optional and cannot create findings, commands or reports.</p></section>
+  <p class="eyebrow">A little guidance</p><h2 id="room-help-title" tabindex="-1">Make yourself at home</h2>
+  <p>Start with a check. Add software when you need it. Review evidence when it is available.</p>
+  <div class="room-help-grid">
+    <section aria-labelledby="help-here"><h3 id="help-here">You can do this here</h3>
+      <ul><li>Check the local service, runtime versions, data readability, executables, and process names.</li><li>Find official downloads by workflow and check availability again after installing.</li><li>Review saved traffic and findings, filter by time, and export a local report.</li><li>Save a companion console link in Apps and open that app in its own tab.</li></ul>
+      <div class="room-actions"><a href="#setup-title">Check this computer →</a><a href="#setup-software-title">Find software →</a></div>
+    </section>
+    <section aria-labelledby="help-terminal"><h3 id="help-terminal">Use a terminal or another app</h3>
+      <p>Installing software, starting or stopping the HUD, selecting a new data source, and importing metadata happen outside this page. Downloads open the official publisher instructions.</p>
+      <p>Under <a href="#setup-title">Data and tools</a>, expand “Change data for the next launch” to prepare and copy a command. In Apps, advanced checks and maintenance commands are available to copy.</p>
+      <details><summary>Reopen or stop MEGALODON</summary><p id="help-launch-intro">Reading the launch method for this HUD…</p><code id="help-reopen-command">Launch command unavailable</code><p>The terminal window owns the running session. Keep it open, and press Ctrl+C there to stop the HUD. Launching does not create sample data or start a sensor.</p><p id="help-source-launch" hidden>From your reviewed repository folder, you can also run <code>./scripts/start-local.sh --check</code>, then <code>./scripts/start-local.sh</code>.</p></details>
+    </section>
+    <section aria-labelledby="help-data"><h3 id="help-data">Why is there no traffic?</h3>
+      <p>A working HUD and tools found on your PC do not mean evidence has been collected. Traffic and Findings need qualified metadata in the selected audit store.</p>
+      <p>Check the selected store in Home. To import authorized metadata, run <code>python -m megalodon run --help</code> in your terminal. For an existing completed offline run, prepare a launch command in Data and tools and review its snapshots under Evidence.</p>
+      <details><summary>I imported data and still see nothing</summary><p>Refresh reads the selected store. After the first import into a previously missing store, restart the HUD. If a store is unsafe or incompatible, inspect the terminal refusal and follow the setup guide; do not weaken permissions to force it open.</p></details>
+      <a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local PC setup and troubleshooting ↗</a>
+    </section>
+    <section aria-labelledby="help-language"><h3 id="help-language">Read the status with confidence</h3>
+      <p><strong>Found</strong> means an executable was on the checked PATH. <strong>Not found</strong> means it was absent from that PATH; it may exist elsewhere. <strong>Not checked</strong> means no availability claim is possible. <strong>Process observed</strong> means a matching name was present at that time. None proves health or a data connection.</p>
+      <p>Home shows the latest check you requested. Apps keeps its startup observations until you reopen the HUD.</p>
+      <p><strong>Unavailable</strong> means there is no usable evidence. <strong>Unknown</strong> means evidence cannot answer the question. <strong>Degraded</strong> means some evidence is limited. <strong>Stale</strong> means the saved view is old or a refresh failed. None of these states establishes network safety.</p>
+      <details><summary>What stays on this computer?</summary><p>Traffic, findings, tool checks, and reports stay local. Official download links open external publisher websites. MEGALODON does not send local evidence to the hosted reference console. Qwen is optional and cannot create findings, commands, or reports.</p></details>
+    </section>
+  </div>
 </section>
 """
 
@@ -97,7 +115,7 @@ def compose_control_room(html: str) -> str:
     legacy = legacy[:legacy.rfind('  </section>')].replace(SETUP_HTML, '', 1)
     # Setup describes the current launch, so keep it on Home rather than inside
     # the historical audit inspector. Its IDs and handlers stay unchanged.
-    html = html[:start] + HOME_HTML + SETUP_HTML + '</section>\n' + html[end:]
+    html = html[:start] + SETUP_HTML + HOME_HTML + '</section>\n' + html[end:]
     marker = '<section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>'
     html = html.replace(marker, marker + '<details class="room-audit-history"><summary>Audit history — may include sample and unlinked rows</summary>' + legacy + '</details>')
     html = html.replace('  <noscript>', TRAFFIC_HTML + '  <noscript>')
@@ -170,6 +188,98 @@ ROOM_CSS = r"""
 @media(max-width:560px) { .room-status { grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; } .room-status > div { padding:.5rem; } .room-status span { font-size:.68rem; } .room-status strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+"""
+
+ROOM_CSS += r"""
+/* Guided setup: one clear check, then software chosen by purpose. */
+.hud-start { padding:clamp(16px,2.3vw,28px); gap:24px; margin:0 0 20px; border-color:#365766; background:#0c202b; }
+.hud-start .setup-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; padding-bottom:20px; border-bottom:1px solid #304953; }
+.hud-start .setup-heading h2 { font-size:clamp(1.6rem,3vw,2.15rem); letter-spacing:-.035em; line-height:1.15; }
+.hud-start .setup-heading p:not(.eyebrow) { font-size:.94rem; margin:9px 0 0; }
+.hud-start .setup-heading .eyebrow { color:#8cdfce; font-size:.68rem; letter-spacing:.13em; margin:0 0 9px; }
+.hud-start .setup-help-link { flex-shrink:0; padding:11px 0; color:#c4e7ef; font-size:.85rem; text-underline-offset:4px; }
+.setup-main { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:32px; align-items:start; }
+.setup-main > section { min-width:0; }
+.hud-start .setup-step { color:#8cdfce; font-size:.65rem; font-weight:750; letter-spacing:.14em; margin:0 0 10px; }
+.hud-start .setup-main h3 { font-size:1.16rem; letter-spacing:-.025em; line-height:1.35; }
+.hud-start .setup-main > section > p { font-size:.85rem; line-height:1.6; }
+.setup-health { border-right:1px solid #304953; padding-right:32px; }
+.setup-check-actions { display:flex; gap:9px; flex-wrap:wrap; margin:20px 0 12px; }
+.hud-start .setup-primary { display:inline-flex; align-items:center; justify-content:space-between; gap:18px; background:#a6f4df; border-color:#a6f4df; color:#092c2b; font-weight:750; box-shadow:0 3px 0 #285e55; transition:background .15s,transform .15s; }
+.hud-start .setup-primary:hover:not(:disabled) { background:#c5ffef; transform:translateY(-1px); }
+.hud-start button:active:not(:disabled) { transform:translateY(1px); }
+.hud-start button:disabled { opacity:.6; cursor:not-allowed; }
+.hud-start .setup-report-button { background:transparent; font-size:.78rem; padding:.65rem .7rem; }
+.hud-start .setup-check-status { min-height:40px; color:#d6ebe9; font-size:.8rem; }
+.setup-check-results { border-top:1px solid #304953; border-bottom:1px solid #304953; margin:12px 0; padding:6px 0; }
+.hud-start .setup-check-empty { font-size:.83rem; padding:16px 2px; color:#aebfc7; }
+.setup-check-row { display:grid; grid-template-columns:24px minmax(0,1fr); gap:11px; padding:13px 0; transition:background-color .16s,opacity .16s; animation:setup-result-in .16s ease-out; }
+.setup-check-results[aria-busy="true"] .setup-check-row { opacity:.65; }
+@keyframes setup-result-in { from { opacity:.8; } to { opacity:1; } }
+.setup-check-row + .setup-check-row { border-top:1px solid #243b46; }
+.setup-check-indicator { width:22px; height:22px; display:grid; place-items:center; font-size:.78rem; font-weight:800; border:1px solid #7e7148; color:#e9d495; border-radius:6px; margin-top:2px; }
+.setup-check-indicator.is-ready { color:#a6f4df; border-color:#356d63; background:#133d37; }
+.setup-check-indicator.is-neutral { color:#bdd0da; border-color:#48616f; background:#112934; }
+.setup-check-row strong { display:block; font-size:.69rem; font-weight:600; color:#b1c7d0; }
+.setup-check-row b { display:block; margin:4px 0 5px; font-size:.89rem; font-weight:650; color:#eff8f6; overflow-wrap:anywhere; }
+.hud-start .setup-check-row p { margin:0; font-size:.77rem; line-height:1.55; }
+.hud-start .setup-health > .setup-check-boundary { font-size:.72rem; color:#b3cad2; padding-top:7px; }
+.hud-start .setup-status-grid { margin:14px 0 8px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.hud-start .setup-status-grid > div { background:#0a1a24; border-radius:7px; }
+.hud-start .setup-status-grid span { font-size:.64rem; }
+.hud-start .setup-status-grid b { font-size:1.05rem; font-weight:600; }
+.hud-start #setup-readiness { font-size:.73rem; line-height:1.6; }
+.setup-software-filters { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:12px; margin:20px 0 12px; }
+.setup-software-filters label { display:grid; gap:7px; font-size:.74rem; font-weight:650; color:#d0e2e8; min-width:0; }
+.setup-software-filters input,.setup-software-filters select { min-width:0; width:100%; min-height:44px; background:#081a25; color:#edf6f7; border:1px solid #426173; padding:10px 12px; border-radius:6px; font:inherit; font-size:.8rem; }
+.setup-software-filters input::placeholder { color:#a7bcc6; opacity:1; }
+.hud-start .setup-software-count { font-size:.73rem; margin:0 0 11px; color:#afc7d0; }
+.setup-software-list { display:grid; gap:0; border-top:1px solid #36515f; }
+.software-row { min-width:0; padding:18px 12px 15px; border-bottom:1px solid #36515f; transition:background-color .16s,box-shadow .16s; }
+.software-row.software-checked { box-shadow:inset 3px 0 0 #a6f4df; background:#112d35; }
+.software-heading { display:flex; align-items:center; gap:12px; }
+.software-mark { display:grid; place-items:center; width:38px; height:38px; flex:0 0 38px; font-size:.82rem; font-weight:750; letter-spacing:-.04em; color:#a6f4df; background:#16332e; border:1px solid #31554f; border-radius:8px; }
+.software-identity { min-width:0; }
+.hud-start .software-identity h4 { margin:0; font-size:1rem; line-height:1.3; color:#f1f7f6; }
+.software-requirement { display:block; font-size:.68rem; color:#b2c6ce; margin-top:4px; }
+.hud-start .software-purpose { margin:12px 0 6px; font-size:.84rem; }
+.hud-start .software-presence { font-size:.7rem; color:#bddbd8; margin:6px 0 12px; }
+.software-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.hud-start .software-actions > a,.hud-start .software-actions > button { display:inline-flex; align-items:center; justify-content:center; padding:10px 12px; min-height:44px; border:1px solid #416674; border-radius:6px; font-size:.76rem; font-weight:600; text-decoration:none; color:#e2f5f4; background:#183845; }
+.hud-start .software-actions > button { background:transparent; color:#c4dfeb; }
+.hud-start .software-actions > .software-check { min-width:148px; }
+.hud-start .software-actions > a:hover,.hud-start .software-actions > button:hover:not(:disabled) { border-color:#a6f4df; background:#204654; }
+.hud-start .software-details { margin-top:6px; }
+.hud-start .software-details > summary { font-size:.73rem; min-height:38px; padding:10px 0; }
+.hud-start .software-details p { font-size:.77rem; line-height:1.65; margin:2px 0 10px; }
+.hud-start .software-details a { font-size:.77rem; display:inline-block; padding:8px 0; min-height:36px; }
+.hud-start .setup-download-note { font-size:.74rem; line-height:1.7; margin:15px 0 0; }
+.setup-download-note a { display:block; margin-top:8px; text-underline-offset:4px; }
+.setup-bottom { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; border-top:1px solid #304953; padding-top:7px; }
+.hud-start .setup-bottom > details { border:0; margin:0; }
+.hud-start .setup-bottom summary { font-size:.84rem; font-weight:600; padding:12px 0; }
+.hud-start .setup-bottom p,.hud-start .setup-bottom label { font-size:.8rem; line-height:1.7; }
+.hud-start .setup-bottom code { font-size:.79rem; padding:12px; white-space:pre-wrap; }
+.hud-start :focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
+.room-home { padding:20px 0; margin:0 0 12px; border:0; background:transparent; box-shadow:none; }
+.room-home h2 { font-size:1.2rem; margin:0; }
+.room-home .eyebrow { font-size:.67rem; }
+.room-home .room-actions a { background:transparent; font-size:.8rem; }
+.room-home > p:not(.eyebrow) { font-size:.84rem; }
+.room-help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.room-help-grid > section { padding:20px; background:#0c202b; border:1px solid #36515f; border-radius:10px; min-width:0; }
+.room-help-grid h3 { margin:0 0 12px; font-size:1.05rem; }
+.room-help-grid p,.room-help-grid li { font-size:.87rem; line-height:1.7; color:#bfd0d9; }
+.room-help-grid ul { padding-left:20px; }
+.room-help-grid a { color:#a6f4df; text-underline-offset:3px; }
+.room-help-grid details { border-top:1px solid #36515f; margin-top:14px; }
+.room-help-grid summary { cursor:pointer; min-height:44px; padding:12px 0; color:#deeeed; font-size:.87rem; }
+.room-help-grid code { font-size:.78rem; overflow-wrap:anywhere; }
+.room-help-grid #help-reopen-command { display:block; padding:12px; border:1px solid #36515f; border-radius:6px; background:#071923; white-space:pre-wrap; }
+@media(prefers-reduced-motion:reduce) { .setup-check-row,.software-row { animation:none; transition:none; } }
+@media(max-width:940px) { .setup-main { gap:22px; } .setup-health { padding-right:22px; } .setup-software-filters { grid-template-columns:1fr; } .setup-check-actions { flex-direction:column; align-items:stretch; } }
+@media(max-width:760px) { .setup-main,.setup-bottom,.room-help-grid { grid-template-columns:1fr; } .setup-health { padding-right:0; border-right:0; padding-bottom:22px; border-bottom:1px solid #304953; } .setup-check-actions { flex-direction:row; } .setup-software-filters { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); } .hud-start .setup-heading { gap:12px; flex-direction:column; } .hud-start .setup-help-link { padding:0; min-height:32px; } .setup-bottom { gap:0; } .hud-start .setup-bottom > details + details { border-top:1px solid #304953; } }
+@media(max-width:440px) { .hud-start { padding:17px; } .setup-software-filters { grid-template-columns:1fr; } .hud-start .setup-heading h2 { font-size:1.7rem; } .setup-check-actions { flex-direction:column; } .software-actions { flex-direction:column; align-items:stretch; } .hud-start .tool-status-row { grid-template-columns:1fr; } .hud-start .tool-status-badges { justify-content:flex-start; } }
 """
 
 ROOM_JS = r"""
@@ -389,7 +499,7 @@ function renderRoom() {
   byId('room-count').textContent=has?`${selected.findings.length} in returned set`:'Unavailable';
   const note=stale?(snapshot?'Refresh failed or snapshot expired. Preserved metadata is stale.':'No qualified data available. The metadata check failed; use Help for the safe next step.'):!has?'No qualified data available in this time range.':future?'Clock uncertainty: future timestamps are present.':old?'Historical metadata only. Current sensor activity is unknown.':'Showing saved metadata. Sensor health and full coverage are unknown.';
   byId('room-notice').textContent=note;
-  byId('room-home-summary').textContent=has?`${selected.events.length} stored metadata events and ${selected.findings.length} linked findings are available. ${note}`:note+' Open Help for the safe next command.';
+  byId('room-home-summary').textContent=has?`${selected.events.length} stored metadata events and ${selected.findings.length} linked findings are available. ${note}`:note+' Open Data and tools to check your source and choose the next step.';
   byId('room-range-description').textContent=roomMeta(selected);
   renderRoomControls();
   const activity=textNode('table');activity.append(textNode('caption',`${selected.events.length} qualified events in this page`));
