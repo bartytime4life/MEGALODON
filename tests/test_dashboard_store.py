@@ -442,6 +442,20 @@ def test_ingestion_run_projection_is_bounded_receipt_only_and_newest_first(tmp_p
     for private_table in ("events", "detections", "actions"):
         assert f"from {private_table}" not in statement
 
+    with DashboardStore(path) as reader:
+        assert [item["run_id"] for item in reader.ingestion_runs(2, source="sample")] == [first]
+        assert reader.ingestion_runs(2, source="scapy") == []
+
+
+@pytest.mark.parametrize("source", ["zeek", "", 1, [], True])
+def test_ingestion_run_projection_rejects_unstored_source(tmp_path, source):
+    path = tmp_path / "private" / "audit.db"
+    with Store(path):
+        pass
+    with DashboardStore(path) as reader:
+        with pytest.raises(ValueError, match="^DASHBOARD_STORE:INVALID_SOURCE$"):
+            reader.ingestion_runs(source=source)
+
 
 @pytest.mark.parametrize("limit", [0, 26, True, 1.0, "1"])
 def test_ingestion_run_projection_rejects_invalid_limits(tmp_path, limit):

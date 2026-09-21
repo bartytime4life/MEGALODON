@@ -354,6 +354,7 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert 'id="ingestion-runs-panel"' in INDEX_HTML
     assert 'id="ingestion-runs-list" role="list" aria-live="polite"' in INDEX_HTML
     assert 'id="ingestion-runs-retry" type="button"' in INDEX_HTML
+    assert 'id="ingestion-source"' in INDEX_HTML
     assert 'id="analysis-summary"' in INDEX_HTML
     assert 'id="analysis-limitations"' in INDEX_HTML
     assert 'role="tablist"' in INDEX_HTML
@@ -436,8 +437,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "['source_scope', report.source_scope]" in dashboard_without_user_exports
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
-    assert "dashboard-ingestion-runs-v1" in DASHBOARD_JS
-    assert "'/api/ingestion-runs?limit=8'" in DASHBOARD_JS
+    assert "dashboard-ingestion-runs-v2" in DASHBOARD_JS
+    assert "`/api/ingestion-runs-v2?limit=8&source=${selectedSource}`" in DASHBOARD_JS
     assert "validatedIngestionRuns" in DASHBOARD_JS
     assert "renderIngestionRuns" in DASHBOARD_JS
     assert "'/api/advisory-receipt'" in DASHBOARD_JS
@@ -918,7 +919,7 @@ process.stdin.on('end', async () => {
     code = withoutBootstrap;
     const nodes = new Map();
     function fakeNode(id = '') {
-      return {id, value: id === 'filter-severity' ? 'ALL' : '', textContent: '',
+      return {id, value: id === 'filter-severity' ? 'ALL' : id === 'ingestion-source' ? 'all' : '', textContent: '',
         className: '', disabled: false, hidden: false, dateTime: '', colSpan: 0, children: [], attributes: new Map(),
         append(...children) { this.children.push(...children); },
         replaceChildren(...children) { this.children = children; },
@@ -956,9 +957,11 @@ process.stdin.on('end', async () => {
         if (rejected.some(validRecordedTime)) throw new Error('ambiguous or impossible receipt time was accepted');
       }
       let ingestionRequestCount = 0;
+      const ingestionUrls = [];
       let releaseIngestionRequest;
-      requestBoundedJSON = () => {
+      requestBoundedJSON = url => {
         ingestionRequestCount += 1;
+        ingestionUrls.push(url);
         return new Promise(resolve => { releaseIngestionRequest = resolve; });
       };
     `, context);
@@ -967,10 +970,24 @@ process.stdin.on('end', async () => {
     const overlapping = vm.runInContext('loadIngestionRuns()', context);
     if (vm.runInContext('ingestionRequestCount', context) !== 1) throw new Error('overlapping reload started a second request');
     if (!nodes.get('ingestion-runs-retry').disabled) throw new Error('reload control remained enabled during request');
-    vm.runInContext("releaseIngestionRequest({schema: 'dashboard-ingestion-runs-v1', limit: 8, runs: []})", context);
+    if (!nodes.get('ingestion-source').disabled) throw new Error('source changed during request');
+    vm.runInContext("releaseIngestionRequest({schema: 'dashboard-ingestion-runs-v2', limit: 8, max_runs: 25, max_response_bytes: 32768, source_filter: 'all', not_recorded: ['adapter_identity', 'accepted_count', 'rejected_count'], runs: []})", context);
     await Promise.all([first, overlapping]);
     if (nodes.get('ingestion-runs-retry').disabled) throw new Error('reload control remained disabled after request');
+    if (nodes.get('ingestion-source').disabled) throw new Error('source control remained disabled after request');
     if (vm.runInContext('ingestionRunsLoading', context)) throw new Error('reload guard remained active after request');
+    const allSourceFetchedAt = vm.runInContext('state.ingestionRunsFetchedAt', context);
+    if (!allSourceFetchedAt) throw new Error('all-source receipt time was not retained');
+    nodes.get('ingestion-source').value = 'jsonl';
+    const selected = vm.runInContext('loadIngestionRuns()', context);
+    if (vm.runInContext('ingestionUrls[1]', context) !== '/api/ingestion-runs-v2?limit=8&source=jsonl')
+      throw new Error('selected source was not bound to the request');
+    vm.runInContext("releaseIngestionRequest({schema: 'dashboard-ingestion-runs-v2', limit: 8, max_runs: 25, max_response_bytes: 32768, source_filter: 'sample', not_recorded: ['adapter_identity', 'accepted_count', 'rejected_count'], runs: []})", context);
+    await selected;
+    if (nodes.get('ingestion-runs-status').textContent !== 'Unavailable')
+      throw new Error('mismatched source was shown as a valid result');
+    if (vm.runInContext('state.ingestionRunsFetchedAt', context) !== allSourceFetchedAt)
+      throw new Error('panel filter changed the all-source report basis');
     process.stdout.write('receipt-guarded\n');
   } catch (error) { console.error(error.stack || error.message); process.exitCode = 1; }
 });
@@ -1305,6 +1322,8 @@ def test_ingestion_runs_api_is_bounded_receipt_only_and_read_only(tmp_path):
     path = tmp_path / "private" / "events.db"
     stamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with Store(path) as writer:
+        sample_id = writer.start_ingestion_run("sample", started_at=stamp)
+        writer.finish_ingestion_run(sample_id, "source_exhausted", finished_at=stamp)
         run_id = writer.start_ingestion_run("jsonl", started_at=stamp)
         writer.finish_ingestion_run(
             run_id, "event_limit_reached", finished_at=stamp
@@ -1340,6 +1359,17 @@ def test_ingestion_runs_api_is_bounded_receipt_only_and_read_only(tmp_path):
                     "termination_reason": "event_limit_reached",
                 }
             ]
+            with urlopen(f"{base}/api/ingestion-runs-v2?limit=2&source=sample", timeout=2) as response:
+                qualified = json.loads(response.read())
+            assert qualified["schema"] == "dashboard-ingestion-runs-v2"
+            assert qualified["source_filter"] == "sample"
+            assert qualified["max_runs"] == 25
+            assert qualified["max_response_bytes"] == 32768
+            assert qualified["not_recorded"] == ["adapter_identity", "accepted_count", "rejected_count"]
+            assert [item["run_id"] for item in qualified["runs"]] == [sample_id]
+            with urlopen(f"{base}/api/ingestion-runs-v2?limit=2&source=all", timeout=2) as response:
+                all_runs = json.loads(response.read())
+            assert [item["run_id"] for item in all_runs["runs"]] == [run_id, sample_id]
             for query in (
                 "limit=0",
                 "limit=26",
@@ -1349,6 +1379,10 @@ def test_ingestion_runs_api_is_bounded_receipt_only_and_read_only(tmp_path):
             ):
                 with pytest.raises(HTTPError) as raised:
                     urlopen(f"{base}/api/ingestion-runs?{query}", timeout=2)
+                assert raised.value.code == 400
+            for query in ("source=zeek", "source=sample&source=jsonl", "source=", "source=sample&other=1"):
+                with pytest.raises(HTTPError) as raised:
+                    urlopen(f"{base}/api/ingestion-runs-v2?limit=2&{query}", timeout=2)
                 assert raised.value.code == 400
         finally:
             server.shutdown()
