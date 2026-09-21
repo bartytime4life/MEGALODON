@@ -81,9 +81,16 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
 def test_ai_receipt_path_never_collides_with_telemetry_database():
     normal = Path("/private/megalodon.db")
     assert _ai_receipt_path(normal) == Path("/private/megalodon-ai-receipts.db")
-    collision = Path("/private/megalodon-ai-receipts.db")
-    assert _ai_receipt_path(collision) == Path("/private/megalodon-ai-receipts-ledger.db")
-    assert _ai_receipt_path(collision) != collision
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        collision = Path("/private/megalodon-ai-receipts.db" + suffix)
+        selected = _ai_receipt_path(collision)
+        assert selected == Path("/private/megalodon-ai-receipts-ledger.db")
+        assert collision not in {
+            selected,
+            selected.with_name(selected.name + "-wal"),
+            selected.with_name(selected.name + "-shm"),
+            selected.with_name(selected.name + "-journal"),
+        }
 
 
 def test_ai_cli_treats_valid_proposal_as_success_without_application():
