@@ -7,6 +7,7 @@ from http.server import ThreadingHTTPServer
 import json
 from threading import Thread
 
+from megalodon.ai_broker import ReceiptStore
 from megalodon.config import AISettings
 from megalodon.dashboard import DashboardHandler
 
@@ -94,3 +95,39 @@ def test_enabled_ai_ask_uses_fixed_question_and_audit_path(monkeypatch, tmp_path
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_malformed_model_tool_returns_audited_failure_over_http(monkeypatch, tmp_path):
+    selections = []
+
+    def fake_generate(*_args, **_kwargs):
+        selections.append("selection")
+        return json.dumps({"tool": [], "arguments": {}, "reason": "synthetic malformed selection"})
+
+    monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
+    ledger = tmp_path / "ai.db"
+    handler = type("AIMalformedSelectionHandler", (DashboardHandler,), {
+        # Any attempt to read evidence would fail: no reader methods exist.
+        "store": object(), "ai_settings": AISettings(enabled=True),
+        "ai_receipt_path": ledger, "ai_operator_token": "exact-test-token",
+    })
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        headers = {"X-Megalodon-AI-Token": "exact-test-token",
+                   "Origin": f"http://127.0.0.1:{server.server_port}",
+                   "Content-Type": "application/json"}
+        code, value = _get(server, "/api/ai/ask", headers, method="POST",
+                           body=json.dumps({"question": "seeing"}))
+        assert code == 200
+        assert value["execution_state"] == "failed" and value["error_code"] == "UNKNOWN_TOOL"
+        assert value["observed"] is None and value["inferred"] is None
+        assert selections == ["selection"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    with ReceiptStore(ledger) as receipts:
+        assert receipts.latest(value["receipt_id"])["state"] == "failed"
+        assert receipts.verify_chain()["incomplete_count"] == 0

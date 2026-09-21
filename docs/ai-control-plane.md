@@ -56,7 +56,12 @@ The current HUD offers fixed question IDs and permits only the Level 0 tools
 listed for each question, plus the Level 1 report tool for the report question.
 Qwen selects one tool by JSON; the broker validates the selection before reading
 data. A second bounded request may explain the resulting typed projection.
-Unexpected tool selection and malformed model output fail closed. Stored
+Unexpected tool selection and malformed model output fail closed. Tool
+selections with non-string names are routed to a failed `UNKNOWN_TOOL`
+receipt before evidence reads or a follow-up explanation request. Telemetry
+summary accepts only `window_minutes`; the `limit` argument belongs to alerts
+queries. Unsupported argument fields and non-string report types produce
+`INVALID_ARGUMENTS` receipts without tool execution. Stored
 traffic is limited to qualified metadata and detector IDs/severity/timestamps;
 packet payloads, hashes of payloads, raw messages, raw JSON and arbitrary
 evidence text are never forwarded. Source authenticity, coverage, host safety
