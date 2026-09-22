@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from hashlib import sha256
+from math import isfinite
 import json
 import re
 from typing import Any, Mapping, Sequence
@@ -27,9 +28,7 @@ MODEL_ALIAS_RE = re.compile(r"qwen[A-Za-z0-9._:-]{1,91}")
 MODEL_FAMILY_RE = re.compile(r"qwen[A-Za-z0-9._-]{1,63}")
 QUANTIZATION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,31}")
 VERSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}")
-PURPOSES = frozenset(
-    {"advisory", "explanation", "tool-selection", "research-evaluation"}
-)
+PURPOSES = frozenset({"advisory", "explanation", "research-evaluation"})
 EVIDENCE_CLASSES = frozenset({"operator_observed", "synthetic_fixture"})
 BANNED_CONTROLS = re.compile(
     r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069\ufeff]"
@@ -97,6 +96,7 @@ class ValidatedProfile:
     canonical_sha256: str
     hard_gate_passed: bool
     gate_failures: tuple[str, ...]
+    comparison_boundary_sha256: str
 
     @property
     def value(self) -> dict[str, Any]:
@@ -125,8 +125,16 @@ def _reject_constant(_: str) -> None:
     raise ModelProfileError("NON_FINITE_NUMBER")
 
 
+def _finite_float(value: str) -> float:
+    """Reject numeric overflow as well as explicit NaN/Infinity constants."""
+    number = float(value)
+    if not isfinite(number):
+        raise ModelProfileError("NON_FINITE_NUMBER")
+    return number
+
+
 def parse_profile_bytes(data: bytes) -> object:
-    """Decode one bounded JSON document without duplicate keys or NaN/Infinity."""
+    """Decode one bounded JSON document without duplicate keys or non-finite numbers."""
 
     if type(data) is not bytes or not 1 <= len(data) <= MAX_PROFILE_BYTES:
         raise ModelProfileError("PROFILE_SIZE")
@@ -135,10 +143,12 @@ def parse_profile_bytes(data: bytes) -> object:
             data.decode("utf-8"),
             object_pairs_hook=_strict_pairs,
             parse_constant=_reject_constant,
+            parse_float=_finite_float,
         )
     except ModelProfileError:
         raise
-    except (UnicodeError, json.JSONDecodeError, RecursionError):
+    except (ValueError, RecursionError):
+        # Includes UTF-8/JSON errors and the interpreter's integer digit limit.
         raise ModelProfileError("INVALID_JSON") from None
 
 
@@ -157,9 +167,7 @@ def _sha(value: object, code: str) -> str:
     return text
 
 
-def _integer(
-    value: object, *, minimum: int, maximum: int, code: str
-) -> int:
+def _integer(value: object, *, minimum: int, maximum: int, code: str) -> int:
     if type(value) is not int or not minimum <= value <= maximum:
         raise ModelProfileError(code)
     return value
@@ -183,6 +191,33 @@ def _canonical(value: Mapping[str, Any]) -> bytes:
     ).encode("ascii")
 
 
+def _comparison_boundary(profile: Mapping[str, Any]) -> dict[str, object]:
+    """Return the exact operating/evaluation boundary required for comparison.
+
+    Model identity, family, quantization, context capacity, latency, and memory
+    are intentionally excluded: those are the candidate attributes being
+    compared. Everything that defines the workload or provider execution
+    environment is included so unlike-for-like observations cannot be ranked.
+    """
+
+    runner = profile["runner"]
+    evaluation = profile["evaluation"]
+    return {
+        "evidence_class": profile["evidence_class"],
+        "provider": profile["provider"],
+        "endpoint": profile["endpoint"],
+        "purpose": profile["purpose"],
+        "operational_context": profile["operational_context"],
+        "structured_output": profile["structured_output"],
+        "thinking_enabled": profile["thinking_enabled"],
+        "runner_name": runner["name"],
+        "runner_version": runner["version"],
+        "runner_binary_sha256": runner["binary_sha256"],
+        "corpus_sha256": evaluation["corpus_sha256"],
+        "sample_count": evaluation["sample_count"],
+    }
+
+
 def validate_profile(value: object) -> ValidatedProfile:
     """Validate one closed candidate and derive deterministic hard-gate status."""
 
@@ -197,7 +232,10 @@ def validate_profile(value: object) -> ValidatedProfile:
         raise ModelProfileError("PROFILE_ID")
     if profile["status"] != "candidate":
         raise ModelProfileError("STATUS")
-    if profile["evidence_class"] not in EVIDENCE_CLASSES:
+    if (
+        type(profile["evidence_class"]) is not str
+        or profile["evidence_class"] not in EVIDENCE_CLASSES
+    ):
         raise ModelProfileError("EVIDENCE_CLASS")
     if profile["provider"] != "ollama":
         raise ModelProfileError("PROVIDER")
@@ -243,7 +281,10 @@ def validate_profile(value: object) -> ValidatedProfile:
     )
     if operational_context > context_window:
         raise ModelProfileError("CONTEXT_RELATION")
-    if profile["purpose"] not in PURPOSES:
+    if (
+        type(profile["purpose"]) is not str
+        or profile["purpose"] not in PURPOSES
+    ):
         raise ModelProfileError("PURPOSE")
     if profile["structured_output"] is not True:
         raise ModelProfileError("STRUCTURED_OUTPUT_REQUIRED")
@@ -315,12 +356,14 @@ def validate_profile(value: object) -> ValidatedProfile:
         if count != sample_count
     )
     copied = json.loads(_canonical(profile).decode("ascii"))
-    digest = sha256(_canonical(copied)).hexdigest()
+    profile_digest = sha256(_canonical(copied)).hexdigest()
+    boundary_digest = sha256(_canonical(_comparison_boundary(copied))).hexdigest()
     return ValidatedProfile(
         _canonical_value=_canonical(copied),
-        canonical_sha256=digest,
+        canonical_sha256=profile_digest,
         hard_gate_passed=not failures,
         gate_failures=failures,
+        comparison_boundary_sha256=boundary_digest,
     )
 
 
@@ -343,6 +386,7 @@ def binding_candidate_packet(profile: ValidatedProfile) -> dict[str, object]:
         "state": state,
         "profile_id": profile.profile_id,
         "profile_sha256": profile.canonical_sha256,
+        "comparison_boundary_sha256": profile.comparison_boundary_sha256,
         "provider": {
             "name": value["provider"],
             "endpoint": value["endpoint"],
@@ -368,6 +412,7 @@ def binding_candidate_packet(profile: ValidatedProfile) -> dict[str, object]:
             "thinking_enabled": False,
         },
         "evaluation": {
+            "corpus_sha256": evaluation["corpus_sha256"],
             "sample_count": evaluation["sample_count"],
             "schema_valid_count": evaluation["schema_valid_count"],
             "citation_valid_count": evaluation["citation_valid_count"],
@@ -403,7 +448,7 @@ def _ranking_key(profile: ValidatedProfile) -> tuple[object, ...]:
 def compare_profiles(
     profiles: Sequence[ValidatedProfile],
 ) -> dict[str, object]:
-    """Rank bounded self-reported candidates without selecting or admitting one."""
+    """Rank like-for-like candidates without selecting or admitting one."""
 
     if not 2 <= len(profiles) <= MAX_PROFILES:
         raise ModelProfileError("PROFILE_COUNT")
@@ -413,11 +458,18 @@ def compare_profiles(
     digests = [profile.canonical_sha256 for profile in profiles]
     if len(digests) != len(set(digests)):
         raise ModelProfileError("DUPLICATE_PROFILE")
+    boundaries = {
+        profile.comparison_boundary_sha256 for profile in profiles
+    }
+    if len(boundaries) != 1:
+        raise ModelProfileError("COMPARISON_BOUNDARY_MISMATCH")
 
+    boundary_digest = next(iter(boundaries))
     ordered = sorted(profiles, key=_ranking_key)
     return {
         "schema": COMPARISON_SCHEMA,
         "state": "COMPARISON_ONLY",
+        "comparison_boundary_sha256": boundary_digest,
         "ranking": [
             {
                 "rank": index,
@@ -437,6 +489,7 @@ def compare_profiles(
         "remaining_holds": list(SEPARATE_HOLDS),
         "limitations": [
             "Metrics are operator-supplied observations, not independent attestation.",
+            "All ranked profiles share one exact workload and runner boundary digest.",
             "Ranking does not select, admit, pull, start, release, or deploy a model.",
             "Lower latency and memory only break ties after closed validation gates.",
         ],
