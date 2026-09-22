@@ -137,6 +137,116 @@ def _temporary_path_class(path: Path) -> str:
     return "other"
 
 
+def _sqlite_error_observation(exc: sqlite3.Error) -> dict[str, object]:
+    code = getattr(exc, "sqlite_errorcode", None)
+    name = getattr(exc, "sqlite_errorname", None)
+    return {
+        "cause_type": type(exc).__name__[:80],
+        "sqlite_errorcode": int(code) if isinstance(code, int) else "unavailable",
+        "sqlite_errorname": (
+            str(name)
+            if isinstance(name, str)
+            and re.fullmatch(r"SQLITE_[A-Z0-9_]+", name)
+            else "unavailable"
+        ),
+    }
+
+
+def _darwin_directory_anchor_sqlite_observation() -> dict[str, object]:
+    """Test a directory-fd SQLite path in a disposable Darwin-only fixture."""
+
+    if sys.platform != "darwin":
+        return {"status": "not_applicable"}
+
+    with tempfile.TemporaryDirectory(prefix="megalodon-dirfd-probe-") as root:
+        private = Path(root) / "private"
+        private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+        path = private / "audit.db"
+        directory_fd = None
+        database_fd = None
+        connection = None
+        try:
+            try:
+                directory_fd = storage._open_private_directory(
+                    private, create=False, prefix="STORAGE_PATH"
+                )
+                database_fd, _ = storage._open_private_database(
+                    path,
+                    directory_fd,
+                    writable=True,
+                    create=True,
+                    prefix="STORAGE_PATH",
+                )
+            except storage.StorageSchemaError as exc:
+                return {"status": _storage_code(exc)}
+
+            if directory_fd is None:
+                return {"status": "directory_descriptor_unavailable"}
+            anchor_root = Path(
+                storage._descriptor_database_path(directory_fd, private)
+            )
+            if str(anchor_root) == str(private):
+                return {"status": "directory_descriptor_path_unavailable"}
+            candidate = anchor_root / path.name
+            try:
+                same_identity = os.path.samestat(
+                    candidate.stat(), os.fstat(database_fd)
+                )
+            except OSError as exc:
+                return {
+                    "status": "candidate_stat_failed",
+                    "candidate_identity": False,
+                    "candidate_stat": _errno_code(exc),
+                }
+            if not same_identity:
+                return {
+                    "status": "candidate_identity_mismatch",
+                    "candidate_identity": False,
+                }
+
+            try:
+                connection = sqlite3.connect(
+                    f"{candidate.as_uri()}?mode=rw&cache=private",
+                    uri=True,
+                    timeout=10,
+                    check_same_thread=False,
+                )
+                storage._validate_connection_path(
+                    connection,
+                    storage._absolute_database_path(path),
+                    "STORAGE_PATH",
+                    anchor=candidate,
+                )
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "CREATE TABLE megalodon_directory_anchor_probe(value INTEGER)"
+                )
+                connection.rollback()
+            except storage.StorageSchemaError as exc:
+                return {
+                    "status": _storage_code(exc),
+                    "candidate_identity": True,
+                }
+            except sqlite3.Error as exc:
+                return {
+                    "status": "sqlite_error",
+                    "candidate_identity": True,
+                    **_sqlite_error_observation(exc),
+                }
+            return {
+                "status": "accepted",
+                "candidate_identity": True,
+                "descriptor_strategy": _strategy(str(anchor_root)),
+            }
+        finally:
+            if connection is not None:
+                connection.close()
+            if database_fd is not None:
+                os.close(database_fd)
+            if directory_fd is not None:
+                os.close(directory_fd)
+
+
 def _production_store_observation() -> dict[str, object]:
     """Exercise the production Store constructor without exposing SQLite text."""
 
@@ -152,18 +262,7 @@ def _production_store_observation() -> dict[str, object]:
             result["status"] = _storage_code(exc)
             cause = exc.__cause__
             if isinstance(cause, sqlite3.Error):
-                result["cause_type"] = type(cause).__name__[:80]
-                code = getattr(cause, "sqlite_errorcode", None)
-                result["sqlite_errorcode"] = (
-                    int(code) if isinstance(code, int) else "unavailable"
-                )
-                name = getattr(cause, "sqlite_errorname", None)
-                result["sqlite_errorname"] = (
-                    str(name)
-                    if isinstance(name, str)
-                    and re.fullmatch(r"SQLITE_[A-Z0-9_]+", name)
-                    else "unavailable"
-                )
+                result.update(_sqlite_error_observation(cause))
             elif cause is None:
                 result["cause_type"] = "none"
             else:
@@ -183,6 +282,7 @@ def collect_report() -> dict[str, object]:
         "python": ".".join(map(str, sys.version_info[:3])),
         "sqlite_version": sqlite3.sqlite_version,
         "darwin_alias": _darwin_alias_observation(),
+        "darwin_directory_anchor_sqlite": _darwin_directory_anchor_sqlite_observation(),
         "store_constructor": _production_store_observation(),
     }
     try:
