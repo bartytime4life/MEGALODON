@@ -1,0 +1,67 @@
+{
+  "schema_version": "megalodon.local-model-binding/v1",
+  "repository": "bartytime4life/MEGALODON",
+  "status": "BOUND",
+  "logical_alias": "local:qwen-2.5-7b-instruct-fp16-v1",
+  "provider": {
+    "name": "ollama",
+    "version": "0.24.0",
+    "executable_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "provenance_ref": "operator-receipt:ollama-build-v1",
+    "endpoint": "http://127.0.0.1:11434"
+  },
+  "artifact": {
+    "installed_tag": "qwen2.5:7b-instruct-fp16",
+    "manifest_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "model_weight_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "components": [
+      {
+        "component_id": "weights-0",
+        "role": "weights",
+        "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "size_bytes": 1
+      },
+      {
+        "component_id": "template-0",
+        "role": "template",
+        "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "size_bytes": 1
+      }
+    ],
+    "provenance_ref": "operator-receipt:qwen-artifact-v1",
+    "license_refs": ["operator-receipt:qwen-license-v1"]
+  },
+  "host_profile": {
+    "profile_id": "ubuntu24-rtx5080-cuda-v1",
+    "os": "ubuntu-24.04",
+    "architecture": "x86_64",
+    "backend": "cuda",
+    "effective_config_sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "registry": {
+    "registry_id": "qwen-anomaly-registry-v1",
+    "fingerprint_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "operator_decision": {
+    "status": "APPROVED",
+    "actor": "example-operator",
+    "approved_at": "2026-09-22T04:00:00Z",
+    "evidence_refs": ["example-only:not-an-approval"]
+  },
+  "effects": {
+    "network_access_performed": false,
+    "model_pulled": false,
+    "model_installed": false,
+    "model_started": false,
+    "alias_created": false,
+    "host_configuration_changed": false,
+    "detector_authority_granted": false,
+    "action_authority_granted": false
+  },
+  "limitations": [
+    "Synthetic fixture only; every identifier and digest is an example.",
+    "Validation proves structure and consistency, not model bytes or operator identity.",
+    "No provider operation, containment acceptance, release, deployment, or host authority follows."
+  ],
+  "generated_at": "2026-09-22T04:00:00Z"
+}
