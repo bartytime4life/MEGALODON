@@ -181,15 +181,24 @@ def _darwin_transaction_stage_observation(use_descriptor_path: bool) -> dict[str
             anchored = storage._anchored_database_path(
                 database_fd, path, "STORAGE_PATH"
             )
-            sqlite_path = anchored if use_descriptor_path else path
+            canonical = storage._resolve_top_level_system_alias(
+                storage._absolute_database_path(path, "STORAGE_PATH")
+            )
+            sqlite_path = anchored if use_descriptor_path else canonical
             result: dict[str, object] = {
                 "status": "running",
                 "path_mode": "descriptor" if use_descriptor_path else "canonical",
-                "database_identity_before": _same_stat(path, database_fd),
+                "database_identity_before": _same_stat(canonical, database_fd),
                 "directory_identity_before": (
-                    directory_fd is not None and _same_stat(private, directory_fd)
+                    directory_fd is not None
+                    and _same_stat(canonical.parent, directory_fd)
                 ),
             }
+            if not result["database_identity_before"] or not result[
+                "directory_identity_before"
+            ]:
+                result["status"] = "canonical_identity_mismatch"
+                return result
             try:
                 connection = sqlite3.connect(
                     f"{sqlite_path.as_uri()}?mode=rw&cache=private",
@@ -199,7 +208,7 @@ def _darwin_transaction_stage_observation(use_descriptor_path: bool) -> dict[str
                 )
                 storage._validate_connection_path(
                     connection,
-                    storage._absolute_database_path(path),
+                    canonical,
                     "STORAGE_PATH",
                     anchor=anchored if use_descriptor_path else None,
                 )
@@ -226,9 +235,10 @@ def _darwin_transaction_stage_observation(use_descriptor_path: bool) -> dict[str
 
             connection.rollback()
             result["status"] = "accepted"
-            result["database_identity_after"] = _same_stat(path, database_fd)
+            result["database_identity_after"] = _same_stat(canonical, database_fd)
             result["directory_identity_after"] = (
-                directory_fd is not None and _same_stat(private, directory_fd)
+                directory_fd is not None
+                and _same_stat(canonical.parent, directory_fd)
             )
             result["journal_sidecar_after_rollback"] = (
                 path.parent / f"{path.name}-journal"
