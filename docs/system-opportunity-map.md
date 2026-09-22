@@ -1,6 +1,6 @@
 # System opportunity map
 
-Status: **Proposed**. This is a design and sequencing record, not an
+Status: ◐ **Proposed**. This is a design and sequencing record, not an
 implementation or acceptance receipt. Basis: GitHub
 `main@97c5798f53b539bbcb487eaa7c8ff07ac0344041` (tree
 `6384a3fe4e743cbce274d654b413f8a07c1e4cff`) and repository files read on

@@ -1,6 +1,6 @@
 # MEGALODON integration hub contract
 
-Status: **implemented static plan; no general runner, scheduler, installer, or
+Status: ● **implemented static plan; no general runner, scheduler, installer, or
 external-tool activation**.
 
 Document role: this file owns the closed workflow vocabulary and its execution

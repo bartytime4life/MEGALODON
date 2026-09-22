@@ -1,6 +1,6 @@
 # CI dependency and action policy
 
-Status: implemented for the required pull-request validation inputs; the
+Status: ● implemented for the required pull-request validation inputs; the
 compatibility lane is non-required discovery work. This document does not change
 the runtime dependency boundary, add a vendor account, or authorize network
 telemetry.
