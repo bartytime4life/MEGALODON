@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/exact-head-evidence/v1/schema.json",
+  "title": "MEGALODON exact-head evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "subject",
+    "execution",
+    "authentication",
+    "disposition",
+    "supersession"
+  ],
+  "properties": {
+    "schema_version": {"const": "megalodon.exact-head-evidence/v1"},
+    "repository": {"const": "bartytime4life/MEGALODON"},
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "pull_request", "artifact_digests"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/sha"},
+        "tree": {"$ref": "#/$defs/sha"},
+        "pull_request": {"type": ["integer", "null"], "minimum": 1},
+        "artifact_digests": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "architecture",
+        "commands",
+        "exit_codes",
+        "started_at",
+        "finished_at"
+      ],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "commands": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "exit_codes": {"type": "array", "items": {"type": "integer"}},
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "finished_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collector", "workflow_run_id", "artifact_id", "artifact_digest"],
+      "properties": {
+        "collector": {
+          "enum": ["self_asserted", "github_actions", "operator", "independent"]
+        },
+        "workflow_run_id": {"type": ["integer", "null"], "minimum": 1},
+        "artifact_id": {"type": ["integer", "null"], "minimum": 1},
+        "artifact_digest": {
+          "anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        }
+      }
+    },
+    "disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implementation",
+        "owner_acceptance",
+        "independent_acceptance",
+        "release_authority",
+        "deployment_authority",
+        "host_authority"
+      ],
+      "properties": {
+        "implementation": {"enum": ["delivered", "held", "failed"]},
+        "owner_acceptance": {"enum": ["accepted", "held", "not_requested"]},
+        "independent_acceptance": {
+          "enum": ["accepted", "held", "not_requested"]
+        },
+        "release_authority": {"const": false},
+        "deployment_authority": {"const": false},
+        "host_authority": {"const": false}
+      }
+    },
+    "supersession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "superseded_by"],
+      "properties": {
+        "status": {"enum": ["current", "historical", "superseded"]},
+        "superseded_by": {
+          "anyOf": [{"$ref": "#/$defs/sha"}, {"type": "null"}]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    }
+  }
+}
