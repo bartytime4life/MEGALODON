@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/local-model-evaluation/v1/schema.json",
+  "title": "MEGALODON local-model adversarial evaluation receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "evidence_class", "profile_sha256", "comparison_boundary_sha256", "corpus", "execution"],
+  "properties": {
+    "schema": {"const": "megalodon-local-model-evaluation-receipt-v1"},
+    "evidence_class": {"enum": ["synthetic_fixture", "operator_observed"]},
+    "profile_sha256": {"$ref": "#/$defs/sha256"},
+    "comparison_boundary_sha256": {"$ref": "#/$defs/sha256"},
+    "corpus": {
+      "type": "object", "additionalProperties": false,
+      "required": ["corpus_id", "corpus_sha256", "manifest_sha256", "signature", "categories"],
+      "properties": {
+        "corpus_id": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{2,127}$"},
+        "corpus_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "signature": {
+          "type": "object", "additionalProperties": false,
+          "required": ["algorithm", "key_fingerprint_sha256", "signature_sha256", "verification_receipt_sha256", "externally_verified"],
+          "properties": {
+            "algorithm": {"const": "external-detached-signature"},
+            "key_fingerprint_sha256": {"$ref": "#/$defs/sha256"},
+            "signature_sha256": {"$ref": "#/$defs/sha256"},
+            "verification_receipt_sha256": {"$ref": "#/$defs/sha256"},
+            "externally_verified": {"type": "boolean"}
+          }
+        },
+        "categories": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "injection"}, {"const": "fabricated_evidence_ids"}, {"const": "unicode_control_text"},
+            {"const": "privacy"}, {"const": "exhaustion"}, {"const": "cancellation"}, {"const": "out_of_distribution"}
+          ],
+          "items": false, "minItems": 7, "maxItems": 7
+        }
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started_at", "completed_at", "total_cases", "completed_cases", "outcome_counts", "category_results", "unknown_evidence_id_cases", "unknown_evidence_id_rejected", "answer_abstain_error_distinct", "raw_advisory_text_retained", "prohibited_effects", "p95_latency_ms", "max_rss_mib"],
+      "properties": {
+        "started_at": {"type": "string", "format": "date-time", "minLength": 20, "maxLength": 64},
+        "completed_at": {"type": "string", "format": "date-time", "minLength": 20, "maxLength": 64},
+        "total_cases": {"type": "integer", "minimum": 7, "maximum": 100000},
+        "completed_cases": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "outcome_counts": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ANSWER", "ABSTAIN", "DENY", "ERROR"],
+          "properties": {
+            "ANSWER": {"type": "integer", "minimum": 0, "maximum": 100000},
+            "ABSTAIN": {"type": "integer", "minimum": 0, "maximum": 100000},
+            "DENY": {"type": "integer", "minimum": 0, "maximum": 100000},
+            "ERROR": {"type": "integer", "minimum": 0, "maximum": 100000}
+          }
+        },
+        "category_results": {
+          "type": "array",
+          "prefixItems": [
+            {"$ref": "#/$defs/injectionResult"}, {"$ref": "#/$defs/fabricatedResult"}, {"$ref": "#/$defs/unicodeResult"},
+            {"$ref": "#/$defs/privacyResult"}, {"$ref": "#/$defs/exhaustionResult"}, {"$ref": "#/$defs/cancellationResult"},
+            {"$ref": "#/$defs/outOfDistributionResult"}
+          ],
+          "items": false, "minItems": 7, "maxItems": 7
+        },
+        "unknown_evidence_id_cases": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "unknown_evidence_id_rejected": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "answer_abstain_error_distinct": {"type": "boolean"},
+        "raw_advisory_text_retained": {"const": false},
+        "prohibited_effects": {"$ref": "#/$defs/effects"},
+        "p95_latency_ms": {"type": "integer", "minimum": 1, "maximum": 3600000},
+        "max_rss_mib": {"type": "integer", "minimum": 1, "maximum": 1048576}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "resultBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["category", "total_cases", "passed_cases", "failed_cases"],
+      "properties": {
+        "category": {"type": "string"},
+        "total_cases": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "passed_cases": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "failed_cases": {"type": "integer", "minimum": 0, "maximum": 100000}
+      }
+    },
+    "injectionResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "injection"}}}]},
+    "fabricatedResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "fabricated_evidence_ids"}}}]},
+    "unicodeResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "unicode_control_text"}}}]},
+    "privacyResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "privacy"}}}]},
+    "exhaustionResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "exhaustion"}}}]},
+    "cancellationResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "cancellation"}}}]},
+    "outOfDistributionResult": {"allOf": [{"$ref": "#/$defs/resultBase"}, {"properties": {"category": {"const": "out_of_distribution"}}}]},
+    "effectAccounting": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observed_count", "total_cases"],
+      "properties": {
+        "observed_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "total_cases": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    },
+    "effects": {
+      "type": "object", "additionalProperties": false,
+      "required": ["network_access_outside_literal_loopback", "filesystem_mutation", "subprocess_or_shell", "tool_invocation", "detector_authority", "action_authority", "persistent_model_state_change"],
+      "properties": {
+        "network_access_outside_literal_loopback": {"$ref": "#/$defs/effectAccounting"},
+        "filesystem_mutation": {"$ref": "#/$defs/effectAccounting"},
+        "subprocess_or_shell": {"$ref": "#/$defs/effectAccounting"},
+        "tool_invocation": {"$ref": "#/$defs/effectAccounting"},
+        "detector_authority": {"$ref": "#/$defs/effectAccounting"},
+        "action_authority": {"$ref": "#/$defs/effectAccounting"},
+        "persistent_model_state_change": {"$ref": "#/$defs/effectAccounting"}
+      }
+    }
+  }
+}
