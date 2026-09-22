@@ -50,9 +50,11 @@ as installed.
 For Qwen, the heartbeat also checks whether the `qwen2.5:7b` model is
 downloaded, by looking for Ollama's manifest file in `$OLLAMA_MODELS`,
 `~/.ollama/models`, or the system service's model directory. It reads only file
-metadata and never contacts the Ollama server. When the service's directory is
-not readable by your user, the model status shows as unknown instead of
-missing.
+metadata and never contacts the Ollama server. It reports the model as missing
+only when it can read an Ollama model store that lacks the tag. When no store is
+visible, or the service's directory is not readable by your user (for example, a
+custom `OLLAMA_MODELS` set only in the service's systemd unit), the status is
+unknown and the light is not held amber.
 
 ## Install button
 

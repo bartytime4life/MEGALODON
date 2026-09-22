@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from http.client import HTTPConnection
 import json
+import os
 from pathlib import Path
 import threading
 
@@ -36,6 +37,8 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
         exe.chmod(0o755)
     monkeypatch.setenv("PATH", str(bin_dir))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    # An Ollama store with no qwen2.5:7b manifest is positive evidence of "missing".
+    (tmp_path / "home" / ".ollama" / "models" / "manifests").mkdir(parents=True)
     monkeypatch.delenv("OLLAMA_MODELS", raising=False)
     monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", ())
     monkeypatch.setattr(tool_heartbeat, "PROBES", {
@@ -251,3 +254,26 @@ def test_snapshot_includes_history(tmp_path, monkeypatch):
                         lambda root: {"tools": [{"id": "nmap", "light": "red"}]})
     payload = json.loads(Heartbeat(tmp_path).snapshot())
     assert payload["history"]["tools"]["nmap"]["changes"][0]["light"] == "red"
+
+
+def test_qwen_model_is_unknown_without_a_visible_store(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", ())
+    monkeypatch.delenv("OLLAMA_MODELS", raising=False)
+    # No store anywhere: the server may keep models where the HUD cannot see.
+    assert tool_heartbeat._model_status(tmp_path / "home") == "unknown"
+    store = tmp_path / "home" / ".ollama" / "models" / "manifests"
+    store.mkdir(parents=True)
+    assert tool_heartbeat._model_status(tmp_path / "home") == "missing"
+    unreadable = tmp_path / "service"
+    (unreadable / "manifests").mkdir(parents=True)
+    monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", (str(unreadable),))
+    real_stat = os.stat
+
+    def guarded(path, *args, **kwargs):
+        if str(path).startswith(str(unreadable)):
+            raise PermissionError(13, "denied")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(tool_heartbeat.os, "stat", guarded)
+    # A readable empty store plus an unreadable one cannot prove absence.
+    assert tool_heartbeat._model_status(tmp_path / "home") == "unknown"

@@ -203,16 +203,27 @@ def _model_status(home: Path | None) -> str:
         roots.append(str(home / ".ollama" / "models"))
     roots.extend(OLLAMA_MODEL_ROOTS)
     uncertain = False
+    found_store = False
     for root in roots:
         try:
             if stat.S_ISREG(os.stat(os.path.join(root, *QWEN_MODEL_MANIFEST)).st_mode):
                 return "present"
         except (FileNotFoundError, NotADirectoryError):
-            continue
+            pass
         except OSError:
             # The system service's model directory is often unreadable to users.
             uncertain = True
-    return "unknown" if uncertain else "missing"
+            continue
+        try:
+            found_store = found_store or stat.S_ISDIR(os.stat(os.path.join(root, "manifests")).st_mode)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:
+            uncertain = True
+    # "missing" needs positive evidence: a readable store without the tag.
+    # With no store in view, the server may keep models where we cannot see
+    # (for example a custom OLLAMA_MODELS in its systemd unit).
+    return "missing" if found_store and not uncertain else "unknown"
 
 
 def _light(installed: str, service: str, expects_service: bool, model: str | None = None) -> str:
