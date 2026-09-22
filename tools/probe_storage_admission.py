@@ -137,12 +137,53 @@ def _temporary_path_class(path: Path) -> str:
     return "other"
 
 
+def _production_store_observation() -> dict[str, object]:
+    """Exercise the production Store constructor without exposing SQLite text."""
+
+    result: dict[str, object] = {}
+    store = None
+    with tempfile.TemporaryDirectory(prefix="megalodon-store-probe-") as root:
+        private = Path(root) / "private"
+        private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+        path = private / "audit.db"
+        try:
+            store = storage.Store(path)
+        except storage.StorageSchemaError as exc:
+            result["status"] = _storage_code(exc)
+            cause = exc.__cause__
+            if isinstance(cause, sqlite3.Error):
+                result["cause_type"] = type(cause).__name__[:80]
+                code = getattr(cause, "sqlite_errorcode", None)
+                result["sqlite_errorcode"] = (
+                    int(code) if isinstance(code, int) else "unavailable"
+                )
+                name = getattr(cause, "sqlite_errorname", None)
+                result["sqlite_errorname"] = (
+                    str(name)
+                    if isinstance(name, str)
+                    and re.fullmatch(r"SQLITE_[A-Z0-9_]+", name)
+                    else "unavailable"
+                )
+            elif cause is None:
+                result["cause_type"] = "none"
+            else:
+                result["cause_type"] = type(cause).__name__[:80]
+        else:
+            result["status"] = "accepted"
+            result["cause_type"] = "none"
+        finally:
+            if store is not None:
+                store.close()
+    return result
+
+
 def collect_report() -> dict[str, object]:
     report: dict[str, object] = {
         "platform": sys.platform,
         "python": ".".join(map(str, sys.version_info[:3])),
         "sqlite_version": sqlite3.sqlite_version,
         "darwin_alias": _darwin_alias_observation(),
+        "store_constructor": _production_store_observation(),
     }
     try:
         source_id = sqlite3.connect(":memory:").execute(
