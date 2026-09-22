@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/local-model-readiness/v1/schema.json",
+  "title": "MEGALODON local-model readiness packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "state",
+    "binding_status",
+    "identifiers",
+    "evidence",
+    "input_states",
+    "model_advertises_tools",
+    "tools_used_or_authorized",
+    "gate_failures",
+    "remaining_holds",
+    "authority",
+    "limitations",
+    "packet_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "megalodon-local-model-readiness-v1"},
+    "state": {
+      "enum": ["UNBOUND", "EVIDENCE_HOLD", "CANDIDATE_PACKET_CONSISTENT"]
+    },
+    "binding_status": {"enum": ["UNBOUND", "BOUND"]},
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_alias",
+        "installed_tag",
+        "profile_id",
+        "corpus_id",
+        "host_profile_id"
+      ],
+      "properties": {
+        "logical_alias": {"$ref": "#/$defs/nullableText"},
+        "installed_tag": {"$ref": "#/$defs/nullableText"},
+        "profile_id": {"$ref": "#/$defs/nullableText"},
+        "corpus_id": {"$ref": "#/$defs/nullableText"},
+        "host_profile_id": {"$ref": "#/$defs/nullableText"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_sha256",
+        "identity_observation_sha256",
+        "provider_identity_sha256",
+        "profile_sha256",
+        "comparison_boundary_sha256",
+        "containment_receipt_sha256",
+        "evaluation_receipt_sha256",
+        "evaluation_boundary_sha256",
+        "request_sha256",
+        "format_schema_sha256"
+      ],
+      "properties": {
+        "binding_sha256": {"$ref": "#/$defs/digest"},
+        "identity_observation_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "provider_identity_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "profile_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "comparison_boundary_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "containment_receipt_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "evaluation_receipt_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "evaluation_boundary_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "request_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "format_schema_sha256": {"$ref": "#/$defs/nullableDigest"}
+      }
+    },
+    "input_states": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "profile", "containment", "evaluation", "request"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/nullableText"},
+        "profile": {"$ref": "#/$defs/nullableText"},
+        "containment": {"$ref": "#/$defs/nullableText"},
+        "evaluation": {"$ref": "#/$defs/nullableText"},
+        "request": {"$ref": "#/$defs/nullableText"}
+      }
+    },
+    "model_advertises_tools": {"type": "boolean"},
+    "tools_used_or_authorized": {"const": false},
+    "gate_failures": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+    },
+    "remaining_holds": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "EVIDENCE_ORIGIN_AUTHENTICATION"},
+        {"const": "LOADED_RUNTIME_BYTES_NOT_ATTESTED"},
+        {"const": "INDEPENDENT_SECURITY_ACCEPTANCE_CURRENTNESS"},
+        {"const": "OWNER_FINAL_ACCEPTANCE"},
+        {"const": "RELEASE_AND_DEPLOYMENT_AUTHORITY"}
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contacts_provider",
+        "starts_provider",
+        "pulls_model",
+        "changes_host",
+        "attests_loaded_bytes",
+        "accepts_model",
+        "grants_detector_authority",
+        "grants_action_authority",
+        "authorizes_release",
+        "authorizes_deployment"
+      ],
+      "properties": {
+        "contacts_provider": {"const": false},
+        "starts_provider": {"const": false},
+        "pulls_model": {"const": false},
+        "changes_host": {"const": false},
+        "attests_loaded_bytes": {"const": false},
+        "accepts_model": {"const": false},
+        "grants_detector_authority": {"const": false},
+        "grants_action_authority": {"const": false},
+        "authorizes_release": {"const": false},
+        "authorizes_deployment": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512}
+    },
+    "packet_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nullableDigest": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]
+    },
+    "nullableText": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 256}
+      ]
+    }
+  }
+}
