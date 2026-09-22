@@ -1,0 +1,25 @@
+MEGALODON
+
+[MAINTAINER: fill in the copyright holder name and year(s) here, matching
+the choice recorded for LICENSE's own "Copyright [yyyy] [name of copyright
+owner]" line. tests/test_license_metadata.py currently asserts that LICENSE
+still carries that unfilled placeholder, so this NOTICE intentionally does
+not invent a name ahead of that decision.]
+
+This product is licensed under the Apache License, Version 2.0. See LICENSE
+for the complete license text.
+
+This NOTICE file is provided under Apache License, Version 2.0, Section
+4(d), for any required attribution notices. As of this revision:
+
+- The MEGALODON core Python package has no required third-party runtime
+  dependency (see README.md, "Requirements and programs used").
+- Optional extras declared in pyproject.toml ([capture]: Scapy; [test]:
+  pytest, jsonschema) are separately licensed upstream projects. They are
+  not redistributed by this repository; consult each project's own license
+  and notice files when that extra is installed.
+- No third-party source, model weights, font, or media file is currently
+  bundled in this repository under a license that requires a notice here.
+  If that changes, record the exact source, version, license, and required
+  notice text in this file per CONTRIBUTING.md's "Licensing contributions"
+  section before the addition merges.

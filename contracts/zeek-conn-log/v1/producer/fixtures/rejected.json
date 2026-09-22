@@ -1,0 +1,159 @@
+[
+  {
+    "id": "unknown-package-added-field",
+    "code": "ZEEK_SCHEMA_MISMATCH",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980,
+      "vlan": 42
+    }
+  },
+  {
+    "id": "missing-required-field",
+    "code": "ZEEK_SCHEMA_MISMATCH",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  },
+  {
+    "id": "unsupported-protocol",
+    "code": "UNSUPPORTED_ZEEK_PROTOCOL",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "sctp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  },
+  {
+    "id": "ip-proto-protocol-unit-mismatch",
+    "code": "ZEEK_PROTOCOL_MISMATCH",
+    "schema_valid": true,
+    "note": "Cross-field unit consistency (declared transport protocol vs. ip_proto number) is not expressible by this scaffold's per-field JSON Schema, so this fixture is schema-valid on its own but still must be refused by the real adapter. This gap is intentional and asserted by name in the test harness, not hidden.",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980,
+      "ip_proto": 17
+    }
+  },
+  {
+    "id": "non-printable-string-field",
+    "code": "INVALID_ZEEK_FIELD",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF\u0007",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  },
+  {
+    "id": "bool-field-wrong-type",
+    "code": "INVALID_ZEEK_FIELD",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980,
+      "local_orig": "T"
+    }
+  },
+  {
+    "id": "port-field-out-of-range",
+    "code": "INVALID_INTEGER",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 70000,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  },
+  {
+    "id": "negative-count-collapses-to-json-decode-error",
+    "code": "INVALID_JSON",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": -1,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  },
+  {
+    "id": "invalid-timestamp-not-numeric",
+    "code": "INVALID_TIME",
+    "value": {
+      "ts": "not-a-timestamp",
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  }
+]

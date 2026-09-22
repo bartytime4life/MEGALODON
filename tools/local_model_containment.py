@@ -144,7 +144,11 @@ def _enum_block(value, states: dict, reason="INPUT_INVALID") -> None:
 
 
 def validate(manifest: dict) -> dict:
-    """Apply semantic controls that JSON Schema alone cannot express."""
+    """Check packet consistency, not its origin, observations, or approvals.
+
+    A caller can supply a structurally valid claim of collector origin. This
+    function does not authenticate that claim or grant provider acceptance.
+    """
     _bounded(manifest)
     _exact_keys(manifest, {
         "schema_version", "basis", "status", "repository", "model_binding",
@@ -310,11 +314,25 @@ def collect() -> dict:
 
 
 def parser() -> argparse.ArgumentParser:
-    result = argparse.ArgumentParser(allow_abbrev=False)
+    result = argparse.ArgumentParser(
+        allow_abbrev=False,
+        description="Validate packet structure and consistency, not provider acceptance.",
+        epilog=(
+            "A validated self-report is not an attestation of origin, model bytes, "
+            "operator approval, or independent security review. "
+            "collect emits the fixed unbound state without host inspection."
+        ),
+    )
     group = result.add_subparsers(dest="command", required=True)
-    verify = group.add_parser("validate", allow_abbrev=False)
+    verify = group.add_parser(
+        "validate", allow_abbrev=False,
+        help="Check a supplied, unauthenticated packet; do not perform its checks.",
+    )
     verify.add_argument("manifest")
-    group.add_parser("collect", allow_abbrev=False)
+    group.add_parser(
+        "collect", allow_abbrev=False,
+        help="Emit the fixed unbound packet without inspecting a provider.",
+    )
     return result
 
 
