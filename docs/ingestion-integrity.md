@@ -1,6 +1,6 @@
 # Ingestion integrity and reconciliation
 
-Status: implemented Stage 0 integrity slice for issue #67. This is a local audit
+Status: ● implemented Stage 0 integrity slice for issue #67. This is a local audit
 property, not production approval, continuous-monitoring proof, alert delivery,
 or authority to change the host. Closed #68 delivered finite resource controls;
 native sustained-capacity evidence remains separate. Closed #3 records the

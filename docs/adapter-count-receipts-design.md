@@ -1,6 +1,6 @@
 # Adapter identity and accepted/rejected count receipts: design note
 
-Status: **Proposed.** This is a design note for review, not a schema change,
+Status: ◐ **Proposed.** This is a design note for review, not a schema change,
 a migration, or an implementation. No code, table, index, or API route is
 altered by this document. It answers rank 6 of
 [`docs/system-opportunity-map.md`](system-opportunity-map.md): "Core

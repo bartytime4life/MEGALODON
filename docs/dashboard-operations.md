@@ -1,6 +1,6 @@
 # Local command center: operator and acceptance runbook
 
-Status: read-only dashboard behavior and a same-origin **static Integration
+Status: ● read-only dashboard behavior and a same-origin **static Integration
 Map**. This guide does not authorize a deployment, remote listener, service,
 capture, analyzer installation, or response action. See the
 [HTTP contract](dashboard-http-contract.md) for exact request semantics and the

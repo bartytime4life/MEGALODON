@@ -1,6 +1,6 @@
 # Local-model containment acceptance plan (future gate)
 
-Status: adds the closed, machine-readable shape for the future
+Status: ◇ adds the closed, machine-readable shape for the future
 operator-owned acceptance gate [issue #261](https://github.com/bartytime4life/MEGALODON/issues/261)
 asks for. It does not invoke a model, install or start Ollama, select an
 artifact, enable persistence, expose the dashboard remotely, run a host-level

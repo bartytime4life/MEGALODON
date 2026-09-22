@@ -1,6 +1,6 @@
 # Fixed-detector synthetic acceptance receipt
 
-Status: adopted bounded synthetic acceptance receipt. Its delivery gate,
+Status: ▽ adopted bounded synthetic acceptance receipt. Its delivery gate,
 [issue #26](https://github.com/bartytime4life/MEGALODON/issues/26), is closed.
 That closure records the specified detector and service-to-ledger evidence; it
 does not claim malware accuracy, prevention effectiveness, representative
