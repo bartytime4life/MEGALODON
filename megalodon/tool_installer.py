@@ -16,7 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
-from threading import Lock, Thread
+from threading import Event, Lock, Thread, Timer
 from typing import Any, Callable
 
 from .capabilities import runtime_platform
@@ -148,7 +148,9 @@ class Installer:
     """Runs at most one fixed recipe at a time in a background thread."""
 
     def __init__(self, *, on_finish: Callable[[], None] | None = None,
-                 runner: Callable[..., subprocess.Popen[str]] = subprocess.Popen) -> None:
+                 runner: Callable[..., subprocess.Popen[str]] = subprocess.Popen,
+                 timeout: float = INSTALL_TIMEOUT_SECONDS) -> None:
+        self._timeout = timeout
         self._lock = Lock()
         self._job = _Job()
         self._on_finish = on_finish
@@ -182,17 +184,28 @@ class Installer:
 
     def _run(self, command: list[str]) -> None:
         code: int | None = None
+        timed_out = Event()
         try:
             process = self._runner(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, text=True, errors="replace",
                                    env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
-            assert process.stdout is not None
-            for line in process.stdout:
-                self._append(line)
-            code = process.wait(timeout=INSTALL_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            self._append("Installation timed out and was stopped.")
+            # Reading stdout blocks until exit, so enforce the deadline separately.
+            def expire() -> None:
+                timed_out.set()
+                process.kill()
+            deadline = Timer(self._timeout, expire)
+            deadline.daemon = True
+            deadline.start()
+            try:
+                assert process.stdout is not None
+                for line in process.stdout:
+                    self._append(line)
+                code = process.wait()
+            finally:
+                deadline.cancel()
+            if timed_out.is_set():
+                code = None
+                self._append("Installation timed out and was stopped.")
         except OSError as exc:
             self._append(f"Installer could not start: {exc.strerror or type(exc).__name__}")
         if code in (126, 127) and command and command[0].endswith("pkexec"):

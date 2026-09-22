@@ -92,7 +92,7 @@ def test_installer_runs_one_job_and_reports_output():
     class FakeProcess:
         stdout = iter(["line one\n", "line two\n"])
 
-        def wait(self, timeout):
+        def wait(self):
             return 0
 
     seen = []
@@ -138,3 +138,35 @@ def test_routes_require_explicit_same_origin_requests(monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_installer_kills_a_hung_install():
+    import time
+    finished = threading.Event()
+
+    class HungProcess:
+        def __init__(self):
+            self.killed = threading.Event()
+
+        @property
+        def stdout(self):
+            def lines():
+                yield "starting\n"
+                self.killed.wait(5)
+            return lines()
+
+        def kill(self):
+            self.killed.set()
+
+        def wait(self):
+            return -9
+
+    process = HungProcess()
+    installer = Installer(on_finish=finished.set, runner=lambda argv, **kw: process, timeout=0.2)
+    started = time.monotonic()
+    installer.start("scapy")
+    assert finished.wait(5)
+    assert time.monotonic() - started < 3
+    status = installer.status()
+    assert status["state"] == "failed" and status["exit_code"] is None
+    assert status["output"][-1] == "Installation timed out and was stopped."
