@@ -1,0 +1,45 @@
+[
+  {
+    "id": "minimal-tcp-conn",
+    "value": {
+      "ts": 1758270930.123456,
+      "id.orig_h": "192.0.2.10",
+      "id.orig_p": 54321,
+      "id.resp_h": "198.51.100.20",
+      "id.resp_p": 443,
+      "proto": "tcp",
+      "conn_state": "SF",
+      "orig_pkts": 12,
+      "resp_pkts": 9,
+      "orig_ip_bytes": 1440,
+      "resp_ip_bytes": 980
+    }
+  },
+  {
+    "id": "bounded-optional-fields-udp",
+    "value": {
+      "ts": 1758270931.5,
+      "uid": "CXWv8f3P9AbGvzJk4h",
+      "id.orig_h": "2001:db8::10",
+      "id.orig_p": 53000,
+      "id.resp_h": "2001:db8::20",
+      "id.resp_p": 53,
+      "proto": "udp",
+      "service": "dns",
+      "duration": 0.045,
+      "orig_bytes": 64,
+      "resp_bytes": 128,
+      "conn_state": "S1",
+      "local_orig": true,
+      "local_resp": false,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 92,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 156,
+      "tunnel_parents": [],
+      "ip_proto": 17
+    }
+  }
+]
