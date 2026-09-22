@@ -1,6 +1,6 @@
 # Alert Workload Lab
 
-Status: implemented offline hypothetical calculator, exposed as
+Status: ● implemented offline hypothetical calculator, exposed as
 `megalodon-evaluate base-rate`. It helps an analyst see how prevalence and
 false-positive assumptions affect the number of units needing review.
 It does not measure the three MEGALODON rules, inspect traffic, train a model,

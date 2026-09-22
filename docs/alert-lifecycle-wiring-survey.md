@@ -1,6 +1,6 @@
 # Alert lifecycle wiring survey
 
-Status: **Proposed; blocked on operator and security review.** This is a
+Status: ◐ **Proposed; blocked on operator and security review.** This is a
 design-only map of possible connections. It changes no schema, command, route,
 alert state, notifier, or host behavior. Basis: repository
 `main@2a3e29632b2cdb842d5d7dfb1efd32d023140893` and the

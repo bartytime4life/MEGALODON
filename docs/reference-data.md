@@ -1,6 +1,6 @@
 # Offline reference data and synthetic corpus
 
-Status: versioned, offline analysis assets. These resources add bounded context
+Status: ● versioned, offline analysis assets. These resources add bounded context
 and repeatable detector checks; they do not add telemetry collection, threat
 intelligence fetching, response authority, or a claim of production accuracy.
 

@@ -1,6 +1,6 @@
 # Reference Library: recovery, provenance, and exact-query contract
 
-Status: **delivered by merged PR #91**, merge commit
+Status: ● **delivered by merged PR #91**, merge commit
 `1b16069e430b539f9677c616a5f61c597fd0bec2`; lifecycle rechecked 2026-09-17.
 The original candidate was prepared on 2026-09-11 against
 `f6df35421798b0eb6b1931b9ebc38a1407349eb1`, with touched source blobs unchanged
