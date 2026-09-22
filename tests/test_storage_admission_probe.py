@@ -27,6 +27,18 @@ def test_storage_admission_probe_emits_bounded_redacted_json():
     assert report["production_database_open"] == "accepted"
     assert report["store_constructor"]["status"] == "accepted"
     assert report["store_constructor"]["cause_type"] == "none"
+    if sys.platform == "darwin":
+        assert report["darwin_directory_anchor_sqlite"]["status"] in {
+            "accepted", "sqlite_error", "candidate_stat_failed",
+            "candidate_identity_mismatch", "directory_descriptor_unavailable",
+            "directory_descriptor_path_unavailable",
+        } or str(report["darwin_directory_anchor_sqlite"]["status"]).startswith(
+            "STORAGE_PATH:"
+        )
+    else:
+        assert report["darwin_directory_anchor_sqlite"] == {
+            "status": "not_applicable"
+        }
     assert report["descriptor_strategy"] in {
         "proc_self_fd", "dev_fd", "other"
     }
