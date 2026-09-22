@@ -1,0 +1,7 @@
+{
+  "schema": "megalodon-ollama-generate-input-v1",
+  "mode": "generic_advisory",
+  "model_id": "local:qwen-approved-v1",
+  "prompt": "MEGALODON_LOCAL_ADVISORY_V1\nSummarize only the approved aggregate projection.",
+  "candidate_ids": []
+}
