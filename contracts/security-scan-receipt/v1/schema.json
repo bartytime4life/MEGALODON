@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/security-scan-receipt/v1/schema.json",
+  "title": "MEGALODON imported security scan receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "subject",
+    "scanner",
+    "scan",
+    "summary",
+    "findings",
+    "raw_result",
+    "authentication",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "megalodon.security-scan-receipt/v1"},
+    "repository": {"const": "bartytime4life/MEGALODON"},
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/sha"},
+        "tree": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "scanner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "configuration_sha256"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "configuration_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "finished_at", "completeness"],
+      "properties": {
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "finished_at": {"$ref": "#/$defs/timestamp"},
+        "completeness": {"enum": ["complete", "partial", "failed"]}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical", "high", "medium", "low", "informational", "suppressed"],
+      "properties": {
+        "critical": {"type": "integer", "minimum": 0},
+        "high": {"type": "integer", "minimum": 0},
+        "medium": {"type": "integer", "minimum": 0},
+        "low": {"type": "integer", "minimum": 0},
+        "informational": {"type": "integer", "minimum": 0},
+        "suppressed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finding_id",
+          "rule_id",
+          "severity",
+          "status",
+          "location_fingerprint",
+          "suppression_reason",
+          "suppression_expires_at"
+        ],
+        "properties": {
+          "finding_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$"},
+          "rule_id": {"type": "string", "minLength": 1, "maxLength": 192},
+          "severity": {"enum": ["critical", "high", "medium", "low", "informational"]},
+          "status": {"enum": ["open", "suppressed"]},
+          "location_fingerprint": {"$ref": "#/$defs/digest"},
+          "suppression_reason": {
+            "oneOf": [
+              {"type": "null"},
+              {"type": "string", "minLength": 1, "maxLength": 512}
+            ]
+          },
+          "suppression_expires_at": {
+            "oneOf": [{"type": "null"}, {"$ref": "#/$defs/timestamp"}]
+          }
+        }
+      }
+    },
+    "raw_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_ref", "artifact_sha256"],
+      "properties": {
+        "artifact_ref": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "artifact_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "authentication": {
+      "enum": ["self_asserted", "github_actions", "operator", "independent"]
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "merge_authority",
+        "independent_acceptance",
+        "release_authority",
+        "deployment_authority",
+        "host_authority"
+      ],
+      "properties": {
+        "merge_authority": {"const": false},
+        "independent_acceptance": {"const": false},
+        "release_authority": {"const": false},
+        "deployment_authority": {"const": false},
+        "host_authority": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }
+  }
+}
