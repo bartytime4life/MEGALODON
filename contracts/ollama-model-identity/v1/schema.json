@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/ollama-model-identity/v1/schema.json",
+  "title": "MEGALODON Ollama model identity observation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidence_class",
+    "observed_at",
+    "endpoint",
+    "binding_alias",
+    "model_tag",
+    "version",
+    "tags",
+    "show",
+    "artifact"
+  ],
+  "properties": {
+    "schema": {"const": "megalodon-ollama-identity-observation-v1"},
+    "evidence_class": {"enum": ["synthetic_fixture", "operator_observed"]},
+    "observed_at": {"type": "string", "format": "date-time", "minLength": 20, "maxLength": 64},
+    "endpoint": {"const": "http://127.0.0.1:11434"},
+    "binding_alias": {"type": "string", "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}$"},
+    "model_tag": {"type": "string", "pattern": "^qwen[A-Za-z0-9._:/-]{1,123}$"},
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "response_sha256", "binary_sha256"],
+      "properties": {
+        "value": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$"},
+        "response_sha256": {"$ref": "#/$defs/sha256"},
+        "binary_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "tags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["response_sha256", "matched_name", "matched_model", "manifest_sha256", "size_bytes", "details"],
+      "properties": {
+        "response_sha256": {"$ref": "#/$defs/sha256"},
+        "matched_name": {"$ref": "#/$defs/modelTag"},
+        "matched_model": {"$ref": "#/$defs/modelTag"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 1125899906842624},
+        "details": {"$ref": "#/$defs/details"}
+      }
+    },
+    "show": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_model", "response_sha256", "modified_at", "capabilities", "parameters_sha256", "template_sha256", "license_sha256", "model_info_sha256", "details"],
+      "properties": {
+        "request_model": {"$ref": "#/$defs/modelTag"},
+        "response_sha256": {"$ref": "#/$defs/sha256"},
+        "modified_at": {"type": "string", "format": "date-time", "minLength": 20, "maxLength": 64},
+        "capabilities": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+:/-]{0,63}$"}},
+        "parameters_sha256": {"$ref": "#/$defs/sha256"},
+        "template_sha256": {"$ref": "#/$defs/sha256"},
+        "license_sha256": {"$ref": "#/$defs/sha256"},
+        "model_info_sha256": {"$ref": "#/$defs/sha256"},
+        "details": {"$ref": "#/$defs/details"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_sha256", "provenance_sha256"],
+      "properties": {
+        "artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "provenance_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "modelTag": {"type": "string", "pattern": "^qwen[A-Za-z0-9._:/-]{1,123}$"},
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "family", "parameter_size", "quantization_level"],
+      "properties": {
+        "format": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+:/-]{0,127}$"},
+        "family": {"type": "string", "pattern": "^[Qq][Ww][Ee][Nn][A-Za-z0-9._+:/-]{0,124}$"},
+        "parameter_size": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+:/-]{0,127}$"},
+        "quantization_level": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+:/-]{0,127}$"}
+      }
+    }
+  }
+}
