@@ -52,10 +52,18 @@ production service.
 | `/api/reference/protocol` | Exactly `number` | One bounded IP-protocol registration lookup |
 | `/api/integrations` | Optional `platform` | Existing static hub plan for one documentation profile |
 | `/api/ai/status` | None; explicit check header and operator token | One optional local model status check |
+| `/api/heartbeat` | None; requires `X-Megalodon-Check: 1`, HUD mode | Cached per-tool installed/running/uptime light; see [tool heartbeat](tool-heartbeat.md) |
+| `/api/install` | None; requires `X-Megalodon-Check: 1`, HUD mode | Fixed install-recipe catalog and the current job status |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate
 private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
+
+`POST /api/install` (HUD mode only) requires the exact same-site `Origin`,
+`Content-Type: application/json`, `X-Megalodon-Install: 1`, and a body of at
+most 64 bytes naming one tool id. It starts one recipe from the closed registry
+in `megalodon/tool_installer.py`; system packages go through the OS `pkexec`
+password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
 
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
