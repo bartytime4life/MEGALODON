@@ -1,6 +1,6 @@
 # Local Ollama/Qwen profile candidate contract v1
 
-Status: **candidate contract and offline proof only**.
+Status: ● **implemented offline contract and profile lab; native binding remains required**.
 
 This contract gives MEGALODON one closed shape for comparing an
 operator-observed Ollama/Qwen model tag, manifest digest, artifact digest,
