@@ -2,11 +2,16 @@
 
 AI_PANEL = """
   <details class="panel ai-control" id="ai-control" aria-labelledby="ai-control-title">
-    <summary><span><strong id="ai-control-title">Local AI control</strong><small>Ask Qwen about bounded MEGALODON metadata after a live model check.</small></span><span class="summary-action">Open AI controls</span></summary>
+    <summary><span><strong id="ai-control-title">Local AI control</strong><small>Ask Qwen about bounded MEGALODON metadata after a live model check.</small></span><span class="summary-action" id="ai-control-action">Open AI controls</span></summary>
     <p>Model output is advice. Tool selection passes through MEGALODON policy and every attempt gets an audit receipt. This HUD offers bounded reads and report snapshots; firewall application remains unavailable.</p>
     <div class="ai-controls">
       <button id="ai-check" type="button">Check Ollama and Qwen</button>
-      <label class="field" for="ai-token"><span>Operator token from the HUD terminal</span><input id="ai-token" type="password" autocomplete="off" spellcheck="false" maxlength="64"></label>
+      <label class="field" for="ai-token"><span>Operator token from the HUD terminal</span>
+        <span class="token-field">
+          <input id="ai-token" type="password" autocomplete="off" spellcheck="false" maxlength="64">
+          <button id="ai-token-toggle" type="button" aria-pressed="false">Show</button>
+        </span>
+      </label>
       <label class="field" for="ai-question"><span>Question</span><select id="ai-question">
         <option value="seeing">What is MEGALODON seeing?</option>
         <option value="changed">What changed during the last hour?</option>
@@ -34,11 +39,15 @@ AI_CSS = """
 .ai-control > p { margin: 14px 20px; color: var(--muted); font-size: .84rem; line-height: 1.5; }
 .ai-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 4px 20px 14px; }
 .ai-controls .field { min-width: min(100%, 280px); flex: 1; }
+.token-field { display: flex; gap: 6px; }
+.token-field input { flex: 1; min-width: 0; }
+.token-field button { padding: 0 10px; white-space: nowrap; min-width: auto; }
 .ai-result { display: grid; gap: 12px; margin: 0 20px 20px; }
 .ai-result div { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .ai-result dt { color: var(--amber); font-size: .75rem; font-weight: 700; }
 .ai-result dd { margin: 6px 0 0; overflow-wrap: anywhere; line-height: 1.5; }
 .ai-result pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; }
+#ai-state.ai-integrity-alert { color: var(--rose); font-weight: 700; }
 """
 
 AI_JS = r"""
@@ -46,7 +55,44 @@ const aiCheck = document.getElementById('ai-check');
 const aiAsk = document.getElementById('ai-ask');
 const aiState = document.getElementById('ai-state');
 const aiResult = document.getElementById('ai-result');
+const aiTokenInput = document.getElementById('ai-token');
+const aiTokenToggle = document.getElementById('ai-token-toggle');
 let aiBusy = false;
+const AI_STATE_TEXT = {
+  disabled: 'Local AI is turned off in configuration.',
+  ollama_unavailable: 'Ollama is not reachable on loopback.',
+  model_missing: 'The configured Qwen model is not installed in Ollama.',
+  model_available: 'The model tag is present but has not completed a live inference check.',
+  model_loading: 'The model is busy or still starting, so the readiness check did not complete.',
+  model_ready: 'The model completed a live bounded inference check.',
+  request_timeout: 'The request to Ollama timed out.',
+  invalid_response: 'Ollama returned a response MEGALODON could not validate.',
+  policy_rejection: 'The current configuration or model identity fails a fixed safety check.',
+};
+const AI_ERROR_TEXT = {
+  CONCURRENCY_LIMIT_REACHED: 'another AI request is already using the one local inference slot',
+  CONCURRENCY_CONTROL_UNAVAILABLE: 'the local concurrency lock could not be acquired',
+  MODEL_MISMATCH: 'the installed model digest does not match the pinned configuration',
+  REQUEST_TOO_LARGE: 'the request exceeded a fixed size limit',
+  AUDIT_INTEGRITY: 'the local receipt ledger failed an integrity check',
+  UNKNOWN_TOOL: 'the model selected a tool outside the permitted list',
+  UNKNOWN_QUESTION: 'the question was not one of the fixed HUD questions',
+  INVALID_ARGUMENTS: 'the request arguments failed validation',
+  EVIDENCE_INVALID: 'the evidence returned by a tool failed validation',
+};
+function aiErrorReason(code) {
+  if (!code) return '';
+  return ` Reason: ${AI_ERROR_TEXT[code] || code} (${code}).`;
+}
+aiTokenToggle.addEventListener('click', () => {
+  const showing = aiTokenInput.type === 'text';
+  aiTokenInput.type = showing ? 'password' : 'text';
+  aiTokenToggle.textContent = showing ? 'Show' : 'Hide';
+  aiTokenToggle.setAttribute('aria-pressed', String(!showing));
+});
+document.getElementById('ai-control').addEventListener('toggle', event => {
+  document.getElementById('ai-control-action').textContent = event.currentTarget.open ? 'Close AI controls' : 'Open AI controls';
+});
 async function aiFetch(path, header, body = null) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 50000);
@@ -82,18 +128,23 @@ async function aiFetch(path, header, body = null) {
 aiCheck.addEventListener('click', async () => {
   if (aiBusy) return;
   aiBusy = true; aiCheck.disabled = true; aiAsk.disabled = true;
+  aiCheck.textContent = 'Checking…';
+  aiState.classList.remove('ai-integrity-alert');
   aiState.textContent = 'Checking the configured model with one bounded local inference…';
   try {
     const {response, value} = await aiFetch('/api/ai/status', 'X-Megalodon-AI-Check');
     if (!response.ok || value.schema !== 'megalodon-ai-status-v1') throw new Error('AI status unavailable');
-    aiState.textContent = `Ollama / Qwen: ${value.state}. Model ${value.model || 'unknown'}. Inference verified: ${value.inference_verified === true ? 'yes' : 'no'}.`;
+    const summary = AI_STATE_TEXT[value.state] || `Unrecognized status (${value.state}).`;
+    aiState.textContent = `${summary}${aiErrorReason(value.error_code)} Model ${value.model || 'unknown'}. Inference verified: ${value.inference_verified === true ? 'yes' : 'no'}.`;
     aiAsk.disabled = value.state !== 'model_ready';
   } catch (_) { aiState.textContent = 'AI check failed. Core MEGALODON remains available.'; }
-  finally { aiBusy = false; aiCheck.disabled = false; }
+  finally { aiBusy = false; aiCheck.disabled = false; aiCheck.textContent = 'Check Ollama and Qwen'; }
 });
 aiAsk.addEventListener('click', async () => {
   if (aiBusy || aiAsk.disabled) return;
   aiBusy = true; aiAsk.disabled = true; aiResult.hidden = true;
+  aiAsk.textContent = 'Asking…';
+  aiState.classList.remove('ai-integrity-alert');
   aiState.textContent = 'Requesting one bounded local analysis…';
   try {
     const question = document.getElementById('ai-question').value;
@@ -104,8 +155,13 @@ aiAsk.addEventListener('click', async () => {
     document.getElementById('ai-action-state').textContent = `Tool ${value.tool}; authority level ${value.authority_level}; state ${value.execution_state}. Reports are stored in the AI receipt ledger; no host security change is applied.`;
     document.getElementById('ai-receipt').textContent = value.receipt_id || 'No receipt';
     aiResult.hidden = false;
-    aiState.textContent = value.error_code ? `AI completed with ${value.error_code}.` : 'Observed data and model inference are shown separately.';
+    if (value.error_code) {
+      aiState.textContent = `AI completed with an error.${aiErrorReason(value.error_code)}`;
+      if (value.error_code === 'AUDIT_INTEGRITY') aiState.classList.add('ai-integrity-alert');
+    } else {
+      aiState.textContent = 'Observed data and model inference are shown separately.';
+    }
   } catch (_) { aiState.textContent = 'AI request failed. No partial model output is shown.'; }
-  finally { aiBusy = false; aiAsk.disabled = false; }
+  finally { aiBusy = false; aiAsk.disabled = false; aiAsk.textContent = 'Ask locally'; }
 });
 """
