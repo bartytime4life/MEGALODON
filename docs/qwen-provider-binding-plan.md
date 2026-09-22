@@ -1,6 +1,6 @@
 # Qwen provider candidate binding and bounded qualification
 
-Status: **PROPOSED / POST-RC HOLD** for [issue #261](https://github.com/bartytime4life/MEGALODON/issues/261).
+Status: ◐ **PROPOSED / POST-RC HOLD** for [issue #261](https://github.com/bartytime4life/MEGALODON/issues/261).
 This is a reviewable nomination and acceptance design, not an owner-approved
 artifact binding, executable runbook, host observation, or acceptance receipt.
 Permission to prepare this PR does not approve model bytes or provider operation.

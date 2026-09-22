@@ -1,6 +1,6 @@
 # Local command center: connection advancement plan
 
-Status: **PROPOSED architecture and acceptance sequence**, not a runtime integration
+Status: ◐ **PROPOSED architecture and acceptance sequence**, not a runtime integration
 or source-admission decision. Prepared 2026-09-11. This plan complements the
 separate [Reference Library recovery delivery in PR #91](https://github.com/bartytime4life/MEGALODON/pull/91);
 PR #91 is now merged as `1b16069e430b539f9677c616a5f61c597fd0bec2`, as rechecked on 2026-09-17. This proposal does not

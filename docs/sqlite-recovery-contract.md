@@ -1,6 +1,6 @@
 # SQLite backup and restore-to-new-destination contract
 
-Status: **IMPLEMENTED runtime contract with an explicit CLI workflow and
+Status: ● **IMPLEMENTED runtime contract with an explicit CLI workflow and
 focused Linux failure-path tests; native operational acceptance remains a
 separate gate.**
 
