@@ -89,7 +89,6 @@
       "enum": [
         "advisory",
         "explanation",
-        "tool-selection",
         "research-evaluation"
       ]
     },

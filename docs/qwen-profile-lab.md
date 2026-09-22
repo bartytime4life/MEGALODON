@@ -3,10 +3,11 @@
 Status: ● **implemented offline lab; no provider or model admitted**  
 Related gate: issue #261
 
-MEGALODON already has a literal-loopback, fingerprint-pinned Qwen advisory
-transport. The highest-value next step is not a broader chat box or automatic
-model pull. It is a reproducible way to bind one operator-owned model artifact,
-compare bounded candidates, and preserve the difference between model quality,
+MEGALODON already has a literal-loopback, registry-bound Qwen advisory
+transport whose exact model artifact and provider acceptance remain held. The
+highest-value next step is not a broader chat box or automatic model pull. It
+is a reproducible way to bind one operator-owned model artifact, compare
+bounded candidates, and preserve the difference between model quality,
 provider containment, and operational authority.
 
 ## What this slice adds
@@ -26,7 +27,7 @@ not echo paths, profile contents, or exception text.
 
 The profile binds:
 
-- exact Ollama model alias and observed manifest digest;
+- exact Ollama model tag and observed manifest digest;
 - separately hashed model artifact and provenance record;
 - separately hashed provider-containment receipt;
 - Ollama runner version and binary digest;
@@ -40,23 +41,41 @@ The comparison order is intentionally conservative: closed schema, citation,
 and refusal gates outrank speed or memory. The comparison never chooses a
 winner; `selection` is always `null`.
 
+## Like-for-like comparison only
+
+Each validated profile derives a `comparison_boundary_sha256` over the exact
+workload and execution boundary:
+
+- evidence class;
+- provider and literal loopback endpoint;
+- purpose and operational context;
+- structured-output and no-thinking posture;
+- runner name, version, and binary digest;
+- adversarial corpus digest and sample count.
+
+The comparison command refuses mixed corpora, runner drift, purpose drift,
+operational-context drift, or synthetic/operator evidence mixing. Model tag,
+family, quantization, context capacity, latency, and memory remain candidate
+attributes and may differ. This prevents a faster model from ranking ahead only
+because it was measured against an easier corpus or different runtime.
+
 ## Recommended capability lanes
 
 These lanes are planning guidance, not admitted aliases.
 
 | Lane | Intended use | Runtime posture | Admission posture |
 |---|---|---|---|
-| Stage 0 advisory baseline | Alert explanation and bounded tool selection | Structured JSON, temperature 0, thinking disabled, 4,096-token operational context | Continue the existing exact Qwen 2.5 binding until an owner changes it |
+| Stage 0 advisory baseline | Alert explanation | Structured JSON, temperature 0, thinking disabled, 4,096-token operational context | Qwen 2.5 candidate profile only; exact owner artifact binding remains HOLD |
 | Reasoning evaluation | Difficult offline explanation tests | Separate corpus; thinking output neither persisted nor treated as evidence | Research-only candidate |
 | Coding assistant | Repository development and review | Separate workstation tool; no product evidence or host-action authority | Outside MEGALODON runtime |
 | Vision evaluation | Screenshot or document understanding | Requires a distinct image/redaction contract and fixtures | HOLD until policy and evidence lanes exist |
 
 Ollama's API supports a JSON Schema in the `format` field and deterministic
 generation controls. MEGALODON should use that feature for machine-facing
-selections, while keeping human explanations bounded and visibly advisory.
+advisories, while keeping human explanations bounded and visibly advisory.
 Ollama also exposes model templates and runtime parameters through Modelfiles;
-those settings belong in the exact profile and must not be inferred from an
-alias alone.
+those settings belong in the exact profile and must not be inferred from a tag
+alone.
 
 Primary implementation references:
 
@@ -73,15 +92,15 @@ Primary implementation references:
 
 1. Acquire Ollama and a Qwen artifact through an owner-approved process outside
    this tool. Do not add a pull or service-start command to MEGALODON.
-2. Record the exact alias, `/api/tags` manifest digest, artifact digest,
+2. Record the exact tag, `/api/tags` manifest digest, artifact digest,
    provenance digest, Ollama binary version/digest, and separately produced
    containment-receipt digest.
-3. Run the signed adversarial corpus and record exact counts. A partial result
-   stays `EVALUATION_HOLD`.
+3. Run the signature-bound adversarial corpus and record exact counts. A
+   partial result stays `EVALUATION_HOLD`.
 4. Run `validate` and `packet`; preserve both the input profile and output
    packet as owner evidence outside public fixtures.
-5. Compare alternatives only when each has the same corpus and operating
-   boundary. The current tool intentionally does not claim corpus equivalence.
+5. Compare alternatives only when the tool emits the same comparison-boundary
+   digest for every profile. Do not override a boundary mismatch.
 6. Make owner binding, independent security acceptance, release, deployment,
    and host-operation decisions separately.
 
