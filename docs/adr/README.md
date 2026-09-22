@@ -32,4 +32,8 @@ records with a link to the replacement rather than rewriting their history.
 
 ## New ADRs
 
-None yet. The next available number is `ADR-0006`.
+| ADR | Title | Decision state |
+| --- | --- | --- |
+| [ADR-0006](0006-evidence-status-badges.md) | Evidence status badges — a fixed five-level claim taxonomy | Proposed |
+
+The next available number is `ADR-0007`.
