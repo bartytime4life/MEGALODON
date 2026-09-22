@@ -1,6 +1,6 @@
 # Offline Ollama identity intake
 
-Status: **implemented offline validation; no provider observation accepted**  
+Status: ● **implemented offline validation; no provider observation accepted**  
 Related gate: issue #261
 
 `tools/ollama_identity_lab.py` converts one explicit JSON observation into a
