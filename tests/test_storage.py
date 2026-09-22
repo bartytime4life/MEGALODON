@@ -48,6 +48,41 @@ def test_dashboard_store_requires_existing_private_compatible_database(tmp_path)
             reader._connection.execute("DELETE FROM events")
 
 
+def test_validate_connection_path_accepts_a_verified_anchor_match(tmp_path):
+    class _FakeRows:
+        def fetchall(self):
+            return [(0, "main", "/dev/fd/5")]
+
+    class _FakeConnection:
+        def execute(self, _sql):
+            return _FakeRows()
+
+    expected = tmp_path / "private" / "audit.db"
+    storage._validate_connection_path(
+        _FakeConnection(), expected, "STORAGE_PATH", anchor=Path("/dev/fd/5")
+    )
+
+
+def test_validate_connection_path_refuses_when_neither_expected_nor_anchor_match(
+    tmp_path,
+):
+    class _FakeRows:
+        def fetchall(self):
+            return [(0, "main", "/dev/fd/5")]
+
+    class _FakeConnection:
+        def execute(self, _sql):
+            return _FakeRows()
+
+    expected = tmp_path / "private" / "audit.db"
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
+        storage._validate_connection_path(
+            _FakeConnection(), expected, "STORAGE_PATH", anchor=Path("/dev/fd/9")
+        )
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
+        storage._validate_connection_path(_FakeConnection(), expected, "STORAGE_PATH")
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlink and mode semantics")
 def test_dashboard_store_rejects_symlink_and_public_storage(tmp_path):
     private = tmp_path / "private"
@@ -122,10 +157,12 @@ def test_open_private_directory_accepts_real_top_level_compat_symlink():
     reason="requires a platform where /tmp is a top-level compatibility symlink",
 )
 def test_store_opens_through_real_top_level_compat_symlink():
-    # SQLite reports PRAGMA database_list's filename fully realpath'd, so an
-    # unresolved self.path (still containing e.g. /tmp) would otherwise
-    # spuriously fail STORAGE_PATH:DATABASE_CHANGED's lexical comparison the
-    # first time this path is actually exercised through a real alias.
+    # SQLite reports PRAGMA database_list's filename via its own
+    # platform-dependent handling of the descriptor-anchored connection path
+    # (fully realpath'd on some platforms, reported back literally on
+    # others), so an unresolved self.path would otherwise spuriously fail
+    # STORAGE_PATH:DATABASE_CHANGED's comparison the first time this path is
+    # actually exercised through a real alias.
     with tempfile.TemporaryDirectory() as root:
         with Store(Path(root) / "audit.db") as store:
             _populate(store)

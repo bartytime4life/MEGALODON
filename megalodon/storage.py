@@ -502,9 +502,25 @@ def _directory_generation(descriptor: int | None) -> tuple[int, ...] | None:
 
 
 def _validate_connection_path(
-    connection: sqlite3.Connection, expected: Path, prefix: str
+    connection: sqlite3.Connection,
+    expected: Path,
+    prefix: str,
+    *,
+    anchor: Path | None = None,
 ) -> None:
-    """Require SQLite to derive journals beside the already-verified path."""
+    """Require SQLite to derive journals beside the already-verified path.
+
+    SQLite's own report of where it opened the database (via ``PRAGMA
+    database_list``) is not consistent across platforms when the connection
+    was made through a descriptor-anchored path (``_anchored_database_path``,
+    e.g. ``/proc/self/fd/N`` or ``/dev/fd/N``): some platforms resolve it to
+    the real filesystem path, others (observed on macOS) report that same
+    descriptor path back literally. ``anchor``, when given, is that exact
+    descriptor path we ourselves constructed and already verified was bound
+    to our own already-open, already-validated file descriptor before
+    calling ``sqlite3.connect`` -- so a report matching it is exactly as
+    strong a guarantee as one matching ``expected``, not a weaker one.
+    """
 
     try:
         rows = connection.execute("PRAGMA database_list").fetchall()
@@ -515,9 +531,12 @@ def _validate_connection_path(
     sequence, name, filename = rows[0][:3]
     if int(sequence) != 0 or str(name) != "main" or not filename:
         _raise_path_error(prefix, "DATABASE_CHANGED")
-    actual = _absolute_database_path(str(filename), prefix)
-    if os.path.normcase(os.fspath(actual)) != os.path.normcase(os.fspath(expected)):
-        _raise_path_error(prefix, "DATABASE_CHANGED")
+    actual = os.path.normcase(os.fspath(_absolute_database_path(str(filename), prefix)))
+    if actual == os.path.normcase(os.fspath(expected)):
+        return
+    if anchor is not None and actual == os.path.normcase(os.fspath(anchor)):
+        return
+    _raise_path_error(prefix, "DATABASE_CHANGED")
 
 
 def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
@@ -1101,7 +1120,9 @@ class Store:
                 timeout=10,
                 check_same_thread=False,
             )
-            _validate_connection_path(connection, self.path, "STORAGE_PATH")
+            _validate_connection_path(
+                connection, self.path, "STORAGE_PATH", anchor=sqlite_path
+            )
             self._assert_path_identity()
             if _directory_generation(self._directory_descriptor) != opening_generation:
                 _raise_path_error("STORAGE_PATH", "DIRECTORY_CHANGED")
@@ -2386,7 +2407,7 @@ class DashboardStore:
                 check_same_thread=False,
             )
             _validate_connection_path(
-                connection, self.path, "DASHBOARD_STORE"
+                connection, self.path, "DASHBOARD_STORE", anchor=self._sqlite_path
             )
             self._assert_path_identity()
             self._assert_directory_generation(opening_generation)
