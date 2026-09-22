@@ -435,6 +435,9 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); line-hei
 .ingestion-run-facts dt { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .ingestion-run-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: .75rem; }
 .ingestion-run-reason { margin: 10px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.ingestion-run-evidence { margin: 8px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.evidence-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); font-weight: 800; font-size: .68rem; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
+.evidence-badge.contract-only { border-color: rgba(110, 216, 255, .35); color: var(--cyan); }
 .ingestion-runs-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: .78rem; }
 .ingestion-runs-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 22px 20px; }
 .ingestion-source-control { display: grid; gap: 5px; width: min(100%, 230px); color: var(--muted); font-size: .75rem; font-weight: 700; }
@@ -878,6 +881,19 @@ function textNode(tag, value = '', className) {
   node.textContent = String(value);
   return node;
 }
+// Fixed five-level evidence taxonomy from ADR-0006 (docs/adr/0006-evidence-status-badges.md).
+// The glyph is decorative and always aria-hidden; the label is the only thing a screen
+// reader announces, so a badge is never rendered with the glyph alone.
+const evidenceGlyphs = Object.freeze({
+  'implemented': '●', 'proposed': '◐', 'contract-only': '◇',
+  'synthetic': '▽', 'native-receipt-required': '◆'
+});
+function evidenceBadge(level, label) {
+  const badge = document.createElement('span'); badge.className = `evidence-badge ${level}`;
+  const glyph = textNode('span', evidenceGlyphs[level]); glyph.setAttribute('aria-hidden', 'true');
+  badge.append(glyph, document.createTextNode(` ${label}`));
+  return badge;
+}
 function formatNumber(value) { return new Intl.NumberFormat().format(Number(value)); }
 const displayTimeFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit',
@@ -1130,7 +1146,11 @@ function renderIngestionRuns(runs, selectedSource = 'all') {
     );
     const reason = run.termination_reason === null ? 'No terminal reason recorded' : run.termination_reason.replaceAll('_', ' ');
     const failure = run.failure_code === null ? '' : ` · ${run.failure_code}`;
-    card.append(head, facts, textNode('p', `Recorded reason: ${reason}${failure}`, 'ingestion-run-reason'));
+    const evidence = document.createElement('p'); evidence.className = 'ingestion-run-evidence';
+    evidence.append(evidenceBadge('contract-only', 'Contract only'), document.createTextNode(
+      ' — adapter identity and accepted/rejected input counts are named in the API contract, not recorded by any adapter yet.'
+    ));
+    card.append(head, facts, textNode('p', `Recorded reason: ${reason}${failure}`, 'ingestion-run-reason'), evidence);
     return card;
   });
   list.replaceChildren(...cards);
