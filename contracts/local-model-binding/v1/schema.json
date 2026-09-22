@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/local-model-binding/v1/schema.json",
+  "title": "MEGALODON operator-owned local model binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "status",
+    "logical_alias",
+    "provider",
+    "artifact",
+    "host_profile",
+    "registry",
+    "operator_decision",
+    "effects",
+    "limitations",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "megalodon.local-model-binding/v1"},
+    "repository": {"const": "bartytime4life/MEGALODON"},
+    "status": {"enum": ["UNBOUND", "BOUND"]},
+    "logical_alias": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}$"}
+      ]
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "executable_sha256",
+        "provenance_ref",
+        "endpoint"
+      ],
+      "properties": {
+        "name": {"const": "ollama"},
+        "version": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9._-]+)?$"}
+          ]
+        },
+        "executable_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "provenance_ref": {"$ref": "#/$defs/nullableRef"},
+        "endpoint": {"const": "http://127.0.0.1:11434"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installed_tag",
+        "manifest_sha256",
+        "model_weight_sha256",
+        "components",
+        "provenance_ref",
+        "license_refs"
+      ],
+      "properties": {
+        "installed_tag": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^qwen[A-Za-z0-9._-]*:[A-Za-z0-9._-]+$"}
+          ]
+        },
+        "manifest_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "model_weight_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "components": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["component_id", "role", "sha256", "size_bytes"],
+            "properties": {
+              "component_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$"},
+              "role": {
+                "enum": [
+                  "weights",
+                  "configuration",
+                  "template",
+                  "parameters",
+                  "license",
+                  "adapter",
+                  "other"
+                ]
+              },
+              "sha256": {"$ref": "#/$defs/digest"},
+              "size_bytes": {"type": "integer", "minimum": 1, "maximum": 1099511627776}
+            }
+          }
+        },
+        "provenance_ref": {"$ref": "#/$defs/nullableRef"},
+        "license_refs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"type": "string", "minLength": 1, "maxLength": 512},
+          "uniqueItems": true
+        }
+      }
+    },
+    "host_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "os",
+        "architecture",
+        "backend",
+        "effective_config_sha256"
+      ],
+      "properties": {
+        "profile_id": {"$ref": "#/$defs/nullableIdentifier"},
+        "os": {"$ref": "#/$defs/nullableIdentifier"},
+        "architecture": {"$ref": "#/$defs/nullableIdentifier"},
+        "backend": {
+          "oneOf": [
+            {"type": "null"},
+            {"enum": ["cpu", "cuda", "rocm", "metal"]}
+          ]
+        },
+        "effective_config_sha256": {"$ref": "#/$defs/nullableDigest"}
+      }
+    },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "fingerprint_sha256"],
+      "properties": {
+        "registry_id": {"$ref": "#/$defs/nullableIdentifier"},
+        "fingerprint_sha256": {"$ref": "#/$defs/nullableDigest"}
+      }
+    },
+    "operator_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "actor", "approved_at", "evidence_refs"],
+      "properties": {
+        "status": {"enum": ["NOT_RECORDED", "APPROVED"]},
+        "actor": {"$ref": "#/$defs/nullableIdentifier"},
+        "approved_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/timestamp"}
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1024},
+          "uniqueItems": true
+        }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_access_performed",
+        "model_pulled",
+        "model_installed",
+        "model_started",
+        "alias_created",
+        "host_configuration_changed",
+        "detector_authority_granted",
+        "action_authority_granted"
+      ],
+      "properties": {
+        "network_access_performed": {"const": false},
+        "model_pulled": {"const": false},
+        "model_installed": {"const": false},
+        "model_started": {"const": false},
+        "alias_created": {"const": false},
+        "host_configuration_changed": {"const": false},
+        "detector_authority_granted": {"const": false},
+        "action_authority_granted": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 16,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512},
+      "uniqueItems": true
+    },
+    "generated_at": {"$ref": "#/$defs/timestamp"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullableDigest": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]
+    },
+    "nullableRef": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 1024}
+      ]
+    },
+    "nullableIdentifier": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$"}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }
+  }
+}
