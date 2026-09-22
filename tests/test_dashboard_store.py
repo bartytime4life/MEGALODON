@@ -199,9 +199,12 @@ def test_reader_and_writer_require_a_stable_descriptor_sqlite_path(
     reader_path = tmp_path / "reader" / "audit.db"
     _seed(reader_path)
     monkeypatch.setattr(
+        storage_module, "_proc_fd_path", lambda _descriptor: Path("/nonexistent-proc-fd")
+    )
+    monkeypatch.setattr(
         storage_module,
-        "_descriptor_database_path",
-        lambda _descriptor, fallback: str(fallback),
+        "_dev_fd_directory_path",
+        lambda _descriptor, _name: Path("/nonexistent-dev-fd"),
     )
 
     with pytest.raises(
@@ -217,6 +220,40 @@ def test_reader_and_writer_require_a_stable_descriptor_sqlite_path(
     ):
         Store(writer_path)
     assert not writer_path.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor paths required")
+def test_writer_and_reader_work_through_the_directory_anchored_fallback(
+    tmp_path, monkeypatch
+):
+    """Simulate a platform without ``/proc/self/fd`` (e.g. macOS).
+
+    ``_dev_fd_directory_path`` is left real (unmocked): on Linux ``/dev/fd``
+    is itself a symlink to ``/proc/self/fd``, so this exercises the exact
+    directory-descriptor-plus-name lookup the real fallback performs on
+    macOS, end to end, including schema creation's write transaction (the
+    step that fails outright on macOS today) and read-back after reopening.
+    """
+    monkeypatch.setattr(
+        storage_module, "_proc_fd_path", lambda _descriptor: Path("/nonexistent-proc-fd")
+    )
+
+    path = tmp_path / "private" / "audit.db"
+    with Store(path) as store:
+        event = PacketEvent(STAMP, "192.0.2.1", "198.51.100.2", "TCP")
+        event_id = store.record_event(event)
+        store.record_detection(
+            event_id,
+            DetectionResult(
+                STAMP, "TEST_RULE", "HIGH", event.src_ip, event.dst_ip,
+                "synthetic finding",
+            ),
+        )
+
+    with DashboardStore(path) as reader:
+        report = reader.summary()
+        assert report["events"] == 1
+        assert report["detections"] == 1
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and modes required")
