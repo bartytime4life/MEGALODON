@@ -48,7 +48,7 @@ def _parser() -> argparse.ArgumentParser:
     packet.add_argument("profile", type=Path)
 
     compare = sub.add_parser(
-        "compare", help="rank two or more self-reported candidates"
+        "compare", help="rank like-for-like self-reported candidates"
     )
     compare.add_argument("profiles", type=Path, nargs="+")
 
@@ -65,6 +65,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "state": "VALID",
                 "profile_id": profile.profile_id,
                 "profile_sha256": profile.canonical_sha256,
+                "comparison_boundary_sha256": (
+                    profile.comparison_boundary_sha256
+                ),
                 "hard_gate_passed": profile.hard_gate_passed,
                 "gate_failures": list(profile.gate_failures),
                 "network_performed": False,
