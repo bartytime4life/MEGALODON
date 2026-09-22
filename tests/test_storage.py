@@ -117,6 +117,21 @@ def test_open_private_directory_accepts_real_top_level_compat_symlink():
             os.close(descriptor)
 
 
+@pytest.mark.skipif(
+    os.name != "posix" or os.path.realpath("/tmp") == "/tmp",
+    reason="requires a platform where /tmp is a top-level compatibility symlink",
+)
+def test_store_opens_through_real_top_level_compat_symlink():
+    # SQLite reports PRAGMA database_list's filename fully realpath'd, so an
+    # unresolved self.path (still containing e.g. /tmp) would otherwise
+    # spuriously fail STORAGE_PATH:DATABASE_CHANGED's lexical comparison the
+    # first time this path is actually exercised through a real alias.
+    with tempfile.TemporaryDirectory() as root:
+        with Store(Path(root) / "audit.db") as store:
+            _populate(store)
+            assert store.summary()["events"] == 1
+
+
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):
     with Store(tmp_path / "audit.db") as store:
         _populate(store)

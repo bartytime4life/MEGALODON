@@ -596,7 +596,11 @@ def _resolve_top_level_system_alias(path: Path) -> Path:
     resolves to exactly ``/private/<name>``. Every other symlink anywhere
     else in the path -- including one of these same names appearing deeper
     in the path, or planted by the current user -- is left untouched and
-    still refused by the strict walk below, unchanged.
+    still refused by the strict, no-symlink admission walk unchanged. It is
+    also used to canonicalize ``self.path`` at construction time, so a
+    lexical comparison against SQLite's own (fully realpath'd) reporting of
+    the database file's location does not spuriously diverge over this same
+    fixed alias.
     """
 
     parts = path.parts
@@ -1058,7 +1062,9 @@ class Store:
         ):
             raise StorageCapacityError("STORAGE_CAPACITY:INVALID_LIMIT")
         self.max_database_bytes = max_database_bytes
-        self.path = _absolute_database_path(path, "STORAGE_PATH")
+        self.path = _resolve_top_level_system_alias(
+            _absolute_database_path(path, "STORAGE_PATH")
+        )
         self._lock = RLock()
         self._closed = False
         self._write_poisoned = False
@@ -2263,7 +2269,9 @@ class DashboardStore:
     }
 
     def __init__(self, path: str | Path):
-        self.path = _absolute_database_path(path, "DASHBOARD_STORE")
+        self.path = _resolve_top_level_system_alias(
+            _absolute_database_path(path, "DASHBOARD_STORE")
+        )
         self._lock = RLock()
         self._closed = False
         self._directory_descriptor: int | None = None
