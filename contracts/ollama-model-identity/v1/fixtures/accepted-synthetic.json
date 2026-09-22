@@ -1,0 +1,36 @@
+{
+  "schema": "megalodon-ollama-identity-observation-v1",
+  "evidence_class": "synthetic_fixture",
+  "observed_at": "2026-01-01T00:00:00Z",
+  "endpoint": "http://127.0.0.1:11434",
+  "binding_alias": "local:qwen-2.5-7b-instruct-fp16-v1",
+  "model_tag": "qwen2.5:7b-instruct-fp16",
+  "version": {
+    "value": "0.0.0-synthetic",
+    "response_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "binary_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "tags": {
+    "response_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "matched_name": "qwen2.5:7b-instruct-fp16",
+    "matched_model": "qwen2.5:7b-instruct-fp16",
+    "manifest_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "size_bytes": 1,
+    "details": {"format": "gguf", "family": "qwen2", "parameter_size": "7.6B", "quantization_level": "F16"}
+  },
+  "show": {
+    "request_model": "qwen2.5:7b-instruct-fp16",
+    "response_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "modified_at": "2026-01-01T00:00:00Z",
+    "capabilities": ["completion"],
+    "parameters_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "template_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+    "license_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "model_info_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "details": {"format": "gguf", "family": "qwen2", "parameter_size": "7.6B", "quantization_level": "F16"}
+  },
+  "artifact": {
+    "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "provenance_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}
