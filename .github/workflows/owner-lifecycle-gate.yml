@@ -1,0 +1,145 @@
+name: owner-lifecycle-gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: owner-lifecycle-gate-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head-owner-authorization:
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event.issue.pull_request != null
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify latest owner lifecycle comment for the exact PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_API_URL: ${{ github.api_url }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_EVENT_PATH: ${{ github.event_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          token = os.environ["GH_TOKEN"]
+          api = os.environ["GH_API_URL"].rstrip("/")
+          repository = os.environ["GH_REPOSITORY"]
+          owner = os.environ["GH_REPOSITORY_OWNER"]
+          event = json.loads(
+              Path(os.environ["GH_EVENT_PATH"]).read_text(encoding="utf-8")
+          )
+
+          if os.environ["GH_EVENT_NAME"] == "pull_request":
+              pr_number = int(event["pull_request"]["number"])
+          else:
+              pr_number = int(event["issue"]["number"])
+
+          def get_json(path: str):
+              request = urllib.request.Request(
+                  f"{api}{path}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "megalodon-owner-lifecycle-gate",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  return json.load(response)
+
+          try:
+              pull = get_json(f"/repos/{repository}/pulls/{pr_number}")
+              comments = get_json(
+                  f"/repos/{repository}/issues/{pr_number}/comments?per_page=100"
+              )
+          except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+              print(f"OWNER_LIFECYCLE_ERROR: unable to read GitHub state: {exc}")
+              raise SystemExit(2)
+
+          head = pull["head"]["sha"]
+          if not re.fullmatch(r"[0-9a-f]{40}", head):
+              print("OWNER_LIFECYCLE_ERROR: GitHub returned a non-canonical head SHA")
+              raise SystemExit(2)
+          if pull["draft"]:
+              print("OWNER_LIFECYCLE_HOLD: pull request is draft")
+              raise SystemExit(3)
+
+          header = "MEGALODON-OWNER-AUTHORIZATION-V1"
+          records = []
+          for comment in comments:
+              if comment.get("user", {}).get("login") != owner:
+                  continue
+              if comment.get("author_association") != "OWNER":
+                  continue
+              body = comment.get("body") or ""
+              if header not in body:
+                  continue
+              fields = {}
+              for raw_line in body.splitlines():
+                  line = raw_line.strip()
+                  if ":" not in line:
+                      continue
+                  key, value = line.split(":", 1)
+                  fields[key.strip().lower()] = value.strip()
+              if fields.get("head") != head:
+                  continue
+              if fields.get("scope") != "ready-and-merge":
+                  continue
+              state = fields.get("state")
+              if state not in {"authorized", "revoked"}:
+                  continue
+              records.append((comment["created_at"], int(comment["id"]), state))
+
+          if not records:
+              print(
+                  "OWNER_LIFECYCLE_HOLD: no owner authorization matches "
+                  f"PR #{pr_number} exact head {head}"
+              )
+              print("Expected owner comment:")
+              print(header)
+              print(f"head: {head}")
+              print("scope: ready-and-merge")
+              print("state: authorized")
+              raise SystemExit(3)
+
+          _, comment_id, state = sorted(records)[-1]
+          if state != "authorized":
+              print(
+                  "OWNER_LIFECYCLE_HOLD: latest exact-head owner record "
+                  f"#{comment_id} is revoked"
+              )
+              raise SystemExit(3)
+
+          print(
+              "OWNER_LIFECYCLE_AUTHORIZED: "
+              f"PR #{pr_number} head {head} by owner record #{comment_id}"
+          )
+          print(
+              "Boundary: authorization covers ready transition and merge only; "
+              "it does not authorize release, deployment, installation, model or "
+              "sensor operation, firewall changes, or independent acceptance."
+          )
+          PY
