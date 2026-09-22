@@ -37,6 +37,8 @@ function heartbeatText(tool) {
   const parts = [heartbeatLabels[tool.light]];
   if (tool.service === 'running' && tool.running_since) parts.push(`up ${heartbeatAge(tool.running_since)}`);
   else if (tool.service === 'stopped' && tool.expects_service) parts.push('start its service to go green');
+  if (tool.model === 'missing') parts.push('Qwen model not downloaded');
+  else if (tool.model === 'present') parts.push('Qwen model downloaded');
   if (tool.installed === 'yes' && tool.installed_since) parts.push(`installed ${new Date(tool.installed_since).toLocaleDateString()}`);
   return parts.join(' · ');
 }
@@ -77,7 +79,8 @@ function paintInstallControl(wrap) {
   if (!entry || toolId === 'core') return;
   const mine = job && job.tool === toolId;
   const model = entry.method === 'ollama';
-  if (entry.one_click && (model || !tool || tool.installed !== 'yes' || (mine && job.state === 'running'))) {
+  const needsModel = model && (!tool || tool.model !== 'present');
+  if (entry.one_click && (needsModel || (!model && (!tool || tool.installed !== 'yes')) || (mine && job.state === 'running'))) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
     const running = job && job.state === 'running';
     button.textContent = mine && running ? 'Installing…' : model ? 'Download Qwen model' : `Install ${name}`;

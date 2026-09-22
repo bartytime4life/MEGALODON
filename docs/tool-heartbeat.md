@@ -7,7 +7,7 @@ a **status light** next to its name, both in **Home → Data and tools** and in
 | Light | Meaning |
 |-------|---------|
 | Green | Installed. For service tools (Suricata, Ollama, OSSEC, Greenbone, Zabbix, Nagios) the service process is also running; hover to see its uptime. |
-| Amber | Installed, but the tool's expected service is not running. |
+| Amber | Installed, but the tool's expected service is not running. For Qwen, also amber while Ollama is installed but the `qwen2.5:7b` model has not been downloaded. |
 | Red   | Not installed. |
 | Grey  | Unknown (for example, a non-Linux host or unreadable metadata). |
 
@@ -33,6 +33,13 @@ missed: OSSEC in `/var/ossec/bin`, private Zeek builds in `~/.local/zeek-*`,
 the Greenbone container compose project, all three Zabbix roles, and Nagios
 source installs in `/usr/local/nagios`. A matching running process also counts
 as installed.
+
+For Qwen, the heartbeat also checks whether the `qwen2.5:7b` model is
+downloaded, by looking for Ollama's manifest file in `$OLLAMA_MODELS`,
+`~/.ollama/models`, or the system service's model directory. It reads only file
+metadata and never contacts the Ollama server. When the service's directory is
+not readable by your user, the model status shows as unknown instead of
+missing.
 
 ## Install button
 
