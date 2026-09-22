@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/ollama-generate-request/v1/schema.json",
+  "title": "MEGALODON Ollama generate-request input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "mode", "model_id", "prompt", "candidate_ids"],
+  "properties": {
+    "schema": {"const": "megalodon-ollama-generate-input-v1"},
+    "mode": {"enum": ["generic_advisory", "anomaly_advisory"]},
+    "model_id": {
+      "type": "string",
+      "pattern": "^local:qwen-[A-Za-z0-9._-]{1,96}$"
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "candidate_ids": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^a[0-9]{2}$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "generic_advisory"}}},
+      "then": {"properties": {"candidate_ids": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"mode": {"const": "anomaly_advisory"}}},
+      "then": {"properties": {"candidate_ids": {"minItems": 1}}}
+    }
+  ]
+}
