@@ -1,6 +1,6 @@
 # Ollama model identity observation contract v1
 
-Status: **contract and offline validator; native observation still required**.
+Status: ● **implemented contract and offline validator; native observation still required**.
 
 The contract records privacy-minimized, operator-supplied observations from an
 already authorized local Ollama provider. The repository tool validates and
