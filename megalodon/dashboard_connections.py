@@ -180,9 +180,9 @@ function integrationCapabilityState(toolIndex, item) {
     qualification: {...integrationQualificationStates[item.selected_status],
       detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
     administration: {className: 'state-unknown', label: 'Operator managed',
-      detail: 'The HUD cannot install, start, stop, remove, configure, or update this app.'},
-    health: {className: 'state-unknown', label: 'Runtime health unknown',
-      detail: 'No service, endpoint, sensor-liveness, data-freshness, or coverage probe was performed.'}
+      detail: 'Install is available where a fixed Ubuntu or Python package exists. The HUD never starts, stops, removes, or configures this app.'},
+    health: {className: 'state-unknown', label: 'See the status light',
+      detail: 'The heartbeat observes installation, process uptime and service state. It does not probe endpoints, sensor liveness, data freshness, or coverage.'}
   };
 }
 function integrationStatusRow(name, state) {
@@ -195,7 +195,8 @@ function integrationCard(item) {
   const card = document.createElement('details'); card.className = 'integration-card';
   const summary = document.createElement('summary');
   const identity = document.createElement('span'); identity.className = 'integration-identity';
-  identity.append(textNode('span', integrationZones[item.id], 'integration-zone'), textNode('span', item.software, 'integration-title'));
+  const title = textNode('span', '', 'integration-title'); title.append(heartbeatLight(workflowToolIds[integrationIds.indexOf(item.id)]), textNode('span', item.software));
+  identity.append(textNode('span', integrationZones[item.id], 'integration-zone'), title);
   const statuses = document.createElement('span'); statuses.className = 'integration-summary-status';
   statuses.append(textNode('span', integrationStatuses[item.selected_status], 'summary-chip'));
   const toolIndex = integrationIds.indexOf(item.id);
@@ -209,7 +210,7 @@ function integrationCard(item) {
                 integrationStatusRow('MEGALODON support', capability.qualification),
                 integrationStatusRow('Administration', capability.administration),
                 integrationStatusRow('Health', capability.health));
-  body.append(matrix);
+  body.append(matrix, heartbeatDetail(toolId), installControl(toolId, item.software));
   const reviewTargets = {core: '#detections-title', tshark: '#offline-title', zeek: '#offline-title', suricata: '#suricata-title', qwen: '#analysis-window-title'};
   if (reviewTargets[toolId]) {
     const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);

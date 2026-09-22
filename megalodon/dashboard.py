@@ -1,4 +1,8 @@
-"""Local read-only dashboard. It exposes telemetry, never control actions.
+"""Local dashboard. Telemetry routes are read-only.
+
+In HUD mode it also serves a cached tool heartbeat and a one-click installer
+that runs only fixed recipes from ``tool_installer.RECIPES`` (system packages
+go through the OS password prompt via pkexec).
 
 The presentation constants live in ``dashboard_assets``; this module retains the
 public Python API and the security boundary for every HTTP route.
@@ -21,6 +25,8 @@ import secrets
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .dashboard_commands import local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
+from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
+from .tool_installer import Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
 from .hub import integration_plan
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .config import AISettings, BlockingSettings
@@ -369,6 +375,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     event_limit: int = 50
     setup_evidence: bytes | None = None
     local_checks: LocalChecks | None = None
+    heartbeat: Heartbeat | None = None
+    installer: Installer | None = None
     javascript: bytes = DASHBOARD_JS.encode()
     ai_settings: AISettings = AISettings()
     ai_receipt_path: Path | None = None
@@ -396,7 +404,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", self.javascript)
             return
-        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/ai/status":
@@ -432,6 +440,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             except (OSError, ValueError, TypeError, OverflowError):
                 self._send_json({"error": "local checks unavailable"}, status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
+            return
+        if route.path in {"/api/heartbeat", "/api/install"}:
+            if self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+                return
+            if self.heartbeat is None or self.installer is None:
+                self._send_json({"error": "heartbeat requires HUD mode"}, status=403)
+                return
+            if route.path == "/api/install":
+                self._send_json({**install_catalog(), "job": self.installer.status()})
+                return
+            try:
+                payload = self.heartbeat.snapshot()
+            except HeartbeatBusy:
+                self._send_json({"error": "heartbeat in progress"}, status=429,
+                                extra_headers={"Retry-After": str(HEARTBEAT_CACHE_SECONDS)})
+                return
+            except (OSError, ValueError, TypeError, OverflowError):
+                self._send_json({"error": "heartbeat unavailable"}, status=503)
                 return
             self._send(200, "application/json; charset=utf-8", payload)
             return
@@ -688,6 +717,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/ai/ask":
             self._ai_ask()
             return
+        if self.path == "/api/install":
+            self._install()
+            return
         self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
 
     def _ai_ask(self) -> None:
@@ -726,6 +758,41 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError, OSError, RuntimeError) as exc:
             self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
                              "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
+
+    def _install(self) -> None:
+        # Custom header + exact Origin + JSON body: a cross-site page cannot
+        # send this without a CORS preflight, which this server never grants.
+        expected_origin = f"http://{self.headers.get('Host')}"
+        if (self.installer is None
+                or self.headers.get_all("X-Megalodon-Install", []) != ["1"]
+                or self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])):
+            self._send_json({"error": "local install authorization required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 1 <= int(lengths[0]) <= 64):
+            self._send_json({"error": "invalid install request length"}, status=400)
+            return
+        try:
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"))
+        except (ValueError, OSError):
+            self._send_json({"error": "invalid install request"}, status=400)
+            return
+        if type(body) is not dict or set(body) != {"tool"} or body["tool"] not in RECIPES:
+            self._send_json({"error": "unknown tool"}, status=400)
+            return
+        try:
+            status = self.installer.start(body["tool"])
+        except InstallBusy:
+            self._send_json({"error": "another installation is running"}, status=409)
+            return
+        except InstallUnavailable:
+            self._send_json({"error": "no one-click installer for this tool on this computer"}, status=422)
+            return
+        self._send_json(status, status=202)
 
     def _reference_library(self) -> ReferenceLibrary:
         library = self.reference_library
@@ -872,6 +939,8 @@ def serve(
         f"const localPythonLifecycle = {lifecycle};",
         1,
     )).encode()
+    heartbeat = Heartbeat() if inspect_tools else None
+    installer = Installer(on_finish=heartbeat.invalidate) if heartbeat is not None else None
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
@@ -881,6 +950,8 @@ def serve(
             "event_limit": event_limit,
             "setup_evidence": setup_evidence,
             "local_checks": LocalChecks(store, source_available=source_available) if inspect_tools else None,
+            "heartbeat": heartbeat,
+            "installer": installer,
             "javascript": javascript,
             "ai_settings": ai_settings or AISettings(),
             "ai_receipt_path": ai_receipt_path,

@@ -330,7 +330,7 @@ process.stdin.on('end', async () => {
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Presence not checked/);
     assert.match(textOf(nodeFor('integrations-cards')), /MEGALODON support:/);
     assert.match(textOf(nodeFor('integrations-cards')), /Administration: Operator managed/);
-    assert.match(textOf(nodeFor('integrations-cards')), /Health: Runtime health unknown/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Health: See the status light/);
     run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'}))}; renderIntegrationMap()");
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);

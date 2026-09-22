@@ -206,6 +206,21 @@ function renderVerificationSummary() {
   if (summary) summary.textContent = `Manual notes: ${installed} reported installed · ${missing} reported not installed · ${stale} need recheck · ${unchecked - stale} not checked`;
 }
 
+// One light per tool: a fresh manual note wins, then an imported report, else unknown.
+function lightFor(id) {
+  const presence = presenceFor(id);
+  if (presence === "installed") return { light: "green", label: toolPresenceLabels.installed };
+  if (presence === "missing") return { light: "red", label: toolPresenceLabels.missing };
+  if (presence === "stale") return { light: "amber", label: toolPresenceLabels.stale };
+  if (state.readiness) {
+    const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
+    const report = state.readiness.tools.find((tool) => tool.id === mapped);
+    if (report && report.status === "executable_found") return { light: "green", label: "Found in imported report" };
+    if (report && report.status === "not_found") return { light: "red", label: "Not found in imported report" };
+  }
+  return { light: "grey", label: "Unknown here · live status is in the local HUD" };
+}
+
 function readinessLabel(id) {
   if (!state.readiness) return "Report: not loaded";
   const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
@@ -308,12 +323,12 @@ function renderIntegrationGrid() {
   $('#tool-inspector').hidden = visible.length === 0;
   if (visible.length && !visible.some(item => item.id === state.selectedTool)) state.selectedTool = visible[0].id;
   $("#integration-grid").replaceChildren(...visible.map((item) => {
-    const presence = presenceFor(item.id);
     const button = document.createElement("button");
     button.type = "button";
     button.className = `tool-card${state.selectedTool === item.id ? " active" : ""}`;
     button.setAttribute("aria-pressed", String(state.selectedTool === item.id));
-    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}" aria-label="Installation status: ${toolPresenceLabels[presence]}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div></div><h2>${item.name}</h2><p>${item.summary}</p><span class="readiness-card-status">${readinessLabel(item.id)}</span><footer><span>${item.dataKind}</span><span>Open controls →</span></footer>`;
+    const light = lightFor(item.id);
+    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span></div></div><h2><i class="status-light ${light.light}" role="img" aria-label="Installation status: ${light.label}" title="${light.label}"></i>${item.name}</h2><p>${item.summary}</p>${state.readiness ? `<span class="readiness-card-status">${readinessLabel(item.id)}</span>` : ""}<footer><span>${item.dataKind}</span><span>Open controls →</span></footer>`;
     button.addEventListener("click", () => {
       state.selectedTool = item.id;
       renderIntegrationGrid();
@@ -332,10 +347,10 @@ function renderToolInspector() {
   const hasHudLane = sourceToolIds.has(item.id);
   $("#tool-inspector").innerHTML = `
     <div class="inspector-head">
-      <div><span class="tool-monogram">${item.monogram}</span><div><h2>${item.name}</h2><small>${item.dataKind}</small></div></div>
-      <div class="inspector-statuses"><span class="status-pill ${item.status}">${item.statusLabel}</span><span class="presence-pill ${presence}"><i aria-hidden="true"></i>${toolPresenceLabels[presence]}</span></div>
+      <div><span class="tool-monogram">${item.monogram}</span><div><h2><i class="status-light ${lightFor(item.id).light}" aria-hidden="true"></i>${item.name}</h2><small>${lightFor(item.id).label}</small></div></div>
+      <div class="inspector-statuses"><span class="status-pill ${item.status}">${item.statusLabel}</span></div>
     </div>
-    <div id="shared-tool-controls"></div>
+    <p class="local-hud-callout"><strong>Want live status and one-click install?</strong> Open the local HUD (<code>python -m megalodon hud</code>). It shows a green/red light for every tool, refreshed in the background, with an Install button where a safe package exists. This hosted page cannot see your computer.</p>
     <details class="tool-technical"><summary>Data connection &amp; technical details</summary>
     <div class="inspector-section"><span>MEGALODON contract</span><p>${item.contract}</p></div>
     <div class="inspector-section"><span>Imported presence report · self-reported</span><p>${readinessLabel(item.id)}</p><small class="panel-footnote">${state.readiness ? `Claimed check: ${state.readiness.checked_at} · ${state.readiness.platform} · path_presence_only` : "No report loaded. The browser has not inspected this device."}</small>${item.id === "qwen" ? "<p class=\"panel-footnote\">The report checks the Ollama executable only. It does not check a Qwen model or its digest.</p>" : ""}</div>
@@ -348,7 +363,6 @@ function renderToolInspector() {
       <p class="acquire-source">Official source · <strong>${acquire.source}</strong></p>
       <div class="platform-tags" aria-label="Companion vendor platforms; not MEGALODON acceptance">${acquire.platforms.map((platform) => `<span>${platform}</span>`).join("")}</div>
       ${acquire.command ? `<div class="install-command"><span>${acquire.commandLabel}</span><code>${acquire.command}</code><button type="button" data-copy-install>Copy command</button></div>` : `<div class="guided-install"><strong>Installation guidance</strong><span>Use the linked project or vendor instructions and keep installation under operator control.</span></div>`}
-      <div class="acquire-actions"><a href="${acquire.url}" target="_blank" rel="noopener noreferrer">${acquire.linkLabel} <span aria-hidden="true">↗</span></a></div>
       <p class="acquire-note">${acquire.note}</p>
       <div class="verification-panel">
         <div class="verification-heading"><strong>Manual presence note</strong><span>${acquire.verificationLabel}</span></div>
@@ -363,6 +377,7 @@ function renderToolInspector() {
       </div>
       <p class="acquire-boundary"><strong>Operator action:</strong> this HUD opens setup guidance and copies lifecycle text. It never probes the host or executes an installer, uninstaller, service command, or package manager.</p>
     </div>
+    <div id="shared-tool-controls"></div>
     <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
     <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
     <div class="inspector-warning">${hasHudLane ? "A local MEGALODON evidence path exists for this tool. This hosted Site has no connection to it." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>

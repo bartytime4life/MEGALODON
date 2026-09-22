@@ -466,7 +466,7 @@ const MegalodonControls = (() => {
     if (publisher) {
       const recipe = node('a', 'MEGALODON setup guidance ↗'); recipe.href = acquisition.url; recipe.target = '_blank'; recipe.rel = 'noopener noreferrer'; root.append(recipe);
     }
-    root.append(node('p', 'Opens the publisher or project page in a new tab. Downloading and installation happen outside this HUD.', 'companion-help'));
+    root.append(node('p', 'Opens the publisher or project page in a new tab. In the local HUD, use Install where a one-click package exists.', 'companion-help'));
     if (typeof runLocalChecks === 'function') {
       const check = node('a', 'Check availability in Home →', 'companion-button'); check.href = '#setup-title';
       check.addEventListener('click', () => runLocalChecks(id)); root.append(check);
