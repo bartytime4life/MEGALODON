@@ -18,7 +18,7 @@ LOCK = "constraints/browser-linux-cp311.txt"
 INCLUDE = "-r test-linux-cp311.txt"
 ENTRY = re.compile(r"([a-z][a-z0-9-]*)==([0-9.]+) --hash=sha256:([0-9a-f]{64})")
 BROWSER_PINS = {
-    "greenlet": ("3.5.5", "74cc6df89ec5302337adc9cf096221cbed2510fd444b0e0f1586cf0470740864"),
+    "greenlet": ("3.5.6", "1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba"),
     "playwright": ("1.63.0", "ad21bc07516b187965a7521c5cf0df0bd657b17482eaad74335272d35a2b07de"),
     "pyee": ("13.0.1", "af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228"),
 }

@@ -230,7 +230,7 @@ The primary hash-policy reference remains
 
 `constraints/browser-linux-cp311.txt` composes the existing twelve-wheel
 `test-linux-cp311.txt` requirements through one fixed relative `-r` include, plus
-three exact browser wheels: Playwright 1.63.0, greenlet 3.5.5, and pyee 13.0.1.
+three exact browser wheels: Playwright 1.63.0, greenlet 3.5.6, and pyee 13.0.1.
 The Playwright wheel is admitted with an accompanying exact-byte native-focus
 driver-profile review; its hash and filename come from the exact PyPI page
 recorded beside the pin.
