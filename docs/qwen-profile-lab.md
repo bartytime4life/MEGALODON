@@ -1,6 +1,6 @@
 # Qwen/Ollama profile lab and upgrade strategy
 
-Status: **implemented offline lab; no provider or model admitted**  
+Status: ● **implemented offline lab; no provider or model admitted**  
 Related gate: issue #261
 
 MEGALODON already has a literal-loopback, fingerprint-pinned Qwen advisory

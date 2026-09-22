@@ -1,6 +1,6 @@
 # Offline metadata analysis v1
 
-Status: implemented optional Linux analysis path with synthetic regression
+Status: ● implemented optional Linux analysis path with synthetic regression
 coverage. Closed [issue #25](https://github.com/bartytime4life/MEGALODON/issues/25)
 records one pinned header-only installed-TShark probe. Other versions, arbitrary
 captures, and operational containment remain separate acceptance work.

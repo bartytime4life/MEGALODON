@@ -1,6 +1,6 @@
 # macOS core acceptance
 
-Status: **Proposed M-track; hosted M1 sample CI probe currently fails; native
+Status: ◐ **Proposed M-track; hosted M1 sample CI probe currently fails; native
 macOS acceptance unproved.**
 
 This document is the macOS counterpart to `docs/windows-core-acceptance.md`.
