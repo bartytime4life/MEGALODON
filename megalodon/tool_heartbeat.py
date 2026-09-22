@@ -7,10 +7,12 @@ combines three signals into one status light per tool:
 * installed  - a known executable (PATH or fixed install prefix), Python
   package, or matching process was found; its change time is the install hint;
 * running    - a known long-running process name was observed in ``/proc``;
-* uptime     - the earliest start time among matching processes.
+* uptime     - the earliest start time among matching processes;
+* model      - for Qwen only, whether the example model manifest exists.
 
 Lights: ``green`` installed and healthy (service running, or a standalone tool
-present), ``amber`` installed but its expected service is not running, ``red``
+present), ``amber`` installed but its expected service is not running (or, for
+Qwen, the model has not been downloaded), ``red``
 not installed, ``grey`` could not be determined on this platform.
 """
 
@@ -33,7 +35,7 @@ from .capabilities import runtime_platform
 
 
 SCHEMA = "megalodon-tool-heartbeat-v1"
-MAX_HEARTBEAT_BYTES = 16 * 1024
+MAX_HEARTBEAT_BYTES = 32 * 1024
 MAX_PROCESS_ENTRIES = 32_768
 MAX_COMM_BYTES = 128
 MAX_STAT_BYTES = 4096
@@ -185,12 +187,53 @@ def _process_starts(proc_root: Path, wanted: frozenset[str]) -> tuple[dict[str, 
     return starts, complete
 
 
-def _light(installed: str, service: str, expects_service: bool) -> str:
+# Ollama stores one manifest file per pulled tag. Reading its metadata tells us
+# whether the example model is downloaded without contacting the provider.
+QWEN_MODEL_MANIFEST = ("manifests", "registry.ollama.ai", "library", "qwen2.5", "7b")
+OLLAMA_MODEL_ROOTS = ("/usr/share/ollama/.ollama/models", "/var/lib/ollama/models")
+
+
+def _model_status(home: Path | None) -> str:
+    """Return "present", "missing" or "unknown" for the example Qwen model."""
+    roots = []
+    configured = os.environ.get("OLLAMA_MODELS")
+    if configured and configured.startswith("/"):
+        roots.append(configured)
+    if home is not None:
+        roots.append(str(home / ".ollama" / "models"))
+    roots.extend(OLLAMA_MODEL_ROOTS)
+    uncertain = False
+    found_store = False
+    for root in roots:
+        try:
+            if stat.S_ISREG(os.stat(os.path.join(root, *QWEN_MODEL_MANIFEST)).st_mode):
+                return "present"
+        except (FileNotFoundError, NotADirectoryError):
+            pass
+        except OSError:
+            # The system service's model directory is often unreadable to users.
+            uncertain = True
+            continue
+        try:
+            found_store = found_store or stat.S_ISDIR(os.stat(os.path.join(root, "manifests")).st_mode)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:
+            uncertain = True
+    # "missing" needs positive evidence: a readable store without the tag.
+    # With no store in view, the server may keep models where we cannot see
+    # (for example a custom OLLAMA_MODELS in its systemd unit).
+    return "missing" if found_store and not uncertain else "unknown"
+
+
+def _light(installed: str, service: str, expects_service: bool, model: str | None = None) -> str:
     if installed == "no":
         return "red"
     if installed == "unknown":
         return "grey"
     if expects_service and service == "stopped":
+        return "amber"
+    if model == "missing":
         return "amber"
     return "green"
 
@@ -243,7 +286,8 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
                 service = "none"
             entry = {"installed": installed, "installed_since": _iso(since),
                      "service": service, "running_since": running_since}
-        entry["light"] = _light(entry["installed"], entry["service"], probe.service)
+        entry["model"] = (_model_status(home) if linux and entry["installed"] == "yes" else "unknown") if tool_id == "qwen" else None
+        entry["light"] = _light(entry["installed"], entry["service"], probe.service, entry["model"])
         entry["expects_service"] = probe.service
         tools.append({"id": tool_id, **entry})
     return {
@@ -252,6 +296,48 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
         "platform": platform,
         "tools": tools,
     }
+
+
+MAX_HISTORY_CHANGES = 6
+
+
+class HeartbeatHistory:
+    """In-memory light history per tool since this HUD launched.
+
+    Time is attributed to the light observed at the start of each interval,
+    so availability reflects how long a tool spent green between checks, not
+    how many checks happened to run. Nothing is written to disk.
+    """
+
+    def __init__(self, started: float | None = None) -> None:
+        self.started = time() if started is None else started
+        self._last: dict[str, tuple[str, float]] = {}
+        self._durations: dict[str, dict[str, float]] = {}
+        self._changes: dict[str, list[dict[str, str]]] = {}
+
+    def observe(self, report: dict[str, Any], now: float | None = None) -> dict[str, Any]:
+        at = time() if now is None else now
+        for tool in report["tools"]:
+            tool_id, light = tool["id"], tool["light"]
+            previous = self._last.get(tool_id)
+            if previous is not None:
+                bucket = self._durations.setdefault(tool_id, {})
+                bucket[previous[0]] = bucket.get(previous[0], 0.0) + max(0.0, at - previous[1])
+            if previous is None or previous[0] != light:
+                changes = self._changes.setdefault(tool_id, [])
+                changes.append({"at": _iso(at), "light": light})
+                del changes[:-MAX_HISTORY_CHANGES]
+            self._last[tool_id] = (light, at)
+        tools = {}
+        for tool_id, changes in self._changes.items():
+            durations = self._durations.get(tool_id, {})
+            total = sum(durations.values())
+            tools[tool_id] = {
+                "changes": list(changes),
+                "healthy_percent": round(100 * durations.get("green", 0.0) / total, 1) if total > 0 else None,
+                "observed_seconds": int(total),
+            }
+        return {"since": _iso(self.started), "tools": tools}
 
 
 class HeartbeatBusy(Exception):
@@ -263,6 +349,7 @@ class Heartbeat:
 
     def __init__(self, proc_root: Path = Path("/proc")) -> None:
         self._proc_root = proc_root
+        self._history = HeartbeatHistory()
         self._lock = Lock()
         self._cached: bytes | None = None
         self._expires = 0.0
@@ -278,7 +365,9 @@ class Heartbeat:
         try:
             if self._cached is not None and monotonic() < self._expires:
                 return self._cached
-            payload = json.dumps(heartbeat_report(self._proc_root), sort_keys=True,
+            report = heartbeat_report(self._proc_root)
+            report["history"] = self._history.observe(report)
+            payload = json.dumps(report, sort_keys=True,
                                  separators=(",", ":"), allow_nan=False).encode()
             if len(payload) > MAX_HEARTBEAT_BYTES:
                 raise ValueError("heartbeat response exceeds limit")

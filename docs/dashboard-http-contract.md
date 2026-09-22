@@ -61,9 +61,10 @@ private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
 
 `POST /api/install` (HUD mode only) requires the exact same-site `Origin`,
 `Content-Type: application/json`, `X-Megalodon-Install: 1`, and a body of at
-most 64 bytes naming one tool id. It starts one recipe from the closed registry
-in `megalodon/tool_installer.py`; system packages go through the OS `pkexec`
-password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
+most 96 bytes naming one tool id and an optional `action` (`install` or
+`start`). It starts one recipe or one fixed systemd unit from the closed
+registries in `megalodon/tool_installer.py`; privileged steps go through the OS
+`pkexec` password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
 
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no

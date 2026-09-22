@@ -26,7 +26,7 @@ from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .dashboard_commands import local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
-from .tool_installer import Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
+from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
 from .hub import integration_plan
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .config import AISettings, BlockingSettings
@@ -772,7 +772,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         lengths = self.headers.get_all("Content-Length", [])
         if (len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit()
-                or not 1 <= int(lengths[0]) <= 64):
+                or not 1 <= int(lengths[0]) <= 96):
             self._send_json({"error": "invalid install request length"}, status=400)
             return
         try:
@@ -781,16 +781,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError, OSError):
             self._send_json({"error": "invalid install request"}, status=400)
             return
-        if type(body) is not dict or set(body) != {"tool"} or body["tool"] not in RECIPES:
-            self._send_json({"error": "unknown tool"}, status=400)
+        if (type(body) is not dict or not {"tool"} <= set(body) <= {"tool", "action"}
+                or body["tool"] not in RECIPES or body.get("action", "install") not in INSTALL_ACTIONS):
+            self._send_json({"error": "unknown tool or action"}, status=400)
             return
         try:
-            status = self.installer.start(body["tool"])
+            status = self.installer.start(body["tool"], body.get("action", "install"))
         except InstallBusy:
             self._send_json({"error": "another installation is running"}, status=409)
             return
         except InstallUnavailable:
-            self._send_json({"error": "no one-click installer for this tool on this computer"}, status=422)
+            self._send_json({"error": "this action is not available for this tool on this computer"}, status=422)
             return
         self._send_json(status, status=202)
 

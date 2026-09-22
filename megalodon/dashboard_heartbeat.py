@@ -34,11 +34,27 @@ function heartbeatAge(iso) {
 }
 function heartbeatText(tool) {
   if (!tool) return heartbeatState.failed ? 'Heartbeat unavailable' : 'Checking…';
-  const parts = [heartbeatLabels[tool.light]];
+  const modelOnly = tool.light === 'amber' && tool.service !== 'stopped' && tool.model === 'missing';
+  const parts = [modelOnly ? 'Installed · Qwen model not downloaded' : heartbeatLabels[tool.light]];
   if (tool.service === 'running' && tool.running_since) parts.push(`up ${heartbeatAge(tool.running_since)}`);
-  else if (tool.service === 'stopped' && tool.expects_service) parts.push('start its service to go green');
+  if (tool.model === 'missing' && !modelOnly) parts.push('Qwen model not downloaded');
+  else if (tool.model === 'present') parts.push('Qwen model downloaded');
   if (tool.installed === 'yes' && tool.installed_since) parts.push(`installed ${new Date(tool.installed_since).toLocaleDateString()}`);
+  const history = heartbeatHistory(tool.id);
+  if (history) {
+    if (history.healthy_percent !== null && history.observed_seconds >= 60 && tool.installed === 'yes') parts.push(`healthy ${history.healthy_percent}% since HUD start`);
+    const changes = history.changes || [];
+    if (changes.length > 1) {
+      const last = changes[changes.length - 1], before = changes[changes.length - 2];
+      parts.push(`${before.light} → ${last.light} at ${new Date(last.at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`);
+    }
+  }
   return parts.join(' · ');
+}
+function heartbeatHistory(toolId) {
+  const history = heartbeatState.report && heartbeatState.report.history;
+  const entry = history && history.tools && Object.prototype.hasOwnProperty.call(history.tools, toolId) ? history.tools[toolId] : null;
+  return entry && Array.isArray(entry.changes) ? entry : null;
 }
 function heartbeatLight(id) {
   const toolId = heartbeatToolId(id);
@@ -53,7 +69,7 @@ function paintHeartbeatLight(light) {
   const tool = heartbeatState.byId.get(toolId);
   const installing = heartbeatState.job && heartbeatState.job.state === 'running' && heartbeatState.job.tool === toolId;
   light.className = `hb-light hb-${tool ? tool.light : 'grey'}${installing || (!tool && !heartbeatState.failed) ? ' hb-pending' : ''}`;
-  const text = installing ? 'Installing…' : heartbeatText(tool);
+  const text = installing ? (heartbeatState.job.action === 'start' ? 'Starting…' : 'Installing…') : heartbeatText(tool);
   light.setAttribute('aria-label', text); light.title = text;
 }
 function heartbeatDetail(id) {
@@ -77,7 +93,10 @@ function paintInstallControl(wrap) {
   if (!entry || toolId === 'core') return;
   const mine = job && job.tool === toolId;
   const model = entry.method === 'ollama';
-  if (entry.one_click && (model || !tool || tool.installed !== 'yes' || (mine && job.state === 'running'))) {
+  // `ollama pull` needs the server, so Qwen offers Start first when it is stopped.
+  const needsModel = model && (!tool || (tool.model !== 'present' && tool.service !== 'stopped'));
+  const installing = mine && job.state === 'running' && job.action !== 'start';
+  if (entry.one_click && (needsModel || (!model && (!tool || tool.installed !== 'yes')) || installing)) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
     const running = job && job.state === 'running';
     button.textContent = mine && running ? 'Installing…' : model ? 'Download Qwen model' : `Install ${name}`;
@@ -85,6 +104,18 @@ function paintInstallControl(wrap) {
     button.title = entry.summary;
     button.addEventListener('click', () => startInstall(toolId, name, entry));
     wrap.append(button);
+  } else if (tool && tool.installed === 'yes' && tool.expects_service && (tool.service === 'stopped' || (mine && job.action === 'start' && job.state === 'running'))) {
+    if (entry.startable) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
+      const running = job && job.state === 'running';
+      button.textContent = mine && running ? 'Starting…' : 'Start service';
+      button.disabled = Boolean(running);
+      button.title = `Starts the ${name} system service so its light can turn green.`;
+      button.addEventListener('click', () => startInstall(toolId, name, entry, 'start'));
+      wrap.append(button);
+    } else if (entry.start_terminal) {
+      wrap.append(textNode('p', `Start the service in a terminal: ${entry.start_terminal}`, 'hb-detail'));
+    }
   } else if (!entry.one_click && entry.method === 'ollama' && (!tool || tool.installed !== 'yes')) {
     wrap.append(textNode('p', 'Install Ollama from its download page first; an Install button for the Qwen model then appears here.', 'hb-detail'));
   } else if (!entry.one_click && entry.method !== 'guided' && entry.terminal && (!tool || tool.installed !== 'yes')) {
@@ -94,8 +125,10 @@ function paintInstallControl(wrap) {
     const log = textNode('pre', job.output.slice(-12).join('\n'), 'hb-install-log');
     log.setAttribute('aria-live', 'polite'); wrap.append(log);
   }
-  if (mine && job.state === 'failed') wrap.append(textNode('p', entry.terminal ? `Install failed. Terminal alternative: ${entry.terminal}` : 'Install failed.', 'hb-detail'));
-  if (mine && job.state === 'succeeded') wrap.append(textNode('p', 'Installed. The light updates automatically.', 'hb-detail'));
+  const starting = mine && job.action === 'start';
+  const alternative = starting ? entry.start_terminal : entry.terminal;
+  if (mine && job.state === 'failed') wrap.append(textNode('p', `${starting ? 'Service start' : 'Install'} failed.${alternative ? ` Terminal alternative: ${alternative}` : ''}`, 'hb-detail'));
+  if (mine && job.state === 'succeeded') wrap.append(textNode('p', `${starting ? 'Service started' : 'Installed'}. The light updates automatically.`, 'hb-detail'));
 }
 function repaintHeartbeat() {
   if (typeof document.querySelectorAll !== 'function') return;
@@ -153,15 +186,18 @@ async function pollHeartbeat() {
   const installing = heartbeatState.job && heartbeatState.job.state === 'running';
   if (!heartbeatState.failed || installing) heartbeatState.timer = window.setTimeout(pollHeartbeat, installing ? 2000 : 60000);
 }
-async function startInstall(toolId, name, entry) {
-  if (!window.confirm(`Install ${name}?\n\n${entry.summary}\n\nYour computer may ask for your password. MEGALODON never sees it.`)) return;
+async function startInstall(toolId, name, entry, action = 'install') {
+  const starting = action === 'start';
+  const question = starting ? `Start the ${name} service?\n\nIt keeps running until you stop it or restart the computer, and may start automatically at boot if its package enabled that.`
+    : `Install ${name}?\n\n${entry.summary}`;
+  if (!window.confirm(`${question}\n\nYour computer may ask for your password. MEGALODON never sees it.`)) return;
   try {
-    const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId}),
+    const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId, action}),
       headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1'}});
     heartbeatState.job = job;
-    byId('setup-check-status').textContent = `Installing ${name}… Approve the password prompt if one appears.`;
+    byId('setup-check-status').textContent = `${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`;
   } catch (error) {
-    byId('setup-check-status').textContent = `${name} could not be installed: ${error.message}.`;
+    byId('setup-check-status').textContent = `${name} could not be ${starting ? 'started' : 'installed'}: ${error.message}.`;
   }
   repaintHeartbeat(); pollHeartbeat();
 }
