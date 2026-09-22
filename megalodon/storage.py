@@ -339,6 +339,7 @@ RECONCILIATION_REQUIRED = "INGESTION_RUN:RECONCILIATION_REQUIRED"
 
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_DATABASE_MODE = 0o600
+TOP_LEVEL_SYSTEM_ALIASES = ("etc", "tmp", "var")
 DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
 MAX_MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024
 CAPACITY_RESERVE_BYTES = 256 * 1024
@@ -580,6 +581,33 @@ def _validate_ancestor_directory_stat(
         _raise_path_error(prefix, "UNSAFE_ANCESTOR")
 
 
+def _resolve_top_level_system_alias(path: Path) -> Path:
+    """Rewrite a fixed, root-owned top-level OS compatibility symlink.
+
+    Some platforms -- notably macOS -- mount a small, fixed set of
+    top-level directories (``/etc``, ``/tmp``, ``/var``) as symlinks into
+    ``/private`` for historical BSD compatibility. Those links are owned by
+    root, are not writable by any unprivileged user, and cannot be
+    repointed by an attacker or by MEGALODON's own operator: they are a
+    fixed OS naming alias, not a path any untrusted party controls.
+
+    This rewrite only ever fires for exactly one of those three names as
+    the immediate child of the filesystem root, and only when it verifiably
+    resolves to exactly ``/private/<name>``. Every other symlink anywhere
+    else in the path -- including one of these same names appearing deeper
+    in the path, or planted by the current user -- is left untouched and
+    still refused by the strict walk below, unchanged.
+    """
+
+    parts = path.parts
+    if len(parts) < 2 or parts[1] not in TOP_LEVEL_SYSTEM_ALIASES:
+        return path
+    alias = f"/{parts[1]}"
+    if os.path.realpath(alias) != f"/private/{parts[1]}":
+        return path
+    return Path("/private", parts[1], *parts[2:])
+
+
 def _open_private_directory(
     path: Path, *, create: bool, prefix: str
 ) -> int | None:
@@ -602,7 +630,7 @@ def _open_private_directory(
     descriptor: int | None = None
     try:
         descriptor = os.open("/", flags)
-        components = path.parts[1:]
+        components = _resolve_top_level_system_alias(path).parts[1:]
         if components:
             _validate_ancestor_directory_stat(os.fstat(descriptor), prefix)
         for index, component in enumerate(components):

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
+from pathlib import Path
 import sqlite3
+import tempfile
 
 import pytest
 
+from megalodon import storage
 from megalodon.models import ActionRecord, DetectionResult, PacketEvent
 from megalodon.storage import DashboardStore, StorageSchemaError, Store
 
@@ -59,6 +62,59 @@ def test_dashboard_store_rejects_symlink_and_public_storage(tmp_path):
     private.chmod(0o755)
     with pytest.raises(StorageSchemaError, match="UNSAFE_DIRECTORY"):
         DashboardStore(database)
+
+
+def test_resolve_top_level_system_alias_rewrites_verified_compat_link(monkeypatch):
+    monkeypatch.setattr(
+        storage.os.path,
+        "realpath",
+        lambda candidate: "/private/var" if candidate == "/var" else candidate,
+    )
+    rewritten = storage._resolve_top_level_system_alias(
+        Path("/var/folders/xx/yyyy/private")
+    )
+    assert rewritten == Path("/private/var/folders/xx/yyyy/private")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        Path("/opt/megalodon/private"),
+        Path("/opt/var/private"),
+    ],
+)
+def test_resolve_top_level_system_alias_ignores_unrelated_or_nested_names(
+    monkeypatch, path
+):
+    monkeypatch.setattr(
+        storage.os.path,
+        "realpath",
+        lambda candidate: "/private/var" if candidate == "/var" else candidate,
+    )
+    assert storage._resolve_top_level_system_alias(path) == path
+
+
+def test_resolve_top_level_system_alias_refuses_unverified_target(monkeypatch):
+    monkeypatch.setattr(storage.os.path, "realpath", lambda candidate: candidate)
+    unresolved = Path("/var/other")
+    assert storage._resolve_top_level_system_alias(unresolved) == unresolved
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or os.path.realpath("/tmp") == "/tmp",
+    reason="requires a platform where /tmp is a top-level compatibility symlink",
+)
+def test_open_private_directory_accepts_real_top_level_compat_symlink():
+    with tempfile.TemporaryDirectory() as root:
+        private = Path(root) / "private"
+        private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+        descriptor = storage._open_private_directory(
+            private, create=False, prefix="STORAGE_PATH"
+        )
+        try:
+            assert descriptor is not None
+        finally:
+            os.close(descriptor)
 
 
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):
