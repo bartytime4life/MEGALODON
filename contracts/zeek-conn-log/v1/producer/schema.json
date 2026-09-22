@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/zeek-conn-log/v1/producer/schema.json",
+  "title": "MEGALODON Zeek conn.log producer profile — PLACEHOLDER, not owner-selected",
+  "$comment": "PLACEHOLDER SCAFFOLD. Every const below names a stand-in profile/version, not an owner-approved Zeek producer. Issue #327 requires the owner to record an exact producer version, build/package configuration, and field set before any of this is a supported profile. Do not cite this file as evidence that a Zeek producer version has been qualified.",
+  "$defs": {
+    "connAddr": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 45,
+      "pattern": "^[0-9A-Fa-f:.]+$"
+    },
+    "connPort": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "connCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1099511627775
+    },
+    "printableField": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 256,
+      "pattern": "^[ -~]*$"
+    },
+    "tunnelParents": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {"type": "string", "maxLength": 64, "pattern": "^[A-Za-z0-9]+$"}
+    },
+    "connJsonRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts", "id.orig_h", "id.orig_p", "id.resp_h", "id.resp_p",
+        "proto", "conn_state", "orig_pkts", "resp_pkts",
+        "orig_ip_bytes", "resp_ip_bytes"
+      ],
+      "properties": {
+        "ts": {"type": "number", "minimum": 0},
+        "uid": {"$ref": "#/$defs/printableField"},
+        "id.orig_h": {"$ref": "#/$defs/connAddr"},
+        "id.orig_p": {"$ref": "#/$defs/connPort"},
+        "id.resp_h": {"$ref": "#/$defs/connAddr"},
+        "id.resp_p": {"$ref": "#/$defs/connPort"},
+        "proto": {"enum": ["tcp", "udp", "icmp"]},
+        "service": {"$ref": "#/$defs/printableField"},
+        "duration": {"type": "number", "minimum": 0},
+        "orig_bytes": {"$ref": "#/$defs/connCount"},
+        "resp_bytes": {"$ref": "#/$defs/connCount"},
+        "conn_state": {"$ref": "#/$defs/printableField"},
+        "local_orig": {"type": "boolean"},
+        "local_resp": {"type": "boolean"},
+        "missed_bytes": {"$ref": "#/$defs/connCount"},
+        "history": {"$ref": "#/$defs/printableField"},
+        "orig_pkts": {"$ref": "#/$defs/connCount"},
+        "orig_ip_bytes": {"$ref": "#/$defs/connCount"},
+        "resp_pkts": {"$ref": "#/$defs/connCount"},
+        "resp_ip_bytes": {"$ref": "#/$defs/connCount"},
+        "tunnel_parents": {"$ref": "#/$defs/tunnelParents"},
+        "ip_proto": {"$ref": "#/$defs/connCount"}
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer_profile", "declared_version"],
+      "properties": {
+        "producer_profile": {
+          "const": "zeek-PLACEHOLDER-UNSELECTED-conn-json-v1",
+          "$comment": "Not a real profile. Earlier planning mentioned 8.0.10 and 9.0.0 as candidates; issue #327 selects neither."
+        },
+        "declared_version": {
+          "const": "0.0.0",
+          "$comment": "0.0.0 only satisfies megalodon.offline.common.version()'s X.Y.Z format check so this scaffold's fixtures stay exercisable. It is not a real Zeek release and must never be reported as one."
+        }
+      }
+    }
+  }
+}
