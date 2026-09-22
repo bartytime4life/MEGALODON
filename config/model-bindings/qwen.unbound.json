@@ -1,0 +1,54 @@
+{
+  "schema_version": "megalodon.local-model-binding/v1",
+  "repository": "bartytime4life/MEGALODON",
+  "status": "UNBOUND",
+  "logical_alias": null,
+  "provider": {
+    "name": "ollama",
+    "version": null,
+    "executable_sha256": null,
+    "provenance_ref": null,
+    "endpoint": "http://127.0.0.1:11434"
+  },
+  "artifact": {
+    "installed_tag": null,
+    "manifest_sha256": null,
+    "model_weight_sha256": null,
+    "components": [],
+    "provenance_ref": null,
+    "license_refs": []
+  },
+  "host_profile": {
+    "profile_id": null,
+    "os": null,
+    "architecture": null,
+    "backend": null,
+    "effective_config_sha256": null
+  },
+  "registry": {
+    "registry_id": null,
+    "fingerprint_sha256": null
+  },
+  "operator_decision": {
+    "status": "NOT_RECORDED",
+    "actor": null,
+    "approved_at": null,
+    "evidence_refs": []
+  },
+  "effects": {
+    "network_access_performed": false,
+    "model_pulled": false,
+    "model_installed": false,
+    "model_started": false,
+    "alias_created": false,
+    "host_configuration_changed": false,
+    "detector_authority_granted": false,
+    "action_authority_granted": false
+  },
+  "limitations": [
+    "No operator-owned exact alias, provider build, host profile, or artifact component closure is recorded.",
+    "No model pull, installation, startup, alias creation, inference, or host mutation was performed.",
+    "This unbound record grants no detector, response, release, deployment, or independent-acceptance authority."
+  ],
+  "generated_at": "2026-09-22T04:00:00Z"
+}
