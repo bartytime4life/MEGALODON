@@ -71,9 +71,10 @@ and inference accuracy remain unproved.
 
 `megalodon-ai-receipts.db` is an application-owned private SQLite database
 beside the configured audit database. If the telemetry database occupies that
-filename or one of its SQLite sidecar names (`-wal`, `-shm`, or `-journal`),
-the AI ledger uses `megalodon-ai-receipts-ledger.db` instead so telemetry can
-never be mistaken for ledger state. The broker writes `not_attempted` before
+filename, a case-fold-equivalent alias, or one of its SQLite sidecar names
+(`-wal`, `-shm`, or `-journal`), the AI ledger uses
+`megalodon-ai-receipts-ledger.db` instead so telemetry can never be mistaken
+for ledger state. The broker writes `not_attempted` before
 execution, then a terminal event (`observed`, `applied`, `failed`, or
 `awaiting_confirmation`). Events contain UUID, UTC timestamp, model, request
 digest, tool, validated arguments, authority level, authorization source,
