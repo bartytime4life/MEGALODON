@@ -98,7 +98,9 @@ def _assert_workflow_credentials(workflow):
     action_refs = re.findall(
         r"^\s+(?:- )?uses:\s+([^@\s]+)@([^\s#]+)", workflow, re.MULTILINE,
     )
-    assert action_refs
+    has_uses_directive = bool(re.search(r"(?m)^\s*(?:- )?uses:\s", workflow))
+    if has_uses_directive:
+        assert action_refs
     assert all(re.fullmatch(r"[0-9a-f]{40}", revision) for _, revision in action_refs)
 
     # This guard supports the repository's block-style, six-space step layout.
@@ -109,7 +111,10 @@ def _assert_workflow_credentials(workflow):
         if re.search(r"^\s+(?:- )?uses:\s+actions/checkout@", step, re.MULTILINE)
     ]
     checkout_refs = [name for name, _ in action_refs if name == "actions/checkout"]
-    assert len(checkout_steps) == len(checkout_refs) > 0
+    # A workflow that uses no actions at all (e.g. a read-only, API-only gate)
+    # has no checkout and no credential-persistence surface to guard.
+    if action_refs:
+        assert len(checkout_steps) == len(checkout_refs) > 0
     for step in checkout_steps:
         inputs = re.findall(r"(?m)^        with:\n((?:^          [^\n]*\n?)*)", step)
         assert len(inputs) == 1

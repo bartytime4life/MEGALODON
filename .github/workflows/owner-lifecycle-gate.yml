@@ -30,7 +30,6 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           GH_REPOSITORY_OWNER: ${{ github.repository_owner }}
           GH_EVENT_NAME: ${{ github.event_name }}
-          GH_EVENT_PATH: ${{ github.event_path }}
         shell: bash
         run: |
           set -euo pipefail
@@ -49,7 +48,7 @@ jobs:
           repository = os.environ["GH_REPOSITORY"]
           owner = os.environ["GH_REPOSITORY_OWNER"]
           event = json.loads(
-              Path(os.environ["GH_EVENT_PATH"]).read_text(encoding="utf-8")
+              Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8")
           )
 
           if os.environ["GH_EVENT_NAME"] == "pull_request":
