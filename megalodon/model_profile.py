@@ -8,7 +8,7 @@ separate containment, provenance, acceptance, release, and deployment holds.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 import re
@@ -91,11 +91,16 @@ class ModelProfileError(ValueError):
 class ValidatedProfile:
     """Closed, immutable view of one syntactically valid candidate profile."""
 
-    value: dict[str, Any]
+    _canonical_value: bytes = field(repr=False)
     canonical_sha256: str
     hard_gate_passed: bool
     gate_failures: tuple[str, ...]
     comparison_boundary_sha256: str
+
+    @property
+    def value(self) -> dict[str, Any]:
+        """Return an owned JSON view; edits cannot invalidate cached evidence."""
+        return json.loads(self._canonical_value)
 
     @property
     def profile_id(self) -> str:
@@ -337,7 +342,7 @@ def validate_profile(value: object) -> ValidatedProfile:
     profile_digest = sha256(_canonical(copied)).hexdigest()
     boundary_digest = sha256(_canonical(_comparison_boundary(copied))).hexdigest()
     return ValidatedProfile(
-        value=copied,
+        _canonical_value=_canonical(copied),
         canonical_sha256=profile_digest,
         hard_gate_passed=not failures,
         gate_failures=failures,
