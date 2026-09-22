@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/ubuntu-candidate-coverage/v1/schema.json",
+  "title": "MEGALODON Ubuntu candidate evidence coverage index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "status",
+    "subject",
+    "checks",
+    "artifacts",
+    "optional_components",
+    "gates",
+    "effects",
+    "limitations",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "megalodon.ubuntu-candidate-coverage/v1"},
+    "repository": {"const": "bartytime4life/MEGALODON"},
+    "status": {"enum": ["incomplete", "complete"]},
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "candidate_manifest_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/sha"},
+        "tree": {"$ref": "#/$defs/sha"},
+        "candidate_manifest_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {"$ref": "#/$defs/checkCoverage"}
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/artifactCoverage"}
+    },
+    "optional_components": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "state", "health", "required_for_core"],
+        "properties": {
+          "id": {"enum": ["tshark", "suricata", "zeek", "ollama", "qwen_model"]},
+          "state": {"enum": ["absent", "disabled", "not_checked", "available_unqualified"]},
+          "health": {"const": "unavailable"},
+          "required_for_core": {"const": false}
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {"$ref": "#/$defs/gateCoverage"}
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tag_created",
+        "release_published",
+        "package_uploaded",
+        "deployment_performed",
+        "service_installed",
+        "firewall_changed",
+        "sensor_started",
+        "model_invoked",
+        "restored_data_activated"
+      ],
+      "properties": {
+        "tag_created": {"const": false},
+        "release_published": {"const": false},
+        "package_uploaded": {"const": false},
+        "deployment_performed": {"const": false},
+        "service_installed": {"const": false},
+        "firewall_changed": {"const": false},
+        "sensor_started": {"const": false},
+        "model_invoked": {"const": false},
+        "restored_data_activated": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 16,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512},
+      "uniqueItems": true
+    },
+    "generated_at": {"$ref": "#/$defs/timestamp"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullableDigest": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]
+    },
+    "nullableString": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 1024}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_ref", "evidence_sha256", "authentication", "platform"],
+      "properties": {
+        "evidence_ref": {"$ref": "#/$defs/nullableString"},
+        "evidence_sha256": {"$ref": "#/$defs/nullableDigest"},
+        "authentication": {
+          "enum": ["not_performed", "github_actions", "operator", "independent"]
+        },
+        "platform": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "checkCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {
+        "id": {
+          "enum": [
+            "compile",
+            "repository_tests",
+            "cli_smoke",
+            "loopback_browser",
+            "sample_jsonl",
+            "backup_restore",
+            "native_failure_paths",
+            "wheel_install_smoke",
+            "sdist_install_smoke"
+          ]
+        },
+        "status": {"enum": ["passed", "failed", "not_run", "blocked"]},
+        "evidence": {"$ref": "#/$defs/pointer"}
+      }
+    },
+    "artifactCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "sha256", "size_bytes", "published", "evidence"],
+      "properties": {
+        "id": {"enum": ["wheel", "sdist"]},
+        "status": {"enum": ["built_ephemeral", "not_run", "blocked"]},
+        "sha256": {"$ref": "#/$defs/nullableDigest"},
+        "size_bytes": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "integer", "minimum": 1, "maximum": 67108864}
+          ]
+        },
+        "published": {"const": false},
+        "evidence": {"$ref": "#/$defs/pointer"}
+      }
+    },
+    "gateCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {
+        "id": {
+          "enum": [
+            "artifact_notice_license",
+            "sbom",
+            "provenance",
+            "operator_recovery",
+            "optional_source_behavior",
+            "owner_disposition",
+            "independent_disposition"
+          ]
+        },
+        "status": {"enum": ["not_run", "held", "accepted"]},
+        "evidence": {"$ref": "#/$defs/pointer"}
+      }
+    }
+  }
+}
