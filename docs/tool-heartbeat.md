@@ -14,6 +14,19 @@ a **status light** next to its name, both in **Home → Data and tools** and in
 The detail line under each name shows the uptime (for example `up 3h 12m`) and
 the date the tool was installed, based on the executable's change time.
 
+## History since the HUD started
+
+The detail line also shows how the tool has behaved since you opened the HUD:
+
+* `healthy 98.5% since HUD start`: the share of observed time the light was
+  green, shown after at least a minute of observation. Time is weighted
+  between checks, so a hidden tab (no checks) does not skew the figure.
+* `amber → green at 14:32`: the most recent light change.
+
+The HUD keeps the last six changes per tool in memory only. Nothing is written
+to disk, and history starts over when you restart the HUD. The
+`/api/heartbeat` receipt includes it under `history`.
+
 ## When checks run
 
 Checks run in the background, and only when they are useful:

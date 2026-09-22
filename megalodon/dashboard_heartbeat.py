@@ -40,7 +40,21 @@ function heartbeatText(tool) {
   if (tool.model === 'missing' && !modelOnly) parts.push('Qwen model not downloaded');
   else if (tool.model === 'present') parts.push('Qwen model downloaded');
   if (tool.installed === 'yes' && tool.installed_since) parts.push(`installed ${new Date(tool.installed_since).toLocaleDateString()}`);
+  const history = heartbeatHistory(tool.id);
+  if (history) {
+    if (history.healthy_percent !== null && history.observed_seconds >= 60 && tool.installed === 'yes') parts.push(`healthy ${history.healthy_percent}% since HUD start`);
+    const changes = history.changes || [];
+    if (changes.length > 1) {
+      const last = changes[changes.length - 1], before = changes[changes.length - 2];
+      parts.push(`${before.light} → ${last.light} at ${new Date(last.at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`);
+    }
+  }
   return parts.join(' · ');
+}
+function heartbeatHistory(toolId) {
+  const history = heartbeatState.report && heartbeatState.report.history;
+  const entry = history && history.tools && Object.prototype.hasOwnProperty.call(history.tools, toolId) ? history.tools[toolId] : null;
+  return entry && Array.isArray(entry.changes) ? entry : null;
 }
 function heartbeatLight(id) {
   const toolId = heartbeatToolId(id);
