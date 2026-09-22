@@ -67,10 +67,15 @@ For a temporary source launch, run:
 ./scripts/start-local.sh
 ```
 
-Open the printed localhost address and choose **Home → Data and tools →
-Check this computer**. The buttons check the running environment, selected
-data file, and optional tool availability. Use the software list to open
-official download pages, and **Help** to find the next step. Keep the
+Open the printed localhost address and go to **Home → Data and tools**. Each
+optional tool has a status light next to its name: green means installed and
+healthy, amber means installed but its service is stopped, red means not
+installed, and grey means unknown. The lights refresh in the background while
+the tab is visible. Where a fixed Ubuntu or Python package exists, **Install**
+and **Start service** buttons do the work after your computer's own password
+prompt ([details](docs/tool-heartbeat.md)). **Check this computer** also
+reports the running environment and selected data file. Use **Help** to find
+the next step. Keep the
 terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
 Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
