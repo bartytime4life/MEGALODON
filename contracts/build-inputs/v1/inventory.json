@@ -181,9 +181,9 @@
     {
       "direct_packages": [
         {
-          "declared_sha256": "sha256:74cc6df89ec5302337adc9cf096221cbed2510fd444b0e0f1586cf0470740864",
+          "declared_sha256": "sha256:1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba",
           "name": "greenlet",
-          "version": "3.5.5"
+          "version": "3.5.6"
         },
         {
           "declared_sha256": "sha256:ad21bc07516b187965a7521c5cf0df0bd657b17482eaad74335272d35a2b07de",
@@ -204,7 +204,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "browser acceptance additions",
-      "source_sha256": "5c5efe9b197d0c0f5e7507f2f8cf620d57c23e016dc5ce9d6d46e2e1dddb5715"
+      "source_sha256": "e487b4230fd9e9d5a93137b569c916427ad540a8de7e10407d567f448dfdec74"
     }
   ],
   "project": {
