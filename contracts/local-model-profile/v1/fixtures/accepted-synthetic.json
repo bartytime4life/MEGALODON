@@ -1,0 +1,36 @@
+{
+  "schema": "megalodon-local-model-profile-v1",
+  "profile_id": "qwen25-7b-fp16-lab",
+  "status": "candidate",
+  "evidence_class": "synthetic_fixture",
+  "provider": "ollama",
+  "endpoint": "http://127.0.0.1:11434",
+  "model_alias": "qwen2.5:7b-instruct-fp16",
+  "ollama_manifest_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "provenance_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "containment_receipt_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "model_family": "qwen2.5",
+  "quantization": "fp16",
+  "context_window": 32768,
+  "operational_context": 4096,
+  "purpose": "advisory",
+  "structured_output": true,
+  "thinking_enabled": false,
+  "license": "Apache-2.0",
+  "source_reference": "synthetic fixture; not an artifact provenance claim",
+  "runner": {
+    "name": "ollama",
+    "version": "0.0.0-synthetic",
+    "binary_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "evaluation": {
+    "corpus_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "sample_count": 12,
+    "schema_valid_count": 12,
+    "citation_valid_count": 12,
+    "refusal_valid_count": 12,
+    "p95_latency_ms": 900,
+    "max_rss_mib": 8192
+  }
+}
