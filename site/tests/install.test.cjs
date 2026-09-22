@@ -14,6 +14,8 @@ test('the hosted quick start presents the user install before the source launche
   assert.match(html, /No sudo\./);
   assert.match(html, /application menu/);
   assert.match(html, /This Site cannot tell whether your HUD is running\./);
+  assert.match(html, /data-jump="missions">View evidence workflows<\/button>/);
+  assert.match(html, /An empty local HUD means evidence is unavailable, not zero traffic\./);
 });
 
 test('quick-start copy buttons copy only the documented local commands', () => {

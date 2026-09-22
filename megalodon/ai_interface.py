@@ -46,7 +46,8 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
         request = json.loads(selection, object_pairs_hook=_strict_pairs)
     except (ValueError, TypeError):
         request = {"tool": "invalid", "arguments": {}, "reason": "malformed model selection"}
-    if type(request) is dict and request.get("tool") not in permitted:
+    if type(request) is dict and (type(request.get("tool")) is not str
+                                  or request["tool"] not in permitted):
         request = {"tool": "invalid", "arguments": {}, "reason": "model selected disallowed tool"}
     receipt = broker.dispatch(request, authorization_source="model_request")
     result: dict[str, Any] = {

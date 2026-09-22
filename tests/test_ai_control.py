@@ -14,6 +14,7 @@ import pytest
 from megalodon.ai_broker import Broker, BrokerError, ReceiptStore, validate_request
 from megalodon.ai_interface import ask
 from megalodon.ai_provider import AIProviderError, status
+from megalodon.cli import _ai_receipt_path, _ai_result_succeeded
 from megalodon.config import AISettings, load_settings
 
 
@@ -57,6 +58,16 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
 
     monkeypatch.setattr(provider, "_request", fake)
     assert status(AISettings(enabled=True))["state"] == "model_ready"
+
+    def wrong_challenge(path, method, body, timeout):
+        if path == "/api/tags":
+            return json.dumps({"models": [{"name": AISettings.model, "digest": AISettings.model_digest}]}).encode()
+        return json.dumps({"model": AISettings.model, "response": "BROKEN", "done": True,
+                           "done_reason": "stop"}).encode()
+
+    monkeypatch.setattr(provider, "_request", wrong_challenge)
+    wrong = status(AISettings(enabled=True))
+    assert wrong["state"] == "invalid_response" and wrong["inference_verified"] is False
     monkeypatch.setattr(provider, "_request", lambda *_: b"not json")
     assert status(AISettings(enabled=True))["state"] == "invalid_response"
     monkeypatch.setattr(provider, "_request", lambda *_: (_ for _ in ()).throw(AIProviderError("REQUEST_TIMEOUT")))
@@ -65,6 +76,40 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     assert status(AISettings(enabled=True))["state"] == "model_loading"
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": False})
     assert status(AISettings(enabled=True))["state"] == "policy_rejection"
+
+
+def test_ai_receipt_path_never_collides_with_telemetry_database():
+    normal = Path("/private/megalodon.db")
+    assert _ai_receipt_path(normal) == Path("/private/megalodon-ai-receipts.db")
+    collisions = [
+        "megalodon-ai-receipts.db",
+        "megalodon-ai-receipts.db-wal",
+        "megalodon-ai-receipts.db-shm",
+        "megalodon-ai-receipts.db-journal",
+        "MEGALODON-AI-RECEIPTS.DB",
+        "MEGALODON-AI-RECEIPTS.DB-WAL",
+        "Megalodon-AI-Receipts.DB-ShM",
+        "megalodon-AI-receipts.DB-JOURNAL",
+    ]
+    for name in collisions:
+        collision = Path("/private") / name
+        selected = _ai_receipt_path(collision)
+        assert selected == Path("/private/megalodon-ai-receipts-ledger.db")
+        selected_names = {
+            selected.name.casefold(),
+            (selected.name + "-wal").casefold(),
+            (selected.name + "-shm").casefold(),
+            (selected.name + "-journal").casefold(),
+        }
+        assert collision.name.casefold() not in selected_names
+
+
+def test_ai_cli_treats_valid_proposal_as_success_without_application():
+    assert _ai_result_succeeded({"state": "awaiting_confirmation"}) is True
+    assert _ai_result_succeeded({"state": "observed"}) is True
+    assert _ai_result_succeeded({"state": "applied"}) is True
+    assert _ai_result_succeeded({"state": "approved"}) is False
+    assert _ai_result_succeeded({"state": "failed"}) is False
 
 
 def test_closed_requests_reject_command_path_network_and_excess():
@@ -135,6 +180,70 @@ def test_ai_outage_does_not_break_core_reader(monkeypatch, broker):
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "no", "loopback_only": None})
     assert status(AISettings(enabled=True))["state"] == "ollama_unavailable"
     assert broker.reader.summary()["events"] == 4
+
+
+@pytest.mark.parametrize("tool", [[], ["megalodon.alerts.query"], {},
+                                 {"name": "megalodon.alerts.query"}, None, True, 7])
+def test_invalid_model_tool_type_records_refusal_before_execution(monkeypatch, broker, tool):
+    calls = []
+
+    def fake_generate(*_args, **_kwargs):
+        calls.append("selection")
+        return json.dumps(request(tool, reason="PRIVATE_MODEL_SELECTION_CANARY"))
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("invalid selection reached tool execution")
+
+    monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
+    monkeypatch.setattr(broker, "_execute", forbidden)
+    monkeypatch.setattr(broker, "_plan", forbidden)
+    answer = ask("alerts", broker)
+    assert answer["execution_state"] == "failed"
+    assert answer["error_code"] == "UNKNOWN_TOOL"
+    assert answer["observed"] is None and answer["inferred"] is None
+    assert answer["evidence_references"] == []
+    assert calls == ["selection"]
+    receipt = broker.receipts.latest(answer["receipt_id"])
+    assert receipt["state"] == "failed" and receipt["tool"] == "invalid"
+    chain = broker.receipts.verify_chain()
+    assert chain["sequence"] == 2 and chain["incomplete_count"] == 0
+    saved = broker.receipts.connection.execute(
+        "SELECT payload_json FROM ai_receipt_events ORDER BY sequence"
+    ).fetchall()
+    assert "PRIVATE_MODEL_SELECTION_CANARY" not in json.dumps(saved)
+
+
+@pytest.mark.parametrize("tool, arguments", [
+    ("megalodon.telemetry.summary", {"window_minutes": 60, "limit": 1}),
+    ("megalodon.telemetry.summary", {"limit": {"path": "PRIVATE_ARGUMENT_CANARY"}}),
+    ("megalodon.report.generate", {"report_type": []}),
+    ("megalodon.report.generate", {"report_type": {"path": "PRIVATE_ARGUMENT_CANARY"}}),
+])
+def test_tool_argument_schema_refuses_invalid_fields_before_execution(monkeypatch, broker, tool, arguments):
+    value = request(tool, arguments)
+    with pytest.raises(BrokerError, match="INVALID_ARGUMENTS"):
+        validate_request(value)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("invalid arguments reached tool execution")
+
+    monkeypatch.setattr(broker, "_execute", forbidden)
+    receipt = broker.dispatch(value)
+    assert receipt["state"] == "failed" and receipt["error_code"] == "INVALID_ARGUMENTS"
+    assert receipt["validated_arguments"] == {} and receipt["result"] is None
+    assert broker.receipts.verify_chain()["incomplete_count"] == 0
+    saved = broker.receipts.connection.execute("SELECT payload_json FROM ai_receipt_events").fetchall()
+    assert "PRIVATE_ARGUMENT_CANARY" not in json.dumps(saved)
+
+
+@pytest.mark.parametrize("tool, arguments, expected", [
+    ("megalodon.telemetry.summary", {}, {"window_minutes": 60}),
+    ("megalodon.telemetry.summary", {"window_minutes": 1440}, {"window_minutes": 1440}),
+    ("megalodon.alerts.query", {"window_minutes": 1, "limit": 2}, {"window_minutes": 1, "limit": 2}),
+])
+def test_closed_tool_arguments_preserve_valid_windows_and_alert_limits(tool, arguments, expected):
+    selected_tool, admitted, _, _ = validate_request(request(tool, arguments))
+    assert selected_tool == tool and admitted == expected
 
 
 def test_audit_failure_precedes_any_tool_execution(monkeypatch, broker):

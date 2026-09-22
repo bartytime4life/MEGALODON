@@ -56,7 +56,12 @@ The current HUD offers fixed question IDs and permits only the Level 0 tools
 listed for each question, plus the Level 1 report tool for the report question.
 Qwen selects one tool by JSON; the broker validates the selection before reading
 data. A second bounded request may explain the resulting typed projection.
-Unexpected tool selection and malformed model output fail closed. Stored
+Unexpected tool selection and malformed model output fail closed. Tool
+selections with non-string names are routed to a failed `UNKNOWN_TOOL`
+receipt before evidence reads or a follow-up explanation request. Telemetry
+summary accepts only `window_minutes`; the `limit` argument belongs to alerts
+queries. Unsupported argument fields and non-string report types produce
+`INVALID_ARGUMENTS` receipts without tool execution. Stored
 traffic is limited to qualified metadata and detector IDs/severity/timestamps;
 packet payloads, hashes of payloads, raw messages, raw JSON and arbitrary
 evidence text are never forwarded. Source authenticity, coverage, host safety
@@ -65,7 +70,11 @@ and inference accuracy remain unproved.
 ## Receipts and HUD
 
 `megalodon-ai-receipts.db` is an application-owned private SQLite database
-beside the configured audit database. The broker writes `not_attempted` before
+beside the configured audit database. If the telemetry database occupies that
+filename, a case-fold-equivalent alias, or one of its SQLite sidecar names
+(`-wal`, `-shm`, or `-journal`), the AI ledger uses
+`megalodon-ai-receipts-ledger.db` instead so telemetry can never be mistaken
+for ledger state. The broker writes `not_attempted` before
 execution, then a terminal event (`observed`, `applied`, `failed`, or
 `awaiting_confirmation`). Events contain UUID, UTC timestamp, model, request
 digest, tool, validated arguments, authority level, authorization source,

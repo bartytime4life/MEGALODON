@@ -2,12 +2,21 @@
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 
+The local dashboard's core telemetry routes are read-only. Its separately
+enabled AI question POST requires a per-launch operator token and can write
+private AI receipts and bounded report snapshots; see
+[`docs/ai-control-plane.md`](../docs/ai-control-plane.md). This hosted Site has
+no connection to those routes. The changed source here is a repository mirror,
+not a new Site publication.
+
 ## Current navigation and install path
 
 The merged source adds view links such as `#view=integrations`, Back/Forward
 navigation, and per-view reading positions for the current page session.
 Reload restores the selected view; it does not retain reading positions or
-imported reports. Mobile navigation keeps text labels visible. Unknown
+imported reports. Navigation labels remain visible at desktop, tablet and
+mobile widths; the first-run steps stack before their three columns become
+cramped. Unknown
 fragments are ignored, and navigation remains usable if history is unavailable.
 The hosted install guide was published in Sites v29. See
 `docs/site-source-alignment.md` in the parent repository for the exact current
@@ -30,6 +39,8 @@ Home → Data and tools contains those checks and next-launch options. Keep the
 terminal open and stop with Ctrl+C. Neither the launcher nor the browser starts
 sensors or creates sample evidence. The local link does not probe the PC.
 Disconnected hosted measurements remain under an explicit status disclosure.
+The status action opens the Site's evidence workflows; it does not run a local
+workflow. An empty local HUD is labeled unavailable rather than zero traffic.
 
 The local address points to the device opening the link; a phone cannot use it
 to reach a Linux computer. Missing or sample-only evidence is not zero traffic.

@@ -93,14 +93,16 @@ def _arguments(tool: str, value: object) -> dict[str, Any]:
     if tool in {"megalodon.status", "megalodon.integrations.status", "megalodon.model.status"}:
         return _keys(value, set())
     if tool in {"megalodon.telemetry.summary", "megalodon.alerts.query"}:
-        args = _keys(value, {"window_minutes", "limit"})
+        allowed = {"window_minutes", "limit"} if tool == "megalodon.alerts.query" else {"window_minutes"}
+        args = _keys(value, allowed)
         result = {"window_minutes": _integer(args.get("window_minutes", 60), 1, 1440)}
         if tool == "megalodon.alerts.query":
             result["limit"] = _integer(args.get("limit", 8), 1, 8)
         return result
     if tool == "megalodon.report.generate":
         args = _keys(value, {"report_type", "window_minutes"}, {"report_type"})
-        if args["report_type"] not in {"security_summary", "ingestion_summary"}:
+        if (type(args["report_type"]) is not str
+                or args["report_type"] not in {"security_summary", "ingestion_summary"}):
             raise BrokerError("INVALID_ARGUMENTS")
         return {"report_type": args["report_type"],
                 "window_minutes": _integer(args.get("window_minutes", 60), 1, 1440)}

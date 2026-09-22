@@ -1,0 +1,138 @@
+name: macOS M1 synthetic sample
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-m1-sample:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Inventory exact candidate and excluded M1 gates
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_COMMIT"
+          observed_tree="$(git rev-parse --verify 'HEAD^{tree}')"
+          test "$(uname -s)" = Darwin
+          {
+            echo '## Hosted macOS M1 sample receipt'
+            echo
+            echo "PR head: \`$EXPECTED_COMMIT\`; tree: \`$observed_tree\`."
+            echo "Runner image: \`${ImageOS:-not_recorded}\` / \`${ImageVersion:-not_recorded}\`."
+            echo "macOS: \`$(sw_vers -productVersion)\` build \`$(sw_vers -buildVersion)\`; architecture: \`$(uname -m)\`; \`$(python -VV)\`."
+            echo
+            echo 'Selected: core package only; built-in sample (13 events under cap 14) and demo-threat sample (114 events under cap 115).'
+            echo 'Not run: JSONL replay, dashboard listener/browser, Intel plus Apple Silicon pair, offline adapters, capture, firewall backend, and operator privacy review.'
+            echo 'This hosted smoke result is one recorded runner environment, not M1 platform acceptance or a catalog promotion.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Install core package
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m pip check
+          python -m pip show megalodon-defense
+      - name: Record bounded storage-admission diagnostic
+        run: |
+          set -euo pipefail
+          python tools/probe_storage_admission.py | tee "$RUNNER_TEMP/storage-admission-diagnostic.json"
+          {
+            echo
+            echo '### Storage admission diagnostic'
+            echo
+            echo 'Diagnostic collection succeeded. This does not mean storage admission or the sample command succeeded.'
+            cat "$RUNNER_TEMP/storage-admission-diagnostic.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run bounded sample commands in a private temporary directory
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          import tempfile
+
+          if sys.platform != "darwin" or sys.version_info[:2] != (3, 12):
+              raise SystemExit("MACOS_M1:UNEXPECTED_RUNNER")
+
+          cases = (
+              ("sample-13", ("--max-events", "14"), 13),
+              ("demo-threat-114", ("--demo-threat", "--max-events", "115"), 114),
+          )
+          results = []
+          with tempfile.TemporaryDirectory(prefix="megalodon-m1-") as private_dir:
+              for name, options, expected in cases:
+                  command = (sys.executable, "-m", "megalodon", "run", "--source", "sample", *options)
+                  try:
+                      completed = subprocess.run(
+                          command, cwd=private_dir, capture_output=True, text=True,
+                          timeout=60, check=False,
+                      )
+                  except subprocess.TimeoutExpired:
+                      results.append({"case": name, "status": "timeout"})
+                      break
+                  if completed.returncode != 0:
+                      diagnostic = completed.stderr.strip()
+                      if re.fullmatch(r"megalodon: [A-Z_]+(?::[A-Z_]+)?", diagnostic) is None:
+                          diagnostic = "unclassified"
+                      results.append({
+                          "case": name, "status": "failed", "exit_code": completed.returncode,
+                          "diagnostic": diagnostic,
+                      })
+                      break
+                  try:
+                      receipt = json.loads(completed.stdout)
+                  except (ValueError, TypeError):
+                      results.append({"case": name, "status": "invalid_receipt"})
+                      break
+                  if (receipt.get("source") != "sample" or receipt.get("status") != "completed"
+                          or receipt.get("termination_reason") != "source_exhausted"
+                          or receipt.get("processed") != expected):
+                      results.append({"case": name, "status": "unexpected_receipt"})
+                      break
+                  results.append({"case": name, "status": "passed", "processed": receipt["processed"]})
+
+          report = Path(os.environ["RUNNER_TEMP"]) / "macos-m1-sample-results.json"
+          report.write_text(json.dumps(results, sort_keys=True), encoding="utf-8")
+          print(json.dumps(results, sort_keys=True))
+          if len(results) != len(cases) or any(row["status"] != "passed" for row in results):
+              raise SystemExit("MACOS_M1:SAMPLE_CHECK_FAILED")
+          PY
+      - name: Report actual sample-command outcome
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = Path(os.environ["RUNNER_TEMP"]) / "macos-m1-sample-results.json"
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if report.is_file():
+              rows = json.loads(report.read_text(encoding="utf-8"))
+              message = "Sample command outcomes: " + "; ".join(
+                  f"{row['case']}={row['status']}"
+                  + (f" (processed={row['processed']})" if "processed" in row else "")
+                  + (f" ({row['diagnostic']})" if "diagnostic" in row else "")
+                  for row in rows
+              )
+          else:
+              message = "Sample command outcomes: not_run; no result file was produced. See preceding steps."
+          summary.open("a", encoding="utf-8").write(message + "\n")
+          print(message)
+          PY

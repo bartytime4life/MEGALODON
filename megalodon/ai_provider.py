@@ -197,7 +197,9 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
         pass
     try:
         if probe:
-            generate(settings, "Reply with the single word READY.", max_tokens=32)
+            challenge = generate(settings, "Reply with the single word READY.", max_tokens=32)
+            if challenge != "READY":
+                raise AIProviderError("INVALID_RESPONSE")
             base["state"] = "model_ready"
             base["inference_verified"] = True
             identity = {"digest": settings.model_digest}
