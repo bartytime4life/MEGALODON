@@ -1,0 +1,35 @@
+{
+  "schema_version": "megalodon.exact-head-evidence/v1",
+  "repository": "bartytime4life/MEGALODON",
+  "subject": {
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "pull_request": 360,
+    "artifact_digests": {
+      "ci": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "execution": {
+    "platform": "ubuntu-24.04",
+    "architecture": "x86_64",
+    "commands": ["python -m pytest -q"],
+    "exit_codes": [0],
+    "started_at": "2026-09-22T04:00:00Z",
+    "finished_at": "2026-09-22T04:01:00Z"
+  },
+  "authentication": {
+    "collector": "github_actions",
+    "workflow_run_id": 123,
+    "artifact_id": 456,
+    "artifact_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "disposition": {
+    "implementation": "delivered",
+    "owner_acceptance": "held",
+    "independent_acceptance": "not_requested",
+    "release_authority": false,
+    "deployment_authority": false,
+    "host_authority": false
+  },
+  "supersession": {"status": "current", "superseded_by": null}
+}

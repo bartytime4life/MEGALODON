@@ -103,6 +103,11 @@ class ValidatedProfile:
         return json.loads(self._canonical_value)
 
     @property
+    def value(self) -> dict[str, Any]:
+        """Return an owned JSON view; edits cannot invalidate cached evidence."""
+        return json.loads(self._canonical_value)
+
+    @property
     def profile_id(self) -> str:
         return str(self.value["profile_id"])
 
@@ -343,7 +348,19 @@ def validate_profile(value: object) -> ValidatedProfile:
     boundary_digest = sha256(_canonical(_comparison_boundary(copied))).hexdigest()
     return ValidatedProfile(
         _canonical_value=_canonical(copied),
+copied = json.loads(_canonical(profile).decode("ascii"))
+    profile_digest = sha256(_canonical(copied)).hexdigest()
+    boundary_digest = sha256(
+        _canonical(_comparison_boundary(copied))
+    ).hexdigest()
+
+    return ValidatedProfile(
+        _canonical_value=_canonical(copied),
         canonical_sha256=profile_digest,
+        hard_gate_passed=not failures,
+        gate_failures=failures,
+        comparison_boundary_sha256=boundary_digest,
+    )
         hard_gate_passed=not failures,
         gate_failures=failures,
         comparison_boundary_sha256=boundary_digest,
