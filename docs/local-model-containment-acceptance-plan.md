@@ -58,10 +58,35 @@ schema that only exists once real evidence is ready.
 Even a structurally complete, `collector_output`-basis packet is not an
 attestation, an independent review, authentic publisher provenance of the
 model bytes actually loaded, or authorization to enable, schedule, or expose
-the provider. `validate()` enforces that `basis: synthetic_contract_fixture`
-can never reach `status: candidate_evidence` — a hand-written JSON file cannot
-promote itself to real evidence — the same anti-gaming rule the Ubuntu
-evidence contract applies to its own `candidate_evidence` status.
+the provider. `validate()` rejects `basis: synthetic_contract_fixture` with
+`status: candidate_evidence`, but that is a consistency rule, not origin
+authentication. A hand-written JSON file can claim `basis: collector_output`,
+fill the required fields and pass validation. Neither that string nor an
+`operator_approved: true` or review `recorded` field authenticates its claim.
+
+The CLI's outer `status: validated` means only that the supplied packet passed
+structural and semantic checks. `manifest_sha256` identifies canonical packet
+bytes; it is not a signature, publisher verification, independent checkpoint,
+or proof that any observation occurred. Treat supplied packets as untrusted
+self-reports until a separately reviewed evidence-ingestion process verifies
+origin, exact candidate identities, corpus signatures, execution receipts and
+independently attributable owner/reviewer decisions. Do not close #261 from
+these fields alone or relabel a synthetic packet to satisfy a gate.
+
+`collect()` still emits only the fixed `unbound` packet. Validating or editing a
+supplied packet does not change that state or cause host inspection. The packet's
+`effects` fields describe the helper's non-effects, not measured zero prohibited
+effects over a provider corpus; those observations need their own signed,
+privacy-minimized receipts and executed denominators. NOT_RUN is not a passing
+`0/N` claim. The schema, validator rules, receipt shape and runtime authority
+remain unchanged by this clarification.
+
+The [trust-boundary regressions](../tests/test_local_model_containment_trust_boundary.py)
+exercise these distinctions with synthetic identities: a self-claimed origin can
+validate without attestation, fixed collection cannot be promoted, placeholder
+bindings and unrecorded review remain refused, and in-memory operations touch
+no monitored file, network, process or thread entry point. These tests do not
+inspect or certify the operator's host, provider, model or corpus.
 
 ## What remains before #261 is addressed
 
@@ -80,6 +105,6 @@ evidence contract applies to its own `candidate_evidence` status.
 
 ```bash
 python -m compileall -q megalodon tests tools
-python -m pytest tests/test_local_model_containment.py
+python -m pytest tests/test_local_model_containment.py tests/test_local_model_containment_trust_boundary.py
 python tools/local_model_containment.py collect
 ```
