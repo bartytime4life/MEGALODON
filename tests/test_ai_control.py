@@ -81,16 +81,27 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
 def test_ai_receipt_path_never_collides_with_telemetry_database():
     normal = Path("/private/megalodon.db")
     assert _ai_receipt_path(normal) == Path("/private/megalodon-ai-receipts.db")
-    for suffix in ("", "-wal", "-shm", "-journal"):
-        collision = Path("/private/megalodon-ai-receipts.db" + suffix)
+    collisions = [
+        "megalodon-ai-receipts.db",
+        "megalodon-ai-receipts.db-wal",
+        "megalodon-ai-receipts.db-shm",
+        "megalodon-ai-receipts.db-journal",
+        "MEGALODON-AI-RECEIPTS.DB",
+        "MEGALODON-AI-RECEIPTS.DB-WAL",
+        "Megalodon-AI-Receipts.DB-ShM",
+        "megalodon-AI-receipts.DB-JOURNAL",
+    ]
+    for name in collisions:
+        collision = Path("/private") / name
         selected = _ai_receipt_path(collision)
         assert selected == Path("/private/megalodon-ai-receipts-ledger.db")
-        assert collision not in {
-            selected,
-            selected.with_name(selected.name + "-wal"),
-            selected.with_name(selected.name + "-shm"),
-            selected.with_name(selected.name + "-journal"),
+        selected_names = {
+            selected.name.casefold(),
+            (selected.name + "-wal").casefold(),
+            (selected.name + "-shm").casefold(),
+            (selected.name + "-journal").casefold(),
         }
+        assert collision.name.casefold() not in selected_names
 
 
 def test_ai_cli_treats_valid_proposal_as_success_without_application():
