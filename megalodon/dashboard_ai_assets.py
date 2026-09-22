@@ -23,6 +23,7 @@ AI_PANEL = """
         <option value="report">Generate a security summary report</option>
       </select></label>
       <button id="ai-ask" type="button" disabled>Ask locally</button>
+      <button id="ai-cancel" class="button-secondary" type="button" hidden>Cancel</button>
     </div>
     <p id="ai-state" role="status" aria-live="polite">AI has not been checked. It is disabled until configured and verified.</p>
     <dl class="ai-result" id="ai-result" hidden>
@@ -57,7 +58,10 @@ const aiState = document.getElementById('ai-state');
 const aiResult = document.getElementById('ai-result');
 const aiTokenInput = document.getElementById('ai-token');
 const aiTokenToggle = document.getElementById('ai-token-toggle');
+const aiCancel = document.getElementById('ai-cancel');
 let aiBusy = false;
+let aiActiveController = null;
+let aiUserCanceled = false;
 const AI_STATE_TEXT = {
   disabled: 'Local AI is turned off in configuration.',
   ollama_unavailable: 'Ollama is not reachable on loopback.',
@@ -93,8 +97,10 @@ aiTokenToggle.addEventListener('click', () => {
 document.getElementById('ai-control').addEventListener('toggle', event => {
   document.getElementById('ai-control-action').textContent = event.currentTarget.open ? 'Close AI controls' : 'Open AI controls';
 });
+aiCancel.addEventListener('click', () => { aiUserCanceled = true; if (aiActiveController) aiActiveController.abort(); });
 async function aiFetch(path, header, body = null) {
   const controller = new AbortController();
+  aiActiveController = controller;
   const timer = setTimeout(() => controller.abort(), 50000);
   const options = {headers: {[header]: '1', 'X-Megalodon-AI-Token': document.getElementById('ai-token').value},
                    cache: 'no-store', credentials: 'omit', signal: controller.signal};
@@ -123,12 +129,12 @@ async function aiFetch(path, header, body = null) {
   const value = JSON.parse(responseText);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('AI response invalid');
   return {response, value};
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); if (aiActiveController === controller) aiActiveController = null; }
 }
 aiCheck.addEventListener('click', async () => {
   if (aiBusy) return;
-  aiBusy = true; aiCheck.disabled = true; aiAsk.disabled = true;
-  aiCheck.textContent = 'Checking…';
+  aiBusy = true; aiUserCanceled = false; aiCheck.disabled = true; aiAsk.disabled = true;
+  aiCheck.textContent = 'Checking…'; aiCancel.hidden = false;
   aiState.classList.remove('ai-integrity-alert');
   aiState.textContent = 'Checking the configured model with one bounded local inference…';
   try {
@@ -137,13 +143,16 @@ aiCheck.addEventListener('click', async () => {
     const summary = AI_STATE_TEXT[value.state] || `Unrecognized status (${value.state}).`;
     aiState.textContent = `${summary}${aiErrorReason(value.error_code)} Model ${value.model || 'unknown'}. Inference verified: ${value.inference_verified === true ? 'yes' : 'no'}.`;
     aiAsk.disabled = value.state !== 'model_ready';
-  } catch (_) { aiState.textContent = 'AI check failed. Core MEGALODON remains available.'; }
-  finally { aiBusy = false; aiCheck.disabled = false; aiCheck.textContent = 'Check Ollama and Qwen'; }
+  } catch (err) {
+    aiState.textContent = err && err.name === 'AbortError'
+      ? (aiUserCanceled ? 'AI check canceled by operator.' : 'AI check timed out client-side.')
+      : 'AI check failed. Core MEGALODON remains available.';
+  } finally { aiBusy = false; aiCheck.disabled = false; aiCheck.textContent = 'Check Ollama and Qwen'; aiCancel.hidden = true; }
 });
 aiAsk.addEventListener('click', async () => {
   if (aiBusy || aiAsk.disabled) return;
-  aiBusy = true; aiAsk.disabled = true; aiResult.hidden = true;
-  aiAsk.textContent = 'Asking…';
+  aiBusy = true; aiUserCanceled = false; aiAsk.disabled = true; aiResult.hidden = true;
+  aiAsk.textContent = 'Asking…'; aiCancel.hidden = false;
   aiState.classList.remove('ai-integrity-alert');
   aiState.textContent = 'Requesting one bounded local analysis…';
   try {
@@ -161,7 +170,10 @@ aiAsk.addEventListener('click', async () => {
     } else {
       aiState.textContent = 'Observed data and model inference are shown separately.';
     }
-  } catch (_) { aiState.textContent = 'AI request failed. No partial model output is shown.'; }
-  finally { aiBusy = false; aiAsk.disabled = false; aiAsk.textContent = 'Ask locally'; }
+  } catch (err) {
+    aiState.textContent = err && err.name === 'AbortError'
+      ? (aiUserCanceled ? 'AI request canceled by operator. No partial model output is shown.' : 'AI request timed out client-side. No partial model output is shown.')
+      : 'AI request failed. No partial model output is shown.';
+  } finally { aiBusy = false; aiAsk.disabled = false; aiAsk.textContent = 'Ask locally'; aiCancel.hidden = true; }
 });
 """
