@@ -174,7 +174,7 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
         "packaging==26.3",
         "pluggy==1.6.0",
         "pygments==2.21.0",
-        "pyproject-hooks==1.2.0",
+        "pyproject-hooks==1.3.3",
         "pytest==9.1.1",
         "referencing==0.37.0",
         "rpds-py==2026.6.3",

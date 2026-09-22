@@ -23,9 +23,9 @@
           "version": "26.3"
         },
         {
-          "declared_sha256": "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913",
+          "declared_sha256": "sha256:5fc53fdac9f7bd63fbcdc868fb5f90b4784d78a53a3d3388cd738b807441a20b",
           "name": "pyproject-hooks",
-          "version": "1.2.0"
+          "version": "1.3.3"
         },
         {
           "declared_sha256": "sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
@@ -39,7 +39,7 @@
       "platform": "linux-x86_64",
       "python": "3.12",
       "role": "wheel-smoke build tools",
-      "source_sha256": "680b315e1b79b5d4cab07412032cff16efa23e2ab19b4c6a6025fb5eb5390c6c"
+      "source_sha256": "8f6d520421b4653e9633651fb0246d423fae6566f2ca881e9157e290e66c8d56"
     },
     {
       "direct_packages": [
