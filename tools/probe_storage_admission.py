@@ -126,12 +126,10 @@ def _darwin_alias_observation() -> dict[str, object]:
 
 def _temporary_path_class(path: Path) -> str:
     parts = path.parts
-    if len(parts) >= 2 and parts[1] == "var":
-        return "var_alias"
-    if len(parts) >= 3 and parts[1:3] == ("/", "private"):
-        return "other"
     if len(parts) >= 3 and parts[1] == "private" and parts[2] == "var":
         return "private_var"
+    if len(parts) >= 2 and parts[1] == "var":
+        return "var_alias"
     if len(parts) >= 2 and parts[1] == "Users":
         return "users"
     return "other"
@@ -150,6 +148,109 @@ def _sqlite_error_observation(exc: sqlite3.Error) -> dict[str, object]:
             else "unavailable"
         ),
     }
+
+
+def _darwin_transaction_stage_observation(use_descriptor_path: bool) -> dict[str, object]:
+    """Identify the first SQLite stage that fails in a disposable fixture."""
+
+    if sys.platform != "darwin":
+        return {"status": "not_applicable"}
+
+    with tempfile.TemporaryDirectory(prefix="megalodon-stage-probe-") as root:
+        private = Path(root) / "private"
+        private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+        path = private / "audit.db"
+        directory_fd = None
+        database_fd = None
+        connection = None
+        try:
+            try:
+                directory_fd = storage._open_private_directory(
+                    private, create=False, prefix="STORAGE_PATH"
+                )
+                database_fd, _ = storage._open_private_database(
+                    path,
+                    directory_fd,
+                    writable=True,
+                    create=True,
+                    prefix="STORAGE_PATH",
+                )
+            except storage.StorageSchemaError as exc:
+                return {"status": _storage_code(exc)}
+
+            anchored = storage._anchored_database_path(
+                database_fd, path, "STORAGE_PATH"
+            )
+            canonical = storage._resolve_top_level_system_alias(
+                storage._absolute_database_path(path, "STORAGE_PATH")
+            )
+            sqlite_path = anchored if use_descriptor_path else canonical
+            result: dict[str, object] = {
+                "status": "running",
+                "path_mode": "descriptor" if use_descriptor_path else "canonical",
+                "database_identity_before": _same_stat(canonical, database_fd),
+                "directory_identity_before": (
+                    directory_fd is not None
+                    and _same_stat(canonical.parent, directory_fd)
+                ),
+            }
+            if not result["database_identity_before"] or not result[
+                "directory_identity_before"
+            ]:
+                result["status"] = "canonical_identity_mismatch"
+                return result
+            try:
+                connection = sqlite3.connect(
+                    f"{sqlite_path.as_uri()}?mode=rw&cache=private",
+                    uri=True,
+                    timeout=10,
+                    check_same_thread=False,
+                )
+                storage._validate_connection_path(
+                    connection,
+                    canonical,
+                    "STORAGE_PATH",
+                    anchor=anchored if use_descriptor_path else None,
+                )
+            except storage.StorageSchemaError as exc:
+                result["status"] = _storage_code(exc)
+                return result
+            except sqlite3.Error as exc:
+                result["status"] = "connect_failed"
+                result.update(_sqlite_error_observation(exc))
+                return result
+
+            for stage, statement in (
+                ("pragma_user_version", "PRAGMA user_version"),
+                ("schema_read", "SELECT type, name, tbl_name FROM sqlite_schema"),
+                ("begin_immediate", "BEGIN IMMEDIATE"),
+            ):
+                try:
+                    connection.execute(statement).fetchall()
+                except sqlite3.Error as exc:
+                    result["status"] = f"{stage}_failed"
+                    result.update(_sqlite_error_observation(exc))
+                    return result
+                result[stage] = "accepted"
+
+            connection.rollback()
+            result["status"] = "accepted"
+            result["database_identity_after"] = _same_stat(canonical, database_fd)
+            result["directory_identity_after"] = (
+                directory_fd is not None
+                and _same_stat(canonical.parent, directory_fd)
+            )
+            result["journal_sidecar_after_rollback"] = (
+                path.parent / f"{path.name}-journal"
+            ).exists()
+            return result
+        finally:
+            if connection is not None:
+                connection.close()
+            if database_fd is not None:
+                os.close(database_fd)
+            if directory_fd is not None:
+                os.close(directory_fd)
 
 
 def _darwin_directory_anchor_sqlite_observation() -> dict[str, object]:
@@ -283,6 +384,8 @@ def collect_report() -> dict[str, object]:
         "sqlite_version": sqlite3.sqlite_version,
         "darwin_alias": _darwin_alias_observation(),
         "darwin_directory_anchor_sqlite": _darwin_directory_anchor_sqlite_observation(),
+        "darwin_descriptor_transaction": _darwin_transaction_stage_observation(True),
+        "darwin_canonical_transaction": _darwin_transaction_stage_observation(False),
         "store_constructor": _production_store_observation(),
     }
     try:
@@ -390,6 +493,7 @@ def collect_report() -> dict[str, object]:
                     connection,
                     storage._absolute_database_path(path),
                     "STORAGE_PATH",
+                    anchor=Path(selected),
                 )
             except storage.StorageSchemaError as exc:
                 report["production_validator"] = _storage_code(exc)

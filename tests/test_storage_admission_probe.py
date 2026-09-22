@@ -35,10 +35,23 @@ def test_storage_admission_probe_emits_bounded_redacted_json():
         } or str(report["darwin_directory_anchor_sqlite"]["status"]).startswith(
             "STORAGE_PATH:"
         )
+        for key in ("darwin_descriptor_transaction", "darwin_canonical_transaction"):
+            observation = report[key]
+            assert observation["path_mode"] in {"descriptor", "canonical"} or (
+                observation["status"] != "accepted"
+            )
+            assert observation["status"] == "accepted" or str(
+                observation["status"]
+            ).endswith("_failed") or str(observation["status"]).startswith(
+                "STORAGE_PATH:"
+            )
     else:
-        assert report["darwin_directory_anchor_sqlite"] == {
-            "status": "not_applicable"
-        }
+        for key in (
+            "darwin_directory_anchor_sqlite",
+            "darwin_descriptor_transaction",
+            "darwin_canonical_transaction",
+        ):
+            assert report[key] == {"status": "not_applicable"}
     assert report["descriptor_strategy"] in {
         "proc_self_fd", "dev_fd", "other"
     }
@@ -49,9 +62,7 @@ def test_storage_admission_probe_emits_bounded_redacted_json():
     assert report["sqlite_filename_relation"] in {
         "admitted_path", "descriptor_path", "other", "empty", "unavailable"
     }
-    assert report["production_validator"] == "accepted" or str(
-        report["production_validator"]
-    ).startswith("STORAGE_PATH:")
+    assert report["production_validator"] == "accepted"
     assert len(completed.stdout.encode("utf-8")) <= 4097
     _assert_redacted(completed.stdout)
 
