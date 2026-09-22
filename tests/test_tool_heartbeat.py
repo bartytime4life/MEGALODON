@@ -35,6 +35,9 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
         exe.write_text("#!/bin/sh\n")
         exe.chmod(0o755)
     monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("OLLAMA_MODELS", raising=False)
+    monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", ())
     monkeypatch.setattr(tool_heartbeat, "PROBES", {
         key: tool_heartbeat.ToolProbe(probe.executables, (), (), probe.python_module, probe.processes, probe.service)
         for key, probe in tool_heartbeat.PROBES.items()
@@ -51,11 +54,14 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
     # A running agent is green with an uptime anchor derived from /proc.
     assert tools["zabbix"]["light"] == "green"
     assert tools["zabbix"]["running_since"] == "2023-11-14T22:13:25Z"
-    # A running process counts as installed even when off PATH.
-    assert tools["qwen"]["installed"] == "yes" and tools["qwen"]["light"] == "green"
+    # A running process counts as installed even when off PATH, but without
+    # the model downloaded the light stays amber.
+    assert tools["qwen"]["installed"] == "yes" and tools["qwen"]["model"] == "missing"
+    assert tools["qwen"]["light"] == "amber"
+    assert tools["nmap"]["model"] is None
     assert tools["tshark"]["light"] == "red" and tools["tshark"]["service"] == "none"
     for tool in report["tools"]:
-        assert set(tool) == {"id", "installed", "installed_since", "service", "running_since", "light", "expects_service"}
+        assert set(tool) == {"id", "installed", "installed_since", "service", "running_since", "light", "expects_service", "model"}
     assert "/" not in json.dumps([t["id"] for t in report["tools"]])
 
 
@@ -170,3 +176,17 @@ def test_installer_kills_a_hung_install():
     status = installer.status()
     assert status["state"] == "failed" and status["exit_code"] is None
     assert status["output"][-1] == "Installation timed out and was stopped."
+
+
+def test_qwen_model_manifest_turns_the_light_green(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool_heartbeat, "runtime_platform", lambda: "linux")
+    monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", ())
+    models = tmp_path / "models"
+    manifest = models.joinpath(*tool_heartbeat.QWEN_MODEL_MANIFEST)
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text("{}")
+    monkeypatch.setenv("OLLAMA_MODELS", str(models))
+    monkeypatch.setenv("PATH", "/nonexistent")
+    proc = _fake_proc(tmp_path / "proc", {77: ("ollama", 1000)})
+    qwen = next(tool for tool in heartbeat_report(proc)["tools"] if tool["id"] == "qwen")
+    assert qwen["model"] == "present" and qwen["light"] == "green"

@@ -7,10 +7,12 @@ combines three signals into one status light per tool:
 * installed  - a known executable (PATH or fixed install prefix), Python
   package, or matching process was found; its change time is the install hint;
 * running    - a known long-running process name was observed in ``/proc``;
-* uptime     - the earliest start time among matching processes.
+* uptime     - the earliest start time among matching processes;
+* model      - for Qwen only, whether the example model manifest exists.
 
 Lights: ``green`` installed and healthy (service running, or a standalone tool
-present), ``amber`` installed but its expected service is not running, ``red``
+present), ``amber`` installed but its expected service is not running (or, for
+Qwen, the model has not been downloaded), ``red``
 not installed, ``grey`` could not be determined on this platform.
 """
 
@@ -185,12 +187,42 @@ def _process_starts(proc_root: Path, wanted: frozenset[str]) -> tuple[dict[str, 
     return starts, complete
 
 
-def _light(installed: str, service: str, expects_service: bool) -> str:
+# Ollama stores one manifest file per pulled tag. Reading its metadata tells us
+# whether the example model is downloaded without contacting the provider.
+QWEN_MODEL_MANIFEST = ("manifests", "registry.ollama.ai", "library", "qwen2.5", "7b")
+OLLAMA_MODEL_ROOTS = ("/usr/share/ollama/.ollama/models", "/var/lib/ollama/models")
+
+
+def _model_status(home: Path | None) -> str:
+    """Return "present", "missing" or "unknown" for the example Qwen model."""
+    roots = []
+    configured = os.environ.get("OLLAMA_MODELS")
+    if configured and configured.startswith("/"):
+        roots.append(configured)
+    if home is not None:
+        roots.append(str(home / ".ollama" / "models"))
+    roots.extend(OLLAMA_MODEL_ROOTS)
+    uncertain = False
+    for root in roots:
+        try:
+            if stat.S_ISREG(os.stat(os.path.join(root, *QWEN_MODEL_MANIFEST)).st_mode):
+                return "present"
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:
+            # The system service's model directory is often unreadable to users.
+            uncertain = True
+    return "unknown" if uncertain else "missing"
+
+
+def _light(installed: str, service: str, expects_service: bool, model: str | None = None) -> str:
     if installed == "no":
         return "red"
     if installed == "unknown":
         return "grey"
     if expects_service and service == "stopped":
+        return "amber"
+    if model == "missing":
         return "amber"
     return "green"
 
@@ -243,7 +275,8 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
                 service = "none"
             entry = {"installed": installed, "installed_since": _iso(since),
                      "service": service, "running_since": running_since}
-        entry["light"] = _light(entry["installed"], entry["service"], probe.service)
+        entry["model"] = (_model_status(home) if linux and entry["installed"] == "yes" else "unknown") if tool_id == "qwen" else None
+        entry["light"] = _light(entry["installed"], entry["service"], probe.service, entry["model"])
         entry["expects_service"] = probe.service
         tools.append({"id": tool_id, **entry})
     return {
