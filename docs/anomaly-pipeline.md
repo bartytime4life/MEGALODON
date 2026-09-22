@@ -1,6 +1,6 @@
 # AI-assisted anomaly pipeline
 
-Status: offline candidate evidence, separate Qwen admission, and the explicit
+Status: ● offline candidate evidence, separate Qwen admission, and the explicit
 [one-shot analyst command](anomaly-triage.md) reached main through
 [#187](https://github.com/bartytime4life/MEGALODON/pull/187), merge
 `fa55906dc327c0bb0cde9366ac99a8f031d19484` on 2026-09-15 UTC.
