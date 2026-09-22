@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import sys
 from threading import RLock
 from time import monotonic
 from typing import Any
@@ -476,6 +477,28 @@ def _anchored_database_path(
     if os.name == "posix" and candidate == fallback:
         _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
     return candidate
+
+
+def _writable_sqlite_connection_path(
+    descriptor: int, expected: Path, prefix: str
+) -> tuple[Path, Path | None]:
+    """Choose a writable SQLite path without weakening descriptor admission.
+
+    Linux keeps the descriptor pathname so SQLite and its sidecars stay tied to
+    the already-open file. Native Darwin accepts the database descriptor for
+    reads but cannot create the rollback journal through /dev/fd/N
+    (SQLITE_CANTOPEN). There, use only the already-canonicalized, owner-private
+    admitted pathname after proving it still names the exact open descriptor.
+    The returned optional anchor tells _validate_connection_path which pathname
+    SQLite is permitted to report.
+    """
+
+    anchor = _anchored_database_path(descriptor, expected, prefix)
+    if sys.platform != "darwin":
+        return anchor, anchor
+    if not _path_matches_descriptor(expected, descriptor):
+        _raise_path_error(prefix, "DATABASE_CHANGED")
+    return expected, None
 
 
 def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
@@ -1102,7 +1125,7 @@ class Store:
                 create=create,
                 prefix="STORAGE_PATH",
             )
-            sqlite_path = _anchored_database_path(
+            sqlite_path, sqlite_anchor = _writable_sqlite_connection_path(
                 self._database_descriptor, self.path, "STORAGE_PATH"
             )
             _validate_sqlite_sidecars(
@@ -1121,7 +1144,7 @@ class Store:
                 check_same_thread=False,
             )
             _validate_connection_path(
-                connection, self.path, "STORAGE_PATH", anchor=sqlite_path
+                connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor
             )
             self._assert_path_identity()
             if _directory_generation(self._directory_descriptor) != opening_generation:
@@ -1364,6 +1387,7 @@ class Store:
     def _assert_write_trusted(self) -> None:
         if self._write_poisoned:
             raise IngestionRunError(RECONCILIATION_REQUIRED)
+        self._assert_path_identity()
 
     def _connection_commit(self) -> None:
         self.connection.commit()
