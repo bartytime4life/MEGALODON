@@ -35,7 +35,7 @@ from .capabilities import runtime_platform
 
 
 SCHEMA = "megalodon-tool-heartbeat-v1"
-MAX_HEARTBEAT_BYTES = 16 * 1024
+MAX_HEARTBEAT_BYTES = 32 * 1024
 MAX_PROCESS_ENTRIES = 32_768
 MAX_COMM_BYTES = 128
 MAX_STAT_BYTES = 4096
@@ -287,6 +287,48 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
     }
 
 
+MAX_HISTORY_CHANGES = 6
+
+
+class HeartbeatHistory:
+    """In-memory light history per tool since this HUD launched.
+
+    Time is attributed to the light observed at the start of each interval,
+    so availability reflects how long a tool spent green between checks, not
+    how many checks happened to run. Nothing is written to disk.
+    """
+
+    def __init__(self, started: float | None = None) -> None:
+        self.started = time() if started is None else started
+        self._last: dict[str, tuple[str, float]] = {}
+        self._durations: dict[str, dict[str, float]] = {}
+        self._changes: dict[str, list[dict[str, str]]] = {}
+
+    def observe(self, report: dict[str, Any], now: float | None = None) -> dict[str, Any]:
+        at = time() if now is None else now
+        for tool in report["tools"]:
+            tool_id, light = tool["id"], tool["light"]
+            previous = self._last.get(tool_id)
+            if previous is not None:
+                bucket = self._durations.setdefault(tool_id, {})
+                bucket[previous[0]] = bucket.get(previous[0], 0.0) + max(0.0, at - previous[1])
+            if previous is None or previous[0] != light:
+                changes = self._changes.setdefault(tool_id, [])
+                changes.append({"at": _iso(at), "light": light})
+                del changes[:-MAX_HISTORY_CHANGES]
+            self._last[tool_id] = (light, at)
+        tools = {}
+        for tool_id, changes in self._changes.items():
+            durations = self._durations.get(tool_id, {})
+            total = sum(durations.values())
+            tools[tool_id] = {
+                "changes": list(changes),
+                "healthy_percent": round(100 * durations.get("green", 0.0) / total, 1) if total > 0 else None,
+                "observed_seconds": int(total),
+            }
+        return {"since": _iso(self.started), "tools": tools}
+
+
 class HeartbeatBusy(Exception):
     """Another heartbeat collection is in progress."""
 
@@ -296,6 +338,7 @@ class Heartbeat:
 
     def __init__(self, proc_root: Path = Path("/proc")) -> None:
         self._proc_root = proc_root
+        self._history = HeartbeatHistory()
         self._lock = Lock()
         self._cached: bytes | None = None
         self._expires = 0.0
@@ -311,7 +354,9 @@ class Heartbeat:
         try:
             if self._cached is not None and monotonic() < self._expires:
                 return self._cached
-            payload = json.dumps(heartbeat_report(self._proc_root), sort_keys=True,
+            report = heartbeat_report(self._proc_root)
+            report["history"] = self._history.observe(report)
+            payload = json.dumps(report, sort_keys=True,
                                  separators=(",", ":"), allow_nan=False).encode()
             if len(payload) > MAX_HEARTBEAT_BYTES:
                 raise ValueError("heartbeat response exceeds limit")
