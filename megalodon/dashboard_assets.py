@@ -2196,6 +2196,7 @@ function applyConfig(payload) {
 async function bootstrap() {
   renderRoom();
   renderSoftwareShelf();
+  pollHeartbeat();
   restoreWorkspaceFromHash();
   try { applyConfig(await requestJSON('/api/config')); }
   catch (_) {
@@ -2275,8 +2276,9 @@ document.addEventListener('visibilitychange', () => {
 from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
 from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
+from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS + AI_CSS
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)

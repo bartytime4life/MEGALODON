@@ -696,3 +696,10 @@ button:disabled, input:disabled, select:disabled { opacity: .65; cursor: not-all
 }
 @media(max-width:600px) { .local-journey .launch-footer { align-items:start; flex-direction:column; } .local-journey :is(.installed-command,.install-command) { align-items:stretch; flex-direction:column; } }
 .nav-item.active { box-shadow: inset 3px 0 0 var(--cyan); }
+
+.status-light { display: inline-block; width: 10px; height: 10px; margin-right: 0.5rem; border-radius: 50%; vertical-align: middle; background: #5d6f7a; }
+.status-light.green { background: var(--green); box-shadow: 0 0 8px rgba(114,226,170,0.6); }
+.status-light.red { background: var(--red); box-shadow: 0 0 8px rgba(255,142,136,0.5); }
+.status-light.amber { background: var(--amber); box-shadow: 0 0 8px rgba(244,196,105,0.5); }
+.local-hud-callout { margin: 0.75rem 0; padding: 0.7rem; border: 1px solid var(--line-strong); background: rgba(10,28,39,0.42); color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.local-hud-callout strong { color: var(--ink); }

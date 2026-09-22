@@ -1,5 +1,9 @@
 # Local tool readiness receipt
 
+> For live green/red status lights, uptime and one-click installs in the local
+> HUD, see [Tool heartbeat and one-click install](tool-heartbeat.md). This page
+> describes the separate executable-only readiness receipt.
+
 For a point-and-click check, start the local HUD and choose **Home → Data and
 tools → Check this computer**. It refreshes executable presence and process-name
 observations, checks the selected data file and shows the running Python/SQLite
