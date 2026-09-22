@@ -1,0 +1,49 @@
+{
+  "schema_version": "megalodon.security-scan-receipt/v1",
+  "repository": "bartytime4life/MEGALODON",
+  "subject": {
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "scanner": {
+    "name": "example-scanner",
+    "version": "1.0.0",
+    "configuration_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "scan": {
+    "started_at": "2026-09-22T04:00:00Z",
+    "finished_at": "2026-09-22T04:01:00Z",
+    "completeness": "complete"
+  },
+  "summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 1,
+    "low": 0,
+    "informational": 0,
+    "suppressed": 0
+  },
+  "findings": [
+    {
+      "finding_id": "example-medium-1",
+      "rule_id": "EXAMPLE001",
+      "severity": "medium",
+      "status": "open",
+      "location_fingerprint": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "suppression_reason": null,
+      "suppression_expires_at": null
+    }
+  ],
+  "raw_result": {
+    "artifact_ref": "github-actions://runs/123/artifacts/456",
+    "artifact_sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "authentication": "github_actions",
+  "authority": {
+    "merge_authority": false,
+    "independent_acceptance": false,
+    "release_authority": false,
+    "deployment_authority": false,
+    "host_authority": false
+  }
+}
