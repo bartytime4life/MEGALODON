@@ -124,7 +124,7 @@ def test_routes_require_explicit_same_origin_requests(monkeypatch):
 
     started = []
     installer = Installer()
-    monkeypatch.setattr(installer, "start", lambda tool: started.append(tool) or installer.status())
+    monkeypatch.setattr(installer, "start", lambda tool, action="install": started.append(tool) or installer.status())
     handler = type("H", (DashboardHandler,), {"heartbeat": Heartbeat(), "installer": installer})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -175,7 +175,7 @@ def test_installer_kills_a_hung_install():
     assert time.monotonic() - started < 3
     status = installer.status()
     assert status["state"] == "failed" and status["exit_code"] is None
-    assert status["output"][-1] == "Installation timed out and was stopped."
+    assert status["output"][-1] == "The job timed out and was stopped."
 
 
 def test_qwen_model_manifest_turns_the_light_green(tmp_path, monkeypatch):
@@ -190,3 +190,41 @@ def test_qwen_model_manifest_turns_the_light_green(tmp_path, monkeypatch):
     proc = _fake_proc(tmp_path / "proc", {77: ("ollama", 1000)})
     qwen = next(tool for tool in heartbeat_report(proc)["tools"] if tool["id"] == "qwen")
     assert qwen["model"] == "present" and qwen["light"] == "green"
+
+
+def test_start_command_uses_only_fixed_existing_units(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool_installer, "runtime_platform", lambda: "linux")
+    units = tmp_path / "units"
+    units.mkdir()
+    (units / "zabbix-agent.service").write_text("[Unit]\n")
+    which = {"systemctl": "/usr/bin/systemctl", "pkexec": "/usr/bin/pkexec"}.get
+    dirs = (str(units),)
+    assert tool_installer.start_command("zabbix", which=which, is_root=False, directories=dirs) == [
+        "/usr/bin/pkexec", "/usr/bin/systemctl", "start", "zabbix-agent.service"]
+    assert tool_installer.start_command("zabbix", which=which, is_root=True, directories=dirs)[0] == "/usr/bin/systemctl"
+    # No unit file, no systemctl, or a standalone tool: no command at all.
+    assert tool_installer.start_command("suricata", which=which, directories=dirs) is None
+    assert tool_installer.start_command("zabbix", which={}.get, directories=dirs) is None
+    assert tool_installer.start_command("nmap", which=which, directories=dirs) is None
+
+
+def test_install_route_accepts_only_known_actions(monkeypatch):
+    from http.server import ThreadingHTTPServer
+    from megalodon.dashboard import DashboardHandler
+
+    calls = []
+    installer = Installer()
+    monkeypatch.setattr(installer, "start", lambda tool, action="install": calls.append((tool, action)) or installer.status())
+    handler = type("H", (DashboardHandler,), {"heartbeat": Heartbeat(), "installer": installer})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        good = {"Origin": f"http://127.0.0.1:{server.server_port}", "Content-Type": "application/json",
+                "X-Megalodon-Install": "1"}
+        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "start"}))[0] == 202
+        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "stop"}))[0] == 400
+        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "extra": 1}))[0] == 400
+        assert calls == [("zabbix", "start")]
+    finally:
+        server.shutdown()
+        server.server_close()

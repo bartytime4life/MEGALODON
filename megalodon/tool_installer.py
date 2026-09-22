@@ -1,10 +1,12 @@
-"""One-click companion installation for the local HUD.
+"""One-click companion installation and service start for the local HUD.
 
 Requests select only a fixed tool id. Every command is a constant argv from the
 closed ``RECIPES`` registry below; no request can supply a package, path, flag
 or shell text. System packages are installed through ``pkexec`` so the
 operating system asks the operator for their password in its own dialog; the
-HUD never sees or stores a credential. One job runs at a time and its bounded
+HUD never sees or stores a credential. A second fixed action starts a tool's
+systemd service from ``SERVICE_UNITS`` so an amber light can go green. One job
+runs at a time and its bounded
 output tail is kept in memory only.
 """
 
@@ -26,6 +28,7 @@ MAX_OUTPUT_LINES = 40
 MAX_LINE_BYTES = 240
 INSTALL_TIMEOUT_SECONDS = 30 * 60
 JOB_STATES = frozenset({"idle", "running", "succeeded", "failed"})
+ACTIONS = frozenset({"install", "start"})
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,43 @@ def install_command(tool_id: str, *, which: Callable[[str], str | None] = shutil
     return None
 
 
+# Fixed systemd units for tools whose light expects a running service. The
+# first unit file that exists on this host is started; nothing else is.
+SERVICE_UNITS: dict[str, tuple[str, ...]] = {
+    "suricata": ("suricata",),
+    "qwen": ("ollama",),
+    "ossec": ("ossec", "wazuh-agent"),
+    "zabbix": ("zabbix-agent2", "zabbix-agent", "zabbix-server"),
+    "nagios": ("nagios4", "nagios"),
+}
+UNIT_DIRECTORIES = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
+
+
+def service_unit(tool_id: str, *, directories: tuple[str, ...] = UNIT_DIRECTORIES) -> str | None:
+    for unit in SERVICE_UNITS.get(tool_id, ()):
+        for directory in directories:
+            if os.path.isfile(os.path.join(directory, f"{unit}.service")):
+                return unit
+    return None
+
+
+def start_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.which,
+                  is_root: bool | None = None,
+                  directories: tuple[str, ...] = UNIT_DIRECTORIES) -> list[str] | None:
+    """Return the fixed argv that starts one tool's service, or None."""
+    if runtime_platform() != "linux":
+        return None
+    unit = service_unit(tool_id, directories=directories)
+    systemctl = which("systemctl")
+    if unit is None or systemctl is None:
+        return None
+    root = (os.geteuid() == 0) if is_root is None else is_root
+    if root:
+        return [systemctl, "start", f"{unit}.service"]
+    pkexec = which("pkexec")
+    return [pkexec, systemctl, "start", f"{unit}.service"] if pkexec else None
+
+
 def terminal_command(tool_id: str) -> str | None:
     """Copyable equivalent for hosts without a graphical password prompt."""
     recipe = RECIPES[tool_id]
@@ -118,6 +158,8 @@ def catalog() -> dict[str, Any]:
             "summary": recipe.summary,
             "one_click": command is not None,
             "terminal": terminal_command(tool_id),
+            "startable": start_command(tool_id) is not None,
+            "start_terminal": f"sudo systemctl start {unit}.service" if (unit := service_unit(tool_id)) else None,
         })
     return {"schema": "megalodon-tool-install-catalog-v1", "tools": tools}
 
@@ -129,6 +171,7 @@ def _now() -> str:
 @dataclass
 class _Job:
     tool: str | None = None
+    action: str | None = None
     state: str = "idle"
     started_at: str | None = None
     finished_at: str | None = None
@@ -159,20 +202,20 @@ class Installer:
     def status(self) -> dict[str, Any]:
         with self._lock:
             job = self._job
-            return {"schema": "megalodon-tool-install-v1", "tool": job.tool, "state": job.state,
+            return {"schema": "megalodon-tool-install-v1", "tool": job.tool, "action": job.action, "state": job.state,
                     "started_at": job.started_at, "finished_at": job.finished_at,
                     "exit_code": job.exit_code, "output": list(job.output)}
 
-    def start(self, tool_id: str) -> dict[str, Any]:
-        if tool_id not in RECIPES:
+    def start(self, tool_id: str, action: str = "install") -> dict[str, Any]:
+        if tool_id not in RECIPES or action not in ACTIONS:
             raise KeyError(tool_id)
-        command = install_command(tool_id)
+        command = install_command(tool_id) if action == "install" else start_command(tool_id)
         if command is None:
             raise InstallUnavailable(tool_id)
         with self._lock:
             if self._job.state == "running":
                 raise InstallBusy
-            self._job = _Job(tool=tool_id, state="running", started_at=_now())
+            self._job = _Job(tool=tool_id, action=action, state="running", started_at=_now())
         Thread(target=self._run, args=(command,), name=f"megalodon-install-{tool_id}", daemon=True).start()
         return self.status()
 
@@ -205,7 +248,7 @@ class Installer:
                 deadline.cancel()
             if timed_out.is_set():
                 code = None
-                self._append("Installation timed out and was stopped.")
+                self._append("The job timed out and was stopped.")
         except OSError as exc:
             self._append(f"Installer could not start: {exc.strerror or type(exc).__name__}")
         if code in (126, 127) and command and command[0].endswith("pkexec"):
