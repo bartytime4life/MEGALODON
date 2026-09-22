@@ -45,6 +45,17 @@ jobs:
           python -m pip install -e .
           python -m pip check
           python -m pip show megalodon-defense
+      - name: Record bounded storage-admission diagnostic
+        run: |
+          set -euo pipefail
+          python tools/probe_storage_admission.py | tee "$RUNNER_TEMP/storage-admission-diagnostic.json"
+          {
+            echo
+            echo '### Storage admission diagnostic'
+            echo
+            echo 'Diagnostic collection succeeded. This does not mean storage admission or the sample command succeeded.'
+            cat "$RUNNER_TEMP/storage-admission-diagnostic.json"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Run bounded sample commands in a private temporary directory
         run: |
           python - <<'PY'
