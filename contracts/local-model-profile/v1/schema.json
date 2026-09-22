@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/local-model-profile/v1/schema.json",
+  "title": "MEGALODON local Ollama/Qwen profile candidate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_sha256",
+    "containment_receipt_sha256",
+    "context_window",
+    "endpoint",
+    "evaluation",
+    "evidence_class",
+    "license",
+    "model_alias",
+    "model_family",
+    "ollama_manifest_digest",
+    "operational_context",
+    "profile_id",
+    "provenance_sha256",
+    "provider",
+    "purpose",
+    "quantization",
+    "runner",
+    "schema",
+    "source_reference",
+    "status",
+    "structured_output",
+    "thinking_enabled"
+  ],
+  "properties": {
+    "schema": {
+      "const": "megalodon-local-model-profile-v1"
+    },
+    "profile_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "status": {
+      "const": "candidate"
+    },
+    "evidence_class": {
+      "enum": [
+        "operator_observed",
+        "synthetic_fixture"
+      ]
+    },
+    "provider": {
+      "const": "ollama"
+    },
+    "endpoint": {
+      "const": "http://127.0.0.1:11434"
+    },
+    "model_alias": {
+      "type": "string",
+      "pattern": "^qwen[A-Za-z0-9._:-]{1,91}$"
+    },
+    "ollama_manifest_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "artifact_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "provenance_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "containment_receipt_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "model_family": {
+      "type": "string",
+      "pattern": "^qwen[A-Za-z0-9._-]{1,63}$"
+    },
+    "quantization": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$"
+    },
+    "context_window": {
+      "type": "integer",
+      "minimum": 256,
+      "maximum": 1048576
+    },
+    "operational_context": {
+      "type": "integer",
+      "minimum": 256,
+      "maximum": 4096
+    },
+    "purpose": {
+      "enum": [
+        "advisory",
+        "explanation",
+        "tool-selection",
+        "research-evaluation"
+      ]
+    },
+    "structured_output": {
+      "const": true
+    },
+    "thinking_enabled": {
+      "const": false
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "source_reference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "binary_sha256"
+      ],
+      "properties": {
+        "name": {
+          "const": "ollama"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$"
+        },
+        "binary_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_sha256",
+        "sample_count",
+        "schema_valid_count",
+        "citation_valid_count",
+        "refusal_valid_count",
+        "p95_latency_ms",
+        "max_rss_mib"
+      ],
+      "properties": {
+        "corpus_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "schema_valid_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "citation_valid_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "refusal_valid_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "p95_latency_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600000
+        },
+        "max_rss_mib": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}
