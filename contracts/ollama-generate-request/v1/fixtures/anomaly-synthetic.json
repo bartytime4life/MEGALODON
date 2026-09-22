@@ -1,0 +1,10 @@
+{
+  "schema": "megalodon-ollama-generate-input-v1",
+  "mode": "anomaly_advisory",
+  "model_id": "local:qwen-approved-v1",
+  "prompt": "MEGALODON_LOCAL_ANOMALY_ADVISORY_V1\nExplain the bounded candidates.",
+  "candidate_ids": [
+    "a01",
+    "a02"
+  ]
+}
