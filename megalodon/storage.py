@@ -339,6 +339,7 @@ RECONCILIATION_REQUIRED = "INGESTION_RUN:RECONCILIATION_REQUIRED"
 
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_DATABASE_MODE = 0o600
+TOP_LEVEL_SYSTEM_ALIASES = ("etc", "tmp", "var")
 DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
 MAX_MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024
 CAPACITY_RESERVE_BYTES = 256 * 1024
@@ -501,9 +502,25 @@ def _directory_generation(descriptor: int | None) -> tuple[int, ...] | None:
 
 
 def _validate_connection_path(
-    connection: sqlite3.Connection, expected: Path, prefix: str
+    connection: sqlite3.Connection,
+    expected: Path,
+    prefix: str,
+    *,
+    anchor: Path | None = None,
 ) -> None:
-    """Require SQLite to derive journals beside the already-verified path."""
+    """Require SQLite to derive journals beside the already-verified path.
+
+    SQLite's own report of where it opened the database (via ``PRAGMA
+    database_list``) is not consistent across platforms when the connection
+    was made through a descriptor-anchored path (``_anchored_database_path``,
+    e.g. ``/proc/self/fd/N`` or ``/dev/fd/N``): some platforms resolve it to
+    the real filesystem path, others (observed on macOS) report that same
+    descriptor path back literally. ``anchor``, when given, is that exact
+    descriptor path we ourselves constructed and already verified was bound
+    to our own already-open, already-validated file descriptor before
+    calling ``sqlite3.connect`` -- so a report matching it is exactly as
+    strong a guarantee as one matching ``expected``, not a weaker one.
+    """
 
     try:
         rows = connection.execute("PRAGMA database_list").fetchall()
@@ -514,9 +531,12 @@ def _validate_connection_path(
     sequence, name, filename = rows[0][:3]
     if int(sequence) != 0 or str(name) != "main" or not filename:
         _raise_path_error(prefix, "DATABASE_CHANGED")
-    actual = _absolute_database_path(str(filename), prefix)
-    if os.path.normcase(os.fspath(actual)) != os.path.normcase(os.fspath(expected)):
-        _raise_path_error(prefix, "DATABASE_CHANGED")
+    actual = os.path.normcase(os.fspath(_absolute_database_path(str(filename), prefix)))
+    if actual == os.path.normcase(os.fspath(expected)):
+        return
+    if anchor is not None and actual == os.path.normcase(os.fspath(anchor)):
+        return
+    _raise_path_error(prefix, "DATABASE_CHANGED")
 
 
 def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
@@ -580,6 +600,37 @@ def _validate_ancestor_directory_stat(
         _raise_path_error(prefix, "UNSAFE_ANCESTOR")
 
 
+def _resolve_top_level_system_alias(path: Path) -> Path:
+    """Rewrite a fixed, root-owned top-level OS compatibility symlink.
+
+    Some platforms -- notably macOS -- mount a small, fixed set of
+    top-level directories (``/etc``, ``/tmp``, ``/var``) as symlinks into
+    ``/private`` for historical BSD compatibility. Those links are owned by
+    root, are not writable by any unprivileged user, and cannot be
+    repointed by an attacker or by MEGALODON's own operator: they are a
+    fixed OS naming alias, not a path any untrusted party controls.
+
+    This rewrite only ever fires for exactly one of those three names as
+    the immediate child of the filesystem root, and only when it verifiably
+    resolves to exactly ``/private/<name>``. Every other symlink anywhere
+    else in the path -- including one of these same names appearing deeper
+    in the path, or planted by the current user -- is left untouched and
+    still refused by the strict, no-symlink admission walk unchanged. It is
+    also used to canonicalize ``self.path`` at construction time, so a
+    lexical comparison against SQLite's own (fully realpath'd) reporting of
+    the database file's location does not spuriously diverge over this same
+    fixed alias.
+    """
+
+    parts = path.parts
+    if len(parts) < 2 or parts[1] not in TOP_LEVEL_SYSTEM_ALIASES:
+        return path
+    alias = f"/{parts[1]}"
+    if os.path.realpath(alias) != f"/private/{parts[1]}":
+        return path
+    return Path("/private", parts[1], *parts[2:])
+
+
 def _open_private_directory(
     path: Path, *, create: bool, prefix: str
 ) -> int | None:
@@ -602,7 +653,7 @@ def _open_private_directory(
     descriptor: int | None = None
     try:
         descriptor = os.open("/", flags)
-        components = path.parts[1:]
+        components = _resolve_top_level_system_alias(path).parts[1:]
         if components:
             _validate_ancestor_directory_stat(os.fstat(descriptor), prefix)
         for index, component in enumerate(components):
@@ -1030,7 +1081,9 @@ class Store:
         ):
             raise StorageCapacityError("STORAGE_CAPACITY:INVALID_LIMIT")
         self.max_database_bytes = max_database_bytes
-        self.path = _absolute_database_path(path, "STORAGE_PATH")
+        self.path = _resolve_top_level_system_alias(
+            _absolute_database_path(path, "STORAGE_PATH")
+        )
         self._lock = RLock()
         self._closed = False
         self._write_poisoned = False
@@ -1067,7 +1120,9 @@ class Store:
                 timeout=10,
                 check_same_thread=False,
             )
-            _validate_connection_path(connection, self.path, "STORAGE_PATH")
+            _validate_connection_path(
+                connection, self.path, "STORAGE_PATH", anchor=sqlite_path
+            )
             self._assert_path_identity()
             if _directory_generation(self._directory_descriptor) != opening_generation:
                 _raise_path_error("STORAGE_PATH", "DIRECTORY_CHANGED")
@@ -2235,7 +2290,9 @@ class DashboardStore:
     }
 
     def __init__(self, path: str | Path):
-        self.path = _absolute_database_path(path, "DASHBOARD_STORE")
+        self.path = _resolve_top_level_system_alias(
+            _absolute_database_path(path, "DASHBOARD_STORE")
+        )
         self._lock = RLock()
         self._closed = False
         self._directory_descriptor: int | None = None
@@ -2350,7 +2407,7 @@ class DashboardStore:
                 check_same_thread=False,
             )
             _validate_connection_path(
-                connection, self.path, "DASHBOARD_STORE"
+                connection, self.path, "DASHBOARD_STORE", anchor=self._sqlite_path
             )
             self._assert_path_identity()
             self._assert_directory_generation(opening_generation)
