@@ -25,6 +25,8 @@ def test_storage_admission_probe_emits_bounded_redacted_json():
     assert report["diagnostic_status"] == "complete"
     assert report["production_directory_open"] == "accepted"
     assert report["production_database_open"] == "accepted"
+    assert report["store_constructor"]["status"] == "accepted"
+    assert report["store_constructor"]["cause_type"] == "none"
     assert report["descriptor_strategy"] in {
         "proc_self_fd", "dev_fd", "other"
     }
@@ -52,6 +54,7 @@ def test_storage_admission_probe_serializes_expected_directory_refusal(monkeypat
     monkeypatch.setattr(storage, "_open_private_directory", refuse_directory)
     report = namespace["collect_report"]()
 
+    assert report["store_constructor"]["status"] == "STORAGE_PATH:UNSAFE_DIRECTORY"
     assert report["diagnostic_status"] == "directory_open_refused"
     assert report["production_directory_open"] == "STORAGE_PATH:UNSAFE_DIRECTORY"
     assert "production_database_open" not in report
