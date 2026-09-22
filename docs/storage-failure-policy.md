@@ -1,6 +1,6 @@
 # Audit-write failure and retention boundaries
 
-Status: implemented per-event ingestion transaction handling plus standalone
+Status: ● implemented per-event ingestion transaction handling plus standalone
 write regression coverage, a finite storage high-water stop, and an internal
 preview-bound retention batch. [Issue #28](https://github.com/bartytime4life/MEGALODON/issues/28)
 is closed as a documentation/test gate; operator retention choices and native

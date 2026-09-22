@@ -1,6 +1,6 @@
 # Zeek Community ID grouping hint
 
-Status: adds a pure, offline Community ID v1 implementation and a read-only
+Status: ● adds a pure, offline Community ID v1 implementation and a read-only
 cross-source correlation index. Advances
 [issue #258](https://github.com/bartytime4life/MEGALODON/issues/258); keep it
 open. This is not the closed multi-profile Zeek producer qualification packet,
