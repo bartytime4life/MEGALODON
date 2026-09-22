@@ -67,7 +67,7 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
 
 def test_heartbeat_cache_and_invalidate(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(tool_heartbeat, "heartbeat_report", lambda root: calls.append(1) or {"n": len(calls)})
+    monkeypatch.setattr(tool_heartbeat, "heartbeat_report", lambda root: calls.append(1) or {"n": len(calls), "tools": []})
     beat = Heartbeat(tmp_path)
     assert beat.snapshot() == beat.snapshot()
     assert len(calls) == 1
@@ -228,3 +228,26 @@ def test_install_route_accepts_only_known_actions(monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_history_tracks_changes_and_time_weighted_health():
+    history = tool_heartbeat.HeartbeatHistory(started=1_000)
+    report = lambda light: {"tools": [{"id": "suricata", "light": light}]}
+    history.observe(report("green"), now=1_000)
+    history.observe(report("green"), now=1_300)   # 300 s green
+    history.observe(report("amber"), now=1_400)   # +100 s green, then amber
+    result = history.observe(report("green"), now=1_500)  # +100 s amber
+    entry = result["tools"]["suricata"]
+    assert result["since"] == "1970-01-01T00:16:40Z"
+    assert [change["light"] for change in entry["changes"]] == ["green", "amber", "green"]
+    assert entry["healthy_percent"] == 80.0 and entry["observed_seconds"] == 500
+    for step in range(20):
+        history.observe(report("red" if step % 2 else "green"), now=1_600 + step)
+    assert len(history.observe(report("green"), now=2_000)["tools"]["suricata"]["changes"]) == tool_heartbeat.MAX_HISTORY_CHANGES
+
+
+def test_snapshot_includes_history(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool_heartbeat, "heartbeat_report",
+                        lambda root: {"tools": [{"id": "nmap", "light": "red"}]})
+    payload = json.loads(Heartbeat(tmp_path).snapshot())
+    assert payload["history"]["tools"]["nmap"]["changes"][0]["light"] == "red"
