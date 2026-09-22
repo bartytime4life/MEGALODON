@@ -1,0 +1,22 @@
+# CODEOWNERS
+#
+# This file is currently a template, not an active ownership assignment.
+# GitHub only applies CODEOWNERS review routing to *uncommented* pattern
+# lines, and every pattern below is commented out on purpose, so this file
+# has no effect on review routing or branch-protection requirements until a
+# maintainer fills it in and removes the leading "#" from the lines that
+# should take effect.
+#
+# [MAINTAINER: fill in the real path-to-owner mapping below using exact,
+# verified GitHub usernames or team handles. Do not uncomment a line with an
+# unverified or placeholder handle — GitHub silently ignores a pattern whose
+# owner does not exist or lacks repository access, which would make review
+# routing look configured when it is not.]
+#
+# Example shape, left inactive:
+# *                 @MAINTAINER_GITHUB_HANDLE
+# /megalodon/       @MAINTAINER_GITHUB_HANDLE
+# /contracts/       @MAINTAINER_GITHUB_HANDLE
+# /docs/adr/        @MAINTAINER_GITHUB_HANDLE
+# /.github/         @MAINTAINER_GITHUB_HANDLE
+# /SECURITY.md      @MAINTAINER_GITHUB_HANDLE
