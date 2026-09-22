@@ -1,6 +1,6 @@
 """Run the fixed browser suite with an isolated, pinned native-focus driver copy.
 
-Stock Playwright 1.62.0 forces pages active on its own CDP session. A second
+Stock Playwright 1.63.0 forces pages active on its own CDP session. A second
 session cannot release that session's Chromium capturer. Change only that
 initialization call, in a temporary copy; never edit the installed driver.
 """
@@ -17,11 +17,11 @@ import subprocess
 import sys
 import tempfile
 
-PROFILE = "playwright-1.62.0-native-focus-v1"
+PROFILE = "playwright-1.63.0-native-focus-v1"
 DRIVER_MODULE = Path("driver/package/lib/coreBundle.js")
 MAX_DRIVER_BYTES = 4 * 1024 * 1024
-STOCK_SHA256 = "3258d1cf334c6afc95f22aa9c292436cb976b391e0437f1359c83b84f0cb9d66"
-NATIVE_SHA256 = "6460cb04d15f438710b5c4e62c0fc4f58e08bf8ee8d46d62824cb6e27bfd1f81"
+STOCK_SHA256 = "549070af3acabb3efcc4f55bfe6210f9f7c2fcf633cf7eaa59bfe60719969171"
+NATIVE_SHA256 = "a1822c4ef78eba42059e6fd7187f5387290ec6c5b456132ba1aaec68a0b9c439"
 FOCUS_CALL = b'promises2.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));'
 NATIVE_CALL = FOCUS_CALL.replace(b"true", b"false")
 
@@ -90,7 +90,7 @@ def run_suite(environment: dict[str, str]) -> int:
 def main() -> int:
     if sys.platform != "linux" or os.geteuid() == 0:
         raise ProfileError("UNPRIVILEGED_LINUX_REQUIRED")
-    if version("playwright") != "1.62.0":
+    if version("playwright") != "1.63.0":
         raise ProfileError("DRIVER_VERSION_MISMATCH")
     if any(os.environ.get(key) for key in ("PLAYWRIGHT_NODEJS_PATH", "NODE_OPTIONS")):
         raise ProfileError("DRIVER_OVERRIDE_REFUSED")
