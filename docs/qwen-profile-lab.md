@@ -3,10 +3,11 @@
 Status: ● **implemented offline lab; no provider or model admitted**  
 Related gate: issue #261
 
-MEGALODON already has a literal-loopback, fingerprint-pinned Qwen advisory
-transport. The highest-value next step is not a broader chat box or automatic
-model pull. It is a reproducible way to bind one operator-owned model artifact,
-compare bounded candidates, and preserve the difference between model quality,
+MEGALODON already has a literal-loopback, registry-bound Qwen advisory
+transport whose exact model artifact and provider acceptance remain held. The
+highest-value next step is not a broader chat box or automatic model pull. It
+is a reproducible way to bind one operator-owned model artifact, compare
+bounded candidates, and preserve the difference between model quality,
 provider containment, and operational authority.
 
 ## What this slice adds
@@ -64,7 +65,7 @@ These lanes are planning guidance, not admitted aliases.
 
 | Lane | Intended use | Runtime posture | Admission posture |
 |---|---|---|---|
-| Stage 0 advisory baseline | Alert explanation | Structured JSON, temperature 0, thinking disabled, 4,096-token operational context | Continue the existing exact Qwen 2.5 binding until an owner changes it |
+| Stage 0 advisory baseline | Alert explanation | Structured JSON, temperature 0, thinking disabled, 4,096-token operational context | Qwen 2.5 candidate profile only; exact owner artifact binding remains HOLD |
 | Reasoning evaluation | Difficult offline explanation tests | Separate corpus; thinking output neither persisted nor treated as evidence | Research-only candidate |
 | Coding assistant | Repository development and review | Separate workstation tool; no product evidence or host-action authority | Outside MEGALODON runtime |
 | Vision evaluation | Screenshot or document understanding | Requires a distinct image/redaction contract and fixtures | HOLD until policy and evidence lanes exist |
