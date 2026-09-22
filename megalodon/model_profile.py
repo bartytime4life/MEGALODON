@@ -31,7 +31,7 @@ VERSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}")
 PURPOSES = frozenset({"advisory", "explanation", "research-evaluation"})
 EVIDENCE_CLASSES = frozenset({"operator_observed", "synthetic_fixture"})
 BANNED_CONTROLS = re.compile(
-    r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069\ufeff]"
+    r"[\x00-\x1f\x7f-\x9f؜‎‏ -‮⁦-⁩﻿]"
 )
 TOP_LEVEL_KEYS = frozenset(
     {
