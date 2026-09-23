@@ -734,7 +734,7 @@ const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
 const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
-const workspaceNavigation = {active: 'live', scroll: Object.create(null)};
+const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
   'workspace-traffic': 'traffic', 'workspace-findings': 'findings',
   'workspace-reports': 'reports', 'workspace-help': 'help',
@@ -798,8 +798,10 @@ const ingestionTerminationReasons = new Set(['source_exhausted', 'event_limit_re
 function byId(value) { return document.getElementById(value); }
 function activateWorkspace(nextWorkspace, moveFocus = false) {
   if (!workspaceIds.includes(nextWorkspace)) return;
-  const scroller = byId('workspace-content');
-  workspaceNavigation.scroll[workspaceNavigation.active] = scroller.scrollTop;
+  const pageScroll = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 560px), (max-height: 500px)').matches;
+  const scroller = pageScroll ? document.scrollingElement || document.documentElement : byId('workspace-content');
+  const positions = pageScroll ? workspaceNavigation.pageScroll : workspaceNavigation.scroll;
+  positions[workspaceNavigation.active] = scroller.scrollTop;
   workspaceIds.forEach(workspace => {
     const selected = workspace === nextWorkspace;
     const tab = byId(`workspace-tab-${workspace}`);
@@ -807,7 +809,7 @@ function activateWorkspace(nextWorkspace, moveFocus = false) {
     tab.tabIndex = selected ? 0 : -1;
     byId(`workspace-${workspace}`).hidden = !selected;
   });
-  scroller.scrollTop = workspaceNavigation.scroll[nextWorkspace] || 0;
+  scroller.scrollTop = positions[nextWorkspace] || 0;
   workspaceNavigation.active = nextWorkspace;
   if (nextWorkspace === 'interfaces' && typeof maybeLoadIntegrationMap === 'function') maybeLoadIntegrationMap();
   if (moveFocus) {

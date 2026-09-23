@@ -214,13 +214,17 @@ def test_workspace_navigation_preserves_context_and_uses_closed_fragments():
     harness = r'''
 const assert = require('node:assert/strict');
 const nodes = new Map(), listeners = {}, history = [];
-const document = {getElementById(id) {
-  if (!nodes.has(id)) nodes.set(id, {scrollTop:0, hidden:false, attrs:{},
-    setAttribute(k,v){this.attrs[k]=v;}, addEventListener(){}, focus(){},
+let viewportWidth = 1440, viewportHeight = 1000;
+const document = {scrollingElement:{scrollTop:0}, getElementById(id) {
+  if (!nodes.has(id)) nodes.set(id, {scrollTop:0, hidden:false, attrs:{}, listeners:{},
+    setAttribute(k,v){this.attrs[k]=v;}, addEventListener(k,v){this.listeners[k]=v;},
+    focus(options){this.focusOptions=options; document.activeElement=this;},
     scrollIntoView(){this.scrolled=true;}});
   return nodes.get(id);
 }, addEventListener(){}};
 const window = {location:{hash:''}, addEventListener(k,v){listeners[k]=v;},
+  matchMedia(query){assert.equal(query, '(max-width: 560px), (max-height: 500px)');
+    return {matches:viewportWidth <= 560 || viewportHeight <= 500};},
   history:{pushState(a,b,hash){history.push(hash);window.location.hash=hash;}}};
 '''
     checks = r'''
@@ -249,6 +253,35 @@ assert.equal(byId('reference-title').scrolled, true);
 window.history.pushState = () => {throw Error('disabled');};
 navigateWorkspace('help');
 assert.equal(byId('workspace-help').hidden, false);
+// Narrow and short layouts scroll the page; workspace offsets from desktop
+// must neither replace page offsets nor be overwritten by them.
+for (const [width, height] of [[375,812], [720,500]]) {
+  viewportWidth = width; viewportHeight = height;
+  navigateWorkspace('live');
+  document.scrollingElement.scrollTop = 840;
+  navigateWorkspace('traffic');
+  document.scrollingElement.scrollTop = 630;
+  navigateWorkspace('live');
+  assert.equal(document.scrollingElement.scrollTop, 840);
+  window.location.hash = '#workspace-traffic'; listeners.popstate();
+  assert.equal(document.scrollingElement.scrollTop, 630);
+  assert.equal(byId('workspace-traffic').hidden, false);
+  const trafficTab = byId('workspace-tab-traffic');
+  trafficTab.listeners.keydown({key:'ArrowRight', preventDefault(){}});
+  const focusedTab = byId('workspace-tab-findings');
+  assert.equal(document.activeElement, focusedTab);
+  assert.equal(focusedTab.attrs['aria-selected'], 'true');
+  assert.equal(focusedTab.focusOptions, undefined,
+    'Keyboard navigation must let native focus reveal its tab rather than prevent scrolling');
+  window.location.hash = '#reference-title'; listeners.hashchange();
+  assert.equal(byId('reference-title').scrolled, true);
+  assert.equal(byId('workspace-analysis').hidden, false);
+}
+viewportWidth = 1440; viewportHeight = 1000;
+navigateWorkspace('live');
+assert.equal(scroll.scrollTop, 210, 'Desktop keeps its own saved workspace position');
+navigateWorkspace('traffic');
+assert.equal(scroll.scrollTop, 95);
 '''
     result = subprocess.run([shutil.which('node'), '-e', harness + constants + navigation + checks],
                             capture_output=True, text=True, timeout=10)

@@ -72,9 +72,12 @@ optional tool has a status light next to its name: green means presence observed
 amber means setup incomplete, red means not found, and grey means unknown or
 stale. These observations do not prove health, a data connection, or configured
 AI readiness. The lights refresh in the background while
-the tab is visible. Where a fixed Ubuntu or Python package exists, **Install**
-and **Start service** buttons do the work after your computer's own password
-prompt ([details](docs/tool-heartbeat.md)). **Check this computer** also
+the tab is visible. Observation is the default; guides and terminal commands
+remain available. On Linux, deliberately launch `hud --enable-tool-management`
+as your ordinary user and paste the launch token from its terminal into
+**Authorize Install and Start** to enable fixed **Install** and **Start service**
+actions. Each action needs confirmation; system packages and service starts also
+use the computer's password prompt ([details](docs/tool-heartbeat.md)). **Check this computer** also
 reports the running environment and selected data file. Use **Help** to find
 the next step. Keep the
 terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
@@ -115,7 +118,12 @@ records the operator's current Ollama exposure and GPU uncertainty.
 - isolated dashboard storage: on POSIX, reading telemetry requires an existing compatible private
   database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
   authorizer; it cannot create or migrate the audit database;
-- no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
+- separate tool management: disabled by default, Linux/non-root only, and gated
+  by explicit launch opt-in plus a separate per-launch operator token. Fixed
+  package/model downloads and service starts can change the host; package
+  installation can start services. These actions do not expand telemetry or
+  firewall authority;
+- no telemetry egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
   bundled reference verification and synthetic evaluation perform no runtime
   download or update;
 - no shell interpolation: untrusted event values never become shell code;
