@@ -1,6 +1,90 @@
 # Unified roadmap: repository reconciliation
 
-## Current readback — 2026-09-21, later observed main
+## Current suite claims and acceptance register — 2026-09-23
+
+Implementation inventory basis:
+[`28436055449f8d7ba0662da699da24c53153ba09`](https://github.com/bartytime4life/MEGALODON/commit/28436055449f8d7ba0662da699da24c53153ba09),
+read from fetched `origin/main` on 2026-09-23. This includes the #385 heartbeat
+observation correction; the earlier inventory at `758648c` is superseded.
+Every source path below refers to that baseline; this reconciliation corrects
+catalog descriptions without adding runtime capabilities. **OBSERVED source**
+means the implementation and named tests were inspected, not that every test
+was rerun or an installed system was accepted. Current GitHub issue/check,
+Drive and hosted Site states were not refreshed for this register. A closed
+issue, merged PR, test fixture or passing synthetic check is not an acceptance
+receipt. Older readbacks below retain their original dates and scope.
+
+This is the full-suite coordination index. The
+[security control register](../SECURITY_REVIEW.md#open-control-register) still
+owns delivered, explicitly declined and outstanding security dispositions;
+[Ubuntu candidate coverage](ubuntu-candidate-coverage.md) owns release evidence;
+and the linked specialist contracts own their input and authority boundaries.
+Do not create another release schema or silently promote proposed capabilities.
+P1 means reconcile or validate an existing claim before expanding it; P2 means
+separately scoped follow-up. Priorities grant no host or publication authority.
+
+For each pytest selection below, run `python -m pytest -ra <listed paths>` from
+the repository root in its supported Python environment, with
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, `PYTEST_PLUGINS=''` and `PYTEST_ADDOPTS=''`.
+`not_run` means that row's complete selection was not run for this register;
+source presence is not a substitute. The bounded catalog verification is
+recorded separately below. Use synthetic fixtures only; installed producers,
+real telemetry, model calls and host changes require their separate gates.
+
+| ID / priority | Exact source and observed implementation | Reproducible selection / current evidence | Missing work or acceptance gate |
+| --- | --- | --- | --- |
+| CORE / P1 | [capture](../megalodon/capture.py), [detector](../megalodon/detector.py), [service](../megalodon/service.py): bounded sample/JSONL metadata and three fixed detections with atomic service-to-ledger decisions. | `not_run`: `tests/test_capture.py tests/test_detector.py tests/test_service_acceptance.py`; [synthetic detector receipt](detector-acceptance.md). | Representative privacy-reviewed replay and false-positive measurement; sustained resource/capture-loss evidence. Synthetic counts do not prove operational efficacy or continuous monitoring. |
+| STORE / P1 | [storage](../megalodon/storage.py), [CLI recovery workflow](../megalodon/sqlite_recovery_workflow.py): private bounded audit, explicit retention and backup/restore. | `not_run`: `tests/test_storage.py tests/test_storage_failures.py tests/test_sqlite_recovery_runtime.py tests/test_sqlite_recovery_native_failures.py`. | Operator retention values and retained recovery drill; high-write WAL, physical exhaustion, hard-kill/power-loss, clock rollback and platform confidentiality evidence. See [recovery contract](sqlite-recovery-contract.md). |
+| HUD / P1 | [dashboard](../megalodon/dashboard.py), [traffic](../megalodon/dashboard_traffic.py), [assets](../megalodon/dashboard_assets.py): loopback telemetry reads, history, filters and reports. Separate AI and installer routes mean the entire HUD is not read-only. | `not_run`: `tests/test_dashboard.py tests/test_dashboard_store.py tests/test_dashboard_traffic.py tests/test_dashboard_history.py tests/test_dashboard_boundaries.py`; real browser: `python tests/browser_native_profile.py` in the [prepared browser environment](dashboard-browser-acceptance.md). | Verify mutation authorization and operator UX at the candidate head. The heartbeat correction below does not establish whole-HUD operator acceptance, capture health or remote-control readiness. |
+| DESKTOP / P1 | [local installer](../megalodon/local_install.py), [tool installer](../megalodon/tool_installer.py), [heartbeat](../megalodon/tool_heartbeat.py): per-user bootstrap plus separate fixed install/start recipes. #385 prevents unknown observations from appearing healthy, marks stale checks grey, refuses expired cache success and excludes unobserved history gaps; green means observed presence, not health. | Full selection `not_run`: `tests/test_local_install.py tests/test_local_setup.py tests/test_tool_heartbeat.py`. **VERIFIED heartbeat subset:** `tests/test_heartbeat_observation.py tests/test_tool_heartbeat.py` — 23 passed below. | Installation and service changes need explicit operator authority. Presence, running, configured, connected and accepted are different states. Failed-upgrade and host-specific package/service/operator acceptance remain separate from synthetic heartbeat checks. |
+| OFFLINE / P1 | [TShark](../megalodon/offline/tshark.py), [Zeek](../megalodon/offline/zeek.py), [Community ID](../megalodon/offline/community_id.py): Linux bounded offline adapters and non-authoritative grouping. | `not_run`: `tests/test_offline.py tests/test_zeek_producer_contract.py`; [Zeek producer scaffold](../contracts/zeek-conn-log/v1/producer/README.md). | Intended installed TShark revision; exact owner-selected Zeek build/field set, real JSON and TSV fixtures, schema drift, loss/asymmetry and CLI/report evidence. The placeholder `0.0.0` profile is not a qualified producer. |
+| SURICATA / P1 | [raw-EVE converter](../megalodon/offline/suricata_eve.py), [consumer](../megalodon/offline/suricata_consumer.py), [projection](../megalodon/suricata_projection.py): pinned 8.0.7 alert-only completed-file conversion, envelope intake, durable publication/reconciliation and read-only startup view. | `not_run`: `tests/test_suricata_raw_eve.py tests/test_suricata_consumer_runtime.py tests/test_suricata_reconciliation.py tests/test_dashboard_suricata.py`. | Exact installed producer and operational privacy/loss acceptance. No sensor, watcher, mixed-EVE firehose, ruleset manager or IPS is supplied. See [producer contract](../contracts/suricata-eve/v1/producer/README.md). |
+| ANALYSIS / P2 | [reference loader](../megalodon/reference/loader.py), [offline triage](../megalodon/offline/triage.py), [posture](../megalodon/posture.py): pinned context, synthetic evaluation and deterministic baseline/anomaly analysis. | `not_run`: `tests/test_reference_data.py tests/test_anomaly_triage.py tests/test_baseline_comparison.py tests/test_posture.py`. | Reviewed snapshot maintenance and representative efficacy evidence. IANA assignments and static posture are context, not observed services, live host assessments or threat verdicts. See [reference data](reference-data.md) and [anomaly pipeline](anomaly-pipeline.md). |
+| EXCHANGE / P1 | [STIX reader](../megalodon/threat_context.py), [SIEM projections/writer](../megalodon/siem_export.py): bounded local context and ECS/OCSF output; SOAR remains inert contract only. | `not_run`: `tests/test_threat_context.py tests/test_siem_export.py`; [exchange contract](external-exchange-contract.md). | Verify all-or-nothing publication on write failure before claiming that guarantee. No TAXII/feed client, SIEM delivery, collector control, credentials, retries or response authority. |
+| AI / P1 | [original advisory](../megalodon/qwen_advisory.py), [anomaly command](../megalodon/offline/anomaly.py), [broker](../megalodon/ai_broker.py), [provider](../megalodon/ai_provider.py): separate optional bounded policies, operator CLI and token-gated HUD, fixed tools and private receipts. | `not_run`: `tests/test_advisory.py tests/test_anomaly_advisory.py tests/test_ai_control.py tests/test_dashboard_ai_control.py tests/test_local_model_readiness.py`; [AI control plane](ai-control-plane.md). | Owner-selected artifact/alias, loaded identity, provider containment, authenticated signed-corpus results and independent disposition. [Readiness](local-model-readiness.md) can establish packet consistency, not accepted operation. No firewall application follows. |
+| LIFECYCLE / P2 | [alert engine](../megalodon/alert_lifecycle.py), [recurrence preview](../megalodon/automation_schedule.py): process-local transitions/inert outbox and pure bounded schedule calculations. | `not_run`: `tests/test_alert_lifecycle_engine.py tests/test_automation_schedule.py tests/test_automation_rrule_boundaries.py`. | Schedule semantics need exact-head regression evidence; persistent lifecycle identity/storage/UI wiring and scheduler/workers/delivery remain separate proposed slices. See [wiring survey](alert-lifecycle-wiring-survey.md) and [automation contract](automation-contract.md). |
+| TOOLS / P1 | [capability catalog](../megalodon/capabilities.py), [hub](../megalodon/hub.py), [readiness](../megalodon/readiness.py): static plans and bounded executable-presence observations. | **VERIFIED synthetic checks** within the focused run below: `tests/test_capabilities.py tests/test_hub.py tests/test_readiness.py`; [integration hub](integration-hub.md). | Python/SQLite are core; Git maintains a checkout. TShark, Zeek, Suricata, Scapy, nftables and Ollama/Qwen retain their separate scopes above/below. ClamAV is manual; osquery, Nmap, OSSEC, Greenbone, Zabbix and Nagios have proposed ingestion relationships. Docker/Compose serve only the chosen Greenbone route. Installation is not integration. |
+| RESPONSE / P1 | [firewall](../megalodon/firewall.py): finite inert nftables plans and fixed live-apply refusal. | `not_run`: `tests/test_firewall.py`; [security containment gate](../SECURITY_REVIEW.md#evaluation-release-firewall-containment-65). | Preserve refusal. A future restoration requires separately reviewed durable intent, exact authority, readback, expiry, rollback and uncertain-outcome reconciliation. No live firewall test or host operation is authorized here. |
+| PLATFORMS / P2 | [Windows job](../.github/workflows/windows-synthetic-core.yml), [macOS sample job](../.github/workflows/macos-m1-synthetic.yml): additive exact-head synthetic lanes exist; Linux remains the reference. | `not_run`: `tests/test_windows_core_acceptance.py tests/test_platform_baseline.py`; hosted/native runs need their own exact-head receipts. | Windows Server CI is not Windows 11 W1 acceptance; obtain NTFS/loopback/browser evidence. macOS needs the separate architecture, JSONL/browser and privacy receipts. Native offline adapters need new reviewed designs. See [Windows](windows-core-acceptance.md) and [macOS](macos-core-acceptance.md) gates. |
+| SITE / P1 | [Site mirror](../site/README.md): disconnected reference console, manual local readiness import and browser-local notes; no local telemetry feed. | `not_run`: `node --test site/tests/*.test.cjs`; [source/deployment receipt](site-source-alignment.md). | Fresh exact-version deployment/source comparison and rendered acceptance if publication is requested. Repository tests do not prove hosted parity or grant external access. |
+| RELEASE / P1 | [release collector](../tools/ubuntu_release_evidence.py), [packet generator](../tools/release_evidence_packet.py), [coverage index](../tools/ubuntu_candidate_coverage.py): evidence tooling and ephemeral wheel/sdist workflows exist; Apache-2.0 source/package metadata is delivered. | `not_run`: `tests/test_ubuntu_release_evidence.py tests/test_release_subjects.py tests/test_release_evidence_packet.py tests/test_ubuntu_candidate_coverage.py tests/test_license_metadata.py`. | Complete nine checks/two artifacts, retained operator recovery and authenticated seven-gate coverage at one candidate. [Release evidence](ubuntu-release-evidence.md) and artifact notice/license review remain distinct from source licensing. No tag, release, merge or deployment follows. |
+
+### Reconciliation verification
+
+**VERIFIED on 2026-09-23 after merging `2843605`:** Linux / CPython 3.12.3,
+in the isolated candidate checkout with the catalog correction in this change.
+The focused command below passed **64 tests**, including its synthetic UI-map
+checks. The separate heartbeat selection passed **23 tests**. Compilation and
+both static CLI commands also passed;
+the CLI receipts retained false execution/installation/network effects and
+the existing platform statuses. The final candidate commit/tree belongs in the
+PR or handoff receipt, not a self-referential source pin in this document.
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS='' PYTEST_ADDOPTS='' \
+  PYTHONDONTWRITEBYTECODE=1 python -m pytest -ra -p no:cacheprovider \
+  tests/test_capabilities.py tests/test_hub.py tests/test_readiness.py \
+  tests/test_integration_map_states.py tests/test_documentation_currentness.py
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS='' PYTEST_ADDOPTS='' \
+  PYTHONDONTWRITEBYTECODE=1 python -m pytest -ra -p no:cacheprovider \
+  tests/test_heartbeat_observation.py tests/test_tool_heartbeat.py
+python -m compileall -q megalodon tests
+python -m megalodon capabilities --platform linux
+python -m megalodon hub-plan --platform linux
+```
+
+The earlier 64-test result for candidate `a8ff7b0` remains historical evidence;
+the reruns above establish the refreshed candidate's focused check results.
+All named Python check paths and 75 local documentation links in the three
+reconciled documents were checked for existence. These checks do not supply
+the unperformed per-row, browser, installed-tool, platform or release evidence.
+The release index must retain `not_performed` evidence pointers for absent
+receipts. Its seven gates are artifact notice/license, SBOM, provenance,
+operator recovery, optional-source behavior, owner disposition and independent
+disposition. The independent-evidence requirement in that contract does not
+reinstate the separately declined server-enforced approval floor.
+
+## Historical readback — 2026-09-21, later observed main
 
 At `main@97c5798f53b539bbcb487eaa7c8ff07ac0344041` (tree
 `6384a3fe4e743cbce274d654b413f8a07c1e4cff`), #334 has merged the
@@ -11,7 +95,7 @@ accepted/rejected input counts. This merge is a code disposition, not a
 sensor-health or release-acceptance receipt. Issues #260, #261, and #327
 remain open at this readback.
 
-## Earlier readback — 2026-09-21, main after #333
+## Historical readback — 2026-09-21, main after #333
 
 At `main@374190a57791f9ac19afeefd78afbd18d9b68919` (tree
 `376a6151a11faae2e055ec711a081de785e3f9e2`), #330 adds verification
@@ -33,7 +117,7 @@ successful repository workflow do not establish a newer hosted version or local
 telemetry connection. See the [proposed opportunity map](system-opportunity-map.md)
 for candidate slices and their separate evidence gates.
 
-## Earlier readback — 2026-09-21
+## Historical readback — 2026-09-21
 
 At `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971`, the local desktop
 installer and guided checks from #323 are merged, while the owner-only hosted
