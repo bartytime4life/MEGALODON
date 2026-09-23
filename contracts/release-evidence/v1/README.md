@@ -62,7 +62,9 @@ retention, not a package upload or release. See
 The identity wrapper is not itself an SBOM or provenance statement. The
 separate `tools/release_evidence_packet.py` command accepts only a complete
 GitHub-Actions `candidate_evidence` wrapper plus the exact manifest-bound wheel
-and sdist. It emits a closed four-file profile: canonical candidate evidence,
+and sdist, a retained v2 subjects manifest with its closed producer declaration,
+and an externally supplied subjects-manifest digest. It emits a closed five-file
+v2 profile: canonical candidate evidence, the unchanged subject declaration,
 a canonical CycloneDX 1.7 SBOM, an in-toto Statement v1 carrying the SLSA
 provenance v1 predicate, and a digest-binding manifest. Generation and offline
 verification are documented in
@@ -73,3 +75,14 @@ The generated provenance is unsigned and the packet status remains
 authentication, a SLSA build-level claim, reproducibility, redistribution
 approval, operator recovery acceptance, release authority, or deployment
 authority.
+
+The candidate manifest schema remains v1 and makes no producer claim. A
+`github_actions` basis is insufficient to identify the build workflow. New packet
+generation refuses local/v1 subjects and derives the builder only from the
+externally pinned v2 declaration. Workflow-definition SHA and PR source SHA are
+separate; all producer fields are self-asserted and authentication is not
+performed. The same-run producer/roundtrip context check is not attestation.
+
+Legacy four-file packet verification preserves its original `ci.yml/wheel-smoke`
+provenance bytes and reports `legacy_origin_unbound`; it never retrofits or
+authenticates that historical builder assumption. No new v1 packet is generated.

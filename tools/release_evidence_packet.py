@@ -33,6 +33,10 @@ PACKET_FILES = (
     "provenance.intoto.json",
     "packet.json",
 )
+ORIGIN_PACKET_FILES = (*PACKET_FILES, "subjects.json")
+LEGACY_SCHEMA = "megalodon-release-evidence-packet-v1"
+ORIGIN_SCHEMA = "megalodon-release-evidence-packet-v2"
+ORIGIN_LIMITATION = "The retained producer declaration is self-asserted CI context; its digest binds bytes, not builder identity or execution."
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){2}$")
 TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -79,6 +83,19 @@ def _load_identity_tool():
 
 
 identity = _load_identity_tool()
+
+
+def _load_subject_tool():
+    path = Path(__file__).with_name("release_subjects.py")
+    spec = importlib.util.spec_from_file_location("_megalodon_release_subjects", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("subject verifier unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+subjects = _load_subject_tool()
 
 
 class PacketError(ValueError):
@@ -281,7 +298,7 @@ def _cyclonedx(
     }
 
 
-def _provenance(
+def _legacy_provenance(
     *, version: str, manifest: dict, artifacts: list[dict], candidate_sha256: str,
 ) -> dict:
     commit = manifest["source"]["observed_commit"]
@@ -329,13 +346,56 @@ def _provenance(
     }
 
 
+def _producer_manifest(raw: bytes, commit: str, tree: str, version: str,
+                       artifacts: list[dict], expected_digest: str) -> dict:
+    if (type(expected_digest) is not str
+            or subjects.DIGEST.fullmatch(expected_digest) is None
+            or _sha256(raw) != expected_digest):
+        _fail("PRODUCER_DIGEST_MISMATCH")
+    try:
+        value = subjects.parse_manifest(raw, commit, tree)
+    except subjects.SubjectError:
+        _fail("PRODUCER_INVALID")
+    if value["schema"] != subjects.CI_SCHEMA:
+        _fail("PRODUCER_REQUIRED")
+    if (value["package_version"] != version
+            or value["artifacts"] != [
+                {key: row[key] for key in ("id", "name", "sha256", "size_bytes")}
+                for row in artifacts
+            ]):
+        _fail("PRODUCER_SUBJECT_MISMATCH")
+    return value
+
+
+def _provenance(*, version: str, manifest: dict, artifacts: list[dict],
+                candidate_sha256: str, producer: dict, subjects_sha256: str) -> dict:
+    value = _legacy_provenance(version=version, manifest=manifest,
+                               artifacts=artifacts, candidate_sha256=candidate_sha256)
+    definition = value["predicate"]["buildDefinition"]
+    definition["externalParameters"].update({
+        "workflow": producer["workflow"], "job": producer["job"],
+        "producerDeclarationSha256": subjects_sha256.removeprefix("sha256:"),
+        "producerAuthentication": "not_performed",
+    })
+    definition["resolvedDependencies"].extend([
+        {"name": "subjects.json", "digest": {"sha256": subjects_sha256.removeprefix("sha256:")}},
+        {"name": "producer workflow commit", "uri": f"git+{REPOSITORY_URL}.git@{producer['workflow_commit']}",
+         "digest": {"sha1": producer["workflow_commit"]}},
+    ])
+    value["predicate"]["runDetails"] = {
+        "builder": {"id": REPOSITORY_URL + "/" + producer["workflow"] + "@" + producer["workflow_commit"]},
+        "metadata": {"invocationId": REPOSITORY_URL + "/actions/runs/" + producer["run_id"] + "/attempts/" + producer["run_attempt"]},
+    }
+    return value
+
+
 def _packet_manifest(
     *, version: str, generated_at: str, manifest: dict, artifacts: list[dict],
     candidate_bytes: bytes, candidate_manifest_sha256: str, sbom_bytes: bytes,
-    provenance_bytes: bytes,
+    provenance_bytes: bytes, subjects_bytes: bytes | None = None,
 ) -> dict:
-    return {
-        "schema_version": "megalodon-release-evidence-packet-v1",
+    packet = {
+        "schema_version": LEGACY_SCHEMA,
         "status": "generated_unreviewed",
         "repository": REPOSITORY,
         "source": {
@@ -378,17 +438,33 @@ def _packet_manifest(
         ],
         "generated_at": generated_at,
     }
+    if subjects_bytes is not None:
+        packet["schema_version"] = ORIGIN_SCHEMA
+        packet["producer_declaration"] = {"name": "subjects.json", "sha256": _sha256(subjects_bytes),
+                                           "authentication": "not_performed"}
+        packet["privacy"] = {
+            "included": [*PRIVACY["included"], "declared_github_actions_producer"],
+            "excluded": ["unselected_environment_variables" if item == "environment_variables" else item
+                         for item in PRIVACY["excluded"]] + ["environment_dumps"],
+        }
+        packet["limitations"].append(ORIGIN_LIMITATION)
+    return packet
 
 
 def _validate_packet_header(packet: dict) -> tuple[str, str]:
-    _exact_keys(packet, {
+    if type(packet) is not dict or packet.get("schema_version") not in (LEGACY_SCHEMA, ORIGIN_SCHEMA):
+        _fail("PACKET_INVALID")
+    expected_keys = {
         "schema_version", "status", "repository", "source", "package",
         "candidate_evidence", "artifacts", "documents", "privacy", "effects",
         "limitations", "generated_at",
-    })
+    }
+    if packet["schema_version"] == ORIGIN_SCHEMA:
+        expected_keys.add("producer_declaration")
+        _exact_keys(packet.get("producer_declaration"), {"name", "sha256", "authentication"})
+    _exact_keys(packet, expected_keys)
     if (
-        packet["schema_version"] != "megalodon-release-evidence-packet-v1"
-        or packet["status"] != "generated_unreviewed"
+        packet["status"] != "generated_unreviewed"
         or packet["repository"] != REPOSITORY
     ):
         _fail("PACKET_INVALID")
@@ -414,10 +490,10 @@ def _directory_files(directory: Path) -> dict[str, Path]:
         entries = {entry.name: entry for entry in os.scandir(directory)}
     except OSError:
         _fail("FILE_SET")
-    if set(entries) != set(PACKET_FILES):
+    if set(entries) not in (set(PACKET_FILES), set(ORIGIN_PACKET_FILES)):
         _fail("FILE_SET")
     result = {}
-    for name in PACKET_FILES:
+    for name in entries:
         entry = entries[name]
         if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
             _fail("FILE_SET")
@@ -437,14 +513,16 @@ def _receipt(packet_bytes: bytes, packet: dict, operation: str) -> dict:
             for artifact in packet["artifacts"]
         ],
         "packet_manifest_sha256": _sha256(packet_bytes),
-        "privacy": PRIVACY,
+        "privacy": packet["privacy"],
         "effects": EFFECTS,
+        "origin_binding": ("declared_origin_bound" if packet["schema_version"] == ORIGIN_SCHEMA
+                           else "legacy_origin_unbound"),
     }
 
 
 def verify_packet_directory(
     directory: Path, wheel: Path, sdist: Path, expected_commit: str, expected_tree: str,
-    *, operation: str = "verified",
+    *, operation: str = "verified", expected_subjects_sha256: str | None = None,
 ) -> dict:
     files = _directory_files(directory)
     raws = {
@@ -470,6 +548,11 @@ def verify_packet_directory(
 
     packet = values["packet.json"]
     version, generated_at = _validate_packet_header(packet)
+    origin_bound = packet["schema_version"] == ORIGIN_SCHEMA
+    if set(files) != set(ORIGIN_PACKET_FILES if origin_bound else PACKET_FILES):
+        _fail("FILE_SET")
+    if not origin_bound and expected_subjects_sha256 is not None:
+        _fail("PRODUCER_REQUIRED")
     if packet["source"] != {"commit": expected_commit, "tree": expected_tree}:
         _fail("SOURCE_MISMATCH")
     if generated_at < candidate_manifest["generated_at"]:
@@ -488,10 +571,21 @@ def verify_packet_directory(
     )
     if values["megalodon.cdx.json"] != sbom:
         _fail("SBOM_MISMATCH")
-    provenance = _provenance(
-        version=version, manifest=candidate_manifest, artifacts=artifacts,
-        candidate_sha256=_sha256(candidate_bytes),
-    )
+    if origin_bound:
+        producer_manifest = _producer_manifest(
+            raws["subjects.json"], expected_commit, expected_tree, version, artifacts,
+            expected_subjects_sha256,
+        )
+        provenance = _provenance(
+            version=version, manifest=candidate_manifest, artifacts=artifacts,
+            candidate_sha256=_sha256(candidate_bytes), producer=producer_manifest["producer"],
+            subjects_sha256=_sha256(raws["subjects.json"]),
+        )
+    else:
+        provenance = _legacy_provenance(
+            version=version, manifest=candidate_manifest, artifacts=artifacts,
+            candidate_sha256=_sha256(candidate_bytes),
+        )
     if values["provenance.intoto.json"] != provenance:
         _fail("PROVENANCE_MISMATCH")
     expected_packet = _packet_manifest(
@@ -503,6 +597,7 @@ def verify_packet_directory(
         candidate_manifest_sha256=candidate_wrapper["manifest_sha256"],
         sbom_bytes=raws["megalodon.cdx.json"],
         provenance_bytes=raws["provenance.intoto.json"],
+        subjects_bytes=raws.get("subjects.json"),
     )
     if packet != expected_packet:
         _fail("BINDING_MISMATCH")
@@ -544,7 +639,10 @@ def _rename_noreplace(source: Path, target: Path) -> None:
 def generate_packet(
     candidate: Path, wheel: Path, sdist: Path, output: Path, version: str,
     generated_at: str, expected_commit: str, expected_tree: str,
+    *, subjects_directory: Path | None = None, expected_subjects_sha256: str | None = None,
 ) -> dict:
+    if subjects_directory is None or expected_subjects_sha256 is None:
+        _fail("PRODUCER_REQUIRED")
     version = _version(version)
     generated_at = _timestamp(generated_at)
     if type(expected_commit) is not str or HEX40.fullmatch(expected_commit) is None:
@@ -562,12 +660,22 @@ def generate_packet(
         _artifact(sdist, "sdist", names["sdist"]),
     ]
     _match_candidate_artifacts(manifest, artifacts)
+    try:
+        retained = subjects.verify(subjects_directory, expected_commit, expected_tree)
+    except subjects.SubjectError:
+        _fail("PRODUCER_INVALID")
+    subjects_bytes = _read_regular(subjects_directory / "subjects.json", subjects.MAX_MANIFEST_BYTES, "PRODUCER_INVALID")
+    producer_manifest = _producer_manifest(subjects_bytes, expected_commit, expected_tree,
+                                           version, artifacts, expected_subjects_sha256)
+    if retained != producer_manifest:
+        _fail("PRODUCER_INVALID")
     sbom_bytes = _canonical(_cyclonedx(
         version=version, generated_at=generated_at, manifest=manifest, artifacts=artifacts,
     ))
     provenance_bytes = _canonical(_provenance(
         version=version, manifest=manifest, artifacts=artifacts,
         candidate_sha256=_sha256(candidate_bytes),
+        producer=producer_manifest["producer"], subjects_sha256=_sha256(subjects_bytes),
     ))
     packet_bytes = _canonical(_packet_manifest(
         version=version,
@@ -578,12 +686,14 @@ def generate_packet(
         candidate_manifest_sha256=candidate_wrapper["manifest_sha256"],
         sbom_bytes=sbom_bytes,
         provenance_bytes=provenance_bytes,
+        subjects_bytes=subjects_bytes,
     ))
     payload = {
         "candidate-evidence.json": candidate_bytes,
         "megalodon.cdx.json": sbom_bytes,
         "provenance.intoto.json": provenance_bytes,
         "packet.json": packet_bytes,
+        "subjects.json": subjects_bytes,
     }
 
     parent = output.parent.resolve(strict=True)
@@ -595,10 +705,11 @@ def generate_packet(
     staging = Path(tempfile.mkdtemp(prefix=".megalodon-release-evidence-", dir=parent))
     os.chmod(staging, 0o700)
     try:
-        for name in PACKET_FILES:
+        for name in ORIGIN_PACKET_FILES:
             _write_exclusive(staging / name, payload[name])
         receipt = verify_packet_directory(
             staging, wheel, sdist, expected_commit, expected_tree, operation="generated",
+            expected_subjects_sha256=expected_subjects_sha256,
         )
         _rename_noreplace(staging, target)
         return receipt
@@ -619,12 +730,15 @@ def parser() -> argparse.ArgumentParser:
     generate.add_argument("--generated-at", required=True)
     generate.add_argument("--expected-commit", required=True)
     generate.add_argument("--expected-tree", required=True)
+    generate.add_argument("--subjects-directory", required=True)
+    generate.add_argument("--expected-subjects-sha256", required=True)
     verify = commands.add_parser("verify", allow_abbrev=False)
     verify.add_argument("packet")
     verify.add_argument("--wheel", required=True)
     verify.add_argument("--sdist", required=True)
     verify.add_argument("--expected-commit", required=True)
     verify.add_argument("--expected-tree", required=True)
+    verify.add_argument("--expected-subjects-sha256")
     return result
 
 
@@ -635,11 +749,14 @@ def main(argv: list[str] | None = None) -> int:
             receipt = generate_packet(
                 Path(args.candidate), Path(args.wheel), Path(args.sdist), Path(args.output),
                 args.package_version, args.generated_at, args.expected_commit, args.expected_tree,
+                subjects_directory=Path(args.subjects_directory),
+                expected_subjects_sha256=args.expected_subjects_sha256,
             )
         else:
             receipt = verify_packet_directory(
                 Path(args.packet), Path(args.wheel), Path(args.sdist),
                 args.expected_commit, args.expected_tree,
+                expected_subjects_sha256=args.expected_subjects_sha256,
             )
         print(_canonical(receipt).decode("utf-8"), end="")
         return 0
