@@ -10,10 +10,9 @@ partial publication." This module is exactly that slice, and nothing else.
 OCSF 1.9.0 record, matching the `ecsRecord`/`ocsfRecord` definitions in
 `contracts/external-exchange/v1/schema.json`. `write_export` writes a bounded
 batch of already-projected records to one brand-new local file (JSON Lines):
-it validates the full record count and byte ceiling before creating
-anything, so a failure never leaves a partially written export, and a single
-buffered write plus `fsync` means there is no partial-record boundary to
-land on mid-file either.
+it validates the full record count and byte ceiling before creating anything,
+then flushes and synchronizes a private temporary sibling before atomically
+publishing the complete file without replacing an existing destination.
 
 Neither profile claims full standard compliance. Each keeps to a minimal,
 verifiable field subset and carries every MEGALODON-specific value inside
@@ -38,8 +37,10 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 from types import MappingProxyType
 from typing import Any
+import uuid
 
 from .models import DetectionResult, PacketEvent
 
@@ -229,6 +230,60 @@ def _line_bytes(record: Mapping[str, Any]) -> bytes:
     return (json.dumps(plain, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def _publish_export(parent_descriptor: int, name: str, payload: bytes) -> None:
+    """Publish only a complete sibling; never replace or remove the final name."""
+    temporary = f".megalodon-siem-{uuid.uuid4().hex}.tmp"
+    temporary_created = False
+    descriptor: int | None = None
+    primary_error: BaseException | None = None
+    try:
+        # As with offline report output, every operation stays relative to the
+        # held directory. O_EXCL also protects a colliding temporary entry.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(temporary, flags, REQUIRED_MODE, dir_fd=parent_descriptor)
+        temporary_created = True
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = None  # The stream now owns closure, including on failure.
+        with stream:
+            if stream.write(payload) != len(payload):
+                raise OSError("short export write")
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, name, src_dir_fd=parent_descriptor,
+                    dst_dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileExistsError:
+            _fail("DESTINATION_EXISTS")
+        os.unlink(temporary, dir_fd=parent_descriptor)
+        temporary_created = False
+        os.fsync(parent_descriptor)
+    except OSError:
+        primary_error = SiemExportError("IO_ERROR")
+        raise primary_error from None
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        cleanup_failed = False
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                cleanup_failed = True
+        if temporary_created:
+            try:
+                os.unlink(temporary, dir_fd=parent_descriptor)
+            except OSError:
+                cleanup_failed = True
+        if cleanup_failed:
+            if primary_error is not None:
+                BaseException.add_note(primary_error, "SIEM export temporary cleanup failed")
+            else:
+                _fail("IO_ERROR")
+
+
 def write_export(
     records: Sequence[Mapping[str, Any]], destination_path: str | os.PathLike[str], *, profile: str,
 ) -> Mapping[str, Any]:
@@ -236,8 +291,10 @@ def write_export(
 
     Every record and the total byte ceiling are checked before any file is
     created: a rejected batch never creates or touches `destination_path`.
-    The file is written with one buffered `write` plus `fsync`, so there is
-    no partially written record for a mid-write failure to leave behind.
+    A private temporary sibling is flushed, synchronized and closed before a
+    no-clobber hard link publishes it. The parent must prevent other local users
+    from replacing that sibling. IO_ERROR after publication can leave a complete
+    destination with unconfirmed durability; it must never be blindly replaced.
     """
     if profile not in PROFILES:
         _fail("INVALID_PROFILE")
@@ -260,25 +317,35 @@ def write_export(
         parent_descriptor = os.open(destination.parent, flags)
     except OSError:
         _fail("DESTINATION_UNSAFE")
+    primary_error: BaseException | None = None
     try:
-        write_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        if hasattr(os, "O_NOFOLLOW"):
-            write_flags |= os.O_NOFOLLOW
+        info = os.fstat(parent_descriptor)
+        # Match the trusted-directory rule used by storage: an untrusted local
+        # user must not be able to substitute the temporary name before linking.
+        if (info.st_uid not in {0, os.geteuid()}
+                or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH) and not info.st_mode & stat.S_ISVTX):
+            _fail("DESTINATION_UNSAFE")
         try:
-            descriptor = os.open(name, write_flags, REQUIRED_MODE, dir_fd=parent_descriptor)
-        except FileExistsError:
+            os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
             _fail("DESTINATION_EXISTS")
-        except OSError:
-            _fail("IO_ERROR")
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(payload)
-                stream.flush()
-                os.fsync(stream.fileno())
-        except OSError:
-            _fail("IO_ERROR")
+        _publish_export(parent_descriptor, name, payload)
+    except OSError:
+        primary_error = SiemExportError("IO_ERROR")
+        raise primary_error from None
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
-        os.close(parent_descriptor)
+        try:
+            os.close(parent_descriptor)
+        except OSError:
+            if primary_error is not None:
+                BaseException.add_note(primary_error, "SIEM export directory closure failed")
+            else:
+                _fail("IO_ERROR")
 
     return MappingProxyType({
         "schema_version": "megalodon-siem-export-receipt-v1",
