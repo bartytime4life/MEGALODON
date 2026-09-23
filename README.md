@@ -59,6 +59,11 @@ only after the new private release passes an import check. A failed upgrade
 keeps the selected release intact. Uninstall removes managed code and desktop
 artifacts while preserving local data and settings.
 
+The [native Linux lifecycle qualification](docs/installer-lifecycle-evidence.md)
+uses real private releases in disposable paths to check same-source replacement,
+repair, failed-upgrade rollback, and uninstall preservation. It does not establish
+cross-version upgrade compatibility or acceptance of an operator's host.
+
 ## Run the checkout without installing
 
 For a temporary source launch, run:
