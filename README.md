@@ -68,9 +68,10 @@ For a temporary source launch, run:
 ```
 
 Open the printed localhost address and go to **Home → Data and tools**. Each
-optional tool has a status light next to its name: green means installed and
-healthy, amber means installed but its service is stopped, red means not
-installed, and grey means unknown. The lights refresh in the background while
+optional tool has a status light next to its name: green means presence observed,
+amber means setup incomplete, red means not found, and grey means unknown or
+stale. These observations do not prove health, a data connection, or configured
+AI readiness. The lights refresh in the background while
 the tab is visible. Where a fixed Ubuntu or Python package exists, **Install**
 and **Start service** buttons do the work after your computer's own password
 prompt ([details](docs/tool-heartbeat.md)). **Check this computer** also

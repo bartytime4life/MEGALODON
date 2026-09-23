@@ -31,7 +31,7 @@ SETUP_HTML = """
           <p class="setup-boundary">Found means an executable is on the checked PATH. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
           <div id="setup-tool-status" class="tool-status-list"></div>
         </details>
-        <p class="setup-check-boundary">Status lights refresh in the background while this page is open: green installed and healthy, amber installed with its service stopped, red not installed, grey unknown. Checks never scan, capture, or change configuration; installs run only when you press Install.</p>
+        <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration; installs run only when you press Install.</p>
       </section>
       <section class="setup-software" aria-labelledby="setup-software-title">
         <p class="setup-step">02 / CHOOSE YOUR WORKFLOW</p>
@@ -436,4 +436,3 @@ byId('setup-reopen-copy').addEventListener('click', async () => {
 renderLaunchHelp();
 """
 SETUP_JS += HEARTBEAT_JS
-

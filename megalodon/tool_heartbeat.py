@@ -10,7 +10,7 @@ combines three signals into one status light per tool:
 * uptime     - the earliest start time among matching processes;
 * model      - for Qwen only, whether the example model manifest exists.
 
-Lights: ``green`` installed and healthy (service running, or a standalone tool
+Lights: ``green`` presence observed (expected process observed, or a standalone tool
 present), ``amber`` installed but its expected service is not running (or, for
 Qwen, the model has not been downloaded), ``red``
 not installed, ``grey`` could not be determined on this platform.
@@ -235,6 +235,8 @@ def _light(installed: str, service: str, expects_service: bool, model: str | Non
         return "amber"
     if model == "missing":
         return "amber"
+    if (expects_service and service != "running") or model == "unknown":
+        return "grey"
     return "green"
 
 
@@ -299,14 +301,15 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
 
 
 MAX_HISTORY_CHANGES = 6
+MAX_HISTORY_INTERVAL_SECONDS = 90
 
 
 class HeartbeatHistory:
     """In-memory light history per tool since this HUD launched.
 
-    Time is attributed to the light observed at the start of each interval,
-    so availability reflects how long a tool spent green between checks, not
-    how many checks happened to run. Nothing is written to disk.
+    Short intervals are attributed to their initial observation. Gaps longer
+    than the visible-tab cadence plus grace are excluded, rather than counted
+    as service health. Nothing is written to disk.
     """
 
     def __init__(self, started: float | None = None) -> None:
@@ -322,7 +325,9 @@ class HeartbeatHistory:
             previous = self._last.get(tool_id)
             if previous is not None:
                 bucket = self._durations.setdefault(tool_id, {})
-                bucket[previous[0]] = bucket.get(previous[0], 0.0) + max(0.0, at - previous[1])
+                elapsed = at - previous[1]
+                if 0 <= elapsed <= MAX_HISTORY_INTERVAL_SECONDS:
+                    bucket[previous[0]] = bucket.get(previous[0], 0.0) + elapsed
             if previous is None or previous[0] != light:
                 changes = self._changes.setdefault(tool_id, [])
                 changes.append({"at": _iso(at), "light": light})
@@ -359,7 +364,7 @@ class Heartbeat:
 
     def snapshot(self) -> bytes:
         if not self._lock.acquire(blocking=False):
-            if self._cached is not None:
+            if self._cached is not None and monotonic() < self._expires:
                 return self._cached
             raise HeartbeatBusy
         try:
