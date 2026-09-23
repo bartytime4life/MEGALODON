@@ -129,6 +129,12 @@ When a light is amber because an installed tool's service is stopped, the HUD
 shows **Start service**. It runs `systemctl start` on one fixed unit per tool,
 through the same `pkexec` password prompt:
 
+The **Apps → Start installed services** area keeps these actions visible without
+opening each app card. It lists only tools whose installation was observed by
+the local heartbeat, shows when the expected process is already present, and
+links back to the per-launch authorization control. Start remains unavailable
+when the observation is stale or the tool's service state is unknown.
+
 | Tool | Units tried, first existing unit file wins |
 |------|--------------------------------------------|
 | Suricata | `suricata` |

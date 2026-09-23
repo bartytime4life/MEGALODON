@@ -89,6 +89,12 @@ terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
 Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
 
+**Apps → Start installed services** shows the fixed local service-start controls
+for Suricata, Ollama, OSSEC, Zabbix and Nagios when the HUD observes them as
+installed. The same launch opt-in, token and confirmation apply there. Other
+app cards retain their setup guidance or explicit web-console navigation;
+opening a console does not start its service or connect its data.
+
 **[Start with the visual guide](docs/gui-quick-start.md)** ·
 **[Find software downloads](docs/software-downloads.md)** ·
 **[Fix a startup problem](docs/local-pc-setup.md#troubleshooting)**

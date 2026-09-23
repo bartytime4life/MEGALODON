@@ -169,6 +169,7 @@ function repaintHeartbeat() {
   document.querySelectorAll('[data-heartbeat-tool]').forEach(paintHeartbeatLight);
   document.querySelectorAll('[data-heartbeat-detail]').forEach(node => { node.textContent = heartbeatText(heartbeatState.byId.get(node.heartbeatTool)); });
   document.querySelectorAll('[data-heartbeat-install]').forEach(paintInstallControl);
+  if (typeof renderAppServiceStarts === 'function') renderAppServiceStarts();
   // The live light supersedes the launch-time PATH line and per-tool check buttons.
   const live = heartbeatState.byId.size > 0;
   document.querySelectorAll('.software-presence, .software-check').forEach(node => { if (!node.id || node.id !== 'software-check-python') node.hidden = live; });
@@ -208,10 +209,15 @@ function validHeartbeat(value) {
 function showInstallCompletion(job) {
   if (!job || !['succeeded', 'failed'].includes(job.state)) return false;
   const command = job.action === 'start' ? 'Service-start command' : 'Installation command';
-  byId('setup-check-status').textContent = job.state === 'succeeded'
+  toolManagementFeedback(job.state === 'succeeded'
     ? `${command} finished. Status is checked separately.`
-    : `${command} failed. See the tool for details.`;
+    : `${command} failed. See the tool for details.`);
   return true;
+}
+function toolManagementFeedback(message) {
+  byId('setup-check-status').textContent = message;
+  const appStatus = byId('app-service-start-feedback');
+  if (appStatus) appStatus.textContent = message;
 }
 async function pollHeartbeat() {
   if (heartbeatState.polling) return;
@@ -241,7 +247,7 @@ async function pollHeartbeat() {
 async function startInstall(toolId, name, entry, action = 'install') {
   const token = toolManagementToken();
   if (!heartbeatState.managementEnabled || !token || heartbeatStale()) {
-    byId('setup-check-status').textContent = 'Tool management needs an enabled launch, its operator token, and current tool observations.';
+    toolManagementFeedback('Tool management needs an enabled launch, its operator token, and current tool observations.');
     return;
   }
   const starting = action === 'start';
@@ -252,10 +258,10 @@ async function startInstall(toolId, name, entry, action = 'install') {
     const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId, action}),
       headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1', 'X-Megalodon-Install-Token': token}});
     heartbeatState.job = job;
-    if (!showInstallCompletion(job)) byId('setup-check-status').textContent = `${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`;
+    if (!showInstallCompletion(job)) toolManagementFeedback(`${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`);
   } catch (error) {
     if (error.status === 403) byId('tool-management-token').value = '';
-    byId('setup-check-status').textContent = `${name} could not be ${starting ? 'started' : 'installed'}: ${error.message}.`;
+    toolManagementFeedback(`${name} could not be ${starting ? 'started' : 'installed'}: ${error.message}.`);
   }
   repaintHeartbeat(); pollHeartbeat();
 }
