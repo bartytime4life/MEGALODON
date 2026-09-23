@@ -38,7 +38,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
 | `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
 | `endpoint-inventory` | osquery | Proposed | No arbitrary SQL, daemon, scheduler, remote enrollment, or importer |
-| `local-ai-advisory` | Qwen via local Ollama | Manual library call | One Airlock-admitted request to literal IPv4 loopback and an optional startup-supplied display receipt; no CLI invocation, traffic inspection, background analysis, tools, or action authority |
+| `local-ai-advisory` | Qwen via local Ollama | Original run-count advisory library call | One Airlock-admitted request to literal IPv4 loopback and an optional startup-supplied display receipt; this policy has no CLI invocation, traffic inspection, background analysis, tools, or action authority. Separate opt-in anomaly/AI paths are described below. |
 | `network-inventory-import` | Nmap | Proposed | Completed XML report import only; no scan launch, targets, scripts, banners, or network activity |
 | `host-integrity-import` | OSSEC | Proposed | Completed alert import only; no agent enrollment, daemon control, configuration, or active response |
 | `vulnerability-report-import` | Greenbone Community Edition | Proposed | Completed GMP report import only; no scanner, feed, target, task, or remediation control |
@@ -57,6 +57,17 @@ remains `contract_only`; no platform gains producer management, mixed-firehose
 acceptance, background ingestion, dashboard control, or action authority.
 `hub-plan` itself remains static and writes nothing.
 
+The `local-ai-advisory` workflow names only the original
+[`invoke_qwen_advisory` policy](local-model-advisory-contract.md). It is not an
+inventory of every AI entry point. The separate [anomaly command](anomaly-triage.md)
+accepts explicit `--qwen`; the draft [AI control plane](ai-control-plane.md)
+adds operator-invoked CLI commands, token-gated HUD requests, closed broker tools
+and private receipts. Those paths do not promote the original workflow's
+`manual_only` status or establish installed-provider acceptance. Model
+provenance, containment, adversarial evaluation and independent disposition
+remain [separate readiness gates](local-model-readiness.md); firewall application
+is unsupported throughout.
+
 ## Threat context and SIEM/SOAR exchange
 
 The separate [external exchange contract](external-exchange-contract.md) adds a
@@ -66,15 +77,17 @@ them to the executable companion-tool catalog:
 | Lane | Contract state | Boundary |
 | --- | --- | --- |
 | Offline threat context | Bounded reader delivered by merged PR #269 | One completed owner-private, checksum-bound, size/object/depth/time-bounded STIX 2.1 file returns immutable context and a no-authority receipt; no TAXII, persistence, pattern execution, model input, attribution, detection, or action authority |
-| SIEM projection | Contract only | New local file only; bounded ECS 9.5.0 and OCSF 1.9.0 projections; no `event.original`, payload, credential, collector, or network delivery |
+| SIEM projection | Pure mappings and bounded local writer implemented | `to_ecs_record`, `to_ocsf_record` and `write_export` in `megalodon/siem_export.py`; new local file only under fixed ECS 9.5.0 and OCSF 1.9.0 profiles; no `event.original`, payload, credential, collector, or network delivery |
 | SOAR handoff | Contract only | Inert local record with no destination, endpoint, credential, retry, scheduler, automation, or host action |
 
 These are data-exchange profiles, not installed utilities, so readiness probes,
 package lifecycle commands, saved console URLs, and `hub-plan` execution fields
 remain unchanged. The offline reader is an explicit library call, not a feed or
-background integration. SIEM projection still requires pure mapping code,
-golden fixtures and private atomic publication; all runtime adoption still
-requires exact-head validation, independent review, and operator acceptance.
+background integration. SIEM projection has mapping fixtures and tests in
+`tests/test_siem_export.py`; their presence does not prove all-or-nothing
+publication under write failure or operational acceptance. Those guarantees
+require their own validation. Runtime adoption still requires exact-head
+validation, independent review, and operator acceptance.
 
 Each capability appears exactly once. Platform support status is derived from
 `megalodon.capabilities` instead of being copied into this registry. That
@@ -103,9 +116,10 @@ they do not certify MEGALODON or any installed tool.
 - Suricata documents that EVE can emit alerts, anomalies, file information,
   metadata, and protocol-specific records. MEGALODON therefore keeps its
   Suricata relationship narrower than stock EVE: the completed-file reader
-  accepts only the repository envelope, and the durable consumer and
-  reconciler accept only that reader's immutable publication. Neither path
-  accepts raw EVE or controls a producer.
+  accepts only the repository envelope. The separate checksum-bound converter
+  admits only the pinned 8.0.7 alert-only completed-file profile and produces
+  the same immutable publication for the durable consumer and reconciler.
+  These paths do not accept a mixed stock-EVE firehose or control a producer.
 - Zeek documents both TSV and JSON logs and their usefulness in pipelines.
   MEGALODON accepts only its versioned connection profile rather than arbitrary
   Zeek log streams.
