@@ -216,8 +216,9 @@ const assert = require('node:assert/strict');
 const nodes = new Map(), listeners = {}, history = [];
 let viewportWidth = 1440, viewportHeight = 1000;
 const document = {scrollingElement:{scrollTop:0}, getElementById(id) {
-  if (!nodes.has(id)) nodes.set(id, {scrollTop:0, hidden:false, attrs:{},
-    setAttribute(k,v){this.attrs[k]=v;}, addEventListener(){}, focus(){},
+  if (!nodes.has(id)) nodes.set(id, {scrollTop:0, hidden:false, attrs:{}, listeners:{},
+    setAttribute(k,v){this.attrs[k]=v;}, addEventListener(k,v){this.listeners[k]=v;},
+    focus(options){this.focusOptions=options; document.activeElement=this;},
     scrollIntoView(){this.scrolled=true;}});
   return nodes.get(id);
 }, addEventListener(){}};
@@ -265,6 +266,13 @@ for (const [width, height] of [[375,812], [720,500]]) {
   window.location.hash = '#workspace-traffic'; listeners.popstate();
   assert.equal(document.scrollingElement.scrollTop, 630);
   assert.equal(byId('workspace-traffic').hidden, false);
+  const trafficTab = byId('workspace-tab-traffic');
+  trafficTab.listeners.keydown({key:'ArrowRight', preventDefault(){}});
+  const focusedTab = byId('workspace-tab-findings');
+  assert.equal(document.activeElement, focusedTab);
+  assert.equal(focusedTab.attrs['aria-selected'], 'true');
+  assert.equal(focusedTab.focusOptions, undefined,
+    'Keyboard navigation must let native focus reveal its tab rather than prevent scrolling');
   window.location.hash = '#reference-title'; listeners.hashchange();
   assert.equal(byId('reference-title').scrolled, true);
   assert.equal(byId('workspace-analysis').hidden, false);

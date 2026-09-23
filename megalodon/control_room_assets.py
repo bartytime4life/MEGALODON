@@ -253,6 +253,7 @@ ROOM_CSS += r"""
 .hud-start .software-purpose { margin:12px 0 6px; font-size:.84rem; }
 .hud-start .software-presence { font-size:.7rem; color:#bddbd8; margin:6px 0 12px; }
 .software-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.software-actions > [data-heartbeat-install] { min-width:0; max-width:100%; overflow-wrap:anywhere; }
 .hud-start .software-actions > a,.hud-start .software-actions > button { display:inline-flex; align-items:center; justify-content:center; padding:10px 12px; min-height:44px; border:1px solid #416674; border-radius:6px; font-size:.76rem; font-weight:600; text-decoration:none; color:#e2f5f4; background:#183845; }
 .hud-start .software-actions > button { background:transparent; color:#c4dfeb; }
 .hud-start .software-actions > .software-check { min-width:148px; }
