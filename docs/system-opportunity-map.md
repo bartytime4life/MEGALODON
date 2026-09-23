@@ -6,7 +6,7 @@ a design record, not an acceptance receipt. Original ranking basis: GitHub
 `6384a3fe4e743cbce274d654b413f8a07c1e4cff`) and repository files read on
 2026-09-21. Recheck mutable issue, PR, workflow, and Site state before acting.
 
-Source refresh: `758648c81975d85a72aa12221edd86c54cf0b360`, inspected
+Source refresh: `28436055449f8d7ba0662da699da24c53153ba09`, inspected
 2026-09-23. Windows/macOS synthetic jobs and the named governance files now
 exist; their old absence claims are superseded below. Job presence is not a
 passing result or platform acceptance. The

@@ -3,7 +3,9 @@
 ## Current suite claims and acceptance register — 2026-09-23
 
 Implementation inventory basis:
-[`758648c81975d85a72aa12221edd86c54cf0b360`](https://github.com/bartytime4life/MEGALODON/commit/758648c81975d85a72aa12221edd86c54cf0b360).
+[`28436055449f8d7ba0662da699da24c53153ba09`](https://github.com/bartytime4life/MEGALODON/commit/28436055449f8d7ba0662da699da24c53153ba09),
+read from fetched `origin/main` on 2026-09-23. This includes the #385 heartbeat
+observation correction; the earlier inventory at `758648c` is superseded.
 Every source path below refers to that baseline; this reconciliation corrects
 catalog descriptions without adding runtime capabilities. **OBSERVED source**
 means the implementation and named tests were inspected, not that every test
@@ -33,8 +35,8 @@ real telemetry, model calls and host changes require their separate gates.
 | --- | --- | --- | --- |
 | CORE / P1 | [capture](../megalodon/capture.py), [detector](../megalodon/detector.py), [service](../megalodon/service.py): bounded sample/JSONL metadata and three fixed detections with atomic service-to-ledger decisions. | `not_run`: `tests/test_capture.py tests/test_detector.py tests/test_service_acceptance.py`; [synthetic detector receipt](detector-acceptance.md). | Representative privacy-reviewed replay and false-positive measurement; sustained resource/capture-loss evidence. Synthetic counts do not prove operational efficacy or continuous monitoring. |
 | STORE / P1 | [storage](../megalodon/storage.py), [CLI recovery workflow](../megalodon/sqlite_recovery_workflow.py): private bounded audit, explicit retention and backup/restore. | `not_run`: `tests/test_storage.py tests/test_storage_failures.py tests/test_sqlite_recovery_runtime.py tests/test_sqlite_recovery_native_failures.py`. | Operator retention values and retained recovery drill; high-write WAL, physical exhaustion, hard-kill/power-loss, clock rollback and platform confidentiality evidence. See [recovery contract](sqlite-recovery-contract.md). |
-| HUD / P1 | [dashboard](../megalodon/dashboard.py), [traffic](../megalodon/dashboard_traffic.py), [assets](../megalodon/dashboard_assets.py): loopback telemetry reads, history, filters and reports. Separate AI and installer routes mean the entire HUD is not read-only. | `not_run`: `tests/test_dashboard.py tests/test_dashboard_store.py tests/test_dashboard_traffic.py tests/test_dashboard_history.py tests/test_dashboard_boundaries.py`; real browser: `python tests/browser_native_profile.py` in the [prepared browser environment](dashboard-browser-acceptance.md). | Verify mutation authorization, truthful unknown/stale/failure states and operator UX at the candidate head. Browser/synthetic checks do not establish operator acceptance, capture health or remote-control readiness. |
-| DESKTOP / P1 | [local installer](../megalodon/local_install.py), [tool installer](../megalodon/tool_installer.py), [heartbeat](../megalodon/tool_heartbeat.py): per-user bootstrap plus separately exposed fixed install/start recipes and observations. | `not_run`: `tests/test_local_install.py tests/test_local_setup.py tests/test_tool_heartbeat.py`. | Installation and service changes need explicit operator authority. Presence, running, configured, connected and accepted are different states. Validate failed upgrades, unavailable observations and host-specific package/service behavior. |
+| HUD / P1 | [dashboard](../megalodon/dashboard.py), [traffic](../megalodon/dashboard_traffic.py), [assets](../megalodon/dashboard_assets.py): loopback telemetry reads, history, filters and reports. Separate AI and installer routes mean the entire HUD is not read-only. | `not_run`: `tests/test_dashboard.py tests/test_dashboard_store.py tests/test_dashboard_traffic.py tests/test_dashboard_history.py tests/test_dashboard_boundaries.py`; real browser: `python tests/browser_native_profile.py` in the [prepared browser environment](dashboard-browser-acceptance.md). | Verify mutation authorization and operator UX at the candidate head. The heartbeat correction below does not establish whole-HUD operator acceptance, capture health or remote-control readiness. |
+| DESKTOP / P1 | [local installer](../megalodon/local_install.py), [tool installer](../megalodon/tool_installer.py), [heartbeat](../megalodon/tool_heartbeat.py): per-user bootstrap plus separate fixed install/start recipes. #385 prevents unknown observations from appearing healthy, marks stale checks grey, refuses expired cache success and excludes unobserved history gaps; green means observed presence, not health. | Full selection `not_run`: `tests/test_local_install.py tests/test_local_setup.py tests/test_tool_heartbeat.py`. **VERIFIED heartbeat subset:** `tests/test_heartbeat_observation.py tests/test_tool_heartbeat.py` — 23 passed below. | Installation and service changes need explicit operator authority. Presence, running, configured, connected and accepted are different states. Failed-upgrade and host-specific package/service/operator acceptance remain separate from synthetic heartbeat checks. |
 | OFFLINE / P1 | [TShark](../megalodon/offline/tshark.py), [Zeek](../megalodon/offline/zeek.py), [Community ID](../megalodon/offline/community_id.py): Linux bounded offline adapters and non-authoritative grouping. | `not_run`: `tests/test_offline.py tests/test_zeek_producer_contract.py`; [Zeek producer scaffold](../contracts/zeek-conn-log/v1/producer/README.md). | Intended installed TShark revision; exact owner-selected Zeek build/field set, real JSON and TSV fixtures, schema drift, loss/asymmetry and CLI/report evidence. The placeholder `0.0.0` profile is not a qualified producer. |
 | SURICATA / P1 | [raw-EVE converter](../megalodon/offline/suricata_eve.py), [consumer](../megalodon/offline/suricata_consumer.py), [projection](../megalodon/suricata_projection.py): pinned 8.0.7 alert-only completed-file conversion, envelope intake, durable publication/reconciliation and read-only startup view. | `not_run`: `tests/test_suricata_raw_eve.py tests/test_suricata_consumer_runtime.py tests/test_suricata_reconciliation.py tests/test_dashboard_suricata.py`. | Exact installed producer and operational privacy/loss acceptance. No sensor, watcher, mixed-EVE firehose, ruleset manager or IPS is supplied. See [producer contract](../contracts/suricata-eve/v1/producer/README.md). |
 | ANALYSIS / P2 | [reference loader](../megalodon/reference/loader.py), [offline triage](../megalodon/offline/triage.py), [posture](../megalodon/posture.py): pinned context, synthetic evaluation and deterministic baseline/anomaly analysis. | `not_run`: `tests/test_reference_data.py tests/test_anomaly_triage.py tests/test_baseline_comparison.py tests/test_posture.py`. | Reviewed snapshot maintenance and representative efficacy evidence. IANA assignments and static posture are context, not observed services, live host assessments or threat verdicts. See [reference data](reference-data.md) and [anomaly pipeline](anomaly-pipeline.md). |
@@ -49,10 +51,11 @@ real telemetry, model calls and host changes require their separate gates.
 
 ### Reconciliation verification
 
-**VERIFIED on 2026-09-23:** Linux / CPython 3.12.3, in the isolated candidate
-checkout based on the inventory commit above, with the catalog correction in
-this change. The focused command below passed **64 tests**, including its
-synthetic UI-map checks. Compilation and both static CLI commands also passed;
+**VERIFIED on 2026-09-23 after merging `2843605`:** Linux / CPython 3.12.3,
+in the isolated candidate checkout with the catalog correction in this change.
+The focused command below passed **64 tests**, including its synthetic UI-map
+checks. The separate heartbeat selection passed **23 tests**. Compilation and
+both static CLI commands also passed;
 the CLI receipts retained false execution/installation/network effects and
 the existing platform statuses. The final candidate commit/tree belongs in the
 PR or handoff receipt, not a self-referential source pin in this document.
@@ -62,11 +65,16 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS='' PYTEST_ADDOPTS='' \
   PYTHONDONTWRITEBYTECODE=1 python -m pytest -ra -p no:cacheprovider \
   tests/test_capabilities.py tests/test_hub.py tests/test_readiness.py \
   tests/test_integration_map_states.py tests/test_documentation_currentness.py
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS='' PYTEST_ADDOPTS='' \
+  PYTHONDONTWRITEBYTECODE=1 python -m pytest -ra -p no:cacheprovider \
+  tests/test_heartbeat_observation.py tests/test_tool_heartbeat.py
 python -m compileall -q megalodon tests
 python -m megalodon capabilities --platform linux
 python -m megalodon hub-plan --platform linux
 ```
 
+The earlier 64-test result for candidate `a8ff7b0` remains historical evidence;
+the reruns above establish the refreshed candidate's focused check results.
 All named Python check paths and 75 local documentation links in the three
 reconciled documents were checked for existence. These checks do not supply
 the unperformed per-row, browser, installed-tool, platform or release evidence.
