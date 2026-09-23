@@ -64,7 +64,7 @@ _COMPONENTS = (
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The Linux main-thread API reads one completed private contract envelope file; non-root capability-free APIs persist it and read-only reconcile an unknown commit in one pre-created private store. An explicit read-only dashboard startup snapshot shows bounded external-alert evidence; no permission repair, EVE converter, sensor, ruleset manager, watcher, dashboard control, or IPS path exists.",
+        "boundary": "The Linux main-thread API reads one completed private contract envelope file; a separate checksum-bound Suricata 8.0.7 alert-only EVE converter produces the same immutable publication. Non-root capability-free APIs persist it and read-only reconcile an unknown commit in one pre-created private store. An explicit read-only dashboard startup snapshot shows bounded external-alert evidence; no permission repair, sensor, ruleset manager, watcher, dashboard control, or IPS path exists.",
     },
     {
         "id": "scapy",
@@ -119,7 +119,7 @@ _COMPONENTS = (
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "One explicitly enabled Python call can request a bounded advisory from 127.0.0.1:11434; no CLI, background run, traffic inspection, tool, or response authority exists.",
+        "boundary": "The original run-count advisory permits one explicitly enabled Python call to 127.0.0.1:11434, with no CLI or tool authority for that policy. Separate opt-in anomaly/AI CLI and token-gated HUD paths exist; installed-provider acceptance remains unproved and firewall application is unsupported.",
     },
     {
         "id": "nmap",
