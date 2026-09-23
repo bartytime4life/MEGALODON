@@ -361,6 +361,16 @@ def test_complete_normal_forward_preview_needs_no_lookahead_past_the_date_ceilin
     assert [o["occurrence_at"] for o in occ] == ["9999-12-31T05:00:00Z"]
 
 
+def test_normal_forward_until_needs_no_lookahead_past_the_date_ceiling() -> None:
+    occ = next_occurrences(
+        dtstart="9999-12-30T23:00:00", schedule_timezone="UTC",
+        rrule="FREQ=HOURLY;UNTIL=99991231T000000Z", dst_policy="shift_forward", limit=10,
+    )
+    assert [o["occurrence_at"] for o in occ] == [
+        "9999-12-30T23:00:00Z", "9999-12-31T00:00:00Z",
+    ]
+
+
 def test_forward_lookahead_budget_exhaustion_refuses_partial_results(monkeypatch) -> None:
     monkeypatch.setattr("megalodon.automation_schedule._MAX_CANDIDATE_SCANS", 2)
     with pytest.raises(AutomationScheduleError) as caught:

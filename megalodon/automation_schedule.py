@@ -447,7 +447,11 @@ def _forward_preview(
             continue
         # Normal and gap cases resolve to utc0 under shift_forward.
         resolved = utc0
-        if resolved < anchor or (until_utc is not None and resolved > until_utc):
+        if resolved < anchor:
+            continue
+        if until_utc is not None and resolved > until_utc:
+            if not shifted_gap:
+                break
             continue
         pending.setdefault(resolved, (candidate, status))
         if len(pending) > cap:
