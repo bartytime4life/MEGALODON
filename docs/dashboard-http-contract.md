@@ -21,7 +21,8 @@ retains its same-origin CSP, no-store responses, no-referrer policy, framing
 prohibition, MIME sniffing protection, and restricted browser permissions. There
 is no CORS permission or external script/font fetch.
 
-`POST` is accepted only for the optional, token-gated `/api/ai/ask` route.
+`POST` is accepted only for the optional, separately token-gated `/api/ai/ask`
+and explicitly enabled HUD `/api/install` routes.
 Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
 methods remain unsupported. Unknown paths return 404. Fixed validation errors
 do not echo request values, private paths, or stack traces. None of these HTTP
@@ -59,10 +60,15 @@ production service.
 Origin, Host, content-type, and length checks. It writes to the separate
 private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
 
-`POST /api/install` (HUD mode only) requires the exact same-site `Origin`,
-`Content-Type: application/json`, `X-Megalodon-Install: 1`, and a body of at
-most 96 bytes naming one tool id and an optional `action` (`install` or
-`start`). It starts one recipe or one fixed systemd unit from the closed
+`POST /api/install` requires a non-root Linux HUD explicitly launched with
+`--enable-tool-management`, exactly one matching per-launch
+`X-Megalodon-Install-Token`, exact same-site `Origin`,
+`Content-Type: application/json`, `X-Megalodon-Install: 1`, and a body of
+1–96 bytes naming one string tool id and an optional string `action` (`install`
+or `start`). Repeated keys, extra fields, ambiguous lengths and content/transfer
+encodings are refused. The token is printed only in the launch terminal; the
+default HUD still serves heartbeat and catalog GETs, whose `management` object
+reports enabled/disabled state without a secret. It starts one recipe or one fixed systemd unit from the closed
 registries in `megalodon/tool_installer.py`; privileged steps go through the OS
 `pkexec` password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
 

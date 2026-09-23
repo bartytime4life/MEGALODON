@@ -1,8 +1,8 @@
 """Local dashboard. Telemetry routes are read-only.
 
-In HUD mode it also serves a cached tool heartbeat and a one-click installer
-that runs only fixed recipes from ``tool_installer.RECIPES`` (system packages
-go through the OS password prompt via pkexec).
+HUD mode also serves a cached tool heartbeat and an inert recipe catalog.
+Explicitly enabled, non-root Linux tool management requires a per-launch
+operator token before fixed installation or service-start recipes can run.
 
 The presentation constants live in ``dashboard_assets``; this module retains the
 public Python API and the security boundary for every HTTP route.
@@ -15,7 +15,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import hmac
 import json
+import os
 from pathlib import Path
+import sys
 from threading import Lock, Thread
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
@@ -377,6 +379,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     local_checks: LocalChecks | None = None
     heartbeat: Heartbeat | None = None
     installer: Installer | None = None
+    tool_management_enabled: bool = False
+    install_operator_token: str | None = None
     javascript: bytes = DASHBOARD_JS.encode()
     ai_settings: AISettings = AISettings()
     ai_receipt_path: Path | None = None
@@ -451,7 +455,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "heartbeat requires HUD mode"}, status=403)
                 return
             if route.path == "/api/install":
-                self._send_json({**install_catalog(), "job": self.installer.status()})
+                enabled = (self.tool_management_enabled is True
+                           and self.install_operator_token is not None and _tool_management_user())
+                self._send_json({**install_catalog(), "job": self.installer.status(),
+                                 "management": {"enabled": enabled,
+                                                "authorization": "per_launch_token" if enabled else "disabled"}})
                 return
             try:
                 payload = self.heartbeat.snapshot()
@@ -760,29 +768,41 @@ class DashboardHandler(BaseHTTPRequestHandler):
                              "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
 
     def _install(self) -> None:
-        # Custom header + exact Origin + JSON body: a cross-site page cannot
-        # send this without a CORS preflight, which this server never grants.
+        # Origin/custom headers prevent cross-site browser requests, but only
+        # the terminal-delivered launch token authenticates a local operator.
         expected_origin = f"http://{self.headers.get('Host')}"
+        tokens = self.headers.get_all("X-Megalodon-Install-Token", [])
         if (self.installer is None
+                or self.tool_management_enabled is not True
+                or self.install_operator_token is None
+                or not _tool_management_user()
+                or len(tokens) != 1 or len(tokens[0]) != 32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0], self.install_operator_token)
                 or self.headers.get_all("X-Megalodon-Install", []) != ["1"]
                 or self.headers.get_all("Origin", []) != [expected_origin]
                 or self.headers.get_all("Content-Type", []) != ["application/json"]
-                or self.headers.get_all("Transfer-Encoding", [])):
-            self._send_json({"error": "local install authorization required"}, status=403)
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "tool management operator authorization required"}, status=403)
             return
         lengths = self.headers.get_all("Content-Length", [])
-        if (len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit()
+        if (len(lengths) != 1 or len(lengths[0]) > 2
+                or not lengths[0].isascii() or not lengths[0].isdigit()
                 or not 1 <= int(lengths[0]) <= 96):
             self._send_json({"error": "invalid install request length"}, status=400)
             return
         try:
+            from .ai_provider import _strict_pairs
             self.connection.settimeout(2)
-            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"))
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
         except (ValueError, OSError):
             self._send_json({"error": "invalid install request"}, status=400)
             return
         if (type(body) is not dict or not {"tool"} <= set(body) <= {"tool", "action"}
-                or body["tool"] not in RECIPES or body.get("action", "install") not in INSTALL_ACTIONS):
+                or type(body["tool"]) is not str or body["tool"] not in RECIPES
+                or type(body.get("action", "install")) is not str
+                or body.get("action", "install") not in INSTALL_ACTIONS):
             self._send_json({"error": "unknown tool or action"}, status=400)
             return
         try:
@@ -907,6 +927,24 @@ def loopback_host(host: str, *, allow_remote: bool = False) -> str:
     return str(address)
 
 
+def _tool_management_user() -> bool:
+    """Fail closed unless this is an ordinary Linux process, including real UID."""
+    try:
+        return sys.platform.startswith("linux") and os.getuid() != 0 and os.geteuid() != 0
+    except (AttributeError, OSError):
+        return False
+
+
+def validate_tool_management_mode(enabled: bool, *, inspect_tools: bool) -> None:
+    if type(enabled) is not bool:
+        raise ValueError("tool management enablement must be a boolean")
+    if enabled:
+        if inspect_tools is not True:
+            raise ValueError("--enable-tool-management requires the hud command")
+        if not _tool_management_user():
+            raise ValueError("tool management requires a non-root Linux HUD; do not use sudo")
+
+
 def serve(
     store: DashboardReader, host: str, port: int, *, enabled: bool = True,
     allow_remote: bool = False, offline_summary: dict[str, Any] | None = None,
@@ -916,18 +954,21 @@ def serve(
     inspect_tools: bool = False, source_available: bool = True,
     refresh_seconds: int = 5, event_limit: int = 50,
     open_browser: bool = False,
+    enable_tool_management: bool = False,
     ai_settings: AISettings | None = None,
     ai_receipt_path: Path | None = None,
     ai_blocking: BlockingSettings | None = None,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
+    validate_tool_management_mode(enable_tool_management, inspect_tools=inspect_tools)
     refresh_seconds = _bounded_dashboard_integer(
         refresh_seconds, "dashboard refresh_seconds", MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS
     )
     event_limit = _bounded_dashboard_integer(event_limit, "dashboard event_limit", 1, MAX_EVENT_LIMIT)
     advisory_snapshot = advisory_receipt_snapshot(advisory_receipt)
     ai_operator_token = secrets.token_urlsafe(24) if ai_settings is not None and ai_settings.enabled else None
+    install_operator_token = secrets.token_urlsafe(24) if enable_tool_management else None
     host = loopback_host(host, allow_remote=allow_remote)
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
@@ -953,6 +994,8 @@ def serve(
             "local_checks": LocalChecks(store, source_available=source_available) if inspect_tools else None,
             "heartbeat": heartbeat,
             "installer": installer,
+            "tool_management_enabled": enable_tool_management,
+            "install_operator_token": install_operator_token,
             "javascript": javascript,
             "ai_settings": ai_settings or AISettings(),
             "ai_receipt_path": ai_receipt_path,
@@ -964,6 +1007,8 @@ def serve(
     try:
         url = f"http://{host}:{port}/"
         print(f"MEGALODON dashboard listening on {url}", flush=True)
+        if install_operator_token is not None:
+            print(f"MEGALODON tool management operator token (this launch only): {install_operator_token}", flush=True)
         if ai_operator_token is not None:
             print(f"MEGALODON AI operator token (this launch only): {ai_operator_token}", flush=True)
         if open_browser:

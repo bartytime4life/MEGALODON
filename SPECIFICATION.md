@@ -114,6 +114,10 @@ capture-buffer sizing or loss-free operation under production load.
    Windows confidentiality remains an ACL acceptance gate. The optional,
    token-gated AI question POST writes only a separate private AI receipt and
    bounded report snapshot; it cannot mutate core telemetry or the firewall.
+   Companion tool management is a separate, default-disabled host-maintenance
+   route: an explicit non-root Linux HUD launch and its per-launch operator
+   token authorize fixed installation/service-start recipes, not telemetry or
+   firewall application.
 9. **Loopback binds only.** The dashboard refuses non-loopback addresses and
    the legacy remote opt-in. It does not provide remote authentication.
 10. **Fail closed for live response.** Every CLI and direct-backend apply
@@ -442,6 +446,20 @@ snapshot and permits only `NO_DIRECTORY`/`NO_DATABASE` to open an unconfigured
 workspace. Its telemetry endpoints return 503, never fabricated zero counters.
 Unsafe, corrupt or incompatible existing stores still refuse startup. The
 original `dashboard` command retains its existing-store/no-probe behavior.
+`hud --enable-tool-management` explicitly enables fixed companion installation,
+example model download and service-start actions on Linux only when both real
+and effective UIDs are nonzero. The CLI and direct `serve()` API refuse other
+opt-in modes before source access or server startup. Ordinary HUD launches keep
+heartbeat observations, recipe guidance and job status without action authority.
+An enabled launch prints a separate random 192-bit operator token only to its
+terminal. The browser password field retains it in page memory, never storage
+or a URL; neither assets nor the catalog disclose it. Restarting rotates the
+token. Each POST checks the token and current non-root Linux identity before
+dispatch, alongside exact Host/Origin, explicit headers and a closed bounded
+body. Fixed package recipes may start services as an installation side effect;
+service-start recipes use fixed existing systemd units and do not enable boot
+startup. These optional host changes are distinct from read-only telemetry,
+AI authority and the closed firewall-application boundary.
 The HUD's **Check this computer** button adds an explicit metadata-only refresh
 through `/api/local-checks`; it does not change the startup snapshot. It reports
 the running Python/SQLite versions, a bounded read of the already selected
@@ -508,6 +526,20 @@ The dashboard exposes only:
   Disabled/missing-header requests return 403; overlapping checks return 429
   with `Retry-After: 5`; failed collection returns a fixed 503. The client checks
   only on a click, never as telemetry polling or automatic startup work;
+- `GET /api/heartbeat` — HUD-only, cached bounded presence observations;
+  requires exactly one `X-Megalodon-Check: 1` header and no query;
+- `GET /api/install` — HUD-only recipe catalog and in-memory job status with
+  explicit `management.enabled` and `management.authorization` metadata; no
+  secret. It uses the same explicit-check header and remains available without
+  tool-management opt-in;
+- `POST /api/install` — explicit tool-management opt-in, non-root Linux identity,
+  exactly one matching `X-Megalodon-Install-Token` and `X-Megalodon-Install: 1`,
+  exact Origin/Host, JSON content type, no transfer/content encoding, and one
+  bounded Content-Length from 1 through 96 bytes. The body has only string
+  `tool` and optional string `action` (`install` by default, or `start`) from
+  fixed registries; repeated keys are refused. Unauthorized requests return 403,
+  invalid bodies/lengths 400, busy jobs 409, unavailable recipes 422, and accepted
+  jobs 202. There is no arbitrary package, command, path or service input;
 - `GET /api/summary` — event, detection, action, and high/critical counts;
 - `GET /api/traffic` — newest 500 event candidates and 200 finding candidates,
   with qualified endpoint/port/flag metadata, exact reported bytes and run links;

@@ -18,6 +18,13 @@ loopback server binds. From a reviewed source checkout, use
 `python -m megalodon hud` and open `http://127.0.0.1:8787` on that computer.
 There is no local cloud login or subscription.
 
+These default launches observe tools and provide guides. Fixed Install/Start
+actions require a deliberate non-root Linux launch with
+`hud --enable-tool-management` and that launch's separate operator token from
+the terminal. Enter it under **Home → Data and tools → Authorize Install and
+Start**; see [tool-management authorization](tool-heartbeat.md#authorize-tool-management-for-one-launch).
+This host-maintenance opt-in does not change telemetry or firewall authority.
+
 The desktop installer selects its owner-private XDG settings and data path.
 Other launches use `data/megalodon.db` relative to the launch directory unless
 an explicit configuration says otherwise. Companion installations are optional.
