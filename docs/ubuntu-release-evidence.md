@@ -117,6 +117,25 @@ recomputes both artifact digests and sizes against independently resolved
 source pins. No database, capture, model output, raw log, or private host path
 is retained in this artifact.
 
+The same build job installs that exact wheel offline into a fresh virtual
+environment and runs the synthetic installed-wheel recovery drill outside the
+checkout. It reuses the actual release build environment for build-tool facts;
+it does not build a second wheel. Before and after recovery, the collector
+verifies the closed subject directory and requires the installed wheel's
+version, size and SHA-256 to match the retained subject manifest. A separate
+`release-subject-recovery-<head>-<run-id>-<attempt>` artifact retains only the
+existing v2 recovery JSON for 14 days. The subjects artifact remains exactly
+three files.
+
+The `subject-roundtrip` job downloads both exact same-run artifact IDs into
+separate directories, compares the manifest and receipt hashes with the
+producer's outputs, and verifies the receipt against the retained subjects and
+independently resolved source pins. See the
+[paired offline verification command](installed-recovery-evidence.md#retained-evidence-and-offline-verification).
+Its `release_subject_binding_verified` result confirms cross-artifact byte
+binding; `authentication: not_performed` remains explicit. This does not claim
+an independently reproducible build or authenticate the runner or builder.
+
 After downloading the matching artifact from its Actions run, verify it from
 the reviewed checkout with externally obtained source pins:
 
@@ -218,12 +237,14 @@ reproducible build, review artifact notices, or grant release authority.
 
 ### Remaining candidate gates
 
-The separate [installed-wheel recovery slice](installed-recovery-evidence.md)
-adds a PR-only Ubuntu 24.04 job that installs the built wheel offline into a
-fresh virtual environment, verifies its installed origin/bytes, and rehearses
-synthetic recovery outside the checkout. It retains only a privacy-minimized,
-commit/tree/wheel-bound receipt. It does not populate this packet's checks or
-artifacts, activate restored data, or supply operator/independent acceptance.
+The [installed-wheel recovery evidence](installed-recovery-evidence.md) now
+includes the retained-subject rehearsal above and the unchanged independent
+PR workflow. The latter builds its own ephemeral wheel and retains only a
+privacy-minimized, commit/tree/wheel-bound receipt; it does not establish that
+its wheel equals the retained release wheel. Both install offline into a fresh
+virtual environment, verify installed origin/bytes, and rehearse synthetic
+recovery outside the checkout. Neither populates this packet's checks or
+artifacts, activates restored data, or supplies operator/independent acceptance.
 
 The separate PR workflow `Ubuntu synthetic recovery rehearsal` runs the real
 sample ingestion, backup and restore CLI paths as a non-root user on Ubuntu
