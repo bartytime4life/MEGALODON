@@ -128,7 +128,9 @@ def test_routes_require_explicit_same_origin_requests(monkeypatch):
     started = []
     installer = Installer()
     monkeypatch.setattr(installer, "start", lambda tool, action="install": started.append(tool) or installer.status())
-    handler = type("H", (DashboardHandler,), {"heartbeat": Heartbeat(), "installer": installer})
+    monkeypatch.setattr("megalodon.dashboard._tool_management_user", lambda: True)
+    handler = type("H", (DashboardHandler,), {"heartbeat": Heartbeat(), "installer": installer,
+                   "tool_management_enabled": True, "install_operator_token": "t" * 32})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -137,7 +139,8 @@ def test_routes_require_explicit_same_origin_requests(monkeypatch):
         status, body = _request(server, "GET", "/api/heartbeat", {"X-Megalodon-Check": "1"})
         assert status == 200 and json.loads(body)["schema"] == "megalodon-tool-heartbeat-v1"
         origin = f"http://127.0.0.1:{server.server_port}"
-        good = {"Origin": origin, "Content-Type": "application/json", "X-Megalodon-Install": "1"}
+        good = {"Origin": origin, "Content-Type": "application/json", "X-Megalodon-Install": "1",
+                "X-Megalodon-Install-Token": "t" * 32}
         payload = json.dumps({"tool": "nmap"})
         assert _request(server, "POST", "/api/install", {**good, "Origin": "http://evil.example"}, payload)[0] == 403
         assert _request(server, "POST", "/api/install", {k: v for k, v in good.items() if k != "X-Megalodon-Install"}, payload)[0] == 403
@@ -218,12 +221,14 @@ def test_install_route_accepts_only_known_actions(monkeypatch):
     calls = []
     installer = Installer()
     monkeypatch.setattr(installer, "start", lambda tool, action="install": calls.append((tool, action)) or installer.status())
-    handler = type("H", (DashboardHandler,), {"heartbeat": Heartbeat(), "installer": installer})
+    monkeypatch.setattr("megalodon.dashboard._tool_management_user", lambda: True)
+    handler = type("H", (DashboardHandler,), {"heartbeat": Heartbeat(), "installer": installer,
+                   "tool_management_enabled": True, "install_operator_token": "t" * 32})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         good = {"Origin": f"http://127.0.0.1:{server.server_port}", "Content-Type": "application/json",
-                "X-Megalodon-Install": "1"}
+                "X-Megalodon-Install": "1", "X-Megalodon-Install-Token": "t" * 32}
         assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "start"}))[0] == 202
         assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "stop"}))[0] == 400
         assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "extra": 1}))[0] == 400

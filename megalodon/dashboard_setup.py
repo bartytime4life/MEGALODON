@@ -31,19 +31,26 @@ SETUP_HTML = """
           <p class="setup-boundary">Found means an executable is on the checked PATH. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
           <div id="setup-tool-status" class="tool-status-list"></div>
         </details>
-        <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration; installs run only when you press Install.</p>
+        <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration. Tool management requires an explicitly enabled launch, its operator token, and your confirmation.</p>
       </section>
       <section class="setup-software" aria-labelledby="setup-software-title">
         <p class="setup-step">02 / CHOOSE YOUR WORKFLOW</p>
         <h3 id="setup-software-title" tabindex="-1">Software, without the guesswork</h3>
         <p>Python runs the HUD. Everything else supports a specific workflow; you do not need to download every tool.</p>
+        <details class="tool-status-details" id="tool-management-controls">
+          <summary>Authorize Install and Start</summary>
+          <p id="tool-management-status" role="status">Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
+          <label class="field" for="tool-management-token">Tool management token from the HUD terminal<input id="tool-management-token" type="password" autocomplete="off" spellcheck="false" maxlength="32" disabled></label>
+          <button id="tool-management-forget" type="button">Forget token</button>
+          <p>The token stays in this page's memory and expires when the HUD stops. It is separate from your system password and the AI token. Reloading the page clears it.</p>
+        </details>
         <div class="setup-software-filters">
           <label for="setup-software-workflow">I want to…<select id="setup-software-workflow"><option value="start">Prepare the basics</option><option value="network">Review network evidence</option><option value="host">Explore host and security tools</option><option value="monitor">Explore monitoring tools</option><option value="ai">Explore local AI</option><option value="all">See all software</option></select></label>
           <label for="setup-software-search">Find software<input id="setup-software-search" type="search" placeholder="Search all software…" maxlength="80" autocomplete="off"></label>
         </div>
         <p id="setup-software-count" class="setup-software-count" role="status"></p>
         <div id="setup-software-list" class="setup-software-list"></div>
-        <p class="setup-download-note">Install runs the Ubuntu package (your computer asks for your password) or the Python package for this HUD. Tools without a safe one-click package link to their official guide. <a href="#integrations-title">Review MEGALODON support in Apps →</a></p>
+        <p class="setup-download-note">After authorization, Install runs a fixed Ubuntu or Python package or downloads the example Qwen model; system packages and service starts use your computer's password prompt. Packages can start services. Official guides and terminal commands remain available in observation mode. <a href="#integrations-title">Review MEGALODON support in Apps →</a></p>
       </section>
     </div>
     <div class="setup-bottom">

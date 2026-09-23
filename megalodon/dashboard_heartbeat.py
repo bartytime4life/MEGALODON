@@ -22,7 +22,7 @@ HEARTBEAT_CSS = r"""
 """
 
 HEARTBEAT_JS = r"""
-const heartbeatState = {report: null, byId: new Map(), catalog: null, job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false};
+const heartbeatState = {report: null, byId: new Map(), catalog: null, job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false};
 const heartbeatLabels = {green: 'Presence observed', amber: 'Setup incomplete', red: 'Not found', grey: 'Status unknown'};
 function heartbeatStale() {
   return heartbeatState.failed || Boolean(heartbeatState.report &&
@@ -96,6 +96,20 @@ function installControl(id, name) {
   paintInstallControl(wrap);
   return wrap;
 }
+function toolManagementToken() {
+  const input = byId('tool-management-token');
+  return input && typeof input.value === 'string' && /^[A-Za-z0-9_-]{32}$/.test(input.value) ? input.value : '';
+}
+function paintToolManagement() {
+  const input = byId('tool-management-token'), status = byId('tool-management-status');
+  if (input) {
+    input.disabled = !heartbeatState.managementEnabled;
+    if (!heartbeatState.managementEnabled) input.value = '';
+  }
+  if (status) status.textContent = heartbeatState.managementEnabled
+    ? 'Tool management is enabled for this launch. Paste its token from the HUD terminal to use Install and Start. Each action still needs your confirmation.'
+    : 'Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user. Guides and terminal commands remain available.';
+}
 function paintInstallControl(wrap) {
   const toolId = wrap.heartbeatTool, name = wrap.toolName;
   const entry = heartbeatState.catalog && heartbeatState.catalog.find(item => item.id === toolId);
@@ -108,11 +122,18 @@ function paintInstallControl(wrap) {
   // `ollama pull` needs the server, so Qwen offers Start first when it is stopped.
   const needsModel = model && (!tool || (tool.model !== 'present' && tool.service !== 'stopped'));
   const installing = mine && job.state === 'running' && job.action !== 'start';
+  if (!heartbeatState.managementEnabled) {
+    const starting = tool && tool.installed === 'yes' && tool.expects_service && tool.service === 'stopped';
+    const command = starting ? entry.start_terminal : needsModel || !tool || tool.installed !== 'yes' ? entry.terminal : null;
+    if (model && !entry.one_click && (!tool || tool.installed !== 'yes')) wrap.append(textNode('p', 'Install Ollama from its download page first.', 'hb-detail'));
+    else if (command) wrap.append(textNode('p', `Observation mode. Run separately in a terminal: ${command}`, 'hb-detail'));
+    return;
+  }
   if (entry.one_click && (needsModel || (!model && (!tool || tool.installed !== 'yes')) || installing)) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
     const running = job && job.state === 'running';
     button.textContent = mine && running ? 'Installing…' : model ? 'Download Qwen model' : `Install ${name}`;
-    button.disabled = Boolean(running || heartbeatStale());
+    button.disabled = Boolean(running || heartbeatStale() || !toolManagementToken());
     button.title = entry.summary;
     button.addEventListener('click', () => startInstall(toolId, name, entry));
     wrap.append(button);
@@ -121,7 +142,7 @@ function paintInstallControl(wrap) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
       const running = job && job.state === 'running';
       button.textContent = mine && running ? 'Starting…' : 'Start service';
-      button.disabled = Boolean(running || heartbeatStale());
+      button.disabled = Boolean(running || heartbeatStale() || !toolManagementToken());
       button.title = `Starts the ${name} system service. A process observation does not establish health or integration.`;
       button.addEventListener('click', () => startInstall(toolId, name, entry, 'start'));
       wrap.append(button);
@@ -143,6 +164,7 @@ function paintInstallControl(wrap) {
   if (mine && job.state === 'succeeded') wrap.append(textNode('p', `${starting ? 'Service-start command' : 'Installation command'} finished. Status is checked separately.`, 'hb-detail'));
 }
 function repaintHeartbeat() {
+  paintToolManagement();
   if (typeof document.querySelectorAll !== 'function') return;
   document.querySelectorAll('[data-heartbeat-tool]').forEach(paintHeartbeatLight);
   document.querySelectorAll('[data-heartbeat-detail]').forEach(node => { node.textContent = heartbeatText(heartbeatState.byId.get(node.heartbeatTool)); });
@@ -183,6 +205,14 @@ function validHeartbeat(value) {
   });
   return value;
 }
+function showInstallCompletion(job) {
+  if (!job || !['succeeded', 'failed'].includes(job.state)) return false;
+  const command = job.action === 'start' ? 'Service-start command' : 'Installation command';
+  byId('setup-check-status').textContent = job.state === 'succeeded'
+    ? `${command} finished. Status is checked separately.`
+    : `${command} failed. See the tool for details.`;
+  return true;
+}
 async function pollHeartbeat() {
   if (heartbeatState.polling) return;
   window.clearTimeout(heartbeatState.timer);
@@ -193,11 +223,10 @@ async function pollHeartbeat() {
     heartbeatState.report = validHeartbeat(report);
     heartbeatState.byId = new Map(report.tools.map(tool => [tool.id, tool]));
     heartbeatState.catalog = Array.isArray(install.tools) ? install.tools : null;
+    heartbeatState.managementEnabled = Boolean(install.management && install.management.enabled === true);
     const previous = heartbeatState.job;
     heartbeatState.job = install.job && install.job.state !== 'idle' ? install.job : null;
-    if (previous && previous.state === 'running' && heartbeatState.job && heartbeatState.job.state !== 'running') {
-      byId('setup-check-status').textContent = heartbeatState.job.state === 'succeeded' ? 'Installation finished. Status lights refreshed.' : 'Installation did not finish. See the tool for details.';
-    }
+    if (previous && previous.state === 'running') showInstallCompletion(heartbeatState.job);
     heartbeatState.failed = false; heartbeatState.failures = 0; heartbeatState.lastAt = Date.now();
   } catch (error) {
     heartbeatState.failed = true;
@@ -210,20 +239,32 @@ async function pollHeartbeat() {
   if (document.visibilityState !== 'hidden') heartbeatState.timer = window.setTimeout(pollHeartbeat, delay);
 }
 async function startInstall(toolId, name, entry, action = 'install') {
+  const token = toolManagementToken();
+  if (!heartbeatState.managementEnabled || !token || heartbeatStale()) {
+    byId('setup-check-status').textContent = 'Tool management needs an enabled launch, its operator token, and current tool observations.';
+    return;
+  }
   const starting = action === 'start';
   const question = starting ? `Start the ${name} service?\n\nIt keeps running until you stop it or restart the computer, and may start automatically at boot if its package enabled that.`
     : `Install ${name}?\n\n${entry.summary}`;
   if (!window.confirm(`${question}\n\nYour computer may ask for your password. MEGALODON never sees it.`)) return;
   try {
     const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId, action}),
-      headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1'}});
+      headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1', 'X-Megalodon-Install-Token': token}});
     heartbeatState.job = job;
-    byId('setup-check-status').textContent = `${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`;
+    if (!showInstallCompletion(job)) byId('setup-check-status').textContent = `${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`;
   } catch (error) {
+    if (error.status === 403) byId('tool-management-token').value = '';
     byId('setup-check-status').textContent = `${name} could not be ${starting ? 'started' : 'installed'}: ${error.message}.`;
   }
   repaintHeartbeat(); pollHeartbeat();
 }
+const managementInput = byId('tool-management-token'), managementForget = byId('tool-management-forget');
+if (managementInput) managementInput.addEventListener('input', repaintHeartbeat);
+if (managementForget) managementForget.addEventListener('click', () => {
+  if (managementInput) managementInput.value = '';
+  repaintHeartbeat();
+});
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') window.clearTimeout(heartbeatState.timer);
   else {

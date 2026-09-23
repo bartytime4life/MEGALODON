@@ -180,7 +180,7 @@ function integrationCapabilityState(toolIndex, item) {
     qualification: {...integrationQualificationStates[item.selected_status],
       detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
     administration: {className: 'state-unknown', label: 'Operator managed',
-      detail: 'Install is available where a fixed Ubuntu or Python package exists. The HUD never starts, stops, removes, or configures this app.'},
+      detail: 'Observation is the default. An explicitly enabled Linux HUD and its operator token allow fixed Install/Start actions after confirmation. The HUD has no stop, removal, or configuration action.'},
     health: {className: 'state-unknown', label: 'See the status light',
       detail: 'The heartbeat observes installation, process uptime and service state. It does not probe endpoints, sensor liveness, data freshness, or coverage.'}
   };
