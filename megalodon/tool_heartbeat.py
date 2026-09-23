@@ -52,6 +52,7 @@ class ToolProbe:
     python_module: str | None = None
     processes: frozenset[str] = frozenset()
     service: bool = False
+    home_configuration_files: tuple[str, ...] = ()
 
 
 # Keys match the HUD control ids. Fixed paths cover installs that are
@@ -73,8 +74,9 @@ PROBES: dict[str, ToolProbe] = {
     "ossec": ToolProbe((), ("/var/ossec/bin/ossec-control", "/var/ossec/bin/wazuh-control"),
                        processes=frozenset({"ossec-analysisd", "ossec-monitord", "ossec-agentd", "wazuh-agentd"}),
                        service=True),
-    "greenbone": ToolProbe(("gvmd",), (), ("greenbone-community-edition/compose.yaml",),
-                           processes=frozenset({"gvmd", "openvas", "ospd-openvas", "gsad"}), service=True),
+    "greenbone": ToolProbe(("gvmd",),
+                           processes=frozenset({"gvmd", "openvas", "ospd-openvas", "gsad"}), service=True,
+                           home_configuration_files=("greenbone-community-edition/compose.yaml",)),
     "zabbix": ToolProbe(("zabbix_agent2", "zabbix_agentd", "zabbix_server"),
                         processes=frozenset({"zabbix_agent2", "zabbix_agentd", "zabbix_server"}), service=True),
     "nagios": ToolProbe(("nagios4", "nagios"), ("/usr/local/nagios/bin/nagios",),
@@ -124,11 +126,6 @@ def _installed(probe: ToolProbe, directories: tuple[str, ...], home: Path | None
             return "yes", ctime
         if found == "unknown":
             uncertain = True
-        elif candidate.endswith(".yaml"):
-            try:
-                return "yes", os.stat(candidate).st_ctime
-            except OSError:
-                pass
     if probe.python_module is not None:
         try:
             spec = importlib.util.find_spec(probe.python_module)
@@ -140,6 +137,20 @@ def _installed(probe: ToolProbe, directories: tuple[str, ...], home: Path | None
             return "yes", os.stat(spec.origin).st_ctime
         except OSError:
             return "yes", None
+    if home is not None:
+        for relative in probe.home_configuration_files:
+            try:
+                metadata = os.stat(home / relative, follow_symlinks=False)
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            except OSError:
+                uncertain = True
+                continue
+            # A saved deployment recipe is not an installed executable. Its
+            # presence only leaves container installation unobserved; never
+            # report its metadata change time as an installation observation.
+            if stat.S_ISREG(metadata.st_mode):
+                uncertain = True
     return ("unknown" if uncertain else "no"), None
 
 
