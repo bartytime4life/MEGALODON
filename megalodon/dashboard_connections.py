@@ -141,7 +141,9 @@ function renderAppServiceStarts() {
   const list = byId('app-service-start-list');
   if (!list) return;
   if (heartbeatStale() || !heartbeatState.catalog) {
-    list.textContent = heartbeatState.failed ? 'Local service observations are unavailable. Retry when this HUD reconnects.' : 'Reading local service observations…';
+    list.textContent = heartbeatState.failed ? 'Local service observations are unavailable. Retry when this HUD reconnects.'
+      : heartbeatStale() ? 'Local service observations are stale. Refresh before starting a service.'
+      : 'Reading local service observations…';
     return;
   }
   const rows = startableServiceIds.flatMap(id => {

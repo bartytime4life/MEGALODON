@@ -54,6 +54,9 @@ process.stdin.on('end', async () => {
     const zabbixRow = () => serviceRows().find(row => row.children[0].children[0].children[1].textContent === 'Zabbix');
     assert.equal(serviceRows().length, 2, 'only installed service tools appear in Apps');
     assert.equal(zabbixRow().children[1].children[0].disabled, true, 'Apps start needs opt-in');
+    run("heartbeatState.report.checked_at = new Date(Date.now() - 120000).toISOString(); renderAppServiceStarts()");
+    assert.match(byId('app-service-start-list').textContent, /observations are stale/);
+    run('heartbeatState.report.checked_at = new Date().toISOString(); renderAppServiceStarts()');
     const wrap = run('installControl("scapy", "Scapy")'); controls.push(wrap);
     assert.equal(byId('tool-management-token').disabled, true);
     assert.equal(wrap.children.some(node => node.tag === 'button'), false);
