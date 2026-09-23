@@ -55,9 +55,16 @@ PIDs or command lines.
 
 Detection covers the usual install locations that the earlier PATH-only check
 missed: OSSEC in `/var/ossec/bin`, private Zeek builds in `~/.local/zeek-*`,
-the Greenbone container compose project, all three Zabbix roles, and Nagios
+all three Zabbix roles, and Nagios
 source installs in `/usr/local/nagios`. A matching running process also counts
 as installed.
+
+For Greenbone, a saved `~/greenbone-community-edition/compose.yaml` is only
+configuration. Without an executable or matching process observation, that file
+leaves installation **unknown** (grey), even if the file is executable. Its
+change time is not reported as installation evidence. A missing compose file
+does not establish that Greenbone is absent: **Not found** still describes only
+the bounded observation locations. No container inventory or Docker request runs.
 
 For Qwen, the heartbeat also checks whether the `qwen2.5:7b` model is
 downloaded, by looking for Ollama's manifest file in `$OLLAMA_MODELS`,
