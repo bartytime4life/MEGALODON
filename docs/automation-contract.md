@@ -33,6 +33,40 @@ covers a narrower RRULE surface than full RFC 5545 (see the module docstring)
 and fails closed with `UNSUPPORTED_COMBINATION` outside it, rather than
 approximating.
 
+Weekly previews order each week's `BYDAY` candidates relative to `WKST`
+before applying `COUNT`, inclusive UTC `UNTIL`, or the preview limit. The
+canonical RRULE still lists `BYDAY` in Monday-first order. With the explicit
+`shift_forward` policy, a nonexistent local time moves forward by the size
+of the clock gap: for example, `2027-03-14T02:30:00` in `America/Chicago`
+resolves to `2027-03-14T08:30:00Z`, or `03:30` local. The returned `local_time`
+keeps the intended `02:30` and `dst_status` remains `gap`; `occurrence_at`
+contains the resolved instant. The default policy still rejects gaps and
+ambiguous times, and this preview grants no scheduling or execution authority.
+
+Shifted-gap overlap follows the contract's DTSTART-first and UTC-identity
+requirements: resolved `DTSTART` is the inclusive lower bound and remains
+first; later-generated candidates resolving before it are excluded. Candidates
+are deduplicated by UTC instant, retaining the earliest intended local time
+for a collision, and ordered before `COUNT`, inclusive UTC `UNTIL`, and the
+preview limit are applied. Collisions do not consume `COUNT`. For example,
+Chicago hourly `01:30`, nonexistent `02:30`, and `03:30` on that date resolve
+to two distinct instants; the `02:30` intent represents the shared `08:30Z`
+instant. A minutely preview starting at nonexistent `02:55` begins at `08:55Z`
+and never moves backward into earlier instants after the local gap ends.
+
+The forward preview retains at most 366 candidate instants and scans at most
+10,000 local candidates. Python's UTC offsets are strictly between minus and
+plus 24 hours, so the next local candidate interpreted as UTC minus 24 hours
+provides a conservative lower bound for all later candidates. After a shifted
+gap, lookahead must prove that no later candidate can precede the selected result; exhausting the
+scan budget raises `SCAN_LIMIT` and returns no partial preview. A later
+ambiguous time encountered only for lookahead does not invalidate a complete
+earlier result; ambiguity that could affect the selected result still raises
+`DST_POLICY_INAPPLICABLE` for `shift_forward`.
+
+`DTSTART` must also match any `BYHOUR` and `BYMINUTE` filter. Matching filters
+preserve its seconds, keeping the anchor intact instead of silently moving it.
+
 | Layer | Current state | What that state proves |
 | --- | --- | --- |
 | Stage 0 schema, fixtures, and tests | Implemented on `main` | Closed structural shapes and fixed no-network/no-firewall authority |
