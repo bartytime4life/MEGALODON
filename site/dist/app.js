@@ -150,8 +150,10 @@ const categories = [
 const sourceToolIds = new Set(["core", "tshark", "zeek", "suricata", "scapy"]);
 const toolPresenceKey = "megalodon-tool-presence-v2";
 const toolPresenceValues = new Set(["unchecked", "installed", "missing"]);
-const toolPresenceLabels = { unchecked: "Not checked", installed: "Installed · self-reported", missing: "Not installed · self-reported", stale: "Recheck required" };
+const toolPresenceLabels = { unchecked: "Not checked", installed: "Found by me · unverified", missing: "Not found by me · unverified", stale: "Manual note expired · recheck" };
 const presenceMaxAge = 7 * 24 * 60 * 60 * 1000;
+const readinessMaxAge = 24 * 60 * 60 * 1000;
+const localEvidenceTargets = { core: "detections-title", tshark: "offline-title", zeek: "offline-title", suricata: "suricata-title", scapy: "workspace-traffic" };
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 function loadToolPresence() {
   try {
@@ -203,31 +205,39 @@ function renderVerificationSummary() {
   const unchecked = integrations.length - installed - missing;
   const summary = $("#verification-summary");
   const stale = integrations.filter((item) => presenceFor(item.id) === "stale").length;
-  if (summary) summary.textContent = `Manual notes: ${installed} reported installed · ${missing} reported not installed · ${stale} need recheck · ${unchecked - stale} not checked`;
+  if (summary) summary.textContent = `Manual notes: ${installed} found by operator · ${missing} not found by operator · ${stale} need recheck · ${unchecked - stale} not checked`;
 }
 
-// One light per tool: a fresh manual note wins, then an imported report, else unknown.
+function readinessFor(id) {
+  if (!state.readiness) return null;
+  const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
+  return state.readiness.tools.find((tool) => tool.id === mapped) || null;
+}
+
+function readinessIsStale() {
+  return !!state.readiness && Date.now() - Date.parse(state.readiness.checked_at) > readinessMaxAge;
+}
+
+// One light per tool: current manual note, current imported report, then expired evidence.
 function lightFor(id) {
   const presence = presenceFor(id);
   if (presence === "installed") return { light: "green", label: toolPresenceLabels.installed };
   if (presence === "missing") return { light: "red", label: toolPresenceLabels.missing };
-  if (presence === "stale") return { light: "amber", label: toolPresenceLabels.stale };
-  if (state.readiness) {
-    const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
-    const report = state.readiness.tools.find((tool) => tool.id === mapped);
-    if (report && report.status === "executable_found") return { light: "green", label: "Found in imported report" };
-    if (report && report.status === "not_found") return { light: "red", label: "Not found in imported report" };
+  const report = readinessFor(id);
+  if (report && !readinessIsStale()) {
+    if (report.status === "executable_found") return { light: "green", label: "Executable found in imported PATH report · unverified" };
+    if (report.status === "not_found") return { light: "red", label: "Executable not found in imported PATH report · unverified" };
   }
+  if (presence === "stale") return { light: "amber", label: toolPresenceLabels.stale };
+  if (report && readinessIsStale() && report.status !== "not_checked") return { light: "amber", label: "Imported PATH report expired · recheck" };
   return { light: "grey", label: "Unknown here · live status is in the local HUD" };
 }
 
 function readinessLabel(id) {
   if (!state.readiness) return "Report: not loaded";
-  const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
-  const report = state.readiness.tools.find((tool) => tool.id === mapped);
+  const report = readinessFor(id);
   const labels = { executable_found: "Executable found", not_found: "Not found on checked PATH", not_checked: "Not checked" };
-  const stale = Date.now() - Date.parse(state.readiness.checked_at) > 24 * 60 * 60 * 1000;
-  return `${stale ? "Stale report · " : "Report · "}${labels[report.status]}`;
+  return `${readinessIsStale() ? "Stale report · " : "Report · "}${labels[report?.status || "not_checked"]}`;
 }
 
 let readinessImportSequence = 0;
@@ -322,20 +332,43 @@ function renderIntegrationGrid() {
   $('#tool-result-count').textContent = `${visible.length} of ${integrations.length} tools shown`;
   $('#tool-inspector').hidden = visible.length === 0;
   if (visible.length && !visible.some(item => item.id === state.selectedTool)) state.selectedTool = visible[0].id;
-  $("#integration-grid").replaceChildren(...visible.map((item) => {
+  const cards = visible.map((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `tool-card${state.selectedTool === item.id ? " active" : ""}`;
     button.setAttribute("aria-pressed", String(state.selectedTool === item.id));
     const light = lightFor(item.id);
-    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span></div></div><h2><i class="status-light ${light.light}" role="img" aria-label="Installation status: ${light.label}" title="${light.label}"></i>${item.name}</h2><p>${item.summary}</p>${state.readiness ? `<span class="readiness-card-status">${readinessLabel(item.id)}</span>` : ""}<footer><span>${item.dataKind}</span><span>Open controls →</span></footer>`;
+    button.innerHTML = `<div class="tool-card-top"><span class="tool-monogram">${item.monogram}</span><div class="tool-state-stack"><span class="status-pill ${item.status}">${item.statusLabel}</span></div></div><h2><i class="status-light ${light.light}" role="img" aria-label="Presence note: ${light.label}" title="${light.label}"></i>${item.name}</h2><p>${item.summary}</p>${state.readiness ? `<span class="readiness-card-status">${readinessLabel(item.id)}</span>` : ""}<footer><span>${item.dataKind}</span><span>Open controls →</span></footer>`;
     button.addEventListener("click", () => {
       state.selectedTool = item.id;
       renderIntegrationGrid();
       renderToolInspector();
     });
     return button;
-  }));
+  });
+  if (!visible.length) {
+    const empty = document.createElement("div");
+    empty.className = "tool-empty-state";
+    empty.innerHTML = `<strong>No tools match these filters.</strong><p>Try another search or show all tools.</p>`;
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "control-button";
+    reset.textContent = "Clear filters";
+    reset.addEventListener("click", () => {
+      state.categoryFilter = "all";
+      state.toolFilter = "all";
+      state.toolQuery = "";
+      $("#tool-search").value = "";
+      $("#tool-quick-filter").value = "all";
+      renderCategoryFilters();
+      renderIntegrationGrid();
+      renderToolInspector();
+      $("#tool-search").focus();
+    });
+    empty.append(reset);
+    cards.push(empty);
+  }
+  $("#integration-grid").replaceChildren(...cards);
   renderVerificationSummary();
 }
 
@@ -344,13 +377,13 @@ function renderToolInspector() {
   const acquire = toolAcquisition[item.id];
   const lifecycle = resolveLifecycle(item.id);
   const presence = presenceFor(item.id);
-  const hasHudLane = sourceToolIds.has(item.id);
+  const evidenceTarget = localEvidenceTargets[item.id];
   $("#tool-inspector").innerHTML = `
     <div class="inspector-head">
       <div><span class="tool-monogram">${item.monogram}</span><div><h2><i class="status-light ${lightFor(item.id).light}" aria-hidden="true"></i>${item.name}</h2><small>${lightFor(item.id).label}</small></div></div>
       <div class="inspector-statuses"><span class="status-pill ${item.status}">${item.statusLabel}</span></div>
     </div>
-    <p class="local-hud-callout"><strong>Check recent tool observations locally.</strong> Open the local HUD (<code>python -m megalodon hud</code>) for presence checks and setup guidance. Green means presence observed; grey can mean unknown or stale. These checks do not establish health or a data connection. Install and Start require a separately enabled, operator-authorized HUD launch. This hosted page cannot see your computer.</p>
+    <p class="local-hud-callout"><strong>Check recent tool observations locally.</strong> Open the local HUD (<code>python -m megalodon hud</code>) for presence checks and setup guidance. Green means a recent manual note or imported PATH finding; it is not verified service health or a data connection. Grey means unknown. Any local Install or Start control requires separate operator authorization. This hosted page cannot see your computer.</p>
     <details class="tool-technical"><summary>Data connection &amp; technical details</summary>
     <div class="inspector-section"><span>MEGALODON contract</span><p>${item.contract}</p></div>
     <div class="inspector-section"><span>Imported presence report · self-reported</span><p>${readinessLabel(item.id)}</p><small class="panel-footnote">${state.readiness ? `Claimed check: ${state.readiness.checked_at} · ${state.readiness.platform} · path_presence_only` : "No report loaded. The browser has not inspected this device."}</small>${item.id === "qwen" ? "<p class=\"panel-footnote\">The report checks the Ollama executable only. It does not check a Qwen model or its digest.</p>" : ""}</div>
@@ -380,8 +413,8 @@ function renderToolInspector() {
     <div id="shared-tool-controls"></div>
     <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
     <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
-    <div class="inspector-warning">${hasHudLane ? "A local MEGALODON evidence path exists for this tool. This hosted Site has no connection to it." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
-    ${hasHudLane ? `<button class="control-button inspector-jump" type="button" data-source-jump="${item.id}">Review evidence locally</button>` : ""}
+    <div class="inspector-warning">${evidenceTarget ? "A local MEGALODON evidence view exists for this tool. It may be empty or unavailable; this hosted Site has no connection to it." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
+    ${evidenceTarget ? `<a class="control-button inspector-jump" href="http://127.0.0.1:8787/#${evidenceTarget}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open local evidence view ↗</a><small class="panel-footnote">Requires a running local HUD on this computer.</small>` : ""}
   `;
   const copyInstall = $("[data-copy-install]");
   if (copyInstall) copyInstall.addEventListener("click", async () => {
@@ -405,11 +438,6 @@ function renderToolInspector() {
         $('#tool-inspector h2').focus();
       }
     }
-  });
-  const jump = $("[data-source-jump]");
-  if (jump) jump.addEventListener("click", () => {
-    renderWorkflow(item.id === "suricata" ? "suricata" : "dashboard");
-    switchView("missions");
   });
 }
 
