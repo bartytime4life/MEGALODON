@@ -1,7 +1,8 @@
 # Ubuntu installed-wheel recovery evidence
 
-Issue [#260](https://github.com/bartytime4life/MEGALODON/issues/260) remains
-**PARTIAL / open**. These synthetic CI slices exercise installed wheels on fresh
+The planning issue [#260](https://github.com/bartytime4life/MEGALODON/issues/260)
+was closed on 2026-09-22; operational release acceptance remains incomplete.
+These synthetic CI slices exercise installed wheels on fresh
 non-root Ubuntu 24.04 x86_64 runners with CPython 3.12. One rehearses an
 independently built ephemeral wheel; the other rehearses the exact wheel retained
 as a release subject. Neither completes the release-evidence packet or the
@@ -167,8 +168,8 @@ operator backup/verify/restore/read-only-inspection drill, canonical candidate
 SBOM/provenance review and authentication, artifact notices, independent review
 and exact-candidate owner acceptance remain separate gates. Physical disk-full,
 power-loss/hard-kill, concurrent high-write WAL, clock rollback, native Windows,
-and operational recovery durability remain unproved. Do not close #260 or
-promote a synthetic success receipt to operator or release acceptance.
+and operational recovery durability remain unproved. Closing the planning issue
+does not promote a synthetic success receipt to operator or release acceptance.
 
 Focused regression tests:
 
