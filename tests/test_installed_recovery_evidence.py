@@ -302,6 +302,119 @@ def test_failure_cli_never_echoes_paths_or_raw_errors(tmp_path, capsys):
     assert captured.err == '{"reason":"INSTALLED_RECOVERY_EVIDENCE_FAILED","status":"failed"}\n'
 
 
+@pytest.fixture
+def retained_subjects(tmp_path, receipt):
+    """Synthetic byte subjects; no build or installed recovery claim."""
+    subject_spec = importlib.util.spec_from_file_location(
+        "release_subjects_fixture", ROOT / "tools/release_subjects.py")
+    subjects = importlib.util.module_from_spec(subject_spec)
+    subject_spec.loader.exec_module(subjects)
+    directory = tmp_path / "subjects"
+    directory.mkdir()
+    wheel = directory / "megalodon_defense-0.1.0-py3-none-any.whl"
+    sdist = directory / "megalodon_defense-0.1.0.tar.gz"
+    wheel.write_bytes(b"synthetic wheel bytes")
+    sdist.write_bytes(b"synthetic sdist bytes")
+    receipt["wheel"].update(sha256=tool.digest(wheel.read_bytes()), size_bytes=wheel.stat().st_size)
+    for phase in receipt["phase_receipts"]:
+        phase["wheel_sha256"] = receipt["wheel"]["sha256"]
+    manifest = {
+        "schema": subjects.SCHEMA, "status": "built_unreviewed",
+        "source": {"commit": COMMIT, "tree": TREE}, "package_version": "0.1.0",
+        "artifacts": [subjects._artifact(wheel, "wheel", wheel.name),
+                      subjects._artifact(sdist, "sdist", sdist.name)],
+        "published": False, "limitations": list(subjects.LIMITATIONS),
+    }
+    (directory / "subjects.json").write_bytes(subjects._canonical(manifest))
+    return directory, wheel, sdist, manifest, subjects
+
+
+def test_paired_verification_requires_retained_bytes_and_keeps_legacy_scope(
+        tmp_path, receipt, retained_subjects):
+    directory, *_ = retained_subjects
+    packet = tmp_path / "recovery.json"
+    packet.write_bytes(tool.canonical(tool.packet(receipt)))
+    command = [sys.executable, "-I", str(ROOT / "tools/installed_recovery_evidence.py"),
+               "--expected-commit", COMMIT, "--expected-tree", TREE, "verify", str(packet)]
+    # An artifact-side module must not be imported, including outside checkout.
+    (tmp_path / "release_subjects.py").write_text("raise AssertionError('untrusted module')")
+    legacy = subprocess.run(command, cwd=tmp_path, check=True, capture_output=True, text=True)
+    paired = subprocess.run(command + ["--subjects-directory", str(directory)],
+                            cwd=tmp_path, check=True, capture_output=True, text=True)
+    assert json.loads(legacy.stdout) == {"authentication": "not_performed", "status": "binding_verified"}
+    assert json.loads(paired.stdout) == {"authentication": "not_performed",
+                                       "status": "release_subject_binding_verified"}
+    assert not legacy.stderr and not paired.stderr
+
+
+@pytest.mark.parametrize("fault", [
+    "wheel_hash", "wheel_size", "wheel_version", "commit", "tree",
+    "retained_wheel", "retained_sdist", "extra_file", "symlink", "rebound_subject",
+])
+def test_paired_verification_refuses_inconsistent_or_different_subjects(
+        tmp_path, receipt, retained_subjects, capsys, fault):
+    directory, wheel, sdist, manifest, subjects = retained_subjects
+    if fault == "wheel_hash":
+        receipt["wheel"]["sha256"] = "sha256:" + "0" * 64
+        for phase in receipt["phase_receipts"]:
+            phase["wheel_sha256"] = receipt["wheel"]["sha256"]
+    elif fault == "wheel_size":
+        receipt["wheel"]["size_bytes"] += 1
+    elif fault == "wheel_version":
+        receipt["wheel"]["version"] = "0.2.0"
+    elif fault in ("commit", "tree"):
+        manifest["source"][fault] = "e" * 40
+        (directory / "subjects.json").write_bytes(subjects._canonical(manifest))
+    elif fault in ("retained_wheel", "rebound_subject"):
+        # Equal size and version with different bytes must still fail.
+        wheel.write_bytes(b"Synthetic wheel bytes")
+        if fault == "rebound_subject":
+            manifest["artifacts"][0] = subjects._artifact(wheel, "wheel", wheel.name)
+            (directory / "subjects.json").write_bytes(subjects._canonical(manifest))
+    elif fault == "retained_sdist":
+        sdist.write_bytes(b"changed")
+    elif fault == "extra_file":
+        (directory / "unexpected.json").write_text("{}")
+    elif fault == "symlink":
+        actual = tmp_path / "wheel"
+        wheel.rename(actual)
+        wheel.symlink_to(actual)
+    packet = tmp_path / "private-recovery.json"
+    packet.write_bytes(tool.canonical(tool.packet(receipt)))
+    assert tool.main(["--expected-commit", COMMIT, "--expected-tree", TREE,
+                      "verify", str(packet), "--subjects-directory", str(directory)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == '{"reason":"INSTALLED_RECOVERY_EVIDENCE_FAILED","status":"failed"}\n'
+
+
+@pytest.mark.parametrize("when", ["before", "during"])
+def test_collection_checks_subjects_before_and_after_recovery(
+        tmp_path, receipt, retained_subjects, monkeypatch, capsys, when):
+    directory, wheel, sdist, *_ = retained_subjects
+    calls = []
+    monkeypatch.setattr(tool, "source_identity", lambda *_: receipt["source"])
+    monkeypatch.setattr(tool, "host_facts", lambda *_: receipt["platform"])
+    monkeypatch.setattr(tool, "installed_wheel", lambda *_: receipt["wheel"])
+
+    def rehearsal(*_):
+        calls.append("rehearsal")
+        sdist.write_bytes(b"changed during recovery")
+        return receipt["phase_receipts"]
+
+    monkeypatch.setattr(tool, "rehearsal", rehearsal)
+    if when == "before":
+        sdist.write_bytes(b"changed before recovery")
+    assert tool.main(["--expected-commit", COMMIT, "--expected-tree", TREE,
+                      "collect", "--checkout", str(tmp_path), "--wheel", str(wheel),
+                      "--build-python", sys.executable,
+                      "--subjects-directory", str(directory)]) == 2
+    assert calls == ([] if when == "before" else ["rehearsal"])
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == '{"reason":"INSTALLED_RECOVERY_EVIDENCE_FAILED","status":"failed"}\n'
+
+
 def test_workflow_preserves_install_isolation_and_exact_artifact_roundtrip():
     workflow = (ROOT / ".github/workflows/installed-recovery-evidence.yml").read_text()
     assert "runs-on: ubuntu-24.04" in workflow

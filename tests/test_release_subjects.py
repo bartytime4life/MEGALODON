@@ -100,3 +100,15 @@ def test_workflow_uses_exact_head_and_same_run_artifact_id():
     assert "--require-hashes --only-binary=:all:" in workflow
     assert "PIP_NO_INDEX=1" in workflow
     assert workflow.count("tools/release_subjects.py verify") == 2
+    assert workflow.count("-m build") == 1
+    assert 'wheels=("$RUNNER_TEMP"/release-subjects/megalodon_defense-*.whl)' in workflow
+    assert '--build-python "$RUNNER_TEMP/release-build/bin/python"' in workflow
+    assert "--no-index --no-deps --no-cache-dir" in workflow
+    assert 'cd "$RUNNER_TEMP/release-recovery-run"' in workflow
+    assert workflow.count('--subjects-directory "$RUNNER_TEMP/release-subjects"') == 2
+    assert '--subjects-directory "$RUNNER_TEMP/release-subject-roundtrip"' in workflow
+    assert "artifact-ids: ${{ needs.build-subjects.outputs.recovery-artifact-id }}" in workflow
+    assert "EXPECTED_PACKET_SHA256: ${{ needs.build-subjects.outputs.recovery-packet-sha256 }}" in workflow
+    assert "path: ${{ runner.temp }}/release-recovery-receipts/installed-wheel-recovery.json" in workflow
+    assert "if: always()" not in workflow
+    assert workflow.count("digest-mismatch: error") == 2

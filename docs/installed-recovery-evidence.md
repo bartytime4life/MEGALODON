@@ -1,22 +1,29 @@
 # Ubuntu installed-wheel recovery evidence
 
 Issue [#260](https://github.com/bartytime4life/MEGALODON/issues/260) remains
-**PARTIAL / open**. This separate synthetic CI slice exercises one built wheel
-on a fresh non-root Ubuntu 24.04 x86_64 runner with CPython 3.12. It does not
-complete the release-evidence packet or the operator recovery drill.
+**PARTIAL / open**. These synthetic CI slices exercise installed wheels on fresh
+non-root Ubuntu 24.04 x86_64 runners with CPython 3.12. One rehearses an
+independently built ephemeral wheel; the other rehearses the exact wheel retained
+as a release subject. Neither completes the release-evidence packet or the
+operator recovery drill.
 
 ## What runs
 
-The PR-only [workflow](../.github/workflows/installed-recovery-evidence.yml)
-checks out the exact PR head with read-only repository permissions and without
-persisted credentials. It verifies a clean commit/tree before building and
-again before and after recovery. Existing CI and the source-checkout recovery
-rehearsal remain separate.
+The PR-only [independent recovery workflow](../.github/workflows/installed-recovery-evidence.yml)
+builds its own ephemeral wheel. The
+[release-subject workflow](../.github/workflows/release-subject-evidence.yml)
+also runs recovery in its `build-subjects` job, using the one wheel already built
+for retention and the actual `release-build` Python environment that built it.
+It does not rebuild a replacement wheel. Both check out the exact PR head with
+read-only repository permissions and without persisted credentials, and verify
+a clean commit/tree before building and before and after recovery. Existing CI
+and the source-checkout recovery rehearsal remain separate.
 
 1. Create separate disposable build and installed-package virtual environments
    on the clean hosted runner. Install the existing hash-locked binary build
-   requirements, then build one ephemeral wheel with build isolation disabled
-   and the package index disabled. No project dependency or lock version changes.
+   requirements, then build with isolation and the package index disabled. The
+   independent workflow builds one wheel; the release-subject job reuses its
+   wheel-and-sdist build. No project dependency or lock version changes.
 2. Install that wheel into the fresh runtime environment with `--no-index
    --no-deps --no-cache-dir`. Run Python with `-I`, outside the checkout, without
    `PYTHONPATH` or `PYTHONHOME`. Require only pip and megalodon-defense to be
@@ -42,27 +49,42 @@ allowlist and emits success only after every check passes. Commands have a
 30-second deadline and a combined 16 KiB stdout/stderr limit enforced while
 draining pipes. Files are limited to 8 MiB; manifests and receipts to 16 KiB;
 table reads to 1,024 rows per table with a five-second SQLite query deadline.
-The workflow has a ten-minute limit. Failure emits one fixed reason with no
-raw exception, command output, or path; the success artifact step does not run.
-The dependent `installed-recovery-roundtrip` job downloads the producer's exact
+The independent workflow has a ten-minute limit. Failure emits one fixed reason
+with no raw exception, command output, or path; the success artifact step does
+not run.
+The independent `installed-recovery-roundtrip` job downloads the producer's exact
 artifact ID on a fresh runner. It requires the one expected regular JSON file,
 compares its bytes with the producer's SHA-256, resolves the PR head/tree from
 its own clean checkout, and verifies every phase binding offline. It does not
 repeat the recovery drill or turn a self-asserted receipt into acceptance.
 
+For retained-subject recovery, collection additionally verifies the closed
+three-file release-subject directory against the external commit/tree and
+requires the installed wheel's version, size and SHA-256 to match its manifest.
+It repeats this binding after the drill. The release workflow's
+`subject-roundtrip` job downloads the producer's exact subject and recovery
+artifact IDs into separate directories, compares their manifest/receipt hashes
+with the producer's outputs, and verifies both source pins and the cross-artifact
+wheel binding. The recovery receipt stays outside the subject directory, which
+still contains exactly the wheel, sdist and `subjects.json`.
+
 Python CLI subprocesses reject socket and process-launch audit events. This is
 an accidental-effect guard, not an OS sandbox or hostile-native-code containment
-claim. The workflow uses network access only for GitHub checkout/setup, the
-hash-locked build-tool acquisition, and receipt transport. Wheel installation
+claim. The workflows use network access only for GitHub checkout/setup, the
+hash-locked build-tool acquisition, and artifact transport. Wheel installation
 and recovery have no network fallback, sensor/model operation, or network test.
 
 ## Retained evidence and offline verification
 
-Only `installed-wheel-recovery.json` is uploaded, for 14 days, under an artifact
-name containing the exact PR commit, run ID and attempt. No wheel, database,
-manifest, configuration, raw CLI receipt or rehearsal log is uploaded. Normal
-GitHub build/install logs remain subject to GitHub's log retention settings;
-the collector never prints raw recovery output into those logs.
+The independent recovery workflow uploads only `installed-wheel-recovery.json`
+for 14 days, under `installed-recovery-<head>-<run-id>-<attempt>`. Its wheel is
+not retained. The release-subject workflow retains its wheel, sdist and
+`subjects.json` as before, and uploads the same recovery JSON format separately
+under `release-subject-recovery-<head>-<run-id>-<attempt>`, also for 14 days.
+Neither recovery artifact includes a database, backup manifest, configuration,
+raw CLI receipt or rehearsal log. Normal GitHub build/install logs remain
+subject to GitHub's log retention settings; the collector never prints raw
+recovery output into those logs.
 
 The canonical JSON wrapper contains `receipt` and `receipt_sha256`, a SHA-256
 over the key-sorted compact UTF-8 receipt **including its final newline**. The
@@ -83,8 +105,9 @@ closed `installed-wheel-recovery-v2` receipt retains only:
   the same restored database digest before and after refusal.
 - Fixed aggregate outcomes and explicit exclusions. It contains no paths,
   usernames, hostnames, environment dumps, timestamps, device/inode identities,
-  synthetic event data, or raw CLI receipts. The synthetic artifact bytes are
-  removed after inspection; their digests remain as self-asserted bindings.
+  synthetic event data, or raw CLI receipts. The temporary database, backup and
+  restore bytes are removed after inspection; their digests remain as
+  self-asserted bindings.
 
 Obtain the expected commit and tree from the reviewed PR source independently
 of the downloaded receipt. From that exact checkout, verify offline:
@@ -98,19 +121,41 @@ python tools/installed_recovery_evidence.py \
 
 Verification reads bounded receipt bytes, checks the closed fields and values,
 canonical encoding, digest, phase relationships, and both external source pins.
-It invokes no host
-commands and performs no network request or write. Successful output is
-`binding_verified` with `authentication: not_performed`. The wheel digest binds
-the described ephemeral subject; the wheel, backup, manifest and restored
-database themselves are deliberately not retained by this slice. Their digests
-cannot independently prove the temporary artifact bytes after cleanup. This
-is self-asserted CI evidence, not signature verification,
-independent reproduction, or an authenticated artifact/build provenance claim.
+It invokes no host commands and performs no network request or write. Successful
+receipt-only output is `binding_verified` with `authentication: not_performed`.
+It does not compare the wheel digest with a retained release artifact. For the
+independent workflow, the wheel itself is unavailable after cleanup; matching
+source pins or package versions do not establish matching archive bytes.
+
+To verify the retained-subject path, download both artifacts from the same
+release-subject workflow run and supply the subject directory as well:
+
+```bash
+python tools/installed_recovery_evidence.py \
+  --expected-commit '<reviewed 40-character commit>' \
+  --expected-tree '<reviewed 40-character tree>' \
+  verify /path/to/recovery/installed-wheel-recovery.json \
+  --subjects-directory /path/to/release-subjects
+```
+
+The optional `--subjects-directory` argument follows `collect` or `verify`.
+When supplied, it requires native release-subject verification and exact
+wheel version/size/SHA-256 equality; it never falls back to receipt-only
+verification. Successful paired verification reports
+`release_subject_binding_verified` with `authentication: not_performed`.
+The existing v2 receipt format remains unchanged. The independent workflow and
+historical receipts retain their narrower meaning.
+
+This paired check binds a synthetic recovery receipt to the retained wheel
+bytes. It does not authenticate the CI runner or builder, prove that an
+independent rebuild is byte-identical, or perform signature verification. The
+backup, backup manifest and restored database are still not retained; their
+digests cannot independently prove their temporary bytes after cleanup.
 
 ## Scope and remaining gates
 
-This workflow authorizes only temporary CI installation and synthetic data
-creation/removal. It does not install onto an operator host or inspect operator
+These workflows authorize only temporary CI installation and synthetic data
+creation/removal. They do not install onto an operator host or inspect operator
 data. The restored store is never selected or activated. No release, tag,
 package publication, trusted publishing, deployment, service installation,
 remote UI, firewall apply, scheduler/notifier, live sensor or model operation,
@@ -134,5 +179,5 @@ python -m pytest -q tests/test_installed_recovery_evidence.py
 They cover the real SQLite rehearsal and refusal, wrong-content/foreign-key and
 manifest faults, source/destination preservation, temporary cleanup, receipt
 privacy/claim refusals, source-pin mismatches, output/deadline enforcement and
-the CLI effect guard. The dedicated CI job supplies the installed-wheel test;
+the CLI effect guard. The CI recovery jobs supply the installed-wheel tests;
 the unit rehearsal uses the source CLI and does not claim installed evidence.
