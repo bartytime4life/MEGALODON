@@ -210,6 +210,10 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--port", type=_bounded_cli_integer("port", 1, 65535))
     dashboard.add_argument("--allow-remote", action="store_true", help="removed unsafe option; supplying it refuses startup")
     dashboard.add_argument(
+        "--enable-tool-management", action="store_true",
+        help="hud only: enable token-gated fixed Install/Start actions for a non-root Linux launch",
+    )
+    dashboard.add_argument(
         "--refresh-seconds",
         type=_bounded_cli_integer("refresh-seconds", 2, 300),
         help="live refresh interval from 2 to 300 seconds; overrides configuration",
@@ -803,7 +807,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _dashboard(args: argparse.Namespace) -> int:
-    from .dashboard import loopback_host, serve, UnconfiguredDashboardReader
+    from .dashboard import loopback_host, serve, UnconfiguredDashboardReader, validate_tool_management_mode
     from .offline_projection import load_offline_projection
     from .config import AISettings, BlockingSettings
 
@@ -815,8 +819,10 @@ def _dashboard(args: argparse.Namespace) -> int:
         enabled = getattr(settings.dashboard, "enabled", True)
         if not enabled:
             raise ValueError("dashboard is disabled by configuration")
-        offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         first_launch = getattr(args, "command", "dashboard") == "hud"
+        enable_tool_management = getattr(args, "enable_tool_management", False)
+        validate_tool_management_mode(enable_tool_management, inspect_tools=first_launch)
+        offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with _dashboard_reader(settings.db_path, allow_missing=first_launch) as store:
             serve(
                 store,
@@ -827,6 +833,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                 offline_summary=offline_summary,
                 suricata_db=getattr(args, "suricata_db", None),
                 inspect_tools=first_launch,
+                enable_tool_management=enable_tool_management,
                 source_available=not isinstance(store, UnconfiguredDashboardReader),
                 refresh_seconds=(
                     args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
