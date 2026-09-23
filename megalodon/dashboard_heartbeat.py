@@ -205,6 +205,14 @@ function validHeartbeat(value) {
   });
   return value;
 }
+function showInstallCompletion(job) {
+  if (!job || !['succeeded', 'failed'].includes(job.state)) return false;
+  const command = job.action === 'start' ? 'Service-start command' : 'Installation command';
+  byId('setup-check-status').textContent = job.state === 'succeeded'
+    ? `${command} finished. Status is checked separately.`
+    : `${command} failed. See the tool for details.`;
+  return true;
+}
 async function pollHeartbeat() {
   if (heartbeatState.polling) return;
   window.clearTimeout(heartbeatState.timer);
@@ -218,9 +226,7 @@ async function pollHeartbeat() {
     heartbeatState.managementEnabled = Boolean(install.management && install.management.enabled === true);
     const previous = heartbeatState.job;
     heartbeatState.job = install.job && install.job.state !== 'idle' ? install.job : null;
-    if (previous && previous.state === 'running' && heartbeatState.job && heartbeatState.job.state !== 'running') {
-      byId('setup-check-status').textContent = heartbeatState.job.state === 'succeeded' ? 'Installation finished. Status lights refreshed.' : 'Installation did not finish. See the tool for details.';
-    }
+    if (previous && previous.state === 'running') showInstallCompletion(heartbeatState.job);
     heartbeatState.failed = false; heartbeatState.failures = 0; heartbeatState.lastAt = Date.now();
   } catch (error) {
     heartbeatState.failed = true;
@@ -246,7 +252,7 @@ async function startInstall(toolId, name, entry, action = 'install') {
     const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId, action}),
       headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1', 'X-Megalodon-Install-Token': token}});
     heartbeatState.job = job;
-    byId('setup-check-status').textContent = `${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`;
+    if (!showInstallCompletion(job)) byId('setup-check-status').textContent = `${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`;
   } catch (error) {
     if (error.status === 403) byId('tool-management-token').value = '';
     byId('setup-check-status').textContent = `${name} could not be ${starting ? 'started' : 'installed'}: ${error.message}.`;

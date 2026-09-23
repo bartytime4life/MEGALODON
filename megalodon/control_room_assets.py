@@ -187,6 +187,14 @@ ROOM_CSS = r"""
 @media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps,.setup-journey { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
 @media(max-width:560px) { .room-status { grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; } .room-status > div { padding:.5rem; } .room-status span { font-size:.68rem; } .room-status strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
+@media(max-width:560px), (max-height:500px) {
+  html { height:auto; overflow:auto; }
+  body { height:auto; min-height:100dvh; overflow:visible; }
+  .shell { height:auto; min-height:100dvh; }
+  .room-chrome { max-height:none; overflow:visible; flex-shrink:0; }
+  .workspace-scroll { flex:none; overflow:visible; overscroll-behavior:auto; }
+  .workspace-view { min-height:0; }
+}
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 """
 
