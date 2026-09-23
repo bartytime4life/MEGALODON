@@ -6,21 +6,26 @@ a **status light** next to its name, both in **Home → Data and tools** and in
 
 | Light | Meaning |
 |-------|---------|
-| Green | Installed. For service tools (Suricata, Ollama, OSSEC, Greenbone, Zabbix, Nagios) the service process is also running; hover to see its uptime. |
-| Amber | Installed, but the tool's expected service is not running. For Qwen, also amber while Ollama is installed but the `qwen2.5:7b` model has not been downloaded. |
-| Red   | Not installed. |
-| Grey  | Unknown (for example, a non-Linux host or unreadable metadata). |
+| Green | Presence observed. For service tools the expected process name was also observed; this is not a service health or integration check. |
+| Amber | Setup incomplete: an expected process was not observed, or a readable Ollama store lacks the example `qwen2.5:7b` manifest. |
+| Red   | Not found in the bounded observation locations. This does not prove that no installation exists elsewhere. |
+| Grey  | Unknown or stale: for example, an incomplete process observation, unreadable model metadata, unsupported platform, or failed/expired check. |
 
-The detail line under each name shows the uptime (for example `up 3h 12m`) and
-the date the tool was installed, based on the executable's change time.
+The detail line shows observed process uptime (for example `up 3h 12m`) and
+file metadata change time. Metadata change time is not an installation date.
+The Qwen row explicitly describes the example `qwen2.5:7b` manifest; it does
+not assess the selected AI model, its digest, provider health or admission.
+Use the separate opt-in AI readiness workflow for that evidence.
 
 ## History since the HUD started
 
 The detail line also shows how the tool has behaved since you opened the HUD:
 
-* `healthy 98.5% since HUD start`: the share of observed time the light was
-  green, shown after at least a minute of observation. Time is weighted
-  between checks, so a hidden tab (no checks) does not skew the figure.
+* `green in 98.5% of recorded observation time`: the time-weighted share of
+  short observation intervals whose initial light was green. Gaps longer
+  than 90 seconds and reversed clock intervals are excluded. This is not
+  measured service availability. The v1 receipt retains the compatibility
+  field name `healthy_percent` with this observation-only meaning.
 * `amber → green at 14:32`: the most recent light change.
 
 The HUD keeps the last six changes per tool in memory only. Nothing is written
@@ -35,6 +40,13 @@ Checks run in the background, and only when they are useful:
 * every 60 seconds while the HUD tab is visible (hidden tabs pause polling);
 * right away when you return to the tab after more than a minute;
 * every 2 seconds while an installation runs, then once more when it finishes.
+
+A failed check immediately makes previous lights grey and visibly stale.
+Visible tabs retry after 5, 10, 20, 40, then at most every 60 seconds; a
+successful response restores normal polling. Only one poll runs per page at a
+time. Hidden tabs cancel polling and resume on return. Observations older
+than 90 seconds are stale, and a busy server cannot return an expired cache
+as current success.
 
 The server caches each observation for 5 seconds, so extra tabs add almost no
 load. A heartbeat reads file metadata and `/proc` process names and start
@@ -54,7 +66,9 @@ metadata and never contacts the Ollama server. It reports the model as missing
 only when it can read an Ollama model store that lacks the tag. When no store is
 visible, or the service's directory is not readable by your user (for example, a
 custom `OLLAMA_MODELS` set only in the service's systemd unit), the status is
-unknown and the light is not held amber.
+unknown and the light is grey unless an independently known missing/stopped
+condition already makes it amber. Model-file presence does not prove the
+configured model is loaded, safe, or authorized for inference.
 
 ## Install button
 
