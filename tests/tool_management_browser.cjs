@@ -50,6 +50,13 @@ process.stdin.on('end', async () => {
     const settled = () => new Promise(resolve => setImmediate(resolve));
     const posts = () => requests.filter(request => request.options.method === 'POST');
     await run('pollHeartbeat()');
+    const serviceRows = () => byId('app-service-start-list').children;
+    const zabbixRow = () => serviceRows().find(row => row.children[0].children[0].children[1].textContent === 'Zabbix');
+    assert.equal(serviceRows().length, 2, 'only installed service tools appear in Apps');
+    assert.equal(zabbixRow().children[1].children[0].disabled, true, 'Apps start needs opt-in');
+    run("heartbeatState.report.checked_at = new Date(Date.now() - 120000).toISOString(); renderAppServiceStarts()");
+    assert.match(byId('app-service-start-list').textContent, /observations are stale/);
+    run('heartbeatState.report.checked_at = new Date().toISOString(); renderAppServiceStarts()');
     const wrap = run('installControl("scapy", "Scapy")'); controls.push(wrap);
     assert.equal(byId('tool-management-token').disabled, true);
     assert.equal(wrap.children.some(node => node.tag === 'button'), false);
@@ -79,6 +86,12 @@ process.stdin.on('end', async () => {
     assert.equal(service.children[0].textContent, 'Start service');
     await service.children[0].events.click(); await settled();
     assert.equal(JSON.parse(posts()[1].options.body).action, 'start');
+    observedJob = {state: 'idle'};
+    await run('pollHeartbeat()');
+    assert.equal(zabbixRow().children[1].children[0].disabled, false, 'Apps start is available with a launch token');
+    await zabbixRow().children[1].children[0].events.click(); await settled();
+    assert.deepEqual(JSON.parse(posts().at(-1).options.body), {tool: 'zabbix', action: 'start'});
+    assert.match(byId('app-service-start-feedback').textContent, /Starting Zabbix/);
     const model = run('installControl("qwen", "Qwen")');
     assert.equal(model.children[0].textContent, 'Download Qwen model');
     postStatus = 403;
