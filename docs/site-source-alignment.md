@@ -1,6 +1,20 @@
 # Defense Console source alignment
 
-## Current publication — Console v30, merged installer links
+## Local reference correction — not published
+
+Source basis: `ad3266562c647f0131ec62c4882895cd1951acca`, with the HUD
+operator-authorization wording dependent on PR #392. This repository-only
+change corrects stale local-HUD status descriptions and the ECS/OCSF writer
+state. It changes no data connection, command execution, audience or Site
+identity. The source now intentionally differs from the hosted publication.
+
+OBSERVED on 2026-09-23: Sites still reports version 30, source
+`7a96f64b8e9cd5974c9f872c5346726d129f91c0`, owner-only custom access and zero
+external visitors. No version save, source push to Sites or deployment was
+performed. Publication and rendered hosted acceptance require separate
+authorization; the original v30 receipt below retains its historical basis.
+
+## Existing publication — Console v30, merged installer links
 
 OBSERVED 2026-09-21: the existing owner-only Console serves version 30. Its
 install links use the immutable #323 merge

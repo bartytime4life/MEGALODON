@@ -70,9 +70,33 @@ unknown and the light is grey unless an independently known missing/stopped
 condition already makes it amber. Model-file presence does not prove the
 configured model is loaded, safe, or authorized for inference.
 
+## Authorize tool management for one launch
+
+The default HUD observes tools and offers official guides and terminal commands.
+To enable its fixed Install, Download and Start actions, deliberately launch it
+from your existing MEGALODON environment as your ordinary Linux user:
+
+```bash
+python -m megalodon hud --enable-tool-management
+```
+
+The installed launcher accepts the same option:
+`~/.local/bin/megalodon-hud --enable-tool-management`.
+The ordinary `dashboard` command, root real/effective IDs, and other platforms
+refuse this opt-in. Do not use `sudo` to run the HUD.
+
+Copy the **tool management operator token** printed in that launch's terminal
+into **Home → Data and tools → Authorize Install and Start**. It is separate
+from the AI token and the operating system password. The token remains only in
+page memory, is sent only in the Install/Start request header, and is not stored
+in browser storage or exposed by any GET route. Reload or **Forget token** clears
+it; restarting the HUD generates a new token. Keep it private. Each action still
+requires a confirmation dialog, and stale observations disable its buttons.
+
 ## Install button
 
-Tools with a fixed package show an **Install** button:
+After enabling tool management and entering the token, tools with a fixed
+package offer an **Install** button:
 
 | Tool | What the button runs |
 |------|----------------------|
@@ -117,10 +141,15 @@ comes before Download, because `ollama pull` needs the server running.
 | Route | Requirement | Purpose |
 |-------|-------------|---------|
 | `GET /api/heartbeat` | `X-Megalodon-Check: 1`, HUD mode | `megalodon-tool-heartbeat-v1` receipt |
-| `GET /api/install` | `X-Megalodon-Check: 1`, HUD mode | recipe catalog and current job status |
-| `POST /api/install` | exact same-site `Origin`, `Content-Type: application/json`, `X-Megalodon-Install: 1`, body `{"tool": "<id>", "action": "install" or "start"}` (action optional, defaults to install) of 96 bytes or less | starts one fixed recipe or service unit; `409` while another job runs |
+| `GET /api/install` | `X-Megalodon-Check: 1`, HUD mode | recipe catalog, current job status and `management: {enabled, authorization}`; authorization is `disabled` or `per_launch_token`; never the token |
+| `POST /api/install` | explicitly enabled non-root Linux HUD, exact same-site `Origin`, `Content-Type: application/json`, `X-Megalodon-Install: 1`, exactly one matching `X-Megalodon-Install-Token`, body `{"tool": "<id>", "action": "install" or "start"}` (action optional, defaults to install) of 1–96 bytes | starts one fixed recipe or service unit; `202` accepted, `409` while another job runs, `422` unavailable |
 
-The request body selects only a tool id. Package names and commands come from
-the closed registry in `megalodon/tool_installer.py`. Because the POST needs a
-custom header, a cross-site page would have to pass a CORS preflight first, and
-this server never grants one.
+The body selects only a string tool id and optional string action; repeated
+keys, unknown fields and untyped values return 400. Transfer/content encodings,
+duplicate credentials and unauthorized requests are refused with 403; malformed
+or repeated Content-Length returns 400. Package names and commands come from
+the closed registry in `megalodon/tool_installer.py`. Custom headers and exact
+Origin/Host block cross-site browser requests because no CORS preflight is
+granted. They are public values, so the separate launch token is also required
+to authenticate a local operator. The token never grants an arbitrary command,
+firewall operation, model inference, or telemetry mutation.

@@ -5,6 +5,7 @@ import argparse
 from contextlib import closing
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -398,6 +399,25 @@ def verify(raw, commit, tree):
     return wrapper["receipt"]
 
 
+def verify_release_subject(wheel, directory, commit, tree):
+    """Bind recovery to retained bytes, using the same checkout's native verifier.
+
+    Loading this fixed sibling also works under ``python -I`` without adding
+    the checkout or any artifact directory to the module search path.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "_megalodon_release_subjects", Path(__file__).with_name("release_subjects.py"))
+    require(spec is not None and spec.loader is not None, "SUBJECT_VERIFIER")
+    subjects = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(subjects)
+    manifest = subjects.verify(directory, commit, tree)
+    subject = manifest["artifacts"][0]
+    require(wheel == {
+        "distribution": "megalodon-defense", "version": manifest["package_version"],
+        "sha256": subject["sha256"], "size_bytes": subject["size_bytes"],
+    }, "RELEASE_WHEEL_MISMATCH")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-commit", required=True)
@@ -407,20 +427,34 @@ def main(argv=None):
     collect.add_argument("--checkout", type=Path, required=True)
     collect.add_argument("--wheel", type=Path, required=True)
     collect.add_argument("--build-python", type=Path, required=True)
+    collect.add_argument("--subjects-directory", type=Path)
     check = modes.add_parser("verify")
     check.add_argument("receipt", type=Path)
+    check.add_argument("--subjects-directory", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.mode == "verify":
-            verify(read_bounded(args.receipt, MAX_OUTPUT), args.expected_commit, args.expected_tree)
-            print('{"authentication":"not_performed","status":"binding_verified"}')
+            receipt = verify(read_bounded(args.receipt, MAX_OUTPUT), args.expected_commit, args.expected_tree)
+            status = "binding_verified"
+            if args.subjects_directory is not None:
+                verify_release_subject(receipt["wheel"], args.subjects_directory,
+                                       args.expected_commit, args.expected_tree)
+                status = "release_subject_binding_verified"
+            print(json.dumps({"authentication": "not_performed", "status": status},
+                             separators=(",", ":"), sort_keys=True))
         else:
             source = source_identity(args.checkout, args.expected_commit, args.expected_tree)
             host = host_facts(args.build_python, args.checkout)
             wheel = installed_wheel(args.wheel, args.checkout)
+            if args.subjects_directory is not None:
+                verify_release_subject(wheel, args.subjects_directory,
+                                       args.expected_commit, args.expected_tree)
             phases = rehearsal(args.expected_commit, args.expected_tree, wheel["sha256"])
             source_identity(args.checkout, args.expected_commit, args.expected_tree)
             require(installed_wheel(args.wheel, args.checkout) == wheel, "WHEEL_CHANGED")
+            if args.subjects_directory is not None:
+                verify_release_subject(wheel, args.subjects_directory,
+                                       args.expected_commit, args.expected_tree)
             receipt = {"schema_version": "installed-wheel-recovery-v2", "status": "synthetic_slice_passed",
                        "source": source, "wheel": wheel, "platform": host, "checks": dict(CHECKS),
                        "phase_receipts": phases, "exclusions": list(EXCLUSIONS),

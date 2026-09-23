@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
 
 permissions:
   contents: read
@@ -39,6 +39,8 @@ jobs:
           import json
           import os
           import re
+          import time
+          from datetime import datetime
           import urllib.error
           import urllib.request
           from pathlib import Path
@@ -56,7 +58,24 @@ jobs:
           else:
               pr_number = int(event["issue"]["number"])
 
+          class IncompleteState(Exception):
+              pass
+
+          # One shared budget covers both scans and all pull-state reads.
+          MAX_COMMENTS = 1000
+          MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+          MAX_TOTAL_BYTES = 128 * 1024 * 1024
+          deadline = time.monotonic() + 180
+          remaining_bytes = MAX_TOTAL_BYTES
+
+          def time_left():
+              remaining = deadline - time.monotonic()
+              if remaining <= 0:
+                  raise IncompleteState("GitHub read deadline exhausted")
+              return remaining
+
           def get_json(path: str):
+              global remaining_bytes
               request = urllib.request.Request(
                   f"{api}{path}",
                   headers={
@@ -66,24 +85,92 @@ jobs:
                       "User-Agent": "megalodon-owner-lifecycle-gate",
                   },
               )
-              with urllib.request.urlopen(request, timeout=20) as response:
-                  return json.load(response)
+              chunks = []
+              size = 0
+              with urllib.request.urlopen(request, timeout=min(20, time_left())) as response:
+                  while True:
+                      time_left()
+                      chunk = response.read(65536)
+                      time_left()
+                      if not chunk:
+                          break
+                      size += len(chunk)
+                      remaining_bytes -= len(chunk)
+                      if size > MAX_RESPONSE_BYTES or remaining_bytes < 0:
+                          raise IncompleteState("GitHub response byte bound exceeded")
+                      chunks.append(chunk)
+              return json.loads(b"".join(chunks))
+
+          def pull_state():
+              pull = get_json(f"/repos/{repository}/pulls/{pr_number}")
+              if not isinstance(pull, dict) or not isinstance(pull.get("head"), dict):
+                  raise IncompleteState("malformed pull state")
+              sha = pull["head"].get("sha")
+              draft = pull.get("draft")
+              count = pull.get("comments")
+              if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+                  raise IncompleteState("non-canonical head SHA")
+              if type(draft) is not bool or type(count) is not int or count < 0:
+                  raise IncompleteState("malformed pull state")
+              if count > MAX_COMMENTS:
+                  raise IncompleteState("comment history exceeds 1000-comment bound")
+              return sha, draft, count
+
+          def scan_comments(count):
+              comments = []
+              previous_id = 0
+              # A full last page cannot prove exhaustion: read an empty sentinel
+              # page even at the 1000-comment ceiling (at most eleven requests).
+              for offset in range(0, count + (1 if count % 100 == 0 else 0), 100):
+                  # Construct only fixed numbered API paths; never follow supplied URLs.
+                  page = get_json(
+                      f"/repos/{repository}/issues/{pr_number}/comments"
+                      f"?per_page=100&page={offset // 100 + 1}"
+                  )
+                  if not isinstance(page, list) or len(page) != min(100, count - offset):
+                      raise IncompleteState("incomplete comment page")
+                  for comment in page:
+                      if not isinstance(comment, dict):
+                          raise IncompleteState("malformed comment")
+                      identity = comment.get("id")
+                      user = comment.get("user")
+                      created = comment.get("created_at")
+                      association = comment.get("author_association")
+                      body = comment.get("body")
+                      if (
+                          type(identity) is not int or identity <= previous_id
+                          or not isinstance(user, dict)
+                          or not isinstance(user.get("login"), str)
+                          or not isinstance(association, str)
+                          or not isinstance(created, str)
+                          or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", created)
+                          or (body is not None and not isinstance(body, str))
+                      ):
+                          raise IncompleteState("malformed or unordered comment")
+                      datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ")
+                      previous_id = identity
+                      # Compare every input consumed by the authorization decision.
+                      comments.append({
+                          "id": identity, "user": {"login": user["login"]},
+                          "author_association": association, "created_at": created,
+                          "body": body or "",
+                      })
+              return comments
 
           try:
-              pull = get_json(f"/repos/{repository}/pulls/{pr_number}")
-              comments = get_json(
-                  f"/repos/{repository}/issues/{pr_number}/comments?per_page=100"
-              )
-          except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-              print(f"OWNER_LIFECYCLE_ERROR: unable to read GitHub state: {exc}")
-              raise SystemExit(2)
-
-          head = pull["head"]["sha"]
-          if not re.fullmatch(r"[0-9a-f]{40}", head):
-              print("OWNER_LIFECYCLE_ERROR: GitHub returned a non-canonical head SHA")
-              raise SystemExit(2)
-          if pull["draft"]:
-              print("OWNER_LIFECYCLE_HOLD: pull request is draft")
+              initial = pull_state()
+              head, draft, count = initial
+              if draft:
+                  raise IncompleteState("pull request is draft")
+              comments = scan_comments(count)
+              if pull_state() != initial:
+                  raise IncompleteState("pull state changed during comment retrieval")
+              confirmed = scan_comments(count)
+              if confirmed != comments or pull_state() != initial:
+                  raise IncompleteState("GitHub state changed during confirmation")
+              time_left()
+          except (IncompleteState, OSError, ValueError, urllib.error.URLError) as exc:
+              print(f"OWNER_LIFECYCLE_HOLD: unable to confirm complete GitHub state: {exc}")
               raise SystemExit(3)
 
           header = "MEGALODON-OWNER-AUTHORIZATION-V1"
