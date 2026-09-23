@@ -6,7 +6,8 @@ process.stdin.on('data', chunk => input += chunk);
 process.stdin.on('end', async () => {
   try {
     const {code} = JSON.parse(input), nodes = new Map(), controls = [], requests = [];
-    let enabled = false, confirmation = true, postStatus = 202;
+    let enabled = false, confirmation = true, postStatus = 202, postState = 'running';
+    let observedJob = {state: 'idle'};
     const token = 't'.repeat(32);
     function element(tag = '') {
       return {tag, children: [], textContent: '', value: '', events: {},
@@ -36,11 +37,11 @@ process.stdin.on('end', async () => {
       fetch: async (path, options) => {
         requests.push({path, options});
         if (options.method === 'POST') return {ok: postStatus === 202, status: postStatus,
-          json: async () => postStatus === 202 ? {state: 'running', ...JSON.parse(options.body), output: []}
+          json: async () => postStatus === 202 ? {state: postState, ...JSON.parse(options.body), output: []}
             : {error: 'tool management operator authorization required'}};
         return {ok: true, status: 200, json: async () => path === '/api/heartbeat'
           ? {schema: 'megalodon-tool-heartbeat-v1', checked_at: new Date().toISOString(), tools}
-          : {tools: catalog, management: {enabled}, job: {state: 'idle'}}};
+          : {tools: catalog, management: {enabled}, job: observedJob}};
       },
     };
     vm.createContext(context);
@@ -84,10 +85,43 @@ process.stdin.on('end', async () => {
     await model.children[0].events.click(); await settled();
     assert.equal(byId('tool-management-token').value, '');
     assert.equal(wrap.children[0].disabled, true);
+    assert.match(byId('setup-check-status').textContent, /could not be installed: tool management operator authorization required/);
     byId('tool-management-token').value = token;
     byId('tool-management-forget').events.click();
     assert.equal(byId('tool-management-token').value, '');
     assert.equal(wrap.children[0].disabled, true);
+    const afterForget = posts().length;
+    await run('startInstall("scapy", "Scapy", heartbeatState.catalog[0])');
+    assert.equal(posts().length, afterForget, 'Forgetting authorization prevents further POSTs');
+
+    postStatus = 202;
+    byId('tool-management-token').value = token;
+    for (const [tool, name, entryIndex, action, command, pending] of [
+      ['scapy', 'Scapy', 0, 'install', 'Installation command', 'Installing Scapy'],
+      ['zabbix', 'Zabbix', 1, 'start', 'Service-start command', 'Starting Zabbix'],
+    ]) {
+      for (const terminal of ['succeeded', 'failed']) {
+        const expected = terminal === 'succeeded'
+          ? `${command} finished. Status is checked separately.`
+          : `${command} failed. See the tool for details.`;
+        postState = terminal;
+        observedJob = {tool, action, state: terminal, output: []};
+        await run(`startInstall('${tool}', '${name}', heartbeatState.catalog[${entryIndex}], '${action}')`);
+        await settled();
+        assert.equal(byId('setup-check-status').textContent, expected, `${action}: immediate ${terminal}`);
+        assert.equal(JSON.parse(posts().at(-1).options.body).action, action);
+
+        postState = 'running';
+        observedJob = {tool, action, state: 'running', output: []};
+        await run(`startInstall('${tool}', '${name}', heartbeatState.catalog[${entryIndex}], '${action}')`);
+        await settled();
+        assert.match(byId('setup-check-status').textContent, new RegExp(pending));
+        observedJob = {...observedJob, state: terminal};
+        await run('pollHeartbeat()');
+        assert.equal(byId('setup-check-status').textContent, expected, `${action}: polled ${terminal}`);
+        assert.doesNotMatch(byId('setup-check-status').textContent, /Installing|Starting|healthy|integrated|lights refreshed/);
+      }
+    }
     byId('tool-management-token').value = token;
     enabled = false;
     await run('pollHeartbeat()');

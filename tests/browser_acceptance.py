@@ -479,10 +479,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await page.locator("#pause-button").click()
         passed("native foreground resumes polling", counts["summary"] > hidden_counts["summary"])
-        REPORT["stage"] = "mobile-layout-and-focus"
-        await page.set_viewport_size({"width": 375, "height": 812})
-        passed("mobile page fits viewport", await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
-        passed("command center remains viewport-pinned", await page.evaluate("""() => {
+        passed("desktop command center remains viewport-pinned", await page.evaluate("""() => {
             const shell = document.querySelector('.shell').getBoundingClientRect();
             const scroller = document.querySelector('.workspace-scroll');
             return shell.top >= -1 && shell.bottom <= innerHeight + 1
@@ -490,9 +487,23 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
                 && getComputedStyle(document.body).overflow === 'hidden'
                 && getComputedStyle(scroller).overflowY === 'auto';
         }"""))
+        REPORT["stage"] = "mobile-layout-and-focus"
+        await page.set_viewport_size({"width": 375, "height": 812})
+        passed("mobile page fits viewport", await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+        passed("mobile workspace uses document scrolling", await page.evaluate("""() => {
+            return getComputedStyle(document.documentElement).overflowY === 'auto'
+                && getComputedStyle(document.body).overflowY === 'visible'
+                && getComputedStyle(document.querySelector('.workspace-scroll')).overflowY === 'visible'
+                && document.scrollingElement.scrollHeight > innerHeight;
+        }"""))
         await page.locator("#filter-query").focus()
         passed("rendered keyboard focus", await page.locator("#filter-query").evaluate(
             "el => document.activeElement === el && getComputedStyle(el).outlineStyle !== 'none'"))
+        passed("mobile header scrolls away to expose focused controls", await page.evaluate("""() => {
+            const field = document.querySelector('#filter-query').getBoundingClientRect();
+            return document.scrollingElement.scrollTop > 0 && field.top >= 0 && field.bottom <= innerHeight
+                && document.querySelector('.topbar').getBoundingClientRect().bottom < 0;
+        }"""))
         await page.set_viewport_size({"width": 1440, "height": 1000})
         await page.locator("#workspace-tab-traffic").click()
         REPORT["zoom_equivalent_viewports"] = {}
@@ -501,14 +512,15 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             metrics = await page.evaluate("""() => ({
                 width: innerWidth, height: innerHeight,
                 root_scroll_width: document.documentElement.scrollWidth,
-                workspace_scroll: getComputedStyle(document.querySelector('.workspace-scroll')).overflowY
+                workspace_scroll: getComputedStyle(document.querySelector('.workspace-scroll')).overflowY,
+                page_scroll: getComputedStyle(document.documentElement).overflowY
             })""")
             REPORT["zoom_equivalent_viewports"][str(level)] = metrics
-            passed(f"{level} percent zoom-equivalent viewport preserves return and internal scroll",
+            passed(f"{level} percent zoom-equivalent viewport preserves return and page scroll",
                    await page.locator(".room-back").is_visible() and
                    metrics["width"] == width and metrics["height"] == height and
                    metrics["root_scroll_width"] <= metrics["width"] + 1 and
-                   metrics["workspace_scroll"] == "auto")
+                   metrics["workspace_scroll"] == "visible" and metrics["page_scroll"] == "auto")
         await page.set_viewport_size({"width": 1440, "height": 1000})
         passed("no page script errors or nonlocal page requests", not errors and not violations)
     finally:
