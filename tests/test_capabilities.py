@@ -63,7 +63,8 @@ def test_critical_boundaries_are_explicit():
         "Plans are inert review evidence; live application is unsupported and refused."
     )
     assert items["qwen-ollama"]["selected_status"] == "contract_only"
-    assert "no CLI" in items["qwen-ollama"]["boundary"]
+    assert "no CLI or tool authority for that policy" in items["qwen-ollama"]["boundary"]
+    assert "installed-provider acceptance remains unproved" in items["qwen-ollama"]["boundary"]
     assert items["nmap"]["selected_status"] == "proposed"
     assert items["ossec"]["selected_status"] == "proposed"
     assert items["greenbone"]["selected_status"] == "guest_only"
@@ -88,6 +89,7 @@ def test_suricata_runtime_status_matches_reader_and_explicit_consumer():
     )
     assert "main-thread API" in linux["suricata"]["boundary"]
     assert "one completed private contract envelope file" in linux["suricata"]["boundary"]
+    assert "checksum-bound Suricata 8.0.7 alert-only EVE converter" in linux["suricata"]["boundary"]
     assert "pre-created private store" in linux["suricata"]["boundary"]
     assert "read-only reconcile" in linux["suricata"]["boundary"]
     assert windows["suricata"]["selected_status"] == "contract_only"
@@ -99,7 +101,9 @@ def test_planned_interface_slots_never_claim_runtime_authority():
     assert set(items) >= planned
     assert {items[item]["selected_status"] for item in planned} <= {"contract_only", "proposed"}
     assert items["qwen-ollama"]["selected_status"] == "manual_only"
-    assert "no CLI" in items["qwen-ollama"]["boundary"]
+    assert "original run-count advisory" in items["qwen-ollama"]["boundary"]
+    assert "Separate opt-in anomaly/AI CLI and token-gated HUD paths exist" in items["qwen-ollama"]["boundary"]
+    assert "firewall application is unsupported" in items["qwen-ollama"]["boundary"]
     assert "No scan launcher" in items["nmap"]["boundary"]
     assert "No daemon" in items["ossec"]["boundary"]
     assert "No scanner or feed control" in items["greenbone"]["boundary"]
