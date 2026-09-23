@@ -24,6 +24,13 @@ REPOSITORY_URLS = {
     "https://github.com/bartytime4life/MEGALODON.git",
 }
 SCHEMA = "megalodon-ephemeral-subjects-v1"
+CI_SCHEMA = "megalodon-ephemeral-subjects-v2"
+REPOSITORY = "bartytime4life/MEGALODON"
+WORKFLOW = ".github/workflows/release-subject-evidence.yml"
+PRODUCER_JOB = "build-subjects"
+WORKFLOW_REF = re.compile(re.escape(REPOSITORY + "/" + WORKFLOW) + r"@refs/pull/[1-9][0-9]{0,9}/merge\Z")
+RUN_ID = re.compile(r"[1-9][0-9]{0,19}\Z")
+RUN_ATTEMPT = re.compile(r"[1-9][0-9]{0,5}\Z")
 LIMITATIONS = (
     "Temporary CI build subjects; no package publication or release authority.",
     "Source and artifact digests bind bytes but do not authenticate the runner or builder.",
@@ -39,6 +46,45 @@ class SubjectError(ValueError):
 
 def _fail(code: str) -> None:
     raise SubjectError(code) from None
+
+
+def validate_producer(value: object) -> dict:
+    """Validate a closed declaration, never authenticate a GitHub runner."""
+    if type(value) is not dict or set(value) != {
+        "basis", "repository", "workflow", "workflow_ref", "workflow_commit",
+        "job", "run_id", "run_attempt", "authentication",
+    } or any(type(item) is not str for item in value.values()):
+        _fail("PRODUCER_INVALID")
+    if (value["basis"] != "github_actions"
+            or value["authentication"] != "not_performed"
+            or value["repository"] != REPOSITORY or value["workflow"] != WORKFLOW
+            or value["job"] != PRODUCER_JOB
+            or WORKFLOW_REF.fullmatch(value["workflow_ref"]) is None
+            or HEX40.fullmatch(value["workflow_commit"]) is None
+            or RUN_ID.fullmatch(value["run_id"]) is None
+            or RUN_ATTEMPT.fullmatch(value["run_attempt"]) is None):
+        _fail("PRODUCER_INVALID")
+    return value
+
+
+def github_actions_producer(*, roundtrip: bool = False) -> dict:
+    """Capture only allowlisted CI context; environment values are self-asserted."""
+    env = os.environ
+    if (env.get("GITHUB_ACTIONS") != "true"
+            or env.get("GITHUB_SERVER_URL") != "https://github.com"
+            or env.get("GITHUB_EVENT_NAME") != "pull_request"
+            or env.get("GITHUB_JOB") != ("subject-roundtrip" if roundtrip else PRODUCER_JOB)):
+        _fail("PRODUCER_CONTEXT")
+    if env.get("GITHUB_WORKFLOW_REF") != REPOSITORY + "/" + WORKFLOW + "@" + env.get("GITHUB_REF", ""):
+        _fail("PRODUCER_CONTEXT")
+    return validate_producer({
+        "basis": "github_actions", "authentication": "not_performed",
+        "repository": env.get("GITHUB_REPOSITORY", ""), "workflow": WORKFLOW,
+        "workflow_ref": env.get("GITHUB_WORKFLOW_REF", ""),
+        "workflow_commit": env.get("GITHUB_WORKFLOW_SHA", ""),
+        "job": PRODUCER_JOB, "run_id": env.get("GITHUB_RUN_ID", ""),
+        "run_attempt": env.get("GITHUB_RUN_ATTEMPT", ""),
+    })
 
 
 def _read_regular(path: Path, maximum: int) -> bytes:
@@ -119,9 +165,10 @@ def _git(checkout: Path, *args: str) -> str:
 
 
 def collect(checkout: Path, commit: str, tree: str, version: str,
-            wheel: Path, sdist: Path) -> dict:
+            wheel: Path, sdist: Path, *, github_actions_origin: bool = False) -> dict:
     if any(type(value) is not str or HEX40.fullmatch(value) is None for value in (commit, tree)):
         _fail("SOURCE_MISMATCH")
+    producer = github_actions_producer() if github_actions_origin else None
     wheel_name, sdist_name = _names(version)
     if (
         _git(checkout, "rev-parse", "--verify", "HEAD") != commit
@@ -142,40 +189,56 @@ def collect(checkout: Path, commit: str, tree: str, version: str,
                 "source": {"commit": commit, "tree": tree}, "package_version": version,
                 "artifacts": artifacts, "published": False,
                 "limitations": list(LIMITATIONS)}
+    if producer is not None:
+        manifest.update(schema=CI_SCHEMA, producer=producer)
     if len(_canonical(manifest)) > MAX_MANIFEST_BYTES:
         _fail("MANIFEST_INVALID")
     return manifest
 
 
-def verify(directory: Path, commit: str, tree: str) -> dict:
+def parse_manifest(raw: bytes, commit: str, tree: str) -> dict:
+    """Validate retained manifest bytes without inspecting a host or artifact."""
     if any(type(value) is not str or HEX40.fullmatch(value) is None for value in (commit, tree)):
         _fail("SOURCE_MISMATCH")
+    if not 0 < len(raw) <= MAX_MANIFEST_BYTES:
+        _fail("MANIFEST_INVALID")
+    try:
+        manifest = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_pairs,
+                              parse_constant=lambda _: _fail("MANIFEST_INVALID"))
+    except (UnicodeError, ValueError, RecursionError):
+        _fail("MANIFEST_INVALID")
+    if type(manifest) is not dict or type(manifest.get("schema")) is not str:
+        _fail("MANIFEST_INVALID")
+    expected_keys = {
+        "schema", "status", "source", "package_version", "artifacts", "published", "limitations"
+    }
+    if manifest.get("schema") == CI_SCHEMA:
+        expected_keys.add("producer")
+    if set(manifest) != expected_keys or raw != _canonical(manifest):
+        _fail("MANIFEST_INVALID")
+    _names(manifest["package_version"])
+    if manifest["source"] != {"commit": commit, "tree": tree}:
+        _fail("SOURCE_MISMATCH")
+    if (manifest["schema"] not in {SCHEMA, CI_SCHEMA} or manifest["status"] != "built_unreviewed"
+            or manifest["published"] is not False
+            or manifest["limitations"] != list(LIMITATIONS)):
+        _fail("MANIFEST_INVALID")
+    if manifest["schema"] == CI_SCHEMA:
+        validate_producer(manifest["producer"])
+    return manifest
+
+
+def verify(directory: Path, commit: str, tree: str) -> dict:
     try:
         if not stat.S_ISDIR(directory.lstat().st_mode):
             _fail("FILE_INVALID")
         names = {item.name for item in directory.iterdir()}
     except OSError:
         _fail("FILE_INVALID")
-    raw = _read_regular(directory / "subjects.json", MAX_MANIFEST_BYTES)
-    try:
-        manifest = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_pairs,
-                              parse_constant=lambda _: _fail("MANIFEST_INVALID"))
-    except (UnicodeError, ValueError, RecursionError):
-        _fail("MANIFEST_INVALID")
-    if type(manifest) is not dict or set(manifest) != {
-        "schema", "status", "source", "package_version", "artifacts", "published", "limitations"
-    } or raw != _canonical(manifest):
-        _fail("MANIFEST_INVALID")
-    version = manifest["package_version"]
-    wheel_name, sdist_name = _names(version)
+    manifest = parse_manifest(_read_regular(directory / "subjects.json", MAX_MANIFEST_BYTES), commit, tree)
+    wheel_name, sdist_name = _names(manifest["package_version"])
     if names != {"subjects.json", wheel_name, sdist_name}:
         _fail("FILE_SET")
-    if manifest["source"] != {"commit": commit, "tree": tree}:
-        _fail("SOURCE_MISMATCH")
-    if (manifest["schema"] != SCHEMA or manifest["status"] != "built_unreviewed"
-            or manifest["published"] is not False
-            or manifest["limitations"] != list(LIMITATIONS)):
-        _fail("MANIFEST_INVALID")
     observed = [_artifact(directory / wheel_name, "wheel", wheel_name),
                 _artifact(directory / sdist_name, "sdist", sdist_name)]
     if manifest["artifacts"] != observed:
@@ -193,19 +256,26 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--package-version", required=True)
     build.add_argument("--wheel", required=True, type=Path)
     build.add_argument("--sdist", required=True, type=Path)
+    build.add_argument("--github-actions-origin", action="store_true")
     check = group.add_parser("verify", allow_abbrev=False)
     check.add_argument("--directory", required=True, type=Path)
     check.add_argument("--expected-commit", required=True)
     check.add_argument("--expected-tree", required=True)
+    check.add_argument("--github-actions-origin", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.command == "collect":
             manifest = collect(args.checkout, args.expected_commit, args.expected_tree,
-                               args.package_version, args.wheel, args.sdist)
+                               args.package_version, args.wheel, args.sdist,
+                               github_actions_origin=args.github_actions_origin)
             sys.stdout.buffer.write(_canonical(manifest))
         else:
             manifest = verify(args.directory, args.expected_commit, args.expected_tree)
-            print(json.dumps({"schema": SCHEMA, "status": "binding_verified",
+            if args.github_actions_origin:
+                expected = github_actions_producer(roundtrip=os.environ.get("GITHUB_JOB") == "subject-roundtrip")
+                if manifest.get("producer") != expected:
+                    _fail("PRODUCER_MISMATCH")
+            print(json.dumps({"schema": manifest["schema"], "status": "binding_verified",
                               "authentication": "not_performed",
                               "source": manifest["source"]}, sort_keys=True))
         return 0

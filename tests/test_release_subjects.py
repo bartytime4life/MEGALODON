@@ -112,3 +112,90 @@ def test_workflow_uses_exact_head_and_same_run_artifact_id():
     assert "path: ${{ runner.temp }}/release-recovery-receipts/installed-wheel-recovery.json" in workflow
     assert "if: always()" not in workflow
     assert workflow.count("digest-mismatch: error") == 2
+    assert workflow.count("--github-actions-origin") == 3
+
+
+def ci_context(monkeypatch):
+    values = {
+        "GITHUB_ACTIONS": "true", "GITHUB_SERVER_URL": "https://github.com",
+        "GITHUB_REPOSITORY": tool.REPOSITORY, "GITHUB_EVENT_NAME": "pull_request",
+        "GITHUB_JOB": "build-subjects",
+        "GITHUB_REF": "refs/pull/396/merge",
+        "GITHUB_WORKFLOW_REF": tool.REPOSITORY + "/" + tool.WORKFLOW + "@refs/pull/396/merge",
+        "GITHUB_WORKFLOW_SHA": "c" * 40,
+        "GITHUB_RUN_ID": "12345", "GITHUB_RUN_ATTEMPT": "2",
+    }
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    return values
+
+
+def test_ci_origin_records_workflow_commit_separately_and_roundtrips(tmp_path, monkeypatch, capsys):
+    directory, wheel, sdist, old = subjects(tmp_path, monkeypatch)
+    ci_context(monkeypatch)
+    manifest = tool.collect(tmp_path, COMMIT, TREE, VERSION, wheel, sdist,
+                            github_actions_origin=True)
+    assert manifest["producer"]["workflow_commit"] != COMMIT
+    assert manifest["schema"] == tool.CI_SCHEMA
+    assert manifest["producer"]["authentication"] == "not_performed"
+    (directory / "subjects.json").write_bytes(tool._canonical(manifest))
+    assert tool.verify(directory, COMMIT, TREE) == manifest
+    monkeypatch.setenv("GITHUB_JOB", "subject-roundtrip")
+    args = ["verify", "--directory", str(directory), "--expected-commit", COMMIT,
+            "--expected-tree", TREE, "--github-actions-origin"]
+    assert tool.main(args) == 0
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "3")
+    assert tool.main(args) == 2
+    assert "PRODUCER_MISMATCH" in capsys.readouterr().err
+    # Ambient CI environment must never upgrade ordinary local collection.
+    local = tool.collect(tmp_path, COMMIT, TREE, VERSION, wheel, sdist)
+    assert local == old
+    (directory / "subjects.json").write_bytes(tool._canonical(local))
+    assert tool.main(args) == 2
+    assert "PRODUCER_MISMATCH" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("key,value", [
+    ("GITHUB_ACTIONS", "false"), ("GITHUB_SERVER_URL", "https://evil.invalid"),
+    ("GITHUB_REPOSITORY", "other/MEGALODON"), ("GITHUB_EVENT_NAME", "push"),
+    ("GITHUB_JOB", "wheel-smoke"), ("GITHUB_JOB", "subject-roundtrip"),
+    ("GITHUB_REF", "refs/pull/397/merge"), ("GITHUB_REF", ""),
+    ("GITHUB_WORKFLOW_REF", "bartytime4life/MEGALODON/.github/workflows/ci.yml@refs/pull/396/merge"),
+    ("GITHUB_WORKFLOW_REF", tool.REPOSITORY + "/" + tool.WORKFLOW + "@refs/heads/main"),
+    ("GITHUB_WORKFLOW_SHA", "not-a-sha"), ("GITHUB_WORKFLOW_SHA", ""),
+    ("GITHUB_RUN_ID", "0"), ("GITHUB_RUN_ID", "01"), ("GITHUB_RUN_ID", "9" * 21),
+    ("GITHUB_RUN_ATTEMPT", "0"), ("GITHUB_RUN_ATTEMPT", "2\n"),
+])
+def test_ci_collection_refuses_invalid_or_missing_context(tmp_path, monkeypatch, key, value):
+    _, wheel, sdist, _ = subjects(tmp_path, monkeypatch)
+    ci_context(monkeypatch)
+    monkeypatch.setenv(key, value)
+    with pytest.raises(tool.SubjectError, match="PRODUCER_"):
+        tool.collect(tmp_path, COMMIT, TREE, VERSION, wheel, sdist,
+                     github_actions_origin=True)
+
+
+@pytest.mark.parametrize("fault", ["url", "job", "authentication", "basis", "extra", "type", "missing"])
+def test_retained_origin_is_a_closed_declaration(tmp_path, monkeypatch, fault):
+    directory, wheel, sdist, _ = subjects(tmp_path, monkeypatch)
+    ci_context(monkeypatch)
+    manifest = tool.collect(tmp_path, COMMIT, TREE, VERSION, wheel, sdist,
+                            github_actions_origin=True)
+    origin = manifest["producer"]
+    if fault == "url":
+        origin["workflow"] = "https://evil.invalid/builder"
+    elif fault == "job":
+        origin["job"] = "wheel-smoke"
+    elif fault == "authentication":
+        origin["authentication"] = "github_actions"
+    elif fault == "basis":
+        origin["basis"] = "local_checkout"
+    elif fault == "extra":
+        origin["builder_url"] = "https://evil.invalid"
+    elif fault == "type":
+        origin["run_attempt"] = True
+    else:
+        del origin["workflow_commit"]
+    (directory / "subjects.json").write_bytes(tool._canonical(manifest))
+    with pytest.raises(tool.SubjectError, match="PRODUCER_INVALID"):
+        tool.verify(directory, COMMIT, TREE)
