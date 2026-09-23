@@ -302,8 +302,8 @@ def test_failure_cli_never_echoes_paths_or_raw_errors(tmp_path, capsys):
     assert captured.err == '{"reason":"INSTALLED_RECOVERY_EVIDENCE_FAILED","status":"failed"}\n'
 
 
-@pytest.fixture
-def retained_subjects(tmp_path, receipt):
+@pytest.fixture(params=["legacy", "declared_origin"])
+def retained_subjects(tmp_path, receipt, request):
     """Synthetic byte subjects; no build or installed recovery claim."""
     subject_spec = importlib.util.spec_from_file_location(
         "release_subjects_fixture", ROOT / "tools/release_subjects.py")
@@ -325,6 +325,13 @@ def retained_subjects(tmp_path, receipt):
                       subjects._artifact(sdist, "sdist", sdist.name)],
         "published": False, "limitations": list(subjects.LIMITATIONS),
     }
+    if request.param == "declared_origin":
+        manifest.update(schema=subjects.CI_SCHEMA, producer={
+            "basis": "github_actions", "authentication": "not_performed",
+            "repository": subjects.REPOSITORY, "workflow": subjects.WORKFLOW,
+            "workflow_ref": subjects.REPOSITORY + "/" + subjects.WORKFLOW + "@refs/pull/396/merge",
+            "workflow_commit": "f" * 40, "job": "build-subjects", "run_id": "12345", "run_attempt": "2",
+        })
     (directory / "subjects.json").write_bytes(subjects._canonical(manifest))
     return directory, wheel, sdist, manifest, subjects
 

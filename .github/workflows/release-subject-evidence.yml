@@ -48,11 +48,13 @@ jobs:
           wheel="$RUNNER_TEMP/release-subjects/megalodon_defense-${version}-py3-none-any.whl"
           sdist="$RUNNER_TEMP/release-subjects/megalodon_defense-${version}.tar.gz"
           python -I tools/release_subjects.py collect \
+            --github-actions-origin \
             --checkout . --expected-commit "$EXPECTED_COMMIT" \
             --expected-tree "$expected_tree" --package-version "$version" \
             --wheel "$wheel" --sdist "$sdist" \
             > "$RUNNER_TEMP/release-subjects/subjects.json"
           python -I tools/release_subjects.py verify \
+            --github-actions-origin \
             --directory "$RUNNER_TEMP/release-subjects" \
             --expected-commit "$EXPECTED_COMMIT" --expected-tree "$expected_tree"
           test -z "$(git status --porcelain --untracked-files=normal)"
@@ -159,6 +161,7 @@ jobs:
           actual_manifest_sha256="$(sha256sum "$RUNNER_TEMP/release-subject-roundtrip/subjects.json" | cut -d ' ' -f 1)"
           test "$actual_manifest_sha256" = "$EXPECTED_MANIFEST_SHA256"
           python -I tools/release_subjects.py verify \
+            --github-actions-origin \
             --directory "$RUNNER_TEMP/release-subject-roundtrip" \
             --expected-commit "$EXPECTED_COMMIT" \
             --expected-tree "$(git rev-parse --verify 'HEAD^{tree}')"
