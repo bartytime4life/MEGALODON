@@ -58,9 +58,13 @@ def endpoint(monkeypatch):
         thread.join(timeout=2)
 
 
-def request(endpoint, *, body=b'{"tool":"scapy"}', path="/api/install", method="POST",
+def request(endpoint, *, body=None, path="/api/install", method="POST",
             token=TOKEN, extra=(), omit=()):
     server, _, _ = endpoint
+    # GET handlers do not consume a POST payload; unread bytes can reset the
+    # connection while a large asset response is still being transferred.
+    if body is None:
+        body = b'{"tool":"scapy"}' if method == "POST" else b""
     origin = f"http://127.0.0.1:{server.server_port}"
     headers = [("Host", origin[7:]), ("Origin", origin), ("Content-Type", "application/json"),
                ("X-Megalodon-Install", "1"), ("X-Megalodon-Check", "1"),
