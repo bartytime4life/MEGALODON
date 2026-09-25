@@ -2338,9 +2338,7 @@ class DashboardStore:
                 prefix="DASHBOARD_STORE",
             )
             self._sqlite_path = _anchored_database_path(
-                self._database_descriptor,
-                self.path,
-                "DASHBOARD_STORE",
+                self._database_descriptor, self.path, "DASHBOARD_STORE"
             )
             sidecars = self._assert_path_identity()
 
