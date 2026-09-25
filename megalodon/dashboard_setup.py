@@ -167,7 +167,11 @@ async function loadSetup() {
       ? `Startup observations from ${formatRefreshTime(new Date(report.checked_at))}. Use Check this computer to update them.`
       : 'Choose Check this computer to read current local observations.';
     renderToolStatus();
-    if (typeof integrationState !== 'undefined' && integrationState.snapshot) renderIntegrationMap();
+    // loadIntegrationMap()'s own finally block already calls
+    // renderIntegrationMap() once whether it succeeds or fails, so a failed
+    // attempt (snapshot still null, failed true) has already rendered this
+    // panel and must stay in sync here too - snapshot alone is too narrow.
+    if (typeof integrationState !== 'undefined' && (integrationState.snapshot || integrationState.failed)) renderIntegrationMap();
   } catch (_) {
     setupState.sourceStatus = null;
     setupState.readiness = null;
@@ -179,11 +183,11 @@ async function loadSetup() {
     byId('setup-source').textContent = 'Setup information unavailable. Existing telemetry controls remain independent.';
     byId('setup-readiness').textContent = 'Startup observations are unavailable. Choose Check this computer to try a fresh read.';
     renderToolStatus();
-    // Matches the success path above: if Apps already rendered before this
-    // request failed, its Presence rows and freshness line would otherwise
-    // stay on their prior (possibly "not checked") text until an unrelated
-    // filter or control happened to trigger another render.
-    if (typeof integrationState !== 'undefined' && integrationState.snapshot) renderIntegrationMap();
+    // Matches the success path above, including a failed (snapshot-less)
+    // Apps load: if Apps already rendered before this request failed, its
+    // Presence rows and freshness line would otherwise stay on their prior
+    // text until an unrelated filter or control triggered another render.
+    if (typeof integrationState !== 'undefined' && (integrationState.snapshot || integrationState.failed)) renderIntegrationMap();
   }
   renderSoftwareShelf();
 }

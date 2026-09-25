@@ -361,7 +361,17 @@ process.stdin.on('end', async () => {
     context.fetch = async path => { assert.equal(path, '/api/setup'); throw new Error('network down'); };
     await run('loadSetup()');
     assert.match(nodeFor('integrations-freshness').textContent, /Presence: Startup observations are unavailable; the HUD-launch check could not be retrieved\./);
+    // Same guard, distinct trigger: the Apps map itself can fail its very
+    // first load (snapshot stays null, failed becomes true) before /api/setup
+    // also fails. renderIntegrationMap() already ran once via that failed
+    // loadIntegrationMap()'s own finally block, so "snapshot truthy" alone
+    // is the wrong guard for "has Apps already rendered".
+    run("integrationState.snapshot = null; integrationState.failed = true; setupState.readiness = null; setupState.loadFailed = false; renderIntegrationMap()");
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Not checked at HUD launch\./);
+    await run('loadSetup()');
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Startup observations are unavailable; the HUD-launch check could not be retrieved\./);
     context.fetch = async path => { calls.push(path); return {ok: true, json: async () => plans[new URL(path, 'http://localhost').searchParams.get('platform')]}; };
+    run("integrationState.snapshot = validatedIntegrationMap(plans.linux, 'linux'); integrationState.failed = false;");
     run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'})), checked_at: '2026-01-01T00:00:00Z'}; setupState.loadFailed = false; renderIntegrationMap()");
     nodeFor('integrations-presence-filter').value = 'found'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
