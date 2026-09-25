@@ -1,5 +1,66 @@
 # Unified roadmap: repository reconciliation
 
+## Issue-state correction — 2026-09-25
+
+GitHub issue readback at
+[`main@eb6176cdfda43b912f39b3e31b6f3f0fbe1431af`](https://github.com/bartytime4life/MEGALODON/commit/eb6176cdfda43b912f39b3e31b6f3f0fbe1431af)
+(2026-09-23T22:44:50Z, merged [#403](https://github.com/bartytime4life/MEGALODON/pull/403)):
+**one** open issue exists,
+[#345](https://github.com/bartytime4life/MEGALODON/issues/345) (native macOS
+`STORAGE_PATH:DATABASE_CHANGED` diagnosis). Zero open pull requests. This
+corrects the "#260, #261, and #327 remain open" / "#327 is open" /
+"#261 remains open" phrasing still below (2026-09-21 and earlier) and in the
+Zeek/Ollama rows of the 2026-09-23 register directly beneath this note: those
+three issues closed on 2026-09-22, one day before that register's own pin.
+
+- [#260](https://github.com/bartytime4life/MEGALODON/issues/260) (Ubuntu
+  release-candidate evidence plan) closed via merged
+  [#366](https://github.com/bartytime4life/MEGALODON/pull/366) with
+  disposition **PARTIAL**: the nine-check/two-artifact packet, artifact
+  notice/license review, operator drill and exact-candidate owner/independent
+  disposition remain undelivered per the issue's own closing comment.
+- [#261](https://github.com/bartytime4life/MEGALODON/issues/261) (Ollama/Qwen
+  provider acceptance) closed via merged
+  [#364](https://github.com/bartytime4life/MEGALODON/pull/364) and
+  [#378](https://github.com/bartytime4life/MEGALODON/pull/378). #378 adds a
+  `local_model_readiness` packet that cross-checks the existing binding,
+  identity, containment, evaluation and request contracts for internal
+  agreement; the canonical `config/model-bindings/qwen.unbound.json` still
+  reports `UNBOUND / OWNER_MODEL_BINDING_NOT_RECORDED`, and #378's own body
+  lists evidence-origin authentication, loaded-runtime-byte attestation,
+  independent security acceptance and owner final acceptance as HOLDs it does
+  not clear. Issue closure records that the tracked infrastructure gap is
+  filled, not that a model is bound or accepted.
+- [#327](https://github.com/bartytime4life/MEGALODON/issues/327) (Zeek
+  producer profile and schema-drift qualification) closed via merged
+  [#350](https://github.com/bartytime4life/MEGALODON/pull/350), which is an
+  explicit placeholder scaffold (`zeek-PLACEHOLDER-UNSELECTED-conn-json-v1`,
+  declared version `0.0.0`) matching the shape of the qualified Suricata
+  producer contract. It selects no real producer version, does not touch
+  `megalodon/offline/zeek.py`, and does not cover the TSV adapter path. No
+  successor issue tracks the remaining owner-selection gate at this readback.
+
+No new open issue currently tracks the residual #261/#327 gaps described
+above; treat that as a tracking gap, not a signal the gaps closed with their
+issues. This section adds no runtime code, schema, release, deployment, or
+acceptance authority; it corrects only which GitHub issues are open and what
+their closing pull requests actually deliver, cross-checked against each
+closing PR's own body rather than issue-title text alone.
+
+On this checkout (branch `agent/acceptance-contract-integrity-20260909` after
+merging `origin/main` through #403), `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+PYTEST_PLUGINS= PYTEST_ADDOPTS= python -m pytest -ra` reports **3684 passed,
+5 skipped, 203 subtests passed, 2 failed** in 66s. Both failures are in
+`tests/test_provider_containment.py`
+(`test_nothing_listening_is_reported_as_no`,
+`test_loopback_listener_is_observed_and_self_owned`) and reproduce because
+this sandbox container exposes no `/proc/net/tcp6` at all (no IPv6 stack),
+which the module's own conservative-by-design `listening: "unknown"`
+handling for an unreadable table reports honestly rather than guessing "no";
+the module's other tests pin exactly that behavior as intended. This is a
+sandbox artifact of this run, not a code regression, and is not evidence
+about any other host.
+
 ## Current suite claims and acceptance register — 2026-09-23
 
 Implementation inventory basis:
