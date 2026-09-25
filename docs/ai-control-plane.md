@@ -33,8 +33,12 @@ transport uses the existing one-slot process lock, response-framing budget,
 and active deadline. A successful TCP connection or tag lookup is never
 reported as `model_ready`; one bounded validated inference must complete.
 The status states are `disabled`, `ollama_unavailable`, `model_missing`,
-`model_available`, `model_loading`, `model_ready`, `request_timeout`,
-`invalid_response`, and `policy_rejection`.
+`model_available`, `model_loading`, `concurrency_unavailable`, `model_ready`,
+`request_timeout`, `invalid_response`, and `policy_rejection`.
+`model_loading` means another request already holds the one inference slot;
+`concurrency_unavailable` means MEGALODON's own local lock could not be
+established (an unsupported platform or a filesystem fault), so no request
+to Ollama was attempted at all.
 
 ## Tool and authority contract
 

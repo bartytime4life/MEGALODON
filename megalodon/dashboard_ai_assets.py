@@ -77,6 +77,7 @@ const AI_STATE_TEXT = {
   model_missing: 'The configured Qwen model is not installed in Ollama.',
   model_available: 'The model tag is present but has not completed a live inference check.',
   model_loading: 'Another local AI request is already using the one inference slot. Try again in a moment.',
+  concurrency_unavailable: "MEGALODON could not establish its own local concurrency lock, so no request to Ollama was attempted. This is a local platform or filesystem issue, not an Ollama or model problem.",
   model_ready: 'The model completed a live bounded inference check.',
   request_timeout: 'The request to Ollama timed out.',
   invalid_response: 'Ollama returned a response MEGALODON could not validate.',
