@@ -9,6 +9,7 @@ from .dashboard_connections import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRAT
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
+from .status_glossary import GLOSSARY_ANCHOR_ID
 
 
 INDEX_HTML = """<!doctype html>
@@ -245,7 +246,7 @@ INDEX_HTML = """<!doctype html>
       <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
       <span class="timestamp" id="ingestion-runs-status">Loading receipts…</span>
     </summary>
-    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Stored events, findings, and action records are different units; action records are plans, not host changes. Adapter identity and accepted/rejected counts are not recorded. A running receipt does not prove a process is still active; a completed run does not prove sensor liveness or complete coverage.</div>
+    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Stored events, findings, and action records are different units; action records are plans, not host changes. Adapter identity and accepted/rejected counts are not recorded. A running receipt does not prove a process is still active; a completed run does not prove sensor liveness or complete coverage. <a href="#__GLOSSARY_ANCHOR__">What do these receipt statuses mean? →</a></div>
     <div class="ingestion-runs-list" id="ingestion-runs-list" role="list" aria-live="polite" aria-atomic="true">
       <p class="ingestion-runs-empty">Loading bounded ingestion receipts…</p>
     </div>
@@ -341,6 +342,9 @@ INDEX_HTML = """<!doctype html>
 </main>
 </body>
 </html>"""
+if "__GLOSSARY_ANCHOR__" not in INDEX_HTML:
+    raise AssertionError("glossary anchor placeholder missing from INDEX_HTML")
+INDEX_HTML = INDEX_HTML.replace("__GLOSSARY_ANCHOR__", GLOSSARY_ANCHOR_ID)
 
 
 DASHBOARD_CSS = """
@@ -743,7 +747,8 @@ const workspaceTargets = {
   'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'live',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
-  'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis'
+  'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis',
+  'help-language': 'help', 'status-glossary': 'help'
 };
 const state = {
   events: [],

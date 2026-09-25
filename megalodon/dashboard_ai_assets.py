@@ -1,9 +1,11 @@
 """Explicit, bounded local AI controls for the Investigate workspace."""
 
+from .status_glossary import GLOSSARY_ANCHOR_ID
+
 AI_PANEL = """
   <details class="panel ai-control" id="ai-control" aria-labelledby="ai-control-title">
     <summary><span><strong id="ai-control-title">Local AI control</strong><small>Ask Qwen about bounded MEGALODON metadata after a live model check.</small></span><span class="summary-action" id="ai-control-action">Open AI controls</span></summary>
-    <p>Model output is advice. Tool selection passes through MEGALODON policy and every attempt gets an audit receipt. This HUD offers bounded reads and report snapshots; firewall application remains unavailable.</p>
+    <p>Model output is advice. Tool selection passes through MEGALODON policy and every attempt gets an audit receipt. This HUD offers bounded reads and report snapshots; firewall application remains unavailable. (This panel's own states are explained in full below; other pages' statuses are in the <a href="#__GLOSSARY_ANCHOR__">status glossary</a>.)</p>
     <div class="ai-controls">
       <button id="ai-check" type="button">Check Ollama and Qwen</button>
       <label class="field" for="ai-token"><span>Operator token from the HUD terminal</span>
@@ -37,6 +39,9 @@ AI_PANEL = """
     </dl>
   </details>
 """
+if "__GLOSSARY_ANCHOR__" not in AI_PANEL:
+    raise AssertionError("glossary anchor placeholder missing from AI_PANEL")
+AI_PANEL = AI_PANEL.replace("__GLOSSARY_ANCHOR__", GLOSSARY_ANCHOR_ID)
 
 AI_CSS = """
 .ai-control { margin: 0 0 18px; }

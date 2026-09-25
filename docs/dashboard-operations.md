@@ -119,6 +119,15 @@ There are eight distinct surfaces. Do not combine their meanings:
 | Qwen advisory receipt | One startup-supplied, validated, display-only bounded result | An installed/reachable model, an invocation control, live traffic analysis, an evidence source, or a response authority |
 | Suricata evidence | A bounded startup snapshot from one explicitly selected separate durable store | A live sensor, continuous EVE feed, MEGALODON detection, independent source attestation, or applied response |
 
+Each surface's individual status words (`not_checked`, `not_applicable`,
+`unavailable`, the heartbeat light colors, and so on) are collected once, by
+what they check, in the in-app **status glossary** (Help → Full status
+glossary). It is generated from the same source constants each surface
+already reads, in `megalodon/status_glossary.py`, so it cannot silently drift
+from what a page actually renders; adding or renaming a status without
+updating its glossary entry fails the module import. Apps, Ingestion run
+receipts, and Local AI control link to it directly.
+
 The stored traffic projection selects its newest 500 event candidates first,
 then at most 200 finding candidates linked to that window. Newer findings for
 older events cannot displace findings for the displayed window. A sentinel row

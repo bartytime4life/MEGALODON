@@ -29,6 +29,10 @@ next to its name, refreshed in the background while the tab is visible:
 | Red | Not installed | Select **Install**, or open the official guide for tools without a one-click package |
 | Grey | Unknown on this computer | Use the official guide or the terminal checks under Apps |
 
+This table and the one below cover the most common statuses. For every status
+word MEGALODON shows, anywhere in the HUD, open **Help → Full status
+glossary**.
+
 See [tool heartbeat and one-click install](tool-heartbeat.md) for what each
 button runs. For the environment and data file, select **Check this computer**:
 
