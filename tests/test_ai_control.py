@@ -74,6 +74,14 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     assert status(AISettings(enabled=True))["state"] == "request_timeout"
     monkeypatch.setattr(provider, "_request", lambda *_: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_LIMIT_REACHED")))
     assert status(AISettings(enabled=True))["state"] == "model_loading"
+    # A failure to establish the local concurrency lock (unsupported platform,
+    # missing fcntl, a non-directory lock path) is a distinct local-platform
+    # fault, not a validation failure of an Ollama response that was never
+    # requested. Collapsing it into "invalid_response" previously told an
+    # operator the wrong story about where to look.
+    monkeypatch.setattr(provider, "_request",
+                         lambda *_: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_CONTROL_UNAVAILABLE")))
+    assert status(AISettings(enabled=True))["state"] == "concurrency_unavailable"
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": False})
     assert status(AISettings(enabled=True))["state"] == "policy_rejection"
 

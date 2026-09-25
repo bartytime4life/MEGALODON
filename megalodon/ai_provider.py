@@ -215,6 +215,7 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
             "MODEL_MISSING": "model_missing", "MODEL_MISMATCH": "policy_rejection",
             "POLICY_REJECTION": "policy_rejection", "REQUEST_TIMEOUT": "request_timeout",
             "INVALID_RESPONSE": "invalid_response", "CONCURRENCY_LIMIT_REACHED": "model_loading",
+            "CONCURRENCY_CONTROL_UNAVAILABLE": "concurrency_unavailable",
         }.get(exc.code, "invalid_response")
         base["error_code"] = exc.code
         if exc.code == "OLLAMA_UNAVAILABLE":
