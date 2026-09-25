@@ -331,9 +331,20 @@ process.stdin.on('end', async () => {
     assert.match(textOf(nodeFor('integrations-cards')), /MEGALODON support:/);
     assert.match(textOf(nodeFor('integrations-cards')), /Administration: Operator managed/);
     assert.match(textOf(nodeFor('integrations-cards')), /Health: See the status light/);
-    run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'}))}; renderIntegrationMap()");
+    run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'})), checked_at: '2026-01-01T00:00:00Z'}; renderIntegrationMap()");
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer on Home/);
+    // Apps intentionally keeps the HUD-launch snapshot even once a fresher,
+    // different Check this computer result exists on Home - see
+    // appsPresenceFreshnessNote and the matching Help copy. A later local
+    // check must not silently change what this panel already rendered.
+    run("localCheckState.snapshot = {readiness: {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'not_found' : 'not_checked'})), checked_at: '2026-01-02T03:04:05Z'}, runtime: null}; renderIntegrationMap()");
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
+    assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer on Home/);
+    assert.doesNotMatch(nodeFor('integrations-freshness').textContent, /03:04:05/, 'must not pick up the fresher local-check timestamp');
+    run("localCheckState.snapshot = null");
     nodeFor('integrations-presence-filter').value = 'found'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
     assert.match(textOf(nodeFor('integrations-cards')), /TShark/);

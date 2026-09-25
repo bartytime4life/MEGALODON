@@ -88,8 +88,19 @@ const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata',
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
-  const labels = {executable_found: 'Executable found at launch', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
+  const labels = {executable_found: 'Executable found', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
   return labels[report.tools[index].status];
+}
+// Apps & integrations intentionally keeps the one-shot HUD-launch presence
+// snapshot rather than following a fresher Check this computer result on
+// Home (see the "Read the status with confidence" Help section) so its map
+// stays stable regardless of what the operator checks elsewhere. That
+// boundary used to be implicit and untimestamped; this makes it visible
+// instead of pretending the two views share one always-current answer.
+function appsPresenceFreshnessNote() {
+  if (!setupState.readiness) return 'Not checked at HUD launch.';
+  const when = formatRefreshTime(new Date(setupState.readiness.checked_at));
+  return `Checked at HUD launch, ${when}. This does not change after Check this computer on Home; reopen the HUD for a fresh Apps presence check.`;
 }
 const runtimeStatuses = new Set(['running', 'not_running', 'not_applicable', 'not_checked']);
 function validatedRuntimeReport(value) {
@@ -333,6 +344,8 @@ function renderLocalCheckResults() {
   byId('setup-source').hidden = true;
   byId('setup-readiness').textContent = `${localCheckState.failed ? 'Previous observations — stale' : 'Observed'} ${formatRefreshTime(new Date(report.checked_at))}. Check again after changing tools. Results may be reused for five seconds.`;
   renderToolStatus();
+  // Apps & integrations deliberately does not re-render here: it stays on
+  // the HUD-launch snapshot by design (see appsPresenceFreshnessNote).
 }
 async function runLocalChecks(focusTool = null) {
   if (localCheckState.busy) return;
