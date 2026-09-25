@@ -6,8 +6,8 @@
 # The sole include is relative to this file, never a URL or operator input.
 # OS/Chrome/Xvfb/Openbox and Python/pip bootstrap remain outside this lock.
 -r test-linux-cp311.txt
-# greenlet-3.5.5-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl — https://pypi.org/project/greenlet/3.5.5/#files
-greenlet==3.5.5 --hash=sha256:74cc6df89ec5302337adc9cf096221cbed2510fd444b0e0f1586cf0470740864
+# greenlet-3.5.6-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl — https://pypi.org/project/greenlet/3.5.6/#files
+greenlet==3.5.6 --hash=sha256:1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba
 # playwright-1.63.0-py3-none-manylinux1_x86_64.whl — https://pypi.org/project/playwright/1.63.0/#files
 playwright==1.63.0 --hash=sha256:ad21bc07516b187965a7521c5cf0df0bd657b17482eaad74335272d35a2b07de
 # pyee-13.0.1-py3-none-any.whl — https://pypi.org/project/pyee/13.0.1/#files

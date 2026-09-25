@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import socket
 import subprocess
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -109,6 +111,51 @@ def test_weekly_byday_excludes_days_before_dtstart_in_first_week() -> None:
     assert dates == ["2026-09-23", "2026-09-24", "2026-09-25"]
 
 
+@pytest.mark.parametrize("week_start", ["MO", "TU", "WE", "TH", "FR", "SA", "SU"])
+def test_weekly_byday_orders_candidates_from_each_week_start(week_start) -> None:
+    start = datetime(2026, 9, 23, 9)
+    occ = next_occurrences(
+        dtstart=start.isoformat(), schedule_timezone="UTC",
+        rrule=f"FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU;WKST={week_start}", limit=10,
+    )
+    assert [o["occurrence_at"] for o in occ] == [
+        (start + timedelta(days=day)).isoformat() + "Z" for day in range(10)
+    ]
+
+
+@pytest.mark.parametrize(("count", "limit", "expected"), [
+    (1, 10, ["2026-09-20T09:00:00Z"]),
+    (2, 1, ["2026-09-20T09:00:00Z"]),
+    (2, 10, ["2026-09-20T09:00:00Z", "2026-09-21T09:00:00Z"]),
+])
+def test_weekly_count_and_limit_keep_the_earliest_occurrences(count, limit, expected) -> None:
+    occ = next_occurrences(
+        dtstart="2026-09-20T09:00:00", schedule_timezone="UTC",
+        rrule=f"FREQ=WEEKLY;BYDAY=MO,SU;WKST=SU;COUNT={count}", limit=limit,
+    )
+    assert [o["occurrence_at"] for o in occ] == expected
+
+
+def test_weekly_until_does_not_hide_an_earlier_day_in_the_same_week() -> None:
+    occ = next_occurrences(
+        dtstart="2026-09-20T09:00:00", schedule_timezone="UTC",
+        rrule="FREQ=WEEKLY;BYDAY=MO,SU;WKST=SU;UNTIL=20260920T090000Z", limit=10,
+    )
+    assert [o["occurrence_at"] for o in occ] == ["2026-09-20T09:00:00Z"]
+
+
+@pytest.mark.parametrize(("week_start", "dates"), [
+    ("SU", ["2026-09-20", "2026-09-21", "2026-10-04", "2026-10-05"]),
+    ("MO", ["2026-09-20", "2026-09-28", "2026-10-04", "2026-10-12"]),
+])
+def test_weekly_interval_remains_anchored_to_week_start(week_start, dates) -> None:
+    occ = next_occurrences(
+        dtstart="2026-09-20T09:00:00", schedule_timezone="UTC",
+        rrule=f"FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,SU;WKST={week_start}", limit=4,
+    )
+    assert [o["occurrence_at"][:10] for o in occ] == dates
+
+
 def test_monthly_bymonthday_one() -> None:
     occ = next_occurrences(
         dtstart="2026-01-01T08:00:00", schedule_timezone="UTC",
@@ -191,7 +238,147 @@ def test_dst_gap_shift_forward_keeps_the_occurrence() -> None:
     assert [o["local_time"][:10] for o in occ] == ["2027-03-13", "2027-03-14", "2027-03-15"]
     gapped = occ[1]
     assert gapped["dst_status"] == "gap"
-    assert gapped["occurrence_at"] == "2027-03-14T07:30:00Z"
+    assert [o["occurrence_at"] for o in occ] == [
+        "2027-03-13T08:30:00Z", "2027-03-14T08:30:00Z", "2027-03-15T07:30:00Z",
+    ]
+
+
+@pytest.mark.parametrize(("zone", "intended", "shifted"), [
+    ("America/Chicago", "2027-03-14T02:30:00", "2027-03-14T03:30:00-05:00"),
+    ("Australia/Lord_Howe", "2027-10-03T02:15:00", "2027-10-03T02:45:00+11:00"),
+    ("Pacific/Apia", "2011-12-30T12:00:00", "2011-12-31T12:00:00+14:00"),
+])
+def test_gap_shift_forward_round_trips_after_the_gap(zone, intended, shifted) -> None:
+    kwargs = dict(dtstart=intended, schedule_timezone=zone, rrule="FREQ=DAILY;COUNT=1")
+    with pytest.raises(AutomationScheduleError) as caught:
+        next_occurrences(**kwargs)
+    assert caught.value.code == "DST_UNRESOLVED"
+
+    occ = next_occurrences(**kwargs, dst_policy="shift_forward")
+    assert len(occ) == 1
+    assert occ[0]["local_time"] == intended
+    assert occ[0]["dst_status"] == "gap"
+    resolved_local = datetime.fromisoformat(occ[0]["occurrence_at"]).astimezone(ZoneInfo(zone))
+    assert resolved_local.isoformat() == shifted
+    assert resolved_local.replace(tzinfo=None) > datetime.fromisoformat(intended)
+
+
+@pytest.mark.parametrize(("until", "expected"), [
+    ("20270314T080000Z", []),
+    ("20270314T083000Z", ["2027-03-14T08:30:00Z"]),
+])
+def test_gap_shift_forward_applies_until_to_the_resolved_instant(until, expected) -> None:
+    occ = next_occurrences(
+        dtstart="2027-03-14T02:30:00", schedule_timezone="America/Chicago",
+        rrule=f"FREQ=DAILY;UNTIL={until}", dst_policy="shift_forward",
+    )
+    assert [o["occurrence_at"] for o in occ] == expected
+
+
+def test_shifted_hourly_collisions_retain_the_earliest_intended_local_time() -> None:
+    occ = next_occurrences(
+        dtstart="2027-03-14T01:30:00", schedule_timezone="America/Chicago",
+        rrule="FREQ=HOURLY;COUNT=4", dst_policy="shift_forward", limit=10,
+    )
+    assert [o["occurrence_at"] for o in occ] == [
+        "2027-03-14T07:30:00Z", "2027-03-14T08:30:00Z",
+        "2027-03-14T09:30:00Z", "2027-03-14T10:30:00Z",
+    ]
+    assert occ[1]["local_time"] == "2027-03-14T02:30:00"
+    assert occ[1]["dst_status"] == "gap"
+    assert occ[-1]["local_time"] == "2027-03-14T05:30:00"
+
+
+@pytest.mark.parametrize(("count", "limit"), [(10, 10), (100, 10), (10, 100)])
+def test_shifted_dtstart_remains_first_before_count_and_limit(count, limit) -> None:
+    occ = next_occurrences(
+        dtstart="2027-03-14T02:55:00", schedule_timezone="America/Chicago",
+        rrule=f"FREQ=MINUTELY;COUNT={count}", dst_policy="shift_forward", limit=limit,
+    )
+    first = datetime(2027, 3, 14, 8, 55)
+    assert [o["occurrence_at"] for o in occ] == [
+        (first + timedelta(minutes=minute)).isoformat() + "Z" for minute in range(10)
+    ]
+    assert occ[0]["local_time"] == "2027-03-14T02:55:00"
+    assert occ[4]["local_time"] == "2027-03-14T02:59:00"
+    assert occ[5]["local_time"] == "2027-03-14T04:00:00"
+
+
+@pytest.mark.parametrize(("zone", "start", "first_utc"), [
+    ("America/Chicago", "2027-03-14T01:55:00", "2027-03-14T07:55:00"),
+    ("Australia/Lord_Howe", "2027-10-03T01:55:00", "2027-10-02T15:25:00"),
+    ("Pacific/Apia", "2011-12-30T12:00:00", "2011-12-30T22:00:00"),
+])
+def test_shifted_minutely_preview_at_cap_is_chronological_and_unique(zone, start, first_utc) -> None:
+    occ = next_occurrences(
+        dtstart=start, schedule_timezone=zone,
+        rrule="FREQ=MINUTELY;COUNT=366", dst_policy="shift_forward", limit=366,
+    )
+    first = datetime.fromisoformat(first_utc)
+    assert [o["occurrence_at"] for o in occ] == [
+        (first + timedelta(minutes=minute)).isoformat() + "Z" for minute in range(366)
+    ]
+    for row in occ:
+        resolved = datetime.fromisoformat(row["occurrence_at"]).astimezone(ZoneInfo(zone))
+        intended = datetime.fromisoformat(row["local_time"])
+        if row["dst_status"] == "gap":
+            assert resolved.replace(tzinfo=None) > intended
+        else:
+            assert resolved.replace(tzinfo=None) == intended
+
+
+def test_shifted_minutely_until_is_inclusive_after_overlap_normalization() -> None:
+    occ = next_occurrences(
+        dtstart="2027-03-14T01:55:00", schedule_timezone="America/Chicago",
+        rrule="FREQ=MINUTELY;UNTIL=20270314T080500Z", dst_policy="shift_forward", limit=100,
+    )
+    first = datetime(2027, 3, 14, 7, 55)
+    assert [o["occurrence_at"] for o in occ] == [
+        (first + timedelta(minutes=minute)).isoformat() + "Z" for minute in range(11)
+    ]
+    assert occ[-1]["local_time"] == "2027-03-14T02:05:00"
+
+
+def test_forward_lookahead_does_not_reject_a_later_ambiguity_outside_the_preview() -> None:
+    occ = next_occurrences(
+        dtstart="2027-11-06T01:30:00", schedule_timezone="America/Chicago",
+        rrule="FREQ=DAILY;COUNT=1", dst_policy="shift_forward",
+    )
+    assert [o["occurrence_at"] for o in occ] == ["2027-11-06T06:30:00Z"]
+    with pytest.raises(AutomationScheduleError) as caught:
+        next_occurrences(
+            dtstart="2027-11-06T01:30:00", schedule_timezone="America/Chicago",
+            rrule="FREQ=DAILY;COUNT=2", dst_policy="shift_forward",
+        )
+    assert caught.value.code == "DST_POLICY_INAPPLICABLE"
+
+
+def test_complete_normal_forward_preview_needs_no_lookahead_past_the_date_ceiling() -> None:
+    occ = next_occurrences(
+        dtstart="9999-12-30T23:00:00", schedule_timezone="America/Chicago",
+        rrule="FREQ=DAILY;COUNT=1", dst_policy="shift_forward",
+    )
+    assert [o["occurrence_at"] for o in occ] == ["9999-12-31T05:00:00Z"]
+
+
+def test_normal_forward_until_needs_no_lookahead_past_the_date_ceiling() -> None:
+    occ = next_occurrences(
+        dtstart="9999-12-30T23:00:00", schedule_timezone="UTC",
+        rrule="FREQ=HOURLY;UNTIL=99991231T000000Z", dst_policy="shift_forward", limit=10,
+    )
+    assert [o["occurrence_at"] for o in occ] == [
+        "9999-12-30T23:00:00Z", "9999-12-31T00:00:00Z",
+    ]
+
+
+def test_forward_lookahead_budget_exhaustion_refuses_partial_results(monkeypatch) -> None:
+    monkeypatch.setattr("megalodon.automation_schedule._MAX_CANDIDATE_SCANS", 2)
+    with pytest.raises(AutomationScheduleError) as caught:
+        next_occurrences(
+            dtstart="2027-03-14T02:55:00", schedule_timezone="America/Chicago",
+            rrule="FREQ=MINUTELY;COUNT=1", dst_policy="shift_forward",
+        )
+    assert caught.value.code == "SCAN_LIMIT"
 
 
 def test_dst_gap_fold_policies_are_inapplicable() -> None:
@@ -255,6 +442,27 @@ def test_dtstart_must_satisfy_its_own_byday_filter() -> None:
             rrule="FREQ=WEEKLY;BYDAY=TU",
         )
     assert caught.value.code == "DTSTART_VALUE"
+
+
+@pytest.mark.parametrize("part", ["BYHOUR=8", "BYMINUTE=15"])
+def test_dtstart_must_satisfy_its_time_filters(part) -> None:
+    with pytest.raises(AutomationScheduleError) as caught:
+        next_occurrences(
+            dtstart="2026-09-21T09:30:45", schedule_timezone="UTC",
+            rrule=f"FREQ=DAILY;{part};COUNT=1",
+        )
+    assert caught.value.code == "DTSTART_VALUE"
+
+
+@pytest.mark.parametrize("policy", ["reject", "shift_forward"])
+def test_matching_time_filters_preserve_dtstart_seconds(policy) -> None:
+    occ = next_occurrences(
+        dtstart="2026-09-21T09:30:45", schedule_timezone="UTC",
+        rrule="FREQ=DAILY;BYHOUR=9;BYMINUTE=30;COUNT=2", dst_policy=policy,
+    )
+    assert [o["occurrence_at"] for o in occ] == [
+        "2026-09-21T09:30:45Z", "2026-09-22T09:30:45Z",
+    ]
 
 
 def test_invalid_timezone_name_fails_closed() -> None:

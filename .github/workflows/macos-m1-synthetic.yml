@@ -45,6 +45,96 @@ jobs:
           python -m pip install -e .
           python -m pip check
           python -m pip show megalodon-defense
+      - name: Run native storage safety negatives
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          import tempfile
+
+          from megalodon.storage import (
+              PRIVATE_DATABASE_MODE,
+              StorageSchemaError,
+              Store,
+          )
+
+          if sys.platform != "darwin":
+              raise SystemExit("MACOS_STORAGE_NEGATIVES:UNEXPECTED_PLATFORM")
+
+          results = []
+
+          def expect(label, expected, action):
+              try:
+                  action()
+              except StorageSchemaError as exc:
+                  actual = str(exc)
+                  if actual != expected:
+                      raise SystemExit(
+                          f"MACOS_STORAGE_NEGATIVES:{label}:UNEXPECTED_CODE"
+                      ) from exc
+                  results.append({"case": label, "status": "refused", "code": actual})
+              else:
+                  raise SystemExit(
+                      f"MACOS_STORAGE_NEGATIVES:{label}:UNEXPECTED_ACCEPT"
+                  )
+
+          with tempfile.TemporaryDirectory(prefix="megalodon-m1-negative-") as root:
+              private = Path(root) / "private"
+              private.mkdir(mode=0o700)
+              database = private / "audit.db"
+
+              with Store(database):
+                  pass
+
+              alias = private / "alias.db"
+              alias.symlink_to(database)
+              expect(
+                  "database-symlink",
+                  "STORAGE_PATH:SYMLINK_REFUSED",
+                  lambda: Store(alias, create=False),
+              )
+              alias.unlink()
+
+              target = private / "sidecar-target"
+              target.write_bytes(b"target")
+              target.chmod(PRIVATE_DATABASE_MODE)
+              sidecar = private / "audit.db-wal"
+              sidecar.symlink_to(target)
+              expect(
+                  "sidecar-symlink",
+                  "STORAGE_PATH:SYMLINK_REFUSED",
+                  lambda: Store(database, create=False),
+              )
+              sidecar.unlink()
+
+              store = Store(database, create=False)
+              moved = private / "original.db"
+              replacement = b"replacement-sentinel"
+              try:
+                  database.rename(moved)
+                  database.write_bytes(replacement)
+                  database.chmod(PRIVATE_DATABASE_MODE)
+                  expect(
+                      "runtime-replacement",
+                      "STORAGE_PATH:DATABASE_CHANGED",
+                      lambda: store.start_ingestion_run("sample"),
+                  )
+                  if database.read_bytes() != replacement:
+                      raise SystemExit(
+                          "MACOS_STORAGE_NEGATIVES:REPLACEMENT_MUTATED"
+                      )
+              finally:
+                  if database.exists():
+                      database.unlink()
+                  if moved.exists():
+                      moved.rename(database)
+                  store.close()
+
+          print(json.dumps(results, sort_keys=True))
+          if len(results) != 3:
+              raise SystemExit("MACOS_STORAGE_NEGATIVES:INCOMPLETE")
+          PY
       - name: Record bounded storage-admission diagnostic
         run: |
           set -euo pipefail

@@ -291,11 +291,7 @@ def _open_suricata_store_reader(
                         "SURICATA_STORE:ROLLBACK_JOURNAL_REQUIRED"
                     )
             sqlite_path = _anchored_database_path(
-                database_descriptor,
-                directory_descriptor,
-                database_path.name,
-                database_path,
-                "SURICATA_STORE",
+                database_descriptor, database_path, "SURICATA_STORE"
             )
             timeout_ms = (
                 remaining_milliseconds()
@@ -399,11 +395,7 @@ def _open_suricata_store_writer(
             ):
                 raise SuricataStoreError("SURICATA_STORE:RECOVERY_REQUIRED")
             sqlite_path = _anchored_database_path(
-                database_descriptor,
-                directory_descriptor,
-                database_path.name,
-                database_path,
-                "SURICATA_STORE",
+                database_descriptor, database_path, "SURICATA_STORE"
             )
             connection = sqlite3.connect(
                 f"{sqlite_path.as_uri()}?mode=rw&cache=private",
@@ -594,11 +586,7 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
         )
         _refuse_orphaned_sidecars(database_path, directory_descriptor)
         sqlite_path = _anchored_database_path(
-            database_descriptor,
-            directory_descriptor,
-            database_path.name,
-            database_path,
-            "SURICATA_STORE",
+            database_descriptor, database_path, "SURICATA_STORE"
         )
         connection = sqlite3.connect(
             f"{sqlite_path.as_uri()}?mode=rw&cache=private",
@@ -686,11 +674,7 @@ def validate_suricata_store(path: str | Path) -> dict[str, object]:
         if "-journal" in sidecars:
             raise SuricataStoreError("SURICATA_STORE:ACTIVE_JOURNAL_REFUSED")
         sqlite_path = _anchored_database_path(
-            database_descriptor,
-            directory_descriptor,
-            database_path.name,
-            database_path,
-            "SURICATA_STORE",
+            database_descriptor, database_path, "SURICATA_STORE"
         )
         connection = sqlite3.connect(
             f"{sqlite_path.as_uri()}?mode=ro&cache=private",

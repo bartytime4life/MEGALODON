@@ -117,6 +117,41 @@ recomputes both artifact digests and sizes against independently resolved
 source pins. No database, capture, model output, raw log, or private host path
 is retained in this artifact.
 
+New CI collections use `megalodon-ephemeral-subjects-v2`. The retained manifest
+adds a closed, self-asserted producer declaration: this repository,
+`.github/workflows/release-subject-evidence.yml`, the `build-subjects` job,
+the pull-request merge workflow ref, the workflow-definition commit, and the
+run ID and attempt. The workflow-definition commit is taken from
+`GITHUB_WORKFLOW_SHA`; it is separate from the checked-out PR source commit
+([GitHub's variable definitions](https://docs.github.com/en/actions/reference/workflows-and-actions/variables)).
+Collection requires the expected PR workflow/job context, and the roundtrip
+compares the declaration with its same-run context as well as the producer's
+original manifest hash. These environment values are not authentication.
+
+Ordinary local collection still emits v1, even when CI variables are present.
+Existing v1 subjects and installed-recovery receipts remain verifiable without
+being assigned a producer retrospectively. No local or legacy subject manifest
+qualifies for new provenance generation.
+
+The same build job installs that exact wheel offline into a fresh virtual
+environment and runs the synthetic installed-wheel recovery drill outside the
+checkout. It reuses the actual release build environment for build-tool facts;
+it does not build a second wheel. Before and after recovery, the collector
+verifies the closed subject directory and requires the installed wheel's
+version, size and SHA-256 to match the retained subject manifest. A separate
+`release-subject-recovery-<head>-<run-id>-<attempt>` artifact retains only the
+existing v2 recovery JSON for 14 days. The subjects artifact remains exactly
+three files.
+
+The `subject-roundtrip` job downloads both exact same-run artifact IDs into
+separate directories, compares the manifest and receipt hashes with the
+producer's outputs, and verifies the receipt against the retained subjects and
+independently resolved source pins. See the
+[paired offline verification command](installed-recovery-evidence.md#retained-evidence-and-offline-verification).
+Its `release_subject_binding_verified` result confirms cross-artifact byte
+binding; `authentication: not_performed` remains explicit. This does not claim
+an independently reproducible build or authenticate the runner or builder.
+
 After downloading the matching artifact from its Actions run, verify it from
 the reviewed checkout with externally obtained source pins:
 
@@ -145,10 +180,17 @@ and one sdist for `megalodon-defense`, recomputes their bounded SHA-256 values
 and sizes, and requires exact equality with the candidate manifest. A
 synthetic, local-checkout, incomplete, source-mismatched, non-canonical, or
 artifact-mismatched input is refused with a fixed reason that does not include
-input data or local paths.
+input data or local paths. New generation also requires the closed retained
+v2 subjects directory and its externally supplied manifest SHA-256. Source,
+package version, subject names, sizes and digests must match both inputs.
+The `github_actions` candidate basis alone does not identify a builder.
 
 Generation requires the expected commit and tree from an independently trusted
-readback and an explicit UTC timestamp. The tool never reads the host clock.
+readback, the expected `subjects.json` digest from separately retained producer
+output or a reviewed same-run GitHub artifact readback, and an explicit UTC
+timestamp. Do not obtain the expected digest solely from the untrusted input
+being checked. Archive integrity and GitHub run association do not authenticate
+build execution. The tool never reads the host clock.
 The destination must not exist; output is first written with private file modes
 to a sibling staging directory, verified there, and atomically renamed. It
 never overwrites an existing path.
@@ -162,12 +204,15 @@ python tools/release_evidence_packet.py generate \
   --package-version 0.1.0 \
   --generated-at '2026-09-20T23:59:59Z' \
   --expected-commit '<trusted 40-character commit SHA>' \
-  --expected-tree '<trusted 40-character tree SHA>'
+  --expected-tree '<trusted 40-character tree SHA>' \
+  --subjects-directory /path/to/downloaded/release-subjects \
+  --expected-subjects-sha256 'sha256:<externally retained manifest digest>'
 ```
 
 The closed output set is:
 
 - `candidate-evidence.json`: the canonical validated input wrapper;
+- `subjects.json`: the exact externally pinned v2 subject/producer declaration;
 - `megalodon.cdx.json`: CycloneDX 1.7 JSON for the core package, its declared
   empty runtime dependency set, and the exact wheel/sdist subjects;
 - `provenance.intoto.json`: an in-toto Statement v1 with the SLSA provenance v1
@@ -175,27 +220,35 @@ The closed output set is:
 - `packet.json`: the source, artifact, candidate, SBOM, and provenance digest
 binding plus privacy, effect, and limitation statements.
 
-The provenance profile's `buildType` is this section at the exact source
-commit. Its closed `externalParameters` name the repository, commit, tree,
-package, version, `.github/workflows/ci.yml`, the `wheel-smoke` job, and the
-canonical candidate-evidence digest. `resolvedDependencies` binds the Git
-commit, Git tree, and candidate-evidence bytes. `runDetails.builder.id` binds
-the workflow path to the same commit. `internalParameters` is empty and the
-profile deliberately omits an invocation ID, runner name, environment, command
-line, and build timestamps; those values are not required to recompute the
-subject binding and would expand the receipt's identifying surface. The
-repository-controlled workflow is the described build entrypoint; the packet
-generator only records the already built subjects and never initiates it.
+The v2 provenance profile's `buildType` is this section at the exact source
+commit. Its closed `externalParameters` name the repository, source commit and
+tree, package, version, declared release-subject workflow/job, candidate digest
+and producer-declaration digest; producer authentication remains `not_performed`.
+`resolvedDependencies` also binds the subject declaration and workflow-definition
+commit. `runDetails.builder.id` uses that declared workflow commit, not the PR
+source commit. The invocation URL is constructed only from the fixed repository
+and bounded numeric run ID/attempt. There is no arbitrary workflow or builder
+URL option. Runner names, environment dumps, command lines and build timestamps
+remain excluded. The generator records a self-asserted declaration about the
+already built subjects; it neither observes nor initiates their build.
+
+The old v1 profile unconditionally named `ci.yml/wheel-smoke` without an origin
+input. Its bytes are preserved for historical verification only. New generation
+never emits v1, and v1 verification reports `origin_binding: legacy_origin_unbound`.
+Do not rewrite old provenance or treat a successful legacy byte check as a
+verified producer claim.
 
 Every JSON file is UTF-8, key-sorted, compact, newline-terminated canonical
 JSON. The packet and command receipts include source identities, artifact
 basenames/sizes/digests, document digests, package identity, and the explicit
-timestamp. They exclude absolute paths, usernames, hostnames, environment
-variables, command lines, logs, telemetry, and credentials. The SBOM scope is
+timestamp and the closed declared CI producer fields. They exclude absolute
+paths, usernames, hostnames, unselected environment variables and environment
+dumps, command lines, logs, telemetry, and credentials. Legacy v1 privacy bytes
+remain unchanged. The SBOM scope is
 intentionally the core distribution and declared runtime dependencies; optional,
 build, test, OS, and browser components are not silently presented as covered.
 
-Offline verification reads exactly the four regular packet files and the two
+Offline verification reads exactly the five regular v2 packet files and the two
 artifact subjects, recomputes every digest, rebuilds the expected SBOM and
 provenance shapes, and compares the source to external pins. It invokes no host
 command and performs no network request or write:
@@ -206,11 +259,15 @@ python tools/release_evidence_packet.py verify \
   --wheel /path/to/megalodon_defense-0.1.0-py3-none-any.whl \
   --sdist /path/to/megalodon_defense-0.1.0.tar.gz \
   --expected-commit '<trusted 40-character commit SHA>' \
-  --expected-tree '<trusted 40-character tree SHA>'
+  --expected-tree '<trusted 40-character tree SHA>' \
+  --expected-subjects-sha256 'sha256:<externally retained manifest digest>'
 ```
 
 Successful output says only `binding_verified` and
-`authentication: not_performed`. The provenance is unsigned and self-asserted;
+`authentication: not_performed`, with `origin_binding: declared_origin_bound`
+for v2. This means byte-bound declaration, not authenticated origin. Historical
+four-file v1 packets remain verifiable without a producer digest and report
+`legacy_origin_unbound`. The provenance is unsigned and self-asserted;
 the source-pinned workflow builder identity does not establish a SLSA build level. The
 packet remains `generated_unreviewed` and does not convert the existing SBOM or
 provenance gates to accepted, authenticate the runner or host facts, prove a
@@ -218,12 +275,14 @@ reproducible build, review artifact notices, or grant release authority.
 
 ### Remaining candidate gates
 
-The separate [installed-wheel recovery slice](installed-recovery-evidence.md)
-adds a PR-only Ubuntu 24.04 job that installs the built wheel offline into a
-fresh virtual environment, verifies its installed origin/bytes, and rehearses
-synthetic recovery outside the checkout. It retains only a privacy-minimized,
-commit/tree/wheel-bound receipt. It does not populate this packet's checks or
-artifacts, activate restored data, or supply operator/independent acceptance.
+The [installed-wheel recovery evidence](installed-recovery-evidence.md) now
+includes the retained-subject rehearsal above and the unchanged independent
+PR workflow. The latter builds its own ephemeral wheel and retains only a
+privacy-minimized, commit/tree/wheel-bound receipt; it does not establish that
+its wheel equals the retained release wheel. Both install offline into a fresh
+virtual environment, verify installed origin/bytes, and rehearse synthetic
+recovery outside the checkout. Neither populates this packet's checks or
+artifacts, activates restored data, or supplies operator/independent acceptance.
 
 The separate PR workflow `Ubuntu synthetic recovery rehearsal` runs the real
 sample ingestion, backup and restore CLI paths as a non-root user on Ubuntu

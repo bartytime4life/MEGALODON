@@ -1,10 +1,9 @@
 """Bounded, read-only RRULE parser and occurrence preview for automation v1.
 
 `docs/automation-contract.md` describes a future scheduling subsystem for
-issue #84 and marks its "Recurrence semantics and parser" row **Proposed**:
-the repository ships only the Stage 0 JSON Schema shape in
-`contracts/automation/v1`, with no occurrence calculation. This module fills
-exactly that one gap and nothing else:
+issue #84. Alongside the Stage 0 JSON Schema shape in
+`contracts/automation/v1`, this module implements the bounded "Recurrence
+semantics and parser" preview without adding a scheduler:
 
 - `parse_rrule` validates and canonicalizes one RFC 5545 `RRULE` value beyond
   the contract's structural regex: known/duplicate rule parts, per-part value
@@ -29,6 +28,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import calendar
 from datetime import datetime, timedelta, timezone
+from itertools import islice
 from types import MappingProxyType
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -66,6 +66,7 @@ ERROR_CODES = frozenset({
     "BYHOUR_VALUE", "BYMINUTE_VALUE", "WKST_VALUE", "UNBOUNDED_HIGH_FREQUENCY",
     "UNSUPPORTED_COMBINATION", "DTSTART_VALUE", "TIMEZONE_VALUE",
     "DST_POLICY_VALUE", "DST_UNRESOLVED", "DST_POLICY_INAPPLICABLE", "LIMIT_VALUE",
+    "SCAN_LIMIT",
 })
 
 
@@ -265,6 +266,10 @@ def _check_generation_support(parsed: Mapping[str, Any], dtstart: datetime) -> N
         _fail("DTSTART_VALUE")
     if by_month and dtstart.month not in by_month:
         _fail("DTSTART_VALUE")
+    if by_hour is not None and dtstart.hour != by_hour:
+        _fail("DTSTART_VALUE")
+    if by_minute is not None and dtstart.minute != by_minute:
+        _fail("DTSTART_VALUE")
 
 
 def _apply_time_override(candidate: datetime, by_hour: int | None, by_minute: int | None) -> datetime:
@@ -273,7 +278,6 @@ def _apply_time_override(candidate: datetime, by_hour: int | None, by_minute: in
     return candidate.replace(
         hour=by_hour if by_hour is not None else candidate.hour,
         minute=by_minute if by_minute is not None else candidate.minute,
-        second=0, microsecond=0,
     )
 
 
@@ -315,6 +319,9 @@ def _candidates(dtstart: datetime, parsed: Mapping[str, Any]):
             n += 1
     elif frequency == "WEEKLY":
         week_start_index = WEEKDAY_CODES.index(parsed["week_start"])
+        # Canonical BYDAY is Monday-first; generation must follow this rule's
+        # week boundary before COUNT, UNTIL, or the preview limit is applied.
+        day_offsets = sorted((WEEKDAY_CODES.index(code) - week_start_index) % 7 for code in by_day)
         dtstart_date = dtstart.date()
         offset = (dtstart_date.weekday() - week_start_index) % 7
         week0_start = dtstart_date - timedelta(days=offset)
@@ -322,8 +329,8 @@ def _candidates(dtstart: datetime, parsed: Mapping[str, Any]):
         while True:
             if group % interval == 0:
                 week_start_date = week0_start + timedelta(weeks=group)
-                for code in by_day:
-                    date = week_start_date + timedelta(days=(WEEKDAY_CODES.index(code) - week_start_index) % 7)
+                for day_offset in day_offsets:
+                    date = week_start_date + timedelta(days=day_offset)
                     if group == 0 and date < dtstart_date:
                         continue
                     yield _apply_time_override(datetime.combine(date, dtstart.time()), by_hour, by_minute)
@@ -389,11 +396,86 @@ def _resolve(status: str, utc0: datetime, utc1: datetime, policy: str) -> dateti
         return None
     if status == "gap":
         if policy == "shift_forward":
-            return utc1
+            # In a gap, fold=0 uses the pre-transition offset. Its UTC instant
+            # round-trips forward by the gap; fold=1 round-trips backward.
+            return utc0
         _fail("DST_POLICY_INAPPLICABLE")
     if policy in {"fold_earlier", "fold_later"}:
         return utc0 if policy == "fold_earlier" else utc1
     _fail("DST_POLICY_INAPPLICABLE")
+
+
+def _forward_preview(
+    dtstart: datetime, parsed: Mapping[str, Any], zone: ZoneInfo,
+    cap: int, until_utc: datetime | None,
+) -> tuple[Mapping[str, Any], ...]:
+    """Normalize shifted gaps by UTC identity before truncating the preview.
+
+    Python UTC offsets are strictly between -24 and +24 hours. Thus every
+    later local candidate must resolve after candidate-as-UTC minus 24 hours.
+    This conservative watermark proves the bounded buffer's chronological
+    prefix without relying on the size or spacing of IANA clock transitions.
+    """
+    status, utc0, utc1 = _dst_status(dtstart, zone)
+    anchor = _resolve(status, utc0, utc1, "shift_forward")
+    shifted_gap = status == "gap"
+    if until_utc is not None and until_utc < anchor:
+        return ()
+
+    # Keep only the earliest cap instants, retaining the first intended local
+    # candidate when two candidates share a UTC identity. An ambiguous future
+    # candidate stays unresolved until we know whether it can affect the result.
+    pending: dict[datetime, tuple[datetime, str]] = {}
+    ambiguity: tuple[datetime, datetime] | None = None
+    for candidate in islice(_candidates(dtstart, parsed), _MAX_CANDIDATE_SCANS):
+        try:
+            watermark = candidate.replace(tzinfo=timezone.utc) - timedelta(days=1)
+        except OverflowError:
+            watermark = datetime.min.replace(tzinfo=timezone.utc)
+        if len(pending) == cap and max(pending) <= watermark:
+            break
+        if until_utc is not None and until_utc <= watermark:
+            break
+
+        status, utc0, utc1 = _dst_status(candidate, zone)
+        shifted_gap = shifted_gap or status == "gap"
+        if status == "ambiguous":
+            if utc1 < anchor or (until_utc is not None and utc0 > until_utc):
+                continue
+            possible = (max(utc0, anchor), candidate)
+            ambiguity = possible if ambiguity is None else min(ambiguity, possible)
+            continue
+        # Normal and gap cases resolve to utc0 under shift_forward.
+        resolved = utc0
+        if resolved < anchor:
+            continue
+        if until_utc is not None and resolved > until_utc:
+            if not shifted_gap:
+                break
+            continue
+        pending.setdefault(resolved, (candidate, status))
+        if len(pending) > cap:
+            del pending[max(pending)]
+        # Before any forward-shifted gap, later local candidates cannot precede
+        # the retained normal instants. Do not demand unnecessary lookahead
+        # beyond a complete ordinary preview (including near the date ceiling).
+        if len(pending) == cap and not shifted_gap:
+            break
+    else:
+        _fail("SCAN_LIMIT")
+
+    if ambiguity is not None:
+        if len(pending) < cap or ambiguity < (max(pending), pending[max(pending)][0]):
+            _fail("DST_POLICY_INAPPLICABLE")
+
+    results: list[Mapping[str, Any]] = []
+    for resolved, (candidate, status) in sorted(pending.items()):
+        results.append(MappingProxyType({
+            "occurrence_at": resolved.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "local_time": candidate.isoformat(),
+            "dst_status": status,
+        }))
+    return tuple(results)
 
 
 def next_occurrences(
@@ -423,6 +505,8 @@ def next_occurrences(
         datetime.strptime(parsed["until"], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
         if parsed["until"] is not None else None
     )
+    if dst_policy == "shift_forward":
+        return _forward_preview(dtstart_naive, parsed, zone, cap, until_utc)
 
     results: list[Mapping[str, Any]] = []
     for scanned, candidate in enumerate(_candidates(dtstart_naive, parsed)):

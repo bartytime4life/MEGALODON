@@ -286,6 +286,98 @@ const toolPublisherDownloads = {
   nftables: {url: 'https://netfilter.org/projects/nftables/index.html', label: 'nftables install guide'}
 };
 
+// Fixed copy-only setup recipes. These are not installation observations.
+const companionSetupGuide = "https://github.com/bartytime4life/MEGALODON/blob/f6d25ad336623fceee9cd9726092fbe8a7a82cb6/docs/companion-setup.md";
+const companionSetupGuides = {
+  "scapy": {
+    "note": "Optional Python package, not required to open MEGALODON. Linux is supported. The PATH-only check intentionally leaves Scapy not checked. Choose the environment before installing; a standalone environment is not the HUD environment. Commands below run only when you paste them into a terminal.",
+    "steps": [
+      {
+        "title": "Check HUD Python package",
+        "kind": "Package metadata check",
+        "context": "Local HUD: any directory, using the serving interpreter. Hosted Site: activate your reviewed MEGALODON environment first.",
+        "currentPython": true,
+        "expected": "Package information means Scapy metadata exists only in that Python environment. A missing-package message is not proof of absence elsewhere. No capture or import test is performed."
+      },
+      {
+        "title": "Prepare standalone Python tools",
+        "kind": "Optional host change",
+        "context": "Ubuntu 24.04, normal terminal, any directory. Skip when python3-venv is already installed.",
+        "command": "sudo apt update && sudo apt install python3-venv",
+        "expected": "Review the apt prompt. This accesses package repositories; it does not install Scapy or grant capture privileges."
+      },
+      {
+        "title": "Create standalone environment",
+        "kind": "Optional local files",
+        "context": "Any directory. Uses $HOME/scapy/.venv, not the MEGALODON desktop release.",
+        "command": "if test -e \"$HOME/scapy/.venv\" || test -L \"$HOME/scapy/.venv\"; then\n  printf '%s\\n' 'Environment already exists. Inspect it first; nothing was replaced.'\nelse\n  python3 -m venv \"$HOME/scapy/.venv\"\nfi",
+        "expected": "A new environment is created, or an existing path is left alone. Inspect an existing environment rather than recreating it."
+      },
+      {
+        "title": "Install standalone Scapy",
+        "kind": "Optional package download",
+        "context": "Any directory, only after checking that the standalone environment is the one you intend to modify.",
+        "command": "\"$HOME/scapy/.venv/bin/python\" -m pip install 'scapy>=2.5,<3'",
+        "expected": "Scapy is installed into the standalone environment only. The version range is not a pinned artifact. No sudo pip, live capture or packet sending."
+      },
+      {
+        "title": "Check standalone package",
+        "kind": "Package metadata check",
+        "context": "Any directory. Does not check the separate HUD Python environment.",
+        "command": "\"$HOME/scapy/.venv/bin/python\" -I -c \"from importlib.metadata import version; print('Scapy package:', version('scapy'))\"",
+        "expected": "A version prints. Missing interpreter and PackageNotFoundError have different causes; use the guide below. A successful copy is not a successful check."
+      }
+    ]
+  },
+  "greenbone": {
+    "note": "Optional separate scanner. Docker Engine and Compose are required for this container route, not for MEGALODON. Host gvmd absence does not prove containers are absent. This guide targets only the local rootful Docker socket and the documented Greenbone project; stop for a different existing setup.",
+    "steps": [
+      {
+        "title": "Check Docker and Compose",
+        "kind": "Client version check",
+        "context": "Any directory. Does not contact a daemon or start a container.",
+        "command": "command -v docker && docker --version && docker compose version",
+        "expected": "Both version strings print. A missing docker group alone is not proof that Engine is absent."
+      },
+      {
+        "title": "Review Docker installation",
+        "kind": "Separate host-change decision",
+        "context": "Only when the required client/plugin is missing. Use the official signed Ubuntu repository instructions.",
+        "url": "https://docs.docker.com/engine/install/ubuntu/",
+        "linkLabel": "Open Docker Engine Ubuntu installation",
+        "expected": "Installing Docker may start a privileged service and change host networking. Docker-group membership grants root-level access; do not change permissions merely to clear an error."
+      },
+      {
+        "title": "Check the local Docker daemon",
+        "kind": "Local daemon read",
+        "context": "Any directory; existing authorized access to /var/run/docker.sock is required. This is not a rootless/Desktop/Podman probe.",
+        "command": "env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock info --format '{{.ServerVersion}}'",
+        "expected": "Server version means the selected local daemon responded. Permission denied, stopped service and missing packages are different problems; no automatic sudo or service start."
+      },
+      {
+        "title": "Get and review the Compose file",
+        "kind": "Separate download and review",
+        "context": "Follow the complete guide for $HOME/greenbone-community-edition/compose.yaml before the next check.",
+        "expected": "Use the official file, not Markdown-escaped YAML. Review published ports, image sources, mounts and scanner privileges. Keep management ports loopback-only; do not overwrite an existing deployment."
+      },
+      {
+        "title": "Validate reviewed configuration",
+        "kind": "Configuration check",
+        "context": "Any directory, after reviewing the exact file above. No images pulled or containers started.",
+        "command": "env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock compose --env-file /dev/null --project-name greenbone-community-edition --file \"$HOME/greenbone-community-edition/compose.yaml\" config --quiet",
+        "expected": "Silent zero exit means configuration validation only, not installation, health or safety. Stop on an error; do not continue with a partial download."
+      },
+      {
+        "title": "Inspect existing project containers",
+        "kind": "Local daemon read",
+        "context": "Any directory, after configuration review. Startup is a separate operator decision in the guide, not a check button.",
+        "command": "env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock compose --env-file /dev/null --project-name greenbone-community-edition --file \"$HOME/greenbone-community-edition/compose.yaml\" ps --all",
+        "expected": "Rows describe this project only. Empty output is not absence everywhere. Initialization may finish with exit 0; feed readiness and secure login still need separate checks."
+      }
+    ]
+  }
+};
+
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
   const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
@@ -374,10 +466,49 @@ const MegalodonControls = (() => {
     if (publisher) {
       const recipe = node('a', 'MEGALODON setup guidance ↗'); recipe.href = acquisition.url; recipe.target = '_blank'; recipe.rel = 'noopener noreferrer'; root.append(recipe);
     }
-    root.append(node('p', 'Opens the publisher or project page in a new tab. Downloading and installation happen outside this HUD.', 'companion-help'));
+    root.append(node('p', 'Opens the publisher or project page in a new tab. In the local HUD, use Install where a one-click package exists.', 'companion-help'));
     if (typeof runLocalChecks === 'function') {
       const check = node('a', 'Check availability in Home →', 'companion-button'); check.href = '#setup-title';
       check.addEventListener('click', () => runLocalChecks(id)); root.append(check);
+    }
+
+    const setup = companionSetupGuides[id];
+    if (setup) {
+      const easy = node('details', '', 'companion-setup');
+      easy.append(node('summary', 'Easy setup and verification'));
+      easy.append(node('p', setup.note, 'companion-help'));
+      const walkthrough = node('a', 'Open complete setup and troubleshooting ↗', 'companion-button');
+      walkthrough.href = companionSetupGuide; walkthrough.target = '_blank';
+      walkthrough.rel = 'noopener noreferrer'; walkthrough.referrerPolicy = 'no-referrer';
+      easy.append(walkthrough);
+      setup.steps.forEach((step, index) => {
+        const row = node('div', '', 'companion-command');
+        row.append(node('strong', `${index + 1}. ${step.title}`));
+        row.append(node('p', `${step.kind}. ${step.context}`, 'companion-help'));
+        const command = step.currentPython ? resolveLifecycle('scapy').verify : step.command;
+        if (command) {
+          const code = node('code', command);
+          const copy = node('button', `Copy step ${index + 1}: ${step.title}`);
+          copy.type = 'button';
+          copy.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(command);
+              feedback.textContent = 'Step copied, not executed or verified. Review it in your terminal before running.';
+            } catch (_) {
+              feedback.textContent = 'Clipboard unavailable. Select and copy the displayed command. No check was run.';
+            }
+          });
+          row.append(code, copy);
+        }
+        if (step.url) {
+          const link = node('a', `${step.linkLabel} ↗`);
+          link.href = step.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          link.referrerPolicy = 'no-referrer'; row.append(link);
+        }
+        row.append(node('p', `Expected result: ${step.expected}`, 'companion-help'));
+        easy.append(row);
+      });
+      root.append(easy);
     }
 
     const lifecycle = node('details', '', 'companion-lifecycle');

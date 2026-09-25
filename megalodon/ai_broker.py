@@ -155,9 +155,7 @@ class ReceiptStore:
                 self.path, self._directory, writable=True, create=True, prefix="AI_RECEIPT"
             )
             _validate_sqlite_sidecars(self.path, self._directory, writable=True, prefix="AI_RECEIPT")
-            anchored = _anchored_database_path(
-                self._descriptor, self._directory, self.path.name, self.path, "AI_RECEIPT"
-            )
+            anchored = _anchored_database_path(self._descriptor, self.path, "AI_RECEIPT")
             self.connection = sqlite3.connect(
                 f"{anchored.as_uri()}?mode=rw&cache=private", uri=True, timeout=2,
                 check_same_thread=False,

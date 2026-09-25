@@ -46,12 +46,32 @@ An explicit **Check this computer** click uses the separate fixed
 It reads the selected store, reports the running Python/SQLite versions, and
 refreshes the same metadata-only executable and process-name observations.
 There is one collector per HUD, no overlapping probes, a five-second cache,
-and a 20 KiB response cap. No request selects paths or tools. There is no
-installation, command-execution, service-control or model-invocation endpoint.
+and a 20 KiB response cap. No local-check request selects paths or tools.
 PATH entries can refer to mounts/symlinks, so the finite probe count is not a
 filesystem-latency guarantee. Ordinary `dashboard` startup does not inspect tools.
 Ordinary `dashboard` also refuses the local-check route. Failed checks expose
 fixed errors and cannot present expired observations as current success.
+The separate heartbeat and recipe-catalog GETs stay observational. Companion
+tool management is disabled by default and requires `hud --enable-tool-management`
+on Linux with nonzero real/effective UIDs. An independent random per-launch
+operator token is printed only in the launch terminal and entered into a browser
+password field; it is never served, persisted, put in a URL, or shared with AI
+authorization. `/api/install` authenticates exactly one token header and checks
+current non-root identity before selecting a fixed installation or service-start
+recipe. Exact Origin/Host and custom headers remain CSRF defenses, not substitutes
+for authentication. Repeated JSON keys, untyped/unknown tools or actions, encoded
+bodies and ambiguous or overlong lengths fail closed. Default HUD observations
+and guides still work without a token.
+
+Authorized recipes can install Python/Ubuntu packages, download the example
+Qwen model, or start fixed existing systemd units. System package/service steps
+use the OS `pkexec` prompt; package installation can itself start services. These
+are explicit host-maintenance capabilities, not telemetry, inference-readiness
+or firewall authority. One job runs at a time with bounded in-memory output;
+this is not a durable action audit or installed-host acceptance claim. Possession
+of the token authorizes this bounded route; it does not protect against a
+compromised operator account, terminal, or same-origin browser script. Synthetic
+tests do not prove OS password-agent behavior or package/service safety.
 The first-launch exception tolerates only a missing audit source, with 503
 telemetry responses. Unsafe or invalid existing stores remain refused.
 
@@ -447,6 +467,8 @@ The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.
 The core telemetry dashboard remains read-only and loopback-bound; the optional
 AI question route is separately token-gated and writes only its private ledger.
+The default-disabled companion-maintenance route requires its own launch opt-in
+and token and can change the host through fixed recipes as described above.
 No remote exposure exception
 is created. External application installation is not evidence that MEGALODON
 has gained that application's protection or detection capability.
