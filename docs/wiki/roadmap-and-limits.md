@@ -39,14 +39,34 @@ does not establish broader operational acceptance evidence.
 
 | Issue | Remaining decision or evidence theme |
 | --- | --- |
-| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) (closed) and [#327](https://github.com/bartytime4life/MEGALODON/issues/327) (open) | Community ID vectors and bounded grouping are delivered; exact producer profiles and schema-drift fixtures remain the #327 gate. |
+| [#258](https://github.com/bartytime4life/MEGALODON/issues/258) (closed) and [#327](https://github.com/bartytime4life/MEGALODON/issues/327) (closed 2026-09-22, see correction below) | Community ID vectors and bounded grouping are delivered; exact producer profiles and schema-drift fixtures remain the #327 gate. |
 | [#259](https://github.com/bartytime4life/MEGALODON/issues/259) (closed) | Scoped owner acceptance covers the registry and synthetic report at `main@16742fed`; independent review and operational accuracy remain unproved. |
-| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) | Contract, packet tooling, and temporary synthetic installed-wheel recovery receipts are delivered; the complete candidate packet, artifact review, operator drill, and acceptance remain. |
-| [#261](https://github.com/bartytime4life/MEGALODON/issues/261) | Contract and input repairs delivered; collector remains unbound pending exact model and authorized host acceptance. |
+| [#260](https://github.com/bartytime4life/MEGALODON/issues/260) (closed 2026-09-22, see correction below) | Contract, packet tooling, and temporary synthetic installed-wheel recovery receipts are delivered; the complete candidate packet, artifact review, operator drill, and acceptance remain. |
+| [#261](https://github.com/bartytime4life/MEGALODON/issues/261) (closed 2026-09-22, see correction below) | Contract and input repairs delivered; collector remains unbound pending exact model and authorized host acceptance. |
 
 Apache-2.0 is selected and package metadata is aligned. Currentness, bounded
 recovery and raw Suricata conversion are implemented; their original issues
 are not a pending implementation backlog.
+
+### Correction — 2026-09-25
+
+#260, #261, and #327 closed on 2026-09-22, superseding the "remain open" /
+"open" framing above; the 2026-09-21 readback and its table keep their
+original text as a dated historical pin. Closure is a GitHub tracking-state
+change, not new delivered evidence: #260 closed via
+[#366](https://github.com/bartytime4life/MEGALODON/pull/366) as explicitly
+**PARTIAL**; #261 closed via
+[#364](https://github.com/bartytime4life/MEGALODON/pull/364) and
+[#378](https://github.com/bartytime4life/MEGALODON/pull/378), which add a
+cross-consistency readiness packet while the model binding config still
+reports `UNBOUND`; #327 closed via
+[#350](https://github.com/bartytime4life/MEGALODON/pull/350), an explicit
+placeholder scaffold that selects no real Zeek producer version. The
+"remaining decision or evidence theme" column above still applies unchanged
+— only the issue tracking state moved. No successor issue currently tracks
+the residual #261/#327 gap. See
+[`docs/unified-roadmap-currentness.md`](../unified-roadmap-currentness.md)
+for the full readback.
 
 ## Evidence still needed before broader claims
 

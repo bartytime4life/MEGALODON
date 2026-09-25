@@ -1,6 +1,7 @@
 """Anchored control-room presentation; all traffic comes from the local reader."""
 
 from .dashboard_setup import SETUP_HTML
+from .status_glossary import STATUS_GLOSSARY_CSS, STATUS_GLOSSARY_HTML
 
 STATUS_HTML = """
 <section class="room-status" aria-label="Control room status">
@@ -88,14 +89,19 @@ TRAFFIC_HTML = """
       <a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local PC setup and troubleshooting ↗</a>
     </section>
     <section aria-labelledby="help-language"><h3 id="help-language">Read the status with confidence</h3>
-      <p><strong>Found</strong> means an executable was on the checked PATH. <strong>Not found</strong> means it was absent from that PATH; it may exist elsewhere. <strong>Not checked</strong> means no availability claim is possible. <strong>Process observed</strong> means a matching name was present at that time. None proves health or a data connection.</p>
-      <p>Home shows the latest check you requested. Apps keeps its startup observations until you reopen the HUD.</p>
-      <p><strong>Unavailable</strong> means there is no usable evidence. <strong>Unknown</strong> means evidence cannot answer the question. <strong>Degraded</strong> means some evidence is limited. <strong>Stale</strong> means the saved view is old or a refresh failed. None of these states establishes network safety.</p>
+      <p>MEGALODON uses many narrow, truthful status words instead of one collapsed health signal, because each check answers a different question. The same word can still mean different things on different pages &mdash; the glossary below groups them by what each check actually does.</p>
+      <p>Home shows the latest check you requested. Apps keeps its startup observations until you reopen the HUD. <strong>Stale</strong> means the saved view is old or a refresh failed; it does not by itself establish network safety.</p>
+      <details><summary>Full status glossary (every page)</summary>
+        __STATUS_GLOSSARY__
+      </details>
       <details><summary>What stays on this computer?</summary><p>Traffic, findings, tool checks, and reports stay local. Official download links open external publisher websites. MEGALODON does not send local evidence to the hosted reference console. Qwen is optional and cannot create findings, commands, or reports.</p></details>
     </section>
   </div>
 </section>
 """
+if "__STATUS_GLOSSARY__" not in TRAFFIC_HTML:
+    raise AssertionError("status glossary placeholder missing from TRAFFIC_HTML")
+TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML)
 
 
 def compose_control_room(html: str) -> str:
@@ -106,7 +112,7 @@ def compose_control_room(html: str) -> str:
     nav = '<nav class="section-nav" aria-label="Command center workspaces" role="tablist">'
     for key, name in tabs:
         nav += f'<button id="workspace-tab-{key}" type="button" role="tab" aria-controls="workspace-{key}" aria-selected="{"true" if key == "live" else "false"}" tabindex="{0 if key == "live" else -1}">{name}</button>'
-    nav += '</nav><a class="room-back" href="#page-title">← Back to Main HUD</a>'
+    nav += '</nav><a class="room-back" href="#page-title">← Back to Home</a>'
     html = html[:start] + '<div class="room-chrome">' + STATUS_HTML + '</div>' + nav + html[end:]
     # Preserve the older audit inspector and its IDs in the Evidence workspace.
     start = html.index('  <section class="trust-strip')
@@ -119,7 +125,6 @@ def compose_control_room(html: str) -> str:
     marker = '<section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>'
     html = html.replace(marker, marker + '<details class="room-audit-history"><summary>Audit history — may include sample and unlinked rows</summary>' + legacy + '</details>')
     html = html.replace('  <noscript>', TRAFFIC_HTML + '  <noscript>')
-    html = html.replace('>Network activity</h1>', '>Main HUD</h1>')
     return html
 
 
@@ -290,6 +295,7 @@ ROOM_CSS += r"""
 @media(max-width:760px) { .setup-main,.setup-bottom,.room-help-grid { grid-template-columns:1fr; } .setup-health { padding-right:0; border-right:0; padding-bottom:22px; border-bottom:1px solid #304953; } .setup-check-actions { flex-direction:row; } .setup-software-filters { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); } .hud-start .setup-heading { gap:12px; flex-direction:column; } .hud-start .setup-help-link { padding:0; min-height:32px; } .setup-bottom { gap:0; } .hud-start .setup-bottom > details + details { border-top:1px solid #304953; } }
 @media(max-width:440px) { .hud-start { padding:17px; } .setup-software-filters { grid-template-columns:1fr; } .hud-start .setup-heading h2 { font-size:1.7rem; } .setup-check-actions { flex-direction:column; } .software-actions { flex-direction:column; align-items:stretch; } .hud-start .tool-status-row { grid-template-columns:1fr; } .hud-start .tool-status-badges { justify-content:flex-start; } }
 """
+ROOM_CSS += STATUS_GLOSSARY_CSS
 
 ROOM_JS = r"""
 const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null, history:null};

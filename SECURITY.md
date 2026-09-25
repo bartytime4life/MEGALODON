@@ -12,9 +12,13 @@ finding, a fix commitment, a release, or independent security review.
 MEGALODON is a local-first defensive MVP. The current CI reference is Ubuntu
 24.04 / Python 3.11; native Windows core use is an unverified evaluation
 target. Only the current `main` branch receives security attention. There is
-no released version, backport policy, or long-term-support branch yet; see
-[issue #260](https://github.com/bartytime4life/MEGALODON/issues/260) for the
-open release-evidence gate.
+no released version, backport policy, or long-term-support branch yet.
+[Issue #260](https://github.com/bartytime4life/MEGALODON/issues/260) closed
+2026-09-22 with disposition **PARTIAL**: the release-evidence gap itself
+(complete evidence packet, artifact/license review, operator drill,
+exact-candidate disposition) remains open regardless of the issue's tracking
+state; see [`docs/unified-roadmap-currentness.md`](docs/unified-roadmap-currentness.md)
+for the current readback.
 
 ## How to report a vulnerability
 

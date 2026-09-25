@@ -1,9 +1,11 @@
 """Explicit, bounded local AI controls for the Investigate workspace."""
 
+from .status_glossary import GLOSSARY_ANCHOR_ID
+
 AI_PANEL = """
   <details class="panel ai-control" id="ai-control" aria-labelledby="ai-control-title">
     <summary><span><strong id="ai-control-title">Local AI control</strong><small>Ask Qwen about bounded MEGALODON metadata after a live model check.</small></span><span class="summary-action" id="ai-control-action">Open AI controls</span></summary>
-    <p>Model output is advice. Tool selection passes through MEGALODON policy and every attempt gets an audit receipt. This HUD offers bounded reads and report snapshots; firewall application remains unavailable.</p>
+    <p>Model output is advice. Tool selection passes through MEGALODON policy and every attempt gets an audit receipt. This HUD offers bounded reads and report snapshots; firewall application remains unavailable. (This panel's own states are explained in full below; other pages' statuses are in the <a href="#__GLOSSARY_ANCHOR__">status glossary</a>.)</p>
     <div class="ai-controls">
       <button id="ai-check" type="button">Check Ollama and Qwen</button>
       <label class="field" for="ai-token"><span>Operator token from the HUD terminal</span>
@@ -11,21 +13,24 @@ AI_PANEL = """
           <input id="ai-token" type="password" autocomplete="off" spellcheck="false" maxlength="64">
           <button id="ai-token-toggle" type="button" aria-pressed="false">Show</button>
         </span>
+        <small class="field-hint">Printed once in the HUD terminal at startup. It is not shown again; restart the HUD for a new one.</small>
       </label>
       <label class="field" for="ai-question"><span>Question</span><select id="ai-question">
         <option value="seeing">What is MEGALODON seeing?</option>
         <option value="changed">What changed during the last hour?</option>
         <option value="alerts">Why are recent alerts present?</option>
         <option value="integrations">Which integrations are available?</option>
-        <option value="model">Is Ollama healthy?</option>
-        <option value="safe">What can be safely fixed?</option>
+        <option value="model">Is Ollama healthy and which Qwen model is active?</option>
+        <option value="safe">What can be safely fixed automatically?</option>
         <option value="plan">Prepare a remediation plan</option>
         <option value="report">Generate a security summary report</option>
-      </select></label>
+      </select>
+        <small class="field-hint">Fixed so every model tool call stays inside the audited policy; free text is not supported.</small>
+      </label>
       <button id="ai-ask" type="button" disabled>Ask locally</button>
       <button id="ai-cancel" class="button-secondary" type="button" hidden>Cancel</button>
     </div>
-    <p id="ai-state" role="status" aria-live="polite">AI has not been checked. It is disabled until configured and verified.</p>
+    <p id="ai-state" role="status" aria-live="polite">AI has not been checked. It is disabled until configured and verified — run <code>megalodon ai doctor --config config/settings.toml</code>, then see docs/ai-control-plane.md.</p>
     <dl class="ai-result" id="ai-result" hidden>
       <div><dt>OBSERVED · broker output</dt><dd><pre id="ai-observed"></pre></dd></div>
       <div><dt>INFERRED · Qwen advice</dt><dd id="ai-inferred"></dd></div>
@@ -34,12 +39,16 @@ AI_PANEL = """
     </dl>
   </details>
 """
+if "__GLOSSARY_ANCHOR__" not in AI_PANEL:
+    raise AssertionError("glossary anchor placeholder missing from AI_PANEL")
+AI_PANEL = AI_PANEL.replace("__GLOSSARY_ANCHOR__", GLOSSARY_ANCHOR_ID)
 
 AI_CSS = """
 .ai-control { margin: 0 0 18px; }
 .ai-control > p { margin: 14px 20px; color: var(--muted); font-size: .84rem; line-height: 1.5; }
 .ai-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 4px 20px 14px; }
 .ai-controls .field { min-width: min(100%, 280px); flex: 1; }
+.field-hint { color: var(--muted); font-size: .72rem; line-height: 1.4; font-weight: 400; text-transform: none; letter-spacing: normal; }
 .token-field { display: flex; gap: 6px; }
 .token-field input { flex: 1; min-width: 0; }
 .token-field button { padding: 0 10px; white-space: nowrap; min-width: auto; }
@@ -63,11 +72,11 @@ let aiBusy = false;
 let aiActiveController = null;
 let aiUserCanceled = false;
 const AI_STATE_TEXT = {
-  disabled: 'Local AI is turned off in configuration.',
+  disabled: 'Local AI is turned off in configuration. Run megalodon ai doctor --config config/settings.toml, then set [ai] enabled = true (see docs/ai-control-plane.md).',
   ollama_unavailable: 'Ollama is not reachable on loopback.',
   model_missing: 'The configured Qwen model is not installed in Ollama.',
   model_available: 'The model tag is present but has not completed a live inference check.',
-  model_loading: 'The model is busy or still starting, so the readiness check did not complete.',
+  model_loading: 'Another local AI request is already using the one inference slot. Try again in a moment.',
   model_ready: 'The model completed a live bounded inference check.',
   request_timeout: 'The request to Ollama timed out.',
   invalid_response: 'Ollama returned a response MEGALODON could not validate.',
@@ -87,6 +96,10 @@ const AI_ERROR_TEXT = {
 function aiErrorReason(code) {
   if (!code) return '';
   return ` Reason: ${AI_ERROR_TEXT[code] || code} (${code}).`;
+}
+function aiTokenErrorText(value) {
+  const detail = value && typeof value.error === 'string' ? ` (${value.error})` : '';
+  return `Operator token missing or incorrect${detail}. Re-copy the token printed in the HUD terminal at startup.`;
 }
 aiTokenToggle.addEventListener('click', () => {
   const showing = aiTokenInput.type === 'text';
@@ -139,6 +152,7 @@ aiCheck.addEventListener('click', async () => {
   aiState.textContent = 'Checking the configured model with one bounded local inference…';
   try {
     const {response, value} = await aiFetch('/api/ai/status', 'X-Megalodon-AI-Check');
+    if (response.status === 403) { aiState.textContent = aiTokenErrorText(value); return; }
     if (!response.ok || value.schema !== 'megalodon-ai-status-v1') throw new Error('AI status unavailable');
     const summary = AI_STATE_TEXT[value.state] || `Unrecognized status (${value.state}).`;
     aiState.textContent = `${summary}${aiErrorReason(value.error_code)} Model ${value.model || 'unknown'}. Inference verified: ${value.inference_verified === true ? 'yes' : 'no'}.`;
@@ -158,6 +172,7 @@ aiAsk.addEventListener('click', async () => {
   try {
     const question = document.getElementById('ai-question').value;
     const {response, value} = await aiFetch('/api/ai/ask', 'X-Megalodon-AI-Ask', {question});
+    if (response.status === 403) { aiState.textContent = aiTokenErrorText(value); return; }
     if (!response.ok || value.schema !== 'megalodon-ai-answer-v1') throw new Error('AI request unavailable');
     document.getElementById('ai-observed').textContent = JSON.stringify(value.observed, null, 2);
     document.getElementById('ai-inferred').textContent = value.inferred || 'No validated model explanation returned.';

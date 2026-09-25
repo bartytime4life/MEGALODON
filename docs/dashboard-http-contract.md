@@ -43,8 +43,8 @@ production service.
 | `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
 | `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
-| `/api/ingestion-runs` | Optional `limit` | Existing v1 newest 1–25 stored ingestion receipts across core sources, not source liveness |
-| `/api/ingestion-runs-v2` | Optional `limit` and `source` | Source-qualified core ingestion receipts with explicit bounds and unrecorded fields |
+| `/api/ingestion-runs` | Optional `limit` | **Deprecated, kept for existing external callers only; the HUD does not use it.** v1 newest 1–25 stored ingestion receipts across core sources, not source liveness |
+| `/api/ingestion-runs-v2` | Optional `limit` and `source` | **Current route used by the HUD.** Source-qualified core ingestion receipts with explicit bounds and unrecorded fields |
 | `/api/offline-summary` | None | Not selected, or one startup-loaded offline projection |
 | `/api/advisory-receipt` | None | Not supplied, or one startup-snapshotted display-only Qwen result |
 | `/api/suricata` | None | Not configured, unavailable, or one startup snapshot of the separate Suricata store |

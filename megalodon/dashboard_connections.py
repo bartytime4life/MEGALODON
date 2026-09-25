@@ -1,5 +1,7 @@
 """Presentation for the static integration map; no tool or telemetry access."""
 
+from .status_glossary import GLOSSARY_ANCHOR_ID
+
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
@@ -11,6 +13,7 @@ INTEGRATIONS_HTML = """
       <span class="state-found"><i class="app-dot" aria-hidden="true"></i>Found candidate</span>
       <span class="state-missing"><i class="app-dot" aria-hidden="true"></i>Not found</span>
       <span class="state-unknown"><i class="app-dot" aria-hidden="true"></i>Not checked or unknown</span>
+      <a href="#__GLOSSARY_ANCHOR__">What do all these statuses mean? →</a>
     </div>
     <div class="integration-controls">
       <label class="field" for="integrations-platform"><span>Platform guide</span>
@@ -47,6 +50,9 @@ INTEGRATIONS_HTML = """
     <p class="integration-footnote">Commands in details are reference templates. An app's own console uses that app's permissions and may include administration controls. Viewing a console does not connect its data to MEGALODON. Desktop apps need a separately configured web viewer.</p>
   </section>
 """
+if "__GLOSSARY_ANCHOR__" not in INTEGRATIONS_HTML:
+    raise AssertionError("glossary anchor placeholder missing from INTEGRATIONS_HTML")
+INTEGRATIONS_HTML = INTEGRATIONS_HTML.replace("__GLOSSARY_ANCHOR__", GLOSSARY_ANCHOR_ID)
 
 INTEGRATIONS_CSS = """
 h1[id], h2[id] { scroll-margin-top: 18px; }
@@ -66,6 +72,7 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-card-body { padding: 14px; }
 .app-state-legend { display:flex; flex-wrap:wrap; gap:12px; padding:14px 22px 0; color:var(--muted); font-size:.76rem; }
 .app-state-legend span { display:inline-flex; align-items:center; gap:7px; }
+.app-state-legend a { color: var(--cyan); text-underline-offset: 3px; margin-left: auto; }
 .app-status-grid { display:grid; gap:7px; margin:13px 0; }
 .app-status-row { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 8px; align-items:start; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:rgba(110,216,255,.035); }
 .app-status-row .app-dot { grid-row:1 / span 2; margin-top:.24rem; }

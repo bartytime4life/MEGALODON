@@ -9,6 +9,7 @@ from .dashboard_connections import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRAT
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
+from .status_glossary import GLOSSARY_ANCHOR_ID
 
 
 INDEX_HTML = """<!doctype html>
@@ -22,7 +23,7 @@ INDEX_HTML = """<!doctype html>
   <script src="/assets/dashboard.js" defer></script>
 </head>
 <body>
-<a class="skip-link" id="skip-link" href="#detections-title">Skip to detections</a>
+<a class="skip-link" id="skip-link" href="#detections-title">Skip to findings</a>
 <main class="shell">
   <header class="topbar">
     <div class="brand" aria-label="MEGALODON">
@@ -60,7 +61,7 @@ INDEX_HTML = """<!doctype html>
 
   <section class="metrics" id="live-metrics" aria-label="Stored telemetry summary">
     <article class="metric"><div class="metric-label">Stored events</div><div class="metric-value">—</div></article>
-    <article class="metric"><div class="metric-label">Alerts</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">Findings</div><div class="metric-value">—</div></article>
     <article class="metric"><div class="metric-label">High priority</div><div class="metric-value">—</div></article>
     <article class="metric"><div class="metric-label">Recorded decisions</div><div class="metric-value">—</div></article>
   </section>
@@ -96,7 +97,7 @@ INDEX_HTML = """<!doctype html>
   </div>
 
   <nav class="next-actions" aria-label="Common tasks">
-    <a href="#detections-title"><strong>Review alerts</strong><span>Open the newest stored findings.</span></a>
+    <a href="#detections-title"><strong>Review findings</strong><span>Open the newest stored findings.</span></a>
     <button id="open-report-studio" type="button"><strong>Create a report</strong><span>Export an overview, alert review, or ingestion summary.</span></button>
     <a href="#integrations-title"><strong>Open tools</strong><span>Review companion apps and their setup instructions.</span></a>
   </nav>
@@ -132,7 +133,7 @@ INDEX_HTML = """<!doctype html>
 
   <section class="panel" id="triage-panel" aria-labelledby="detections-title" aria-busy="true">
     <div class="panel-head">
-      <div><p class="eyebrow">Needs attention</p><h2 id="detections-title" tabindex="-1">Stored alerts</h2><p>The newest fixed-rule findings. MEGALODON has not changed the host or network.</p></div>
+      <div><p class="eyebrow">Needs attention</p><h2 id="detections-title" tabindex="-1">Stored findings</h2><p>The newest fixed-rule findings. MEGALODON has not changed the host or network.</p></div>
       <time class="timestamp" id="updated">Awaiting first refresh</time>
     </div>
     <details class="triage-tools" id="triage-tools">
@@ -245,7 +246,7 @@ INDEX_HTML = """<!doctype html>
       <div><h2 id="ingestion-runs-title" tabindex="-1">Ingestion run receipts</h2><p>Bounded read-only evidence for the newest local ingestion attempts. A completed receipt describes stored work; it does not prove sensor liveness or full network coverage.</p></div>
       <span class="timestamp" id="ingestion-runs-status">Loading receipts…</span>
     </summary>
-    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Stored events, findings, and action records are different units; action records are plans, not host changes. Adapter identity and accepted/rejected counts are not recorded. A running receipt does not prove a process is still active; a completed run does not prove sensor liveness or complete coverage.</div>
+    <div class="ingestion-runs-note" role="note">Select one stored source to review its attempts. This filters this panel only; the report builder and Traffic label use the separate all-source snapshot. Stored events, findings, and action records are different units; action records are plans, not host changes. Adapter identity and accepted/rejected counts are not recorded. A running receipt does not prove a process is still active; a completed run does not prove sensor liveness or complete coverage. <a href="#__GLOSSARY_ANCHOR__">What do these receipt statuses mean? →</a></div>
     <div class="ingestion-runs-list" id="ingestion-runs-list" role="list" aria-live="polite" aria-atomic="true">
       <p class="ingestion-runs-empty">Loading bounded ingestion receipts…</p>
     </div>
@@ -341,6 +342,9 @@ INDEX_HTML = """<!doctype html>
 </main>
 </body>
 </html>"""
+if "__GLOSSARY_ANCHOR__" not in INDEX_HTML:
+    raise AssertionError("glossary anchor placeholder missing from INDEX_HTML")
+INDEX_HTML = INDEX_HTML.replace("__GLOSSARY_ANCHOR__", GLOSSARY_ANCHOR_ID)
 
 
 DASHBOARD_CSS = """
@@ -724,8 +728,8 @@ DASHBOARD_JS = r"""
 
 const metricSpec = [
   ['events', 'Stored events', 'Metadata rows'],
-  ['detections', 'Alerts', 'Fixed-rule matches'],
-  ['high_or_critical', 'High priority', 'Stored high or critical alerts'],
+  ['detections', 'Findings', 'Fixed-rule matches'],
+  ['high_or_critical', 'High priority', 'Stored high or critical findings'],
   ['actions', 'Recorded decisions', 'Audit records only']
 ];
 const summaryFields = ['actions', 'detections', 'events', 'high_or_critical'];
@@ -743,7 +747,8 @@ const workspaceTargets = {
   'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'live',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
-  'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis'
+  'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis',
+  'help-language': 'help', 'status-glossary': 'help'
 };
 const state = {
   events: [],
@@ -1538,8 +1543,8 @@ function reportSnapshot() {
 }
 function reportPlainText(report) {
   const lines = [report.title, `Generated: ${report.generated_at}`, `Scope: ${report.scope}`, `Source scope: ${report.source_scope}`, report.bounds];
-  if (report.summary) lines.push(`Events: ${report.summary.events}`, `Detections: ${report.summary.detections}`, `High / critical: ${report.summary.high_or_critical}`, `Actions: ${report.summary.actions}`, `Traffic sample: ${report.traffic.sampled_events} events, ${formatBytes(report.traffic.total_bytes)}`);
-  if (report.detections) lines.push(`Returned detections: ${report.detections.length}`);
+  if (report.summary) lines.push(`Events: ${report.summary.events}`, `Findings: ${report.summary.detections}`, `High / critical: ${report.summary.high_or_critical}`, `Actions: ${report.summary.actions}`, `Traffic sample: ${report.traffic.sampled_events} events, ${formatBytes(report.traffic.total_bytes)}`);
+  if (report.detections) lines.push(`Returned findings: ${report.detections.length}`);
   if (report.ingestion_runs) lines.push(`Returned ingestion receipts: ${report.ingestion_runs.length}`);
   lines.push(`Limitation: ${report.limitation}`); return lines.join('\n');
 }
@@ -1554,7 +1559,7 @@ function renderReportPreview() {
   }
   const facts = document.createElement('dl');
   const entries = report.summary
-    ? [['Stored events', report.summary.events], ['Alerts', report.summary.detections], ['Traffic records', `${report.traffic.sampled_events} · ${formatBytes(report.traffic.total_bytes)}`]]
+    ? [['Stored events', report.summary.events], ['Findings', report.summary.detections], ['Traffic records', `${report.traffic.sampled_events} · ${formatBytes(report.traffic.total_bytes)}`]]
     : report.detections
       ? [['Returned rows', report.detections.length], ['Priority rows', report.detections.filter(item => prioritySeverities.has(item.severity)).length], ['Newest bound', state.config.event_limit]]
       : [['Run receipts', report.ingestion_runs.length], ['Running receipts', report.ingestion_runs.filter(item => item.status === 'running').length], ['Needs review', report.ingestion_runs.filter(item => !['running', 'completed'].includes(item.status)).length]];
@@ -1772,7 +1777,7 @@ function applyFilters() {
     ? base
     : base.filter((_, index) => model.bins[state.activeBin].members.includes(index));
   renderEvents(visible);
-  const noun = state.events.length === 1 ? 'detection' : 'detections';
+  const noun = state.events.length === 1 ? 'finding' : 'findings';
   const status = `${formatNumber(visible.length)} of ${formatNumber(state.events.length)} returned ${noun} shown${hasActiveFilters() ? ' with active filters' : ''}.`;
   if (byId('filter-status').textContent !== status) byId('filter-status').textContent = status;
 }
