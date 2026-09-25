@@ -179,6 +179,11 @@ async function loadSetup() {
     byId('setup-source').textContent = 'Setup information unavailable. Existing telemetry controls remain independent.';
     byId('setup-readiness').textContent = 'Startup observations are unavailable. Choose Check this computer to try a fresh read.';
     renderToolStatus();
+    // Matches the success path above: if Apps already rendered before this
+    // request failed, its Presence rows and freshness line would otherwise
+    // stay on their prior (possibly "not checked") text until an unrelated
+    // filter or control happened to trigger another render.
+    if (typeof integrationState !== 'undefined' && integrationState.snapshot) renderIntegrationMap();
   }
   renderSoftwareShelf();
 }

@@ -354,6 +354,15 @@ process.stdin.on('end', async () => {
     assert.doesNotMatch(nodeFor('integrations-freshness').textContent, /Not checked at HUD launch/);
     run("setupState.loadFailed = false; renderIntegrationMap()");
     assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch/);
+    // The catch path in loadSetup() itself must trigger the same Apps
+    // re-render its success path does, not just flip the flag - otherwise
+    // an operator already viewing Apps sees stale text until an unrelated
+    // control happens to redraw the panel.
+    context.fetch = async path => { assert.equal(path, '/api/setup'); throw new Error('network down'); };
+    await run('loadSetup()');
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Startup observations are unavailable; the HUD-launch check could not be retrieved\./);
+    context.fetch = async path => { calls.push(path); return {ok: true, json: async () => plans[new URL(path, 'http://localhost').searchParams.get('platform')]}; };
+    run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'})), checked_at: '2026-01-01T00:00:00Z'}; setupState.loadFailed = false; renderIntegrationMap()");
     nodeFor('integrations-presence-filter').value = 'found'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
     assert.match(textOf(nodeFor('integrations-cards')), /TShark/);
