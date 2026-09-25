@@ -345,6 +345,15 @@ process.stdin.on('end', async () => {
     assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer on Home/);
     assert.doesNotMatch(nodeFor('integrations-freshness').textContent, /03:04:05/, 'must not pick up the fresher local-check timestamp');
     run("localCheckState.snapshot = null");
+    // A failed /api/setup fetch and a genuinely absent readiness both leave
+    // setupState.readiness null, but they are not the same fact: only the
+    // second one means "not checked". loadSetup()'s catch path must not be
+    // reported as an ordinary not-checked launch.
+    run("setupState.loadFailed = true; renderIntegrationMap()");
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Startup observations are unavailable; the HUD-launch check could not be retrieved\./);
+    assert.doesNotMatch(nodeFor('integrations-freshness').textContent, /Not checked at HUD launch/);
+    run("setupState.loadFailed = false; renderIntegrationMap()");
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch/);
     nodeFor('integrations-presence-filter').value = 'found'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
     assert.match(textOf(nodeFor('integrations-cards')), /TShark/);

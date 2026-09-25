@@ -82,7 +82,7 @@ SETUP_HTML = """
 """
 
 SETUP_JS = r"""
-const setupState = {readiness: null, runtime: null, sourceStatus: null};
+const setupState = {readiness: null, runtime: null, sourceStatus: null, loadFailed: false};
 const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
 const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios-core'];
 function toolPresenceText(index) {
@@ -98,6 +98,7 @@ function toolPresenceText(index) {
 // boundary used to be implicit and untimestamped; this makes it visible
 // instead of pretending the two views share one always-current answer.
 function appsPresenceFreshnessNote() {
+  if (setupState.loadFailed) return 'Startup observations are unavailable; the HUD-launch check could not be retrieved. Choose Check this computer on Home for a fresh read.';
   if (!setupState.readiness) return 'Not checked at HUD launch.';
   const when = formatRefreshTime(new Date(setupState.readiness.checked_at));
   return `Checked at HUD launch, ${when}. This does not change after Check this computer on Home; reopen the HUD for a fresh Apps presence check.`;
@@ -158,6 +159,7 @@ async function loadSetup() {
     setupState.readiness = report;
     setupState.runtime = runtime;
     setupState.sourceStatus = value.source_status;
+    setupState.loadFailed = false;
     byId('setup-source').textContent = value.source_status === 'connected'
       ? 'The local data file is open. Traffic and alert counts come from this file.'
       : 'No local data file is available yet. Tool checks still work. After the first successful import, reopen the HUD before the new store appears.';
@@ -170,6 +172,10 @@ async function loadSetup() {
     setupState.sourceStatus = null;
     setupState.readiness = null;
     setupState.runtime = null;
+    // Distinct from a genuinely absent/not-yet-checked readiness: the check
+    // may well have run at launch, it just could not be retrieved here.
+    // appsPresenceFreshnessNote() must not report this as "not checked".
+    setupState.loadFailed = true;
     byId('setup-source').textContent = 'Setup information unavailable. Existing telemetry controls remain independent.';
     byId('setup-readiness').textContent = 'Startup observations are unavailable. Choose Check this computer to try a fresh read.';
     renderToolStatus();
