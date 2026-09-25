@@ -90,6 +90,15 @@ function heartbeatDetail(id) {
   detail.textContent = heartbeatText(heartbeatState.byId.get(heartbeatToolId(id)));
   return detail;
 }
+function installDisabledReason(mine, running) {
+  // A button disabled because it is itself the running job already says so
+  // in its own text ("Installing…"/"Starting…"); no separate reason needed.
+  if (mine && running) return null;
+  if (running) return 'Another install or service start is already running on this computer; wait for it to finish.';
+  if (heartbeatStale()) return 'Tool observations are stale; wait for the next check.';
+  if (!toolManagementToken()) return 'Enter the operator token above to use Install and Start.';
+  return null;
+}
 function installControl(id, name) {
   const toolId = heartbeatToolId(id);
   const wrap = document.createElement('div'); wrap.setAttribute('data-heartbeat-install', toolId); wrap.heartbeatTool = toolId; wrap.toolName = name;
@@ -134,18 +143,24 @@ function paintInstallControl(wrap) {
     const running = job && job.state === 'running';
     button.textContent = mine && running ? 'Installing…' : model ? 'Download Qwen model' : `Install ${name}`;
     button.disabled = Boolean(running || heartbeatStale() || !toolManagementToken());
-    button.title = entry.summary;
+    const reason = installDisabledReason(mine, running);
+    button.title = reason || entry.summary;
     button.addEventListener('click', () => startInstall(toolId, name, entry));
     wrap.append(button);
+    // A disabled button has no focus/hover a keyboard or touch user can read
+    // its title from; the reason must also be visible sibling text.
+    if (reason) wrap.append(textNode('p', reason, 'hb-detail'));
   } else if (tool && tool.installed === 'yes' && tool.expects_service && (tool.service === 'stopped' || (mine && job.action === 'start' && job.state === 'running'))) {
     if (entry.startable) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
       const running = job && job.state === 'running';
       button.textContent = mine && running ? 'Starting…' : 'Start service';
       button.disabled = Boolean(running || heartbeatStale() || !toolManagementToken());
-      button.title = `Starts the ${name} system service. A process observation does not establish health or integration.`;
+      const reason = installDisabledReason(mine, running);
+      button.title = reason || `Starts the ${name} system service. A process observation does not establish health or integration.`;
       button.addEventListener('click', () => startInstall(toolId, name, entry, 'start'));
       wrap.append(button);
+      if (reason) wrap.append(textNode('p', reason, 'hb-detail'));
     } else if (entry.start_terminal) {
       wrap.append(textNode('p', `Start the service in a terminal: ${entry.start_terminal}`, 'hb-detail'));
     }
