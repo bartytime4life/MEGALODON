@@ -5,10 +5,12 @@ The existing private [Defense Console](https://megalodon-defense-console.blackba
 The local dashboard's core telemetry routes are read-only. Its separately
 enabled AI question POST requires a per-launch operator token and can write
 private AI receipts and bounded report snapshots; see
-[`docs/ai-control-plane.md`](../docs/ai-control-plane.md). This hosted Site has
-no connection to those routes. The changed source here is a repository mirror,
-not a new Site publication. Its local HUD wording follows the operator-authorization
-change merged in PR #392. No Site version is saved or deployed here.
+[`docs/ai-control-plane.md`](https://github.com/bartytime4life/MEGALODON/blob/main/docs/ai-control-plane.md). This hosted Site has
+no connection to those routes. The deployable files in `dist/` and the hosting
+manifest match the MEGALODON repository at
+`main@799dc984cadf23990fb074f252b4c53a4534e855`. Its local HUD wording
+follows the operator-authorization change merged in PR #392. A saved Sites
+version and deployment must be verified separately from this source commit.
 
 ## Current navigation and install path
 
