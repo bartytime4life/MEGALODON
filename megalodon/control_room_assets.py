@@ -5,12 +5,17 @@ from .status_glossary import STATUS_GLOSSARY_CSS, STATUS_GLOSSARY_HTML
 
 STATUS_HTML = """
 <section class="room-status" aria-label="Control room status">
-  <div><span>Evidence Status</span><strong id="room-overall">Unknown</strong></div>
-  <div><span>Local Service</span><strong id="room-connection">Not checked</strong></div>
-  <div><span>Data Coverage</span><strong id="room-coverage">Unavailable</strong></div>
-  <div><span>Last Fetched</span><strong id="room-updated">Not fetched</strong></div>
-  <div><span>Stored Sources</span><strong id="room-sources">Unknown</strong></div>
-  <div><span>Findings</span><strong id="room-count">Unavailable</strong></div>
+  <div class="room-status-headline"><span>Evidence Status</span><strong id="room-overall">Unknown</strong></div>
+  <details class="room-status-details">
+    <summary>More status fields</summary>
+    <div class="room-status-grid">
+      <div><span>Local Service</span><strong id="room-connection">Not checked</strong></div>
+      <div><span>Data Coverage</span><strong id="room-coverage">Unavailable</strong></div>
+      <div><span>Last Fetched</span><strong id="room-updated">Not fetched</strong></div>
+      <div><span>Stored Sources</span><strong id="room-sources">Unknown</strong></div>
+      <div><span>Findings</span><strong id="room-count">Unavailable</strong></div>
+    </div>
+  </details>
 </section>
 <p id="room-notice" class="room-notice" role="status" aria-live="polite">No qualified data available until the local metadata check succeeds.</p>
 <div class="room-range" aria-label="Shared time range">
@@ -136,10 +141,15 @@ ROOM_CSS = r"""
 .section-nav { grid-template-columns:repeat(7,minmax(0,1fr)); margin:0; }
 .section-nav button[aria-selected="true"] { box-shadow:inset 0 -3px 0 #a6f4df; }
 .section-nav button:focus-visible { outline:3px solid #a6f4df; outline-offset:-3px; }
-.room-status { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.6rem; margin:.7rem 0; }
-.room-status > div { background:#102632; border:1px solid #325061; border-radius:10px; padding:.75rem; min-width:0; }
-.room-status span { display:block; font-size:.8rem; color:#b7cbd4; margin-bottom:.4rem; }
-.room-status strong { display:block; font-size:.96rem; overflow-wrap:anywhere; color:#f2f7f9; }
+.room-status { margin:.7rem 0; }
+.room-status-headline,.room-status-grid > div { background:#102632; border:1px solid #325061; border-radius:10px; padding:.75rem; min-width:0; }
+.room-status-headline { max-width:22rem; }
+.room-status-headline span,.room-status-grid span { display:block; font-size:.8rem; color:#b7cbd4; margin-bottom:.4rem; }
+.room-status-headline strong,.room-status-grid strong { display:block; font-size:.96rem; overflow-wrap:anywhere; color:#f2f7f9; }
+.room-status-details { margin-top:.5rem; }
+.room-status-details > summary { min-height:44px; padding:.5rem 0; color:#b7cbd4; font-size:.82rem; line-height:1.5; cursor:pointer; overflow-wrap:anywhere; }
+.room-status-details[open] { padding-bottom:.3rem; }
+.room-status-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.6rem; margin-top:.5rem; }
 .room-notice { color:#e2d298; font-size:.88rem; margin:.35rem 0 .7rem; }
 .room-range { display:flex; flex-wrap:wrap; gap:.6rem; align-items:end; }
 .room-range label { display:grid; gap:.25rem; font-size:.85rem; }
@@ -189,8 +199,8 @@ ROOM_CSS = r"""
 .room-report-actions button:disabled { cursor:not-allowed; opacity:.58; }
 .room-report-preview { max-height:48vh; overflow:auto; margin:0; padding:1rem; border:1px solid #335064; border-radius:10px; background:#071923; color:#dcebf0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.78rem; line-height:1.5; }
 :is(.room-range,.room-actions,.room-visual,.room-table,.room-report-actions) :focus-visible,.room-report-preview:focus-visible,.room-back:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
-@media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps,.setup-journey { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
-@media(max-width:560px) { .room-status { grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; } .room-status > div { padding:.5rem; } .room-status span { font-size:.68rem; } .room-status strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
+@media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps,.setup-journey { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-status-headline { max-width:none; } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
+@media(max-width:560px) { .room-status-grid { gap:.35rem; } .room-status-headline,.room-status-grid > div { padding:.5rem; } .room-status-headline span,.room-status-grid span { font-size:.68rem; } .room-status-headline strong,.room-status-grid strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
 @media(max-width:560px), (max-height:500px) {
   html { height:auto; overflow:auto; }
