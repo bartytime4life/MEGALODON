@@ -5,7 +5,7 @@ probe a host, or start an integration. The dashboard module re-exports these
 constants to preserve the existing public/test interface.
 """
 
-from .dashboard_connections import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
+from .dashboard_integrations import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS

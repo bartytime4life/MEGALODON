@@ -2,7 +2,7 @@
 
 The implementation authority is [dashboard.py](../megalodon/dashboard.py).
 [dashboard_assets.py](../megalodon/dashboard_assets.py) composes same-origin
-presentation; [dashboard_connections.py](../megalodon/dashboard_connections.py)
+presentation; [dashboard_integrations.py](../megalodon/dashboard_integrations.py)
 owns the Integration Map markup, styles, and behavior. The public dashboard
 module continues to export `INDEX_HTML`, `DASHBOARD_CSS`, and `DASHBOARD_JS` for
 existing consumers and tests. No static CDN or additional server is introduced.
