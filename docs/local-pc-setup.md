@@ -123,7 +123,9 @@ acceptance and native Windows support are outside this check.
 
 ## Use your data
 
-Home → **Data and tools** shows the selected source and startup tool observations.
+Home → **Data and tools** shows the selected source and a live status light for
+each optional tool, with **Install** and **Start service** buttons where a fixed
+package or service unit exists (see [tool heartbeat](tool-heartbeat.md)).
 Choose **Check this computer** for a fresh, explicit metadata check. Home then
 shows current results; Apps keeps its startup observations until the HUD is
 reopened. **Unable to check** is a neutral result when executable discovery

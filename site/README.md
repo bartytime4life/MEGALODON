@@ -7,7 +7,8 @@ enabled AI question POST requires a per-launch operator token and can write
 private AI receipts and bounded report snapshots; see
 [`docs/ai-control-plane.md`](../docs/ai-control-plane.md). This hosted Site has
 no connection to those routes. The changed source here is a repository mirror,
-not a new Site publication.
+not a new Site publication. Its local HUD wording follows the operator-authorization
+change merged in PR #392. No Site version is saved or deployed here.
 
 ## Current navigation and install path
 
@@ -55,19 +56,22 @@ Local and hosted tool controls share the canonical Python asset constants in
 official setup links and copy-only maintenance commands. Optional saved console
 addresses persist per browser origin; they open the actual companion app in a
 separate tab. No embedding, probing, credential storage or host execution occurs.
-Tool search includes local evidence paths and saved-console filters. Manual
-presence-report import remains optional for this hosted page.
+Tool search includes local evidence paths and saved-console filters; an empty
+result offers a filter reset. The integrations view links to a HUD already
+running on the same computer, and supported evidence cards link to their
+matching local view. Manual presence-report import remains optional for this
+hosted page.
 
 ## Actual behavior
 
 - No network feed is connected. The HUD shows unavailable measurements, not zeros, generated rates, detections, protocol shares or example receipts. Workflows points to the local dashboard for actual stored evidence; this does not start a sensor or establish liveness.
-- Fourteen integration cards distinguish repository implementation status, timestamped **self-reported** installation notes, and imported executable-presence findings. No card automatically verifies installation or service health.
+- Fourteen integration cards show one presence light next to each name: a fresh manual note or imported executable-presence report sets it green or red, stale evidence sets it amber, and otherwise it stays grey. The imported report is an unauthenticated PATH claim, not proof of installation or service health. This hosted page cannot see the PC. The local HUD provides recent presence observations, visible unknown/stale states, setup guidance and, where implemented, separately authorized Install/Start controls (see `docs/tool-heartbeat.md`).
 - Manual notes persist in this browser's `localStorage`, expire after seven days, and can be cleared. A readiness JSON import stays only in page memory and is never uploaded or saved to `localStorage`.
 - Readiness import accepts only the closed `megalodon-tool-readiness-v1` schema, fixed registry/boundaries and at most 8,192 UTF-8 bytes. Duplicate keys, unsupported claims, malformed/future timestamps and overlapping reads fail closed. Reports older than 24 hours are marked stale; they are not authenticated.
 - Lifecycle diagnostics and commands are reference text. The browser never executes them. Qwen operations use one explicit example model tag and literal local provider; the tag is mutable and not an approved digest. Zabbix requires one selected role. Greenbone labels distinguish image inventory, container removal and image refresh. Zeek/OSSEC/Nagios defer to the actual installation method instead of inventing universal package commands.
 - Package commands can download dependencies or start services when an operator runs them. They do not bypass the repository's guarded setup or establish MEGALODON operational acceptance. No command was executed to test host changes.
 - The local Suricata projection is an immutable startup snapshot, not this Site's feed. Client-side Qwen admission does not confine the separate model process. Linux reference support does not imply native Windows/macOS acceptance.
-- The exchange map now distinguishes the bounded offline STIX reader delivered by merged PR #269 from the still-contract-only ECS/OCSF and SOAR lanes. This hosted page cannot select or upload a bundle and has no threat-feed, TAXII, SIEM, or SOAR runtime connection.
+- The exchange map now distinguishes the bounded offline STIX reader delivered by merged PR #269 from the implemented bounded local ECS/OCSF writer and the still-contract-only SOAR lane. This hosted page cannot select or upload a bundle and has no threat-feed, TAXII, SIEM, or SOAR runtime connection.
 
 ## Source and verification
 

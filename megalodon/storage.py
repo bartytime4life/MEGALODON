@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import sys
 from threading import RLock
 from time import monotonic
 from typing import Any
@@ -467,59 +468,37 @@ def _descriptor_database_path(descriptor: int, fallback: Path) -> str:
     return str(fallback)
 
 
-def _proc_fd_path(descriptor: int) -> Path:
-    """Return the Linux ``/proc/self/fd`` symlink path for ``descriptor``."""
-    return Path("/proc/self/fd") / str(descriptor)
-
-
-def _dev_fd_directory_path(descriptor: int, name: str) -> Path:
-    """Return the macOS/BSD ``/dev/fd`` directory-lookup path for ``name``."""
-    return Path("/dev/fd") / str(descriptor) / name
-
-
 def _anchored_database_path(
-    file_descriptor: int,
-    directory_descriptor: int,
-    name: str,
-    fallback: Path,
-    prefix: str,
+    descriptor: int, fallback: Path, prefix: str
 ) -> Path:
-    """Return an SQLite path bound to an already-open descriptor where supported.
+    """Return an SQLite path bound to an already-open file where supported."""
 
-    Prefer anchoring to the database file's own descriptor via
-    ``/proc/self/fd/<N>``: where that exists (Linux) it is a real,
-    readlink-resolvable symlink, so SQLite's connection is bound to our own
-    already-open file object -- immune to any rename or replacement of its
-    directory entry between our validation and ``sqlite3.connect`` -- while
-    its full pathname still resolves to a real, sibling-capable location for
-    deriving ``-journal``/``-wal``/``-shm`` paths.
+    candidate = Path(_descriptor_database_path(descriptor, fallback))
+    if os.name == "posix" and candidate == fallback:
+        _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
+    return candidate
 
-    Fall back to anchoring the *directory's* descriptor plus ``name`` only
-    where ``/proc/self/fd`` does not exist at all (macOS/BSD). There,
-    ``/dev/fd/<N>`` is a device node rather than a symlink: opening it does
-    reach our own already-open file, but SQLite cannot derive a valid
-    sibling path from a bare descriptor number, so anchoring to the file
-    descriptor there fails outright (``STORAGE_SCHEMA:INSPECTION_FAILED`` on
-    the first write transaction) rather than merely weakening. Anchoring to
-    the directory descriptor and looking up ``name`` beneath it (POSIX
-    ``fd/N/name`` lookups, documented in ``fdesc(4)``) resolves that
-    derivation, at the cost of a narrower guarantee than the file-anchored
-    form: it performs a fresh name lookup at connect time, so it does not
-    protect against that exact file being renamed or replaced by another
-    process in the narrow window between validation and connect. That
-    narrower guarantee is still strictly better than the current
-    alternative on this platform, which does not open at all.
+
+def _writable_sqlite_connection_path(
+    descriptor: int, expected: Path, prefix: str
+) -> tuple[Path, Path | None]:
+    """Choose a writable SQLite path without weakening descriptor admission.
+
+    Linux keeps the descriptor pathname so SQLite and its sidecars stay tied to
+    the already-open file. Native Darwin accepts the database descriptor for
+    reads but cannot create the rollback journal through /dev/fd/N
+    (SQLITE_CANTOPEN). There, use only the already-canonicalized, owner-private
+    admitted pathname after proving it still names the exact open descriptor.
+    The returned optional anchor tells _validate_connection_path which pathname
+    SQLite is permitted to report.
     """
 
-    if os.name == "posix":
-        by_file = _proc_fd_path(file_descriptor)
-        if by_file.exists():
-            return by_file
-        by_directory = _dev_fd_directory_path(directory_descriptor, name)
-        if by_directory.exists():
-            return by_directory
-        _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
-    return fallback
+    anchor = _anchored_database_path(descriptor, expected, prefix)
+    if sys.platform != "darwin":
+        return anchor, anchor
+    if not _path_matches_descriptor(expected, descriptor):
+        _raise_path_error(prefix, "DATABASE_CHANGED")
+    return expected, None
 
 
 def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
@@ -557,17 +536,13 @@ def _validate_connection_path(
     SQLite's own report of where it opened the database (via ``PRAGMA
     database_list``) is not consistent across platforms when the connection
     was made through a descriptor-anchored path (``_anchored_database_path``,
-    e.g. ``/proc/self/fd/N`` or ``/dev/fd/N/name``): some platforms resolve
-    it to the real filesystem path, others (observed on macOS) report that
-    same descriptor path back literally. ``anchor``, when given, is that
-    exact descriptor path we ourselves constructed before calling
-    ``sqlite3.connect`` -- on platforms with ``/proc/self/fd`` it was bound
-    to our own already-open, already-validated file descriptor, so a report
-    matching it is exactly as strong a guarantee as one matching
-    ``expected``; where that path had to fall back to a directory-descriptor
-    lookup (see ``_anchored_database_path``), it is a fresh, already-checked
-    name lookup rather than a held-open file, a narrower but still verified
-    guarantee.
+    e.g. ``/proc/self/fd/N`` or ``/dev/fd/N``): some platforms resolve it to
+    the real filesystem path, others (observed on macOS) report that same
+    descriptor path back literally. ``anchor``, when given, is that exact
+    descriptor path we ourselves constructed and already verified was bound
+    to our own already-open, already-validated file descriptor before
+    calling ``sqlite3.connect`` -- so a report matching it is exactly as
+    strong a guarantee as one matching ``expected``, not a weaker one.
     """
 
     try:
@@ -1150,12 +1125,8 @@ class Store:
                 create=create,
                 prefix="STORAGE_PATH",
             )
-            sqlite_path = _anchored_database_path(
-                self._database_descriptor,
-                self._directory_descriptor,
-                self.path.name,
-                self.path,
-                "STORAGE_PATH",
+            sqlite_path, sqlite_anchor = _writable_sqlite_connection_path(
+                self._database_descriptor, self.path, "STORAGE_PATH"
             )
             _validate_sqlite_sidecars(
                 self.path,
@@ -1173,7 +1144,7 @@ class Store:
                 check_same_thread=False,
             )
             _validate_connection_path(
-                connection, self.path, "STORAGE_PATH", anchor=sqlite_path
+                connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor
             )
             self._assert_path_identity()
             if _directory_generation(self._directory_descriptor) != opening_generation:
@@ -1416,6 +1387,7 @@ class Store:
     def _assert_write_trusted(self) -> None:
         if self._write_poisoned:
             raise IngestionRunError(RECONCILIATION_REQUIRED)
+        self._assert_path_identity()
 
     def _connection_commit(self) -> None:
         self.connection.commit()
@@ -2367,8 +2339,6 @@ class DashboardStore:
             )
             self._sqlite_path = _anchored_database_path(
                 self._database_descriptor,
-                self._directory_descriptor,
-                self.path.name,
                 self.path,
                 "DASHBOARD_STORE",
             )

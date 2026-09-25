@@ -59,6 +59,11 @@ only after the new private release passes an import check. A failed upgrade
 keeps the selected release intact. Uninstall removes managed code and desktop
 artifacts while preserving local data and settings.
 
+The [native Linux lifecycle qualification](docs/installer-lifecycle-evidence.md)
+uses real private releases in disposable paths to check same-source replacement,
+repair, failed-upgrade rollback, and uninstall preservation. It does not establish
+cross-version upgrade compatibility or acceptance of an operator's host.
+
 ## Run the checkout without installing
 
 For a temporary source launch, run:
@@ -67,13 +72,28 @@ For a temporary source launch, run:
 ./scripts/start-local.sh
 ```
 
-Open the printed localhost address and choose **Home → Data and tools →
-Check this computer**. The buttons check the running environment, selected
-data file, and optional tool availability. Use the software list to open
-official download pages, and **Help** to find the next step. Keep the
+Open the printed localhost address and go to **Home → Data and tools**. Each
+optional tool has a status light next to its name: green means presence observed,
+amber means setup incomplete, red means not found, and grey means unknown or
+stale. These observations do not prove health, a data connection, or configured
+AI readiness. The lights refresh in the background while
+the tab is visible. Observation is the default; guides and terminal commands
+remain available. On Linux, deliberately launch `hud --enable-tool-management`
+as your ordinary user and paste the launch token from its terminal into
+**Authorize Install and Start** to enable fixed **Install** and **Start service**
+actions. Each action needs confirmation; system packages and service starts also
+use the computer's password prompt ([details](docs/tool-heartbeat.md)). **Check this computer** also
+reports the running environment and selected data file. Use **Help** to find
+the next step. Keep the
 terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
 Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
+
+**Apps → Start installed services** shows the fixed local service-start controls
+for Suricata, Ollama, OSSEC, Zabbix and Nagios when the HUD observes them as
+installed. The same launch opt-in, token and confirmation apply there. Other
+app cards retain their setup guidance or explicit web-console navigation;
+opening a console does not start its service or connect its data.
 
 **[Start with the visual guide](docs/gui-quick-start.md)** ·
 **[Find software downloads](docs/software-downloads.md)** ·
@@ -109,7 +129,12 @@ records the operator's current Ollama exposure and GPU uncertainty.
 - isolated dashboard storage: on POSIX, reading telemetry requires an existing compatible private
   database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
   authorizer; it cannot create or migrate the audit database;
-- no egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
+- separate tool management: disabled by default, Linux/non-root only, and gated
+  by explicit launch opt-in plus a separate per-launch operator token. Fixed
+  package/model downloads and service starts can change the host; package
+  installation can start services. These actions do not expand telemetry or
+  firewall authority;
+- no telemetry egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
   bundled reference verification and synthetic evaluation perform no runtime
   download or update;
 - no shell interpolation: untrusted event values never become shell code;

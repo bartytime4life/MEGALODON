@@ -118,6 +118,8 @@ test('the HTML declares unique evidence controls and loads its local validator f
   assert.match(html, /MEGALODON\/pull\/241/);
   assert.match(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
+  assert.match(html, /href="http:\/\/127\.0\.0\.1:8787\/#integrations-title"[^>]*>Open local Apps/);
+  assert.match(html, /How to start the HUD/);
 });
 
 const {lifecycleCommands, resolveLifecycle} = require('../dist/lifecycle.js');
@@ -182,11 +184,11 @@ test('disconnected HUD has no generated observations, fixtures or refresh timer'
   assert.ok(html.indexOf('src="./lifecycle.js"') < html.indexOf('src="./app.js"'));
 });
 
-test('exchange map separates the implemented offline STIX reader from inert SIEM/SOAR contracts', () => {
+test('exchange map separates implemented local reader/writer from inert SOAR contract', () => {
   const fs = require('node:fs');
   const html = fs.readFileSync(require.resolve('../dist/index.html'), 'utf8');
   assert.match(html, /id="external-exchange"/);
-  for (const value of ['STIX 2.1', 'ECS 9.5.0', 'OCSF 1.9.0', 'Reader implemented', 'Contract only', 'Zero attempts; status not attempted']) assert.ok(html.includes(value));
+  for (const value of ['STIX 2.1', 'ECS 9.5.0', 'OCSF 1.9.0', 'Reader implemented', 'Local writer implemented', 'Zero attempt', 'Zero attempts; status not attempted']) assert.ok(html.includes(value));
   assert.match(html, /No TAXII, persistence, model, attribution, or action/);
   assert.match(html, /No collector, credential, or network delivery/);
   assert.match(html, /No endpoint, webhook, playbook, or host action/);
@@ -260,6 +262,26 @@ test('whole application initializes and navigates without a feed or browser netw
   assert.equal(nodes.get('#tool-result-count').textContent,'0 of 14 tools shown');
   assert.equal(nodes.get('#tool-inspector').hidden,true);
   assert.equal(document.activeElement,nodes.get('#tool-quick-filter'));
+  const reset=all(nodes.get('#integration-grid')).find(node=>node.textContent==='Clear filters');
+  assert.ok(reset, 'empty results offer a recovery control');
+  reset.listeners.click();
+  assert.equal(nodes.get('#tool-result-count').textContent,'14 of 14 tools shown');
+  assert.equal(nodes.get('#tool-inspector').hidden,false);
+  assert.equal(document.activeElement,nodes.get('#tool-search'));
+  context.syntheticReport=report();
+  vm.runInContext('state.readiness=syntheticReport',context);
+  assert.equal(vm.runInContext("lightFor('tshark').light",context),'amber');
+  assert.match(vm.runInContext("readinessLabel('tshark')",context),/Stale report/);
+  context.syntheticReport.checked_at=new Date().toISOString();
+  assert.equal(vm.runInContext("lightFor('tshark').light",context),'green');
+  vm.runInContext("state.toolPresence.tshark={status:'missing',checkedAt:Date.now()};",context);
+  assert.equal(vm.runInContext("lightFor('tshark').light",context),'red');
+  vm.runInContext("state.toolPresence.tshark.checkedAt=Date.now()-8*86400000;",context);
+  assert.equal(vm.runInContext("lightFor('tshark').light",context),'green');
+  vm.runInContext("delete state.toolPresence.tshark;",context);
+  vm.runInContext("state.selectedTool='tshark'; renderToolInspector()",context);
+  assert.match(nodes.get('#tool-inspector').innerHTML,/href="http:\/\/127\.0\.0\.1:8787\/#offline-title"/);
+  assert.doesNotMatch(nodes.get('#tool-inspector').innerHTML,/data-source-jump/);
   for(const id of Object.keys(lifecycleCommands)) vm.runInContext(`state.selectedTool='${id}'; renderToolInspector()`,context);
   assert.match(nodes.get('#feed-count').textContent, /No network records/);
   assert.match(nodes.get('#tool-inspector').innerHTML, /Manual presence note/);

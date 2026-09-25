@@ -3,7 +3,7 @@
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
-      <div><h2 id="integrations-title" tabindex="-1">Apps &amp; integrations</h2><p>See what was found, what MEGALODON supports, and what remains unknown. Use View in HUD to open an app's web console in the viewer below.</p></div>
+      <div><h2 id="integrations-title" tabindex="-1">Apps &amp; integrations</h2><p>Start supported installed services here, or use View in HUD to open an app's web console below. Service starts require <a href="#tool-management-controls">authorization for this local HUD launch</a>.</p></div>
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
     <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
@@ -36,6 +36,12 @@ INTEGRATIONS_HTML = """
       <button id="integrations-clear" type="button" class="button-secondary">Clear map filters</button>
     </div>
     <p class="reference-status" id="integrations-status" role="status" aria-live="polite" aria-atomic="true">Choose a documentation profile, then load the static map. No host has been inspected.</p>
+    <section class="app-service-start" aria-labelledby="app-service-start-title">
+      <h3 id="app-service-start-title">Start installed services</h3>
+      <p>These controls start only a fixed service already installed on this computer. A process observation does not prove that the app is healthy or connected to MEGALODON.</p>
+      <div id="app-service-start-list" class="app-service-start-list">Reading local service observations…</div>
+      <p id="app-service-start-feedback" role="status" aria-live="polite"></p>
+    </section>
     <!-- APP_VIEWER -->
     <div class="integration-cards" id="integrations-cards" aria-busy="false"></div>
     <p class="integration-footnote">Commands in details are reference templates. An app's own console uses that app's permissions and may include administration controls. Viewing a console does not connect its data to MEGALODON. Desktop apps need a separately configured web viewer.</p>
@@ -79,9 +85,17 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .integration-card details dl { margin: 8px 0 0; }
 .integration-footnote { margin: 0; padding: 0 22px 22px; color: var(--muted); font-size: .76rem; line-height: 1.6; }
 .integration-empty { grid-column: 1 / -1; margin: 0; padding: 18px; color: var(--muted); font-size: .85rem; }
+.app-service-start { margin:14px 22px 0; padding:14px; border:1px solid var(--line); border-radius:12px; background:rgba(3,13,19,.34); }
+.app-service-start h3 { margin:0 0 .4rem; font-size:.95rem; }
+.app-service-start > p { margin:.25rem 0 .8rem; color:var(--muted); font-size:.76rem; line-height:1.5; }
+.app-service-start-list { display:grid; gap:.55rem; font-size:.8rem; }
+.app-service-start-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; padding:.7rem; border:1px solid var(--line); border-radius:9px; }
+.app-service-start-row > div { min-width:0; overflow-wrap:anywhere; }
+.app-service-start-row .hb-detail { margin-left:1.1rem; }
 @media (max-width: 720px) { .integration-card > summary { grid-template-columns: 1fr; } .integration-summary-status { justify-content: flex-start; } }
 @media (max-width: 560px) {
   .integration-controls, .integration-cards { padding-right: 14px; padding-left: 14px; }
+  .app-service-start { margin-right:14px; margin-left:14px; }
   .integration-footnote { padding-right: 14px; padding-left: 14px; }
   .integration-controls .field, .integration-controls button { flex-basis: 100%; }
 }
@@ -89,10 +103,61 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 
 INTEGRATIONS_JS = r"""
 
-// Static plans are a separate read model. They do not participate in telemetry
-// polling, reference lookup, persistence, execution, or connection health.
+// The integration map is a static read model. The service controls below use
+// the separate heartbeat and fixed, operator-authorized start route.
 const integrationState = {snapshot: null, loading: false, pendingPlatform: null, failed: false};
 const integrationPlatforms = ['linux', 'windows', 'other'];
+const startableServiceIds = ['suricata', 'qwen', 'ossec', 'zabbix', 'nagios'];
+const startableServiceNames = {suricata:'Suricata', qwen:'Ollama', ossec:'OSSEC', zabbix:'Zabbix', nagios:'Nagios Core'};
+function appServiceStartControl(id, name, tool) {
+  const action = document.createElement('div');
+  const entry = heartbeatState.catalog.find(item => item.id === id);
+  const job = heartbeatState.job && heartbeatState.job.tool === id && heartbeatState.job.action === 'start' ? heartbeatState.job : null;
+  if (tool.service === 'running') {
+    action.append(textNode('span', 'Expected process observed; no start needed.', 'hb-detail'));
+  } else if (tool.service !== 'stopped') {
+    action.append(textNode('span', 'Service state is unknown; start unavailable.', 'hb-detail'));
+  } else if (!entry || !entry.startable) {
+    action.append(textNode('span', entry && entry.start_terminal
+      ? `Start separately in a terminal: ${entry.start_terminal}`
+      : 'No supported service-start action was found on this computer.', 'hb-detail'));
+  } else {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
+    button.textContent = job && job.state === 'running' ? 'Starting…' : `Start ${name}`;
+    button.disabled = Boolean(!heartbeatState.managementEnabled || !toolManagementToken()
+      || heartbeatStale() || (heartbeatState.job && heartbeatState.job.state === 'running'));
+    button.addEventListener('click', () => startInstall(id, name, entry, 'start'));
+    action.append(button);
+    if (!heartbeatState.managementEnabled || !toolManagementToken()) {
+      const authorize = textNode('a', heartbeatState.managementEnabled ? 'Enter launch token' : 'Enable Start in this HUD', 'hb-detail');
+      authorize.href = '#tool-management-controls'; action.append(authorize);
+    }
+    if (job && job.state === 'failed') action.append(textNode('span', 'Service-start command failed. See the app card for details.', 'hb-detail'));
+    if (job && job.state === 'succeeded') action.append(textNode('span', 'Service-start command finished. Status is checked separately.', 'hb-detail'));
+  }
+  return action;
+}
+function renderAppServiceStarts() {
+  const list = byId('app-service-start-list');
+  if (!list) return;
+  if (heartbeatStale() || !heartbeatState.catalog) {
+    list.textContent = heartbeatState.failed ? 'Local service observations are unavailable. Retry when this HUD reconnects.'
+      : heartbeatStale() ? 'Local service observations are stale. Refresh before starting a service.'
+      : 'Reading local service observations…';
+    return;
+  }
+  const rows = startableServiceIds.flatMap(id => {
+    const tool = heartbeatState.byId.get(id);
+    if (!tool || tool.installed !== 'yes') return [];
+    const row = document.createElement('div'); row.className = 'app-service-start-row';
+    const identity = document.createElement('div');
+    const title = textNode('strong', ''); title.append(heartbeatLight(id), textNode('span', startableServiceNames[id]));
+    identity.append(title, heartbeatDetail(id));
+    row.append(identity, appServiceStartControl(id, startableServiceNames[id], tool));
+    return [row];
+  });
+  list.replaceChildren(...(rows.length ? rows : [textNode('p', 'No supported installed service was observed. Check the app cards for setup guidance.') ]));
+}
 const integrationStatuses = {
   implemented: 'Implemented', optional: 'Optional', evaluation_only: 'Evaluation only — unverified',
   contract_only: 'Contract only — no importer', manual_only: 'Separate manual tool',
@@ -180,9 +245,9 @@ function integrationCapabilityState(toolIndex, item) {
     qualification: {...integrationQualificationStates[item.selected_status],
       detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
     administration: {className: 'state-unknown', label: 'Operator managed',
-      detail: 'The HUD cannot install, start, stop, remove, configure, or update this app.'},
-    health: {className: 'state-unknown', label: 'Runtime health unknown',
-      detail: 'No service, endpoint, sensor-liveness, data-freshness, or coverage probe was performed.'}
+      detail: 'Observation is the default. An explicitly enabled Linux HUD and its operator token allow fixed Install/Start actions after confirmation. The HUD has no stop, removal, or configuration action.'},
+    health: {className: 'state-unknown', label: 'See the status light',
+      detail: 'The heartbeat observes installation, process uptime and service state. It does not probe endpoints, sensor liveness, data freshness, or coverage.'}
   };
 }
 function integrationStatusRow(name, state) {
@@ -195,7 +260,8 @@ function integrationCard(item) {
   const card = document.createElement('details'); card.className = 'integration-card';
   const summary = document.createElement('summary');
   const identity = document.createElement('span'); identity.className = 'integration-identity';
-  identity.append(textNode('span', integrationZones[item.id], 'integration-zone'), textNode('span', item.software, 'integration-title'));
+  const title = textNode('span', '', 'integration-title'); title.append(heartbeatLight(workflowToolIds[integrationIds.indexOf(item.id)]), textNode('span', item.software));
+  identity.append(textNode('span', integrationZones[item.id], 'integration-zone'), title);
   const statuses = document.createElement('span'); statuses.className = 'integration-summary-status';
   statuses.append(textNode('span', integrationStatuses[item.selected_status], 'summary-chip'));
   const toolIndex = integrationIds.indexOf(item.id);
@@ -209,7 +275,7 @@ function integrationCard(item) {
                 integrationStatusRow('MEGALODON support', capability.qualification),
                 integrationStatusRow('Administration', capability.administration),
                 integrationStatusRow('Health', capability.health));
-  body.append(matrix);
+  body.append(matrix, heartbeatDetail(toolId), installControl(toolId, item.software));
   const reviewTargets = {core: '#detections-title', tshark: '#offline-title', zeek: '#offline-title', suricata: '#suricata-title', qwen: '#analysis-window-title'};
   if (reviewTargets[toolId]) {
     const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);

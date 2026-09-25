@@ -169,6 +169,132 @@ def test_store_opens_through_real_top_level_compat_symlink():
             assert store.summary()["events"] == 1
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_writable_sqlite_path_uses_only_admitted_canonical_path(
+    tmp_path, monkeypatch
+):
+    private = tmp_path / "private"
+    private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+    database = private / "audit.db"
+    directory_fd = storage._open_private_directory(
+        private, create=False, prefix="STORAGE_PATH"
+    )
+    database_fd = None
+    try:
+        database_fd, _ = storage._open_private_database(
+            database,
+            directory_fd,
+            writable=True,
+            create=True,
+            prefix="STORAGE_PATH",
+        )
+        monkeypatch.setattr(storage.sys, "platform", "darwin")
+        sqlite_path, anchor = storage._writable_sqlite_connection_path(
+            database_fd, database, "STORAGE_PATH"
+        )
+        assert sqlite_path == database
+        assert anchor is None
+        assert storage._path_matches_descriptor(database, database_fd)
+    finally:
+        if database_fd is not None:
+            os.close(database_fd)
+        os.close(directory_fd)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_writable_sqlite_path_refuses_replaced_database(
+    tmp_path, monkeypatch
+):
+    private = tmp_path / "private"
+    private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+    database = private / "audit.db"
+    moved = private / "original.db"
+    directory_fd = storage._open_private_directory(
+        private, create=False, prefix="STORAGE_PATH"
+    )
+    database_fd = None
+    try:
+        database_fd, _ = storage._open_private_database(
+            database,
+            directory_fd,
+            writable=True,
+            create=True,
+            prefix="STORAGE_PATH",
+        )
+        database.rename(moved)
+        database.write_bytes(b"replacement")
+        database.chmod(storage.PRIVATE_DATABASE_MODE)
+        monkeypatch.setattr(storage.sys, "platform", "darwin")
+        with pytest.raises(
+            StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"
+        ):
+            storage._writable_sqlite_connection_path(
+                database_fd, database, "STORAGE_PATH"
+            )
+    finally:
+        if database_fd is not None:
+            os.close(database_fd)
+        os.close(directory_fd)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX path and mode semantics")
+def test_darwin_store_branch_creates_and_writes_without_descriptor_journal(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    database = tmp_path / "audit.db"
+    with Store(database) as store:
+        _populate(store)
+        assert store.summary()["events"] == 1
+        assert store._database_descriptor is not None
+        assert storage._path_matches_descriptor(
+            store.path, store._database_descriptor
+        )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX replacement semantics")
+def test_darwin_store_refuses_runtime_database_replacement_before_write(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    database = tmp_path / "audit.db"
+    moved = tmp_path / "original.db"
+    store = Store(database)
+    replacement = b"replacement-sentinel"
+    try:
+        database.rename(moved)
+        database.write_bytes(replacement)
+        database.chmod(storage.PRIVATE_DATABASE_MODE)
+        with pytest.raises(
+            StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"
+        ):
+            store.start_ingestion_run("sample")
+        assert database.read_bytes() == replacement
+    finally:
+        if database.exists():
+            database.unlink()
+        if moved.exists():
+            moved.rename(database)
+        store.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlink semantics")
+def test_darwin_store_refuses_symlinked_sqlite_sidecar_before_connect(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    with Store(database):
+        pass
+    target = tmp_path / "outside"
+    target.write_bytes(b"sidecar-target")
+    target.chmod(storage.PRIVATE_DATABASE_MODE)
+    sidecar = tmp_path / "audit.db-wal"
+    sidecar.symlink_to(target)
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    with pytest.raises(StorageSchemaError, match="SYMLINK_REFUSED"):
+        Store(database, create=False)
+
+
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):
     with Store(tmp_path / "audit.db") as store:
         _populate(store)

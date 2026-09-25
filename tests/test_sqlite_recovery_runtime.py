@@ -153,12 +153,12 @@ def test_destination_replacement_at_creation_boundaries(
         destination.write_bytes(replacement)
         destination.chmod(0o600)
 
-    def anchor(file_descriptor, directory_descriptor, name, path, prefix):
+    def anchor(descriptor, path, prefix):
         if prefix == "RECOVERY_DESTINATION":
-            descriptors.append(file_descriptor)
+            descriptors.append(descriptor)
             if phase == "anchor":
                 replace()
-        return original_anchor(file_descriptor, directory_descriptor, name, path, prefix)
+        return original_anchor(descriptor, path, prefix)
 
     def connect(database_uri, *args, **kwargs):
         connection = original_connect(database_uri, *args, **kwargs)

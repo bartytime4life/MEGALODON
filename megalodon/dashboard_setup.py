@@ -1,5 +1,7 @@
 """First-launch presentation and bounded startup receipt rendering."""
 
+from .dashboard_heartbeat import HEARTBEAT_JS
+
 SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
     <header class="setup-heading">
@@ -19,6 +21,7 @@ SETUP_HTML = """
           <p class="setup-check-empty">Your checklist will appear here, with a next step for anything that needs attention.</p>
         </div>
         <p id="setup-source" role="status">Reading the selected data source…</p>
+        <div id="hb-summary" class="hb-summary" role="status" aria-live="polite">Reading tool heartbeat…</div>
         <div class="setup-status-grid" aria-label="Tool observations">
           <div><span>Executables</span><b id="setup-installed-count">Not checked</b></div>
           <div><span>Process names</span><b id="setup-running-count">Not checked</b></div>
@@ -28,19 +31,26 @@ SETUP_HTML = """
           <p class="setup-boundary">Found means an executable is on the checked PATH. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
           <div id="setup-tool-status" class="tool-status-list"></div>
         </details>
-        <p class="setup-check-boundary">Read only · no installs, scans, capture, or configuration changes. Home shows your latest explicit check; Apps keeps the observations recorded at HUD launch.</p>
+        <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration. Tool management requires an explicitly enabled launch, its operator token, and your confirmation.</p>
       </section>
       <section class="setup-software" aria-labelledby="setup-software-title">
         <p class="setup-step">02 / CHOOSE YOUR WORKFLOW</p>
         <h3 id="setup-software-title" tabindex="-1">Software, without the guesswork</h3>
         <p>Python runs the HUD. Everything else supports a specific workflow; you do not need to download every tool.</p>
+        <details class="tool-status-details" id="tool-management-controls">
+          <summary>Authorize Install and Start</summary>
+          <p id="tool-management-status" role="status">Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
+          <label class="field" for="tool-management-token">Tool management token from the HUD terminal<input id="tool-management-token" type="password" autocomplete="off" spellcheck="false" maxlength="32" disabled></label>
+          <button id="tool-management-forget" type="button">Forget token</button>
+          <p>The token stays in this page's memory and expires when the HUD stops. It is separate from your system password and the AI token. Reloading the page clears it.</p>
+        </details>
         <div class="setup-software-filters">
           <label for="setup-software-workflow">I want to…<select id="setup-software-workflow"><option value="start">Prepare the basics</option><option value="network">Review network evidence</option><option value="host">Explore host and security tools</option><option value="monitor">Explore monitoring tools</option><option value="ai">Explore local AI</option><option value="all">See all software</option></select></label>
           <label for="setup-software-search">Find software<input id="setup-software-search" type="search" placeholder="Search all software…" maxlength="80" autocomplete="off"></label>
         </div>
         <p id="setup-software-count" class="setup-software-count" role="status"></p>
         <div id="setup-software-list" class="setup-software-list"></div>
-        <p class="setup-download-note">Download buttons open official publisher pages in a new tab. Installation happens outside this HUD. <a href="#integrations-title">Review MEGALODON support in Apps →</a></p>
+        <p class="setup-download-note">After authorization, Install runs a fixed Ubuntu or Python package or downloads the example Qwen model; system packages and service starts use your computer's password prompt. Packages can start services. Official guides and terminal commands remain available in observation mode. <a href="#integrations-title">Review MEGALODON support in Apps →</a></p>
       </section>
     </div>
     <div class="setup-bottom">
@@ -266,15 +276,20 @@ function renderSoftwareShelf() {
     if (localCheckState.focusTool === item.id && localCheckState.snapshot && !localCheckState.failed) row.className += ' software-checked';
     const heading = textNode('div', '', 'software-heading');
     const mark = textNode('span', item.mark, 'software-mark'); mark.setAttribute('aria-hidden', 'true');
-    const identity = textNode('div', '', 'software-identity'); identity.append(textNode('h4', item.name), textNode('span', item.requirement, 'software-requirement'));
+    const title = textNode('h4', ''); if (item.id !== 'git') title.append(heartbeatLight(item.id)); title.append(textNode('span', item.name));
+    const identity = textNode('div', '', 'software-identity'); identity.append(title, textNode('span', item.requirement, 'software-requirement'));
+    if (item.id !== 'git') identity.append(heartbeatDetail(item.id));
     heading.append(mark, identity); row.append(heading, textNode('p', item.purpose, 'software-purpose'));
     const presence = textNode('p', softwarePresence(item), 'software-presence'); presence.id = `software-status-${item.id}`;
+    presence.hidden = heartbeatState.byId.size > 0;
     const actions = textNode('div', '', 'software-actions');
+    if (item.id !== 'git' && item.id !== 'python') actions.append(installControl(item.id, item.name));
     const link = textNode('a', `${item.link || item.name + ' downloads'} ↗`, 'software-download');
     link.href = item.url || toolAcquisition[item.id].url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.setAttribute('aria-label', `${item.link || item.name + ' downloads'} — official publisher, opens a new tab`); actions.append(link);
     if (item.id !== 'git' && item.id !== 'scapy') {
       const check = textNode('button', localCheckState.busy ? 'Checking…' : item.id === 'python' ? 'Check runtime' : 'Check availability', 'software-check');
       check.type = 'button'; check.id = `software-check-${item.id}`; check.disabled = localCheckState.busy; check.setAttribute('aria-label', `Check ${item.name} availability`); check.setAttribute('aria-describedby', presence.id);
+      check.hidden = heartbeatState.byId.size > 0 && item.id !== 'python';
       check.addEventListener('click', () => runLocalChecks(item.id)); actions.append(check);
     }
     const more = textNode('details', '', 'software-details'); more.id = `software-guidance-${item.id}`;
@@ -427,3 +442,4 @@ byId('setup-reopen-copy').addEventListener('click', async () => {
 });
 renderLaunchHelp();
 """
+SETUP_JS += HEARTBEAT_JS

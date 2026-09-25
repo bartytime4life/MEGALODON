@@ -23,9 +23,9 @@
           "version": "26.3"
         },
         {
-          "declared_sha256": "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913",
+          "declared_sha256": "sha256:5fc53fdac9f7bd63fbcdc868fb5f90b4784d78a53a3d3388cd738b807441a20b",
           "name": "pyproject-hooks",
-          "version": "1.2.0"
+          "version": "1.3.3"
         },
         {
           "declared_sha256": "sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
@@ -39,7 +39,7 @@
       "platform": "linux-x86_64",
       "python": "3.12",
       "role": "wheel-smoke build tools",
-      "source_sha256": "680b315e1b79b5d4cab07412032cff16efa23e2ab19b4c6a6025fb5eb5390c6c"
+      "source_sha256": "8f6d520421b4653e9633651fb0246d423fae6566f2ca881e9157e290e66c8d56"
     },
     {
       "direct_packages": [
@@ -181,9 +181,9 @@
     {
       "direct_packages": [
         {
-          "declared_sha256": "sha256:74cc6df89ec5302337adc9cf096221cbed2510fd444b0e0f1586cf0470740864",
+          "declared_sha256": "sha256:1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba",
           "name": "greenlet",
-          "version": "3.5.5"
+          "version": "3.5.6"
         },
         {
           "declared_sha256": "sha256:ad21bc07516b187965a7521c5cf0df0bd657b17482eaad74335272d35a2b07de",
@@ -204,7 +204,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "browser acceptance additions",
-      "source_sha256": "5c5efe9b197d0c0f5e7507f2f8cf620d57c23e016dc5ce9d6d46e2e1dddb5715"
+      "source_sha256": "e487b4230fd9e9d5a93137b569c916427ad540a8de7e10407d567f448dfdec74"
     }
   ],
   "project": {

@@ -272,9 +272,7 @@ def _open_source_database(path: Path, *, immutable: bool) -> _Database:
     try:
         if os.fstat(descriptor).st_size > MAX_SOURCE_BYTES:
             raise _RecoveryFailure("ARTIFACT_LIMIT_EXCEEDED", source_state="admitted")
-        sqlite_path = _anchored_database_path(
-            descriptor, directory_descriptor, path.name, path, "RECOVERY_SOURCE"
-        )
+        sqlite_path = _anchored_database_path(descriptor, path, "RECOVERY_SOURCE")
         sidecars = _validate_sqlite_sidecars(
             path,
             directory_descriptor,
@@ -393,9 +391,7 @@ def _create_destination(
         if os.name == "posix":
             os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
         _validate_private_file(descriptor, source=False)
-        sqlite_path = _anchored_database_path(
-            descriptor, directory_descriptor, path.name, path, "RECOVERY_DESTINATION"
-        )
+        sqlite_path = _anchored_database_path(descriptor, path, "RECOVERY_DESTINATION")
         database.sqlite_path = sqlite_path
         database.connection = sqlite3.connect(
             f"{sqlite_path.as_uri()}?mode=rw&cache=private",

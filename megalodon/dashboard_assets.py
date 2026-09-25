@@ -734,12 +734,12 @@ const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
 const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
-const workspaceNavigation = {active: 'live', scroll: Object.create(null)};
+const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
   'workspace-traffic': 'traffic', 'workspace-findings': 'findings',
   'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
-  'room-home-title': 'live', 'setup-title': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
+  'room-home-title': 'live', 'setup-title': 'live', 'tool-management-controls': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
   'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'live',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
@@ -798,8 +798,10 @@ const ingestionTerminationReasons = new Set(['source_exhausted', 'event_limit_re
 function byId(value) { return document.getElementById(value); }
 function activateWorkspace(nextWorkspace, moveFocus = false) {
   if (!workspaceIds.includes(nextWorkspace)) return;
-  const scroller = byId('workspace-content');
-  workspaceNavigation.scroll[workspaceNavigation.active] = scroller.scrollTop;
+  const pageScroll = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 560px), (max-height: 500px)').matches;
+  const scroller = pageScroll ? document.scrollingElement || document.documentElement : byId('workspace-content');
+  const positions = pageScroll ? workspaceNavigation.pageScroll : workspaceNavigation.scroll;
+  positions[workspaceNavigation.active] = scroller.scrollTop;
   workspaceIds.forEach(workspace => {
     const selected = workspace === nextWorkspace;
     const tab = byId(`workspace-tab-${workspace}`);
@@ -807,7 +809,7 @@ function activateWorkspace(nextWorkspace, moveFocus = false) {
     tab.tabIndex = selected ? 0 : -1;
     byId(`workspace-${workspace}`).hidden = !selected;
   });
-  scroller.scrollTop = workspaceNavigation.scroll[nextWorkspace] || 0;
+  scroller.scrollTop = positions[nextWorkspace] || 0;
   workspaceNavigation.active = nextWorkspace;
   if (nextWorkspace === 'interfaces' && typeof maybeLoadIntegrationMap === 'function') maybeLoadIntegrationMap();
   if (moveFocus) {
@@ -2196,6 +2198,7 @@ function applyConfig(payload) {
 async function bootstrap() {
   renderRoom();
   renderSoftwareShelf();
+  pollHeartbeat();
   restoreWorkspaceFromHash();
   try { applyConfig(await requestJSON('/api/config')); }
   catch (_) {
@@ -2275,8 +2278,9 @@ document.addEventListener('visibilitychange', () => {
 from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
 from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
+from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS + AI_CSS
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)

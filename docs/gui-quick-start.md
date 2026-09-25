@@ -19,7 +19,18 @@ interface becomes available after the local server starts.
 
 ## 2. Check this computer
 
-On **Home**, open **Data and tools** and select **Check this computer**.
+On **Home**, open **Data and tools**. Every optional tool has a status light
+next to its name, refreshed in the background while the tab is visible:
+
+| Light | Meaning | Next step |
+| --- | --- | --- |
+| Green | Installed; a service tool is also running (the detail line shows uptime) | Nothing to do |
+| Amber | Installed, but its service is stopped (for Qwen, possibly the model is not downloaded yet) | Select **Start service** or **Download Qwen model** |
+| Red | Not installed | Select **Install**, or open the official guide for tools without a one-click package |
+| Grey | Unknown on this computer | Use the official guide or the terminal checks under Apps |
+
+See [tool heartbeat and one-click install](tool-heartbeat.md) for what each
+button runs. For the environment and data file, select **Check this computer**:
 
 | Result | What it tells you | Next step |
 | --- | --- | --- |
@@ -41,9 +52,12 @@ or traffic. It differs from the standalone readiness-only JSON import format.
 ## 3. Get only the software you need
 
 The software list starts with essentials. Choose a workflow or search for a
-program to reveal its purpose, availability and download or installation button.
-Each button opens the publisher's page in a new tab. Choose the correct package
-for your operating system there; the browser never runs a companion installer.
+program to see its purpose, status light and buttons. **Install** installs the
+fixed Ubuntu package, or the Python package for this HUD, after your computer's
+password prompt; MEGALODON never sees the password. Zeek, osquery, OSSEC and
+Greenbone need a vendor repository, a role choice or a multi-container setup, so
+they link to their official guides instead. Download links open the publisher's
+page in a new tab.
 
 Python is required. Git helps obtain and maintain a checkout. SQLite is included
 with the standard Python runtime. Wireshark, Zeek, Suricata and the remaining
@@ -69,11 +83,13 @@ does not start collection or fill Traffic and Findings automatically.
 
 ## What you can do here, and what still needs a terminal
 
-Use buttons to check the environment and tools, refresh saved metadata, inspect
-time ranges, look up reference data, preview/download reports and open official
-download pages. These actions do not require copying diagnostic commands.
+Use buttons to check the environment and tools, install supported companion
+packages, start their services, refresh saved metadata, inspect time ranges,
+look up reference data, preview/download reports and open official download
+pages. These actions do not require copying diagnostic commands.
 
-The one-time MEGALODON install, companion-software installation, importing data,
+The one-time MEGALODON install, guided companion installs (Zeek, osquery, OSSEC,
+Greenbone), importing data,
 starting an authorized capture, and changing the server's source remain explicit
 local operations. After installation, the application-menu entry handles normal
 startup and browser opening. **Change data for the next launch** prepares and copies a
@@ -81,6 +97,6 @@ quoted command. It takes effect after you stop and relaunch the HUD; typing a
 path into the form does not open that file.
 
 The [hosted reference console](../site/README.md) has no connection to this PC.
-Its download links and local report import are useful, but local machine checks
-run only in the localhost HUD. Linux is the reference platform; see the
+Its download links and local report import are useful, but status lights,
+installs and local machine checks run only in the localhost HUD. Linux is the reference platform; see the
 [platform baseline](platform-baseline.md) for Windows evaluation and other limits.

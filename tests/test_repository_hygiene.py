@@ -174,7 +174,7 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
         "packaging==26.3",
         "pluggy==1.6.0",
         "pygments==2.21.0",
-        "pyproject-hooks==1.2.0",
+        "pyproject-hooks==1.3.3",
         "pytest==9.1.1",
         "referencing==0.37.0",
         "rpds-py==2026.6.3",
@@ -241,7 +241,7 @@ def test_codeql_scans_python_source_with_only_required_permissions():
     workflow = (ROOT / ".github" / "workflows" / "codeql.yml").read_text(
         encoding="utf-8"
     )
-    codeql_revision = "b96794f015dfd88f77b49b1c93e0fa7110f94c63"
+    codeql_revision = "1c5b675653bb5c22dbe9b12b556ec555138e09fd"
 
     assert "name: CodeQL\n" in workflow
     assert "push:\n    branches: [main]" in workflow

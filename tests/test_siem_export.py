@@ -5,14 +5,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import socket
+import stat
 import subprocess
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 from megalodon.models import DetectionResult, PacketEvent
+from megalodon import siem_export
 from megalodon.siem_export import (
     MAX_OUTPUT_BYTES,
     MAX_RECORDS,
@@ -206,6 +209,9 @@ def test_write_export_produces_one_jsonl_record_per_line(tmp_path) -> None:
     assert receipt["credentials"] is False
     lines = destination.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 5
+    assert receipt["output_bytes"] == destination.stat().st_size
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+    assert list(tmp_path.iterdir()) == [destination]
     for line in lines:
         parsed = json.loads(line)
         _validator("ecsRecord").validate(parsed)
@@ -218,6 +224,193 @@ def test_write_export_refuses_an_existing_destination(tmp_path) -> None:
         write_export([], destination, profile="ecs-9.5.0")
     assert caught.value.code == "DESTINATION_EXISTS"
     assert destination.read_text() == "not an export"  # untouched
+
+
+@pytest.mark.parametrize("failure", ["write", "short_write", "flush", "close", "file_sync", "publish"])
+def test_failed_export_never_publishes_partial_output(tmp_path, monkeypatch, failure) -> None:
+    destination = tmp_path / "export.jsonl"
+    original_fdopen = os.fdopen
+
+    class FaultyStream:
+        def __init__(self, descriptor, mode):
+            self.stream = original_fdopen(descriptor, mode)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            self.stream.close()
+            if failure == "close":
+                raise OSError("synthetic close failure")
+
+        def write(self, content):
+            if failure in {"write", "short_write"}:
+                count = self.stream.write(content[:5])
+                self.stream.flush()
+                if failure == "short_write":
+                    return count
+                raise OSError("synthetic partial write")
+            return self.stream.write(content)
+
+        def flush(self):
+            if failure == "flush":
+                raise OSError("synthetic flush failure")
+            self.stream.flush()
+
+        def fileno(self):
+            return self.stream.fileno()
+
+    def denied(*_args, **_kwargs):
+        raise OSError("synthetic I/O failure")
+
+    monkeypatch.setattr(siem_export.os, "fdopen", FaultyStream)
+    if failure == "file_sync":
+        monkeypatch.setattr(siem_export.os, "fsync", denied)
+    if failure == "publish":
+        monkeypatch.setattr(siem_export.os, "link", denied)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([{"synthetic": "complete record"}], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "IO_ERROR"
+    assert not destination.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_export_is_complete_and_synced_before_publication(tmp_path, monkeypatch) -> None:
+    destination = tmp_path / "export.jsonl"
+    expected = b'{"synthetic":"complete record"}\n'
+    original_link, original_fsync = os.link, os.fsync
+    synced = []
+
+    def sync(descriptor):
+        synced.append("directory" if stat.S_ISDIR(os.fstat(descriptor).st_mode) else "file")
+        return original_fsync(descriptor)
+
+    def publish(source, target, **kwargs):
+        assert not destination.exists()
+        assert (tmp_path / source).read_bytes() == expected
+        assert stat.S_IMODE((tmp_path / source).stat().st_mode) == 0o600
+        assert synced == ["file"]
+        return original_link(source, target, **kwargs)
+
+    monkeypatch.setattr(siem_export.os, "fsync", sync)
+    monkeypatch.setattr(siem_export.os, "link", publish)
+    write_export([{"synthetic": "complete record"}], destination, profile="ecs-9.5.0")
+    assert synced == ["file", "directory"]
+    assert destination.read_bytes() == expected
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+@pytest.mark.parametrize("kind", ["file", "symlink", "directory"])
+def test_destination_created_during_publication_is_preserved(tmp_path, monkeypatch, kind) -> None:
+    destination = tmp_path / "export.jsonl"
+    original_link = os.link
+
+    def publish(source, target, **kwargs):
+        if kind == "file":
+            destination.write_bytes(b"other writer")
+        elif kind == "symlink":
+            destination.symlink_to("other-writer.jsonl")
+        else:
+            destination.mkdir()
+        return original_link(source, target, **kwargs)
+
+    monkeypatch.setattr(siem_export.os, "link", publish)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([{"synthetic": "complete record"}], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "DESTINATION_EXISTS"
+    if kind == "file":
+        assert destination.read_bytes() == b"other writer"
+    elif kind == "symlink":
+        assert destination.is_symlink() and os.readlink(destination) == "other-writer.jsonl"
+    else:
+        assert destination.is_dir() and list(destination.iterdir()) == []
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_directory_sync_failure_retains_complete_export_without_success(tmp_path, monkeypatch) -> None:
+    destination = tmp_path / "export.jsonl"
+    original_fsync = os.fsync
+
+    def sync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise OSError("synthetic directory sync failure")
+        return original_fsync(descriptor)
+
+    monkeypatch.setattr(siem_export.os, "fsync", sync)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([{"synthetic": "complete record"}], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "IO_ERROR"
+    assert destination.read_bytes() == b'{"synthetic":"complete record"}\n'
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_temporary_cleanup_failure_is_bounded_and_keeps_final_absent(tmp_path, monkeypatch) -> None:
+    destination = tmp_path / "export.jsonl"
+    attempted = []
+
+    def failed_sync(*_):
+        raise OSError("synthetic file sync failure")
+
+    def failed_cleanup(name, **_kwargs):
+        attempted.append(name)
+        raise OSError("synthetic cleanup failure")
+
+    monkeypatch.setattr(siem_export.os, "fsync", failed_sync)
+    monkeypatch.setattr(siem_export.os, "unlink", failed_cleanup)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([{"synthetic": "complete record"}], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "IO_ERROR"
+    assert caught.value.__notes__ == ["SIEM export temporary cleanup failed"]
+    assert not destination.exists()
+    assert len(attempted) == 1
+    temporary, = tmp_path.iterdir()
+    assert temporary.name == attempted[0] and temporary.name.endswith(".tmp")
+    assert stat.S_IMODE(temporary.stat().st_mode) == 0o600
+
+
+def test_shared_writable_parent_is_refused_before_creating_files(tmp_path) -> None:
+    tmp_path.chmod(0o777)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([], tmp_path / "export.jsonl", profile="ecs-9.5.0")
+    assert caught.value.code == "DESTINATION_UNSAFE"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_trusted_sticky_parent_still_accepts_an_export(tmp_path) -> None:
+    tmp_path.chmod(0o1777)
+    destination = tmp_path / "export.jsonl"
+    assert write_export([], destination, profile="ecs-9.5.0")["record_count"] == 0
+    assert destination.read_bytes() == b""
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+
+
+def test_temporary_name_collision_never_removes_existing_file(tmp_path, monkeypatch) -> None:
+    identifier = siem_export.uuid.UUID(int=0)
+    monkeypatch.setattr(siem_export.uuid, "uuid4", lambda: identifier)
+    existing = tmp_path / f".megalodon-siem-{identifier.hex}.tmp"
+    existing.write_bytes(b"another export")
+    with pytest.raises(SiemExportError) as caught:
+        write_export([], tmp_path / "export.jsonl", profile="ecs-9.5.0")
+    assert caught.value.code == "IO_ERROR"
+    assert existing.read_bytes() == b"another export"
+    assert list(tmp_path.iterdir()) == [existing]
+
+
+def test_stream_open_failure_closes_descriptor_and_cleans_temporary(tmp_path, monkeypatch) -> None:
+    opened = []
+
+    def failed_open(descriptor, _mode):
+        opened.append(descriptor)
+        raise OSError("synthetic stream open failure")
+
+    monkeypatch.setattr(siem_export.os, "fdopen", failed_open)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([], tmp_path / "export.jsonl", profile="ecs-9.5.0")
+    assert caught.value.code == "IO_ERROR"
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_record_limit_exceeded_creates_no_file(tmp_path) -> None:

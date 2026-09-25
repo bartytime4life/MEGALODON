@@ -21,7 +21,9 @@ the corresponding MEGALODON adapter supports it. Use the
 | SQLite | Included in standard Python builds; the running HUD reports its version | [Python SQLite documentation](https://docs.python.org/3/library/sqlite3.html); no separate pip package |
 
 The MEGALODON installer may download declared Python build requirements. It does
-not install any companion program listed below. No GPU, cloud account, capture
+not install any companion program listed below. Once the HUD is open, its
+**Install** buttons can install several of them from fixed Ubuntu or Python
+packages; see [tool heartbeat and one-click install](tool-heartbeat.md). No GPU, cloud account, capture
 driver or local AI model is needed to open the HUD.
 For a new environment, follow the [platform setup recipe](platform-baseline.md)
 instead of replacing an existing working environment.

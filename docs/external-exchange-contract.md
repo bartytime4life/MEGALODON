@@ -39,9 +39,19 @@ generic `activity_id: 99`/"Other" sentinel for OCSF), so neither profile
 claims full upstream compliance. Neither function reconstructs a field
 MEGALODON did not retain, and `event.original` is never produced because it
 would preserve the raw source body. `write_export` validates the full record
-count and byte ceiling before creating anything and writes the complete
-batch in one buffered call, so a rejected or interrupted export never leaves
-a partial file, matching [`contracts/external-exchange/v1/schema.json`](../contracts/external-exchange/v1/schema.json)'s
+count and byte ceiling before creating anything. It writes a private temporary
+sibling, checks for a complete write, flushes and synchronizes the file, then
+publishes it through an atomic hard link that cannot replace an existing
+destination. The held parent directory must be root/current-user-owned and not
+group/world writable unless protected by the sticky bit; a symlinked parent is
+refused. The temporary name is removed and the directory synchronized before a
+success receipt. A write, flush, close, file-sync or publication failure never
+exposes a partial final export. Cleanup is bounded and best-effort: an interrupted
+process or cleanup failure can leave a private `.megalodon-siem-*.tmp` sibling.
+An `IO_ERROR` after publication can leave a complete destination whose durability
+is unconfirmed; it must be inspected rather than overwritten or blindly retried.
+Filesystems without the required hard-link/directory-sync operations fail closed.
+The record profiles match [`contracts/external-exchange/v1/schema.json`](../contracts/external-exchange/v1/schema.json)'s
 `ecsRecord`/`ocsfRecord` definitions and the fixtures in
 [`contracts/external-exchange/v1/fixtures/siem-records`](../contracts/external-exchange/v1/fixtures/siem-records).
 Neither function nor the writer performs a database read, a dashboard write,
