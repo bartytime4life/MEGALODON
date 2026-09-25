@@ -131,15 +131,18 @@ function appServiceStartControl(id, name, tool) {
       : 'No supported service-start action was found on this computer.', 'hb-detail'));
   } else {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
-    button.textContent = job && job.state === 'running' ? 'Starting…' : `Start ${name}`;
+    const mine = Boolean(job && job.state === 'running');
+    const busyElsewhere = !mine && heartbeatState.job && heartbeatState.job.state === 'running';
+    button.textContent = mine ? 'Starting…' : `Start ${name}`;
     button.disabled = Boolean(!heartbeatState.managementEnabled || !toolManagementToken()
-      || heartbeatStale() || (heartbeatState.job && heartbeatState.job.state === 'running'));
+      || heartbeatStale() || busyElsewhere || mine);
     button.addEventListener('click', () => startInstall(id, name, entry, 'start'));
     action.append(button);
     if (!heartbeatState.managementEnabled || !toolManagementToken()) {
       const authorize = textNode('a', heartbeatState.managementEnabled ? 'Enter launch token' : 'Enable Start in this HUD', 'hb-detail');
       authorize.href = '#tool-management-controls'; action.append(authorize);
     }
+    if (busyElsewhere) action.append(textNode('span', 'Another install or service start is already running; wait for it to finish.', 'hb-detail'));
     if (job && job.state === 'failed') action.append(textNode('span', 'Service-start command failed. See the app card for details.', 'hb-detail'));
     if (job && job.state === 'succeeded') action.append(textNode('span', 'Service-start command finished. Status is checked separately.', 'hb-detail'));
   }

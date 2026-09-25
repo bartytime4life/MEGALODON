@@ -135,6 +135,22 @@ process.stdin.on('end', async () => {
         assert.doesNotMatch(byId('setup-check-status').textContent, /Installing|Starting|healthy|integrated|lights refreshed/);
       }
     }
+    // A running job for one tool silently disabled every other tool's
+    // Install/Start button with no indication why; both surfaces must now
+    // say so instead of leaving an unexplained disabled control.
+    observedJob = {tool: 'scapy', action: 'install', state: 'running', output: []};
+    await run('pollHeartbeat()');
+    const zabbixAction = zabbixRow().children[1];
+    assert.equal(zabbixAction.children[0].disabled, true, 'a different tool\'s running job disables this Start button');
+    assert.match(zabbixAction.children[1].textContent, /Another install or service start is already running/);
+    const zabbixCard = run('installControl("zabbix", "Zabbix")');
+    assert.equal(zabbixCard.children[0].disabled, true);
+    assert.match(zabbixCard.children[0].title, /Another install or service start is already running/);
+    const scapyCard = run('installControl("scapy", "Scapy")');
+    assert.equal(scapyCard.children[0].textContent, 'Installing…', 'the running job\'s own button shows progress, not the elsewhere hint');
+    assert.doesNotMatch(scapyCard.children[0].title, /Another install or service start/);
+    observedJob = {state: 'idle'};
+    await run('pollHeartbeat()');
     byId('tool-management-token').value = token;
     enabled = false;
     await run('pollHeartbeat()');
