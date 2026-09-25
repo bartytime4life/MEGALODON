@@ -146,9 +146,14 @@ process.stdin.on('end', async () => {
     const zabbixCard = run('installControl("zabbix", "Zabbix")');
     assert.equal(zabbixCard.children[0].disabled, true);
     assert.match(zabbixCard.children[0].title, /Another install or service start is already running/);
+    // Disabled buttons have no focus/hover a keyboard or touch user can read
+    // a title from - the reason must also be visible sibling text.
+    assert.match(zabbixCard.children[1].textContent, /Another install or service start is already running/);
+    assert.equal(zabbixCard.children[1].className, 'hb-detail');
     const scapyCard = run('installControl("scapy", "Scapy")');
     assert.equal(scapyCard.children[0].textContent, 'Installing…', 'the running job\'s own button shows progress, not the elsewhere hint');
     assert.doesNotMatch(scapyCard.children[0].title, /Another install or service start/);
+    assert.equal(scapyCard.children.length, 1, 'the running job\'s own card has no elsewhere-hint sibling');
     observedJob = {state: 'idle'};
     await run('pollHeartbeat()');
     byId('tool-management-token').value = token;
