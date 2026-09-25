@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import unittest
 
-from megalodon.dashboard_connections import INTEGRATIONS_JS
+from megalodon.dashboard_integrations import INTEGRATIONS_JS
 from megalodon.dashboard_setup import SETUP_JS
 from megalodon.dashboard_tool_assets import LIFECYCLE_JS, CONTROLS_JS
 

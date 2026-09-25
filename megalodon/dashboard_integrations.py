@@ -9,6 +9,7 @@ INTEGRATIONS_HTML = """
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
     <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
+    <p class="reference-status" id="integrations-freshness">Presence: not checked yet.</p>
     <div class="app-state-legend" aria-label="App status legend">
       <span class="state-found"><i class="app-dot" aria-hidden="true"></i>Found candidate</span>
       <span class="state-missing"><i class="app-dot" aria-hidden="true"></i>Not found</span>
@@ -246,7 +247,8 @@ function integrationDefinition(label, value, parent) {
 }
 function integrationCapabilityState(toolIndex, item) {
   const tool = setupState.readiness && setupState.readiness.tools[toolIndex];
-  const presence = integrationPresenceStates[tool ? tool.status : 'not_checked'];
+  const basePresence = integrationPresenceStates[tool ? tool.status : 'not_checked'];
+  const presence = {...basePresence, detail: `${basePresence.detail} ${appsPresenceFreshnessNote()}`};
   return {
     presence,
     qualification: {...integrationQualificationStates[item.selected_status],
@@ -336,6 +338,9 @@ function renderIntegrationMap() {
   byId('integrations-cards').replaceChildren(...cards);
   byId('integrations-profile').textContent = snapshot ? `Loaded profile: ${snapshot.selected_platform} · static only` : 'No profile loaded';
   byId('integrations-status').textContent = integrationViewStatus(rows.length);
+  // One shared freshness line for every Presence row below, instead of an
+  // operator having to expand each card to see when it was last checked.
+  byId('integrations-freshness').textContent = `Presence: ${appsPresenceFreshnessNote()}`;
 }
 async function loadIntegrationMap() {
   if (integrationState.loading) return;

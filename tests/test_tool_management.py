@@ -260,7 +260,7 @@ def test_cli_passes_explicit_opt_in_without_changing_default(monkeypatch):
 
 def test_browser_requires_opt_in_token_and_confirmation():
     from megalodon.dashboard_heartbeat import HEARTBEAT_JS
-    from megalodon.dashboard_connections import INTEGRATIONS_JS
+    from megalodon.dashboard_integrations import INTEGRATIONS_JS
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node required for tool-management browser behavior")

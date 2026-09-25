@@ -25,6 +25,26 @@ def test_seven_workspaces_and_persistent_return():
     assert 'Local report preview is unavailable' not in INDEX_HTML
 
 
+def test_only_the_headline_status_field_renders_outside_the_collapsed_details():
+    """Only Evidence Status is always visible; the other five status fields
+    are tucked behind a closed-by-default <details> so the always-on chrome
+    stays small on short/narrow viewports (matches the existing collapsed
+    .room-feed-details and #ai-control conventions elsewhere in the HUD).
+    """
+    for status_id in ('room-overall', 'room-connection', 'room-coverage', 'room-updated', 'room-sources', 'room-count'):
+        assert f'id="{status_id}"' in INDEX_HTML
+    assert 'class="room-status-headline"><span>Evidence Status</span><strong id="room-overall">' in INDEX_HTML
+    details_start = INDEX_HTML.index('<details class="room-status-details">')
+    details_end = INDEX_HTML.index('</details>', details_start)
+    details_body = INDEX_HTML[details_start:details_end]
+    assert '<summary>More status fields</summary>' in details_body
+    for status_id in ('room-connection', 'room-coverage', 'room-updated', 'room-sources', 'room-count'):
+        assert f'id="{status_id}"' in details_body
+    assert 'id="room-overall"' not in details_body
+    # <details> without an `open` attribute renders closed by default.
+    assert '<details class="room-status-details" open>' not in INDEX_HTML
+
+
 def test_startup_controls_belong_to_home_outside_audit_history():
     detail_ids = {'room-feed-status', 'room-history-status', 'room-range-description'}
     control_ids = {'room-range', 'room-apply', 'room-refresh', 'room-pause'}
