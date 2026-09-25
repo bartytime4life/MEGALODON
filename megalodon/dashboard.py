@@ -514,6 +514,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(events)
             return
+        # /api/ingestion-runs (v1) is kept only for existing external callers;
+        # the HUD itself reads the source-qualified v2 route exclusively.
         if route.path in {"/api/ingestion-runs", "/api/ingestion-runs-v2"}:
             qualified = route.path == "/api/ingestion-runs-v2"
             try:

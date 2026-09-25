@@ -106,7 +106,7 @@ def compose_control_room(html: str) -> str:
     nav = '<nav class="section-nav" aria-label="Command center workspaces" role="tablist">'
     for key, name in tabs:
         nav += f'<button id="workspace-tab-{key}" type="button" role="tab" aria-controls="workspace-{key}" aria-selected="{"true" if key == "live" else "false"}" tabindex="{0 if key == "live" else -1}">{name}</button>'
-    nav += '</nav><a class="room-back" href="#page-title">← Back to Main HUD</a>'
+    nav += '</nav><a class="room-back" href="#page-title">← Back to Home</a>'
     html = html[:start] + '<div class="room-chrome">' + STATUS_HTML + '</div>' + nav + html[end:]
     # Preserve the older audit inspector and its IDs in the Evidence workspace.
     start = html.index('  <section class="trust-strip')
@@ -119,7 +119,6 @@ def compose_control_room(html: str) -> str:
     marker = '<section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>'
     html = html.replace(marker, marker + '<details class="room-audit-history"><summary>Audit history — may include sample and unlinked rows</summary>' + legacy + '</details>')
     html = html.replace('  <noscript>', TRAFFIC_HTML + '  <noscript>')
-    html = html.replace('>Network activity</h1>', '>Main HUD</h1>')
     return html
 
 

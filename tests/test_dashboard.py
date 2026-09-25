@@ -343,7 +343,7 @@ def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
 
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
-    assert "Stored alerts" in INDEX_HTML
+    assert "Stored findings" in INDEX_HTML
     assert "What MEGALODON has stored" in INDEX_HTML
     assert "Inspect one source at a time" in INDEX_HTML
     assert "Qwen advisory receipt · checking" in INDEX_HTML

@@ -57,7 +57,7 @@ identifier, model output, health state, bookmark or report.
 ## Control-room presentation (second draft slice)
 
 Home, Traffic, Findings, Apps, Reports, Evidence and Help share one anchored,
-keyboard-operable shell. A persistent Back to Main HUD link returns to Home.
+keyboard-operable shell. A persistent Back to Home link returns to the Home tab.
 The old audit inspector is explicitly separate in Evidence because it can
 contain sample/unlinked rows. It is never the source of traffic visuals.
 

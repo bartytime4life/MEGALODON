@@ -99,7 +99,7 @@ Airlock-admitted request to literal IPv4 loopback. The dashboard cannot start
 that call, poll Qwen, inspect raw traffic, run analysis in the background, or
 apply a response.
 
-There are six distinct surfaces. Do not combine their meanings:
+There are eight distinct surfaces. Do not combine their meanings:
 
 | Surface | What it represents | What it does not prove |
 | --- | --- | --- |

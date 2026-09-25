@@ -22,7 +22,7 @@ INDEX_HTML = """<!doctype html>
   <script src="/assets/dashboard.js" defer></script>
 </head>
 <body>
-<a class="skip-link" id="skip-link" href="#detections-title">Skip to detections</a>
+<a class="skip-link" id="skip-link" href="#detections-title">Skip to findings</a>
 <main class="shell">
   <header class="topbar">
     <div class="brand" aria-label="MEGALODON">
@@ -60,7 +60,7 @@ INDEX_HTML = """<!doctype html>
 
   <section class="metrics" id="live-metrics" aria-label="Stored telemetry summary">
     <article class="metric"><div class="metric-label">Stored events</div><div class="metric-value">—</div></article>
-    <article class="metric"><div class="metric-label">Alerts</div><div class="metric-value">—</div></article>
+    <article class="metric"><div class="metric-label">Findings</div><div class="metric-value">—</div></article>
     <article class="metric"><div class="metric-label">High priority</div><div class="metric-value">—</div></article>
     <article class="metric"><div class="metric-label">Recorded decisions</div><div class="metric-value">—</div></article>
   </section>
@@ -96,7 +96,7 @@ INDEX_HTML = """<!doctype html>
   </div>
 
   <nav class="next-actions" aria-label="Common tasks">
-    <a href="#detections-title"><strong>Review alerts</strong><span>Open the newest stored findings.</span></a>
+    <a href="#detections-title"><strong>Review findings</strong><span>Open the newest stored findings.</span></a>
     <button id="open-report-studio" type="button"><strong>Create a report</strong><span>Export an overview, alert review, or ingestion summary.</span></button>
     <a href="#integrations-title"><strong>Open tools</strong><span>Review companion apps and their setup instructions.</span></a>
   </nav>
@@ -132,7 +132,7 @@ INDEX_HTML = """<!doctype html>
 
   <section class="panel" id="triage-panel" aria-labelledby="detections-title" aria-busy="true">
     <div class="panel-head">
-      <div><p class="eyebrow">Needs attention</p><h2 id="detections-title" tabindex="-1">Stored alerts</h2><p>The newest fixed-rule findings. MEGALODON has not changed the host or network.</p></div>
+      <div><p class="eyebrow">Needs attention</p><h2 id="detections-title" tabindex="-1">Stored findings</h2><p>The newest fixed-rule findings. MEGALODON has not changed the host or network.</p></div>
       <time class="timestamp" id="updated">Awaiting first refresh</time>
     </div>
     <details class="triage-tools" id="triage-tools">
@@ -724,8 +724,8 @@ DASHBOARD_JS = r"""
 
 const metricSpec = [
   ['events', 'Stored events', 'Metadata rows'],
-  ['detections', 'Alerts', 'Fixed-rule matches'],
-  ['high_or_critical', 'High priority', 'Stored high or critical alerts'],
+  ['detections', 'Findings', 'Fixed-rule matches'],
+  ['high_or_critical', 'High priority', 'Stored high or critical findings'],
   ['actions', 'Recorded decisions', 'Audit records only']
 ];
 const summaryFields = ['actions', 'detections', 'events', 'high_or_critical'];
@@ -1536,8 +1536,8 @@ function reportSnapshot() {
 }
 function reportPlainText(report) {
   const lines = [report.title, `Generated: ${report.generated_at}`, `Scope: ${report.scope}`, `Source scope: ${report.source_scope}`, report.bounds];
-  if (report.summary) lines.push(`Events: ${report.summary.events}`, `Detections: ${report.summary.detections}`, `High / critical: ${report.summary.high_or_critical}`, `Actions: ${report.summary.actions}`, `Traffic sample: ${report.traffic.sampled_events} events, ${formatBytes(report.traffic.total_bytes)}`);
-  if (report.detections) lines.push(`Returned detections: ${report.detections.length}`);
+  if (report.summary) lines.push(`Events: ${report.summary.events}`, `Findings: ${report.summary.detections}`, `High / critical: ${report.summary.high_or_critical}`, `Actions: ${report.summary.actions}`, `Traffic sample: ${report.traffic.sampled_events} events, ${formatBytes(report.traffic.total_bytes)}`);
+  if (report.detections) lines.push(`Returned findings: ${report.detections.length}`);
   if (report.ingestion_runs) lines.push(`Returned ingestion receipts: ${report.ingestion_runs.length}`);
   lines.push(`Limitation: ${report.limitation}`); return lines.join('\n');
 }
@@ -1552,7 +1552,7 @@ function renderReportPreview() {
   }
   const facts = document.createElement('dl');
   const entries = report.summary
-    ? [['Stored events', report.summary.events], ['Alerts', report.summary.detections], ['Traffic records', `${report.traffic.sampled_events} · ${formatBytes(report.traffic.total_bytes)}`]]
+    ? [['Stored events', report.summary.events], ['Findings', report.summary.detections], ['Traffic records', `${report.traffic.sampled_events} · ${formatBytes(report.traffic.total_bytes)}`]]
     : report.detections
       ? [['Returned rows', report.detections.length], ['Priority rows', report.detections.filter(item => prioritySeverities.has(item.severity)).length], ['Newest bound', state.config.event_limit]]
       : [['Run receipts', report.ingestion_runs.length], ['Running receipts', report.ingestion_runs.filter(item => item.status === 'running').length], ['Needs review', report.ingestion_runs.filter(item => !['running', 'completed'].includes(item.status)).length]];
@@ -1770,7 +1770,7 @@ function applyFilters() {
     ? base
     : base.filter((_, index) => model.bins[state.activeBin].members.includes(index));
   renderEvents(visible);
-  const noun = state.events.length === 1 ? 'detection' : 'detections';
+  const noun = state.events.length === 1 ? 'finding' : 'findings';
   const status = `${formatNumber(visible.length)} of ${formatNumber(state.events.length)} returned ${noun} shown${hasActiveFilters() ? ' with active filters' : ''}.`;
   if (byId('filter-status').textContent !== status) byId('filter-status').textContent = status;
 }
