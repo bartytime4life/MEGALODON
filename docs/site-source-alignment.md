@@ -1,6 +1,37 @@
 # Defense Console source alignment
 
-## Local reference correction — not published
+## Current publication — Console v31, repository source refresh
+
+OBSERVED 2026-09-25: the existing owner-only Console serves version 31 from
+Sites source `cd421d21435092f4571cc4d13b999fd0f6c62730`. Its deployable
+`dist/` files and `.openai/hosting.json` match repository
+`main@799dc984cadf23990fb074f252b4c53a4534e855` byte-for-byte. This
+candidate aligns the repository's `site/README.md` with the published source;
+all 14 tracked `site/` files then match the Sites source commit. This source
+refresh includes the merged hosted integration guidance from #403, the
+bounded companion setup references, and the local-only status wording. It
+does not connect the hosted page to the local HUD or grant host control.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 31 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_aabdb14ce3388191a8ab8b9650f8105c` |
+| Sites source | `cd421d21435092f4571cc4d13b999fd0f6c62730` |
+| Archive | `sha256:f8f5f0711613f4b23c31d8095d9ec1254dca7f192b14151b653b7a3fce5ce163`; 10 files, 307,200 bytes |
+| Deployment | `appgdep_6ab6b87c3940819184f2f364b50c361c`; succeeded at `2026-09-25T18:08:02.995357+00:00` |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access; no external visitors |
+| Rollback reference | v30 / `7a96f64b8e9cd5974c9f872c5346726d129f91c0` |
+
+VERIFIED: 44 Site Node checks, JavaScript syntax, 21 focused repository checks,
+and a local browser preview passed on the source used for publication. After
+deployment, browser readback showed the new Home wording and Integrations
+view with its local-only boundary. This does not establish installed-tool
+health, telemetry, local runtime acceptance, or a full rendered-browser
+walkthrough. Site publication and this repository documentation change are
+separate states until this candidate is merged.
+
+## Historical local reference correction — unpublished at that checkpoint
 
 Source basis: `ad3266562c647f0131ec62c4882895cd1951acca`, with the HUD
 operator-authorization wording dependent on PR #392. This repository-only
@@ -14,7 +45,7 @@ external visitors. No version save, source push to Sites or deployment was
 performed. Publication and rendered hosted acceptance require separate
 authorization; the original v30 receipt below retains its historical basis.
 
-## Existing publication — Console v30, merged installer links
+## Historical publication — Console v30, merged installer links
 
 OBSERVED 2026-09-21: the existing owner-only Console serves version 30. Its
 install links use the immutable #323 merge
