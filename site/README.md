@@ -32,6 +32,12 @@ IP regions. The Actions workspace provides copy-only reviewed scripts and a
 bounded recurrence preview; it creates no schedule or job and runs no command.
 Those local features are not available through this hosted Site.
 
+The hosted Home view now draws the same bundled public-domain Natural Earth
+land mask as a geographic reference. West/East controls rotate the map locally.
+Returned records, review signals, and high-priority signals are labeled as
+unavailable here; no markers, timestamps, IP locations, or event counts are
+created. The interactive rolling-hour timeline remains in the local HUD.
+
 ## Quick-start controls
 
 The first view follows Review / Install / Open: from a reviewed repository root,
