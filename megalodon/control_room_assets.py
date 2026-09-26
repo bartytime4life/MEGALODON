@@ -1,6 +1,8 @@
 """Anchored control-room presentation; all traffic comes from the local reader."""
 
 from .dashboard_setup import SETUP_HTML
+from .dashboard_snapshot import SNAPSHOT_LOCAL_HTML
+from .telemetry_catalog import coverage_html, COVERAGE_CSS
 from .status_glossary import STATUS_GLOSSARY_CSS, STATUS_GLOSSARY_HTML
 
 STATUS_HTML = """
@@ -37,30 +39,43 @@ STATUS_HTML = """
 
 HOME_HTML = """
 <section class="room-home panel" aria-labelledby="room-home-title">
-  <p class="eyebrow">Continue exploring</p><h2 id="room-home-title" tabindex="-1">Review your saved evidence</h2>
+  <p class="eyebrow">MEGALODON / Operations</p><h2 id="room-home-title" tabindex="-1">Your evidence at a glance</h2>
   <p id="room-home-summary">No qualified data available. Your saved audit data and optional tools are checked separately.</p>
+  <div class="hud-metrics" aria-label="Selected evidence totals">
+    <article><span>Metadata records</span><strong id="hud-records">—</strong></article>
+    <article><span>Linked findings</span><strong id="hud-findings">—</strong></article>
+    <article><span>Reported bytes</span><strong id="hud-bytes">—</strong></article>
+    <article><span>Source kinds</span><strong id="hud-source-count">—</strong></article>
+  </div>
   <section class="room-globe-entry" aria-labelledby="room-globe-entry-title">
     <div><p class="eyebrow">Recent activity</p><h3 id="room-globe-entry-title">Activity globe</h3>
       <p>See recent source IPs and approximate regions from an offline map you choose.</p>
       <p id="room-globe-entry-status" role="status">Waiting for qualified traffic.</p></div>
-    <a href="#room-traffic-title">Open activity globe <span aria-hidden="true">→</span></a>
+    <a href="#activity-globe-title">View globe <span aria-hidden="true">↓</span></a>
   </section>
+  <!-- HUD_ACTIVITY_GLOBE -->
+  <h3 class="hud-section-title">Traffic overview <span>Shared time range</span></h3>
+  <div id="room-traffic-grid" class="room-grid"></div>
+  <h3 class="hud-section-title">Detection overview <span>Linked findings</span></h3>
+  <div id="room-findings-visual" class="room-grid"></div>
+  <!-- HUD_DATA_CONNECTIONS -->
   <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#action-plane-title">Open Actions</a><a href="#room-reports-title">Make a report</a></div>
   <details><summary>How do we know?</summary><p>Only validated, bounded metadata linked to a non-sample ingestion run appears in Traffic and Findings. Imported JSONL provenance is unverified. Open Evidence for separate saved reports and audit history.</p></details>
 </section>
 """
 
+HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML)
+
 TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>
   <h2 id="room-traffic-title" tabindex="-1">Traffic</h2><p>Saved metadata in the shared time range. No capture starts here.</p>
-  <!-- HUD_ACTIVITY_GLOBE -->
-  <div id="room-traffic-grid" class="room-grid"></div>
+  <a class="hud-return" href="#room-home-title">Return to visual HUD →</a>
   <h3>Activity detail</h3><p>Every qualified event in this page, with its recorded source and import status. Times are UTC; imported event order can differ from capture time.</p>
   <div id="room-activity-table" class="room-table" tabindex="0" role="region" aria-label="Scrollable activity detail"></div>
 </section>
 <section class="workspace-view" id="workspace-findings" role="tabpanel" aria-labelledby="workspace-tab-findings" hidden>
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
-  <div id="room-findings-visual" class="room-grid"></div><div id="room-findings-table" class="room-table"></div>
+  <a class="hud-return" href="#room-home-title">Return to visual HUD →</a><div id="room-findings-table" class="room-table"></div>
 </section>
 <section class="workspace-view" id="workspace-reports" role="tabpanel" aria-labelledby="workspace-tab-reports" hidden>
   <h2 id="room-reports-title" tabindex="-1">Make a local report</h2>
@@ -119,7 +134,7 @@ TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML)
 def compose_control_room(html: str) -> str:
     start = html.index('  <nav class="section-nav"')
     end = html.index('  <div class="workspace-scroll"', start)
-    tabs = (("live", "Home"), ("traffic", "Traffic"), ("findings", "Findings"), ("interfaces", "Actions"),
+    tabs = (("live", "HUD"), ("traffic", "Traffic"), ("findings", "Findings"), ("interfaces", "Actions"),
             ("reports", "Reports"), ("analysis", "Evidence"), ("help", "Help"))
     nav = '<nav class="section-nav" aria-label="Command center workspaces" role="tablist">'
     for key, name in tabs:
@@ -133,7 +148,7 @@ def compose_control_room(html: str) -> str:
     legacy = legacy[:legacy.rfind('  </section>')].replace(SETUP_HTML, '', 1)
     # Setup describes the current launch, so keep it on Home rather than inside
     # the historical audit inspector. Its IDs and handlers stay unchanged.
-    html = html[:start] + SETUP_HTML + HOME_HTML + '</section>\n' + html[end:]
+    html = html[:start] + HOME_HTML + SETUP_HTML + '</section>\n' + html[end:]
     marker = '<section class="workspace-view" id="workspace-analysis" role="tabpanel" aria-labelledby="workspace-tab-analysis" hidden>'
     html = html.replace(marker, marker + '<details class="room-audit-history"><summary>Audit history — may include sample and unlinked rows</summary>' + legacy + '</details>')
     html = html.replace('  <noscript>', TRAFFIC_HTML + '  <noscript>')
@@ -313,6 +328,23 @@ ROOM_CSS += r"""
 @media(max-width:440px) { .hud-start { padding:17px; } .setup-software-filters { grid-template-columns:1fr; } .hud-start .setup-heading h2 { font-size:1.7rem; } .setup-check-actions { flex-direction:column; } .software-actions { flex-direction:column; align-items:stretch; } .hud-start .tool-status-row { grid-template-columns:1fr; } .hud-start .tool-status-badges { justify-content:flex-start; } }
 """
 ROOM_CSS += STATUS_GLOSSARY_CSS
+
+ROOM_CSS += r"""
+.hud-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.hud-metrics article { padding:18px; background:#102b38; border:1px solid #345765; border-radius:10px; min-width:0; }
+.hud-metrics span { display:block; font-size:.875rem; color:#b9d3df; }
+.hud-metrics strong { display:block; font-size:clamp(1.5rem,2.8vw,2.2rem); color:#e9f9ff; margin-top:8px; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.hud-section-title { display:flex; align-items:center; gap:14px; margin:28px 0 12px; font-size:1.2rem; }
+.hud-section-title span { color:#9ebcca; font-size:.875rem; font-weight:400; }
+.room-home h2 { font-size:clamp(1.5rem,3vw,2.2rem); }
+.room-home > p:not(.eyebrow) { font-size:1rem; max-width:90ch; }
+.room-home .room-globe-entry { margin-bottom:0; }
+.room-home .activity-globe { margin-top:12px; }
+.room-grid > section { min-width:0; }
+@media(max-width:700px) { .hud-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+"""
+
+ROOM_CSS += COVERAGE_CSS
 
 ROOM_JS = r"""
 const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null, history:null};
@@ -532,6 +564,10 @@ function renderRoom() {
   const note=stale?(snapshot?'Refresh failed or snapshot expired. Preserved metadata is stale.':'No qualified data available. The metadata check failed; use Help for the safe next step.'):!has?'No qualified data available in this time range.':future?'Clock uncertainty: future timestamps are present.':old?'Historical metadata only. Current sensor activity is unknown.':'Showing saved metadata. Sensor health and full coverage are unknown.';
   byId('room-notice').textContent=note;
   byId('room-home-summary').textContent=has?`${selected.events.length} stored metadata events and ${selected.findings.length} linked findings are available. ${note}`:note+' Open Data and tools to check your source and choose the next step.';
+  byId('hud-records').textContent=has?String(selected.events.length):'—';
+  byId('hud-findings').textContent=has?String(selected.findings.length):'—';
+  byId('hud-bytes').textContent=has?String(selected.events.reduce((sum,event)=>sum+BigInt(event.byte_count),0n)):'—';
+  byId('hud-source-count').textContent=has?String(new Set(selected.events.map(event=>event.source)).size):'—';
   byId('room-range-description').textContent=roomMeta(selected);
   renderRoomControls();
   const activity=textNode('table');activity.append(textNode('caption',`${selected.events.length} qualified events in this page`));
@@ -555,6 +591,7 @@ function renderRoom() {
   const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
   const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach(value=>row.append(textNode('td',value)));body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
   if(!roomState.report)invalidateRoomReport();
+  if(typeof renderTelemetryConnections==='function')renderTelemetryConnections();
 }
 const roomRequests=new Map();
 function requestRoomSnapshot(path='/api/traffic') {

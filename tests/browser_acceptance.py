@@ -244,8 +244,11 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await asyncio.sleep(2.4)
         passed("pause stops scheduled polling " + str(nonempty), counts == stable)
         await expect(page.locator("#room-updated")).not_to_have_text("Not fetched")
-        await page.locator("#workspace-tab-traffic").click()
-        traffic_views = page.locator("#room-traffic-grid .room-visual")
+        await page.locator("#workspace-tab-live").click()
+        await expect(page.locator("#workspace-live #room-traffic-grid")).to_be_visible()
+        await expect(page.locator("#workspace-live #room-findings-visual .room-visual")).to_have_count(2)
+        await expect(page.locator("#workspace-traffic")).to_be_hidden()
+        traffic_views = page.locator("#workspace-live #room-traffic-grid .room-visual")
         await expect(traffic_views).to_have_count(8)
         for index in range(8):
             details = traffic_views.nth(index).locator(":scope > details")
@@ -263,6 +266,23 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         if nonempty:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
             await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")
+            await page.locator("#hud-export-prepare").click()
+            await expect(page.locator("#hud-export-download")).to_be_enabled()
+            summary_text = await page.locator("#hud-export-preview").inner_text()
+            summary = json.loads(summary_text)
+            passed("hosted summary preview uses the real bounded backend",
+                   summary["schema"] == "megalodon-hud-snapshot-v1" and
+                   summary["events"] == 2 and summary["findings"] == 2 and
+                   summary["reported_bytes"] == "200" and
+                   "192.0.2." not in summary_text and "198.51.100." not in summary_text)
+            async with page.expect_download() as summary_download:
+                await page.locator("#hud-export-download").click()
+            downloaded = await summary_download.value
+            passed("hosted summary download preserves the preview bytes",
+                   Path(await downloaded.path()).read_text() == summary_text)
+            await page.locator("#hud-export-clear").click()
+            await expect(page.locator("#hud-export-preview")).to_be_hidden()
+            await expect(page.locator("#hud-export-download")).to_be_disabled()
             await page.locator("#workspace-tab-findings").click()
             passed("qualified linked finding rows", await page.locator("#room-findings-table tbody tr").count() == 2)
             await page.locator("#room-range").select_option("hour")

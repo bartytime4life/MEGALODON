@@ -1,0 +1,14 @@
+
+.telemetry-coverage { margin:20px 0; border:1px solid #385363; padding:18px; border-radius:10px; background:#0b202c; color:#e7f4fa; }
+.telemetry-coverage h3 { margin:0 0 12px; }
+.telemetry-coverage p { color:#b9ceda; font-size:.875rem; }
+.telemetry-coverage summary { cursor:pointer; padding:12px 0; min-height:44px; font-size:1rem; }
+.telemetry-table { overflow:auto; max-width:100%; }
+.telemetry-table table { width:100%; border-collapse:collapse; font-size:.875rem; }
+.telemetry-table td,.telemetry-table th { padding:12px; border-bottom:1px solid #314a5b; text-align:left; vertical-align:top; min-width:160px; }
+.telemetry-table th { color:#d5eeef; }
+.telemetry-readings { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.telemetry-readings article { border:1px solid #385363; border-radius:8px; padding:14px; min-width:0; }
+.telemetry-readings strong,.telemetry-readings span { display:block; overflow-wrap:anywhere; }
+.telemetry-readings span { font-size:.875rem; color:#b9ceda; margin-top:8px; }
+@media(max-width:650px) { .telemetry-readings { grid-template-columns:1fr; } }

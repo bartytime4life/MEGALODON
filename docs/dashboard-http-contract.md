@@ -21,8 +21,10 @@ retains its same-origin CSP, no-store responses, no-referrer policy, framing
 prohibition, MIME sniffing protection, and restricted browser permissions. There
 is no CORS permission or external script/font fetch.
 
-`POST` is accepted only for the optional, separately token-gated `/api/ai/ask`
-and explicitly enabled HUD `/api/install` routes.
+`POST` is accepted for the optional, separately token-gated `/api/ai/ask`,
+explicitly enabled HUD `/api/install`, bounded read-only `/api/offline-locations`,
+and inert `/api/automation-preview` routes. The latter two do not execute host
+actions; their fixed request headers, schemas and size limits remain required.
 Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
 methods remain unsupported. Unknown paths return 404. Fixed validation errors
 do not echo request values, private paths, or stack traces. None of these HTTP
@@ -41,6 +43,7 @@ production service.
 | `/api/local-checks` | None; requires `X-Megalodon-Check: 1` | Explicit HUD-only read of runtime versions, selected-store readability, executable presence and process names |
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
 | `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
+| `/api/hud-snapshot` | None | Aggregate-only summary from the same qualified traffic projection, at most 16 KiB; explicit preview/download, no upload or write |
 | `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
 | `/api/ingestion-runs` | Optional `limit` | **Deprecated, kept for existing external callers only; the HUD does not use it.** v1 newest 1–25 stored ingestion receipts across core sources, not source liveness |

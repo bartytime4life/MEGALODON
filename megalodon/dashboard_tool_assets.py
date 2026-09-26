@@ -472,6 +472,21 @@ const MegalodonControls = (() => {
       check.addEventListener('click', () => runLocalChecks(id)); root.append(check);
     }
 
+    const unified = node('details', '', 'companion-unified-setup');
+    unified.append(node('summary', 'Install, configure and verify'));
+    unified.append(node('p', 'Requires the HUD workflow update in your MEGALODON Python environment. Install previews the recipe; add --apply only after review. Configure prints tool-specific steps; verify checks executable presence only.', 'companion-help'));
+    ['plan', 'install', 'configure', 'verify'].forEach(action => {
+      const command = `python -m megalodon.tool_setup ${id} ${action}`;
+      const row = node('div', '', 'companion-command');
+      const copy = node('button', `Copy ${action}`); copy.type = 'button';
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(command); feedback.textContent = 'Command copied. Run it in your local MEGALODON environment.'; }
+        catch (_) { feedback.textContent = 'Select and copy the displayed command.'; }
+      });
+      row.append(node('code', command), copy); unified.append(row);
+    });
+    root.append(unified);
+
     const setup = companionSetupGuides[id];
     if (setup) {
       const easy = node('details', '', 'companion-setup');

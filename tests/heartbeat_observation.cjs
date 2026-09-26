@@ -69,6 +69,25 @@ process.stdin.on('end', async () => {
     assert.match(light.className, /hb-green/);
     assert.equal(run('heartbeatState.failed'), false);
     assert.equal([...timers.values()][0].delay, 60000);
+    context.fetch = async path => {
+      if(path === '/api/install') throw Error('installer unavailable');
+      return success(path);
+    };
+    await run('pollHeartbeat()');
+    assert.equal(run('heartbeatState.failed'), false, 'Installer failure must not discard successful tool observations');
+    assert.equal(run('heartbeatState.catalogFailed'), true);
+    assert.equal(run('heartbeatState.managementEnabled'), false);
+    assert.match(light.className, /hb-green/);
+    assert.match(byId('tool-management-status').textContent, /Install status unavailable/);
+    context.fetch = async path => {
+      if(path === '/api/heartbeat') throw Error('observation unavailable');
+      return success(path);
+    };
+    await run('pollHeartbeat()');
+    assert.equal(run('heartbeatState.failed'), true);
+    assert.equal(run('heartbeatState.catalogFailed'), false);
+    assert.match(light.className, /hb-grey/);
+    context.fetch=success;await run('pollHeartbeat()');
     for (const checked_at of ['not-a-date', '2000-01-01T00:00:00Z', '2999-01-01T00:00:00Z']) {
       context.bad = {...report(), checked_at};
       assert.throws(() => run('validHeartbeat(bad)'), /Expired/);

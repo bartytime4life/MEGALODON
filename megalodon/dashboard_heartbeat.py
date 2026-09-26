@@ -22,7 +22,7 @@ HEARTBEAT_CSS = r"""
 """
 
 HEARTBEAT_JS = r"""
-const heartbeatState = {report: null, byId: new Map(), catalog: null, job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false};
+const heartbeatState = {report: null, byId: new Map(), catalog: null, job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false, catalogFailed: false};
 const heartbeatLabels = {green: 'Presence observed', amber: 'Setup incomplete', red: 'Not found', grey: 'Status unknown'};
 function heartbeatStale() {
   return heartbeatState.failed || Boolean(heartbeatState.report &&
@@ -115,7 +115,7 @@ function paintToolManagement() {
     input.disabled = !heartbeatState.managementEnabled;
     if (!heartbeatState.managementEnabled) input.value = '';
   }
-  if (status) status.textContent = heartbeatState.managementEnabled
+  if (status) status.textContent = heartbeatState.catalogFailed ? 'Install status unavailable. Tool observations are checked separately; management is disabled until status recovers.' : heartbeatState.managementEnabled
     ? 'Tool management is enabled for this launch. Paste its token from the HUD terminal to use Install and Start. Each action still needs your confirmation.'
     : 'Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user. Guides and terminal commands remain available.';
 }
@@ -239,24 +239,38 @@ async function pollHeartbeat() {
   window.clearTimeout(heartbeatState.timer);
   if (document.visibilityState === 'hidden') return;
   heartbeatState.polling = true;
+  const [reportResult, installResult] = await Promise.allSettled([heartbeatFetch('/api/heartbeat'), heartbeatFetch('/api/install')]);
   try {
-    const [report, install] = await Promise.all([heartbeatFetch('/api/heartbeat'), heartbeatFetch('/api/install')]);
-    heartbeatState.report = validHeartbeat(report);
+    if (reportResult.status !== 'fulfilled') throw new Error('Heartbeat unavailable');
+    const report = validHeartbeat(reportResult.value);
+    heartbeatState.report = report;
     heartbeatState.byId = new Map(report.tools.map(tool => [tool.id, tool]));
-    heartbeatState.catalog = Array.isArray(install.tools) ? install.tools : null;
+    heartbeatState.failed = false; heartbeatState.failures = 0; heartbeatState.lastAt = Date.now();
+  } catch (_) {
+    heartbeatState.failed = true;
+    heartbeatState.failures = Math.min(heartbeatState.failures + 1, 5);
+  }
+  try {
+    if (installResult.status !== 'fulfilled') throw new Error('Catalog unavailable');
+    const install = installResult.value;
+    if (!install || !Array.isArray(install.tools)) throw new Error('Invalid catalog');
+    heartbeatState.catalog = install.tools;
     heartbeatState.managementEnabled = Boolean(install.management && install.management.enabled === true);
     const previous = heartbeatState.job;
     heartbeatState.job = install.job && install.job.state !== 'idle' ? install.job : null;
     if (previous && previous.state === 'running') showInstallCompletion(heartbeatState.job);
-    heartbeatState.failed = false; heartbeatState.failures = 0; heartbeatState.lastAt = Date.now();
-  } catch (error) {
-    heartbeatState.failed = true;
-    heartbeatState.failures = Math.min(heartbeatState.failures + 1, 5);
+    heartbeatState.catalogFailed = false;
+  } catch (_) {
+    heartbeatState.catalogFailed = true;
+    heartbeatState.managementEnabled = false;
+    heartbeatState.catalog = null;
+    heartbeatState.job = null;
   }
   heartbeatState.polling = false;
   repaintHeartbeat();
+  if (typeof renderTelemetryConnections === 'function') renderTelemetryConnections();
   const installing = heartbeatState.job && heartbeatState.job.state === 'running';
-  const delay = heartbeatState.failed ? Math.min(60000, 5000 * 2 ** (heartbeatState.failures - 1)) : installing ? 2000 : 60000;
+  const delay = heartbeatState.catalogFailed && !heartbeatState.failed ? 5000 : heartbeatState.failed ? Math.min(60000, 5000 * 2 ** (heartbeatState.failures - 1)) : installing ? 2000 : 60000;
   if (document.visibilityState !== 'hidden') heartbeatState.timer = window.setTimeout(pollHeartbeat, delay);
 }
 async function startInstall(toolId, name, entry, action = 'install') {

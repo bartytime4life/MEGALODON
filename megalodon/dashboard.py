@@ -450,7 +450,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", self.javascript)
             return
-        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/ai/status":
@@ -525,6 +525,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     raise ValueError("response bound")
             except (StorageSchemaError, ValueError, TypeError, OverflowError):
                 self._send_json(unavailable(), status=503)
+                return
+            self._send(200, "application/json; charset=utf-8", payload)
+            return
+        if route.path == "/api/hud-snapshot":
+            from .hud_snapshot import snapshot_from_projection
+            try:
+                reader = getattr(self.store, "traffic", None)
+                if reader is None:
+                    raise ValueError("No database")
+                payload = json.dumps(snapshot_from_projection(reader()), separators=(",", ":"), allow_nan=False).encode()
+                if len(payload) > 16384:
+                    raise ValueError("response bound")
+            except (StorageSchemaError, ValueError, TypeError, OverflowError):
+                self._send_json({"error": "HUD summary unavailable"}, status=503)
                 return
             self._send(200, "application/json; charset=utf-8", payload)
             return

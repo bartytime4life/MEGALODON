@@ -51,17 +51,21 @@ development base; it does not invent the installed checkout commit.
 Synthetic tests exercise the real writer/reader/HTTP boundary but are never
 published as real telemetry. Native source authenticity, installed-tool
 qualification, human accessibility acceptance and independent security review
-remain separate gates. The hosted Site receives no local feed, record,
-identifier, model output, health state, bookmark or report.
+remain separate gates. The hosted Site has no automatic local feed. It accepts explicitly selected
+aggregate-only HUD summaries and readiness self-reports in page memory; these
+are unauthenticated saved data, not a live connection. Raw traffic records,
+addresses and model output are excluded from that summary contract.
 
 ## Control-room presentation (second draft slice)
 
-Home, Traffic, Findings, Apps, Reports, Evidence and Help share one anchored,
+HUD, Traffic, Findings, Apps, Reports, Evidence and Help share one anchored,
 keyboard-operable shell. A persistent Back to Home link returns to the Home tab.
 The old audit inspector is explicitly separate in Evidence because it can
 contain sample/unlinked rows. It is never the source of traffic visuals.
 
-All traffic panels share a UTC range (maximum 31 days). Recorded window and
+The visual HUD contains the traffic and finding charts; Traffic and Findings
+retain detailed tables. The rolling-hour globe has its own selected minute.
+The other traffic panels share a UTC range (maximum 31 days). Recorded window and
 Now use the bounded `/api/traffic` response. Last hour, Today and Custom UTC
 read database history through `/api/traffic-history`. Every panel includes range, source, unknown
 vantage, fetch time, unit and quality. Counts describe returned metadata;
@@ -89,8 +93,10 @@ None of those states proves package installation, version compatibility,
 configuration, usability, process state or health.
 
 **MEGALODON support** describes whether the static integration profile has a
-documented command contract. **Administration** remains external because the
-HUD cannot install, update, remove or configure companion applications.
+documented command contract. **Administration** defaults to observation mode. A separately enabled non-root
+Linux launch can run fixed install/start recipes with a per-launch operator
+token and confirmation; update, removal and vendor configuration stay external.
+See [tool management](tool-heartbeat.md).
 **Health** remains unverified: process-name observation does not start, stop,
 attach to, or request a response from a companion service. These rows must not be collapsed into one
 overall readiness badge.
