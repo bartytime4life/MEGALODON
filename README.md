@@ -702,14 +702,32 @@ ports, reported byte counts and source/run provenance appear in Activity detail.
 
 The activity globe's rolling hour view shows the newest bounded stored metadata
 within the past 60 minutes and refreshes while the tab is visible. Sweep the
-time control back to review a minute, or choose **Live** to follow the latest
-stored activity. The globe scans gently until a mapped detector-linked source
+time control back to review a minute, or choose **Live** to follow the current
+rolling minute, including when that minute has no returned records. The globe scans gently until a mapped detector-linked source
 needs review, then focuses on each recent signal for no more than eight seconds
 (less during a burst) before moving on. Its bars compare event counts in the returned candidates;
 unlinked findings do not prove traffic is safe, and a missing minute does not
 prove there was no traffic. The history response contains at most 500 stored
 event candidates and 200 linked finding candidates, so a busy hour can be only
 partly represented.
+
+Two traffic volume meters use that same validated history response. The normal
+lane counts records with no returned linked finding; the danger/critical lane
+counts records linked to HIGH or CRITICAL findings. Each record is counted once
+at its highest returned severity. LOW/MEDIUM records have a separate review
+count. These are metadata records per minute, not packet rates or bandwidth;
+neither lane is an operational verdict on maliciousness or safety.
+
+Both meters share the largest returned minute's count as their scale. Low,
+moderate and high volume mean up to one third, up to two thirds, and above two
+thirds of that scale. The normal lane may be incomplete when findings are capped.
+The existing configured refresh interval defaults to five seconds and pauses
+with the dashboard or hidden tab. The UI distinguishes the last successful
+refresh from the latest returned observation. Failed/old refreshes retain labeled
+previous readings; unavailable input shows no measurement. Historical selection
+changes both meters to that minute. This refreshes stored evidence only; it does
+not start a capture or establish sensor liveness. The separately hosted Console
+has disconnected meter tracks because it has no local telemetry connection.
 
 To place public source IPs automatically on the globe, install the optional
 local reader (`python -m pip install '.[geo]'` from this checkout), obtain a
