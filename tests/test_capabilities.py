@@ -65,7 +65,7 @@ def test_critical_boundaries_are_explicit():
     assert items["qwen-ollama"]["selected_status"] == "contract_only"
     assert "no CLI or tool authority for that policy" in items["qwen-ollama"]["boundary"]
     assert "installed-provider acceptance remains unproved" in items["qwen-ollama"]["boundary"]
-    assert items["nmap"]["selected_status"] == "proposed"
+    assert items["nmap"]["selected_status"] == "evaluation_only"
     assert items["ossec"]["selected_status"] == "proposed"
     assert items["greenbone"]["selected_status"] == "guest_only"
     assert items["zabbix"]["selected_status"] == "proposed"
@@ -97,7 +97,7 @@ def test_suricata_runtime_status_matches_reader_and_explicit_consumer():
 
 def test_planned_interface_slots_never_claim_runtime_authority():
     items = {item["id"]: item for item in catalog("linux")["components"]}
-    planned = {"nmap", "ossec", "greenbone", "zabbix", "nagios-core"}
+    planned = {"ossec", "greenbone", "zabbix", "nagios-core"}
     assert set(items) >= planned
     assert {items[item]["selected_status"] for item in planned} <= {"contract_only", "proposed"}
     assert items["qwen-ollama"]["selected_status"] == "manual_only"

@@ -124,13 +124,13 @@ _COMPONENTS = (
     {
         "id": "nmap",
         "software": "Nmap",
-        "integration": "future_network_inventory_import",
+        "integration": "completed_nmap_aggregate_inventory",
         "platforms": {
-            "linux": "proposed",
-            "windows": "proposed",
+            "linux": "optional",
+            "windows": "evaluation_only",
             "other": "unsupported",
         },
-        "boundary": "No scan launcher, script engine, service-banner intake, or XML importer exists.",
+        "boundary": "No scan launcher or script execution. A bounded Nmap 7.x XML 1.05 stdin reader emits aggregate counts for manual HUD import; no identifiers or banners retained. Native Windows acceptance remains unproved.",
     },
     {
         "id": "ossec",

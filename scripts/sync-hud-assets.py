@@ -21,3 +21,12 @@ if start in text and end in text:
     a, b = text.index(start) + len(start), text.index(end)
     index.write_text(text[:a] + '\n' + coverage['coverage_html'](hosted=True) + '\n' + text[b:])
 (root / "site/dist/telemetry.css").write_text(coverage['COVERAGE_CSS'])
+
+# One canonical inventory UI for the packaged HUD and hosted console.
+inventory = runpy.run_path(str(root / "megalodon/dashboard_inventory.py"))
+for key, filename in {"INVENTORY_JS": "inventory.js", "INVENTORY_CSS": "inventory.css"}.items():
+    (root / "site/dist" / filename).write_text(inventory[key])
+text = index.read_text()
+start, end = '<!-- INVENTORY_START -->', '<!-- INVENTORY_END -->'
+a, b = text.index(start) + len(start), text.index(end)
+index.write_text(text[:a] + '\n' + inventory['INVENTORY_HTML'] + '\n' + text[b:])

@@ -118,7 +118,6 @@ def test_workflow_contracts_match_their_owned_entry_points():
     assert "cannot execute commands" in advisory["action_boundary"]
 
     for workflow in (
-        "network-inventory-import",
         "host-integrity-import",
         "vulnerability-report-import",
         "zabbix-availability-read",
@@ -146,3 +145,11 @@ def test_cli_performs_no_network_process_or_host_probe(monkeypatch, capsys):
     assert caught.value.code == 0
     value = json.loads(capsys.readouterr().out)
     assert value == integration_plan("linux", "offline-packet-metadata")
+
+
+def test_nmap_aggregate_entry_is_optional_and_never_launches_scans():
+    item = integration_plan("linux", "network-inventory-import")["workflows"][0]
+    assert item["selected_status"] == "optional"
+    assert item["entry_point"] == "python -m megalodon.nmap_inventory"
+    assert item["launch_policy"] == "explicit_stdin_import_only_no_scan_launch"
+    assert "no scan launch" in item["action_boundary"]
