@@ -1,6 +1,32 @@
 # Defense Console source alignment
 
-## Current publication — Console v32, local feature guide
+## Current publication — Console v33, globe reference and signal levels
+
+OBSERVED 2026-09-26: the existing owner-only Console serves version 33 from
+Sites source `7b39459140b6f08cccf5a1bfbc5686b7e4a9ac95`. The hosted Home view
+renders the local HUD's bundled Natural Earth land mask as a rotatable geographic
+reference and names the returned-record, review, and high-priority signal levels.
+All are explicitly unavailable here because the hosted Site cannot read the local
+HUD's stored traffic or optional IP map. No marker, count, or timestamp is
+fabricated. The rolling-hour timeline and actual signals remain local-only.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 33 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_8cc48214d6b88191b8ad3eafa0f01288` |
+| Sites source | `7b39459140b6f08cccf5a1bfbc5686b7e4a9ac95` |
+| Deployment | `appgdep_6ab826ddf3188191b5dc9efebefbf921`; succeeded 2026-09-26T20:11:15Z |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access; no external visitors |
+| Rollback reference | v32 / `fd308cb9b4ba42b2f7c281ae046138694cfd5d4c` |
+
+VERIFIED: 44 Site Node checks, JavaScript syntax, diff validation, Site source
+push, and successful Sites deployment readback. Browser rendering and local HUD
+operation were not exercised by this publication. The repository mirror is
+proposed in this PR; merging it does not broaden source, host, or release
+acceptance.
+
+## Historical publication — Console v32, local feature guide
 
 OBSERVED 2026-09-26: the existing owner-only Console serves version 32 from
 Sites source `fd308cb9b4ba42b2f7c281ae046138694cfd5d4c`. The source began
