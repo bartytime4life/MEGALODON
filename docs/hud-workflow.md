@@ -105,3 +105,13 @@ ClamAV, osquery, Nmap, OSSEC, Greenbone, Zabbix and Nagios do not yet have their
 scan/inventory/alert/monitoring data adapters. Their presence/process checks and
 manual console links must not be presented as those missing data connections.
 nftables exposes inert response-plan evidence, never live firewall telemetry.
+
+## Completed network inventory
+
+The local HUD and hosted overview share a Network inventory panel. Use
+`python -m megalodon.nmap_inventory < completed-report.xml > inventory-summary.json`
+in the installed MEGALODON environment, then load the aggregate JSON into either
+panel. The [versioned profile](nmap-inventory-v1.md) explains bounds and omissions.
+No scanner is installed or started. Inventory counts never change traffic rates,
+finding severity or globe signals. New observations require another completed
+report, export and explicit load; this is not a live Nmap connection.

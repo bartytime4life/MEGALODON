@@ -1,6 +1,32 @@
 # Defense Console source alignment
 
-## Current publication — Console v36, data connections aligned
+## Current publication — Console v37, saved network inventory
+
+The existing owner-private Site was published successfully from source
+`607d5cc810490fdb71fbda1f938d288d87dbacef` with deployment
+`appgdep_6ab84e40b3608191a31e3dc24bde7cd8`, version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_1ace2e3c303481919a827d0441dbeb90`.
+Success observed at 2026-09-26T22:59:18Z. URL and audience are unchanged.
+Rollback reference: v36 / `aaceadec976a0c0b20193e8ad9b57176404eebfb`.
+
+The Nmap inventory addition is based on HUD redesign #425 at
+`26698c73fbc2f10759428f349bc8850b3ddcaf1a`, which incorporates merged #422.
+It provides a bounded completed-report exporter and one shared local/hosted
+inventory panel with four charts. The hosted page requires an explicitly loaded
+aggregate summary; it has no live feed. Installation of the corresponding
+candidate package remains separate from Site publication. See
+[nmap-inventory-v1.md](nmap-inventory-v1.md) and
+[project-gap-review.md](project-gap-review.md).
+
+Local verification: 3,785 passed, five environment-dependent skips, 203 subtests;
+79 hosted Node tests passed. Hygiene and build-input inventory passed. The full
+suite initially found an outdated one-file-picker assertion; the correction
+explicitly checks both intended inputs and keeps all endpoint/ID boundaries.
+Native browser acceptance now exercises import, rejection preservation and clear;
+its new exact-head hosted result is pending. No installed Nmap, actual scan,
+real producer-profile or independent operational acceptance is claimed.
+
+## Historical publication — Console v36, data connections aligned
 
 OBSERVED 2026-09-26: existing owner-private publication succeeded from source
 `aaceadec976a0c0b20193e8ad9b57176404eebfb`. The hosted page and repository
