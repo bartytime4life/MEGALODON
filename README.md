@@ -278,7 +278,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata completed-file intake | Single-threaded Linux main-thread APIs for one checksum-bound private 8.0.7 alert-only EVE file or one closed-envelope file; both return the same consumer-compatible immutable batch and terminal receipt, with no mixed firehose, persistence, dashboard write, watcher, or sensor operation |
 | Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
 | Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
-| Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and occurrence-preview engine (`megalodon/automation_schedule.py`) with explicit DST classification; no scheduler, ledger, persistence, model call, or executor |
+| Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and `automation-preview` CLI with explicit DST classification; no scheduler, ledger, persistence, model call, or executor |
 | Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
 | Qwen provider posture (read-only) | `megalodon.provider_containment.qwen_provider_posture()` observes, via `/proc` only, whether the fixed loopback destination is bound, whether it is also reachable beyond loopback, and (permission-gated, best-effort) its owning UID/PID/cgroup/net-namespace; never contacts the provider, never gates or feeds back into an advisory request, and reports denial/uncertainty honestly rather than guessing |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
@@ -894,6 +894,7 @@ last-success timestamp, and count baseline while marking the display stale.
 | --- | --- |
 | `capabilities [--platform linux\|windows\|other]` | Print a static support/free-software catalog without probing or changing the host |
 | `hub-plan [--platform ...] [--workflow ...]` | Print a closed integration workflow plan; never probes, installs, launches, networks, or mutates |
+| `automation-preview --dtstart LOCAL --timezone ZONE --rrule RULE [--dst-policy POLICY] [--limit N]` | Print at most 366 read-only recurrence instants with explicit DST status; creates no schedule or job |
 | `run --source sample [--demo-threat] [--max-seconds N]` | Process built-in synthetic metadata; optionally apply the Linux source-lifetime deadline |
 | `run --source jsonl --max-events N [--max-seconds N] [--input FILE]` | Replay validated JSONL from a file or stdin under an explicit finite accepted-event ceiling and optional Linux source-lifetime deadline |
 | `run --source scapy --interface IFACE --max-events N` | Perform optional Linux live metadata capture under an explicit finite accepted-event ceiling; the threaded adapter refuses `--max-seconds` |
@@ -1197,17 +1198,28 @@ implemented. See [`docs/offline-analysis.md`](docs/offline-analysis.md) for the
 full isolation model, fixed limits, typed adapter fields, report semantics,
 failure behavior, and optional installed-TShark compatibility probe.
 
-## Automation contract: schema only
+## Automation contract and read-only preview
 
 [`contracts/automation/v1`](contracts/automation/v1/README.md) contains the
 dependency-closed Stage 0 contract now present on `main`: JSON Schema Draft
 2020-12 definitions plus positive/negative fixtures for draft definitions,
 activated definitions, and immutable run snapshots.
 
-This is a normative draft data contract, not a scheduler. It does not calculate
-recurrences, resolve DST, persist automation definitions/runs, invoke models,
-publish output, expose a CLI/API, or execute jobs. Network and firewall
-capabilities are fixed to `false`, `requested_actions` is empty, and no arbitrary
+The separate `megalodon/automation_schedule.py` engine and
+`automation-preview` CLI calculate bounded recurrence instants and classify DST
+for a documented RRULE subset. For example:
+
+```bash
+python -m megalodon automation-preview \
+  --dtstart 2026-09-28T09:00:00 --timezone America/Chicago \
+  --rrule 'FREQ=WEEKLY;BYDAY=MO,WE' --limit 4
+```
+
+This is a normative draft data contract plus a read-only preview, not a
+scheduler. It does not persist automation definitions/runs, invoke models,
+supply a publication channel beyond the CLI response, expose an automation
+control API, or execute jobs. Network and firewall capabilities are fixed to
+`false`, `requested_actions` is empty, and no arbitrary
 command, path, endpoint, or tool field exists. See
 [`docs/automation-contract.md`](docs/automation-contract.md) for the proposed
 staged design.

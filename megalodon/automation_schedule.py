@@ -217,11 +217,12 @@ def parse_rrule(rrule: str) -> Mapping[str, Any]:
 
 
 def _zone(name: object) -> ZoneInfo:
-    if type(name) is not str or not _ZONE_NAME.fullmatch(name):
+    if (type(name) is not str or len(name) > 128 or not _ZONE_NAME.fullmatch(name)
+            or any(part in {"", ".", ".."} for part in name.split("/"))):
         _fail("TIMEZONE_VALUE")
     try:
         return ZoneInfo(name)
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
         _fail("TIMEZONE_VALUE")
 
 
