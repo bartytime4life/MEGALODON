@@ -9,7 +9,10 @@ private AI receipts and bounded report snapshots; see
 no connection to those routes. The hosted HUD now accepts a bounded aggregate-only
 `megalodon-hud-snapshot-v1` export for six visual summaries. It does not connect
 to the local routes. Source changes for the exporter and uniform tool setup
-must be installed locally before those new module commands are available.
+must be installed locally before the new module commands and Prepare summary
+controls are available. The Site and local HUD share a generated feature/tool
+data-coverage map and an identical snapshot validator; use
+`python scripts/sync-hud-assets.py` after changing either canonical source.
 See [the workflow guide](../docs/hud-workflow.md). The current publication receipt
 is recorded in [source alignment](../docs/site-source-alignment.md).
 

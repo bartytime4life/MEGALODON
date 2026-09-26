@@ -1,6 +1,8 @@
 """Anchored control-room presentation; all traffic comes from the local reader."""
 
 from .dashboard_setup import SETUP_HTML
+from .dashboard_snapshot import SNAPSHOT_LOCAL_HTML
+from .telemetry_catalog import coverage_html, COVERAGE_CSS
 from .status_glossary import STATUS_GLOSSARY_CSS, STATUS_GLOSSARY_HTML
 
 STATUS_HTML = """
@@ -56,10 +58,13 @@ HOME_HTML = """
   <div id="room-traffic-grid" class="room-grid"></div>
   <h3 class="hud-section-title">Detection overview <span>Linked findings</span></h3>
   <div id="room-findings-visual" class="room-grid"></div>
+  <!-- HUD_DATA_CONNECTIONS -->
   <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#action-plane-title">Open Actions</a><a href="#room-reports-title">Make a report</a></div>
   <details><summary>How do we know?</summary><p>Only validated, bounded metadata linked to a non-sample ingestion run appears in Traffic and Findings. Imported JSONL provenance is unverified. Open Evidence for separate saved reports and audit history.</p></details>
 </section>
 """
+
+HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML)
 
 TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>
@@ -339,6 +344,8 @@ ROOM_CSS += r"""
 @media(max-width:700px) { .hud-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 """
 
+ROOM_CSS += COVERAGE_CSS
+
 ROOM_JS = r"""
 const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null, history:null};
 const roomProtocols = ['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'];
@@ -584,6 +591,7 @@ function renderRoom() {
   const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
   const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach(value=>row.append(textNode('td',value)));body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
   if(!roomState.report)invalidateRoomReport();
+  if(typeof renderTelemetryConnections==='function')renderTelemetryConnections();
 }
 const roomRequests=new Map();
 function requestRoomSnapshot(path='/api/traffic') {

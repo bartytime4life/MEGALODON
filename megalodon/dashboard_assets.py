@@ -6,6 +6,7 @@ constants to preserve the existing public/test interface.
 """
 
 from .dashboard_integrations import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
+from .dashboard_snapshot import SNAPSHOT_VALIDATOR_JS, SNAPSHOT_LOCAL_JS
 from .dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
@@ -742,7 +743,7 @@ const maxTimelineBins = 12;
 const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
 const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
-  'activity-globe-title': 'live',
+  'activity-globe-title': 'live', 'hud-export-title': 'live', 'telemetry-coverage-title': 'live',
   'workspace-traffic': 'traffic', 'workspace-findings': 'findings',
   'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
@@ -2197,6 +2198,7 @@ function togglePause() {
   else { refresh(false); refreshGlobeHour(); scheduleNext(); }
   renderRoomControls();
   renderGlobeHour();
+  if(typeof renderTelemetryConnections==='function')renderTelemetryConnections();
 }
 function applyConfig(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)
@@ -2299,4 +2301,4 @@ INDEX_HTML = compose_control_room(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + "\nbootstrap();\n"

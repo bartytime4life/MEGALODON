@@ -11,8 +11,13 @@ interval (five seconds by default). No sensor is started by opening a view.
 
 ## Hosted summary workflow
 
-The hosted Site cannot read localhost or your database. To populate its six
-summary charts, run this in the Python environment containing this revision:
+The hosted Site cannot read localhost or your database. In the updated local
+HUD, select **Prepare summary**, review the aggregate JSON, then **Download
+summary JSON** and load that file on the hosted page. Preparation uses the
+latest bounded database window, independently of the displayed time filter.
+A failed refresh preserves the previous preview and its original timestamp.
+
+Alternatively, run this in the Python environment containing this revision:
 
 ```sh
 umask 077
@@ -77,3 +82,26 @@ terminal output. No supplied command, package or shell fragment is accepted.
 Unsupported platform/guided recipes return a nonzero result. Package service
 side effects and large model downloads are disclosed before execution. This
 workflow never automatically starts a scan, capture or firewall rule change.
+
+## Connection coverage and failure isolation
+
+Both UIs use `megalodon/telemetry_catalog.py` for the same 14-feature and
+14-companion data map. It describes supported sources and update modes, not
+observed runtime health. The local HUD additionally shows accepted traffic,
+heartbeat and installer-job observations with their separate timestamps/states.
+The map names each unimplemented companion data adapter explicitly.
+
+`GET /api/hud-snapshot` is read-only, parameter-free and limited to 16 KiB.
+It uses the same exporter as the CLI and inherits the local server's Host,
+no-store and same-origin boundaries. The packaged validator is identical to
+the hosted validator. The preview/download controls start no upload or timer.
+
+Heartbeat and installer-status responses are handled independently. A failed
+installer request disables management and shows its own unavailable state while
+a valid heartbeat continues to show observed tool presence. A failed heartbeat
+continues to mark tool observations stale even when installer status succeeds.
+
+ClamAV, osquery, Nmap, OSSEC, Greenbone, Zabbix and Nagios do not yet have their
+scan/inventory/alert/monitoring data adapters. Their presence/process checks and
+manual console links must not be presented as those missing data connections.
+nftables exposes inert response-plan evidence, never live firewall telemetry.

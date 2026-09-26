@@ -1,4 +1,6 @@
+"""Shared aggregate schema validator and explicit local export controls."""
 
+SNAPSHOT_VALIDATOR_JS = r'''
 /* Aggregate snapshots are local, unverified self-reports, never live telemetry. */
 const snapshotLabels = {
   protocols:['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'],
@@ -51,7 +53,9 @@ function validateHudSnapshot(text, now=Date.now()) {
   return data;
 }
 if(typeof module!=='undefined')module.exports={validateHudSnapshot,snapshotLabels};
+'''
 
+SNAPSHOT_HOSTED_JS = r'''
 if(typeof document!=='undefined'){
   const el=id=>document.getElementById(id);let generation=0;
   function chart(id,labels,values,unit='records'){
@@ -77,3 +81,70 @@ if(typeof document!=='undefined'){
   el('snapshot-clear').addEventListener('click',()=>{generation++;render(null);el('snapshot-status').textContent='Summary cleared from this page. No upload was performed.';});
   render(null);
 }
+'''
+
+SNAPSHOT_LOCAL_HTML = r'''
+<section class="telemetry-coverage" aria-labelledby="hud-export-title">
+  <h3 id="hud-export-title">Export a hosted HUD summary</h3>
+  <p>Prepare an aggregate-only summary of the newest qualified records. This export uses the latest bounded database window, independently of the displayed time filter. It contains no addresses, ports or raw records.</p>
+  <button type="button" id="hud-export-prepare">Prepare summary</button>
+  <button type="button" id="hud-export-download" disabled>Download summary JSON</button>
+  <button type="button" id="hud-export-clear" disabled>Clear preview</button>
+  <p id="hud-export-status" role="status">No summary prepared. Nothing is uploaded.</p>
+  <pre id="hud-export-preview" class="room-report-preview" tabindex="0" hidden aria-label="Exact hosted summary JSON"></pre>
+</section>
+'''
+
+SNAPSHOT_LOCAL_JS = r'''
+const hudExportState = {text:null, busy:false};
+async function prepareHudExport() {
+  if(hudExportState.busy)return;
+  hudExportState.busy=true;byId('hud-export-prepare').disabled=true;
+  byId('hud-export-download').disabled=true;byId('hud-export-clear').disabled=true;
+  byId('hud-export-status').textContent='Reading the latest bounded metadata summary…';
+  try {
+    const payload=await requestBoundedJSON('/api/hud-snapshot',16384);
+    const summary=validateHudSnapshot(JSON.stringify(payload));
+    hudExportState.text=JSON.stringify(summary,null,2)+'\n';
+    byId('hud-export-preview').textContent=hudExportState.text;byId('hud-export-preview').hidden=false;
+    byId('hud-export-clear').disabled=false;
+    byId('hud-export-status').textContent=`Saved summary prepared: ${summary.events} records, ${summary.findings} findings. Exported ${summary.generated_at}. Review below, then download and load it into the hosted HUD.`;
+  } catch(_) {
+    byId('hud-export-status').textContent=hudExportState.text?'Summary refresh failed. The prior held preview is preserved; its timestamp has not changed.':'Summary unavailable. Check the local source for qualified metadata; no empty summary was invented.';
+  } finally {hudExportState.busy=false;byId('hud-export-prepare').disabled=false;byId('hud-export-download').disabled=!hudExportState.text;byId('hud-export-clear').disabled=!hudExportState.text;}
+}
+function clearHudExport() {
+  if(hudExportState.busy)return;
+  hudExportState.text=null;byId('hud-export-preview').textContent='';byId('hud-export-preview').hidden=true;
+  byId('hud-export-download').disabled=true;byId('hud-export-clear').disabled=true;
+  byId('hud-export-status').textContent='Preview cleared. Nothing was uploaded.';
+}
+function downloadHudExport() {
+  if(!hudExportState.text||hudExportState.busy)return;
+  let url;
+  try {
+    url=URL.createObjectURL(new Blob([hudExportState.text],{type:'application/json'}));
+    const anchor=document.createElement('a');anchor.href=url;anchor.download='megalodon-hud-summary.json';anchor.click();
+    byId('hud-export-status').textContent='Summary download requested. Load this saved JSON in the hosted HUD. No upload was performed.';
+  } catch(_) {byId('hud-export-status').textContent='Download unavailable. Copy the exact summary JSON from the preview.';}
+  finally {if(url)setTimeout(()=>URL.revokeObjectURL(url),0);}
+}
+byId('hud-export-prepare').addEventListener('click',prepareHudExport);
+byId('hud-export-download').addEventListener('click',downloadHudExport);
+byId('hud-export-clear').addEventListener('click',clearHudExport);
+function renderTelemetryConnections() {
+  const traffic=typeof roomState==='undefined'?null:roomState.snapshot;
+  const paused=typeof state!=='undefined'&&state.paused;
+  const hidden=typeof document!=='undefined'&&document.hidden;
+  const failed=typeof roomState!=='undefined'&&roomState.failed;
+  const has=Boolean(traffic&&traffic.events.length);
+  const fresh=traffic&&Date.now()-Date.parse(traffic.generated_at)<=300000;
+  byId('telemetry-traffic-state').textContent=failed?'Refresh failed':!has?'No qualified records':!fresh?'Stale stored view':paused||hidden?'Refresh paused':'Stored metadata available';
+  byId('telemetry-traffic-time').textContent=traffic?`Snapshot: ${traffic.generated_at} · sensor health unknown`:'No accepted traffic snapshot';
+  const hb=typeof heartbeatState==='undefined'?null:heartbeatState;
+  byId('telemetry-tools-state').textContent=!hb?.report?'No observation':heartbeatStale()?'Stale tool observation':'Tool presence observed';
+  byId('telemetry-tools-time').textContent=hb?.report?`Checked: ${hb.report.checked_at} · not sensor health`:'Waiting for the local heartbeat';
+  byId('telemetry-management-state').textContent=hb?.catalogFailed?'Status unavailable':hb?.catalog?hb.job?`Job: ${hb.job.state}`:'No active job':'Not checked';
+  byId('telemetry-management-time').textContent=hb?.catalogFailed?'Tool observations remain independent':hb?.managementEnabled?'Management enabled for this launch':'Observation mode; management disabled';
+}
+'''
