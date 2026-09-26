@@ -432,6 +432,31 @@ def test_output_bytes_limit_exceeded_creates_no_file(tmp_path) -> None:
     assert not destination.exists()
 
 
+@pytest.mark.parametrize("record", [
+    {"value": float("nan")},
+    {"value": float("inf")},
+    {1: "integer key"},
+    {"mixed": {1: "integer key", "name": "string key"}},
+    ["not a record"],
+])
+def test_invalid_jsonl_record_creates_no_file(tmp_path, record) -> None:
+    destination = tmp_path / "export.jsonl"
+    with pytest.raises(SiemExportError) as caught:
+        write_export([{"valid": True}, record], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "INVALID_RECORD"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_cyclic_record_creates_no_file(tmp_path) -> None:
+    record = {}
+    record["self"] = record
+    destination = tmp_path / "export.jsonl"
+    with pytest.raises(SiemExportError) as caught:
+        write_export([record], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "INVALID_RECORD"
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_invalid_profile_is_rejected(tmp_path) -> None:
     with pytest.raises(SiemExportError) as caught:
         write_export([], tmp_path / "export.jsonl", profile="splunk-hec")

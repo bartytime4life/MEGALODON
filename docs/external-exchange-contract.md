@@ -38,10 +38,13 @@ free-form `megalodon` namespace for ECS, the `unmapped` object plus the
 generic `activity_id: 99`/"Other" sentinel for OCSF), so neither profile
 claims full upstream compliance. Neither function reconstructs a field
 MEGALODON did not retain, and `event.original` is never produced because it
-would preserve the raw source body. `write_export` validates the full record
-count and byte ceiling before creating anything. It writes a private temporary
-sibling, checks for a complete write, flushes and synchronizes the file, then
-publishes it through an atomic hard link that cannot replace an existing
+would preserve the raw source body. `write_export` rejects records that cannot
+be encoded as standard JSON, then checks the record count and byte ceiling
+before creating anything. The writer does not validate a caller's mapping
+against the ECS/OCSF schema or screen it for sensitive fields; callers must
+pass only records from the trusted projection path. It writes a private
+temporary sibling, checks for a complete write, flushes and synchronizes the
+file, then publishes it through an atomic hard link that cannot replace an existing
 destination. The held parent directory must be root/current-user-owned and not
 group/world writable unless protected by the sticky bit; a symlinked parent is
 refused. The temporary name is removed and the directory synchronized before a
@@ -93,8 +96,8 @@ effect boundaries. `tests/test_siem_export.py` additionally validates every
 projected ECS/OCSF record against `schema.json`, that neither profile ever
 contains `event.original`, a payload, or a credential-shaped field, the
 closed severity mapping, and that `write_export` creates no file at all when
-the record count or byte ceiling is exceeded or the destination already
-exists. None of this proves semantic trust in a feed, complete STIX or
-ECS/OCSF interoperability, storage atomicity, third-party delivery, threat
-coverage, operational accuracy, independent review, release readiness, or
+a record cannot be encoded as standard JSON, the record count or byte ceiling
+is exceeded, or the destination already exists. None of this proves semantic
+trust in a feed, complete STIX or ECS/OCSF interoperability, storage atomicity,
+third-party delivery, threat coverage, operational accuracy, independent review, release readiness, or
 deployment.
