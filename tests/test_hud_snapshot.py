@@ -7,6 +7,7 @@ import subprocess
 import pytest
 from megalodon.hud_snapshot import main, snapshot_from_projection
 from megalodon.dashboard_traffic import TrafficDashboardStore, unavailable
+from megalodon.dashboard_snapshot import SNAPSHOT_VALIDATOR_JS
 from megalodon.models import PacketEvent, DetectionResult, ActionRecord
 from megalodon.storage import Store
 
@@ -32,8 +33,8 @@ def test_export_projection_roundtrip_and_privacy(tmp_path, capsys):
         assert writer.summary() == before
         node = shutil.which('node')
         if node:
-            script = "const {validateHudSnapshot}=require('./site/dist/snapshot.js');let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const x=validateHudSnapshot(s);if(x.events!==2)process.exit(1);});"
-            subprocess.run([node,'-e',script], input=text,text=True,check=True,cwd=Path(__file__).resolve().parents[1])
+            script = SNAPSHOT_VALIDATOR_JS + "\nlet s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const x=validateHudSnapshot(s);if(x.events!==2)process.exit(1);});"
+            subprocess.run([node,'-e',script], input=text,text=True,check=True,cwd=tmp_path,timeout=10)
 
 
 def test_no_export_for_unqualified_or_missing_database(tmp_path, capsys):
