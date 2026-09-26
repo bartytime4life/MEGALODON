@@ -265,7 +265,10 @@ process.stdin.on('end', () => {
   let timerId = 0;
   context.window = {setTimeout: () => ++timerId, clearTimeout: () => {}};
   context.focusMap = evaluate("parseGlobeMapping('ip,latitude,longitude,label\\n8.8.8.8,40,-75,East\\n9.9.9.9,20,20,Other')");
-  evaluate('state.paused=false; globeState.stale=false; syncGlobeFocus(focusMap)');
+  evaluate('state.paused=false; syncGlobeFocus(focusMap)');
+  assert.equal(evaluate('globeState.focus.id'), null); // A stale empty minute has no current signal.
+  // Restore the signal-bearing minute through the renderer before testing focus order.
+  evaluate('globeState.hour.selectedAt=start+10*60000; globeState.hour.failed=false; renderGlobeHour(); syncGlobeFocus(focusMap)');
   assert.equal(evaluate('globeState.focus.id'), '2'); // High before review.
   assert.ok(evaluate('globeState.focus.until-Date.now()') <= 4000);
   evaluate('globeState.focus.until=Date.now()-1; syncGlobeFocus(focusMap)');
