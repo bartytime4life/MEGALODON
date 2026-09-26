@@ -39,6 +39,13 @@ def test_globe_is_in_visible_traffic_workspace_and_uses_validated_projection():
     assert 'Previous snapshot · source IPs and map labels' in DASHBOARD_JS
     assert '.activity-globe.stale .activity-globe-list .matched span' in GLOBE_CSS
     assert '.activity-globe-note { font-size: .875rem; }' in GLOBE_CSS
+    assert '.activity-globe-bin.high::before' in GLOBE_CSS
+    assert '.activity-globe-bin.selected .activity-globe-bar' in GLOBE_CSS
+    assert 'grid-template-areas: ". histogram ." "label slider live" ". axis ."' in GLOBE_CSS
+    assert 'grid-template-areas: "histogram" "label" "slider" "axis" "live"' in GLOBE_CSS
+    assert GLOBE_HTML.index('class="activity-globe-rail"') < GLOBE_HTML.index('id="activity-globe-histogram"') < GLOBE_HTML.index('id="activity-globe-minute"')
+    assert 'input { height: 44px; }' in GLOBE_CSS
+    assert 'at most 20 distinct public IPs per view, signal IPs first' in GLOBE_HTML
 
 
 def test_embedded_natural_earth_mask_has_expected_land_and_water():
@@ -130,6 +137,8 @@ process.stdin.on('end', async () => {
   evaluate('globeState.mapping = mapping; renderGlobe(traffic)');
   assert.equal(nodes.get('room-globe-entry-status').textContent, 'Mapped signal source context available');
   assert.equal(nodes.get('activity-globe-list').children.length, 3);
+  assert.equal(nodes.get('activity-globe-focus-time').textContent, 'Observed 2026-09-26 · 03:00:00 UTC');
+  assert.equal(nodes.get('activity-globe-lead').textContent.includes('2026-09-26T'), false);
   evaluate('renderGlobeUnavailable(true)');
   assert.equal(nodes.get('activity-globe-list-heading').textContent, 'Previous snapshot · source IPs and map labels');
   assert.equal(nodes.get('activity-globe-list').attrs['aria-label'], 'Previous snapshot source IP mapping status');
@@ -236,6 +245,8 @@ process.stdin.on('end', () => {
   assert.match(nodes.get('activity-globe-selected-time').textContent, /Live · latest stored · 00:40 UTC/);
   assert.equal(nodes.get('activity-globe-selected-count').textContent, '1');
   assert.equal(nodes.get('activity-globe-peak-count').textContent, '2');
+  assert.match(nodes.get('activity-globe-histogram').children[10].className, /high/);
+  assert.match(nodes.get('activity-globe-histogram').children[40].className, /selected/);
   assert.match(nodes.get('activity-globe-histogram').attrs['aria-label'], /empty bins do not prove no traffic/i);
   evaluate('globeState.hour.live=false; globeState.hour.selectedAt=start+10*60000; globeState.hour.partial=true; state.paused=true; renderGlobeHour()');
   assert.match(nodes.get('activity-globe-selected-time').textContent, /Selected · 00:10 UTC/);

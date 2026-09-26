@@ -18,20 +18,23 @@ GLOBE_HTML = """
     </div>
     <div class="activity-globe-readout">
       <p class="activity-globe-lead" id="activity-globe-lead" role="status" aria-live="polite">Waiting for qualified stored traffic.</p>
+      <time class="activity-globe-focus-time" id="activity-globe-focus-time" hidden></time>
       <p class="activity-globe-list-heading" id="activity-globe-list-heading">Recent source IPs</p>
       <ul class="activity-globe-list" id="activity-globe-list" aria-label="Recent source IP mapping status"></ul>
       <p class="activity-globe-source-status" id="activity-globe-source-status">Checking offline location source…</p>
+      <p class="activity-globe-source-limit">Automatic lookup checks at most 20 distinct public IPs per view, signal IPs first; other IPs may remain unmapped.</p>
       <p class="activity-globe-note">Markers reflect offline database or CSV locations, rounded to about 5°. IP location may be wrong; this does not establish a device, person, or origin.</p>
     </div>
   </div>
   <section class="activity-globe-timeline" aria-labelledby="activity-globe-timeline-title">
     <div class="activity-globe-timeline-head"><div><p class="eyebrow">Time sweep</p><h4 id="activity-globe-timeline-title">Past 60 minutes</h4></div>
       <output id="activity-globe-selected-time" for="activity-globe-minute">Waiting for the hour view</output></div>
-    <div class="activity-globe-histogram" id="activity-globe-histogram" role="img" aria-label="Waiting for the past-hour activity summary"></div>
-    <div class="activity-globe-rail"><label for="activity-globe-minute">Review a minute</label>
+    <div class="activity-globe-rail">
+      <div class="activity-globe-histogram" id="activity-globe-histogram" role="img" aria-label="Waiting for the past-hour activity summary"></div>
+      <label for="activity-globe-minute">Review a minute</label>
       <input id="activity-globe-minute" type="range" min="0" max="59" step="1" value="59" aria-describedby="activity-globe-selected-time activity-globe-coverage">
+      <div class="activity-globe-axis"><span>60 min ago</span><span>Now · UTC</span></div>
       <button type="button" id="activity-globe-live" aria-pressed="true">Live · latest stored</button></div>
-    <div class="activity-globe-axis"><span>60 min ago</span><span>Now · UTC</span></div>
     <div class="activity-globe-timeline-bottom"><dl class="activity-globe-counts">
       <div><dt>Selected minute</dt><dd id="activity-globe-selected-count">—</dd></div>
       <div><dt>Peak minute</dt><dd id="activity-globe-peak-count">—</dd></div>
@@ -80,6 +83,8 @@ GLOBE_CSS = r"""
 @keyframes globe-ping { 0% { opacity: .9; transform: scale(.35); } 100% { opacity: 0; transform: scale(1.4); } }
 .activity-globe-readout { min-width: 0; }
 .activity-globe-lead { margin: 0 0 10px; color: #e8f7fa; font-size: .9rem; line-height: 1.45; }
+.activity-globe-focus-time { display: block; margin: -4px 0 11px; color: #abcbd2; font-size: .78rem; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.activity-globe-focus-time[hidden] { display: none; }
 .activity-globe-list-heading { margin: 0 0 6px; color: #c5dbe1; font-size: .77rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .activity-globe-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
 .activity-globe-list li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 8px 10px; border: 1px solid #294957; border-radius: 6px; background: #0b2531; font-size: .78rem; }
@@ -93,25 +98,29 @@ GLOBE_CSS = r"""
 .activity-globe.stale .activity-globe-list .matched span { color: #f4d58f; }
 .activity-globe.stale .activity-globe-list-heading { color: #f4d58f; }
 .activity-globe-source-status { margin: 12px 0 0; color: #91d9d1; font-size: .79rem; line-height: 1.45; }
+.activity-globe-source-limit { margin: 5px 0 0; color: #aec8d0; font-size: .73rem; line-height: 1.4; }
 .activity-globe-note { margin: 10px 0 0; color: #b8ced6; font-size: .82rem; line-height: 1.5; }
 .activity-globe-timeline { padding: 15px 18px 17px; border-top: 1px solid #345967; background: linear-gradient(180deg,rgba(8,33,45,.66),rgba(5,23,33,.7)); }
 .activity-globe-timeline-head { display: flex; align-items: end; justify-content: space-between; gap: 15px; }
 .activity-globe-timeline-head .eyebrow { margin: 0 0 3px; }
 .activity-globe-timeline h4 { margin: 0; color: #f0fbfb; font-size: 1rem; letter-spacing: -.02em; }
 .activity-globe-timeline output { color: #d9edf0; font-size: .86rem; font-variant-numeric: tabular-nums; text-align: right; }
-.activity-globe-histogram { display: grid; grid-template-columns: repeat(60,minmax(0,1fr)); align-items: end; gap: 2px; height: 82px; margin: 14px 0 5px; padding: 7px 4px 0; border: 1px solid #294c59; border-bottom-color: #6e9eaa; border-radius: 6px 6px 0 0; background: repeating-linear-gradient(to right,transparent,transparent calc(10% - 1px),rgba(111,171,180,.09) 10%),#081f2b; }
+.activity-globe-histogram { grid-area: histogram; display: grid; grid-template-columns: repeat(60,minmax(0,1fr)); align-items: end; gap: 2px; height: 82px; margin: 14px 0 5px; padding: 7px 1px 0; border: 1px solid #294c59; border-bottom-color: #6e9eaa; border-radius: 6px 6px 0 0; background: repeating-linear-gradient(to right,transparent,transparent calc(10% - 1px),rgba(111,171,180,.09) 10%),#081f2b; }
+.activity-globe-bin { position: relative; display: flex; align-items: flex-end; width: 100%; height: 100%; min-width: 0; }
+.activity-globe-bin.review::before, .activity-globe-bin.high::before { content: ""; position: absolute; top: 1px; left: 0; z-index: 1; width: 100%; min-width: 3px; height: 5px; border-radius: 2px; }
+.activity-globe-bin.review::before { background: #e7bc6d; box-shadow: 0 0 5px #e7bc6d; }
+.activity-globe-bin.high::before { background: #ff9189; box-shadow: 0 0 6px #ff9189; }
 .activity-globe-bar { display: block; width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: #4aaea8; opacity: .76; }
 .activity-globe-bar.empty { height: 2px; opacity: .3; }
-.activity-globe-bar.review { background: linear-gradient(to top,#4aaea8 65%,#e7bc6d 65%); }
-.activity-globe-bar.high { background: linear-gradient(to top,#4aaea8 62%,#ee8b83 62%); }
-.activity-globe-bar.selected { outline: 2px solid #ecf5e1; outline-offset: 1px; opacity: 1; }
-.activity-globe-rail { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px; }
-.activity-globe-rail label { color: #dcebee; font-size: .8rem; font-weight: 700; }
-.activity-globe-rail input { width: 100%; min-width: 0; height: 30px; margin: 0; accent-color: #70e2d0; cursor: ew-resize; }
-.activity-globe-rail button { min-height: 42px; padding: 8px 12px; border: 1px solid #6aa9a7; border-radius: 6px; background: #17414a; color: #edfffb; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; }
+.activity-globe-bin.selected { background: rgba(236,245,225,.07); }
+.activity-globe-bin.selected .activity-globe-bar { outline: 2px solid #ecf5e1; outline-offset: 1px; opacity: 1; }
+.activity-globe-rail { display: grid; grid-template-columns: auto minmax(0,1fr) auto; grid-template-areas: ". histogram ." "label slider live" ". axis ."; align-items: center; column-gap: 10px; }
+.activity-globe-rail label { grid-area: label; color: #dcebee; font-size: .8rem; font-weight: 700; }
+.activity-globe-rail input { grid-area: slider; width: 100%; min-width: 0; height: 30px; margin: 0; accent-color: #70e2d0; cursor: ew-resize; }
+.activity-globe-rail button { grid-area: live; min-height: 42px; padding: 8px 12px; border: 1px solid #6aa9a7; border-radius: 6px; background: #17414a; color: #edfffb; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; }
 .activity-globe-rail button[aria-pressed="false"] { background: #0e2935; color: #cae0e4; }
 .activity-globe-rail button:focus-visible, .activity-globe-rail input:focus-visible { outline: 3px solid #ffd16b; outline-offset: 3px; }
-.activity-globe-axis { display: flex; justify-content: space-between; margin: 0 0 11px; padding: 0 158px 0 109px; color: #b8ced6; font-size: .72rem; }
+.activity-globe-axis { grid-area: axis; display: flex; justify-content: space-between; margin: -1px 0 11px; color: #b8ced6; font-size: .72rem; }
 .activity-globe-timeline-bottom { display: flex; justify-content: space-between; align-items: end; gap: 14px; }
 .activity-globe-counts { display: flex; gap: 16px; margin: 0; }
 .activity-globe-counts div { min-width: 95px; }
@@ -138,6 +147,7 @@ GLOBE_CSS = r"""
 .activity-globe-controls summary { width: fit-content; min-height: 34px; padding: 7px 0; cursor: pointer; }
 .activity-globe-controls code { display: block; width: fit-content; max-width: 100%; overflow-wrap: anywhere; padding: 8px; border: 1px solid #365966; color: #eaf7fa; line-height: 1.5; }
 @media (max-width: 900px) { .activity-globe-body { grid-template-columns: 1fr; gap: 8px; } .activity-globe-stage { width: min(100%,360px); } .activity-globe-head { align-items: flex-start; } .activity-globe-timeline-bottom { display: block; } .activity-globe-legend { margin-top: 12px; } }
+@media (max-width: 900px) and (min-width: 561px) { .activity-globe-histogram { padding-inline: 4px; } }
 @media (max-width: 680px) { .room-globe-entry { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 560px) {
   .activity-globe-stage { width: min(100%,306px); }
@@ -151,10 +161,11 @@ GLOBE_CSS = r"""
   .activity-globe-head-state { justify-items: start; text-align: left; margin-top: 9px; }
   .activity-globe-timeline-head { display: block; }
   .activity-globe-timeline output { display: block; margin-top: 7px; text-align: left; }
-  .activity-globe-rail { grid-template-columns: minmax(0,1fr) auto; }
-  .activity-globe-rail label { grid-column: 1 / -1; }
-  .activity-globe-axis { padding: 0 0 0 2px; }
-  .activity-globe-histogram { gap: 1px; }
+  .activity-globe-rail { grid-template-columns: minmax(0,1fr); grid-template-areas: "histogram" "label" "slider" "axis" "live"; row-gap: 2px; }
+  .activity-globe-rail input { height: 44px; }
+  .activity-globe-rail button { justify-self: end; margin-top: 6px; }
+  .activity-globe-axis { margin: -4px 0 2px; }
+  .activity-globe-histogram { gap: 1px; padding-inline: 5px; }
   .activity-globe-controls > summary small { display: block; margin: 4px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .activity-globe-ping::after { animation: none; opacity: .65; transform: scale(.7); } }
@@ -456,10 +467,15 @@ function renderGlobeView() {
   const lead = byId('activity-globe-lead');
   const focusMinute = view.active && globeState.hour.start !== null
     ? Math.max(0, Math.min(59, Math.floor((Date.parse(view.active.observed_at) - globeState.hour.start) / 60000))) : null;
-  const focusTime = view.active && globeState.hour.page
-    ? ` Observed ${view.active.observed_at}${focusMinute !== globeState.hour.selectedIndex ? ' · recent signal beyond selected minute' : ''}.` : '';
+  const focusTime = byId('activity-globe-focus-time');
+  focusTime.hidden = !view.active;
+  if (view.active) {
+    const observed = new Date(view.active.observed_at).toISOString();
+    focusTime.dateTime = view.active.observed_at;
+    focusTime.textContent = `${globeState.hour.page && focusMinute !== globeState.hour.selectedIndex ? 'Recent signal · ' : ''}Observed ${observed.slice(0, 10)} · ${observed.slice(11, 19)} UTC`;
+  }
   lead.textContent = view.kind === 'mapped'
-    ? `Focused source: ${view.active.ip} · ${view.active.location.label}. ${globeSignalLabel(view.active.signal)}.${focusTime} Approximate region only.`
+    ? `Focused source: ${view.active.ip} · ${view.active.location.label}. ${globeSignalLabel(view.active.signal)}.`
     : view.kind === 'stale' ? 'Hour refresh failed. Previous source IPs are shown; no current location ping.'
     : view.kind === 'unavailable' ? 'Qualified traffic is unavailable. No location is shown.'
     : view.kind === 'empty' ? 'No qualified stored events were returned for this minute.'
@@ -556,11 +572,14 @@ function renderGlobeHour() {
   const binStart = hour.start + model.index * 60000;
   const counts = model.bins.map(bin => bin.count);
   const bars = model.bins.map((bin, index) => {
+    const column = document.createElement('span');
     const bar = document.createElement('span');
-    bar.className = `activity-globe-bar${bin.count ? '' : ' empty'}${bin.signal === 'quiet' ? '' : ' ' + bin.signal}${index === model.index ? ' selected' : ''}`;
+    column.className = `activity-globe-bin${bin.signal === 'quiet' ? '' : ' ' + bin.signal}${index === model.index ? ' selected' : ''}`;
+    bar.className = `activity-globe-bar${bin.count ? '' : ' empty'}`;
     bar.style.height = `${bin.count ? Math.max(8, bin.count / Math.max(1, model.peak) * 100) : 2}%`;
-    bar.title = `${globeHourTime(hour.start + index * 60000)} · ${bin.count} returned record${bin.count === 1 ? '' : 's'} · ${globeSignalLabel(bin.signal)}`;
-    return bar;
+    column.title = `${globeHourTime(hour.start + index * 60000)} · ${bin.count} returned record${bin.count === 1 ? '' : 's'} · ${globeSignalLabel(bin.signal)}`;
+    column.replaceChildren(bar);
+    return column;
   });
   const histogram = byId('activity-globe-histogram'); histogram.replaceChildren(...bars);
   histogram.setAttribute('aria-label', `60 minute bins, oldest to newest, returned qualified metadata counts: ${counts.join(', ')}. Empty bins do not prove no traffic.`);

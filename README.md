@@ -719,6 +719,8 @@ The containing directory must be owned by the launching user and mode `0700`;
 the file must be owned by that user, mode `0600`, regular, and no larger than
 128 MiB. The HUD reads it once at startup, makes no download or external IP
 lookup, and returns only coarse 5-degree coordinates to its local browser.
+Each displayed view asks for at most 20 distinct public source IPs, with linked
+signals first; other addresses remain unmapped unless the reviewed CSV covers them.
 Geolocation is approximate and does not identify a person, device or true
 network origin. The existing reviewed CSV stays available as a per-tab override
 for exact IPs, including local addresses. If no MMDB is configured, the timeline
