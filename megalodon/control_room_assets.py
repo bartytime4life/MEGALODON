@@ -45,7 +45,7 @@ HOME_HTML = """
       <p id="room-globe-entry-status" role="status">Waiting for qualified traffic.</p></div>
     <a href="#room-traffic-title">Open activity globe <span aria-hidden="true">→</span></a>
   </section>
-  <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#integrations-title">Open Apps</a><a href="#room-reports-title">Make a report</a></div>
+  <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#action-plane-title">Open Actions</a><a href="#room-reports-title">Make a report</a></div>
   <details><summary>How do we know?</summary><p>Only validated, bounded metadata linked to a non-sample ingestion run appears in Traffic and Findings. Imported JSONL provenance is unverified. Open Evidence for separate saved reports and audit history.</p></details>
 </section>
 """
@@ -119,7 +119,7 @@ TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML)
 def compose_control_room(html: str) -> str:
     start = html.index('  <nav class="section-nav"')
     end = html.index('  <div class="workspace-scroll"', start)
-    tabs = (("live", "Home"), ("traffic", "Traffic"), ("findings", "Findings"), ("interfaces", "Apps"),
+    tabs = (("live", "Home"), ("traffic", "Traffic"), ("findings", "Findings"), ("interfaces", "Actions"),
             ("reports", "Reports"), ("analysis", "Evidence"), ("help", "Help"))
     nav = '<nav class="section-nav" aria-label="Command center workspaces" role="tablist">'
     for key, name in tabs:

@@ -34,6 +34,11 @@ and fails closed with `UNSUPPORTED_COMBINATION` outside it, rather than
 approximating.
 
 The `automation-preview` CLI exposes only that pure preview as bounded JSON.
+The local HUD Actions workspace also exposes three fixed recurrence presets
+through an explicit same-origin `POST /api/automation-preview`. It uses the
+same occurrence engine with an eight-item cap and no scheduling, job storage,
+script execution, or host action. Its reviewed-script cards only copy fixed
+commands for operator review in a terminal; they do not run them.
 It takes an explicit local start time, IANA zone, RRULE, DST policy, and a
 1–366 occurrence limit. Invalid inputs return a fixed refusal without a
 partial preview. It does not create an automation or run a job.
