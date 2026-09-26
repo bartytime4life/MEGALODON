@@ -12,6 +12,8 @@
     <script src="./lifecycle.js" defer></script>
     <link rel="stylesheet" href="./controls.css" />
     <script src="./controls.js" defer></script>
+    <script src="./globe-land.js" defer></script>
+    <script src="./globe.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
@@ -68,6 +70,35 @@
               <button class="control-button" type="button" data-jump="missions">View evidence workflows</button>
             </div>
           </div>
+
+          <section class="globe-surface" aria-labelledby="globe-surface-title">
+            <div class="globe-heading">
+              <div><p class="panel-kicker">LOCAL HUD FEATURE · HOSTED REFERENCE</p><h2 id="globe-surface-title">Activity globe</h2><p>Explore the geographic view used by the local Traffic workspace. This page has no access to your stored traffic or offline IP map.</p></div>
+              <span class="status-pill bounded">No telemetry connected</span>
+            </div>
+            <div class="globe-content">
+              <div class="globe-visual">
+                <canvas id="reference-globe" width="420" height="420" role="img" aria-label="Natural Earth globe with no activity markers because this hosted Site has no traffic connection"></canvas>
+                <div class="globe-turn" role="group" aria-label="Rotate globe">
+                  <button type="button" id="globe-west" aria-label="Rotate globe west">← West</button>
+                  <button type="button" id="globe-east" aria-label="Rotate globe east">East →</button>
+                </div>
+                <small>Natural Earth land · 30° grid · no activity plotted</small>
+              </div>
+              <div class="globe-detail">
+                <strong>Waiting for qualified stored traffic</strong>
+                <p>In the local HUD, the rolling hour view sweeps 60 minutes of bounded stored metadata. Its source regions come from an optional offline IP map and are approximate. No source location is available on this hosted page.</p>
+                <h3>Signal levels</h3>
+                <ul class="globe-levels">
+                  <li><span class="level-swatch quiet" aria-hidden="true"></span><div><strong>Returned records</strong><small>Stored metadata in the bounded view; no signal implied.</small></div><b>Unavailable</b></li>
+                  <li><span class="level-swatch review" aria-hidden="true"></span><div><strong>Review signal</strong><small>Linked finding to inspect in the local HUD.</small></div><b>Unavailable</b></li>
+                  <li><span class="level-swatch high" aria-hidden="true"></span><div><strong>High priority signal</strong><small>A linked finding with higher review priority.</small></div><b>Unavailable</b></li>
+                </ul>
+                <p class="globe-caution">An empty or unmapped globe does not establish zero traffic or a clean network. IP regions do not identify a device, person, or origin.</p>
+                <a class="globe-local-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open the local HUD on this computer ↗</a>
+              </div>
+            </div>
+          </section>
 
           <section class="hud-start local-journey" aria-labelledby="hud-start-title">
             <div class="launch-heading"><p class="eyebrow">User install · Linux</p><h2 id="hud-start-title">Install once. Open like an app.</h2><p>Three steps to a local, read-only workspace. Start from a reviewed checkout. The installer adds MEGALODON for your user only; companion tools and data can come later.</p></div>
