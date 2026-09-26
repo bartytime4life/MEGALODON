@@ -39,6 +39,12 @@ HOME_HTML = """
 <section class="room-home panel" aria-labelledby="room-home-title">
   <p class="eyebrow">Continue exploring</p><h2 id="room-home-title" tabindex="-1">Review your saved evidence</h2>
   <p id="room-home-summary">No qualified data available. Your saved audit data and optional tools are checked separately.</p>
+  <section class="room-globe-entry" aria-labelledby="room-globe-entry-title">
+    <div><p class="eyebrow">Recent activity</p><h3 id="room-globe-entry-title">Activity globe</h3>
+      <p>See recent source IPs and approximate regions from an offline map you choose.</p>
+      <p id="room-globe-entry-status" role="status">Waiting for qualified traffic.</p></div>
+    <a href="#room-traffic-title">Open activity globe <span aria-hidden="true">→</span></a>
+  </section>
   <div class="room-actions"><a href="#setup-title">Data and tools</a><a href="#room-traffic-title">See traffic</a><a href="#room-findings-title">Review findings</a><a href="#integrations-title">Open Apps</a><a href="#room-reports-title">Make a report</a></div>
   <details><summary>How do we know?</summary><p>Only validated, bounded metadata linked to a non-sample ingestion run appears in Traffic and Findings. Imported JSONL provenance is unverified. Open Evidence for separate saved reports and audit history.</p></details>
 </section>
@@ -47,6 +53,7 @@ HOME_HTML = """
 TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>
   <h2 id="room-traffic-title" tabindex="-1">Traffic</h2><p>Saved metadata in the shared time range. No capture starts here.</p>
+  <!-- HUD_ACTIVITY_GLOBE -->
   <div id="room-traffic-grid" class="room-grid"></div>
   <h3>Activity detail</h3><p>Every qualified event in this page, with its recorded source and import status. Times are UTC; imported event order can differ from capture time.</p>
   <div id="room-activity-table" class="room-table" tabindex="0" role="region" aria-label="Scrollable activity detail"></div>

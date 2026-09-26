@@ -706,8 +706,12 @@ failure paths without promoting them to operational acceptance. Native
 power-loss, physical disk-full, concurrent high-write WAL, Windows ACL, and
 operator recovery evidence remain separate gates.
 
-External feed lookups, IP geolocation, and cloud analytics are not enabled. Any
-future integration must document what identifiers leave the host and require
+External feed lookups, automatic IP geolocation, and cloud analytics are not enabled.
+The local HUD can display an optional operator-selected CSV of exact IP-to-region
+coordinates in browser memory. It rounds coordinates to about five degrees,
+uses only validated source-qualified traffic, and makes no origin or attribution
+claim. The file is not uploaded, persisted, or used to change stored records.
+Any future network integration must document what identifiers leave the host and require
 an explicit configuration switch. Bundled IANA registration context and the
 synthetic corpus are offline package data, not telemetry uploads or a runtime
 threat-feed/update mechanism.
