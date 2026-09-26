@@ -463,7 +463,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "heartbeatFetch('/api/install', {method: 'POST'" in DASHBOARD_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
-    assert 'type="file"' not in INDEX_HTML
+    assert INDEX_HTML.count('type="file"') == 1
+    assert 'id="activity-globe-file" type="file"' in INDEX_HTML
     assert "/api/run" not in INDEX_HTML + DASHBOARD_JS
     ids = re.findall(r'\bid="([^"]+)"', INDEX_HTML)
     referenced_ids = re.findall(r"byId\('([^']+)'\)", DASHBOARD_JS)

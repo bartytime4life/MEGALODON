@@ -6,6 +6,7 @@ constants to preserve the existing public/test interface.
 """
 
 from .dashboard_integrations import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
+from .dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
@@ -943,7 +944,9 @@ function validatedEvents(value) {
 function validatedTraffic(value) {
   const source = validateTraffic(value);
   const events = source.events.map(event => Object.freeze({
+    id: event.id,
     observed_at: event.observed_at,
+    src_ip: event.src_ip,
     protocol: event.protocol,
     byte_count: event.byte_count
   }));
@@ -1477,6 +1480,7 @@ function renderTraffic(traffic) {
     ? `Showing the newest ${formatNumber(traffic.sampled_events)} stored metadata records in chronological bins.`
     : 'The audit store is connected, but no event metadata is recorded yet.';
   updateTrafficFreshness();
+  renderGlobe(traffic);
   byId('traffic-panel').setAttribute('aria-busy', 'false');
 }
 function updateTrafficFreshness() {
@@ -1494,6 +1498,7 @@ function updateTrafficFreshness() {
   }
 }
 function renderTrafficUnavailable(preserve = false) {
+  renderGlobeUnavailable(preserve);
   byId('traffic-panel').setAttribute('aria-busy', 'false');
   byId('traffic-status').textContent = preserve
     ? 'Traffic refresh failed. The prior bounded traffic snapshot remains visible.'
@@ -2201,6 +2206,7 @@ function applyConfig(payload) {
   renderScope();
 }
 async function bootstrap() {
+  initializeGlobe();
   renderRoom();
   renderSoftwareShelf();
   pollHeartbeat();
@@ -2285,9 +2291,10 @@ from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
+INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + APP_VIEWER_JS + AI_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + "\nbootstrap();\n"
