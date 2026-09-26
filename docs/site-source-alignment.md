@@ -1,5 +1,20 @@
 # Defense Console source alignment
 
+## Current publication — Console v38, completed ClamAV summary
+
+The local and hosted pages share a new Completed file scan panel and versioned
+counts-only importer. The UI accepts only a manually selected aggregate JSON;
+the read-only exporter accepts an operator-owned completed `clamscan` report and
+its recorded exit status. See [clamav-summary-v1.md](clamav-summary-v1.md).
+The existing owner-only Site was published from source
+`dfa4c312b5850e0b24866ef752542d39a05071d1` as version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_8758571179d48191bc82bcbe78d68be7`.
+Deployment `appgdep_6ab85a5ea3a88191aa9ff992cbb614c5` succeeded at
+2026-09-26T23:50:59Z. The checkout matched all repository `site/` files before
+publication. Rollback reference: v37 / `607d5cc810490fdb71fbda1f938d288d87dbacef`.
+Full Python suite, 94 hosted JavaScript tests, repository hygiene and build
+inventory passed locally. The hosted Site does not receive a live scanner feed.
+
 ## Current publication — Console v37, saved network inventory
 
 The existing owner-private Site was published successfully from source

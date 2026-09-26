@@ -30,3 +30,11 @@ text = index.read_text()
 start, end = '<!-- INVENTORY_START -->', '<!-- INVENTORY_END -->'
 a, b = text.index(start) + len(start), text.index(end)
 index.write_text(text[:a] + '\n' + inventory['INVENTORY_HTML'] + '\n' + text[b:])
+
+clamav = runpy.run_path(str(root / "megalodon/dashboard_clamav.py"))
+for key, filename in {"CLAMAV_JS": "clamav.js", "CLAMAV_CSS": "clamav.css"}.items():
+    (root / "site/dist" / filename).write_text(clamav[key])
+text = index.read_text()
+start, end = '<!-- CLAMAV_START -->', '<!-- CLAMAV_END -->'
+a, b = text.index(start) + len(start), text.index(end)
+index.write_text(text[:a] + '\n' + clamav['CLAMAV_HTML'] + '\n' + text[b:])

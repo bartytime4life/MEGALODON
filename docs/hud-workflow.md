@@ -107,7 +107,16 @@ aggregate importer, not a live connection. Presence/process checks and manual
 console links do not establish these data connections.
 nftables exposes inert response-plan evidence, never live firewall telemetry.
 
+## Completed file scan
+
+For a separately operated completed ClamAV scan, see
+[Completed scan summary](clamav-summary-v1.md). Export aggregate counts with
+`python -m megalodon.clamav_summary --exit-code 0 < completed-clamscan.txt > scan-summary.json`
+(substitute the recorded exit status 1 when applicable), then load that JSON
+in the Completed file scan panel. It is a saved report, not a live feed.
+
 ## Completed network inventory
+
 
 The local HUD and hosted overview share a Network inventory panel. Use
 `python -m megalodon.nmap_inventory < completed-report.xml > inventory-summary.json`
