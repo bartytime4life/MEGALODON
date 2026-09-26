@@ -8,16 +8,17 @@ as a tool argument. Its text is advice, not evidence or authorization.
 
 This is separate from the original fingerprint-pinned run-count Qwen advisory
 and offline anomaly advisory. Those policies and their callers are unchanged.
-Issue [#261](https://github.com/bartytime4life/MEGALODON/issues/261) still
-requires exact provider containment, model provenance, adversarial corpus and
-independent review before operational acceptance. The Ollama manifest digest
+The acceptance requirements recorded in
+[#261](https://github.com/bartytime4life/MEGALODON/issues/261) cover exact provider
+containment, model provenance, adversarial corpus and independent review.
+An issue closure or passing doctor output does not supply that evidence. The Ollama manifest digest
 below pins the locally observed tag, not publisher authenticity or the bytes
 actually loaded into memory.
 
 ## Explicit configuration
 
 `[ai]` in `config/settings.toml` defaults to `enabled = false`, provider
-`ollama`, fixed endpoint `http://127.0.0.1:11434`, installed tag
+`ollama`, fixed endpoint `http://127.0.0.1:11434`, configured candidate tag
 `qwen2.5:7b-instruct-fp16`, and observed manifest digest
 `59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c`.
 The request timeout is at most 15 seconds, context at most 4096 tokens, and
@@ -107,34 +108,76 @@ can apply firewall changes or choose an arbitrary executable, file or URL.
 
 ## Operator setup and checks
 
-1. Run `.venv312/bin/python -m megalodon ai doctor --config config/settings.toml`.
-   It does not change systemd, the firewall or packages. It creates only an
-   application-owned doctor receipt when the private ledger is writable.
-2. Correct any non-loopback Ollama bind in the existing systemd override under
-   operator/root authority, preserving `OLLAMA_MODELS`. On the inspected host,
-   the following explicit operator command narrows both inbound and outbound
-   network access without moving model storage:
+### 1. Keep AI disabled during initial diagnostics
 
-   ```bash
-   cat <<'EOF' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null
-   [Service]
-   Environment="OLLAMA_HOST=127.0.0.1:11434"
-   Environment="OLLAMA_MODELS=/var/snap/ollama/common/models"
-   IPAddressDeny=any
-   IPAddressAllow=127.0.0.0/8 ::1/128
-   EOF
-   sudo systemctl daemon-reload
-   sudo systemctl restart ollama
-   ```
+Run from the repository root using its already prepared Python environment;
+`python` below must resolve to that environment's interpreter. Inspect the
+operator-selected TOML first and keep `[ai] enabled = false` for this step.
+Do not overwrite an existing configuration merely to copy an example.
 
-   Confirm effective `systemctl show ollama -p IPAddressDeny -p IPAddressAllow
-   -p Environment` and `ss -lntp '( sport = :11434 )'` before enabling AI.
-   The provider process still needs separate filesystem/resource review.
-3. Review the exact local model manifest and provenance; then set `[ai]
-   enabled = true` in the operator-selected TOML file.
-4. Run `.venv312/bin/python -m megalodon hud --config config/settings.toml`.
-   Copy the ephemeral AI token from that terminal into the Local AI control in
-   Investigate. Click **Check Ollama and Qwen**, then choose a fixed question.
+```bash
+python -m megalodon ai doctor --config config/settings.toml
+```
+
+The doctor honors the configured enablement flag; it never temporarily enables
+AI. With AI disabled, neither its status probe nor model inventory contacts
+Ollama. `model_status.state` is `disabled`, `inference_verified` is `false`, and
+`model_inventory.error_code` is `DISABLED`. False model-installed/health checks
+in that result mean **not verified while disabled**, not proof that the model
+is absent or broken. The command exits nonzero rather than claiming readiness.
+
+This is still **not a no-effect inventory command**: it observes local listener
+and executable/device presence, attempts the fixed `nvidia-smi` and read-only
+`systemctl show` diagnostics, and writes an application-owned doctor receipt
+when the separate private ledger is writable. It does not install software,
+edit configuration, change the firewall, or start/restart a service.
+
+| Configuration | Provider activity from `ai doctor` |
+| --- | --- |
+| `enabled = false` (default) | No tag lookup or generation request. Local diagnostics and the separate doctor receipt remain. |
+| `enabled = true` | An active readiness challenge through the existing listener/manifest admission, plus a tag inventory lookup. It can invoke the already operated provider; it is not a passive check. |
+
+### 2. Review host and model evidence before enabling inference
+
+Keep any host changes separate from MEGALODON diagnostics. Identify the actual
+installation method, serving identity, effective unit/drop-ins and model-store
+location. Preserve the existing service configuration and storage path; a path
+from an earlier host observation is not a default for another installation.
+Do not replace `override.conf` or the vendor unit wholesale. Prepare a scoped,
+reviewed change and recovery plan under separate operator authority before
+editing or restarting anything.
+
+The [provider hardening guidance](qwen-provider-hardening.md) describes candidate
+controls and their limitations; its examples are not an applied or accepted
+configuration. A loopback listener and the doctor's
+`ollama_egress_restricted` configuration hint do not prove outbound denial,
+process ownership, wrapper-only access, or artifact authenticity. Missing or
+inconclusive evidence remains a HOLD, not permission to relax a check.
+
+Record the exact owner-selected model/runner/artifact binding and provenance,
+provider containment, bounded lifecycle/resource behavior, signed adversarial
+evaluation and independent security disposition before operational acceptance.
+These decisions are separate from CI, an issue's open/closed label, a manifest
+match, or a `model_ready` response. Do not publish private paths, environment
+values, tokens, provider responses or local evidence in public fixtures.
+
+### 3. Perform an explicitly authorized active check
+
+Only after the relevant operator decisions, set `[ai] enabled = true` in the
+reviewed TOML. Running the doctor again now authorizes an active readiness
+probe, not just local diagnostics. There is no separate no-probe switch in this
+command. A successful challenge validates the response, not provider acceptance.
+
+To use the HUD after the same authorization, run:
+
+```bash
+python -m megalodon hud --config config/settings.toml
+```
+
+Copy the ephemeral AI token from that terminal into the Local AI control in
+Investigate. **Check Ollama and Qwen** is an active inference check. Fixed
+questions can also invoke Qwen; neither operation grants host or firewall
+application authority.
 
 For a CLI tool request, pass one closed JSON object to `megalodon ai tool
 --request '...'`. The CLI is operator-invoked; it is not a shell tool exposed to

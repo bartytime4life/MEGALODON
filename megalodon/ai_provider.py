@@ -138,8 +138,10 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
 
 
 def inventory(settings: AISettings) -> dict[str, object]:
-    """Read the fixed local tag list; never starts inference or admits use."""
+    """Read the fixed local tag list only when AI is enabled; never infer."""
     try:
+        if not settings.enabled:
+            raise AIProviderError("DISABLED")
         tags = _json(_request("/api/tags", "GET", None, settings.timeout_seconds))
         if type(tags) is not dict or type(tags.get("models")) is not list or len(tags["models"]) > 256:
             raise AIProviderError("INVALID_RESPONSE")

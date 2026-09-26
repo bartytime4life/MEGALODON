@@ -881,7 +881,6 @@ def _dashboard_reader(path: Path, *, allow_missing: bool = False):
 
 
 def _ai(args: argparse.Namespace) -> int:
-    from dataclasses import replace
     from uuid import uuid4
     from .ai_broker import Broker, BrokerError, ReceiptStore
     from .ai_interface import ask
@@ -896,7 +895,7 @@ def _ai(args: argparse.Namespace) -> int:
         if args.operation == "doctor":
             posture = qwen_provider_posture()
             bound_uids = [binding["uid"] for binding in posture["bindings"]]
-            model_status = status(replace(settings.ai, enabled=True), probe=True)
+            model_status = status(settings.ai, probe=True)
             model_inventory = inventory(settings.ai)
             try:
                 gpu = subprocess.run(["/usr/bin/nvidia-smi", "--query-gpu=name,driver_version,compute_cap",
@@ -943,7 +942,7 @@ def _ai(args: argparse.Namespace) -> int:
                 pass
             print(json.dumps({"schema": "megalodon-ai-doctor-v1", "checks": checks,
                               "model_status": model_status, "model_inventory": model_inventory,
-                              "operator_action": "Apply the loopback and egress-restricted override in docs/ai-control-plane.md, then restart Ollama" if (posture["loopback_only"] is not True or not egress_restricted) else None},
+                              "operator_action": "Review the operator setup gates in docs/ai-control-plane.md; no host change was applied" if (posture["loopback_only"] is not True or not egress_restricted) else None},
                              sort_keys=True))
             return 0 if all(checks.values()) else 1
         with ReceiptStore(receipt_path) as receipts, _dashboard_reader(settings.db_path, allow_missing=True) as reader:
