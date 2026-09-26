@@ -88,14 +88,23 @@
               <div class="globe-detail">
                 <strong>Waiting for qualified stored traffic</strong>
                 <p>In the local HUD, the rolling hour view sweeps 60 minutes of bounded stored metadata. Its source regions come from an optional offline IP map and are approximate. No source location is available on this hosted page.</p>
-                <h3>Signal levels</h3>
-                <ul class="globe-levels">
-                  <li><span class="level-swatch quiet" aria-hidden="true"></span><div><strong>Returned records</strong><small>Stored metadata in the bounded view; no signal implied.</small></div><b>Unavailable</b></li>
-                  <li><span class="level-swatch review" aria-hidden="true"></span><div><strong>Review signal</strong><small>Linked finding to inspect in the local HUD.</small></div><b>Unavailable</b></li>
-                  <li><span class="level-swatch high" aria-hidden="true"></span><div><strong>High priority signal</strong><small>A linked finding with higher review priority.</small></div><b>Unavailable</b></li>
-                </ul>
-                <p class="globe-caution">An empty or unmapped globe does not establish zero traffic or a clean network. IP regions do not identify a device, person, or origin.</p>
-                <a class="globe-local-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open the local HUD on this computer ↗</a>
+                <h3>Traffic levels · records per minute</h3>
+                <p class="volume-connection">Not connected · no successful telemetry refresh</p>
+                <div class="hosted-volume-lane normal">
+                  <div><strong>Normal lane · no linked finding</strong><b>— records / min</b></div>
+                  <div class="hosted-volume-track" role="img" aria-label="Normal traffic volume unavailable; no local telemetry connection"><span>Awaiting traffic connection</span></div>
+                  <div class="hosted-volume-axis"><span>Low volume</span><span>High volume</span></div>
+                </div>
+                <div class="hosted-volume-lane danger">
+                  <div><strong>Danger / critical lane</strong><b>— records / min</b></div>
+                  <small>Records linked to HIGH or CRITICAL findings</small>
+                  <div class="hosted-volume-track" role="img" aria-label="Dangerous traffic volume unavailable; no local telemetry connection"><span>Awaiting traffic connection</span></div>
+                  <div class="hosted-volume-axis"><span>Low volume</span><span>High volume</span></div>
+                </div>
+                <p class="volume-connection">LOW / MEDIUM review signals: unavailable.</p>
+                <p>Live values require the local Traffic workspace and qualified stored data. This hosted page cannot reach that data. Counts measure metadata records, not bandwidth or packet rates.</p>
+                <p class="globe-caution">No linked finding does not establish safe traffic. A HIGH or CRITICAL finding requires review; it is not confirmation of malicious activity.</p>
+                <a class="globe-local-link" href="http://127.0.0.1:8787/#room-traffic-title" target="_blank" rel="noopener noreferrer">Open local Traffic on this computer ↗</a>
               </div>
             </div>
           </section>
