@@ -213,6 +213,9 @@
       "capture": [
         "scapy>=2.5,<3"
       ],
+      "geo": [
+        "maxminddb>=2,<4"
+      ],
       "test": [
         "pytest>=8,<10",
         "jsonschema>=4.23,<5"
