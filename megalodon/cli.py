@@ -249,6 +249,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="existing private Suricata store; bounded read-only startup snapshot",
     )
     dashboard.add_argument(
+        "--geoip-db",
+        type=Path,
+        help="optional owner-private offline MMDB region database; no IPs leave this PC",
+    )
+    dashboard.add_argument(
         "--open-browser",
         action="store_true",
         help="open the loopback HUD in the default browser after the server binds",
@@ -843,6 +848,7 @@ def _run(args: argparse.Namespace) -> int:
 def _dashboard(args: argparse.Namespace) -> int:
     from .dashboard import loopback_host, serve, UnconfiguredDashboardReader, validate_tool_management_mode
     from .offline_projection import load_offline_projection
+    from .offline_locations import OfflineLocations
     from .config import AISettings, BlockingSettings
 
     try:
@@ -858,26 +864,32 @@ def _dashboard(args: argparse.Namespace) -> int:
         validate_tool_management_mode(enable_tool_management, inspect_tools=first_launch)
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with _dashboard_reader(settings.db_path, allow_missing=first_launch) as store:
-            serve(
-                store,
-                host,
-                port,
-                enabled=enabled,
-                allow_remote=args.allow_remote,
-                offline_summary=offline_summary,
-                suricata_db=getattr(args, "suricata_db", None),
-                inspect_tools=first_launch,
-                enable_tool_management=enable_tool_management,
-                source_available=not isinstance(store, UnconfiguredDashboardReader),
-                refresh_seconds=(
-                    args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
-                ),
-                event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
-                open_browser=getattr(args, "open_browser", False),
-                ai_settings=getattr(settings, "ai", AISettings()),
-                ai_receipt_path=_ai_receipt_path(settings.db_path),
-                ai_blocking=getattr(settings, "blocking", BlockingSettings()),
-            )
+            locations = OfflineLocations.open(args.geoip_db) if getattr(args, "geoip_db", None) else None
+            try:
+                serve(
+                    store,
+                    host,
+                    port,
+                    enabled=enabled,
+                    allow_remote=args.allow_remote,
+                    offline_summary=offline_summary,
+                    suricata_db=getattr(args, "suricata_db", None),
+                    inspect_tools=first_launch,
+                    enable_tool_management=enable_tool_management,
+                    source_available=not isinstance(store, UnconfiguredDashboardReader),
+                    refresh_seconds=(
+                        args.refresh_seconds if args.refresh_seconds is not None else settings.dashboard.refresh_seconds
+                    ),
+                    event_limit=args.event_limit if args.event_limit is not None else settings.dashboard.event_limit,
+                    open_browser=getattr(args, "open_browser", False),
+                    ai_settings=getattr(settings, "ai", AISettings()),
+                    ai_receipt_path=_ai_receipt_path(settings.db_path),
+                    ai_blocking=getattr(settings, "blocking", BlockingSettings()),
+                    offline_locations=locations,
+                )
+            finally:
+                if locations is not None:
+                    locations.close()
     except KeyboardInterrupt:
         print("\nMEGALODON dashboard stopped.")
     except OSError as exc:

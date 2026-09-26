@@ -1480,7 +1480,6 @@ function renderTraffic(traffic) {
     ? `Showing the newest ${formatNumber(traffic.sampled_events)} stored metadata records in chronological bins.`
     : 'The audit store is connected, but no event metadata is recorded yet.';
   updateTrafficFreshness();
-  renderGlobe(traffic);
   byId('traffic-panel').setAttribute('aria-busy', 'false');
 }
 function updateTrafficFreshness() {
@@ -1498,7 +1497,6 @@ function updateTrafficFreshness() {
   }
 }
 function renderTrafficUnavailable(preserve = false) {
-  renderGlobeUnavailable(preserve);
   byId('traffic-panel').setAttribute('aria-busy', 'false');
   byId('traffic-status').textContent = preserve
     ? 'Traffic refresh failed. The prior bounded traffic snapshot remains visible.'
@@ -2193,8 +2191,9 @@ function togglePause() {
     setSnapshotStatus('checking');
   }
   if (state.paused) scheduleNext();
-  else { refresh(false); scheduleNext(); }
+  else { refresh(false); refreshGlobeHour(); scheduleNext(); }
   renderRoomControls();
+  renderGlobeHour();
 }
 function applyConfig(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)
@@ -2223,7 +2222,7 @@ async function bootstrap() {
   loadIngestionRuns();
   loadReferenceStatus();
   await loadSetup();
-  await refresh(false); scheduleNext();
+  await refresh(false); scheduleNext(); startGlobeHour();
 }
 
 function applyBaseFilters() { state.activeBin = null; state.timelineNotice = ''; applyFilters(); }
@@ -2232,7 +2231,7 @@ byId('filter-severity').addEventListener('change', applyBaseFilters);
 byId('filter-rule').addEventListener('change', applyBaseFilters);
 byId('clear-filters').addEventListener('click', clearFilters);
 byId('clear-time-filter').addEventListener('click', () => { state.activeBin = null; state.timelineNotice = ''; applyFilters(); });
-byId('refresh-button').addEventListener('click', () => refresh(true));
+byId('refresh-button').addEventListener('click', () => {refresh(true); refreshGlobeHour(true);});
 byId('pause-button').addEventListener('click', togglePause);
 byId('ingestion-runs-retry').addEventListener('click', loadIngestionRuns);
 byId('ingestion-source').addEventListener('change', loadIngestionRuns);

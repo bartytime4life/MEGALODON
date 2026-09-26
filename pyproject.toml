@@ -15,6 +15,7 @@ dependencies = []
 [project.optional-dependencies]
 capture = ["scapy>=2.5,<3"]
 test = ["pytest>=8,<10", "jsonschema>=4.23,<5"]
+geo = ["maxminddb>=2,<4"]
 
 [project.scripts]
 megalodon = "megalodon.cli:main"
