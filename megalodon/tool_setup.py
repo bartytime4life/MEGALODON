@@ -9,7 +9,7 @@ from .readiness import readiness_report
 
 # Role, scope and credentials remain operator choices; never guess or enable capture.
 CONFIGURATION = {
-    'core': ('Run ./scripts/install-local.sh from a reviewed checkout, then open the MEGALODON application.', 'Open HUD → Data and tools; select your private database and check availability.'),
+    'core': ('Run ./scripts/install-local.sh from a reviewed checkout, then open the MEGALODON application.', 'Before startup: python -m megalodon.config_check < config/settings.toml (substitute your actual settings file). Exit 0 validates configuration only; then check your private database and availability in the HUD.'),
     'tshark': ('For offline review: tshark -r /absolute/path/to/capture.pcap -c 100', 'Live capture needs an explicitly selected interface and separately approved permissions. No permissions are granted by this script.'),
     'zeek': ('Use the pinned private-prefix build guide in docs/companion-setup.md.', 'Run zeek -r /absolute/path/to/capture.pcap inside a new private output directory; it creates logs there.'),
     'suricata': ('Review /etc/suricata/suricata.yaml: set HOME_NET to your authorized network and choose rules and output paths.', 'Validate before enabling: suricata -T -c /etc/suricata/suricata.yaml (may require read permissions).'),
