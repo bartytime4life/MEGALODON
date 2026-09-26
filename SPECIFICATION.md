@@ -526,6 +526,11 @@ The dashboard exposes only:
   Disabled/missing-header requests return 403; overlapping checks return 429
   with `Retry-After: 5`; failed collection returns a fixed 503. The client checks
   only on a click, never as telemetry polling or automatic startup work;
+- `POST /api/automation-preview` — HUD-only, explicit same-origin preview of one
+  fixed daily, weekdays, or weekly recurrence from a validated local start and
+  IANA time zone. It accepts a single bounded JSON body and custom preview
+  header, serializes computation, and returns at most eight local/UTC times.
+  It does not create, persist, activate, or execute an automation;
 - `GET /api/heartbeat` — HUD-only, cached bounded presence observations;
   requires exactly one `X-Megalodon-Check: 1` header and no query;
 - `GET /api/install` — HUD-only recipe catalog and in-memory job status with

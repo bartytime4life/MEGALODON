@@ -25,6 +25,7 @@ import webbrowser
 import secrets
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
+from .dashboard_action_plane import ACTION_PRESETS
 from .dashboard_commands import local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
@@ -424,6 +425,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     ai_receipt_path: Path | None = None
     ai_operator_token: str | None = None
     ai_blocking: BlockingSettings = BlockingSettings()
+    automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -768,7 +770,52 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/install":
             self._install()
             return
+        if self.path == "/api/automation-preview":
+            self._automation_preview()
+            return
         self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
+
+    def _automation_preview(self) -> None:
+        """Calculate a fixed recurrence; never create or run a job."""
+        expected_origin = f"http://{self.headers.get('Host')}"
+        if (self.local_checks is None
+                or self.headers.get_all("X-Megalodon-Preview", []) != ["1"]
+                or self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "explicit local preview required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 3 or not lengths[0].isascii()
+                or not lengths[0].isdigit() or not 1 <= int(lengths[0]) <= 512):
+            self._send_json({"error": "invalid preview request length"}, status=400)
+            return
+        if not self.automation_preview_lock.acquire(blocking=False):
+            self._send_json({"error": "preview already in progress"}, status=429)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            from .automation_schedule import AutomationScheduleError, next_occurrences
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
+            if (type(body) is not dict
+                    or set(body) != {"dtstart", "schedule_timezone", "preset"}
+                    or type(body["dtstart"]) is not str or len(body["dtstart"]) > 32
+                    or type(body["schedule_timezone"]) is not str or len(body["schedule_timezone"]) > 128
+                    or type(body["preset"]) is not str or body["preset"] not in ACTION_PRESETS):
+                raise ValueError("invalid preview fields")
+            occurrences = next_occurrences(
+                dtstart=body["dtstart"], schedule_timezone=body["schedule_timezone"],
+                rrule=ACTION_PRESETS[body["preset"]], limit=8,
+            )
+            self._send_json({"schema_version": "megalodon-automation-preview-v1",
+                             "status": "preview_only", "occurrences": [dict(item) for item in occurrences]})
+        except (AutomationScheduleError, ValueError, OSError, OverflowError) as exc:
+            self._send_json({"error_code": getattr(exc, "code", "PREVIEW_UNAVAILABLE")}, status=400)
+        finally:
+            self.automation_preview_lock.release()
 
     def _ai_ask(self) -> None:
         token_values = self.headers.get_all("X-Megalodon-AI-Token", [])

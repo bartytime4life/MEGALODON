@@ -1,13 +1,15 @@
 """Presentation for the static integration map; no tool or telemetry access."""
 
 from .status_glossary import GLOSSARY_ANCHOR_ID
+from .dashboard_action_plane import ACTION_HTML
 
 INTEGRATIONS_HTML = """
   <section class="panel integrations-panel" aria-labelledby="integrations-title">
     <div class="panel-head">
-      <div><h2 id="integrations-title" tabindex="-1">Apps &amp; integrations</h2><p>Start supported installed services here, or use View in HUD to open an app's web console below. Service starts require <a href="#tool-management-controls">authorization for this local HUD launch</a>.</p></div>
+      <div><h2 id="integrations-title" tabindex="-1">Actions &amp; apps</h2><p>Run a bounded local check, preview a routine, or review supported companion apps. Service starts require <a href="#tool-management-controls">authorization for this local HUD launch</a>.</p></div>
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
+    __ACTION_PLANE__
     <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
     <p class="reference-status" id="integrations-freshness">Presence: not checked yet.</p>
     <div class="app-state-legend" aria-label="App status legend">
@@ -54,6 +56,7 @@ INTEGRATIONS_HTML = """
 if "__GLOSSARY_ANCHOR__" not in INTEGRATIONS_HTML:
     raise AssertionError("glossary anchor placeholder missing from INTEGRATIONS_HTML")
 INTEGRATIONS_HTML = INTEGRATIONS_HTML.replace("__GLOSSARY_ANCHOR__", GLOSSARY_ANCHOR_ID)
+INTEGRATIONS_HTML = INTEGRATIONS_HTML.replace("__ACTION_PLANE__", ACTION_HTML)
 
 INTEGRATIONS_CSS = """
 h1[id], h2[id] { scroll-margin-top: 18px; }
