@@ -187,12 +187,12 @@ process.stdin.on('end', () => {
       {event_id:'2', severity:'LOW'}]}};
   context.start = start; context.end = end;
   let model = evaluate('globeHourModel(page,start,end,null,true)');
-  assert.equal(model.index, 40);
+  assert.equal(model.index, 59); // Live is the current minute, not the last populated one.
   assert.equal(model.peak, 2);
   assert.equal(model.bins.length, 60);
   assert.equal(model.bins[10].signal, 'high');
   assert.equal(model.bins[40].signal, 'quiet');
-  assert.equal(model.traffic.events[0].id, '3');
+  assert.equal(model.traffic.events.length, 0); // The 20-minute-old record is not live activity.
   assert.equal(model.traffic.signalByEvent.get('2'), 'high');
   model = evaluate('globeHourModel(page,start,end,start+10*60000,false)');
   assert.equal(model.index, 10);
@@ -242,11 +242,11 @@ process.stdin.on('end', () => {
   evaluate('renderGlobeView = () => {}');
   evaluate('globeState.hour.page=page; globeState.hour.start=start; globeState.hour.end=end; globeState.hour.fetchedAt=end; globeState.hour.live=true;');
   evaluate('renderGlobeHour()');
-  assert.match(nodes.get('activity-globe-selected-time').textContent, /Live · latest stored · 00:40 UTC/);
-  assert.equal(nodes.get('activity-globe-selected-count').textContent, '1');
+  assert.match(nodes.get('activity-globe-selected-time').textContent, /Live · current minute · 00:59 UTC/);
+  assert.equal(nodes.get('activity-globe-selected-count').textContent, '0');
   assert.equal(nodes.get('activity-globe-peak-count').textContent, '2');
   assert.match(nodes.get('activity-globe-histogram').children[10].className, /high/);
-  assert.match(nodes.get('activity-globe-histogram').children[40].className, /selected/);
+  assert.match(nodes.get('activity-globe-histogram').children[59].className, /selected/);
   assert.match(nodes.get('activity-globe-histogram').attrs['aria-label'], /empty bins do not prove no traffic/i);
   evaluate('globeState.hour.live=false; globeState.hour.selectedAt=start+10*60000; globeState.hour.partial=true; state.paused=true; renderGlobeHour()');
   assert.match(nodes.get('activity-globe-selected-time').textContent, /Selected · 00:10 UTC/);

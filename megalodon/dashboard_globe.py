@@ -26,6 +26,24 @@ GLOBE_HTML = """
       <p class="activity-globe-note">Markers reflect offline database or CSV locations, rounded to about 5°. IP location may be wrong; this does not establish a device, person, or origin.</p>
     </div>
   </div>
+  <section class="traffic-volumes" id="traffic-volumes" aria-labelledby="traffic-volume-title">
+    <h4 id="traffic-volume-title">Traffic levels · records per minute</h4>
+    <p id="traffic-volume-status" role="status">Waiting for qualified stored traffic.</p>
+    <div class="traffic-volume-lane normal">
+      <div><label for="traffic-normal-meter">Normal lane · no linked finding</label><strong id="traffic-normal-count">—</strong></div>
+      <meter id="traffic-normal-meter" min="0" max="1" value="0" hidden aria-describedby="traffic-volume-scale traffic-volume-status"></meter>
+      <div class="traffic-volume-axis"><span>Low volume</span><span id="traffic-normal-level">Unavailable</span><span>High volume</span></div>
+    </div>
+    <div class="traffic-volume-lane danger">
+      <div><label for="traffic-danger-meter">Danger / critical lane · HIGH or CRITICAL findings</label><strong id="traffic-danger-count">—</strong></div>
+      <meter id="traffic-danger-meter" min="0" max="1" value="0" hidden aria-describedby="traffic-volume-scale traffic-volume-status"></meter>
+      <div class="traffic-volume-axis"><span>Low volume</span><span id="traffic-danger-level">Unavailable</span><span>High volume</span></div>
+    </div>
+    <p id="traffic-review-count">LOW / MEDIUM review signals: unavailable.</p>
+    <p id="traffic-volume-scale">Both bars share the same scale. Counts describe returned metadata records, not bandwidth or packet rates.</p>
+    <p id="traffic-volume-freshness">No successful refresh.</p>
+    <p class="traffic-volume-note">The normal lane means no finding was returned for those records; safety is unknown. A dangerous signal is a detector finding requiring review, not confirmed malicious traffic.</p>
+  </section>
   <section class="activity-globe-timeline" aria-labelledby="activity-globe-timeline-title">
     <div class="activity-globe-timeline-head"><div><p class="eyebrow">Time sweep</p><h4 id="activity-globe-timeline-title">Past 60 minutes</h4></div>
       <output id="activity-globe-selected-time" for="activity-globe-minute">Waiting for the hour view</output></div>
@@ -34,7 +52,7 @@ GLOBE_HTML = """
       <label for="activity-globe-minute">Review a minute</label>
       <input id="activity-globe-minute" type="range" min="0" max="59" step="1" value="59" aria-describedby="activity-globe-selected-time activity-globe-coverage">
       <div class="activity-globe-axis"><span>60 min ago</span><span>Now · UTC</span></div>
-      <button type="button" id="activity-globe-live" aria-pressed="true">Live · latest stored</button></div>
+      <button type="button" id="activity-globe-live" aria-pressed="true">Live · current minute</button></div>
     <div class="activity-globe-timeline-bottom"><dl class="activity-globe-counts">
       <div><dt>Selected minute</dt><dd id="activity-globe-selected-count">—</dd></div>
       <div><dt>Peak minute</dt><dd id="activity-globe-peak-count">—</dd></div>
@@ -100,6 +118,24 @@ GLOBE_CSS = r"""
 .activity-globe-source-status { margin: 12px 0 0; color: #91d9d1; font-size: .79rem; line-height: 1.45; }
 .activity-globe-source-limit { margin: 5px 0 0; color: #aec8d0; font-size: .73rem; line-height: 1.4; }
 .activity-globe-note { margin: 10px 0 0; color: #b8ced6; font-size: .82rem; line-height: 1.5; }
+.traffic-volumes { padding: 18px; border-top: 1px solid #345967; background: #091f2b; }
+.traffic-volumes h4 { margin: 0 0 8px; font-size: 1.1rem; }
+.traffic-volumes p { font-size: .875rem; color: #bdd5dd; line-height: 1.5; }
+.traffic-volume-lane { margin: 16px 0; padding: 12px; border: 1px solid #315360; border-radius: 8px; background: #0b2632; }
+.traffic-volume-lane > div { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.traffic-volume-lane label { font-size: .95rem; font-weight: 700; }
+.traffic-volume-lane strong { font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.traffic-volume-lane meter { display: block; width: 100%; height: 26px; margin: 7px 0; appearance: none; background: #061923; border: 1px solid #517581; border-radius: 5px; overflow: hidden; }
+.traffic-volume-lane meter[hidden] { display: none; }
+.traffic-volume-lane meter::-webkit-meter-bar { background: #061923; border: none; }
+.traffic-volume-lane meter::-webkit-meter-optimum-value { background: #5dbdc7; }
+.traffic-volume-lane meter::-moz-meter-bar { background: #5dbdc7; }
+.traffic-volume-lane.danger meter::-webkit-meter-optimum-value { background: #f08c84; }
+.traffic-volume-lane.danger meter::-moz-meter-bar { background: #f08c84; }
+.traffic-volume-axis { color: #bfd5dc; font-size: .875rem; }
+.traffic-volume-axis span:nth-child(2) { font-weight: 700; color: #effafa; }
+.traffic-volumes .traffic-volume-note { color: #e1c898; }
+.traffic-volumes.stale meter { opacity: .45; }
 .activity-globe-timeline { padding: 15px 18px 17px; border-top: 1px solid #345967; background: linear-gradient(180deg,rgba(8,33,45,.66),rgba(5,23,33,.7)); }
 .activity-globe-timeline-head { display: flex; align-items: end; justify-content: space-between; gap: 15px; }
 .activity-globe-timeline-head .eyebrow { margin: 0 0 3px; }
@@ -522,7 +558,7 @@ function globePublicIp(value) {
   return address;
 }
 function globeHourModel(page, start, end, selectedAt, live) {
-  const bins = Array.from({length: 60}, () => ({count: 0, signal: 'quiet'}));
+  const bins = Array.from({length: 60}, () => ({count: 0, signal: 'quiet', normal: 0, danger: 0, review: 0}));
   const events = page?.traffic.events || [], findings = page?.traffic.findings || [];
   const signalByEvent = new Map();
   findings.forEach(finding => {
@@ -535,10 +571,11 @@ function globeHourModel(page, start, end, selectedAt, live) {
     const index = Math.max(0, Math.min(59, Math.floor((at - start) / 60000)));
     bins[index].count += 1;
     const signal = signalByEvent.get(event.id);
+    bins[index][signal === 'high' ? 'danger' : signal === 'review' ? 'review' : 'normal'] += 1;
     if (signal === 'high' || (signal === 'review' && bins[index].signal === 'quiet')) bins[index].signal = signal;
     if (latest === null || at > latest) latest = at;
   });
-  const at = live ? latest === null ? end : latest : Math.max(start, Math.min(end, selectedAt ?? end));
+  const at = live ? end : Math.max(start, Math.min(end, selectedAt ?? end));
   const index = Math.max(0, Math.min(59, Math.floor((at - start) / 60000)));
   const selectedEvents = events.filter(event => Math.max(0, Math.min(59,
     Math.floor((Date.parse(event.observed_at) - start) / 60000))) === index);
@@ -551,6 +588,51 @@ function globeHourModel(page, start, end, selectedAt, live) {
     traffic: {status: 'available', events: displayed, signalByEvent}};
 }
 function globeHourTime(at) { return new Date(at).toISOString().slice(11, 16) + ' UTC'; }
+function globeVolumeLevel(count, peak) {
+  if (!count) return 'No returned records';
+  return count / Math.max(1, peak) <= 1 / 3 ? 'Low volume'
+    : count / Math.max(1, peak) <= 2 / 3 ? 'Moderate volume' : 'High volume';
+}
+function renderGlobeVolumes(model = null, now = Date.now()) {
+  const hour = globeState.hour;
+  const interval = Math.max(2, state.config?.refresh_seconds || 5);
+  const old = Boolean(hour.page && (!Number.isFinite(hour.fetchedAt)
+    || now < hour.fetchedAt || now - hour.fetchedAt > Math.max(15000, interval * 3000)));
+  const previous = hour.failed || old;
+  const paused = state.paused || document.hidden;
+  const prefix = previous ? 'Previous snapshot · ' : paused ? 'Paused snapshot · ' : '';
+  byId('traffic-volumes').className = `traffic-volumes${previous || paused ? ' stale' : ''}`;
+  if (!model && hour.page) model = globeHourModel(hour.page, hour.start, hour.end, hour.selectedAt, hour.live);
+  for (const lane of ['normal', 'danger']) {
+    const meter = byId(`traffic-${lane}-meter`);
+    meter.hidden = !model;
+    if (!model) {
+      byId(`traffic-${lane}-count`).textContent = '—';
+      byId(`traffic-${lane}-level`).textContent = 'Unavailable';
+      continue;
+    }
+    const count = model.bins[model.index][lane], peak = Math.max(1, model.peak);
+    meter.max = peak; meter.value = count;
+    meter.setAttribute('aria-valuetext', `${prefix}${count} returned records in this minute; ${globeVolumeLevel(count, peak)} on a shared scale of ${peak}`);
+    byId(`traffic-${lane}-count`).textContent = `${prefix}${count} records / min`;
+    byId(`traffic-${lane}-level`).textContent = globeVolumeLevel(count, peak);
+  }
+  const status = byId('traffic-volume-status');
+  if (!model) {
+    status.textContent = hour.failed ? 'Unavailable · refresh failed. No traffic measurement is available.' : 'Waiting for qualified stored traffic.';
+    byId('traffic-review-count').textContent = 'LOW / MEDIUM review signals: unavailable.';
+    byId('traffic-volume-freshness').textContent = 'No successful refresh.';
+    return;
+  }
+  const start = hour.start + model.index * 60000;
+  const partial = hour.partial || hour.capReached;
+  status.textContent = `${prefix}${hour.live ? 'Current rolling minute' : 'Historical selected minute'} · ${globeHourTime(start)}–${globeHourTime(start + 60000)}. ${partial ? 'Partial coverage; counts and finding classifications may be incomplete. ' : ''}${paused ? 'Refresh paused.' : previous ? 'Current readings unavailable.' : `Checks for stored updates every ${interval}s.`}`;
+  byId('traffic-review-count').textContent = `${prefix}LOW / MEDIUM review signals: ${model.bins[model.index].review} records / min (excluded from both bars).`;
+  byId('traffic-volume-scale').textContent = `Shared scale: 0–${Math.max(1, model.peak)} records / min, set by the largest returned minute in this hour. Low ≤⅓, moderate ≤⅔, high >⅔ of that scale. Volume is separate from severity. Counts are bounded metadata records, not bandwidth or packet rates.`;
+  const refreshed = Number.isFinite(hour.fetchedAt) ? new Date(hour.fetchedAt).toISOString() : 'unknown';
+  const observed = model.latest === null ? 'none returned in this hour' : new Date(model.latest).toISOString();
+  byId('traffic-volume-freshness').textContent = `${prefix}Last successful refresh: ${refreshed}. Latest returned observation: ${observed}. Sensor liveness is unknown.`;
+}
 function renderGlobeHour() {
   const hour = globeState.hour;
   if (!hour.page) {
@@ -564,11 +646,13 @@ function renderGlobeHour() {
     byId('activity-globe-live').disabled = true;
     byId('activity-globe-selected-count').textContent = '—';
     byId('activity-globe-peak-count').textContent = '—';
+    renderGlobeVolumes();
     renderGlobeUnavailable(false);
     return;
   }
   const model = globeHourModel(hour.page, hour.start, hour.end, hour.selectedAt, hour.live);
   hour.selectedIndex = model.index;
+  renderGlobeVolumes(model);
   const binStart = hour.start + model.index * 60000;
   const counts = model.bins.map(bin => bin.count);
   const bars = model.bins.map((bin, index) => {
@@ -587,7 +671,7 @@ function renderGlobeHour() {
   slider.setAttribute('aria-valuetext', `${globeHourTime(binStart)}, ${model.bins[model.index].count} returned records`);
   const live = byId('activity-globe-live'); live.disabled = false;
   live.setAttribute('aria-pressed', String(hour.live));
-  byId('activity-globe-selected-time').textContent = `${hour.live ? 'Live · latest stored · ' : 'Selected · '}${globeHourTime(binStart)}–${globeHourTime(binStart + 60000)}`;
+  byId('activity-globe-selected-time').textContent = `${hour.failed ? 'Previous page · ' : hour.live ? 'Live · current minute · ' : 'Selected · '}${globeHourTime(binStart)}–${globeHourTime(binStart + 60000)}`;
   byId('activity-globe-selected-count').textContent = String(model.bins[model.index].count);
   byId('activity-globe-peak-count').textContent = String(model.peak);
   byId('activity-globe-updated').textContent = `Refreshed ${globeHourTime(hour.fetchedAt)}`;
@@ -694,6 +778,7 @@ function startGlobeHour() {
   hour.started = true;
   const tick = async () => {
     if (!state.paused && !document.hidden) await refreshGlobeHour();
+    else renderGlobeVolumes();
     hour.timer = window.setTimeout(tick, Math.max(2, state.config.refresh_seconds) * 1000);
   };
   tick();
@@ -746,7 +831,10 @@ function initializeGlobe() {
     byId('activity-globe-file-status').textContent = 'Map cleared from this tab.';
     renderGlobeView();
   });
-  document.addEventListener('visibilitychange', () => renderGlobeView());
+  document.addEventListener('visibilitychange', () => {
+    renderGlobeView(); renderGlobeVolumes();
+    if (!document.hidden && !state.paused && globeState.hour.started) refreshGlobeHour();
+  });
   renderGlobeView();
 }
 """

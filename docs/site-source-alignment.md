@@ -1,6 +1,34 @@
 # Defense Console source alignment
 
-## Current publication — Console v33, globe reference and signal levels
+## Current publication — Console v34, separate traffic volume lanes
+
+OBSERVED 2026-09-26: the existing owner-only Console serves version 34 from
+Sites source `4b81d72ade6e2fbedeff2ce1fa0c2b7b0898cc33`. Its globe view now has
+separate normal and danger/critical volume tracks, both visibly disconnected.
+The hosted page has no telemetry refresh loop or local data connection. Actual
+meters in the accompanying local-HUD change read the existing bounded history
+projection at the configured refresh interval (five seconds by default).
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 34 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_6ee0bfd20cc081919531228d7bef841f` |
+| Sites source | `4b81d72ade6e2fbedeff2ce1fa0c2b7b0898cc33` |
+| Deployment | `appgdep_6ab82e852ff08191b4d0be2b8224cf96`; succeeded 2026-09-26T20:43:54Z |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access |
+| Rollback reference | v33 / `7b39459140b6f08cccf5a1bfbc5686b7e4a9ac95` |
+
+VERIFIED: 44 Site Node checks and the repository suite (3,745 passed, five
+environment-specific skips) passed before this receipt was appended. JavaScript
+behavior covers lane separation, duplicate-finding deduplication, relative volume
+thresholds, current-minute selection, partial/stale/paused/unavailable states,
+bounded refresh, overlap refusal and recovery. These are synthetic behavior
+checks, not a real network or rendered-browser acceptance receipt. The repository
+change remains subject to PR review and merge; Site publication does not update
+an installed local HUD.
+
+## Historical publication — Console v33, globe reference and signal levels
 
 OBSERVED 2026-09-26: the existing owner-only Console serves version 33 from
 Sites source `7b39459140b6f08cccf5a1bfbc5686b7e4a9ac95`. The hosted Home view
