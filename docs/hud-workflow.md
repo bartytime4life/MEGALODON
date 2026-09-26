@@ -105,3 +105,12 @@ ClamAV, osquery, Nmap, OSSEC, Greenbone, Zabbix and Nagios do not yet have their
 scan/inventory/alert/monitoring data adapters. Their presence/process checks and
 manual console links must not be presented as those missing data connections.
 nftables exposes inert response-plan evidence, never live firewall telemetry.
+
+## Validate core setup before startup
+
+Run `python -m megalodon.config_check < config/settings.toml` in the installed
+MEGALODON environment, substituting your settings file. It checks syntax, known
+fields, typed limits and the supported dashboard binding without opening the
+database or starting a program. Exit 0 means configuration only; runtime remains
+unverified. See [the preflight guide](config-preflight.md). The existing
+`python -m megalodon.tool_setup core configure` command also prints this step.

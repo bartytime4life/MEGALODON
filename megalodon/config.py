@@ -136,6 +136,11 @@ def load_settings(path: str | Path | None = None) -> Settings:
         with config_path.open("rb") as handle:
             raw = tomllib.load(handle)
 
+    return _settings_from_mapping(raw)
+
+
+def _settings_from_mapping(raw: dict[str, object]) -> Settings:
+    """Shared typed validation; no paths are opened or runtime services started."""
     app = _table(raw.get("app", {}), "app")
     capture = _table(raw.get("capture", {}), "capture")
     detection = _table(raw.get("detection", {}), "detection")
