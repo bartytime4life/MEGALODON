@@ -64,11 +64,11 @@ const integrations = [
     nextGate: "Independent review before invocation-to-dashboard orchestration.", ui: ["Advisory receipt", "Model provenance", "Fixed limitations"],
   },
   {
-    id: "nmap", name: "Nmap", monogram: "NM", category: "network", status: "proposed", statusLabel: "Proposed",
-    summary: "Reserves an import-only interface for a completed, operator-supplied bounded inventory report.",
-    dataKind: "network inventory", contract: "Future completed Nmap XML import", owner: "not implemented",
+    id: "nmap", name: "Nmap", monogram: "NM", category: "network", status: "optional", statusLabel: "Optional importer",
+    summary: "Converts completed Nmap XML reports into aggregate host and port-state charts in the HUD.",
+    dataKind: "network inventory", contract: "megalodon-nmap-inventory-v1", owner: "megalodon.nmap_inventory",
     boundary: "No scan launch, target selection, script engine, service-banner intake, or network activity.",
-    nextGate: "Versioned XML contract, adversarial parser fixtures, privacy review, and size limits.", ui: ["Host inventory", "Port summary", "Import receipt"],
+    nextGate: "Independent producer-profile, privacy and native-platform acceptance; no live feed.", ui: ["Host inventory", "Port summary", "Import receipt"],
   },
   {
     id: "ossec", name: "OSSEC", monogram: "OS", category: "endpoint", status: "proposed", statusLabel: "Proposed",
