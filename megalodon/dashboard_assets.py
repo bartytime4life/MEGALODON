@@ -10,6 +10,7 @@ from .dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
+from .dashboard_action_plane import ACTION_CSS, ACTION_JS
 from .status_glossary import GLOSSARY_ANCHOR_ID
 
 
@@ -748,7 +749,7 @@ const workspaceTargets = {
   'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'live',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
-  'workspace-interfaces': 'interfaces', 'analysis-window-title': 'analysis',
+  'workspace-interfaces': 'interfaces', 'action-plane-title': 'interfaces', 'app-service-start-title': 'interfaces', 'app-viewer-title': 'interfaces', 'analysis-window-title': 'analysis',
   'help-language': 'help', 'status-glossary': 'help'
 };
 const state = {
@@ -1339,12 +1340,13 @@ async function loadAdvisoryReceipt() {
     renderAdvisoryUnavailable('The advisory receipt was unavailable or invalid. No partial model output is displayed, and no model request was made.');
   }
 }
-async function requestBoundedJSON(path, maxBytes) {
+async function requestBoundedJSON(path, maxBytes, options = {}) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   let reader = null;
   try {
-    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal});
+    const response = await fetch(path, {cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal,
+      ...options, headers: {'Accept': 'application/json', ...(options.headers || {})}});
     if (!response.ok) throw new Error('bounded request failed');
     if (!response.headers || typeof response.headers.get !== 'function') throw new Error('bounded response headers unavailable');
     const declared = response.headers.get('Content-Length');
@@ -2290,10 +2292,10 @@ from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS
+DASHBOARD_CSS += REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + "\nbootstrap();\n"

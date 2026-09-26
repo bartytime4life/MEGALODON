@@ -431,8 +431,9 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
     from megalodon.dashboard_setup import SETUP_JS
     dashboard_without_user_exports = DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "")
-    assert dashboard_without_user_exports.count("navigator.clipboard") == 1
+    assert dashboard_without_user_exports.count("navigator.clipboard") == 2
     assert "navigator.clipboard.writeText(reportPlainText(report))" in dashboard_without_user_exports
+    assert "navigator.clipboard.writeText(command)" in dashboard_without_user_exports
     assert "Source scope: ${report.source_scope}" in dashboard_without_user_exports
     assert "['source_scope', report.source_scope]" in dashboard_without_user_exports
     assert "reference-library-lookup-v1" in DASHBOARD_JS
