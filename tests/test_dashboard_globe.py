@@ -11,12 +11,12 @@ from megalodon.dashboard_globe_land import LAND_MASK_BASE64, LAND_MASK_WIDTH, LA
 from megalodon.dashboard import INDEX_HTML, DASHBOARD_JS
 
 
-def test_globe_is_in_visible_traffic_workspace_and_uses_validated_projection():
+def test_globe_is_in_visible_hud_workspace_and_uses_validated_projection():
     assert GLOBE_HTML in INDEX_HTML
     assert 'id="room-globe-entry-title">Activity globe' in INDEX_HTML
     assert INDEX_HTML.index('id="room-globe-entry-title"') < INDEX_HTML.index('id="workspace-analysis"')
-    assert '<a href="#room-traffic-title">Open activity globe' in INDEX_HTML
-    assert INDEX_HTML.index(GLOBE_HTML) > INDEX_HTML.index('id="workspace-traffic"')
+    assert '<a href="#activity-globe-title">View globe' in INDEX_HTML
+    assert INDEX_HTML.index('id="workspace-live"') < INDEX_HTML.index(GLOBE_HTML) < INDEX_HTML.index('id="workspace-traffic"')
     assert INDEX_HTML.index(GLOBE_HTML) < INDEX_HTML.index('id="room-traffic-grid"')
     projection = DASHBOARD_JS.split('function validatedTraffic(value)', 1)[1].split('function unavailableTrafficResponse', 1)[0]
     assert 'const source = validateTraffic(value)' in projection

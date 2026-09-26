@@ -1,6 +1,38 @@
 # Defense Console source alignment
 
-## Current publication — Console v34, separate traffic volume lanes
+## Current publication — Console v35, visual HUD workflow
+
+OBSERVED 2026-09-26: owner-only publication succeeded from Sites source
+`93626ca408af0e02b26d287d5e7b9137d9a488e9`. The hosted overview now puts
+summary metrics, the globe and six aggregate charts ahead of setup/runbooks.
+A bounded in-memory summary import connects exported local evidence to those
+charts; it is explicitly saved data, not a live feed. Every tool card offers
+consistent plan/install/configure/verify commands. The accompanying repository
+change moves all traffic/finding visualizations into the local HUD and adds
+`megalodon.hud_snapshot` and `megalodon.tool_setup`; those changes still require
+review/merge and a local update. Configuration is guided, not automatically
+written to vendor settings.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 35 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_4acd79e703048191a6f677b146d47979` |
+| Sites source | `93626ca408af0e02b26d287d5e7b9137d9a488e9` |
+| Deployment | `appgdep_6ab8348bf734819198c32058e44d5fc4`; succeeded 2026-09-26T21:09:37Z |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access |
+| Rollback reference | v34 / `4b81d72ade6e2fbedeff2ce1fa0c2b7b0898cc33` |
+
+VERIFIED: repository suite 3,751 passed, five environment-specific skips and
+203 subtests passed; hosted Node suite 63 passed. Coverage includes real
+read-only database export → browser validation, sensitive-field omission,
+large integers, invalid inputs, exclusive severity lanes, async import races,
+clear behavior, fixed recipe execution gates and inert configuration guidance.
+No package installation, real traffic capture, vendor configuration, or rendered
+browser acceptance was exercised. Source changes are stacked on PR #424;
+existing PR #422's globe-detail work remains separate.
+
+## Historical publication — Console v34, separate traffic volume lanes
 
 OBSERVED 2026-09-26: the existing owner-only Console serves version 34 from
 Sites source `4b81d72ade6e2fbedeff2ce1fa0c2b7b0898cc33`. Its globe view now has

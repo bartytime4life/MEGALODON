@@ -6,13 +6,14 @@ The local dashboard's core telemetry routes are read-only. Its separately
 enabled AI question POST requires a per-launch operator token and can write
 private AI receipts and bounded report snapshots; see
 [`docs/ai-control-plane.md`](https://github.com/bartytime4life/MEGALODON/blob/main/docs/ai-control-plane.md). This hosted Site has
-no connection to those routes. The deployable files in `dist/` and the hosting
-manifest match the MEGALODON repository at
-`main@799dc984cadf23990fb074f252b4c53a4534e855`. Its local HUD wording
-follows the operator-authorization change merged in PR #392. A saved Sites
-version and deployment must be verified separately from this source commit.
+no connection to those routes. The hosted HUD now accepts a bounded aggregate-only
+`megalodon-hud-snapshot-v1` export for six visual summaries. It does not connect
+to the local routes. Source changes for the exporter and uniform tool setup
+must be installed locally before those new module commands are available.
+See [the workflow guide](../docs/hud-workflow.md). The current publication receipt
+is recorded in [source alignment](../docs/site-source-alignment.md).
 
-## Current navigation and install path
+## Navigation and install path
 
 The merged source adds view links such as `#view=integrations`, Back/Forward
 navigation, and per-view reading positions for the current page session.

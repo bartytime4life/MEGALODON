@@ -388,7 +388,7 @@ function orientGlobe(view) {
   const targetLat = Math.max(-65, Math.min(65, view.active.location.latitude));
   const targetLon = ((view.active.location.longitude - 15 + 540) % 360) - 180;
   const motion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (motion || document.hidden || byId('workspace-traffic').hidden || typeof window.requestAnimationFrame !== 'function') {
+  if (motion || document.hidden || byId('workspace-live').hidden || typeof window.requestAnimationFrame !== 'function') {
     globeState.latitude = targetLat; globeState.longitude = targetLon; drawGlobe(view); return;
   }
   const startLat = globeState.latitude, startLon = globeState.longitude;
@@ -416,7 +416,7 @@ function stopGlobeSpin() {
 }
 function startGlobeSpin(view) {
   const reduced = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const workspace = byId('workspace-traffic');
+  const workspace = byId('workspace-live');
   if (globeMotionMode(view, document.hidden || workspace.hidden, reduced(), state.paused, Boolean(globeState.hour.page)) !== 'spin') return;
   const step = () => {
     if (globeMotionMode(view, document.hidden || workspace.hidden, reduced(), state.paused, Boolean(globeState.hour.page)) !== 'spin') {
@@ -457,7 +457,7 @@ function syncGlobeFocus(mapping) {
   const validSignalIds = new Set(traffic?.events.filter(event => traffic.signalByEvent?.has(event.id)).map(event => event.id) || []);
   focus.seen = new Set([...focus.seen].filter(id => validSignalIds.has(id)));
   const candidates = globeFocusCandidates(traffic, mapping);
-  const hidden = document.hidden || byId('workspace-traffic').hidden || state.paused || globeState.stale;
+  const hidden = document.hidden || byId('workspace-live').hidden || state.paused || globeState.stale;
   const current = candidates.find(event => event.id === focus.id);
   const currentSignal = current && traffic.signalByEvent.get(current.id);
   const urgent = currentSignal === 'review' && candidates.some(event =>

@@ -684,6 +684,9 @@ that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.
 
+See [visual HUD, summary export and uniform tool setup](docs/hud-workflow.md)
+for the hosted import workflow and the `python -m megalodon.tool_setup` commands.
+
 **Apps** shows the startup executable-presence snapshot, official setup links,
 saved companion-console addresses and copy-only maintenance controls. Choose
 **View in HUD** on any app card to use its configured web console in the App
@@ -693,7 +696,8 @@ Zenmap require a separately configured web viewer; MEGALODON cannot embed native
 windows. The app's own controls retain that app's permissions. Viewing its UI does
 not connect its telemetry to the HUD.
 
-**Traffic** refreshes the newest 500 stored event candidates every five seconds
+**HUD** gathers the globe and all traffic/finding visualizations. **Traffic** and
+**Findings** retain the detailed records. The shared metadata feed refreshes the newest 500 stored event candidates every five seconds
 by default while the tab is visible. A configured capture or metadata writer must
 be operating separately for new records to appear. Last Fetched and the latest
 observation are separate timestamps; neither establishes whole-network coverage.

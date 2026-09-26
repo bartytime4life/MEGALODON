@@ -15,6 +15,7 @@
     <script src="./globe-land.js" defer></script>
     <script src="./globe.js" defer></script>
     <script src="./app.js" defer></script>
+    <script src="./snapshot.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to operations HUD</a>
@@ -39,8 +40,8 @@
         <nav class="primary-nav">
           <button class="nav-item active" data-view="hud" aria-current="page"><span class="nav-glyph" aria-hidden="true">⌁</span><span>Activity HUD</span></button>
           <button class="nav-item" data-view="evidence" aria-label="Evidence desk"><span class="nav-glyph" aria-hidden="true">▤</span><span>Evidence desk</span></button>
-          <button class="nav-item" data-view="integrations"><span class="nav-glyph" aria-hidden="true">⌘</span><span>Integrations</span></button>
-          <button class="nav-item" data-view="missions"><span class="nav-glyph" aria-hidden="true">◇</span><span>Workflows</span></button>
+          <button class="nav-item" data-view="integrations"><span class="nav-glyph" aria-hidden="true">⌘</span><span>Tools &amp; setup</span></button>
+          <button class="nav-item" data-view="missions"><span class="nav-glyph" aria-hidden="true">◇</span><span>Runbooks</span></button>
           <button class="nav-item" data-view="boundaries"><span class="nav-glyph" aria-hidden="true">▱</span><span>Boundaries</span></button>
         </nav>
         <section class="rail-summary" aria-labelledby="rail-summary-title">
@@ -60,20 +61,33 @@
                 <img src="./megalodon-github-hero-compact.png" width="960" height="640" alt="MEGALODON shark and shield emblem" />
               </figure>
               <div>
-                <p class="eyebrow">Reference for your local workspace</p>
-                <h1 id="hud-title">MEGALODON control desk</h1>
-                <p>Install the local desktop app, check what is ready, and review saved evidence. This reference site has no connection to your computer.</p>
+                <p class="eyebrow">Observe · understand · investigate</p>
+                <h1 id="hud-title">Operations overview</h1>
+                <p>Start with the visual HUD. Open the local app for refreshing telemetry, or load a saved summary here to explore your evidence.</p>
               </div>
             </div>
             <div class="hud-controls" aria-label="Connection status">
               <div class="mode-badge"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NOT CONNECTED</strong><small>No network observations received</small></span></div>
-              <button class="control-button" type="button" data-jump="missions">View evidence workflows</button>
+              <button class="control-button" type="button" data-jump="missions">Setup &amp; runbooks</button>
             </div>
           </div>
 
+          <section class="snapshot-import" aria-labelledby="snapshot-title">
+            <div><p class="panel-kicker">YOUR DATA · ON THIS PAGE ONLY</p><h2 id="snapshot-title">Visual evidence summary</h2><p>Load an aggregate-only export from your local backend. Files stay in this browser tab; there is no upload or automatic host connection.</p></div>
+            <div class="snapshot-actions"><label class="snapshot-upload">Load summary JSON<input type="file" id="snapshot-file" accept=".json,application/json" /></label><button type="button" id="snapshot-clear" disabled>Clear summary</button><a href="http://127.0.0.1:8787/#room-home-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></div>
+            <p id="snapshot-status" role="status">No summary loaded · live telemetry is available in the local HUD.</p>
+            <details><summary>Export a summary from MEGALODON</summary><p>Requires the HUD workflow source update installed locally. In that MEGALODON Python environment, substitute the absolute path to your existing private database. The exporter reads at most 500 qualified events and 200 linked findings. It omits addresses, ports, paths and raw records.</p><code>umask 077<br>python -m megalodon.hud_snapshot --database /absolute/path/to/megalodon.db &gt; hud-summary.json</code><p>This is a saved, unverified metadata summary. Sensor health, complete coverage and geographic locations are not exported.</p></details>
+          </section>
+          <section class="snapshot-metrics" aria-label="Saved summary totals">
+            <article><span>Metadata records</span><strong id="snapshot-events">—</strong><small>Bounded returned set</small></article>
+            <article><span>Linked findings</span><strong id="snapshot-findings">—</strong><small>Signals for review</small></article>
+            <article><span>Reported bytes</span><strong id="snapshot-bytes">—</strong><small>Metadata, not bandwidth</small></article>
+            <article><span>Source kinds</span><strong id="snapshot-sources">—</strong><small>Qualified ingestion sources</small></article>
+          </section>
+          <p id="snapshot-range" class="snapshot-range"></p>
           <section class="globe-surface" aria-labelledby="globe-surface-title">
             <div class="globe-heading">
-              <div><p class="panel-kicker">LOCAL HUD FEATURE · HOSTED REFERENCE</p><h2 id="globe-surface-title">Activity globe</h2><p>Explore the geographic view used by the local Traffic workspace. This page has no access to your stored traffic or offline IP map.</p></div>
+              <div><p class="panel-kicker">LOCAL HUD FEATURE · HOSTED REFERENCE</p><h2 id="globe-surface-title">Activity globe</h2><p>Explore the geographic view used by the local HUD. This page has no access to your stored traffic or offline IP map.</p></div>
               <span class="status-pill bounded">No telemetry connected</span>
             </div>
             <div class="globe-content">
@@ -102,30 +116,22 @@
                   <div class="hosted-volume-axis"><span>Low volume</span><span>High volume</span></div>
                 </div>
                 <p class="volume-connection">LOW / MEDIUM review signals: unavailable.</p>
-                <p>Live values require the local Traffic workspace and qualified stored data. This hosted page cannot reach that data. Counts measure metadata records, not bandwidth or packet rates.</p>
+                <p>Live values require the local HUD and qualified stored data. This hosted page cannot reach that data. Counts measure metadata records, not bandwidth or packet rates.</p>
                 <p class="globe-caution">No linked finding does not establish safe traffic. A HIGH or CRITICAL finding requires review; it is not confirmation of malicious activity.</p>
-                <a class="globe-local-link" href="http://127.0.0.1:8787/#room-traffic-title" target="_blank" rel="noopener noreferrer">Open local Traffic on this computer ↗</a>
+                <a class="globe-local-link" href="http://127.0.0.1:8787/#room-home-title" target="_blank" rel="noopener noreferrer">Open local visual HUD on this computer ↗</a>
               </div>
             </div>
           </section>
 
-          <section class="hud-start local-journey" aria-labelledby="hud-start-title">
-            <div class="launch-heading"><p class="eyebrow">User install · Linux</p><h2 id="hud-start-title">Install once. Open like an app.</h2><p>Three steps to a local, read-only workspace. Start from a reviewed checkout. The installer adds MEGALODON for your user only; companion tools and data can come later.</p></div>
-            <ol class="launch-steps" aria-label="Local PC setup path">
-              <li><span class="launch-step-number" aria-hidden="true">01</span><div><h3>Review</h3><p>Use Python 3.11 or newer on Linux. Download or clone the project, then review the source and local setup guide.</p><a href="https://github.com/bartytime4life/MEGALODON/tree/16742fed020283aafad35e30238986c851d7542a" target="_blank" rel="noopener noreferrer">Open the merged install source on GitHub ↗</a><a href="https://github.com/bartytime4life/MEGALODON/blob/16742fed020283aafad35e30238986c851d7542a/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div></li>
-              <li><span class="launch-step-number" aria-hidden="true">02</span><div><h3>Install</h3><p>From the repository root, create the private user application and menu entry:</p><div class="install-command"><code>./scripts/install-local.sh</code><button id="copy-local-install" type="button">Copy install command</button></div><p class="launch-note">No sudo. Python may download build requirements. Optional tools, sensors, telemetry, and automatic startup are not installed.</p></div></li>
-              <li><span class="launch-step-number" aria-hidden="true">03</span><div><h3>Open and check</h3><p>Open MEGALODON from the application menu, then choose Home → Data and tools → Check this computer.</p><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open a running local HUD ↗</a><p class="launch-note">The app opens your browser after its local server binds. On a phone, 127.0.0.1 points to the phone. This Site cannot tell whether your HUD is running.</p></div></li>
-            </ol>
-            <details class="launch-installed"><summary>Prefer to run the checkout without installing?</summary><p>Use the source launcher from the repository root:</p><div class="installed-command"><code>./scripts/start-local.sh</code><button id="copy-hud-start" type="button">Copy source command</button></div><p>Keep its terminal open and stop with Ctrl+C. The source launcher does not add an app-menu entry or change an existing Python installation.</p></details>
-            <div class="launch-footer"><p>An empty local HUD means evidence is unavailable, not zero traffic.</p><button type="button" data-jump="integrations">Explore optional tools</button></div>
-          </section>
-          <section class="exchange-map local-feature-map" aria-labelledby="local-feature-title">
-            <div class="exchange-heading"><div><p class="panel-kicker">AVAILABLE IN THE LOCAL HUD</p><h2 id="local-feature-title">Explore current repository features</h2><p>These views run in your local MEGALODON workspace after you open it on this computer. This hosted page cannot read its evidence or operate its controls.</p></div><span class="status-pill bounded">Local only</span></div>
-            <div class="exchange-grid">
-              <article><div><span class="exchange-code">TRAFFIC</span><strong>Rolling-hour activity globe</strong></div><p>Review bounded stored metadata across the past 60 minutes, with a time control and linked detection signals. Optional offline IP regions are approximate; missing or unmapped activity is never a clean-network verdict.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/a767e69bcaf7ac0020e03b89578e6c76ec264560/README.md" target="_blank" rel="noopener noreferrer">Read the local Traffic guide ↗</a></article>
-              <article><div><span class="exchange-code">ACTIONS</span><strong>Reviewed scripts and time previews</strong></div><p>The local Actions workspace offers copy-only command references and a bounded recurrence preview. It creates no schedule or job, executes no copied script, and grants no firewall authority.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/a767e69bcaf7ac0020e03b89578e6c76ec264560/docs/automation-contract.md" target="_blank" rel="noopener noreferrer">Read the preview boundary ↗</a></article>
-            </div>
-          </section>
+          <div class="snapshot-grid">
+            <section class="snapshot-panel snapshot-wide"><p class="panel-kicker">ACTIVITY THROUGH TIME</p><h2>Traffic history</h2><div id="snapshot-timeline" class="snapshot-timeline" aria-label="Traffic records in twelve equal time intervals"></div><p>12 equal intervals from the first to last exported observation. Counts are records, not packets per second.</p></section>
+            <section class="snapshot-panel"><p class="panel-kicker">SEPARATE TRAFFIC LANES</p><h2>Normal, review and danger</h2><div id="snapshot-lanes-chart"></div><div class="snapshot-axis"><span>Low volume · 0</span><span>High · largest lane</span></div><p>One lane per record, using its highest linked severity. These are saved-range totals. Live records/minute are available in the local HUD.</p></section>
+            <section class="snapshot-panel"><p class="panel-kicker">PROTOCOL DISTRIBUTION</p><h2>Protocol mix</h2><div id="snapshot-protocols-chart"></div></section>
+            <section class="snapshot-panel"><p class="panel-kicker">DETECTION PRIORITY</p><h2>Severity breakdown</h2><div id="snapshot-severities-chart"></div></section>
+            <section class="snapshot-panel"><p class="panel-kicker">SOURCE CONTRIBUTION</p><h2>Metadata by source</h2><div id="snapshot-sources-chart"></div><p>Source declarations are not independently authenticated.</p></section>
+            <section class="snapshot-panel"><p class="panel-kicker">FINDING DISTRIBUTION</p><h2>Detector signals</h2><div id="snapshot-detectors-chart"></div><p>A finding needs investigation; no linked finding does not establish safe traffic.</p></section>
+          </div>
+
           <details class="disconnected-details"><summary>Hosted network feed · not connected</summary><p>Actual measurements are available only in your local HUD after real evidence is ingested.</p>
           <section class="kpi-grid" aria-label="Network measurements unavailable">
             <article class="kpi-card cyan-accent"><div><span>METADATA EVENTS</span><small>no input</small></div><strong id="metric-events">—</strong><span class="metric-delta">unavailable</span></article>
@@ -213,6 +219,24 @@
 
         <section class="view" data-view-panel="missions" aria-labelledby="missions-title" hidden>
           <div class="view-heading"><div><p class="eyebrow">Bounded workflows</p><h1 id="missions-title">Choose the work. See the boundary.</h1><p>Review an entry point, its evidence output, and the authority it deliberately does not receive.</p></div></div>
+          <section class="hud-start local-journey" aria-labelledby="hud-start-title">
+            <div class="launch-heading"><p class="eyebrow">User install · Linux</p><h2 id="hud-start-title">Install once. Open like an app.</h2><p>Three steps to a local, read-only workspace. Start from a reviewed checkout. The installer adds MEGALODON for your user only; companion tools and data can come later.</p></div>
+            <ol class="launch-steps" aria-label="Local PC setup path">
+              <li><span class="launch-step-number" aria-hidden="true">01</span><div><h3>Review</h3><p>Use Python 3.11 or newer on Linux. Download or clone the project, then review the source and local setup guide.</p><a href="https://github.com/bartytime4life/MEGALODON/tree/16742fed020283aafad35e30238986c851d7542a" target="_blank" rel="noopener noreferrer">Open the merged install source on GitHub ↗</a><a href="https://github.com/bartytime4life/MEGALODON/blob/16742fed020283aafad35e30238986c851d7542a/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div></li>
+              <li><span class="launch-step-number" aria-hidden="true">02</span><div><h3>Install</h3><p>From the repository root, create the private user application and menu entry:</p><div class="install-command"><code>./scripts/install-local.sh</code><button id="copy-local-install" type="button">Copy install command</button></div><p class="launch-note">No sudo. Python may download build requirements. Optional tools, sensors, telemetry, and automatic startup are not installed.</p></div></li>
+              <li><span class="launch-step-number" aria-hidden="true">03</span><div><h3>Open and check</h3><p>Open MEGALODON from the application menu, then choose Home → Data and tools → Check this computer.</p><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open a running local HUD ↗</a><p class="launch-note">The app opens your browser after its local server binds. On a phone, 127.0.0.1 points to the phone. This Site cannot tell whether your HUD is running.</p></div></li>
+            </ol>
+            <details class="launch-installed"><summary>Prefer to run the checkout without installing?</summary><p>Use the source launcher from the repository root:</p><div class="installed-command"><code>./scripts/start-local.sh</code><button id="copy-hud-start" type="button">Copy source command</button></div><p>Keep its terminal open and stop with Ctrl+C. The source launcher does not add an app-menu entry or change an existing Python installation.</p></details>
+            <div class="launch-footer"><p>An empty local HUD means evidence is unavailable, not zero traffic.</p><button type="button" data-jump="integrations">Explore optional tools</button></div>
+          </section>
+          <section class="exchange-map local-feature-map" aria-labelledby="local-feature-title">
+            <div class="exchange-heading"><div><p class="panel-kicker">AVAILABLE IN THE LOCAL HUD</p><h2 id="local-feature-title">Explore current repository features</h2><p>These views run in your local MEGALODON workspace after you open it on this computer. This hosted page cannot read its evidence or operate its controls.</p></div><span class="status-pill bounded">Local only</span></div>
+            <div class="exchange-grid">
+              <article><div><span class="exchange-code">TRAFFIC</span><strong>Rolling-hour activity globe</strong></div><p>Review bounded stored metadata across the past 60 minutes, with a time control and linked detection signals. Optional offline IP regions are approximate; missing or unmapped activity is never a clean-network verdict.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/a767e69bcaf7ac0020e03b89578e6c76ec264560/README.md" target="_blank" rel="noopener noreferrer">Read the local Traffic guide ↗</a></article>
+              <article><div><span class="exchange-code">ACTIONS</span><strong>Reviewed scripts and time previews</strong></div><p>The local Actions workspace offers copy-only command references and a bounded recurrence preview. It creates no schedule or job, executes no copied script, and grants no firewall authority.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/a767e69bcaf7ac0020e03b89578e6c76ec264560/docs/automation-contract.md" target="_blank" rel="noopener noreferrer">Read the preview boundary ↗</a></article>
+            </div>
+          </section>
+
           <div class="mission-deck">
             <nav class="mission-list" aria-label="Select a MEGALODON workflow">
               <button class="mission active" data-workflow="dashboard" aria-pressed="true"><span>01</span><strong>Local dashboard</strong><small>Read your actual stored evidence</small></button>
