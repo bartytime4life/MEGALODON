@@ -1,6 +1,86 @@
 # Defense Console source alignment
 
-## Current publication — Console v34, separate traffic volume lanes
+## Current publication — Console v36, data connections aligned
+
+OBSERVED 2026-09-26: existing owner-private publication succeeded from source
+`aaceadec976a0c0b20193e8ad9b57176404eebfb`. The hosted page and repository
+mirror share the packaged snapshot validator and generated 14-feature /
+14-companion data-coverage map. The hosted instructions now link to the new
+local Prepare summary / Download summary controls. No automatic local-to-cloud
+connection was added.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 36 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_7b450743fd448191b06872198967fa25` |
+| Sites source | `aaceadec976a0c0b20193e8ad9b57176404eebfb` |
+| Deployment | `appgdep_6ab838700ed481918dfa813749342475`; succeeded 2026-09-26T21:26:14Z |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access |
+| Rollback reference | v35 / `93626ca408af0e02b26d287d5e7b9137d9a488e9` |
+
+The source alignment continues in draft PR #425, now targeting main after #424
+merged at `ef03008d5406e205515a20ef993c18e4f5f39387`. The candidate adds a
+read-only bounded `/api/hud-snapshot` route, local preview/download and explicit
+traffic/tool/job observations. Installer-status failure no longer invalidates a
+successful heartbeat; heartbeat failure still makes tool observations stale.
+The Site mirror is aligned with the candidate, not yet with merged main.
+
+VERIFIED: full local suite 3,754 passed, five environment-specific skips and
+203 subtests passed. After a final Clear-button busy-state correction and added
+connection-state regression, all seven snapshot/alignment tests passed. Hosted
+Node suite: 63 passed. Repository hygiene and build-input inventory passed.
+HTTP export, no-store/query/POST refusals, preview/failure/overlap behavior,
+shared assets and all fourteen companion identities are covered. No rendered
+browser, actual host telemetry, package installation or vendor configuration
+acceptance is claimed.
+
+FOLLOW-UP: GitHub browser run 36273002775 failed on the prior candidate tree
+because its scenario still opened Traffic before asserting visible chart
+disclosures. The candidate now navigates to HUD, asserts the charts' new owning
+workspace, and retains all keyboard/source/quality assertions. It also exercises
+the real summary HTTP preview and exact download bytes. This is a test-path
+correction for the redesign, not a waived visibility check. The draft owner
+lifecycle hold in run 36273003713 is intentional and remains unchanged.
+
+The coverage map explicitly retains missing ClamAV, osquery, Nmap, OSSEC,
+Greenbone, Zabbix and Nagios data adapters. Presence checks do not provide their
+scan, inventory, alert or monitoring data. nftables remains plan-only. No
+new sensor, scheduler, provider, scanner or firewall authority was introduced.
+
+## Historical publication — Console v35, visual HUD workflow
+
+OBSERVED 2026-09-26: owner-only publication succeeded from Sites source
+`93626ca408af0e02b26d287d5e7b9137d9a488e9`. The hosted overview now puts
+summary metrics, the globe and six aggregate charts ahead of setup/runbooks.
+A bounded in-memory summary import connects exported local evidence to those
+charts; it is explicitly saved data, not a live feed. Every tool card offers
+consistent plan/install/configure/verify commands. The accompanying repository
+change moves all traffic/finding visualizations into the local HUD and adds
+`megalodon.hud_snapshot` and `megalodon.tool_setup`; those changes still require
+review/merge and a local update. Configuration is guided, not automatically
+written to vendor settings.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 35 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_4acd79e703048191a6f677b146d47979` |
+| Sites source | `93626ca408af0e02b26d287d5e7b9137d9a488e9` |
+| Deployment | `appgdep_6ab8348bf734819198c32058e44d5fc4`; succeeded 2026-09-26T21:09:37Z |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access |
+| Rollback reference | v34 / `4b81d72ade6e2fbedeff2ce1fa0c2b7b0898cc33` |
+
+VERIFIED: repository suite 3,751 passed, five environment-specific skips and
+203 subtests passed; hosted Node suite 63 passed. Coverage includes real
+read-only database export → browser validation, sensitive-field omission,
+large integers, invalid inputs, exclusive severity lanes, async import races,
+clear behavior, fixed recipe execution gates and inert configuration guidance.
+No package installation, real traffic capture, vendor configuration, or rendered
+browser acceptance was exercised. Source changes are stacked on PR #424;
+existing PR #422's globe-detail work remains separate.
+
+## Historical publication — Console v34, separate traffic volume lanes
 
 OBSERVED 2026-09-26: the existing owner-only Console serves version 34 from
 Sites source `4b81d72ade6e2fbedeff2ce1fa0c2b7b0898cc33`. Its globe view now has
