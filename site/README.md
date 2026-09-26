@@ -34,9 +34,13 @@ Those local features are not available through this hosted Site.
 
 The hosted Home view now draws the same bundled public-domain Natural Earth
 land mask as a geographic reference. West/East controls rotate the map locally.
-Returned records, review signals, and high-priority signals are labeled as
-unavailable here; no markers, timestamps, IP locations, or event counts are
-created. The interactive rolling-hour timeline remains in the local HUD.
+Separate normal and danger/critical traffic bar tracks show an explicit
+disconnected state here, with LOW/MEDIUM review signals listed separately.
+No marker, timestamp, IP location, or event count is created. The normal lane
+means no returned linked finding, not proven-safe traffic; the danger/critical
+lane refers to HIGH/CRITICAL findings requiring review. Actual volume meters
+and the interactive rolling-hour timeline use qualified stored data in the
+local HUD. This hosted Site has no local telemetry connection or refresh loop.
 
 ## Quick-start controls
 
