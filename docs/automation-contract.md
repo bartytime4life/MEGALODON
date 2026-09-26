@@ -12,7 +12,7 @@
 The repository now carries a [draft JSON Schema and deterministic fixtures](../contracts/automation/v1/README.md)
 for the create payload, activation prerequisites, bounded policy, and immutable
 run-snapshot shape. This is contract evidence only. It adds no scheduler loop,
-persistence, model invocation, CLI/API operation, network access, shell
+persistence, model invocation, automation control API, network access, shell
 access, or firewall authority. The overall design remains proposed; later
 stages require separate review.
 
@@ -32,6 +32,11 @@ activate. To keep every supported case verifiably correct, it intentionally
 covers a narrower RRULE surface than full RFC 5545 (see the module docstring)
 and fails closed with `UNSUPPORTED_COMBINATION` outside it, rather than
 approximating.
+
+The `automation-preview` CLI exposes only that pure preview as bounded JSON.
+It takes an explicit local start time, IANA zone, RRULE, DST policy, and a
+1–366 occurrence limit. Invalid inputs return a fixed refusal without a
+partial preview. It does not create an automation or run a job.
 
 Weekly previews order each week's `BYDAY` candidates relative to `WKST`
 before applying `COUNT`, inclusive UTC `UNTIL`, or the preview limit. The
@@ -102,7 +107,11 @@ The current repository is a small local-first network-defense MVP. Its adopted d
 - [SPECIFICATION.md](../SPECIFICATION.md) defines the current MVP data contracts, action statuses, and non-goals.
 - [SECURITY_REVIEW.md](../SECURITY_REVIEW.md) identifies the remaining production gates, including rollback, privilege, dashboard authentication, feed policy, and false-positive measurement.
 
-The current main snapshot does not contain an automation table, scheduler, model adapter, folder service, RRULE parser, or automation API. This contract is therefore a proposal for a future slice, not a statement of current implementation.
+The repository contains the bounded RRULE parser, occurrence engine, and
+read-only preview CLI described above. It does not contain an automation
+table, scheduler, model adapter, folder service, or automation control API.
+The remaining execution design is a proposal, not a statement of current
+implementation.
 
 ## 2. Why the seed fields need expansion
 
@@ -574,8 +583,8 @@ No implementation should be accepted until the following cases are covered by de
 
 | Stage | Deliverable | Exit condition |
 | --- | --- | --- |
-| 0. Contract | JSON fixtures, enums, validation errors, and this document | **Implemented:** deterministic Stage 0 schema tests pass; semantics beyond the structural contract remain future gates |
-| 1. Parser | RRULE/DTSTART/time-zone normalization and occurrence fixtures | Exact fixture expectations pass, including DST policy |
+| 0. Contract | JSON fixtures, enums, validation errors, and this document | **Implemented:** deterministic Stage 0 schema tests pass; activation and execution remain future gates |
+| 1. Parser and preview | **Implemented:** bounded RRULE/DTSTART/time-zone normalization, occurrence fixtures, and read-only CLI | Exact fixture expectations pass, including DST policy; no scheduling authority |
 | 2. Ledger | SQLite migrations for definitions/runs and idempotent claim transaction | Restart/concurrency tests pass without model execution |
 | 3. Read-only scheduler | Health, replay, retention-plan, and report jobs | Hosted tests prove no firewall, shell, or remote side effect |
 | 4. Model adapter | Bounded local adapter with structured output validation | Prompt/data separation, output limits, and model registry tests pass |
@@ -588,8 +597,8 @@ Each stage should be a separate reviewable change. A scheduler implementation mu
 
 These questions remain deliberately unresolved and should be answered in a follow-up design review rather than inferred in code:
 
-1. Which exact RRULE library and version will be supported, and what subset is acceptable on Python 3.11?
-2. Is UTC the only active schedule zone in v1, or will named local zones be enabled with the explicit DST policy above?
+1. Should a future active scheduler retain the current standard-library RRULE subset or adopt a separately pinned library and broader grammar?
+2. Should an active schedule support the named local zones available in preview, or use UTC only?
 3. Should prompt snapshots be retained as encrypted content, a controlled file reference, or only a digest plus versioned source?
 4. What is the approved model registry and which local Qwen/Ollama adapters, if any, are allowed?
 5. What is the logical folder service and retention policy for run outputs?

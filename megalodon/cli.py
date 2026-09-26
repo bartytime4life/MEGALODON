@@ -124,6 +124,21 @@ def build_parser() -> argparse.ArgumentParser:
     from .hub import WORKFLOW_IDS
     hub.add_argument("--workflow", choices=WORKFLOW_IDS, help="show one closed workflow")
 
+    automation_preview = sub.add_parser(
+        "automation-preview", help="preview a bounded recurrence without scheduling a job",
+    )
+    automation_preview.add_argument("--dtstart", required=True, help="local start time, YYYY-MM-DDTHH:MM:SS")
+    automation_preview.add_argument("--timezone", required=True, help="IANA time zone for the local start time")
+    automation_preview.add_argument("--rrule", required=True, help="bounded recurrence rule")
+    automation_preview.add_argument(
+        "--dst-policy", choices=("reject", "skip", "shift_forward", "fold_earlier", "fold_later"),
+        default="reject", help="how to handle ambiguous or nonexistent local times",
+    )
+    automation_preview.add_argument(
+        "--limit", type=_bounded_cli_integer("limit", 1, 366), default=10,
+        help="maximum number of preview occurrences (1-366; default 10)",
+    )
+
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
@@ -292,6 +307,25 @@ def _hub_plan(args: argparse.Namespace) -> int:
     from .hub import integration_plan
 
     print(json.dumps(integration_plan(args.platform, args.workflow), sort_keys=True))
+    return 0
+
+
+def _automation_preview(args: argparse.Namespace) -> int:
+    from .automation_schedule import AutomationScheduleError, next_occurrences
+
+    try:
+        occurrences = next_occurrences(
+            dtstart=args.dtstart, schedule_timezone=args.timezone,
+            rrule=args.rrule, dst_policy=args.dst_policy, limit=args.limit,
+        )
+    except (AutomationScheduleError, ValueError, OverflowError) as exc:
+        print(f"megalodon automation-preview: {getattr(exc, 'code', 'PREVIEW_UNAVAILABLE')}", file=sys.stderr)
+        return 2
+    print(json.dumps({
+        "schema_version": "megalodon-automation-preview-v1",
+        "status": "preview_only",
+        "occurrences": [dict(item) for item in occurrences],
+    }, sort_keys=True, allow_nan=False))
     return 0
 
 
@@ -1129,6 +1163,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _posture(args)
     elif args.command == "hub-plan":
         code = _hub_plan(args)
+    elif args.command == "automation-preview":
+        code = _automation_preview(args)
     elif args.command == "run":
         code = _run(args)
     elif args.command in {"dashboard", "hud"}:
