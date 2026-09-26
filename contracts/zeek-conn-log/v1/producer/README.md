@@ -1,15 +1,15 @@
 # Zeek conn.log producer profile — PLACEHOLDER scaffold, not a qualified profile
 
 Status: **Scaffold only.** This directory is a stand-in structure for the
-producer-profile and schema-drift evidence that
-[issue #327](https://github.com/bartytime4life/MEGALODON/issues/327) asks
-for. It does **not** close #327, does not select a supported Zeek producer,
-and must not be cited as evidence that one has been qualified. Every
+producer-profile and schema-drift evidence described in
+[issue #327](https://github.com/bartytime4life/MEGALODON/issues/327).
+The issue closed on 2026-09-22, but this scaffold does not select a supported
+Zeek producer and must not be cited as evidence that one has been qualified. Every
 identifier in [`schema.json`](schema.json) that looks like a version or
 profile name (`zeek-PLACEHOLDER-UNSELECTED-conn-json-v1`, declared version
 `0.0.0`) is a deliberately unmistakable placeholder, not a real Zeek release.
-Earlier planning mentioned Zeek 8.0.10 and 9.0.0 as candidates; #327 selects
-neither, and neither is referenced here.
+Earlier planning mentioned Zeek 8.0.10 and 9.0.0 as candidates; the closing
+change selected neither, and neither is referenced here.
 
 This mirrors the structural shape of the existing, actually-qualified
 [Suricata raw-EVE producer profile](../../../suricata-eve/v1/producer/README.md)

@@ -3,10 +3,11 @@
 ## Current alignment basis
 
 The [2026-09-21 alignment record](docs/document-alignment-2026-09-21.md) binds
-this working tree to merged recovery, licensing, detector, installer and
-containment-contract work. Current issue state is distinct from control evidence:
-#254–#259 are closed, #260–#261 remain open, and #327 now tracks the exact Zeek
-producer-profile evidence left after #258 closed. The scoped owner acceptance
+the review's historical baseline to merged recovery, licensing, detector,
+installer and containment-contract work. Its issue-state snapshot is stale:
+the [2026-09-25 issue-state correction](docs/unified-roadmap-currentness.md#issue-state-correction--2026-09-25)
+records the closure of #260, #261 and #327 while preserving their remaining
+evidence gates. The scoped owner acceptance
 that closed #259 does not establish independent review or operational detector
 accuracy. This alignment is not a new security scan or independent acceptance
 of a model or host.
@@ -51,6 +52,12 @@ PATH entries can refer to mounts/symlinks, so the finite probe count is not a
 filesystem-latency guarantee. Ordinary `dashboard` startup does not inspect tools.
 Ordinary `dashboard` also refuses the local-check route. Failed checks expose
 fixed errors and cannot present expired observations as current success.
+The loopback HTTP listener allows at most 32 active handlers and gives each
+accepted socket a two-second inactivity timeout before header parsing. Excess
+connections close without starting another handler thread. This bounds idle
+connection resource use; a process that continually sends slow partial headers
+can still occupy the finite slots, so this is not an availability guarantee
+against a hostile local process.
 The separate heartbeat and recipe-catalog GETs stay observational. Companion
 tool management is disabled by default and requires `hud --enable-tool-management`
 on Linux with nonzero real/effective UIDs. An independent random per-launch
