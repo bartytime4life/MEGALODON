@@ -35,6 +35,14 @@ shared assets and all fourteen companion identities are covered. No rendered
 browser, actual host telemetry, package installation or vendor configuration
 acceptance is claimed.
 
+FOLLOW-UP: GitHub browser run 36273002775 failed on the prior candidate tree
+because its scenario still opened Traffic before asserting visible chart
+disclosures. The candidate now navigates to HUD, asserts the charts' new owning
+workspace, and retains all keyboard/source/quality assertions. It also exercises
+the real summary HTTP preview and exact download bytes. This is a test-path
+correction for the redesign, not a waived visibility check. The draft owner
+lifecycle hold in run 36273003713 is intentional and remains unchanged.
+
 The coverage map explicitly retains missing ClamAV, osquery, Nmap, OSSEC,
 Greenbone, Zabbix and Nagios data adapters. Presence checks do not provide their
 scan, inventory, alert or monitoring data. nftables remains plan-only. No
