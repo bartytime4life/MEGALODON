@@ -60,7 +60,7 @@ _OCSF_SEVERITY = {
 
 ERROR_CODES = frozenset({
     "INVALID_ID", "INVALID_COMPLETENESS", "INVALID_SOURCE_KIND", "INVALID_TIMESTAMP",
-    "INVALID_PROFILE", "RECORD_LIMIT_EXCEEDED", "OUTPUT_BYTES_LIMIT_EXCEEDED",
+    "INVALID_PROFILE", "INVALID_RECORD", "RECORD_LIMIT_EXCEEDED", "OUTPUT_BYTES_LIMIT_EXCEEDED",
     "DESTINATION_UNSAFE", "DESTINATION_EXISTS", "IO_ERROR",
 })
 
@@ -219,6 +219,8 @@ def to_ocsf_record(
 
 def _freeze(value: Any) -> Any:
     if isinstance(value, Mapping):
+        if any(type(key) is not str for key in value):
+            raise TypeError("non-string JSON key")
         return {key: _freeze(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_freeze(item) for item in value]
@@ -226,8 +228,14 @@ def _freeze(value: Any) -> Any:
 
 
 def _line_bytes(record: Mapping[str, Any]) -> bytes:
-    plain = _freeze(record)
-    return (json.dumps(plain, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if not isinstance(record, Mapping):
+        _fail("INVALID_RECORD")
+    try:
+        plain = _freeze(record)
+        encoded = json.dumps(plain, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        return (encoded + "\n").encode("utf-8")
+    except (TypeError, ValueError, RecursionError, UnicodeError):
+        _fail("INVALID_RECORD")
 
 
 def _publish_export(parent_descriptor: int, name: str, payload: bytes) -> None:
@@ -301,10 +309,13 @@ def write_export(
     if len(records) > MAX_RECORDS:
         _fail("RECORD_LIMIT_EXCEEDED")
 
-    lines = [_line_bytes(record) for record in records]
-    payload = b"".join(lines)
-    if len(payload) > MAX_OUTPUT_BYTES:
-        _fail("OUTPUT_BYTES_LIMIT_EXCEEDED")
+    payload_buffer = bytearray()
+    for record in records:
+        line = _line_bytes(record)
+        if len(line) > MAX_OUTPUT_BYTES - len(payload_buffer):
+            _fail("OUTPUT_BYTES_LIMIT_EXCEEDED")
+        payload_buffer.extend(line)
+    payload = bytes(payload_buffer)
 
     destination = Path(os.fspath(destination_path))
     name = destination.name
