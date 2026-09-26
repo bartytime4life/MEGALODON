@@ -242,21 +242,33 @@ process.stdin.on('end', () => {
   evaluate('renderGlobeView = () => {}');
   evaluate('globeState.hour.page=page; globeState.hour.start=start; globeState.hour.end=end; globeState.hour.fetchedAt=end; globeState.hour.live=true;');
   evaluate('renderGlobeHour()');
-  assert.match(nodes.get('activity-globe-selected-time').textContent, /Live · current minute · 00:59 UTC/);
+  assert.match(nodes.get('activity-globe-selected-time').textContent, /Live · current minute · 00:59 UTC.*0 returned records.*safety unknown/);
+  assert.match(nodes.get('activity-globe-minute').attrs['aria-valuetext'], /00:59 UTC.*0 returned records.*safety unknown/);
   assert.equal(nodes.get('activity-globe-selected-count').textContent, '0');
   assert.equal(nodes.get('activity-globe-peak-count').textContent, '2');
   assert.match(nodes.get('activity-globe-histogram').children[10].className, /high/);
   assert.match(nodes.get('activity-globe-histogram').children[59].className, /selected/);
+  nodes.get('activity-globe-histogram').children[10].onpointerenter();
+  assert.match(nodes.get('activity-globe-hover-detail').textContent, /Hovered · 00:10 UTC.*2 returned records.*High priority signal/);
+  nodes.get('activity-globe-histogram').children[10].onpointerleave();
+  assert.match(nodes.get('activity-globe-hover-detail').textContent, /use the slider/);
   assert.match(nodes.get('activity-globe-histogram').attrs['aria-label'], /empty bins do not prove no traffic/i);
   evaluate('globeState.hour.live=false; globeState.hour.selectedAt=start+10*60000; globeState.hour.partial=true; state.paused=true; renderGlobeHour()');
-  assert.match(nodes.get('activity-globe-selected-time').textContent, /Selected · 00:10 UTC/);
+  assert.match(nodes.get('activity-globe-selected-time').textContent, /Selected · 00:10 UTC.*2 returned records.*High priority signal/);
+  assert.match(nodes.get('activity-globe-minute').attrs['aria-valuetext'], /00:10 UTC.*High priority signal/);
   assert.equal(nodes.get('activity-globe-selected-count').textContent, '2');
   assert.match(nodes.get('activity-globe-hour-status').textContent, /Partial hour.*refresh paused/);
   assert.match(nodes.get('activity-globe-coverage').textContent, /Partial view/);
+  evaluate('globeState.hour.selectedAt=start+11*60000; globeState.hour.failed=true; renderGlobeHour()');
+  assert.match(nodes.get('activity-globe-selected-time').textContent, /Previous page.*0 returned records.*safety unknown/);
+  assert.match(nodes.get('activity-globe-minute').attrs['aria-valuetext'], /Previous page.*0 returned records.*safety unknown/);
   let timerId = 0;
   context.window = {setTimeout: () => ++timerId, clearTimeout: () => {}};
   context.focusMap = evaluate("parseGlobeMapping('ip,latitude,longitude,label\\n8.8.8.8,40,-75,East\\n9.9.9.9,20,20,Other')");
-  evaluate('state.paused=false; globeState.stale=false; syncGlobeFocus(focusMap)');
+  evaluate('state.paused=false; syncGlobeFocus(focusMap)');
+  assert.equal(evaluate('globeState.focus.id'), null); // A stale empty minute has no current signal.
+  // Restore the signal-bearing minute through the renderer before testing focus order.
+  evaluate('globeState.hour.selectedAt=start+10*60000; globeState.hour.failed=false; renderGlobeHour(); syncGlobeFocus(focusMap)');
   assert.equal(evaluate('globeState.focus.id'), '2'); // High before review.
   assert.ok(evaluate('globeState.focus.until-Date.now()') <= 4000);
   evaluate('globeState.focus.until=Date.now()-1; syncGlobeFocus(focusMap)');
