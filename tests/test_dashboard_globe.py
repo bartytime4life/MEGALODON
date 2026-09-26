@@ -1,11 +1,13 @@
 """Browser-only source context must never create a location from invalid input."""
 
+import base64
 import shutil
 import subprocess
 
 import pytest
 
 from megalodon.dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
+from megalodon.dashboard_globe_land import LAND_MASK_BASE64, LAND_MASK_WIDTH, LAND_MASK_HEIGHT
 from megalodon.dashboard import INDEX_HTML, DASHBOARD_JS
 
 
@@ -22,10 +24,31 @@ def test_globe_is_in_visible_traffic_workspace_and_uses_validated_projection():
     assert 'id: event.id' in projection
     assert 'renderGlobe(traffic)' in DASHBOARD_JS
     assert 'renderGlobeUnavailable(preserve)' in DASHBOARD_JS
-    assert 'Schematic land · 30° grid' in GLOBE_HTML
+    assert 'Natural Earth land · 30° grid' in GLOBE_HTML
+    assert 'width="420" height="420"' in GLOBE_HTML
+    assert 'fetch(' not in GLOBE_JS
+    assert 'localStorage' not in GLOBE_JS
     assert 'Previous snapshot · source IPs and map labels' in DASHBOARD_JS
     assert '.activity-globe.stale .activity-globe-list .matched span' in GLOBE_CSS
     assert '.activity-globe-note { font-size: .875rem; }' in GLOBE_CSS
+
+
+def test_embedded_natural_earth_mask_has_expected_land_and_water():
+    assert (LAND_MASK_WIDTH, LAND_MASK_HEIGHT) == (720, 360)
+    mask = base64.b64decode(LAND_MASK_BASE64, validate=True)
+    assert len(mask) == LAND_MASK_WIDTH * LAND_MASK_HEIGHT // 8
+
+    def land(latitude, longitude):
+        x = int((longitude + 180) * 2) % LAND_MASK_WIDTH
+        y = min(LAND_MASK_HEIGHT - 1, max(0, int((90 - latitude) * 2)))
+        bit = y * LAND_MASK_WIDTH + x
+        return bool(mask[bit >> 3] & (1 << (bit & 7)))
+
+    assert land(40, -100)  # North America
+    assert land(0, 25)  # Africa
+    assert land(-20, 135)  # Australia
+    assert not land(0, 0)  # Gulf of Guinea
+    assert not land(0, -140)  # Pacific
 
 
 def test_offline_map_validation_matching_and_stale_state():

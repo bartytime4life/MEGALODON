@@ -1,5 +1,7 @@
 """Local, presentation-only activity globe for the qualified traffic projection."""
 
+from .dashboard_globe_land import LAND_MASK_BASE64
+
 GLOBE_HTML = """
 <section class="activity-globe" id="activity-globe" aria-labelledby="activity-globe-title">
   <div class="activity-globe-head">
@@ -8,9 +10,9 @@ GLOBE_HTML = """
   </div>
   <div class="activity-globe-body">
     <div class="activity-globe-stage" id="activity-globe-stage">
-      <canvas id="activity-globe-canvas" width="240" height="240" aria-hidden="true"></canvas>
+      <canvas id="activity-globe-canvas" width="420" height="420" aria-hidden="true"></canvas>
       <span class="activity-globe-ping" id="activity-globe-ping" hidden aria-hidden="true"></span>
-      <span class="activity-globe-caption">Schematic land · 30° grid</span>
+      <span class="activity-globe-caption">Natural Earth land · 30° grid</span>
     </div>
     <div class="activity-globe-readout">
       <p class="activity-globe-lead" id="activity-globe-lead" role="status" aria-live="polite">Waiting for qualified stored traffic.</p>
@@ -45,11 +47,11 @@ GLOBE_CSS = r"""
 .activity-globe-state { flex: none; padding: 5px 9px; border: 1px solid #567484; border-radius: 6px; color: #d5e4ea; font-size: .73rem; font-weight: 700; }
 .activity-globe-state.mapped { color: #94eedc; border-color: #389e90; }
 .activity-globe-state.stale { color: #f4d58f; border-color: #9e8145; }
-.activity-globe-body { display: grid; grid-template-columns: minmax(210px,.7fr) minmax(0,1.3fr); gap: 18px; align-items: center; padding: 4px 18px 18px; }
-.activity-globe-stage { position: relative; width: min(100%,240px); aspect-ratio: 1; margin: 0 auto; }
+.activity-globe-body { display: grid; grid-template-columns: minmax(340px,.95fr) minmax(0,1fr); gap: 22px; align-items: center; padding: 4px 18px 18px; }
+.activity-globe-stage { position: relative; width: min(100%,420px); aspect-ratio: 1; margin: 0 auto; }
 .activity-globe-stage canvas { display: block; width: 100%; height: 100%; }
-.activity-globe-caption { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font-size: .64rem; color: #9bbbc7; letter-spacing: .04em; }
-.activity-globe-ping { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #ffd16b; border: 2px solid #fff2ce; box-shadow: 0 0 15px #ffd16b; transform: translate(-50%,-50%); pointer-events: none; }
+.activity-globe-caption { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center; font-size: .68rem; color: #b6d4de; letter-spacing: .04em; }
+.activity-globe-ping { position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #ffd16b; border: 2px solid #fff2ce; box-shadow: 0 0 18px #ffd16b; transform: translate(-50%,-50%); pointer-events: none; }
 .activity-globe-ping::after { content: ""; position: absolute; inset: -12px; border: 2px solid #ffd16b; border-radius: 50%; animation: globe-ping 1.8s ease-out infinite; }
 .activity-globe.stale .activity-globe-ping, .activity-globe.hidden-page .activity-globe-ping { display: none; }
 @keyframes globe-ping { 0% { opacity: .9; transform: scale(.35); } 100% { opacity: 0; transform: scale(1.4); } }
@@ -76,8 +78,10 @@ GLOBE_CSS = r"""
 .activity-globe-controls details { flex-basis: 100%; color: #b8ced6; font-size: .74rem; }
 .activity-globe-controls summary { width: fit-content; min-height: 34px; padding: 7px 0; cursor: pointer; }
 .activity-globe-controls code { display: block; width: fit-content; max-width: 100%; overflow-wrap: anywhere; padding: 8px; border: 1px solid #365966; color: #eaf7fa; line-height: 1.5; }
-@media (max-width: 680px) { .activity-globe-body { grid-template-columns: 1fr; gap: 8px; } .activity-globe-stage { width: min(100%,200px); } .activity-globe-head { align-items: flex-start; } .room-globe-entry { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 900px) { .activity-globe-body { grid-template-columns: 1fr; gap: 8px; } .activity-globe-stage { width: min(100%,360px); } .activity-globe-head { align-items: flex-start; } }
+@media (max-width: 680px) { .room-globe-entry { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 560px) {
+  .activity-globe-stage { width: min(100%,306px); }
   .activity-globe-head { display: block; }
   .activity-globe-head .eyebrow { font-size: .75rem; }
   .activity-globe-state { display: inline-block; margin-top: 9px; }
@@ -161,34 +165,74 @@ function globeViewModel(traffic, mapping, stale = false) {
     active: mapped ? {ip: mapped.src_ip, observed_at: mapped.observed_at,
       location: mapping.get(normalizeGlobeIp(mapped.src_ip))} : null};
 }
+const globeSize = 420, globeCenter = 210, globeRadius = 182;
+const globeLandMaskBase64 = '__GLOBE_LAND_MASK__';
+let globeLandMask = null, globeImage = null;
+function globeMask() {
+  if (globeLandMask === null) {
+    const binary = atob(globeLandMaskBase64);
+    if (binary.length !== 32400) throw new Error('Invalid bundled globe land mask');
+    globeLandMask = Uint8Array.from(binary, char => char.charCodeAt(0));
+  }
+  return globeLandMask;
+}
 function globeProject(latitude, longitude, centerLat, centerLon) {
   const rad = Math.PI / 180, phi = latitude * rad, phi0 = centerLat * rad;
   const delta = ((longitude - centerLon + 540) % 360 - 180) * rad;
   const depth = Math.sin(phi0) * Math.sin(phi) + Math.cos(phi0) * Math.cos(phi) * Math.cos(delta);
-  return {visible: depth >= 0, x: 120 + 94 * Math.cos(phi) * Math.sin(delta),
-    y: 120 - 94 * (Math.cos(phi0) * Math.sin(phi) - Math.sin(phi0) * Math.cos(phi) * Math.cos(delta))};
+  return {visible: depth >= 0, x: globeCenter + globeRadius * Math.cos(phi) * Math.sin(delta),
+    y: globeCenter - globeRadius * (Math.cos(phi0) * Math.sin(phi) - Math.sin(phi0) * Math.cos(phi) * Math.cos(delta))};
 }
-// Deliberately coarse land reference; the selected map is the sole source of marker coordinates.
-const globeLand = [
-  [[72,-165],[65,-140],[57,-135],[50,-125],[34,-118],[25,-108],[16,-91],[9,-82],[18,-88],[29,-81],[43,-67],[53,-56],[60,-75],[70,-95],[72,-125],[72,-165]],
-  [[12,-81],[5,-76],[-5,-80],[-17,-75],[-30,-72],[-42,-73],[-55,-67],[-52,-54],[-35,-48],[-20,-41],[-5,-34],[5,-51],[12,-63],[12,-81]],
-  [[36,-10],[44,-10],[51,3],[58,20],[67,29],[70,52],[62,80],[71,105],[61,130],[55,160],[43,145],[37,122],[22,112],[10,104],[8,78],[23,65],[30,46],[36,35],[42,25],[36,-10]],
-  [[36,-17],[31,10],[32,33],[19,42],[10,51],[-10,42],[-25,35],[-35,18],[-30,11],[-17,11],[-5,9],[5,-1],[15,-17],[36,-17]],
-  [[-11,113],[-14,129],[-10,142],[-20,153],[-35,151],[-39,143],[-34,115],[-21,113],[-11,113]],
-  [[83,-50],[76,-20],[65,-39],[59,-47],[65,-58],[76,-65],[83,-50]]
-];
 function drawGlobe(view) {
   const canvas = byId('activity-globe-canvas');
   if (typeof canvas.getContext !== 'function') return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  ctx.clearRect(0, 0, 240, 240);
-  const water = ctx.createRadialGradient(88, 74, 8, 120, 120, 110);
-  water.addColorStop(0, '#246577'); water.addColorStop(.6, '#123c4e'); water.addColorStop(1, '#071c29');
-  ctx.beginPath(); ctx.arc(120, 120, 94, 0, Math.PI * 2); ctx.fillStyle = water; ctx.fill();
-  ctx.save(); ctx.beginPath(); ctx.arc(120, 120, 94, 0, Math.PI * 2); ctx.clip();
-  ctx.strokeStyle = 'rgba(135,218,218,.28)'; ctx.lineWidth = .8;
-  function line(points) {
+  const mask = globeMask();
+  if (globeImage === null) globeImage = ctx.createImageData(globeSize, globeSize);
+  const pixels = globeImage.data;
+  pixels.fill(0);
+  const phi0 = globeState.latitude * Math.PI / 180;
+  const sin0 = Math.sin(phi0), cos0 = Math.cos(phi0);
+  const lon0 = globeState.longitude * Math.PI / 180;
+  const twoPi = Math.PI * 2;
+  for (let y = globeCenter - globeRadius; y <= globeCenter + globeRadius; y += 1) {
+    const north = (globeCenter - y) / globeRadius;
+    for (let x = globeCenter - globeRadius; x <= globeCenter + globeRadius; x += 1) {
+      const east = (x - globeCenter) / globeRadius;
+      const distance = east * east + north * north;
+      if (distance > 1) continue;
+      const forward = Math.sqrt(1 - distance);
+      const latitude = Math.asin(north * cos0 + forward * sin0);
+      const longitude = lon0 + Math.atan2(east, forward * cos0 - north * sin0);
+      let horizontal = longitude / twoPi + .5;
+      horizontal -= Math.floor(horizontal);
+      const landX = Math.min(719, Math.floor(horizontal * 720));
+      const landY = Math.max(0, Math.min(359, Math.floor((.5 - latitude / Math.PI) * 360)));
+      const bit = landY * 720 + landX;
+      const isLand = (mask[bit >> 3] & (1 << (bit & 7))) !== 0;
+      // Screen-fixed light gives volume while keeping the far side legible.
+      const light = Math.max(0, -.28 * east + .37 * north + .88 * forward);
+      const shade = .51 + .47 * light + .10 * forward;
+      const relief = isLand ? 3 * Math.sin(latitude * 17 + longitude * 11) * Math.cos(longitude * 19) : 0;
+      const index = (y * globeSize + x) * 4;
+      pixels[index] = (isLand ? 72 : 16) * shade + relief;
+      pixels[index + 1] = (isLand ? 135 : 81) * shade + relief;
+      pixels[index + 2] = (isLand ? 113 : 116) * shade + relief;
+      pixels[index + 3] = Math.min(255, Math.round(255 * Math.min(1, (1 - distance) * 95)));
+    }
+  }
+  ctx.putImageData(globeImage, 0, 0);
+  const atmosphere = ctx.createRadialGradient(globeCenter, globeCenter, globeRadius - 13,
+    globeCenter, globeCenter, globeRadius + 24);
+  atmosphere.addColorStop(0, 'rgba(112,205,218,0)');
+  atmosphere.addColorStop(.42, 'rgba(112,205,218,.13)');
+  atmosphere.addColorStop(.75, 'rgba(112,205,218,.21)');
+  atmosphere.addColorStop(1, 'rgba(112,205,218,0)');
+  ctx.fillStyle = atmosphere; ctx.fillRect(0, 0, globeSize, globeSize);
+  ctx.save(); ctx.beginPath(); ctx.arc(globeCenter, globeCenter, globeRadius, 0, twoPi); ctx.clip();
+  ctx.strokeStyle = 'rgba(185,231,226,.23)'; ctx.lineWidth = 1;
+  function gridLine(points) {
     let drawing = false;
     ctx.beginPath();
     points.forEach(([lat, lon]) => {
@@ -199,22 +243,18 @@ function drawGlobe(view) {
     });
     ctx.stroke();
   }
-  for (let lat = -60; lat <= 60; lat += 30) {
-    line(Array.from({length: 145}, (_, i) => [lat, -180 + i * 2.5]));
-  }
-  for (let lon = -180; lon < 180; lon += 30) {
-    line(Array.from({length: 73}, (_, i) => [-90 + i * 2.5, lon]));
-  }
-  ctx.strokeStyle = 'rgba(170,223,193,.68)'; ctx.lineWidth = 1.5;
-  globeLand.forEach(line);
+  for (let lat = -60; lat <= 60; lat += 30)
+    gridLine(Array.from({length: 145}, (_, i) => [lat, -180 + i * 2.5]));
+  for (let lon = -180; lon < 180; lon += 30)
+    gridLine(Array.from({length: 73}, (_, i) => [-90 + i * 2.5, lon]));
   ctx.restore();
-  ctx.beginPath(); ctx.arc(120, 120, 94, 0, Math.PI * 2);
-  ctx.strokeStyle = '#68acb9'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(globeCenter, globeCenter, globeRadius, 0, twoPi);
+  ctx.strokeStyle = 'rgba(160,226,225,.75)'; ctx.lineWidth = 1.5; ctx.stroke();
   const ping = byId('activity-globe-ping');
   const point = view.active && globeProject(view.active.location.latitude, view.active.location.longitude,
     globeState.latitude, globeState.longitude);
   ping.hidden = !point || !point.visible || globeState.stale || document.hidden;
-  if (!ping.hidden) { ping.style.left = `${point.x / 240 * 100}%`; ping.style.top = `${point.y / 240 * 100}%`; }
+  if (!ping.hidden) { ping.style.left = `${point.x / globeSize * 100}%`; ping.style.top = `${point.y / globeSize * 100}%`; }
 }
 function orientGlobe(view) {
   if (globeState.frame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(globeState.frame);
@@ -233,7 +273,7 @@ function orientGlobe(view) {
   function step(now) {
     if (document.hidden) { globeState.latitude = targetLat; globeState.longitude = targetLon; globeState.frame = null; drawGlobe(view); return; }
     if (started === null) started = now;
-    const t = Math.min(1, (now - started) / 650), eased = 1 - Math.pow(1 - t, 3);
+    const t = Math.min(1, (now - started) / 850), eased = 1 - Math.pow(1 - t, 3);
     globeState.latitude = startLat + (targetLat - startLat) * eased;
     globeState.longitude = startLon + deltaLon * eased;
     drawGlobe(view);
@@ -322,3 +362,5 @@ function initializeGlobe() {
   renderGlobeView();
 }
 """
+
+GLOBE_JS = GLOBE_JS.replace('__GLOBE_LAND_MASK__', LAND_MASK_BASE64)
