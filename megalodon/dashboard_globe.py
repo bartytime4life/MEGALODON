@@ -35,6 +35,7 @@ GLOBE_HTML = """
       <input id="activity-globe-minute" type="range" min="0" max="59" step="1" value="59" aria-describedby="activity-globe-selected-time activity-globe-coverage">
       <div class="activity-globe-axis"><span>60 min ago</span><span>Now · UTC</span></div>
       <button type="button" id="activity-globe-live" aria-pressed="true">Live · latest stored</button></div>
+    <p class="activity-globe-hover-detail" id="activity-globe-hover-detail">Hover a bar for its minute details; use the slider to review by keyboard or touch.</p>
     <div class="activity-globe-timeline-bottom"><dl class="activity-globe-counts">
       <div><dt>Selected minute</dt><dd id="activity-globe-selected-count">—</dd></div>
       <div><dt>Peak minute</dt><dd id="activity-globe-peak-count">—</dd></div>
@@ -120,6 +121,7 @@ GLOBE_CSS = r"""
 .activity-globe-rail button { grid-area: live; min-height: 42px; padding: 8px 12px; border: 1px solid #6aa9a7; border-radius: 6px; background: #17414a; color: #edfffb; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; }
 .activity-globe-rail button[aria-pressed="false"] { background: #0e2935; color: #cae0e4; }
 .activity-globe-rail button:focus-visible, .activity-globe-rail input:focus-visible { outline: 3px solid #ffd16b; outline-offset: 3px; }
+.activity-globe-hover-detail { margin: 0 0 11px; color: #c7e6e7; font-size: .78rem; line-height: 1.45; font-variant-numeric: tabular-nums; }
 .activity-globe-axis { grid-area: axis; display: flex; justify-content: space-between; margin: -1px 0 11px; color: #b8ced6; font-size: .72rem; }
 .activity-globe-timeline-bottom { display: flex; justify-content: space-between; align-items: end; gap: 14px; }
 .activity-globe-counts { display: flex; gap: 16px; margin: 0; }
@@ -551,6 +553,10 @@ function globeHourModel(page, start, end, selectedAt, live) {
     traffic: {status: 'available', events: displayed, signalByEvent}};
 }
 function globeHourTime(at) { return new Date(at).toISOString().slice(11, 16) + ' UTC'; }
+function globeMinuteDetail(at, bin) {
+  const signal = bin.count ? globeSignalLabel(bin.signal) : 'No returned records (safety unknown)';
+  return `${globeHourTime(at)}–${globeHourTime(at + 60000)} · ${bin.count} returned record${bin.count === 1 ? '' : 's'} · ${signal}`;
+}
 function renderGlobeHour() {
   const hour = globeState.hour;
   if (!hour.page) {
@@ -558,6 +564,7 @@ function renderGlobeHour() {
       ? 'Hour history unavailable · no current activity shown' : 'Loading the past hour of stored metadata…';
     byId('activity-globe-updated').textContent = hour.failed ? 'Refresh failed' : 'Awaiting hour view';
     byId('activity-globe-selected-time').textContent = hour.failed ? 'Hour unavailable' : 'Waiting for the hour view';
+    byId('activity-globe-hover-detail').textContent = 'No minute details available.';
     byId('activity-globe-histogram').setAttribute('aria-label', 'No hour history available');
     byId('activity-globe-histogram').replaceChildren();
     byId('activity-globe-minute').disabled = true;
@@ -577,17 +584,22 @@ function renderGlobeHour() {
     column.className = `activity-globe-bin${bin.signal === 'quiet' ? '' : ' ' + bin.signal}${index === model.index ? ' selected' : ''}`;
     bar.className = `activity-globe-bar${bin.count ? '' : ' empty'}`;
     bar.style.height = `${bin.count ? Math.max(8, bin.count / Math.max(1, model.peak) * 100) : 2}%`;
-    column.title = `${globeHourTime(hour.start + index * 60000)} · ${bin.count} returned record${bin.count === 1 ? '' : 's'} · ${globeSignalLabel(bin.signal)}`;
+    const detail = globeMinuteDetail(hour.start + index * 60000, bin);
+    column.title = detail;
+    column.onpointerenter = () => {byId('activity-globe-hover-detail').textContent = `Hovered · ${detail}`;};
+    column.onpointerleave = () => {byId('activity-globe-hover-detail').textContent = 'Hover a bar for its minute details; use the slider to review by keyboard or touch.';};
     column.replaceChildren(bar);
     return column;
   });
+  byId('activity-globe-hover-detail').textContent = 'Hover a bar for its minute details; use the slider to review by keyboard or touch.';
   const histogram = byId('activity-globe-histogram'); histogram.replaceChildren(...bars);
   histogram.setAttribute('aria-label', `60 minute bins, oldest to newest, returned qualified metadata counts: ${counts.join(', ')}. Empty bins do not prove no traffic.`);
   const slider = byId('activity-globe-minute'); slider.disabled = false; slider.value = String(model.index);
-  slider.setAttribute('aria-valuetext', `${globeHourTime(binStart)}, ${model.bins[model.index].count} returned records`);
+  const minuteDetail = globeMinuteDetail(binStart, model.bins[model.index]);
+  slider.setAttribute('aria-valuetext', `${hour.failed ? 'Previous page · ' : ''}${minuteDetail}`);
   const live = byId('activity-globe-live'); live.disabled = false;
   live.setAttribute('aria-pressed', String(hour.live));
-  byId('activity-globe-selected-time').textContent = `${hour.live ? 'Live · latest stored · ' : 'Selected · '}${globeHourTime(binStart)}–${globeHourTime(binStart + 60000)}`;
+  byId('activity-globe-selected-time').textContent = `${hour.failed ? 'Previous page · ' : hour.live ? 'Live · latest stored · ' : 'Selected · '}${minuteDetail}`;
   byId('activity-globe-selected-count').textContent = String(model.bins[model.index].count);
   byId('activity-globe-peak-count').textContent = String(model.peak);
   byId('activity-globe-updated').textContent = `Refreshed ${globeHourTime(hour.fetchedAt)}`;
