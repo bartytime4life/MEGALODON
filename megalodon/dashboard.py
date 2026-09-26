@@ -11,14 +11,14 @@ public Python API and the security boundary for every HTTP route.
 from __future__ import annotations
 
 from collections import OrderedDict
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer as _ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import hmac
 import json
 import os
 from pathlib import Path
 import sys
-from threading import Lock, Thread
+from threading import BoundedSemaphore, Lock, Thread
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 import webbrowser
@@ -58,6 +58,44 @@ REFERENCE_WARNING = (
     "Registration is analyst context, not proof of what was observed or whether an endpoint "
     "is safe or malicious."
 )
+
+
+class ThreadingHTTPServer(_ThreadingHTTPServer):
+    """Bound the loopback server before HTTP headers reach the handler."""
+
+    max_connections = 32
+    request_queue_size = 32
+    request_timeout_seconds = 2
+
+    def __init__(self, server_address: tuple[str, int], handler: type[BaseHTTPRequestHandler]) -> None:
+        self._connection_slots = BoundedSemaphore(self.max_connections)
+        super().__init__(server_address, handler)
+
+    def get_request(self):
+        connection, address = super().get_request()
+        try:
+            connection.settimeout(self.request_timeout_seconds)
+        except OSError:
+            connection.close()
+            raise
+        return connection, address
+
+    def process_request(self, request, client_address) -> None:
+        if not self._connection_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._connection_slots.release()
+            self.shutdown_request(request)
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connection_slots.release()
 
 
 class DashboardReader(Protocol):
