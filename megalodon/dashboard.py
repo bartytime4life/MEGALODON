@@ -36,6 +36,7 @@ from .config import AISettings, BlockingSettings
 from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
 from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYTES, read_suricata_projection
+from .offline_locations import OfflineLocations, validate_lookup_ips, unconfigured as unconfigured_locations
 
 
 MIN_REFRESH_SECONDS = 2
@@ -425,6 +426,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     ai_receipt_path: Path | None = None
     ai_operator_token: str | None = None
     ai_blocking: BlockingSettings = BlockingSettings()
+    offline_locations: OfflineLocations | None = None
     automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -770,11 +772,51 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/install":
             self._install()
             return
+        if self.path == "/api/offline-locations":
+            self._offline_locations()
+            return
         if self.path == "/api/automation-preview":
             self._automation_preview()
             return
         self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
 
+    def _offline_locations(self) -> None:
+        # An Origin and custom header are required even for this read-only local
+        # projection, so another website cannot query private address metadata.
+        expected_origin = f"http://{self.headers.get('Host')}"
+        if (self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("X-Megalodon-Location", []) != ["1"]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "same-origin local lookup required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 4 or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 2 <= int(lengths[0]) <= 2048):
+            self._send_json({"error": "invalid lookup length"}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
+            if type(body) is not dict or set(body) != {"ips"}:
+                raise ValueError("invalid lookup body")
+            validate_lookup_ips(body["ips"])
+        except (ValueError, UnicodeError, TypeError, OverflowError):
+            self._send_json({"error": "invalid offline location request"}, status=400)
+            return
+        try:
+            response = (self.offline_locations.lookup(body["ips"]) if self.offline_locations is not None
+                        else unconfigured_locations(body["ips"]))
+            payload = json.dumps(response, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+            if len(payload) > 4096:
+                raise ValueError("lookup response bound")
+        except Exception:
+            self._send_json({"error": "offline location lookup unavailable"}, status=503)
+            return
+        self._send(200, "application/json; charset=utf-8", payload)
     def _automation_preview(self) -> None:
         """Calculate a fixed recurrence; never create or run a job."""
         expected_origin = f"http://{self.headers.get('Host')}"
@@ -1045,6 +1087,7 @@ def serve(
     ai_settings: AISettings | None = None,
     ai_receipt_path: Path | None = None,
     ai_blocking: BlockingSettings | None = None,
+    offline_locations: OfflineLocations | None = None,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
@@ -1088,6 +1131,7 @@ def serve(
             "ai_receipt_path": ai_receipt_path,
             "ai_operator_token": ai_operator_token,
             "ai_blocking": ai_blocking or BlockingSettings(),
+            "offline_locations": offline_locations,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)

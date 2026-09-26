@@ -700,6 +700,33 @@ observation are separate timestamps; neither establishes whole-network coverage.
 Sample, unlinked and unqualified receipts are excluded. Endpoint addresses,
 ports, reported byte counts and source/run provenance appear in Activity detail.
 
+The activity globe's rolling hour view shows the newest bounded stored metadata
+within the past 60 minutes and refreshes while the tab is visible. Sweep the
+time control back to review a minute, or choose **Live** to follow the latest
+stored activity. The globe scans gently until a mapped detector-linked source
+needs review, then focuses on each recent signal for no more than eight seconds
+(less during a burst) before moving on. Its bars compare event counts in the returned candidates;
+unlinked findings do not prove traffic is safe, and a missing minute does not
+prove there was no traffic. The history response contains at most 500 stored
+event candidates and 200 linked finding candidates, so a busy hour can be only
+partly represented.
+
+To place public source IPs automatically on the globe, install the optional
+local reader (`python -m pip install '.[geo]'` from this checkout), obtain a
+City-style MMDB region file under its provider's terms, and launch
+`python -m megalodon hud --geoip-db /absolute/private/GeoLite2-City.mmdb`.
+The containing directory must be owned by the launching user and mode `0700`;
+the file must be owned by that user, mode `0600`, regular, and no larger than
+128 MiB. The HUD reads it once at startup, makes no download or external IP
+lookup, and returns only coarse 5-degree coordinates to its local browser.
+Each displayed view asks for at most 20 distinct public source IPs, with linked
+signals first; other addresses remain unmapped unless the reviewed CSV covers them.
+Geolocation is approximate and does not identify a person, device or true
+network origin. The existing reviewed CSV stays available as a per-tab override
+for exact IPs, including local addresses. If no MMDB is configured, the timeline
+still works and the globe names the missing location source. GeoLite2 users
+should follow [MaxMind's attribution and data terms](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/).
+
 Choose **Last hour**, **Today (UTC)** or **Custom UTC**, then **Apply time range**
 to read database history, up to 31 days per range. **Older page** and **Newer page**
 move through 500-candidate pages, including pages containing only excluded rows.

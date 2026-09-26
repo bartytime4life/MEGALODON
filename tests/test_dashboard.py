@@ -459,9 +459,11 @@ def test_dashboard_ui_has_accessible_read_only_states():
         assert f"'{private_field}'" not in INDEX_HTML + DASHBOARD_JS
         assert f'"{private_field}"' not in INDEX_HTML + DASHBOARD_JS
         assert not re.search(r"\." + re.escape(private_field) + r"\b", DASHBOARD_JS)
-    # The only browser write is the fixed-recipe installer request.
-    assert DASHBOARD_JS.count("method: 'POST'") == 1
+    # Browser POSTs are the fixed-recipe installer and a read-only, same-origin
+    # lookup into an explicitly configured offline region database.
+    assert DASHBOARD_JS.count("method: 'POST'") == 2
     assert "heartbeatFetch('/api/install', {method: 'POST'" in DASHBOARD_JS
+    assert "fetch('/api/offline-locations', {method: 'POST'" in DASHBOARD_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
     assert INDEX_HTML.count('type="file"') == 1
