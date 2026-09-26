@@ -25,6 +25,13 @@ The hosted install guide was published in Sites v29. See
 `docs/site-source-alignment.md` in the parent repository for the exact current
 publication receipt; later source edits require their own version and deployment.
 
+The Home view also points to the local HUD's rolling-hour activity globe and
+Actions workspace as implemented on repository `main@a767e69bcaf7ac0020e03b89578e6c76ec264560`.
+The globe reads bounded stored metadata and uses optional offline, approximate
+IP regions. The Actions workspace provides copy-only reviewed scripts and a
+bounded recurrence preview; it creates no schedule or job and runs no command.
+Those local features are not available through this hosted Site.
+
 ## Quick-start controls
 
 The first view follows Review / Install / Open: from a reviewed repository root,

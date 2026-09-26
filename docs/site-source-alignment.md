@@ -1,6 +1,35 @@
 # Defense Console source alignment
 
-## Current publication — Console v31, repository source refresh
+## Current publication — Console v32, local feature guide
+
+OBSERVED 2026-09-26: the existing owner-only Console serves version 32 from
+Sites source `fd308cb9b4ba42b2f7c281ae046138694cfd5d4c`. The source began
+with repository `main@a767e69bcaf7ac0020e03b89578e6c76ec264560`; its
+Home view now points to that revision's local rolling-hour activity globe and
+Actions workspace. The new text describes optional offline approximate IP
+regions and copy-only scripts with a read-only recurrence preview. This hosted
+page still has no local evidence, schedule, command, or firewall connection.
+All 14 tracked `site/` files in this repository candidate match the pushed
+Sites source; the candidate is not merged into `main` by this publication.
+
+| Identity | Observed value |
+| --- | --- |
+| Project | `appgprj_6aaa2be9d9288191a15a9c1d743af0b3` |
+| Version | 32 — `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_e7f249e6cec4819188e0b6742663f5eb` |
+| Sites source | `fd308cb9b4ba42b2f7c281ae046138694cfd5d4c` |
+| Stored archive | `sha256:67963f125642a00fbe8580d94cc2945afc5cb7deafae1bc59e2b00939b36fc2e`; 10 files, 317,440 bytes |
+| Deployment | `appgdep_6ab8143e014881919b810e32ded7a560`; succeeded at `2026-09-26T18:51:51.093723+00:00` |
+| URL | <https://megalodon-defense-console.blackbart-55.chatgpt.site> |
+| Audience | Existing owner-only access; no external visitors |
+| Rollback reference | v31 / `cd421d21435092f4571cc4d13b999fd0f6c62730` |
+
+VERIFIED: 44 Site Node checks, JavaScript syntax, diff validation, source
+equality, and Sites version and deployment readback passed. No new rendered
+browser walkthrough or local-host operation was tested. Publication establishes
+the hosted reference update, not telemetry, schedule execution, operational
+acceptance, repository merge, or software release.
+
+## Historical publication — Console v31, repository source refresh
 
 OBSERVED 2026-09-25: the existing owner-only Console serves version 31 from
 Sites source `cd421d21435092f4571cc4d13b999fd0f6c62730`. Its deployable
