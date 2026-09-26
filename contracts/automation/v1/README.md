@@ -6,7 +6,9 @@ implemented here.
 
 Delivery state: the Stage 0 schema, fixtures, and deterministic tests are on
 `main`. “Draft” describes the compatibility/versioning status of the contract,
-not an unmerged branch. The next stage remains unimplemented.
+not an unmerged branch. The bounded recurrence parser and preview live
+separately in `megalodon/automation_schedule.py` and the `automation-preview`
+CLI; this directory still provides no scheduler or execution path.
 
 This directory is the first dependency-closed slice of the proposed
 [MEGALODON automation design](../../../docs/automation-contract.md). It defines
