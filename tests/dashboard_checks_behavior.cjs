@@ -6,7 +6,8 @@ process.stdin.on('data', chunk => input += chunk);
 process.stdin.on('end', async () => {
   try {
     const {code, report} = JSON.parse(input), nodes = new Map(), calls = [], timers = new Map();
-    const artifacts = [], downloads = [], revoked = [];
+    const artifacts = [], downloads = [], revoked = [], copied = [];
+    let clipboardFails = false;
     let timerId = 0;
     function element(tag = '') {
       return {tag, children: [], textContent: '', value: '', attrs: {}, listeners: {}, disabled: false,
@@ -26,6 +27,7 @@ process.stdin.on('end', async () => {
       formatRefreshTime: date => date.toISOString(),
       toolAcquisition: Object.fromEntries(['suricata','scapy','clamav','osquery','qwen','nmap','ossec','greenbone','zabbix','nagios','tshark','zeek','nftables'].map(id => [id, {url: 'https://publisher.example/' + id}])),
       window: {setTimeout(fn, delay) {const id = ++timerId; timers.set(id, {fn, delay}); return id;}, clearTimeout(id) {timers.delete(id);}},
+      navigator: {clipboard: {async writeText(value) {if (clipboardFails) throw Error('denied'); copied.push(value);}}},
       report,
       fetch: async () => {throw Error('PRIVATE_PATH');},
     };
@@ -43,6 +45,17 @@ process.stdin.on('end', async () => {
     assert.equal(byId('help-source-launch').hidden, false);
     assert.equal(byId('setup-command').textContent, context.localHudLaunch.command);
     assert.equal(byId('setup-copy').disabled, false);
+    assert.equal(byId('tool-management-command').textContent, context.localHudLaunch.command + ' --enable-tool-management');
+    assert.equal(byId('tool-management-copy').disabled, false);
+    assert.match(byId('tool-management-copy-status').textContent, /not been run/);
+    await byId('tool-management-copy').listeners.click();
+    assert.equal(copied.pop(), context.localHudLaunch.command + ' --enable-tool-management');
+    assert.match(byId('tool-management-copy-status').textContent, /copied.*not run/i);
+    clipboardFails = true;
+    await byId('tool-management-copy').listeners.click();
+    assert.match(byId('tool-management-copy-status').textContent, /Clipboard unavailable.*not run/);
+    assert.match(byId('tool-management-command').textContent, /--enable-tool-management$/);
+    clipboardFails = false;
     context.localHudLaunch = {mode: 'desktop', command: "'/home/example/.local/bin/megalodon-hud' --config '/home/example/.config/MEGALODON/settings.toml'"};
     run('renderLaunchHelp()');
     assert.match(byId('setup-launch-intro').textContent, /application menu/);
@@ -50,6 +63,12 @@ process.stdin.on('end', async () => {
     assert.equal(byId('setup-source-launch').hidden, true);
     assert.equal(byId('help-source-launch').hidden, true);
     assert.equal(run('hudLaunchCommand({})'), context.localHudLaunch.command);
+    assert.equal(run('toolManagementLaunchCommand()'), context.localHudLaunch.command + ' --enable-tool-management');
+    context.localHudLaunch = {mode: 'desktop', command: "'/home/example/.local/bin/megalodon-hud' --enable-tool-management --config '/home/example/.config/MEGALODON/settings.toml'"};
+    assert.equal(run('toolManagementLaunchCommand()'), context.localHudLaunch.command, 'existing authorization flag must not be duplicated');
+    context.localHudLaunch = {mode: 'desktop', command: "'/home/example/.local/bin/megalodon-hud' --enable-tool-management --enable-tool-management"};
+    assert.throws(() => run('toolManagementLaunchCommand()'));
+    context.localHudLaunch = {mode: 'desktop', command: "'/home/example/.local/bin/megalodon-hud' --config '/home/example/.config/MEGALODON/settings.toml'"};
     assert.equal(run('hudLaunchCommand({config: "/tmp/override.toml"})'), context.localHudLaunch.command + " --config '/tmp/override.toml'");
     assert.match(byId('setup-config-note').textContent, /overrides that default/);
     for (const invalid of [{mode: 'desktop', command: 'safe', extra: 'PRIVATE'}, {mode: 'bogus', command: 'safe'}, {mode: 'source', command: ''}, {mode: 'source', command: 'bad\ncommand'}, null]) {
@@ -58,6 +77,8 @@ process.stdin.on('end', async () => {
       run('renderLaunchHelp()');
       assert.equal(byId('setup-copy').disabled, true);
       assert.equal(byId('setup-reopen-copy').disabled, true);
+      assert.equal(byId('tool-management-copy').disabled, true);
+      assert.equal(byId('tool-management-command').textContent, 'Restart command for Install/Start unavailable');
       assert.doesNotMatch(byId('setup-launch-intro').textContent, /PRIVATE|bad\ncommand/);
     }
     context.localHudLaunch = {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"};

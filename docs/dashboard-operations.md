@@ -60,6 +60,18 @@ Addresses persist only in this browser and origin; the hosted Site and local HUD
 have separate bookmarks. Remove a link from its editor. No credentials belong
 in a saved address. No background connection test is performed.
 
+The local HUD offers fixed suggested loopback addresses for Greenbone and
+Nagios. They are literal navigation targets, are not saved automatically, and
+are absent from the hosted Site. Seeing the action does not mean the service is
+installed or reachable; choosing it only asks the browser to open that address.
+
+When the HUD is in observation mode, expand **Authorize Install and Start** on
+Home to copy the exact current launch command with
+`--enable-tool-management`. Stop the current HUD yourself, review the visible
+command, and run it in the terminal. The page does not execute the copied
+command. The restarted HUD still requires its per-launch terminal token and an
+explicit confirmation before an existing fixed Install or Start action.
+
 On the local Linux dashboard, the Python/SQLite and Scapy maintenance cards
 use the absolute Python executable running that dashboard. Copied commands work
 from a new terminal without activating a virtual environment. When the package

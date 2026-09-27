@@ -76,6 +76,18 @@ and Scapy remain `not_checked` in the executable-only `presence` field; read
 the separate `heartbeat` field with its `observed_at` timestamp. All 14 cards
 offer the same copyable commands.
 
+The local HUD can prepare the exact command needed to reopen that HUD with its
+existing fixed Install/Start controls enabled. Expand **Authorize Install and
+Start** on Home and copy the displayed command. Copying does not stop or restart
+the HUD, and it does not install or start a companion. After running the command
+in a terminal, the separate per-launch token and confirmation controls remain
+required.
+
+Apps provides fixed loopback console suggestions for Greenbone and Nagios on
+the local HUD only. A suggestion is not probed or saved and does not establish
+installation, reachability, authentication, service health, telemetry, or
+MEGALODON integration. The hosted Site does not show these local suggestions.
+
 | IDs | Installation path |
 | --- | --- |
 | tshark, suricata, nftables, clamav, nmap, zabbix, nagios | Existing fixed Ubuntu apt recipes; OS privilege prompt through pkexec when needed |

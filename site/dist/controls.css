@@ -1,6 +1,7 @@
 .companion-controls { margin: 1rem 0; min-width: 0; font-size: .875rem; line-height: 1.55; }
 .companion-controls [hidden] { display: none !important; }
 .companion-controls a, .companion-controls button { display: inline-flex; align-items: center; min-height: 44px; padding: .6rem .85rem; border: 1px solid #38627a; border-radius: .5rem; background: #122938; color: #a8eeff; text-decoration: none; font: inherit; cursor: pointer; margin: .2rem .35rem .2rem 0; }
+.companion-controls .companion-button-primary { border-color: #6acabb; background: #163c39; color: #dcfff8; font-weight: 700; }
 .companion-controls button:disabled { opacity: .55; cursor: default; }
 .companion-controls :focus-visible { outline: 2px solid #5be2fa; outline-offset: 3px; }
 .companion-controls details { border-top: 1px solid #2a4355; margin-top: .6rem; padding-top: .35rem; }

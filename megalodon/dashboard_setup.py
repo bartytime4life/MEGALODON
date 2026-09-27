@@ -41,6 +41,12 @@ SETUP_HTML = """
         <details class="tool-status-details" id="tool-management-controls">
           <summary>Authorize Install and Start</summary>
           <p id="tool-management-status" role="status">Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
+          <div class="tool-management-launch">
+            <p>Copy the restart command for Install/Start from this exact HUD launcher. Copying does not stop, restart, install, or start anything.</p>
+            <code id="tool-management-command">Restart command for Install/Start unavailable</code>
+            <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start</button>
+            <p id="tool-management-copy-status" role="status" aria-live="polite">Reading this HUD's launch method…</p>
+          </div>
           <label class="field" for="tool-management-token">Tool management token from the HUD terminal<input id="tool-management-token" type="password" autocomplete="off" spellcheck="false" maxlength="32" disabled></label>
           <button id="tool-management-forget" type="button">Forget token</button>
           <p>The token stays in this page's memory and expires when the HUD stops. It is separate from your system password and the AI token. Reloading the page clears it.</p>
@@ -426,6 +432,12 @@ function validatedHudLaunch(value) {
   }
   return value;
 }
+function toolManagementLaunchCommand() {
+  const command = validatedHudLaunch(typeof localHudLaunch === 'undefined' ? null : localHudLaunch).command;
+  const flags = command.match(/(^|\s)--enable-tool-management(?=\s|$)/g) || [];
+  if (flags.length > 1) throw new Error('Launch guidance is unavailable because tool management is already listed more than once.');
+  return flags.length === 1 ? command : `${command} --enable-tool-management`;
+}
 function renderLaunchHelp() {
   try {
     const launch = validatedHudLaunch(typeof localHudLaunch === 'undefined' ? null : localHudLaunch);
@@ -442,11 +454,17 @@ function renderLaunchHelp() {
     byId('setup-reopen-copy').disabled = false;
     byId('setup-copy').disabled = false;
     byId('setup-build').disabled = false;
+    byId('tool-management-command').textContent = toolManagementLaunchCommand();
+    byId('tool-management-copy').disabled = false;
+    byId('tool-management-copy-status').textContent = 'Command prepared for copying. It has not been run.';
   } catch (error) {
     ['setup-launch-intro', 'help-launch-intro'].forEach(id => { byId(id).textContent = error.message; });
     ['setup-reopen-command', 'help-reopen-command', 'setup-command'].forEach(id => { byId(id).textContent = 'Launch command unavailable'; });
     ['setup-source-launch', 'help-source-launch'].forEach(id => { byId(id).hidden = true; });
     ['setup-reopen-copy', 'setup-copy', 'setup-build'].forEach(id => { byId(id).disabled = true; });
+    byId('tool-management-command').textContent = 'Restart command for Install/Start unavailable';
+    byId('tool-management-copy').disabled = true;
+    byId('tool-management-copy-status').textContent = 'Use the launcher that opened this HUD; no restart command for Install/Start was prepared.';
   }
 }
 byId('setup-build').addEventListener('click', () => {
@@ -468,6 +486,15 @@ byId('setup-reopen-copy').addEventListener('click', async () => {
   if (byId('setup-reopen-copy').disabled) return;
   try { await navigator.clipboard.writeText(validatedHudLaunch(localHudLaunch).command); byId('setup-reopen-feedback').textContent = 'Reopen command copied.'; }
   catch (_) { byId('setup-reopen-feedback').textContent = 'Select and copy the displayed command; clipboard unavailable.'; }
+});
+byId('tool-management-copy').addEventListener('click', async () => {
+  if (byId('tool-management-copy').disabled) return;
+  try {
+    await navigator.clipboard.writeText(toolManagementLaunchCommand());
+    byId('tool-management-copy-status').textContent = 'Restart command for Install/Start copied. It was not run.';
+  } catch (_) {
+    byId('tool-management-copy-status').textContent = 'Clipboard unavailable. Select and copy the displayed command. It was not run.';
+  }
 });
 renderLaunchHelp();
 """

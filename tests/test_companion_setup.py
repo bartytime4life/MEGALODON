@@ -33,8 +33,8 @@ class Element {
   focus() {}
 }
 const all = element => [element, ...element.children.flatMap(all)];
-function mount(id, override=null, clipboardFails=false) {
-  const copied=[], writes=[], checks=[], network=[];
+function mount(id, override=null, clipboardFails=false, local=false) {
+  const copied=[], writes=[], checks=[], network=[], views=[];
   const context={
     URL, document:{createElement:tag=>new Element(tag)},
     localStorage:{getItem(){return null;},setItem(...args){writes.push(args);}},
@@ -42,7 +42,7 @@ function mount(id, override=null, clipboardFails=false) {
       if(clipboardFails) throw new Error('denied'); copied.push(text);
     }}},
     fetch(...args){network.push(args); throw new Error('no network');},
-    runLocalChecks(...args){checks.push(args);}
+    runLocalChecks(...args){checks.push(args);}, views, local
   };
   vm.createContext(context);
   const lifecycle=override === null ? lifecycleSource : lifecycleSource.replace(
@@ -52,11 +52,11 @@ function mount(id, override=null, clipboardFails=false) {
   vm.runInContext(controlsSource,context);
   const parent=new Element('main');
   context.parent=parent; context.toolId=id;
-  vm.runInContext('MegalodonControls.mount(parent, toolId, toolId)',context);
+  vm.runInContext('MegalodonControls.mount(parent, toolId, toolId, local ? {local:true,view(...args){views.push(args)}} : {})',context);
   const guide=all(parent).find(n=>n.className==='companion-setup');
   const find=text=>all(parent).find(n=>n.textContent===text);
   const feedback=all(parent).find(n=>n.attributes.role==='status');
-  return {parent,guide,find,feedback,context,copied,writes,checks,network};
+  return {parent,guide,find,feedback,context,copied,writes,checks,network,views};
 }
 """
 
@@ -168,6 +168,52 @@ assert.equal(r.copied.length,5);
 assert.deepEqual([r.writes,r.checks,r.network],[[],[],[]]);
 assert.match(r.feedback.textContent,/not executed or verified/);
 """,
+    r"""
+for(const [id,expected] of [['greenbone','https://127.0.0.1/'],['nagios','http://127.0.0.1/nagios4/']]) {
+  const local=mount(id,null,false,true);
+  const suggested=local.find('Open suggested local console ↗');
+  assert.ok(suggested);
+  assert.equal(suggested.href,expected);
+  assert.equal(suggested.target,'_blank');
+  assert.equal(suggested.rel,'noopener noreferrer');
+  assert.equal(suggested.referrerPolicy,'no-referrer');
+  assert.equal(suggested.hidden,false);
+  const view=local.find('View suggested console in HUD');
+  assert.ok(view);
+  assert.match(all(local.parent).map(n=>n.textContent).join('\n'),/Fixed suggestion; not checked or saved/);
+  assert.deepEqual([local.copied,local.writes,local.checks,local.network,local.views],[[],[],[],[],[]]);
+  view.listeners.click();
+  assert.equal(local.views.length,1);
+  assert.equal(local.views[0][0],id);
+  assert.equal(local.views[0][1],id);
+  assert.equal(local.views[0][2],expected);
+  assert.deepEqual([local.copied,local.writes,local.checks,local.network],[[],[],[],[]]);
+  const hosted=mount(id);
+  assert.equal(hosted.find('Open suggested local console ↗'),undefined);
+}
+const other=mount('zabbix',null,false,true);
+assert.equal(other.find('Open suggested local console ↗'),undefined);
+""",
+    r"""
+const r=mount('greenbone',null,false,true);
+const suggested=r.find('Open suggested local console ↗');
+const open=r.find('Open companion console ↗');
+const input=all(r.parent).find(n=>n.tag==='input');
+assert.equal(open.hidden,true);
+input.value='https://127.0.0.1:9392/';
+r.find('Save link').listeners.click();
+assert.equal(suggested.hidden,true);
+assert.equal(open.hidden,false);
+assert.equal(open.href,'https://127.0.0.1:9392/');
+const view=r.find('View saved console in HUD');
+assert.ok(view);
+view.listeners.click();
+assert.equal(r.views.length,1);
+assert.equal(r.views[0][2],'https://127.0.0.1:9392/');
+assert.equal(r.writes.length,1);
+assert.equal(JSON.parse(r.writes[0][1]).greenbone,'https://127.0.0.1:9392/');
+assert.deepEqual([r.copied,r.checks,r.network],[[],[],[]]);
+""",
 ]
 
 
@@ -176,6 +222,7 @@ assert.match(r.feedback.textContent,/not executed or verified/);
     "ordered-inert-steps", "scapy-environment", "serving-interpreter",
     "fixed-local-docker", "privilege-and-absence", "clipboard-failure",
     "pinned-guidance", "closed-registry", "no-execution",
+    "local-suggestions-only", "saved-link-precedence",
 ])
 def test_setup_controls(surface: str, case: str) -> None:
     node = shutil.which("node")

@@ -243,6 +243,7 @@ const companionSetupGuides = {
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
   const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
+  const localConsoleSuggestions = Object.freeze({greenbone: 'https://127.0.0.1/', nagios: 'http://127.0.0.1/nagios4/'});
   const storageKey = 'megalodon-console-links-v1';
   let memory = null;
   function consoleURL(raw) {
@@ -288,6 +289,10 @@ const MegalodonControls = (() => {
     const feedback = node('p', '', 'companion-feedback'); feedback.setAttribute('role', 'status');
     const open = node('a', 'Open companion console ↗', 'companion-button');
     open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer';
+    const suggestedURL = options.local === true ? localConsoleSuggestions[id] || null : null;
+    const suggested = node('a', 'Open suggested local console ↗', 'companion-button companion-button-primary');
+    suggested.target = '_blank'; suggested.rel = 'noopener noreferrer'; suggested.referrerPolicy = 'no-referrer';
+    if (suggestedURL) suggested.href = suggestedURL;
     const destination = node('p', '', 'companion-destination');
     const editor = node('details', '', 'companion-editor');
     editor.append(node('summary', 'Set console link'));
@@ -296,16 +301,22 @@ const MegalodonControls = (() => {
     label.append(input);
     const saveButton = node('button', 'Save link'); saveButton.type = 'button';
     const removeButton = node('button', 'Remove link'); removeButton.type = 'button';
+    let view = null;
     if (typeof options.view === 'function') {
-      const view = node('button', 'View in HUD', 'companion-button'); view.type = 'button';
-      view.addEventListener('click', () => options.view(id, name, links()[id] || null));
+      view = node('button', 'View in HUD', 'companion-button'); view.type = 'button';
+      view.addEventListener('click', () => options.view(id, name, links()[id] || suggestedURL || null));
       root.append(view);
     }
     const repaint = () => {
       const url = links()[id]; open.hidden = !url;
       if (url) open.href = url; else open.removeAttribute('href');
+      suggested.hidden = !suggestedURL || Boolean(url);
       input.value = url || '';
-      destination.textContent = url ? `Saved destination: ${url}` : 'Have a web console for this tool? Add its address once.';
+      destination.textContent = url ? `Saved destination: ${url}`
+        : suggestedURL ? `Suggested local address: ${suggestedURL} Fixed suggestion; not checked or saved.`
+        : 'Have a web console for this tool? Add its address once.';
+      if (view) view.textContent = url ? 'View saved console in HUD'
+        : suggestedURL ? 'View suggested console in HUD' : 'View in HUD';
       removeButton.disabled = !url;
     };
     saveButton.addEventListener('click', () => {
@@ -319,7 +330,9 @@ const MegalodonControls = (() => {
     });
     removeButton.addEventListener('click', () => { save(id, ''); repaint(); feedback.textContent = 'Console link removed.'; input.focus(); if (typeof options.changed === 'function') options.changed(id); });
     editor.append(label, saveButton, removeButton, node('p', 'Saved only in this browser and origin. Do not paste credentials. Opens the actual companion app in a new tab; it is not a data connection.', 'companion-help'));
-    root.append(open, destination, editor);
+    root.append(open);
+    if (suggestedURL) root.append(suggested);
+    root.append(destination, editor);
     const acquisition = toolAcquisition[id];
     const publisher = toolPublisherDownloads[id];
     const guide = node('a', `${publisher ? publisher.label : acquisition.linkLabel} ↗`, 'companion-download');

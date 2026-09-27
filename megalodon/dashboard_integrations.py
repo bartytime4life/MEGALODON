@@ -295,7 +295,8 @@ function integrationCard(item) {
   if (reviewTargets[toolId]) {
     const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);
   }
-  MegalodonControls.mount(body, toolId, item.software, typeof appConsole === 'undefined' ? {} : appConsole);
+  const localControls = Object.assign({local: true}, typeof appConsole === 'undefined' ? {} : appConsole);
+  MegalodonControls.mount(body, toolId, item.software, localControls);
   body.append(textNode('p', 'View in HUD provides a place for this app. If its console blocks embedding or requires a separate sign-in window, use Open companion console.', 'app-return-note'));
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);

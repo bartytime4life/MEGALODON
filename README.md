@@ -700,7 +700,9 @@ local entry points and authority limits, and
 the local summary and `python -m megalodon.tool_setup` workflows.
 
 **Apps** shows the startup executable-presence snapshot, official setup links,
-saved companion-console addresses and copy-only maintenance controls. Choose
+saved companion-console addresses and copy-only maintenance controls. The local
+HUD also shows fixed loopback console suggestions for Greenbone and Nagios; a
+suggestion is neither probed nor saved, and the hosted Site does not show it. Choose
 **View in HUD** on any app card to use its configured web console in the App
 viewer. Nothing loads until you choose it. If the app refuses embedding or needs
 external sign-in, use **Open outside HUD**. Desktop GUIs such as Wireshark and
