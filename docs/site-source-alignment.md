@@ -32,7 +32,7 @@ acceptance, or approve independent security review.
 ## Historical publication — Console v41, source parity pending
 
 OBSERVED 2026-09-27 through the Sites project, version and deployment read
-APIs: the existing owner-only Site is live as version 41 from Sites source
+APIs: the existing owner-only Site was observed live as version 41 from Sites source
 `6d076c214f69f92aac71ee7628055ac5438f2aec`, saved version
 `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_9f60a36e44648191ab57db8ada6ca00e`.
 Deployment `appgdep_6ab8c03a34d88191b0a1323246bb388b` reported
