@@ -6,13 +6,13 @@ The local dashboard's core telemetry routes are read-only. Its separately
 enabled AI question POST requires a per-launch operator token and can write
 private AI receipts and bounded report snapshots; see
 [`docs/ai-control-plane.md`](https://github.com/bartytime4life/MEGALODON/blob/main/docs/ai-control-plane.md). This hosted Site has
-no connection to those routes. The hosted HUD now accepts a bounded aggregate-only
-`megalodon-hud-snapshot-v1` export for six visual summaries. It does not connect
-to the local routes. Source changes for the exporter and uniform tool setup
-must be installed locally before the new module commands and Prepare summary
-controls are available. The Site and local HUD share a generated feature/tool
-data-coverage map and an identical snapshot validator; use
-`python scripts/sync-hud-assets.py` after changing either canonical source.
+no connection to those routes. Its Activity view does not accept local activity
+telemetry or `megalodon-hud-snapshot-v1` files; it shows one passive unavailable
+boundary and a reference globe. The local HUD retains its bounded summary
+preview and download workflow for private review. Source changes for the exporter
+and uniform tool setup must be installed locally before those local controls are
+available. The Site and local HUD share a generated feature/tool data-coverage
+map; use `python scripts/sync-hud-assets.py` after changing that canonical source.
 
 The saved osquery package-count panel accepts only a counts-only JSON produced
 from one operator-run `deb_packages` count. It stays in the browser tab and
@@ -33,8 +33,8 @@ The hosted install guide was published in Sites v29. See
 `docs/site-source-alignment.md` in the parent repository for the exact current
 publication receipt; later source edits require their own version and deployment.
 
-The Home view also points to the local HUD's rolling-hour activity globe and
-Actions workspace as implemented on repository `main@a767e69bcaf7ac0020e03b89578e6c76ec264560`.
+The local HUD includes a rolling-hour activity globe and Actions workspace as
+implemented on repository `main@a767e69bcaf7ac0020e03b89578e6c76ec264560`.
 The globe reads bounded stored metadata and uses optional offline, approximate
 IP regions. The Actions workspace provides copy-only reviewed scripts and a
 bounded recurrence preview; it creates no schedule or job and runs no command.
@@ -91,7 +91,7 @@ hosted page.
 
 ## Actual behavior
 
-- No network feed is connected. The HUD shows unavailable measurements, not zeros, generated rates, detections, protocol shares or example receipts. Workflows points to the local dashboard for actual stored evidence; this does not start a sensor or establish liveness.
+- No network feed is connected. The Activity view shows one passive unavailable boundary, not zeros, generated rates, detections, protocol shares or example receipts. Separate evidence imports and setup workflows retain their own controls; none starts a sensor or establishes liveness.
 - Fourteen integration cards show one presence light next to each name: a fresh manual note or imported executable-presence report sets it green or red, stale evidence sets it amber, and otherwise it stays grey. The imported report is an unauthenticated PATH claim, not proof of installation or service health. This hosted page cannot see the PC. The local HUD provides recent presence observations, visible unknown/stale states, setup guidance and, where implemented, separately authorized Install/Start controls (see `docs/tool-heartbeat.md`).
 - Manual notes persist in this browser's `localStorage`, expire after seven days, and can be cleared. A readiness JSON import stays only in page memory and is never uploaded or saved to `localStorage`.
 - Readiness import accepts only the closed `megalodon-tool-readiness-v1` schema, fixed registry/boundaries and at most 8,192 UTF-8 bytes. Duplicate keys, unsupported claims, malformed/future timestamps and overlapping reads fail closed. Reports older than 24 hours are marked stale; they are not authenticated.

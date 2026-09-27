@@ -9,13 +9,14 @@ uses its own rolling hour and selected minute. Existing same-origin read-only
 `/api/traffic` and `/api/traffic-history` supply data at the configured refresh
 interval (five seconds by default). No sensor is started by opening a view.
 
-## Hosted summary workflow
+## Local summary export
 
-The hosted Site cannot read localhost or your database. In the updated local
-HUD, select **Prepare summary**, review the aggregate JSON, then **Download
-summary JSON** and load that file on the hosted page. Preparation uses the
-latest bounded database window, independently of the displayed time filter.
-A failed refresh preserves the previous preview and its original timestamp.
+The local HUD retains a private summary preview and download workflow. Select
+**Prepare summary**, review the aggregate JSON, then **Download summary JSON**
+for private review. Preparation uses the latest bounded database window,
+independently of the displayed time filter. A failed refresh preserves the
+previous preview and its original timestamp. The hosted reference Site cannot
+read localhost or your database and does not accept this activity summary.
 
 Alternatively, run this in the Python environment containing this revision:
 
@@ -24,8 +25,8 @@ umask 077
 python -m megalodon.hud_snapshot --database /absolute/path/to/megalodon.db > hud-summary.json
 ```
 
-Replace the database path, then choose **Load summary JSON** in the hosted HUD.
-The exporter uses the existing bounded read-only projection: at most 500 event
+Replace the database path before running the command. The exporter uses the
+existing bounded read-only projection: at most 500 event
 candidates and 200 linked finding candidates. Sample/unlinked events remain
 excluded. No database is created. A missing/unavailable source exits nonzero
 without writing a JSON document; shell redirection may leave an empty file.
@@ -37,16 +38,15 @@ It contains no IPs, ports, raw records, messages, credentials or filesystem path
 Highest linked finding severity determines each event's lane. No finding is
 not evidence of safety. Counts are metadata records, not link bandwidth.
 
-The browser accepts at most 16 KiB of strict UTF-8 JSON, closed keys and fixed
-arrays. It rejects duplicate keys, invalid/future dates, excessive nesting,
-unknown quality, out-of-range counts and inconsistent totals. Values are rendered
-as text. Imported data stays in memory until Clear, reload or navigation away;
-there is no upload or persistent storage. Concurrent reads cannot restore a
-cleared or superseded import. Failed imports preserve the previous summary and
-show an error. A summary is always labeled **saved**, never live, and is an
-unauthenticated self-report. The geographic reference remains unpopulated because
-locations are not exported. Use the local HUD for refreshing minute rates and
-optional approximate offline IP mapping.
+The local HUD accepts at most 16 KiB from its same-origin summary endpoint, then
+checks strict JSON, closed keys and fixed arrays. It rejects duplicate keys,
+invalid/future dates, excessive nesting, unknown quality, out-of-range counts
+and inconsistent totals. Values are rendered as text. Preview data stays in
+memory until cleared or the page closes; there is no upload or persistent
+storage. Failed refreshes preserve the previous summary and its timestamp. A
+summary is always labeled **saved**, never live, and is an unauthenticated
+self-report. The hosted geographic reference remains unpopulated because the
+hosted page does not read this export.
 
 ## One setup entry point for every companion
 
@@ -115,8 +115,8 @@ The map names each unimplemented companion data adapter explicitly.
 
 `GET /api/hud-snapshot` is read-only, parameter-free and limited to 16 KiB.
 It uses the same exporter as the CLI and inherits the local server's Host,
-no-store and same-origin boundaries. The packaged validator is identical to
-the hosted validator. The preview/download controls start no upload or timer.
+no-store and same-origin boundaries. The packaged local validator checks the
+preview before download. The preview/download controls start no upload or timer.
 
 Heartbeat and installer-status responses are handled independently. A failed
 installer request disables management and shows its own unavailable state while

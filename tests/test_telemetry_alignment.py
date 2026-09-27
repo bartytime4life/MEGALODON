@@ -1,6 +1,6 @@
 from pathlib import Path
 from megalodon.telemetry_catalog import FEATURES, TOOLS, coverage_html, COVERAGE_CSS
-from megalodon.dashboard_snapshot import SNAPSHOT_VALIDATOR_JS, SNAPSHOT_HOSTED_JS
+from megalodon.dashboard_snapshot import SNAPSHOT_VALIDATOR_JS
 from megalodon.tool_installer import RECIPES
 from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_JS, DASHBOARD_CSS
 
@@ -44,5 +44,5 @@ def test_repository_site_mirror_matches_packaged_sources():
     if not (root/'site/dist').is_dir():
         pytest.skip('Hosted Site mirror is separate from the Python source distribution')
     assert coverage_html(hosted=True) in (root/'site/dist/index.html').read_text()
-    assert (root/'site/dist/snapshot.js').read_text()==SNAPSHOT_VALIDATOR_JS+SNAPSHOT_HOSTED_JS
+    assert not (root/'site/dist/snapshot.js').exists()
     assert (root/'site/dist/telemetry.css').read_text()==COVERAGE_CSS
