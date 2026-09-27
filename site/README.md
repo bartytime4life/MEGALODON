@@ -22,7 +22,7 @@ is recorded in [source alignment](../docs/site-source-alignment.md).
 
 ## Navigation and install path
 
-The source has four views: Activity HUD, Evidence desk, Tools & setup, and
+The source has four views: Overview, Evidence desk, Tools & setup, and
 Boundaries. It adds view links such as `#view=integrations`, Back/Forward
 navigation, and per-view reading positions for the current page session.
 Reload restores the selected view; it does not retain reading positions or
@@ -54,22 +54,22 @@ local HUD. This hosted Site has no local telemetry connection or refresh loop.
 
 ## Direct setup and workflow guides
 
-Activity links directly to the current
+Overview links directly to the current
 [`docs/local-pc-setup.md`](../docs/local-pc-setup.md) guide. The disconnected
 traffic panel and Evidence desk link to
 [`docs/operator-workflows.md`](../docs/operator-workflows.md), which indexes the
 authoritative local dashboard, bounded JSONL replay, saved capture, Suricata
-review, and integration-plan documents. Tools & setup keeps the local Apps link
-and routes its setup action to the same local PC guide. These links open the
-repository documentation in protected new tabs; the Site does not execute or
-copy workflow commands.
+review, and integration-plan documents. Tools & setup routes its setup action
+to the same local PC guide without trying to open a loopback app or per-tool
+local evidence view. These links open the repository documentation in protected
+new tabs; the Site does not execute or copy workflow commands.
 
 The local HUD can open before data exists. Neither a launcher nor the browser
 starts sensors or creates sample evidence, and an empty local HUD is labeled
-unavailable rather than zero traffic. The local address points to the device
-opening the link; a phone cannot use it to reach a Linux computer. The brand
-returns to Activity, view changes focus their heading, and saved-console filters
-update immediately when a bookmark changes.
+unavailable rather than zero traffic. The hosted Site does not navigate to a
+device loopback address. The brand returns to Overview, view changes focus
+their heading, and saved-console filters update immediately when a bookmark
+changes.
 
 Local and hosted tool controls share the canonical Python asset constants in
 `megalodon/dashboard_tool_assets.py`. The repository's
@@ -79,10 +79,10 @@ official setup links and copy-only maintenance commands. Optional saved console
 addresses persist per browser origin; they open the actual companion app in a
 separate tab. No embedding, probing, credential storage or host execution occurs.
 Tool search includes local evidence paths and saved-console filters; an empty
-result offers a filter reset. The integrations view links to a HUD already
-running on the same computer, and supported evidence cards link to their
-matching local view. Manual presence-report import remains optional for this
-hosted page.
+result offers a filter reset. The integrations view points to the documented
+local setup entry point. Supported evidence cards state that their local views
+remain separate without opening loopback URLs. Manual presence-report import
+remains optional for this hosted page.
 
 ## Actual behavior
 

@@ -364,13 +364,12 @@ function renderToolInspector() {
         </div>
         <small>${state.toolPresence[item.id] ? `Self-reported ${new Date(state.toolPresence[item.id].checkedAt).toISOString()}. ` : ""}Saved only in this browser; recheck after 7 days. Manual notes are not verified installation evidence.</small>
       </div>
-      <p class="acquire-boundary"><strong>Operator action:</strong> this HUD opens setup guidance and copies lifecycle text. It never probes the host or executes an installer, uninstaller, service command, or package manager.</p>
+      <p class="acquire-boundary"><strong>Operator action:</strong> this hosted console opens setup guidance and copies lifecycle text. It never probes the host or executes an installer, uninstaller, service command, or package manager.</p>
     </div>
     <div id="shared-tool-controls"></div>
     <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
     <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
-    <div class="inspector-warning">${evidenceTarget ? "A local MEGALODON evidence view exists for this tool. It may be empty or unavailable; this hosted Site has no connection to it." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
-    ${evidenceTarget ? `<a class="control-button inspector-jump" href="http://127.0.0.1:8787/#${evidenceTarget}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open local evidence view ↗</a><small class="panel-footnote">Requires a running local HUD on this computer.</small>` : ""}
+    <div class="inspector-warning">${evidenceTarget ? "A local MEGALODON evidence view exists for this tool. It may be empty or unavailable; this hosted Site has no connection to it. Use the setup guide at the top of this view for the documented local entry point." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
   `;
   const copyInstall = $("[data-copy-install]");
   if (copyInstall) copyInstall.addEventListener("click", async () => {

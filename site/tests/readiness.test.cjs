@@ -118,7 +118,7 @@ test('the HTML declares unique evidence controls and loads its local validator f
   assert.match(html, /MEGALODON\/pull\/241/);
   assert.match(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
-  assert.match(html, /href="http:\/\/127\.0\.0\.1:8787\/#integrations-title"[^>]*>Open local Apps/);
+  assert.doesNotMatch(html, /href="http:\/\/127\.0\.0\.1:8787/);
   assert.match(html, /local-pc-setup\.md"[^>]*>Local setup guide ↗<\/a>/);
 });
 
@@ -280,7 +280,8 @@ test('whole application initializes and navigates without a feed or browser netw
   assert.equal(vm.runInContext("lightFor('tshark').light",context),'green');
   vm.runInContext("delete state.toolPresence.tshark;",context);
   vm.runInContext("state.selectedTool='tshark'; renderToolInspector()",context);
-  assert.match(nodes.get('#tool-inspector').innerHTML,/href="http:\/\/127\.0\.0\.1:8787\/#offline-title"/);
+  assert.doesNotMatch(nodes.get('#tool-inspector').innerHTML,/href="http:\/\/127\.0\.0\.1:8787/);
+  assert.match(nodes.get('#tool-inspector').innerHTML,/Use the setup guide at the top of this view/);
   assert.doesNotMatch(nodes.get('#tool-inspector').innerHTML,/data-source-jump/);
   for(const id of Object.keys(lifecycleCommands)) vm.runInContext(`state.selectedTool='${id}'; renderToolInspector()`,context);
   assert.match(nodes.get('#feed-count').textContent, /No network records/);
