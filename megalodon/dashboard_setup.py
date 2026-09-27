@@ -244,7 +244,7 @@ async function requestLocalCheck() {
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   let reader = null;
   try {
-    const response = await fetch('/api/local-checks', {headers: {'Accept': 'application/json', 'X-Megalodon-Check': '1'}, cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal});
+    const response = await fetch('/api/local-checks', {headers: {'Accept': 'application/json', 'X-Megalodon-Check': '1'}, cache: 'no-store', mode: 'same-origin', credentials: 'same-origin', redirect: 'error', signal: controller.signal});
     if (!response.ok) { const error = new Error('Check unavailable'); error.status = response.status; throw error; }
     const declared = response.headers.get('Content-Length');
     if (declared !== null && (!/^(0|[1-9][0-9]*)$/.test(declared) || !Number.isSafeInteger(Number(declared)) || Number(declared) > 20480)) throw new Error('Invalid check length');

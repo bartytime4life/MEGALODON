@@ -23,9 +23,9 @@ subsequently merged as `cdf43bac9ffce75d1e24b97b16fdb591ec2f21ea`; it adds
 companion install/removal controls and a CLI verification receipt that separates
 executable presence from metadata/process heartbeat observations. PR #430
 merged as `e95e5223d1a12b84ff155bffac774972771019f8` with the bounded saved
-osquery package-count path. The owner-only Console is published as v40 from
-Sites source `5e5da36d53cfeb689878b2c5a841a188f3fa1d8a`; the exact version and
-deployment receipt, plus the current parity limit, are recorded in
+osquery package-count path. The owner-only Console is now published as v41 from
+Sites source `6d076c214f69f92aac71ee7628055ac5438f2aec`; the exact version and
+deployment receipt, plus the unverified source-parity boundary, are recorded in
 [source alignment](site-source-alignment.md). Manual ClamAV, Nmap and osquery
 imports and a green companion light do not prove operational health.
 

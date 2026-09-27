@@ -11,6 +11,8 @@ public Python API and the security boundary for every HTTP route.
 from __future__ import annotations
 
 from collections import OrderedDict
+import base64
+import binascii
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer as _ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import hmac
@@ -408,6 +410,7 @@ def _bounded_query(query: str, *, max_fields: int) -> dict[str, list[str]]:
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    http_read_password: str | None = None
     store: DashboardReader
     offline_summary: dict[str, Any] | None = None
     advisory_receipt: dict[str, object] | None = None
@@ -432,6 +435,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
+            return
+        if not self._has_operator_http_auth():
             return
         try:
             route = urlparse(self.path)
@@ -784,6 +789,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
+        if not self._has_operator_http_auth():
+            return
         if self.path == "/api/ai/ask":
             self._ai_ask()
             return
@@ -1006,6 +1013,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
             expected.update({"localhost", f"localhost:{bound_port}"})
         return supplied in expected
 
+    def _has_operator_http_auth(self) -> bool:
+        """Require the launch password before any served data or action route."""
+        password = self.http_read_password
+        if password is None:
+            return True  # Direct test handlers; serve() always sets a password.
+        values = self.headers.get_all("Authorization", [])
+        authorized = False
+        if len(values) == 1 and len(values[0]) <= 128 and values[0][:6].lower() == "basic ":
+            try:
+                supplied = base64.b64decode(values[0][6:], validate=True)
+            except (ValueError, binascii.Error):
+                supplied = b""
+            expected = f"megalodon:{password}".encode("ascii")
+            authorized = hmac.compare_digest(supplied, expected)
+        if not authorized:
+            self._send_json(
+                {"error": "local dashboard sign-in required"}, status=401,
+                extra_headers={"WWW-Authenticate": 'Basic realm="MEGALODON local"'},
+            )
+        return authorized
+
     def _send_json(self, value: object, *, status: int = 200, extra_headers: dict[str, str] | None = None) -> None:
         payload = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
         self._send(status, "application/json; charset=utf-8", payload, extra_headers=extra_headers)
@@ -1118,6 +1146,7 @@ def serve(
     ai_operator_token = secrets.token_urlsafe(24) if ai_settings is not None and ai_settings.enabled else None
     install_operator_token = secrets.token_urlsafe(24) if enable_tool_management else None
     host = loopback_host(host, allow_remote=allow_remote)
+    http_read_password = secrets.token_urlsafe(24)
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
     # Capture inert command text once. HTTP input cannot choose an interpreter
@@ -1144,6 +1173,7 @@ def serve(
             "installer": installer,
             "tool_management_enabled": enable_tool_management,
             "install_operator_token": install_operator_token,
+            "http_read_password": http_read_password,
             "javascript": javascript,
             "ai_settings": ai_settings or AISettings(),
             "ai_receipt_path": ai_receipt_path,
@@ -1156,6 +1186,7 @@ def serve(
     try:
         url = f"http://{host}:{port}/"
         print(f"MEGALODON dashboard listening on {url}", flush=True)
+        print(f"MEGALODON local dashboard sign-in: username megalodon; password {http_read_password}", flush=True)
         if install_operator_token is not None:
             print(f"MEGALODON tool management operator token (this launch only): {install_operator_token}", flush=True)
         if ai_operator_token is not None:

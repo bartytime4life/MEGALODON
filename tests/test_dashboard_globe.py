@@ -31,7 +31,7 @@ def test_globe_is_in_visible_hud_workspace_and_uses_validated_projection():
     assert "fetch('/api/offline-locations'" in GLOBE_JS
     assert "method: 'POST'" in GLOBE_JS
     assert "'X-Megalodon-Location': '1'" in GLOBE_JS
-    assert "credentials: 'omit', mode: 'same-origin', redirect: 'error'" in GLOBE_JS
+    assert "credentials: 'same-origin', mode: 'same-origin', redirect: 'error'" in GLOBE_JS
     assert 'if (!state.paused && !document.hidden) await refreshGlobeHour()' in GLOBE_JS
     assert 'refreshGlobeHour(true)' in DASHBOARD_JS
     assert 'refreshGlobeHour(); scheduleNext();' in DASHBOARD_JS

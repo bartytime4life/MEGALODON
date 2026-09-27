@@ -103,7 +103,7 @@ process.stdin.on('end', async () => {
     assert.equal(calls[0].options.headers['X-Megalodon-Check'], '1');
     assert.equal(calls[0].options.mode, 'same-origin');
     assert.equal(calls[0].options.redirect, 'error');
-    assert.equal(calls[0].options.credentials, 'omit');
+    assert.equal(calls[0].options.credentials, 'same-origin');
     assert.equal(byId('setup-check').disabled, false);
     assert.equal(context.document.activeElement, byId('setup-check'));
     assert.equal(byId('setup-check').focusOptions.preventScroll, true);

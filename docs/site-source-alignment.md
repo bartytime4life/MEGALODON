@@ -1,9 +1,31 @@
 # Defense Console source alignment
 
-## Current publication — Console v40, saved osquery package count
+## Current publication — Console v41, source parity pending
+
+OBSERVED 2026-09-27 through the Sites project, version and deployment read
+APIs: the existing owner-only Site is live as version 41 from Sites source
+`6d076c214f69f92aac71ee7628055ac5438f2aec`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_9f60a36e44648191ab57db8ada6ca00e`.
+Deployment `appgdep_6ab8c03a34d88191b0a1323246bb388b` reported
+`succeeded` at 2026-09-27T07:06:18.804114Z at the existing Console URL. Its
+retained archive reports 19 files, 389,120 bytes and
+`sha256:c973bf62f0d317a45063a39b8981b33c5faf980a57d8bd19d60394cf3fe7bacf`.
+The access readback is `custom`, limited to one owner account with zero external
+visitors. Rollback reference: v40 /
+`5e5da36d53cfeb689878b2c5a841a188f3fa1d8a`.
+
+The Sites source Git endpoint did not provide this readback with source bytes,
+so v41's content, byte parity with the repository mirror, and rendered behavior
+are unverified here. The successful version and deployment receipts establish
+publication and audience only. They do not establish local installation,
+telemetry, model or sensor operation, repository merge, release, or independent
+acceptance. This was a read-only check; no Site version, deployment or access
+setting was changed.
+
+## Historical publication — Console v40, saved osquery package count
 
 OBSERVED 2026-09-26 through the Sites project and deployment read APIs: the
-existing owner-only Site is live as version 40 from source
+existing owner-only Site was live as version 40 from source
 `5e5da36d53cfeb689878b2c5a841a188f3fa1d8a`, saved version
 `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_832d1c73a2b48191ac8924ca8ded6eea`.
 Deployment `appgdep_6ab8813fe78c819183656c7075d3e225` reported `succeeded`
