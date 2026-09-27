@@ -46,6 +46,15 @@ requirements while installing this checkout. Pip destination overrides and pip
 configuration files are ignored so the package cannot be redirected outside the
 private application release.
 
+For optional companion dependencies, use
+`./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
+`./scripts/manage-companion.sh nmap install` to preview the fixed recipe.
+`./scripts/manage-companion.sh nmap uninstall` previews the exact package
+removal; `uninstall --apply` needs an interactive terminal and typed tool ID.
+Replace `nmap` with a supported companion. Some vendor, role, container and
+firewall tools deliberately have no automatic removal recipe. See
+[companion workflow](docs/hud-workflow.md).
+
 Use the included manager for maintenance:
 
 ```bash

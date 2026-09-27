@@ -135,9 +135,23 @@ def start_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.w
     return [pkexec, systemctl, "start", f"{unit}.service"] if pkexec else None
 
 
-def terminal_command(tool_id: str) -> str | None:
+def terminal_command(tool_id: str, action: str = "install") -> str | None:
     """Copyable equivalent for hosts without a graphical password prompt."""
     recipe = RECIPES[tool_id]
+    if action == "uninstall":
+        if tool_id == "core":
+            return "~/.local/bin/megalodon-manage uninstall"
+        if recipe.kind == "apt":
+            if tool_id == "nftables":
+                return None  # A firewall package requires a separate host-protection decision.
+            return f"sudo apt-get remove --no-install-recommends {' '.join(recipe.packages)}"
+        if recipe.kind == "pip":
+            return f"{sys.executable} -m pip uninstall scapy"
+        if recipe.kind == "ollama":
+            return f"OLLAMA_HOST=127.0.0.1:11434 ollama rm {recipe.packages[0]}"
+        return None
+    if action != "install":
+        raise ValueError("unknown companion action")
     if recipe.kind == "apt":
         preseed = "".join(f"echo '{s}' | sudo debconf-set-selections && " for s in recipe.preseed)
         return f"{preseed}sudo apt-get update && sudo apt-get install -y --no-install-recommends {' '.join(recipe.packages)}"
@@ -145,6 +159,22 @@ def terminal_command(tool_id: str) -> str | None:
         return f"{sys.executable} -m pip install '{recipe.packages[0]}'"
     if recipe.kind == "ollama":
         return f"ollama pull {recipe.packages[0]}"
+    return None
+
+
+def uninstall_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.which) -> list[str] | None:
+    """Fixed argv for terminal-only removal after an exact typed confirmation."""
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        return None
+    recipe = RECIPES[tool_id]
+    if recipe.kind == "apt" and tool_id != "nftables" and runtime_platform() == "linux":
+        sudo, apt = which("sudo"), which("apt-get")
+        return [sudo, apt, "remove", "--no-install-recommends", *recipe.packages] if sudo and apt else None
+    if recipe.kind == "pip":
+        return [sys.executable, "-m", "pip", "uninstall", "scapy"]
+    if recipe.kind == "ollama":
+        ollama = which("ollama")
+        return [ollama, "rm", *recipe.packages] if ollama else None
     return None
 
 
@@ -158,6 +188,7 @@ def catalog() -> dict[str, Any]:
             "summary": recipe.summary,
             "one_click": command is not None,
             "terminal": terminal_command(tool_id),
+            "uninstall_terminal": terminal_command(tool_id, "uninstall"),
             "startable": start_command(tool_id) is not None,
             "start_terminal": f"sudo systemctl start {unit}.service" if (unit := service_unit(tool_id)) else None,
         })

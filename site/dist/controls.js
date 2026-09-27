@@ -335,10 +335,10 @@ const MegalodonControls = (() => {
     }
 
     const unified = node('details', '', 'companion-unified-setup');
-    unified.append(node('summary', 'Install, configure and verify'));
-    unified.append(node('p', 'Requires the HUD workflow update in your MEGALODON Python environment. Install previews the recipe; add --apply only after review. Configure prints tool-specific steps; verify checks executable presence only.', 'companion-help'));
-    ['plan', 'install', 'configure', 'verify'].forEach(action => {
-      const command = `python -m megalodon.tool_setup ${id} ${action}`;
+    unified.append(node('summary', 'Install, configure, verify and uninstall'));
+    unified.append(node('p', 'From the reviewed checkout, this single script previews fixed install/removal recipes. Add --apply only in your terminal after review; uninstall needs typed confirmation. Configure prints tool-specific steps; verify checks executable presence only.', 'companion-help'));
+    ['plan', 'install', 'configure', 'verify', 'uninstall'].forEach(action => {
+      const command = `./scripts/manage-companion.sh ${id} ${action}`;
       const row = node('div', '', 'companion-command');
       const copy = node('button', `Copy ${action}`); copy.type = 'button';
       copy.addEventListener('click', async () => {

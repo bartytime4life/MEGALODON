@@ -19,6 +19,11 @@ HEARTBEAT_CSS = r"""
 .hb-install-log { margin:.4rem 0 0; padding:.5rem .6rem; max-height:9rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; border-radius:.4rem; background:#06121c; color:#cfe9f3; font-size:.72rem; }
 .hb-summary { display:flex; flex-wrap:wrap; gap:.8rem; align-items:center; margin:.4rem 0 .8rem; font-size:.8rem; color:#bfd1dc; }
 .hb-summary span { display:inline-flex; align-items:center; }
+.hb-removal { margin:.5rem 0; padding:.35rem .6rem; border:1px solid #456071; border-radius:.5rem; }
+.hb-removal summary { cursor:pointer; min-height:44px; padding:.6rem 0; }
+.hb-removal code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
+.hb-removal button { min-height:44px; font:inherit; padding:.5rem .7rem; background:#193243; color:#def4fb; border:1px solid #658398; border-radius:.4rem; cursor:pointer; }
+.hb-removal :focus-visible, #tool-check-now:focus-visible { outline:3px solid #7be7f0; outline-offset:3px; }
 """
 
 HEARTBEAT_JS = r"""
@@ -119,6 +124,20 @@ function paintToolManagement() {
     ? 'Tool management is enabled for this launch. Paste its token from the HUD terminal to use Install and Start. Each action still needs your confirmation.'
     : 'Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user. Guides and terminal commands remain available.';
 }
+function appendRemovalPlan(wrap, entry, tool, name) {
+  if (!entry.uninstall_terminal || !tool || tool.installed !== 'yes' || heartbeatStale()
+      || (entry.method === 'ollama' && tool.model !== 'present')) return;
+  const details = document.createElement('details'); details.className = 'hb-removal';
+  details.append(textNode('summary', `Review removal of ${name}`));
+  details.append(textNode('p', 'This command is for the specific installed method shown below. Package removal can stop services or affect dependents. Review it in a terminal; this page does not execute removal.', 'hb-detail'));
+  details.append(textNode('code', entry.uninstall_terminal));
+  const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy removal command';
+  copy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(entry.uninstall_terminal); toolManagementFeedback('Removal command copied. Review the package plan in your terminal before proceeding.'); }
+    catch (_) { toolManagementFeedback('Clipboard unavailable. Select and copy the displayed removal command.'); }
+  });
+  details.append(copy); wrap.append(details);
+}
 function paintInstallControl(wrap) {
   const toolId = wrap.heartbeatTool, name = wrap.toolName;
   const entry = heartbeatState.catalog && heartbeatState.catalog.find(item => item.id === toolId);
@@ -136,6 +155,7 @@ function paintInstallControl(wrap) {
     const command = starting ? entry.start_terminal : needsModel || !tool || tool.installed !== 'yes' ? entry.terminal : null;
     if (model && !entry.one_click && (!tool || tool.installed !== 'yes')) wrap.append(textNode('p', 'Install Ollama from its download page first.', 'hb-detail'));
     else if (command) wrap.append(textNode('p', `Observation mode. Run separately in a terminal: ${command}`, 'hb-detail'));
+    appendRemovalPlan(wrap, entry, tool, name);
     return;
   }
   if (entry.one_click && (needsModel || (!model && (!tool || tool.installed !== 'yes')) || installing)) {
@@ -177,6 +197,7 @@ function paintInstallControl(wrap) {
   const alternative = starting ? entry.start_terminal : entry.terminal;
   if (mine && job.state === 'failed') wrap.append(textNode('p', `${starting ? 'Service start' : 'Install'} failed.${alternative ? ` Terminal alternative: ${alternative}` : ''}`, 'hb-detail'));
   if (mine && job.state === 'succeeded') wrap.append(textNode('p', `${starting ? 'Service-start command' : 'Installation command'} finished. Status is checked separately.`, 'hb-detail'));
+  appendRemovalPlan(wrap, entry, tool, name);
 }
 function repaintHeartbeat() {
   paintToolManagement();
@@ -234,12 +255,12 @@ function toolManagementFeedback(message) {
   const appStatus = byId('app-service-start-feedback');
   if (appStatus) appStatus.textContent = message;
 }
-async function pollHeartbeat() {
+async function pollHeartbeat(force = false) {
   if (heartbeatState.polling) return;
   window.clearTimeout(heartbeatState.timer);
   if (document.visibilityState === 'hidden') return;
   heartbeatState.polling = true;
-  const [reportResult, installResult] = await Promise.allSettled([heartbeatFetch('/api/heartbeat'), heartbeatFetch('/api/install')]);
+  const [reportResult, installResult] = await Promise.allSettled([heartbeatFetch('/api/heartbeat', force === true ? {headers: {'X-Megalodon-Refresh': '1'}} : {}), heartbeatFetch('/api/install')]);
   try {
     if (reportResult.status !== 'fulfilled') throw new Error('Heartbeat unavailable');
     const report = validHeartbeat(reportResult.value);
@@ -295,6 +316,18 @@ async function startInstall(toolId, name, entry, action = 'install') {
   repaintHeartbeat(); pollHeartbeat();
 }
 const managementInput = byId('tool-management-token'), managementForget = byId('tool-management-forget');
+const toolCheckNow = byId('tool-check-now');
+if (toolCheckNow) toolCheckNow.addEventListener('click', async () => {
+  if (heartbeatState.polling) { byId('tool-check-now-status').textContent = 'A local check is already running.'; return; }
+  toolCheckNow.disabled = true;
+  byId('tool-check-now-status').textContent = 'Checking local tool presence…';
+  try {
+    await pollHeartbeat(true);
+    byId('tool-check-now-status').textContent = heartbeatState.failed
+      ? 'Local tool check failed; prior observations are stale.'
+      : `Local presence observed ${formatRefreshTime(new Date(heartbeatState.report.checked_at))}. This does not verify tool health or configuration.`;
+  } finally { toolCheckNow.disabled = false; }
+});
 if (managementInput) managementInput.addEventListener('input', repaintHeartbeat);
 if (managementForget) managementForget.addEventListener('click', () => {
   if (managementInput) managementInput.value = '';

@@ -14,10 +14,10 @@ const lifecycleCommands = (() => {
   });
   return {
     core: {
-      verify: "python3 -m pip show megalodon-defense",
-      uninstall: "python3 -m pip uninstall megalodon-defense",
-      reinstall: "python3 -m pip install --force-reinstall --no-deps .",
-      note: "Activate your MEGALODON virtual environment in every new terminal before using these commands. A different python3 can report Package(s) not found even while the dashboard is running. For reinstall, first change into the reviewed MEGALODON checkout containing pyproject.toml; build dependencies may be downloaded. Package metadata does not verify SQLite support or operational acceptance."
+      verify: "~/.local/bin/megalodon-manage status",
+      uninstall: "~/.local/bin/megalodon-manage uninstall",
+      reinstall: "./scripts/install-local.sh",
+      note: "The user installer manages a private release and preserves settings and data on uninstall. Run reinstall from the reviewed checkout. These commands do not install or remove optional companions."
     },
     tshark: apt("tshark", "test -x /usr/bin/tshark && /usr/bin/tshark --version", "Use the repository's guarded setup; do not grant capture permissions."),
     zeek: {
@@ -473,10 +473,10 @@ const MegalodonControls = (() => {
     }
 
     const unified = node('details', '', 'companion-unified-setup');
-    unified.append(node('summary', 'Install, configure and verify'));
-    unified.append(node('p', 'Requires the HUD workflow update in your MEGALODON Python environment. Install previews the recipe; add --apply only after review. Configure prints tool-specific steps; verify checks executable presence only.', 'companion-help'));
-    ['plan', 'install', 'configure', 'verify'].forEach(action => {
-      const command = `python -m megalodon.tool_setup ${id} ${action}`;
+    unified.append(node('summary', 'Install, configure, verify and uninstall'));
+    unified.append(node('p', 'From the reviewed checkout, this single script previews fixed install/removal recipes. Add --apply only in your terminal after review; uninstall needs typed confirmation. Configure prints tool-specific steps; verify checks executable presence only.', 'companion-help'));
+    ['plan', 'install', 'configure', 'verify', 'uninstall'].forEach(action => {
+      const command = `./scripts/manage-companion.sh ${id} ${action}`;
       const row = node('div', '', 'companion-command');
       const copy = node('button', `Copy ${action}`); copy.type = 'button';
       copy.addEventListener('click', async () => {

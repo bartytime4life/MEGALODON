@@ -2,9 +2,10 @@
 from __future__ import annotations
 import argparse
 import json
+import os
 import subprocess
 import sys
-from .tool_installer import RECIPES, install_command, terminal_command, INSTALL_TIMEOUT_SECONDS
+from .tool_installer import RECIPES, install_command, uninstall_command, terminal_command, INSTALL_TIMEOUT_SECONDS
 from .readiness import readiness_report
 
 # Role, scope and credentials remain operator choices; never guess or enable capture.
@@ -28,13 +29,13 @@ ALIASES = {'core':'python-sqlite','tshark':'wireshark-tshark','qwen':'qwen-ollam
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Review, install, configure or inspect a fixed MEGALODON companion. Default: print plan only.')
+    parser = argparse.ArgumentParser(description='Review, install, uninstall, configure or inspect a fixed MEGALODON companion. Default: print plan only.')
     parser.add_argument('tool', choices=tuple(RECIPES))
-    parser.add_argument('action', nargs='?', default='plan', choices=('plan','install','configure','verify'))
-    parser.add_argument('--apply', action='store_true', help='Execute the fixed installation recipe; only valid with install')
+    parser.add_argument('action', nargs='?', default='plan', choices=('plan','install','uninstall','configure','verify'))
+    parser.add_argument('--apply', action='store_true', help='Execute the fixed install or terminal-confirmed uninstall recipe')
     args = parser.parse_args(argv)
-    if args.apply and args.action != 'install':
-        parser.error('--apply requires install')
+    if args.apply and args.action not in ('install', 'uninstall'):
+        parser.error('--apply requires install or uninstall')
     if args.action == 'verify':
         report = readiness_report()
         item = next(t for t in report['tools'] if t['id'] == ALIASES.get(args.tool,args.tool))
@@ -47,18 +48,41 @@ def main(argv=None):
             print(f'{index}. {instruction}')
     if args.action in ('plan','install'):
         print('Install command:', terminal_command(args.tool) or 'Guided installation; use the linked publisher/setup guide in the HUD.')
+    if args.action in ('plan','uninstall'):
+        print('Uninstall command:', terminal_command(args.tool, 'uninstall') or 'Guided removal; select the exact installed role and follow its vendor guide.')
     if not args.apply:
         if args.action == 'install':
             print('Preview only. Add --apply to execute a supported fixed recipe. Package services may start; model downloads may be large.')
+        if args.action == 'uninstall':
+            print('Preview only. Add --apply in an interactive terminal, then type the exact tool ID. Package removal may stop services or affect dependents; no purge or autoremove is requested.')
         return 0
-    command = install_command(args.tool)
+    if args.action == 'uninstall':
+        command = uninstall_command(args.tool)
+        if command is None:
+            print('No automatic removal recipe. Review the installed method and follow its guide.', file=sys.stderr)
+            return 2
+        if not sys.stdin.isatty():
+            print('Uninstall requires an interactive terminal and exact tool confirmation.', file=sys.stderr)
+            return 2
+        try:
+            if input(f'Type {args.tool} to review and run its removal command: ') != args.tool:
+                print('Removal cancelled.', file=sys.stderr)
+                return 2
+        except EOFError:
+            print('Removal cancelled.', file=sys.stderr)
+            return 2
+    else:
+        command = install_command(args.tool)
     if command is None:
         print('No automatic recipe is available on this platform. Follow the configuration and publisher guides.',file=sys.stderr)
         return 2
     try:
-        return subprocess.run(command, check=False, timeout=INSTALL_TIMEOUT_SECONDS).returncode
+        run_options = {'check': False, 'timeout': INSTALL_TIMEOUT_SECONDS}
+        if args.action == 'uninstall' and args.tool == 'qwen':
+            run_options['env'] = {**os.environ, 'OLLAMA_HOST': '127.0.0.1:11434'}
+        return subprocess.run(command, **run_options).returncode
     except (OSError, subprocess.TimeoutExpired):
-        print('Installation did not complete. Inspect the package manager locally before retrying.',file=sys.stderr)
+        print('Companion action did not complete. Inspect the package manager or provider locally before retrying.',file=sys.stderr)
         return 1
 
 if __name__ == '__main__':

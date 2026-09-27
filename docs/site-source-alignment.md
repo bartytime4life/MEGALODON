@@ -1,6 +1,23 @@
 # Defense Console source alignment
 
-## Current publication — Console v38, completed ClamAV summary
+## Current publication — Console v39, companion lifecycle controls
+
+The existing owner-only Site was published from source
+`c62508c1d3a85ddb773738da0c216cd419860d4b` as version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_7164dda6f878819198be3289ee151397`.
+Deployment `appgdep_6ab8635b214081919fb38bdd201f8c84` succeeded at
+2026-09-27T00:29:20Z. All 25 repository `site/` files matched the Site
+checkout before publication. Rollback reference: v38 /
+`dfa4c312b5850e0b24866ef752542d39a05071d1`.
+
+Both HUDs now show copyable install/configure/verify/uninstall commands through
+the reviewed companion wrapper. The hosted Site remains static and cannot
+operate software on the viewer's computer. The local HUD adds a force-refresh
+presence button and displays a removal command supplied by its local catalog;
+actual removal requires explicit terminal confirmation. Full Python suite,
+94 hosted Node tests, repository hygiene and build-input inventory passed.
+
+## Historical publication — Console v38, completed ClamAV summary
 
 The local and hosted pages share a new Completed file scan panel and versioned
 counts-only importer. The UI accepts only a manually selected aggregate JSON;
