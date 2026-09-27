@@ -1,7 +1,7 @@
 # macOS core acceptance
 
-Status: ◐ **Proposed M-track; hosted M1 sample CI probe currently fails; native
-macOS acceptance unproved.**
+Status: ◐ **Proposed M-track. The implemented PR-only M1 sample receipt passed
+on one hosted arm64 runner; native macOS acceptance remains unproved.**
 
 This document is the macOS counterpart to `docs/windows-core-acceptance.md`.
 It tracks what has and has not been evaluated on macOS, following the same
@@ -21,7 +21,7 @@ Windows track, starting from the narrowest, lowest-risk surface.
 | Stage | Scope | Status |
 | --- | --- | --- |
 | M0 | This document; no code change | Proposed |
-| M1 | Synthetic/JSONL-only core evaluation; no capture, no adapters, no firewall backend | Hosted sample probe failed; M1 remains open |
+| M1 | Synthetic/JSONL-only core evaluation; no capture, no adapters, no firewall backend | One hosted arm64 sample receipt passed; JSONL, dashboard/browser, x86_64, second-major-version, and operator-review evidence remain open |
 | M2 | Offline TShark adapter, mirroring the Linux contract | Not started |
 | M3 (deferred) | Native live capture evaluation (BPF-based) | Not proposed; gated on M1/M2 evidence and a separate permission/isolation review |
 
@@ -72,10 +72,27 @@ At PR #339 head `af43e527fdaeb17bc7fea7bbd70b7969b743ab96`, hosted
 [run 35639424857](https://github.com/bartytime4life/MEGALODON/actions/runs/35639424857)
 recorded macOS 26.6.2 (build 25G83), arm64, Python 3.12.10, and a failed first
 sample command with `STORAGE_PATH:DATABASE_CHANGED`. The demo-threat command
-did not run. This is a failure receipt, not a diagnosed cause or M1 acceptance.
-The storage path-identity guard must not be relaxed to make the probe pass;
-investigate the macOS descriptor/SQLite behavior and review any runtime change
-separately.
+did not run. This remains the historical failure receipt that motivated
+[issue #345](https://github.com/bartytime4life/MEGALODON/issues/345).
+
+The separately reviewed storage repair in PR #377 used the admitted canonical
+path on Darwin only after descriptor identity had been established, while
+retaining database, directory, and sidecar refusal checks. At exact candidate
+head `302b58811124c1c064a0322a41d443b45eefd7b6`, hosted
+[run 35785575307](https://github.com/bartytime4life/MEGALODON/actions/runs/35785575307)
+recorded macOS 26.6.2 (build 25G83), arm64, and Python 3.12.10. Its native
+negative controls refused a database symlink, a symlinked SQLite sidecar, and a
+runtime database replacement without changing the replacement bytes. The two
+sample commands then completed with `source_exhausted` receipts for exactly 13
+and 114 processed events. PR #377 merged as
+`727382077d7b460ee8e6cf0a99fc50ae01cc8d7e`.
+
+That exact-head result advances only the hosted arm64 sample portion of M1. It
+does not exercise JSONL replay, a dashboard listener or browser, x86_64, a
+second recent macOS major version, an operator-managed host, privacy review,
+M2/M3, release, or deployment. M1 therefore remains open, issue #345 remains
+open for maintainer disposition, and the unsupported platform catalog remains
+unchanged.
 
 ## M2 — offline TShark adapter
 
