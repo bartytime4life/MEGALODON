@@ -1186,7 +1186,7 @@ def serve(
     try:
         url = f"http://{host}:{port}/"
         print(f"MEGALODON dashboard listening on {url}", flush=True)
-        print(f"MEGALODON local dashboard sign-in: username megalodon; password {http_read_password}", flush=True)
+        print("MEGALODON local dashboard sign-in: username megalodon; password [redacted]", flush=True)
         if install_operator_token is not None:
             print(f"MEGALODON tool management operator token (this launch only): {install_operator_token}", flush=True)
         if ai_operator_token is not None:
