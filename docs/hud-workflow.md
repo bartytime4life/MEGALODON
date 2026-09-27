@@ -107,7 +107,7 @@ not prove the rest of a dependency tree was removed.
 
 ## Connection coverage and failure isolation
 
-Both UIs use `megalodon/telemetry_catalog.py` for the same 16-feature and
+Both UIs use `megalodon/telemetry_catalog.py` for the same 17-feature and
 14-companion data map. It describes supported sources and update modes, not
 observed runtime health. The local HUD additionally shows accepted traffic,
 heartbeat and installer-job observations with their separate timestamps/states.
@@ -123,9 +123,10 @@ installer request disables management and shows its own unavailable state while
 a valid heartbeat continues to show observed tool presence. A failed heartbeat
 continues to mark tool observations stale even when installer status succeeds.
 
-osquery, OSSEC, Greenbone, Zabbix and Nagios do not yet have their
+OSSEC, Greenbone, Zabbix and Nagios do not yet have their
 inventory/alert/monitoring data adapters. ClamAV and Nmap have manual completed-report
-aggregate importers, not live connections. Presence/process checks and manual
+aggregate importers, and osquery has a fixed saved DEB package-count importer;
+none are live connections. Presence/process checks and manual
 console links do not establish these data connections.
 nftables exposes inert response-plan evidence, never live firewall telemetry.
 The local **Check tool presence now** button asks the backend for a fresh

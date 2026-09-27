@@ -2,6 +2,7 @@
 
 from .dashboard_inventory import INVENTORY_HTML
 from .dashboard_clamav import CLAMAV_HTML
+from .dashboard_osquery import OSQUERY_HTML
 from .dashboard_setup import SETUP_HTML
 from .dashboard_snapshot import SNAPSHOT_LOCAL_HTML
 from .telemetry_catalog import coverage_html, COVERAGE_CSS
@@ -66,7 +67,7 @@ HOME_HTML = """
 </section>
 """
 
-HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML + INVENTORY_HTML + CLAMAV_HTML)
+HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML + INVENTORY_HTML + CLAMAV_HTML + OSQUERY_HTML)
 
 TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>

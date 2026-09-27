@@ -108,7 +108,7 @@ _COMPONENTS = (
             "windows": "proposed",
             "other": "proposed",
         },
-        "boundary": "No query pack, arbitrary SQL, scheduler, remote enrollment, or importer exists.",
+        "boundary": "A fixed saved DEB package-count importer exists on Linux; no query pack, arbitrary SQL, daemon, scheduler, remote enrollment, or broader endpoint importer exists.",
     },
     {
         "id": "qwen-ollama",
