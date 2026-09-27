@@ -97,7 +97,7 @@ _COMPONENTS = (
             "windows": "manual_only",
             "other": "proposed",
         },
-        "boundary": "No file-content intake, quarantine, signature update, daemon, or result importer exists.",
+        "boundary": "Completed-report counts-only export and manual HUD import; no file-content intake, quarantine, signature update, daemon, scan launcher, or live result feed.",
     },
     {
         "id": "osquery",
