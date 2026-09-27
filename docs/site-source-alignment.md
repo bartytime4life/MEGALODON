@@ -1,6 +1,35 @@
 # Defense Console source alignment
 
-## Current publication — Console v41, source parity pending
+## Current publication — Console v42, repository mirror aligned
+
+OBSERVED 2026-09-27: the existing owner-only Site published version 42 from
+Sites source `e10e9d162c376d24abf85dd7512ca2398f4dd2a7`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_3dc476ee25648191b05104bf16cb4021`.
+Deployment `appgdep_6ab966dbbb4c8191835b9e9285f0ebcd` reported `succeeded`
+at 2026-09-27T18:56:34.476232Z at
+<https://megalodon-defense-console.blackbart-55.chatgpt.site>. The retained
+archive reports 19 files, 389,120 bytes and
+`sha256:9e863fd654786f1a4ded36ca37a1d5f28d0e93416b56e716827f8224c141b7ff`.
+The access readback is `custom`, restricted to the owner account with zero
+external visitors. Rollback reference: saved v41 / source
+`6d076c214f69f92aac71ee7628055ac5438f2aec` / deployment
+`appgdep_6ab8c03a34d88191b0a1323246bb388b` (succeeded).
+
+VERIFIED against repository `main@7d79af1e2d232f9aa9a8feb2366f372fa1014622`:
+all 27 tracked `site/` source files match the pushed Sites commit byte for
+byte. All 19 packaged files match their corresponding source bytes, including
+the hosting manifest. The complete repository Site suite passed 89/89 Node
+tests, including passive Activity evidence, saved controls, Runbooks routing,
+and disconnected telemetry; JavaScript syntax checks passed. An isolated Site
+checkout cannot run the documentation-routing suite without the parent
+repository's `docs/` files; the full repository run includes that suite.
+The browser reached the owner sign-in screen, so authenticated hosted rendering
+and interaction remain unverified. The Node DOM harness is behavior evidence,
+not a rendered-page check. This publication does not install local software,
+connect host telemetry, operate a sensor/model, establish release or host
+acceptance, or approve independent security review.
+
+## Historical publication — Console v41, source parity pending
 
 OBSERVED 2026-09-27 through the Sites project, version and deployment read
 APIs: the existing owner-only Site is live as version 41 from Sites source
