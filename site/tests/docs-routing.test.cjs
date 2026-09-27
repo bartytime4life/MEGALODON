@@ -22,6 +22,15 @@ test('the hosted console exposes exactly four application views', () => {
   assert.match(app, /\['hud', 'evidence', 'integrations', 'boundaries'\]\.includes\(name\)/);
 });
 
+test('the hosted surface is named as a console rather than the local HUD', () => {
+  assert.match(html, /<title>MEGALODON — Hosted reference console<\/title>/);
+  assert.match(html, /data-view="hud"[^>]*>[\s\S]*?<span>Overview<\/span><\/button>/);
+  assert.match(html, /aria-label="MEGALODON hosted reference console"/);
+  assert.doesNotMatch(html, />Activity HUD<|MEGALODON activity HUD|Defensive operations HUD/);
+  assert.match(app, /this hosted console opens setup guidance/);
+  assert.doesNotMatch(app, /this HUD opens setup guidance/);
+});
+
 test('the retired Runbooks surface and its behavior are absent', () => {
   for (const source of [html, app, css]) {
     assert.doesNotMatch(source, /data-view(?:-panel)?="missions"|\bmission-(?:deck|list|panel|columns|topline)\b|\bworkflow-(?:status|platform|title|summary|command|boundary|produces|refuses)\b/);
@@ -44,6 +53,8 @@ test('setup and workflow actions use protected repository documentation links', 
     assert.ok(`${html}\n${app}`.includes(label));
   }
   assert.match(app, /operator-workflows\.md#local-dashboard/);
+  assert.doesNotMatch(`${html}\n${app}`, /href="http:\/\/127\.0\.0\.1:8787/);
+  assert.doesNotMatch(`${html}\n${app}`, /Open local Apps|Open local evidence view/);
 });
 
 test('the operator workflow index states status and authority boundaries', () => {

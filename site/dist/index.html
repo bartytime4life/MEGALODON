@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050b11" />
     <meta name="description" content="MEGALODON companion-tool guidance and local evidence workflow. No hosted network feed is connected." />
-    <title>MEGALODON — Defensive operations HUD</title>
+    <title>MEGALODON — Hosted reference console</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./telemetry.css" />
@@ -24,10 +24,10 @@
     <link rel="stylesheet" href="./osquery.css">
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to operations HUD</a>
+    <a class="skip-link" href="#main-content">Skip to operations overview</a>
 
     <header class="topbar">
-      <a class="brand" href="#" aria-label="MEGALODON activity HUD">
+      <a class="brand" href="#" aria-label="MEGALODON hosted reference console">
         <span class="brand-mark" aria-hidden="true">M</span>
         <span class="brand-copy"><strong>MEGALODON</strong><small>DEFENSIVE OPERATIONS SURFACE</small></span>
       </a>
@@ -44,7 +44,7 @@
     <div class="app-shell">
       <aside class="side-rail" aria-label="Console navigation">
         <nav class="primary-nav">
-          <button class="nav-item active" data-view="hud" aria-current="page"><span class="nav-glyph" aria-hidden="true">⌁</span><span>Activity HUD</span></button>
+          <button class="nav-item active" data-view="hud" aria-current="page"><span class="nav-glyph" aria-hidden="true">⌁</span><span>Overview</span></button>
           <button class="nav-item" data-view="evidence" aria-label="Evidence desk"><span class="nav-glyph" aria-hidden="true">▤</span><span>Evidence desk</span></button>
           <button class="nav-item" data-view="integrations"><span class="nav-glyph" aria-hidden="true">⌘</span><span>Tools &amp; setup</span></button>
           <button class="nav-item" data-view="boundaries"><span class="nav-glyph" aria-hidden="true">▱</span><span>Boundaries</span></button>
@@ -252,7 +252,7 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
             <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Tools &amp; consoles</h1><p>Find a tool and open its controls. Save the address of an existing web console once, or use its setup guide. The local HUD provides startup presence checks automatically.</p></div>
             <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>Operator reference</small></span></div>
           </div>
-          <div class="local-apps-route"><div><strong>Use Apps in your local HUD</strong><p>Open a HUD already running on this computer to review tool presence and available local controls. This hosted page cannot start services. Local starts, where supported, require separate operator authorization.</p></div><a class="control-button" href="http://127.0.0.1:8787/#integrations-title" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open local Apps ↗</a><a class="text-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div>
+          <div class="local-apps-route"><div><strong>Set up the local HUD</strong><p>Use the repository guide to start the separate local dashboard and review its tool observations. This hosted page does not open a loopback app, start services, or authorize local starts.</p></div><a class="text-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div>
           <div class="hud-tool-search"><label>Find a tool<input id="tool-search" type="search" maxlength="120" placeholder="Name, task, or data type" /></label><label>Show<select id="tool-quick-filter"><option value="all">All tools</option><option value="data">Local evidence paths</option><option value="saved">My saved consoles</option></select></label><p id="tool-result-count" role="status"></p></div>
           <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
           <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card separates unverified manual notes from imported PATH findings. Copyable commands are scoped to an installation method; unknown methods require vendor guidance. Setup links open project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Manual notes: 0 found by operator · 0 not found by operator · 0 need recheck · 14 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
