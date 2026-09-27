@@ -2,10 +2,12 @@
 from __future__ import annotations
 import argparse
 import json
+import os
 import subprocess
 import sys
-from .tool_installer import RECIPES, install_command, terminal_command, INSTALL_TIMEOUT_SECONDS
+from .tool_installer import RECIPES, install_command, uninstall_command, terminal_command, INSTALL_TIMEOUT_SECONDS
 from .readiness import readiness_report
+from .tool_heartbeat import heartbeat_report
 
 # Role, scope and credentials remain operator choices; never guess or enable capture.
 CONFIGURATION = {
@@ -25,20 +27,50 @@ CONFIGURATION = {
     'nagios': ('Review /etc/nagios4/nagios.cfg and host/service definitions for authorized targets.', 'Validate with nagios4 -v /etc/nagios4/nagios.cfg before separately enabling the service; restrict the web console.'),
 }
 ALIASES = {'core':'python-sqlite','tshark':'wireshark-tshark','qwen':'qwen-ollama','nagios':'nagios-core'}
+APT_PREVIEW_TIMEOUT_SECONDS = 30
+APT_PREVIEW_MAX_CHARS = 64 * 1024
+
+
+def preview_apt_removal(tool: str, command: list[str]) -> bool:
+    """Show apt's current dependency plan without obtaining privileges or changing packages."""
+    if RECIPES[tool].kind != 'apt':
+        return True
+    # uninstall_command returns [sudo, apt-get, remove, flags, fixed packages].
+    preview = [command[1], '-s', 'remove', '--no-install-recommends', *RECIPES[tool].packages]
+    try:
+        result = subprocess.run(preview, check=False, capture_output=True, text=True,
+                                timeout=APT_PREVIEW_TIMEOUT_SECONDS,
+                                env={**os.environ, 'LC_ALL': 'C'})
+    except (OSError, subprocess.TimeoutExpired, UnicodeError):
+        print('Could not simulate package removal; no removal was started.', file=sys.stderr)
+        return False
+    output = (result.stdout or '') + (result.stderr or '')
+    if result.returncode or not output.strip() or len(output) > APT_PREVIEW_MAX_CHARS:
+        print('Package removal simulation failed or exceeded its display limit; no removal was started.', file=sys.stderr)
+        return False
+    print('Read-only apt removal plan (review every package and dependency):')
+    print(output, end='' if output.endswith('\n') else '\n')
+    return True
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Review, install, configure or inspect a fixed MEGALODON companion. Default: print plan only.')
+    parser = argparse.ArgumentParser(description='Review, install, uninstall, configure or inspect a fixed MEGALODON companion. Verify prints separate executable and heartbeat observations. Default: print plan only.')
     parser.add_argument('tool', choices=tuple(RECIPES))
-    parser.add_argument('action', nargs='?', default='plan', choices=('plan','install','configure','verify'))
-    parser.add_argument('--apply', action='store_true', help='Execute the fixed installation recipe; only valid with install')
+    parser.add_argument('action', nargs='?', default='plan', choices=('plan','install','uninstall','configure','verify'))
+    parser.add_argument('--apply', action='store_true', help='Execute the fixed install or terminal-confirmed uninstall recipe')
     args = parser.parse_args(argv)
-    if args.apply and args.action != 'install':
-        parser.error('--apply requires install')
+    if args.apply and args.action not in ('install', 'uninstall'):
+        parser.error('--apply requires install or uninstall')
     if args.action == 'verify':
         report = readiness_report()
         item = next(t for t in report['tools'] if t['id'] == ALIASES.get(args.tool,args.tool))
-        print(json.dumps({'tool':args.tool, 'presence':item['status'], 'boundaries':report['boundaries']}))
+        observed = heartbeat_report()
+        heartbeat = next(t for t in observed['tools'] if t['id'] == args.tool)
+        print(json.dumps({'tool':args.tool, 'presence':item['status'],
+                          'heartbeat':heartbeat, 'observed_at':observed['checked_at'],
+                          'platform':observed['platform'],
+                          'boundaries':report['boundaries'] + [
+                              'The separate heartbeat uses file metadata and process-name observations only; its light does not prove tool health, configuration, version or integration.']}))
         return 0
     print(f'{args.tool}: {RECIPES[args.tool].summary}')
     if args.action in ('plan','configure'):
@@ -47,18 +79,43 @@ def main(argv=None):
             print(f'{index}. {instruction}')
     if args.action in ('plan','install'):
         print('Install command:', terminal_command(args.tool) or 'Guided installation; use the linked publisher/setup guide in the HUD.')
+    if args.action in ('plan','uninstall'):
+        print('Uninstall command:', terminal_command(args.tool, 'uninstall') or 'Guided removal; select the exact installed role and follow its vendor guide.')
     if not args.apply:
         if args.action == 'install':
             print('Preview only. Add --apply to execute a supported fixed recipe. Package services may start; model downloads may be large.')
+        if args.action == 'uninstall':
+            print('Preview only. Add --apply in an interactive terminal to simulate apt removal and review dependencies before typing the exact tool ID. Package removal may stop services or affect dependents; no purge or autoremove is requested.')
         return 0
-    command = install_command(args.tool)
+    if args.action == 'uninstall':
+        command = uninstall_command(args.tool)
+        if command is None:
+            print('No automatic removal recipe. Review the installed method and follow its guide.', file=sys.stderr)
+            return 2
+        if not sys.stdin.isatty():
+            print('Uninstall requires an interactive terminal and exact tool confirmation.', file=sys.stderr)
+            return 2
+        if not preview_apt_removal(args.tool, command):
+            return 2
+        try:
+            if input(f'Type {args.tool} to run its removal command after reviewing the plan: ') != args.tool:
+                print('Removal cancelled.', file=sys.stderr)
+                return 2
+        except EOFError:
+            print('Removal cancelled.', file=sys.stderr)
+            return 2
+    else:
+        command = install_command(args.tool)
     if command is None:
         print('No automatic recipe is available on this platform. Follow the configuration and publisher guides.',file=sys.stderr)
         return 2
     try:
-        return subprocess.run(command, check=False, timeout=INSTALL_TIMEOUT_SECONDS).returncode
+        run_options = {'check': False, 'timeout': INSTALL_TIMEOUT_SECONDS}
+        if args.action == 'uninstall' and args.tool == 'qwen':
+            run_options['env'] = {**os.environ, 'OLLAMA_HOST': '127.0.0.1:11434'}
+        return subprocess.run(command, **run_options).returncode
     except (OSError, subprocess.TimeoutExpired):
-        print('Installation did not complete. Inspect the package manager locally before retrying.',file=sys.stderr)
+        print('Companion action did not complete. Inspect the package manager or provider locally before retrying.',file=sys.stderr)
         return 1
 
 if __name__ == '__main__':

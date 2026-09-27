@@ -18,4 +18,5 @@ recursive-include megalodon/assets *.svg
 recursive-include tests *.py *.cjs *.json
 recursive-include tools *.py
 include scripts/install-local.sh
+include scripts/manage-companion.sh
 include scripts/start-local.sh

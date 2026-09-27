@@ -23,7 +23,7 @@ process.stdin.on('end', async () => {
     ];
     const catalog = [
       {id: 'scapy', method: 'pip', one_click: true, terminal: 'python -m pip install scapy', summary: 'Synthetic Scapy package'},
-      {id: 'zabbix', method: 'apt', one_click: true, startable: true, start_terminal: 'sudo systemctl start zabbix-agent.service'},
+      {id: 'zabbix', method: 'apt', one_click: true, startable: true, start_terminal: 'sudo systemctl start zabbix-agent.service', uninstall_terminal: 'sudo apt-get remove --no-install-recommends zabbix-agent'},
       {id: 'qwen', method: 'ollama', one_click: true, terminal: 'ollama pull qwen2.5:7b', summary: 'Synthetic example model'},
     ];
     const context = {Date, Map, AbortController, workflowToolIds: tools.map(tool => tool.id), byId,
@@ -50,6 +50,10 @@ process.stdin.on('end', async () => {
     const settled = () => new Promise(resolve => setImmediate(resolve));
     const posts = () => requests.filter(request => request.options.method === 'POST');
     await run('pollHeartbeat()');
+    await byId('tool-check-now').events.click();
+    const forced = requests.find(request => request.path === '/api/heartbeat' && request.options.headers['X-Megalodon-Refresh'] === '1');
+    assert.ok(forced, 'explicit Check now bypasses the heartbeat cache');
+    assert.match(byId('tool-check-now-status').textContent, /Local presence observed/);
     const serviceRows = () => byId('app-service-start-list').children;
     const zabbixRow = () => serviceRows().find(row => row.children[0].children[0].children[1].textContent === 'Zabbix');
     assert.equal(serviceRows().length, 2, 'only installed service tools appear in Apps');
@@ -84,6 +88,9 @@ process.stdin.on('end', async () => {
     }
     const service = run('installControl("zabbix", "Zabbix")'); controls.push(service);
     assert.equal(service.children[0].textContent, 'Start service');
+    const removal = service.children.find(child => child.tag === 'details');
+    assert.ok(removal, 'installed package has a backend-provided removal plan');
+    assert.match(removal.children[2].textContent, /apt-get remove.*zabbix-agent/);
     await service.children[0].events.click(); await settled();
     assert.equal(JSON.parse(posts()[1].options.body).action, 'start');
     observedJob = {state: 'idle'};

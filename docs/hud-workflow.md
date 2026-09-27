@@ -50,23 +50,31 @@ optional approximate offline IP mapping.
 
 ## One setup entry point for every companion
 
-Run these in your installed MEGALODON environment (or activate the reviewed
-checkout's virtual environment). Replace `tshark` with a tool ID below:
+From a reviewed checkout, use the small wrapper below. It selects that
+checkout's Python environment. Replace `tshark` with a tool ID below:
 
 ```sh
-python -m megalodon.tool_setup tshark plan
-python -m megalodon.tool_setup tshark install
-python -m megalodon.tool_setup tshark install --apply
-python -m megalodon.tool_setup tshark configure
-python -m megalodon.tool_setup tshark verify
+./scripts/manage-companion.sh tshark plan
+./scripts/manage-companion.sh tshark install
+./scripts/manage-companion.sh tshark install --apply
+./scripts/manage-companion.sh tshark configure
+./scripts/manage-companion.sh tshark verify
+./scripts/manage-companion.sh tshark uninstall
 ```
 
-Default/plan, install without `--apply`, and configure only print instructions.
+Installed-package users can run the equivalent `python -m megalodon.tool_setup`
+in the MEGALODON Python environment. Default/plan, install and uninstall without
+`--apply`, and configure only print instructions.
 Configure provides tool-specific paths, settings and validation steps; it does
 not write vendor configuration or guess network scope, role or credentials.
-Verify performs the existing read-only executable-presence probe; it does not
-establish service health or valid configuration. Python/SQLite and Scapy are
-not checked by that probe. All 14 cards offer the same copyable commands.
+Verify returns the existing read-only executable-presence probe **and** the
+local HUD's metadata/process heartbeat in separate JSON fields. The latter
+can observe the Scapy Python module, an expected process, and the example
+Qwen model manifest without executing a companion. Neither result establishes
+service health, a valid configuration, version or integration. Python/SQLite
+and Scapy remain `not_checked` in the executable-only `presence` field; read
+the separate `heartbeat` field with its `observed_at` timestamp. All 14 cards
+offer the same copyable commands.
 
 | IDs | Installation path |
 | --- | --- |
@@ -76,16 +84,30 @@ not checked by that probe. All 14 cards offer the same copyable commands.
 | core | Existing reviewed `scripts/install-local.sh` user installer |
 | zeek, osquery, ossec, greenbone | Publisher/project guides; explicit build, repository, role or container decisions |
 
-`--apply` is valid only for install. It executes the same closed recipe registry
-as the local installer, with a 30-minute deadline and the package manager's
-terminal output. No supplied command, package or shell fragment is accepted.
+`install --apply` executes the same closed recipe registry as the local
+installer, with a 30-minute deadline and the package manager's terminal
+output. No supplied command, package or shell fragment is accepted.
 Unsupported platform/guided recipes return a nonzero result. Package service
 side effects and large model downloads are disclosed before execution. This
 workflow never automatically starts a scan, capture or firewall rule change.
 
+`uninstall --apply` is available for the fixed Ubuntu packages except nftables,
+the active Python environment's Scapy package, and the example Qwen model.
+It refuses noninteractive input and root, requires the exact tool ID typed in
+the terminal, and first runs unprivileged `apt-get -s remove` for Ubuntu
+packages. It displays the current dependency removal plan and stops if the
+simulation fails or its output is too large to review. After confirmation,
+the package manager may show a new plan; review it again before accepting.
+Removal uses no purge or autoremove.
+Generic removal is unavailable for private-prefix, vendor-repository,
+container, or ambiguous multi-role installations. Use
+`~/.local/bin/megalodon-manage uninstall` for the user-installed core; its
+data and settings are preserved. A stopped service or removed executable does
+not prove the rest of a dependency tree was removed.
+
 ## Connection coverage and failure isolation
 
-Both UIs use `megalodon/telemetry_catalog.py` for the same 15-feature and
+Both UIs use `megalodon/telemetry_catalog.py` for the same 16-feature and
 14-companion data map. It describes supported sources and update modes, not
 observed runtime health. The local HUD additionally shows accepted traffic,
 heartbeat and installer-job observations with their separate timestamps/states.
@@ -101,11 +123,15 @@ installer request disables management and shows its own unavailable state while
 a valid heartbeat continues to show observed tool presence. A failed heartbeat
 continues to mark tool observations stale even when installer status succeeds.
 
-ClamAV, osquery, OSSEC, Greenbone, Zabbix and Nagios do not yet have their
-scan/inventory/alert/monitoring data adapters. Nmap has a manual completed-report
-aggregate importer, not a live connection. Presence/process checks and manual
+osquery, OSSEC, Greenbone, Zabbix and Nagios do not yet have their
+inventory/alert/monitoring data adapters. ClamAV and Nmap have manual completed-report
+aggregate importers, not live connections. Presence/process checks and manual
 console links do not establish these data connections.
 nftables exposes inert response-plan evidence, never live firewall telemetry.
+The local **Check tool presence now** button asks the backend for a fresh
+observation, bypassing its short cache. It does not start services or certify
+health. Installed tool cards show a backend-supplied removal command where an
+exact supported method exists; the page copies that command but never runs it.
 
 ## Completed file scan
 

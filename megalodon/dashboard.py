@@ -504,7 +504,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                                 "authorization": "per_launch_token" if enabled else "disabled"}})
                 return
             try:
-                payload = self.heartbeat.snapshot()
+                refresh_headers = self.headers.get_all("X-Megalodon-Refresh", [])
+                if refresh_headers and refresh_headers != ["1"]:
+                    self._send_json({"error": "invalid refresh request"}, status=400)
+                    return
+                payload = self.heartbeat.snapshot(force=True) if refresh_headers else self.heartbeat.snapshot()
             except HeartbeatBusy:
                 self._send_json({"error": "heartbeat in progress"}, status=429,
                                 extra_headers={"Retry-After": str(HEARTBEAT_CACHE_SECONDS)})

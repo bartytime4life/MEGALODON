@@ -9,10 +9,10 @@ const lifecycleCommands = (() => {
   });
   return {
     core: {
-      verify: "python3 -m pip show megalodon-defense",
-      uninstall: "python3 -m pip uninstall megalodon-defense",
-      reinstall: "python3 -m pip install --force-reinstall --no-deps .",
-      note: "Activate your MEGALODON virtual environment in every new terminal before using these commands. A different python3 can report Package(s) not found even while the dashboard is running. For reinstall, first change into the reviewed MEGALODON checkout containing pyproject.toml; build dependencies may be downloaded. Package metadata does not verify SQLite support or operational acceptance."
+      verify: "~/.local/bin/megalodon-manage status",
+      uninstall: "~/.local/bin/megalodon-manage uninstall",
+      reinstall: "./scripts/install-local.sh",
+      note: "The user installer manages a private release and preserves settings and data on uninstall. Run reinstall from the reviewed checkout. These commands do not install or remove optional companions."
     },
     tshark: apt("tshark", "test -x /usr/bin/tshark && /usr/bin/tshark --version", "Use the repository's guarded setup; do not grant capture permissions."),
     zeek: {

@@ -32,6 +32,7 @@ SETUP_HTML = """
           <div id="setup-tool-status" class="tool-status-list"></div>
         </details>
         <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration. Tool management requires an explicitly enabled launch, its operator token, and your confirmation.</p>
+        <button id="tool-check-now" type="button">Check tool presence now</button><p id="tool-check-now-status" role="status">Waiting for a local observation.</p>
       </section>
       <section class="setup-software" aria-labelledby="setup-software-title">
         <p class="setup-step">02 / CHOOSE YOUR WORKFLOW</p>

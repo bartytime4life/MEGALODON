@@ -373,13 +373,13 @@ class Heartbeat:
     def invalidate(self) -> None:
         self._expires = 0.0
 
-    def snapshot(self) -> bytes:
+    def snapshot(self, *, force: bool = False) -> bytes:
         if not self._lock.acquire(blocking=False):
-            if self._cached is not None and monotonic() < self._expires:
+            if not force and self._cached is not None and monotonic() < self._expires:
                 return self._cached
             raise HeartbeatBusy
         try:
-            if self._cached is not None and monotonic() < self._expires:
+            if not force and self._cached is not None and monotonic() < self._expires:
                 return self._cached
             report = heartbeat_report(self._proc_root)
             report["history"] = self._history.observe(report)

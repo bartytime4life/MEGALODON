@@ -77,6 +77,8 @@ def test_heartbeat_cache_and_invalidate(tmp_path, monkeypatch):
     beat.invalidate()
     beat.snapshot()
     assert len(calls) == 2
+    beat.snapshot(force=True)
+    assert len(calls) == 3
 
 
 def test_recipes_are_closed_and_never_interpolate_requests(monkeypatch):
@@ -138,6 +140,8 @@ def test_routes_require_explicit_same_origin_requests(monkeypatch):
         assert _request(server, "GET", "/api/heartbeat")[0] == 403
         status, body = _request(server, "GET", "/api/heartbeat", {"X-Megalodon-Check": "1"})
         assert status == 200 and json.loads(body)["schema"] == "megalodon-tool-heartbeat-v1"
+        assert _request(server, "GET", "/api/heartbeat", {"X-Megalodon-Check": "1", "X-Megalodon-Refresh": "0"})[0] == 400
+        assert _request(server, "GET", "/api/heartbeat", {"X-Megalodon-Check": "1", "X-Megalodon-Refresh": "1"})[0] == 200
         origin = f"http://127.0.0.1:{server.server_port}"
         good = {"Origin": origin, "Content-Type": "application/json", "X-Megalodon-Install": "1",
                 "X-Megalodon-Install-Token": "t" * 32}

@@ -16,12 +16,20 @@ Align capability catalog, hub plan, feature coverage, Site companion description
 operator instructions and tests. Preserve traffic/globe behavior and all existing
 permission boundaries. See [the versioned contract](nmap-inventory-v1.md).
 
+## Currentness after the Nmap and ClamAV slices
+
+The completed ClamAV counts-only importer was merged in PR #428. Draft PR #429
+adds companion install/removal controls and a CLI verification receipt that
+separates executable presence from metadata/process heartbeat observations.
+The published owner-only Console v39 reflects its Site assets. Neither the
+manual ClamAV import nor a green companion light proves operational health.
+
 ## Remaining work, in order
 
 | Gap | Next concrete slice | Completion evidence |
 | --- | --- | --- |
 | Hosted telemetry is manual | Design an explicitly configured, authenticated aggregate relay with freshness, outage and revocation behavior | Real local-to-hosted integration test; no raw records or implied browser access to loopback |
-| Six companions lack result adapters | Select one completed-result profile for ClamAV, osquery, OSSEC, Greenbone, Zabbix or Nagios; implement a bounded reader and separate visualization | Producer fixture, malformed-input tests, provenance, units and last observation visible |
+| Five companions lack result adapters | Select one completed-result profile for osquery, OSSEC, Greenbone, Zabbix or Nagios; implement a bounded reader and separate visualization | Producer fixture, malformed-input tests, provenance, units and last observation visible |
 | Configuration commands are guidance | Add per-tool validate/preview commands before considering explicit configuration writers | Invalid paths/scope/credentials rejected, exact preview and rollback demonstrated |
 | Presence is not operational health | Add documented version/configuration/last-result observations to each implemented integration | Stopped, stale, unavailable and partial cases distinguishable from healthy |
 | Installation differs from publication | Exercise clean installed-package startup and the full import/export workflow on supported hosts | Native receipts with exact version; browser and package CI alone are insufficient |
