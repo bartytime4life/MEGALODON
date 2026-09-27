@@ -50,11 +50,11 @@ const integrations = [
     nextGate: "Versioned result contract, retention decision, and false-positive review.", ui: ["Reserved scan result", "Verdict", "Provenance"],
   },
   {
-    id: "osquery", name: "osquery", monogram: "OQ", category: "endpoint", status: "proposed", statusLabel: "Proposed",
-    summary: "Reserves a future endpoint-inventory view built from a closed, privacy-reviewed query profile.",
-    dataKind: "endpoint metadata", contract: "Not implemented", owner: "not implemented",
+    id: "osquery", name: "osquery", monogram: "OQ", category: "endpoint", status: "manual", statusLabel: "Manual count",
+    summary: "A saved DEB package count can be loaded manually. Broader endpoint inventory remains proposed.",
+    dataKind: "package count", contract: "megalodon-osquery-package-count-v1; manual import", owner: "operator-run query",
     boundary: "No arbitrary SQL, process environment, command-line dump, daemon, scheduler, or remote enrollment.",
-    nextGate: "Closed table and field allowlist, query-pack contract, and local privacy review.", ui: ["Host posture", "Package inventory", "Query receipt"],
+    nextGate: "Native producer-profile check and privacy review before broader inventory.", ui: ["Saved package count", "Export time", "Scope"],
   },
   {
     id: "qwen", name: "Qwen + Ollama", monogram: "QW", category: "advisory", status: "manual", statusLabel: "Manual",

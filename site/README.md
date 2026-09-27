@@ -13,6 +13,10 @@ must be installed locally before the new module commands and Prepare summary
 controls are available. The Site and local HUD share a generated feature/tool
 data-coverage map and an identical snapshot validator; use
 `python scripts/sync-hud-assets.py` after changing either canonical source.
+
+The saved osquery package-count panel accepts only a counts-only JSON produced
+from one operator-run `deb_packages` count. It stays in the browser tab and
+does not start osquery, upload package names, or establish live host health.
 See [the workflow guide](../docs/hud-workflow.md). The current publication receipt
 is recorded in [source alignment](../docs/site-source-alignment.md).
 

@@ -38,3 +38,11 @@ text = index.read_text()
 start, end = '<!-- CLAMAV_START -->', '<!-- CLAMAV_END -->'
 a, b = text.index(start) + len(start), text.index(end)
 index.write_text(text[:a] + '\n' + clamav['CLAMAV_HTML'] + '\n' + text[b:])
+
+osquery = runpy.run_path(str(root / "megalodon/dashboard_osquery.py"))
+for key, filename in {"OSQUERY_JS": "osquery.js", "OSQUERY_CSS": "osquery.css"}.items():
+    (root / "site/dist" / filename).write_text(osquery[key])
+text = index.read_text()
+start, end = '<!-- OSQUERY_START -->', '<!-- OSQUERY_END -->'
+a, b = text.index(start) + len(start), text.index(end)
+index.write_text(text[:a] + '\n' + osquery['OSQUERY_HTML'] + '\n' + text[b:])

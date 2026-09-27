@@ -466,7 +466,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "fetch('/api/offline-locations', {method: 'POST'" in DASHBOARD_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
-    assert INDEX_HTML.count('type="file"') == 3
+    assert INDEX_HTML.count('type="file"') == 4
+    assert 'type="file" id="osquery-file" accept=".json,application/json"' in INDEX_HTML
     assert 'type="file" id="clamav-file" accept=".json,application/json"' in INDEX_HTML
     assert 'type="file" id="inventory-file" accept=".json,application/json"' in INDEX_HTML
     assert 'id="activity-globe-file" type="file"' in INDEX_HTML
