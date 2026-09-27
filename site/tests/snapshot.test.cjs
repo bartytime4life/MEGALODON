@@ -38,3 +38,12 @@ test('rejected file preserves prior summary and older import cannot win a race',
  finish(await file(example()).arrayBuffer());await pending;assert.match(nodes.get('snapshot-status').textContent,/Import rejected/);assert.equal(nodes.get('snapshot-events').textContent,'3');
 });
 test('summary UI has no network, persistent storage, HTML injection or command execution',()=>{const source=fs.readFileSync(require.resolve('../dist/snapshot.js'),'utf8');assert.doesNotMatch(source,/\bfetch\s*\(|XMLHttpRequest|WebSocket|localStorage|innerHTML|\beval\s*\(/);});
+test('summary import presents one load action and a truthful unchecked state',()=>{
+ const html=fs.readFileSync(require.resolve('../dist/index.html'),'utf8');
+ const panel=html.match(/<section class="snapshot-import"[\s\S]*?<\/section>/)?.[0];
+ assert.ok(panel);
+ assert.match(panel,/id="snapshot-file"/);assert.match(panel,/id="snapshot-clear" disabled/);
+ assert.match(panel,/No summary loaded\. This page has not checked local telemetry\./);
+ assert.match(panel,/>How to export a summary<\/summary>/);
+ assert.doesNotMatch(panel,/<a\b|Open local HUD|live telemetry is available/);
+});
