@@ -318,7 +318,7 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             await expect(page.locator("#room-refresh")).to_be_enabled()
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
         else:
-            await expect(page.locator("#room-traffic-grid")).to_contain_text("No qualified data available")
+            await expect(page.locator("#room-traffic-grid")).to_contain_text("This chart has no qualified values")
             await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_have_count(6)
             await expect(page.locator("#room-traffic-grid .room-empty-plot[role=img]").first).to_have_attribute("aria-label", re.compile("no synthetic values", re.I))
             passed("empty traffic visuals contain no synthetic series", True)
