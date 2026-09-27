@@ -12,8 +12,14 @@ existing consumers and tests. No static CDN or additional server is introduced.
 The server binds to numeric IPv4 loopback. The public `serve()` boundary refuses
 non-loopback addresses, IPv6 for this IPv4 server, and any attempt to enable the
 legacy remote override. Expected-Host validation happens before routing or store
-access and rejects missing, duplicate, or unexpected Host values. This is a
-local exposure guard, **not authentication or a multi-user authorization model**.
+access and rejects missing, duplicate, or unexpected Host values. The supported
+`serve()` path also generates a per-launch password, prints it only to the
+launching terminal, and requires HTTP Basic authentication before serving the
+page, assets, private reads or POST routes. The browser sends that credential
+only to the same origin; no password is embedded in the served assets or URL.
+The Host check alone is a local exposure guard, not authentication. A private
+launch terminal and ordinary same-host process isolation remain prerequisites;
+this local HTTP password does not make the HUD suitable for remote exposure.
 
 Requests must use an origin-form target. Parsed scheme, authority, path parameters,
 or fragment components are refused rather than discarded as aliases. The server

@@ -639,7 +639,7 @@ const roomRequests=new Map();
 function requestRoomSnapshot(path='/api/traffic') {
   if(roomRequests.has(path))return roomRequests.get(path);
   const pending=(async()=>{
-    const response=await fetch(path,{method:'GET',cache:'no-store',credentials:'omit',mode:'same-origin',redirect:'error',signal:AbortSignal.timeout(5000)});
+    const response=await fetch(path,{method:'GET',cache:'no-store',credentials:'same-origin',mode:'same-origin',redirect:'error',signal:AbortSignal.timeout(5000)});
     const reader=response.body?.getReader();if(!reader)throw new Error('Unavailable');let bytes=0,chunks=[];
     try {
       while(true){const {done,value}=await reader.read();if(done)break;if(!(value instanceof Uint8Array))throw new Error('Invalid response');bytes+=value.byteLength;if(bytes>262144)throw new Error('Oversized');chunks.push(value);}

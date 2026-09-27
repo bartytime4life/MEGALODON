@@ -226,7 +226,7 @@ async function heartbeatFetch(path, options = {}) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(path, {cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal, ...options,
+    const response = await fetch(path, {cache: 'no-store', mode: 'same-origin', redirect: 'error', signal: controller.signal, ...options, credentials: 'same-origin',
       headers: {'Accept': 'application/json', 'X-Megalodon-Check': '1', ...(options.headers || {})}});
     const value = await response.json();
     if (!response.ok) { const error = new Error(value && value.error || 'Request failed'); error.status = response.status; throw error; }

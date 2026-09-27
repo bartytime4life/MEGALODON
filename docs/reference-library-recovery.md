@@ -127,7 +127,9 @@ client validation does not replace server security controls. [3]
 
 The shared dashboard JSON helper retains its five-second AbortController timeout
 and clears that timer in `finally`. It now requests `mode: 'same-origin'`,
-`credentials: 'omit'`, `redirect: 'error'`, and `cache: 'no-store'`. The Integration
+`credentials: 'same-origin'`, `redirect: 'error'`, and `cache: 'no-store'`. The
+same-origin setting carries the local dashboard's launch password after the
+browser sign-in; it does not send credentials to other origins. The Integration
 Map already calls this helper, so the same policy applies there without changing
 its schema or turning its descriptions into connections. A timeout is a browser
 request limit, not proof that server work has stopped. [2, 4]

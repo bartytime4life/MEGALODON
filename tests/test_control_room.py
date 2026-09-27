@@ -221,7 +221,7 @@ assert.throws(()=>run('{const p=JSON.parse(JSON.stringify(payload));'+expression
 }
 context.fetch=async(path,options)=>{calls.push({path,options});throw Error('PRIVATE_FAILURE')};
 await run('refreshRoom()');assert.equal(calls.length,2);assert.equal(calls[1].path,'/api/traffic');
-assert.equal(calls[1].options.method,'GET');assert.equal(calls[1].options.credentials,'omit');
+assert.equal(calls[1].options.method,'GET');assert.equal(calls[1].options.credentials,'same-origin');
 assert.equal(byId('room-connection').textContent,'Unavailable · preserved view');
 assert.equal(byId('room-coverage').textContent,'Stale');assert.match(byId('room-home-summary').textContent,/1 stored metadata events/);
 assert.doesNotMatch(textOf(byId('room-traffic-grid')),/PRIVATE_FAILURE/);

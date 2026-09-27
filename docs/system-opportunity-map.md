@@ -37,6 +37,12 @@ receipt here. A merged Site-source change is not a Site publication, and the
 live version is not evidence of local telemetry, host acceptance, or source
 parity beyond its recorded archive.
 
+Later on 2026-09-27, a new Sites readback found owner-only version 41 published
+successfully. Its source commit, archive digest, deployment and audience are
+recorded in [the current Site receipt](site-source-alignment.md). This later
+readback does not establish v41 source-byte parity or rendered acceptance; the
+version-40 statement above remains the earlier snapshot, not current live state.
+
 The structural backlog that motivated the original ranking is largely present:
 governance/community files, ADR indexing, Windows and macOS synthetic jobs,
 CycloneDX/provenance packet generation, the placeholder Zeek producer contract,
@@ -60,7 +66,7 @@ or changing their disposition.
 | 5 | Review alert lifecycle identity and persistence boundaries | The in-memory engine and [proposed wiring survey](alert-lifecycle-wiring-survey.md) exist; storage, CLI and dashboard wiring do not. | Operator/security review of identity, authorization, retention, atomic persistence, concurrency and uncertain commits before a migration or UI action. External delivery needs a separate adapter-specific review. |
 | 6 | Retain the model containment hold | Cross-contract readiness can check internal packet consistency, but the canonical binding remains unbound and issue #261 closure does not select model bytes. | Exact owner-selected model/provider digests, loaded-runtime identity, filesystem/resource/egress observations, signed adversarial corpus and independent security disposition. |
 | 7 | Complete native platform receipts | Windows and macOS jobs provide useful synthetic regression evidence without changing the Linux-reference catalog. | Windows 11 NTFS/loopback/browser checks and macOS architecture, JSONL/browser/privacy evidence on named native environments. |
-| 8 | Publish the Site only through a separate receipt | Repository source through #436 is locally and CI tested; owner-restricted v40 remains live. | Explicit reviewed publication with source commit, archive digest, version, successful deployment, audience readback, rendered check and rollback reference. |
+| 8 | Verify the current Site publication against repository source | Owner-restricted v41 is live with a version, archive, deployment, audience and rollback receipt; v41 source-byte parity and rendered acceptance are unverified. | Review the exact v41 source bytes against the intended repository mirror and check the rendered owner-only page. Future edits need their own publication receipt. |
 
 The current core ingestion path admits `sample`, `jsonl`, or `scapy`, commits an
 event and its linked findings/action records with the run counter in one

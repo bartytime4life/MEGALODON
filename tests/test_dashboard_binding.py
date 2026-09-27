@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import contextmanager
 import errno
 from http.client import HTTPConnection
@@ -94,6 +95,8 @@ def test_loopback_server_gets_numeric_host_and_closes(monkeypatch, host, expecte
     assert handler.offline_summary == {}
     assert handler.refresh_seconds == 12
     assert handler.event_limit == 25
+    assert isinstance(handler.http_read_password, str)
+    assert len(handler.http_read_password) >= 32
     server.server_close.assert_called_once_with()
 
 
@@ -248,19 +251,59 @@ def test_parser_preserves_legacy_flag_for_explicit_refusal():
     assert args.allow_remote is True
 
 
-def _host_request(server, values, path="/api/summary"):
+def _host_request(server, values, path="/api/summary", authorizations=()):
     connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
     connection.putrequest(
         "GET", path, skip_host=True, skip_accept_encoding=True
     )
     for value in values:
         connection.putheader("Host", value)
+    for value in authorizations:
+        connection.putheader("Authorization", value)
     connection.endheaders()
     response = connection.getresponse()
     body = json.loads(response.read())
     headers = dict(response.getheaders())
     connection.close()
     return response.status, body, headers
+
+
+def test_launch_password_guards_private_reads_before_store_access():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    handler = type("AuthorizedDashboardHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": "private-launch-password",
+    })
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host = f"127.0.0.1:{server.server_port}"
+        for credentials in ((), ("Basic invalid!",), ("Basic " + base64.b64encode(b"megalodon:wrong").decode("ascii"),)):
+            status, body, headers = _host_request(server, (host,), authorizations=credentials)
+            assert status == 401
+            assert body == {"error": "local dashboard sign-in required"}
+            assert headers["WWW-Authenticate"] == 'Basic realm="MEGALODON local"'
+        assert not store.summary.called
+        valid = "Basic " + base64.b64encode(b"megalodon:private-launch-password").decode("ascii")
+        status, _, _ = _host_request(server, (host,), authorizations=(valid, valid))
+        assert status == 401
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        try:
+            connection.request("POST", "/api/automation-preview", body=b"{}", headers={"Host": host})
+            response = connection.getresponse()
+            assert response.status == 401
+            response.read()
+        finally:
+            connection.close()
+        status, body, _ = _host_request(server, (host,), authorizations=(valid,))
+        assert status == 200
+        assert body == store.summary.return_value
+        store.summary.assert_called_once_with()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_dashboard_rejects_untrusted_host_before_store_access():

@@ -1350,8 +1350,8 @@ async function requestBoundedJSON(path, maxBytes, options = {}) {
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   let reader = null;
   try {
-    const response = await fetch(path, {cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal,
-      ...options, headers: {'Accept': 'application/json', ...(options.headers || {})}});
+    const response = await fetch(path, {cache: 'no-store', mode: 'same-origin', redirect: 'error', signal: controller.signal,
+      ...options, credentials: 'same-origin', headers: {'Accept': 'application/json', ...(options.headers || {})}});
     if (!response.ok) throw new Error('bounded request failed');
     if (!response.headers || typeof response.headers.get !== 'function') throw new Error('bounded response headers unavailable');
     const declared = response.headers.get('Content-Length');
@@ -1389,7 +1389,7 @@ async function requestJSON(path) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', mode: 'same-origin', credentials: 'omit', redirect: 'error', signal: controller.signal});
+    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', mode: 'same-origin', credentials: 'same-origin', redirect: 'error', signal: controller.signal});
     if (!response.ok) {
       let payload = null;
       try { payload = await response.json(); } catch (_) {}

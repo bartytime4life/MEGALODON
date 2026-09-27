@@ -262,9 +262,9 @@ if (!baseline) {
     const match=lookupFixture();match.warning=p.warning;match.sources[0]=p.sources[0];match.matches[0].description='<script>bad()</script>';
     await r.lookup(match);assert(r.get('reference-results').textContent.includes('<script>bad()</script>'));
   });
-  test('request policy is same-origin credential-free no-redirect with five-second cleanup',async()=>{
+  test('request policy carries same-origin sign-in with no redirect and five-second cleanup',async()=>{
     const r=runtime();await r.ready();const options=r.requests[0].options;
-    assert.equal(options.mode,'same-origin');assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');
+    assert.equal(options.mode,'same-origin');assert.equal(options.credentials,'same-origin');assert.equal(options.redirect,'error');
     assert.equal(options.cache,'no-store');assert.equal(options.headers.Accept,'application/json');assert.equal(r.timers.size,0);
   });
   test('timeout aborts and releases busy state without a real timer or socket',async()=>{

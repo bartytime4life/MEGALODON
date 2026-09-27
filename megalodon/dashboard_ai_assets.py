@@ -117,7 +117,7 @@ async function aiFetch(path, header, body = null) {
   aiActiveController = controller;
   const timer = setTimeout(() => controller.abort(), 50000);
   const options = {headers: {[header]: '1', 'X-Megalodon-AI-Token': document.getElementById('ai-token').value},
-                   cache: 'no-store', credentials: 'omit', signal: controller.signal};
+                   cache: 'no-store', credentials: 'same-origin', signal: controller.signal};
   try {
   if (body !== null) {
     options.method = 'POST'; options.body = JSON.stringify(body);

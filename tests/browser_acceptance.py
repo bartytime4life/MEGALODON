@@ -7,6 +7,7 @@ Missing prerequisites or failed assertions exit nonzero; no skip/fallback mode.
 from __future__ import annotations
 
 import asyncio
+import base64
 from contextlib import contextmanager
 import hashlib
 import http.client
@@ -15,6 +16,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import select
 import socket
 import sqlite3
 import subprocess
@@ -48,12 +50,15 @@ def cli(*args: str, stdin: str | None = None) -> dict:
     return json.loads(result.stdout)
 
 
-def request(port: int, path: str, hosts: list[str] | None = None):
+def request(port: int, path: str, hosts: list[str] | None = None, password: str | None = None):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
     try:
         connection.putrequest("GET", path, skip_host=True)
         for host in ([f"127.0.0.1:{port}"] if hosts is None else hosts):
             connection.putheader("Host", host)
+        if password is not None:
+            credentials = base64.b64encode(f"megalodon:{password}".encode("ascii")).decode("ascii")
+            connection.putheader("Authorization", f"Basic {credentials}")
         connection.endheaders()
         response = connection.getresponse()
         body = response.read(131073)
@@ -84,21 +89,33 @@ def dashboard(settings: Path, offline: Path | None = None):
             "--host", "127.0.0.1", "--port", str(port)]
     if offline is not None:
         args += ["--offline-run", str(offline)]
-    process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     try:
         deadline = time.monotonic() + 10
+        output = b""
+        password = None
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 raise AssertionError("dashboard startup refused")
+            ready, _, _ = select.select([process.stdout], [], [], 0.05)
+            if ready:
+                output += os.read(process.stdout.fileno(), 256)
+                if len(output) > 1024:
+                    raise AssertionError("dashboard startup output exceeded bound")
+                match = re.search(rb"MEGALODON local dashboard sign-in: username megalodon; password ([A-Za-z0-9_-]{32,})\n", output)
+                if match:
+                    password = match.group(1).decode("ascii")
+            if password is None:
+                continue
             try:
-                if request(port, "/api/config")[0] == 200:
+                if request(port, "/api/config", password=password)[0] == 200:
                     break
             except (OSError, http.client.HTTPException):
                 pass
             time.sleep(0.05)
         else:
             raise AssertionError("dashboard startup timeout")
-        yield port
+        yield port, password
     finally:
         if process.poll() is None:
             process.terminate()
@@ -108,6 +125,8 @@ def dashboard(settings: Path, offline: Path | None = None):
                 process.kill()
                 process.wait(timeout=5)
                 raise AssertionError("dashboard required forced cleanup")
+        if process.stdout is not None:
+            process.stdout.close()
 
 
 def unsafe_startup(settings: Path, db: Path) -> None:
@@ -171,11 +190,12 @@ async def set_native_window_state(page, window_state: str) -> dict:
         await cdp.detach()
 
 
-async def exercise(browser, port: int, nonempty: bool) -> None:
+async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
     from playwright.async_api import expect
     origin = f"http://127.0.0.1:{port}"
     context = await browser.new_context(viewport={"width": 1440, "height": 1000},
-                                        reduced_motion="reduce", service_workers="block")
+                                        reduced_motion="reduce", service_workers="block",
+                                        http_credentials={"username": "megalodon", "password": password})
     violations: list[str] = []
     errors: list[str] = []
     counts = {"summary": 0, "events": 0, "advisory": 0}
@@ -617,8 +637,10 @@ async def run() -> None:
                 try:
                     for settings, db, nonempty in ((empty, empty_db, False), (populated, populated_db, True)):
                         original = hashlib.sha256(db.read_bytes()).hexdigest()
-                        with dashboard(settings, offline if nonempty else None) as port:
-                            status, headers, body = request(port, "/api/events?limit=5")
+                        with dashboard(settings, offline if nonempty else None) as (port, password):
+                            passed("unauthenticated telemetry refused " + str(nonempty),
+                                   request(port, "/api/events?limit=5")[0] == 401)
+                            status, headers, body = request(port, "/api/events?limit=5", password=password)
                             records = json.loads(body)
                             passed("five-field HTTP projection " + str(nonempty), status == 200 and
                                    len(records) == (2 if nonempty else 0) and all(set(row) ==
@@ -628,13 +650,13 @@ async def run() -> None:
                                    headers.get("X-Content-Type-Options") == "nosniff")
                             for query in ("limit=0", "limit=201", "limit=1&limit=2", "extra=1", "limit=x"):
                                 passed("query refusal " + query + " " + str(nonempty),
-                                       request(port, "/api/events?" + query)[0] == 400)
+                                       request(port, "/api/events?" + query, password=password)[0] == 400)
                             for label, hosts in (("missing", []), ("foreign", ["foreign.invalid"]),
                                                  ("wrong-port", ["127.0.0.1:1"]),
                                                  ("duplicate", [f"127.0.0.1:{port}", f"127.0.0.1:{port}"])):
                                 passed("Host refusal " + label + " " + str(nonempty),
-                                       request(port, "/api/summary", hosts)[0] == 400)
-                            await exercise(browser, port, nonempty)
+                                       request(port, "/api/summary", hosts, password=password)[0] == 400)
+                            await exercise(browser, port, password, nonempty)
                         passed("main database bytes unchanged " + str(nonempty),
                                hashlib.sha256(db.read_bytes()).hexdigest() == original)
                 finally:

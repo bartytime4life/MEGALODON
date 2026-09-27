@@ -721,7 +721,7 @@ function validateGlobeLocations(value, requested) {
 }
 async function requestGlobeLocations(ips) {
   const response = await fetch('/api/offline-locations', {method: 'POST', cache: 'no-store',
-    credentials: 'omit', mode: 'same-origin', redirect: 'error',
+    credentials: 'same-origin', mode: 'same-origin', redirect: 'error',
     headers: {'Content-Type': 'application/json', 'X-Megalodon-Location': '1'},
     body: JSON.stringify({ips}), signal: AbortSignal.timeout(5000)});
   if (!response.ok) throw new Error('Location lookup unavailable');
