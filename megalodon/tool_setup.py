@@ -7,6 +7,7 @@ import subprocess
 import sys
 from .tool_installer import RECIPES, install_command, uninstall_command, terminal_command, INSTALL_TIMEOUT_SECONDS
 from .readiness import readiness_report
+from .tool_heartbeat import heartbeat_report
 
 # Role, scope and credentials remain operator choices; never guess or enable capture.
 CONFIGURATION = {
@@ -53,7 +54,7 @@ def preview_apt_removal(tool: str, command: list[str]) -> bool:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Review, install, uninstall, configure or inspect a fixed MEGALODON companion. Default: print plan only.')
+    parser = argparse.ArgumentParser(description='Review, install, uninstall, configure or inspect a fixed MEGALODON companion. Verify prints separate executable and heartbeat observations. Default: print plan only.')
     parser.add_argument('tool', choices=tuple(RECIPES))
     parser.add_argument('action', nargs='?', default='plan', choices=('plan','install','uninstall','configure','verify'))
     parser.add_argument('--apply', action='store_true', help='Execute the fixed install or terminal-confirmed uninstall recipe')
@@ -63,7 +64,13 @@ def main(argv=None):
     if args.action == 'verify':
         report = readiness_report()
         item = next(t for t in report['tools'] if t['id'] == ALIASES.get(args.tool,args.tool))
-        print(json.dumps({'tool':args.tool, 'presence':item['status'], 'boundaries':report['boundaries']}))
+        observed = heartbeat_report()
+        heartbeat = next(t for t in observed['tools'] if t['id'] == args.tool)
+        print(json.dumps({'tool':args.tool, 'presence':item['status'],
+                          'heartbeat':heartbeat, 'observed_at':observed['checked_at'],
+                          'platform':observed['platform'],
+                          'boundaries':report['boundaries'] + [
+                              'The separate heartbeat uses file metadata and process-name observations only; its light does not prove tool health, configuration, version or integration.']}))
         return 0
     print(f'{args.tool}: {RECIPES[args.tool].summary}')
     if args.action in ('plan','configure'):

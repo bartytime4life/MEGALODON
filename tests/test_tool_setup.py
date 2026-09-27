@@ -39,7 +39,23 @@ def test_guided_install_and_presence_do_not_claim_configuration(monkeypatch,caps
         assert tool_setup.main([tool,'verify'])==0
         value=json.loads(capsys.readouterr().out)
         assert value['presence'] in {'not_checked','not_found','executable_found'}
+        assert value['heartbeat']['id']==tool
+        assert value['heartbeat']['light'] in {'green','amber','red','grey'}
+        assert value['heartbeat']['installed'] in {'yes','no','unknown'}
+        assert value['observed_at']
         assert 'running state are not verified' in value['boundaries'][0]
+
+
+def test_verify_keeps_executable_and_heartbeat_evidence_separate(monkeypatch,capsys):
+    monkeypatch.setattr(tool_setup,'readiness_report',lambda:{'tools':[{'id':'scapy','status':'not_checked'}], 'boundaries':['Executable check only']})
+    monkeypatch.setattr(tool_setup,'heartbeat_report',lambda:{'checked_at':'2026-09-27T00:00:00Z','platform':'linux',
+        'tools':[{'id':'scapy','installed':'yes','service':'standalone','light':'green','model':None,'expects_service':False,'installed_since':None,'running_since':None}]})
+    assert tool_setup.main(['scapy','verify'])==0
+    value=json.loads(capsys.readouterr().out)
+    assert value['presence']=='not_checked'
+    assert value['heartbeat']['installed']=='yes'
+    assert value['heartbeat']['service']=='standalone'
+    assert value['observed_at']=='2026-09-27T00:00:00Z'
 
 
 def test_uninstall_is_closed_preview_and_requires_terminal_confirmation(monkeypatch, capsys):

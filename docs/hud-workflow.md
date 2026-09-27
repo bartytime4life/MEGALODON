@@ -67,9 +67,14 @@ in the MEGALODON Python environment. Default/plan, install and uninstall without
 `--apply`, and configure only print instructions.
 Configure provides tool-specific paths, settings and validation steps; it does
 not write vendor configuration or guess network scope, role or credentials.
-Verify performs the existing read-only executable-presence probe; it does not
-establish service health or valid configuration. Python/SQLite and Scapy are
-not checked by that probe. All 14 cards offer the same copyable commands.
+Verify returns the existing read-only executable-presence probe **and** the
+local HUD's metadata/process heartbeat in separate JSON fields. The latter
+can observe the Scapy Python module, an expected process, and the example
+Qwen model manifest without executing a companion. Neither result establishes
+service health, a valid configuration, version or integration. Python/SQLite
+and Scapy remain `not_checked` in the executable-only `presence` field; read
+the separate `heartbeat` field with its `observed_at` timestamp. All 14 cards
+offer the same copyable commands.
 
 | IDs | Installation path |
 | --- | --- |

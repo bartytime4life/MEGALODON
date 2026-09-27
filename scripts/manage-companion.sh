@@ -10,6 +10,8 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" || $# -eq 0 ]]; then
 Usage: ./scripts/manage-companion.sh TOOL [plan|install|uninstall|configure|verify] [--apply]
 
 Preview a fixed recipe or read the configuration/verification instructions.
+Verify prints separate executable-presence and metadata/process heartbeat
+observations; neither proves a working integration or healthy service.
 Install --apply executes the selected fixed recipe. Uninstall --apply requires
 an interactive terminal and the exact tool ID typed again; package managers
 may ask for confirmation. Ubuntu package removals first show an unprivileged
