@@ -100,49 +100,6 @@ const integrations = [
   }
 ];
 
-const workflows = {
-  dashboard: {
-    status: "Implemented", statusClass: "implemented", platform: "Local Linux reference", title: "Open your local evidence dashboard",
-    summary: "Install the reviewed checkout for your user, then open MEGALODON from the application menu. The HUD opens with or without an audit store and provides explicit local checks. No cloud account or readiness-file export is needed locally.",
-    command: "./scripts/install-local.sh",
-    produces: ["Read-only view of your stored events", "Source-qualified detection links", "Available run receipts"],
-    refuses: ["Remote exposure", "Host control", "Automatic sensor startup"],
-    boundary: "Stored evidence is not proof of a currently running sensor. Check run timestamps and terminal outcomes."
-  },
-  replay: {
-    status: "Implemented", statusClass: "implemented", platform: "Linux reference", title: "Bounded JSONL replay",
-    summary: "Replay authorized metadata through finite line, byte, event, skipped-line, and optional elapsed-time limits while preserving terminal error evidence.",
-    command: "python -m megalodon run --source jsonl --input ./events.jsonl --max-events 10000",
-    produces: ["Accepted event ledger", "Detection and decision links", "Terminal run counters"],
-    refuses: ["Unbounded aggregate reads", "Arbitrary event extensions", "Shell interpolation"],
-    boundary: "The fixed aggregate UTF-8 input ceiling is 256 MiB; excess input fails closed."
-  },
-  offline: {
-    status: "Bounded adapter", statusClass: "bounded", platform: "Linux only", title: "Isolated saved-capture analysis",
-    summary: "Run a fixed-system TShark adapter against an explicitly selected PCAP or PCAPNG in a non-root analyst environment. Reports are private and redacted.",
-    command: "python -m megalodon.offline --source tshark --input-root /absolute/private/input --input capture.pcapng --output /absolute/private/new-report --case case001 --max-records 10000 --timeout 30",
-    produces: ["Typed metadata summary", "Redacted JSONL and CSV reports", "Run manifest and receipt"],
-    refuses: ["Live capture", "Payload publication", "Root execution"],
-    boundary: "Replace both absolute example paths with your private input and a new report directory. Fixed /usr/bin/tshark, bounded output and time; Windows desktop Wireshark is separate."
-  },
-  suricata: {
-    status: "Implemented · optional local view", statusClass: "implemented", platform: "Linux · non-root · capability-free", title: "Review a bounded Suricata startup snapshot",
-    summary: "Point the local dashboard at an existing private Suricata store. It validates a bounded read-only snapshot at startup and serves immutable review data; the hosted Site is not connected.",
-    command: "python -m megalodon dashboard --suricata-db /absolute/private/suricata.sqlite",
-    produces: ["Up to five validated recent publications", "At most 50 external alert metadata rows", "Explicit unconfigured, unavailable, and snapshot provenance states"],
-    refuses: ["Database, schema, permission, or evidence writes", "Per-request database queries or live sensor access", "Retry, repair, retention, producer, or response authority"],
-    boundary: "The optional projection validates a locked read-only startup snapshot within a cooperative five-second deadline and 64 KiB output bound. Snapshot freshness is explicit; external alert evidence does not become MEGALODON detection or action authority."
-  },
-  plans: {
-    status: "Implemented / non-executing", statusClass: "implemented", platform: "Static catalog", title: "Capability and integration plans",
-    summary: "Inspect a closed vocabulary of platform capabilities and integration steps without probing the host, locating executables, installing packages, or starting services.",
-    command: "python -m megalodon hub-plan --platform linux",
-    produces: ["Machine-readable workflow plan", "Explicit availability state", "Documented prerequisites"],
-    refuses: ["Host probing", "Package installation", "Firewall or service changes"],
-    boundary: "A plan is not an applied action, compatibility result, or production approval."
-  }
-};
-
 const categories = [
   ["all", "All tools"], ["network", "Network"], ["endpoint", "Endpoint / file"], ["availability", "Availability"], ["advisory", "Advisory"], ["response", "Response"], ["core", "Core"]
 ];
@@ -266,7 +223,7 @@ async function importReadinessFile(file) {
 }
 
 function switchView(name, updateHistory = true) {
-  if (!['hud', 'evidence', 'integrations', 'missions', 'boundaries'].includes(name)) return;
+  if (!['hud', 'evidence', 'integrations', 'boundaries'].includes(name)) return;
   if (!$( `[data-view-panel="${name}"]`)) return;
   if (!state.viewScroll) state.viewScroll = Object.create(null);
   state.viewScroll[state.activeView] = window.scrollY || 0;
@@ -301,8 +258,7 @@ function renderTelemetryUnavailable() {
   $("#detection-lanes").textContent = "Unavailable — no detection evidence received.";
   $("#source-bars").textContent = "Unavailable — no source measurements received.";
   $("#run-list").textContent = "No runtime receipts loaded.";
-  $("#run-inspector").innerHTML = '<h2>Review your local evidence</h2><p>The local dashboard reads your configured audit store. Its optional Suricata view is an immutable startup snapshot with explicit provenance and age.</p><p>Use Workflows for the local command. This Site cannot fetch your database or turn a readiness report into network evidence.</p><button class="control-button" id="local-workflow" type="button">View local dashboard command →</button>';
-  $("#local-workflow").addEventListener("click", () => { renderWorkflow("dashboard"); switchView("missions"); });
+  $("#run-inspector").innerHTML = '<h2>Review your local evidence</h2><p>The local dashboard reads your configured audit store. Its optional Suricata view is an immutable startup snapshot with explicit provenance and age.</p><p>Use the operator workflow index for the documented local entry point. This Site cannot fetch your database or turn a readiness report into network evidence.</p><a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/operator-workflows.md#local-dashboard" target="_blank" rel="noopener noreferrer">Local dashboard workflow ↗</a>';
 }
 
 function renderCategoryFilters() {
@@ -461,62 +417,25 @@ async function copyText(value, button, successLabel = "Copied") {
   window.setTimeout(() => { button.textContent = original; }, 1600);
 }
 
-function renderWorkflow(key) {
-  const item = workflows[key];
-  if (!item) return;
-  $$(".mission").forEach((button) => {
-    const active = button.dataset.workflow === key;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
-  const badge = $("#workflow-status");
-  badge.textContent = item.status;
-  badge.className = `status-pill ${item.statusClass}`;
-  $("#workflow-platform").textContent = item.platform;
-  $("#workflow-title").textContent = item.title;
-  $("#workflow-summary").textContent = item.summary;
-  $("#workflow-command").textContent = item.command;
-  $("#workflow-boundary").textContent = item.boundary;
-  $("#workflow-produces").replaceChildren(...item.produces.map(listItem));
-  $("#workflow-refuses").replaceChildren(...item.refuses.map(listItem));
-}
-
-function listItem(text) {
-  const li = document.createElement("li");
-  li.textContent = text;
-  return li;
-}
-
 $$('[data-view]').forEach((button) => { button.setAttribute("aria-label", button.querySelector("span:last-child").textContent); button.addEventListener('click', () => switchView(button.dataset.view)); });
 $('.brand').addEventListener('click', (event) => { event.preventDefault(); switchView('hud'); });
 $$('[data-jump]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
-$$('.mission').forEach((button) => button.addEventListener('click', () => renderWorkflow(button.dataset.workflow)));
 
 $("#readiness-file").addEventListener("change", (event) => importReadinessFile(event.target.files[0]));
 $("#clear-readiness").addEventListener("click", () => { readinessImportSequence += 1; state.readiness = null; $("#readiness-file").value = ""; $("#readiness-feedback").textContent = "Report forgotten. No readiness results retained."; $("#clear-readiness").disabled = true; renderIntegrationGrid(); renderToolInspector(); });
 $("#clear-tool-notes").addEventListener("click", () => { state.toolPresence = {}; try { localStorage.removeItem(toolPresenceKey); localStorage.removeItem("megalodon-tool-presence-v1"); } catch { /* Current page still clears. */ } renderIntegrationGrid(); renderToolInspector(); });
 
-$("#copy-command").addEventListener("click", async () => {
-  const command = $("#workflow-command").textContent;
-  const button = $("#copy-command");
-  await copyText(command, button);
-});
-
 renderTelemetryUnavailable();
 renderCategoryFilters();
 renderIntegrationGrid();
 renderToolInspector();
-renderWorkflow("dashboard");
-
-$('#copy-local-install').addEventListener('click', () => copyText('./scripts/install-local.sh', $('#copy-local-install')));
-$('#copy-hud-start').addEventListener('click', () => copyText('./scripts/start-local.sh', $('#copy-hud-start')));
 $('#tool-search').addEventListener('input', () => { state.toolQuery = $('#tool-search').value.slice(0, 120).trim().toLowerCase(); renderIntegrationGrid(); renderToolInspector(); });
 $('#tool-quick-filter').addEventListener('change', () => { state.toolFilter = $('#tool-quick-filter').value; renderIntegrationGrid(); renderToolInspector(); });
 
 function restoreViewFromHash() {
   const hash = window.location.hash;
   if (hash === '') switchView('hud', false);
-  else if (/^#view=(hud|evidence|integrations|missions|boundaries)$/.test(hash)) switchView(hash.slice(6), false);
+  else if (/^#view=(hud|evidence|integrations|boundaries)$/.test(hash)) switchView(hash.slice(6), false);
 }
 window.addEventListener('popstate', restoreViewFromHash);
 window.addEventListener('hashchange', restoreViewFromHash);
