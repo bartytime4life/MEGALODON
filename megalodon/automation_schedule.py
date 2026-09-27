@@ -57,7 +57,12 @@ _CANONICAL = re.compile(
 _POSITIVE_INT = re.compile(r"[0-9]{1,9}\Z")
 _UNTIL = re.compile(r"[0-9]{8}T[0-9]{6}Z\Z")
 _DTSTART = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\Z")
-_ZONE_NAME = re.compile(r"(UTC|[A-Za-z_+-]+/[A-Za-z0-9_+./-]+)\Z")
+_ZONE_HEAD_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_+-"
+)
+_ZONE_COMPONENT_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_+.-"
+)
 
 ERROR_CODES = frozenset({
     "PATTERN", "DUPLICATE_PART", "UNKNOWN_PART", "COUNT_AND_UNTIL",
@@ -216,9 +221,24 @@ def parse_rrule(rrule: str) -> Mapping[str, Any]:
     })
 
 
+def _valid_zone_name(name: str) -> bool:
+    if name == "UTC":
+        return True
+    parts = name.split("/")
+    return (
+        len(parts) >= 2
+        and all(parts)
+        and all(character in _ZONE_HEAD_CHARS for character in parts[0])
+        and all(
+            part not in {".", ".."}
+            and all(character in _ZONE_COMPONENT_CHARS for character in part)
+            for part in parts[1:]
+        )
+    )
+
+
 def _zone(name: object) -> ZoneInfo:
-    if (type(name) is not str or len(name) > 128 or not _ZONE_NAME.fullmatch(name)
-            or any(part in {"", ".", ".."} for part in name.split("/"))):
+    if type(name) is not str or len(name) > 128 or not _valid_zone_name(name):
         _fail("TIMEZONE_VALUE")
     try:
         return ZoneInfo(name)
