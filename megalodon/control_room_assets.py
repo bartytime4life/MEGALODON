@@ -58,6 +58,7 @@ HOME_HTML = """
   </section>
   <!-- HUD_ACTIVITY_GLOBE -->
   <h3 class="hud-section-title">Traffic overview <span>Shared time range</span></h3>
+  <p class="room-section-note">Charts use only qualified stored metadata in the selected range. Blank charts contain no synthetic values. <a href="#setup-title">Review Data and tools</a> when a source is unavailable.</p>
   <div id="room-traffic-grid" class="room-grid"></div>
   <h3 class="hud-section-title">Detection overview <span>Linked findings</span></h3>
   <div id="room-findings-visual" class="room-grid"></div>
@@ -190,18 +191,35 @@ ROOM_CSS = r"""
 .room-actions a { text-decoration:none; }
 .room-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:1rem 0; }
 .room-visual { min-width:0; background:#0e2330; border:1px solid #335064; border-radius:12px; padding:1rem; }
-.room-visual h3 { font-size:1.05rem; margin:0 0 .5rem; color:#f2f7f9; }
+.room-visual-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; margin-bottom:.35rem; }
+.room-visual h3 { font-size:1.05rem; margin:0; color:#f2f7f9; }
+.room-visual-state { flex:0 0 auto; max-width:46%; border:1px solid #426173; border-radius:999px; padding:.24rem .48rem; color:#bfd0d9; font-size:.67rem; font-weight:700; letter-spacing:.04em; line-height:1.25; text-align:center; text-transform:uppercase; }
+.room-visual-state.is-data { border-color:#397e72; background:#113d37; color:#b8f4e8; }
+.room-visual-state.is-unavailable { border-color:#766a43; background:#302a19; color:#ead99e; }
+.room-section-note { margin:.45rem 0 0; color:#b7cbd4; font-size:.82rem; line-height:1.55; }
+.room-section-note a { color:#9deee0; text-underline-offset:3px; }
 .room-meta,.room-empty { font-size:.85rem; color:#bfd0d9; line-height:1.6; overflow-wrap:anywhere; }
 .room-bars { list-style:none; padding:0; margin:.7rem 0; }
 .room-bars li { display:grid; grid-template-columns:minmax(0,1fr) 5rem; gap:.2rem .5rem; margin:.6rem 0; font-size:.85rem; overflow-wrap:anywhere; }
 .room-bars meter { grid-column:1/-1; width:100%; height:12px; }
 .room-bars strong { text-align:right; }
+.room-empty-plot { position:relative; min-height:142px; display:grid; place-items:center; margin:.85rem 0 .55rem; border-left:1px solid #496575; border-bottom:1px solid #496575; border-radius:0 0 0 5px; overflow:hidden; background:repeating-linear-gradient(to top,transparent 0,transparent 34px,rgba(114,151,169,.13) 35px),repeating-linear-gradient(to right,transparent 0,transparent 12.4%,rgba(114,151,169,.1) 12.5%); }
+.room-empty-plot-message { position:relative; z-index:1; max-width:18rem; padding:.65rem .8rem; border:1px solid #426173; border-radius:8px; background:#0b1d27; text-align:center; }
+.room-empty-plot-message strong,.room-empty-plot-message span { display:block; }
+.room-empty-plot-message strong { color:#e8f1f4; font-size:.84rem; }
+.room-empty-plot-message span { margin-top:.24rem; color:#aebfc7; font-size:.72rem; line-height:1.45; }
+.room-direction-unknown { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; margin:.85rem 0 .55rem; }
+.room-direction-node { display:grid; gap:.3rem; min-width:0; padding:.8rem .55rem; border:1px dashed #587080; border-radius:8px; background:#0b1d27; color:#bfd0d9; text-align:center; }
+.room-direction-node strong { color:#e8f1f4; font-size:.78rem; }
+.room-direction-node span { color:#ead99e; font-size:1.15rem; font-weight:750; }
+.room-chart-axis { display:flex; justify-content:space-between; gap:.75rem; margin:-.15rem 0 .55rem; color:#9fb3bd; font-size:.68rem; }
 .room-table { overflow:auto; max-height:50vh; }
 .room-table table { min-width:580px; }
 .room-table caption { text-align:left; color:#e6f3f8; padding:.6rem; }
 .room-flow { display:grid; gap:.5rem; }
 .room-flow p { border-left:3px solid #62d6c6; padding:.6rem; margin:0; font-family:ui-monospace,monospace; font-size:.8rem; overflow-wrap:anywhere; }
 .room-visual svg { width:100%; height:140px; }
+.room-visual svg .room-grid-line { stroke:#355363; stroke-width:1; }
 .room-visual svg rect { fill:#67dfcc; }
 .room-visual svg text { fill:#c3d2da; font-size:10px; }
 .room-audit-history > summary { min-height:44px; padding:1rem; color:#d9e8ef; cursor:pointer; }
@@ -229,6 +247,7 @@ ROOM_CSS = r"""
 .room-report-preview { max-height:48vh; overflow:auto; margin:0; padding:1rem; border:1px solid #335064; border-radius:10px; background:#071923; color:#dcebf0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.78rem; line-height:1.5; }
 :is(.room-range,.room-actions,.room-visual,.room-table,.room-report-actions) :focus-visible,.room-report-preview:focus-visible,.room-back:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
 @media(max-width:760px) { .section-nav { grid-template-columns:repeat(4,minmax(0,1fr)); } .room-report-steps,.setup-journey { grid-template-columns:1fr; } .room-grid { grid-template-columns:1fr; } .room-status-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .room-status-headline { max-width:none; } .room-range label { flex:1 1 140px; } .room-range select,.room-range input { max-width:100%; min-width:0; } }
+@media(max-width:440px) { .room-visual-head { display:grid; } .room-visual-state { max-width:100%; justify-self:start; } .room-direction-unknown { grid-template-columns:1fr; } }
 @media(max-width:560px) { .room-status-grid { gap:.35rem; } .room-status-headline,.room-status-grid > div { padding:.5rem; } .room-status-headline span,.room-status-grid span { font-size:.68rem; } .room-status-headline strong,.room-status-grid strong { font-size:.78rem; } .room-range { gap:.4rem; } .room-range button { flex:1 1 130px; font-size:.82rem; } .room-notice { font-size:.78rem; } }
 @media(max-height:500px) { .shell { padding-top:4px; } .topbar { display:none; } .room-chrome { max-height:25vh; } .workspace-scroll { min-height:44px; } }
 @media(max-width:560px), (max-height:500px) {
@@ -441,24 +460,37 @@ function roomMeta(selection) {
   const value=roomState.snapshot;
   return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · source: ${[...new Set(selection.events.map(e=>e.source))].join(', ')||'unavailable'} · vantage: unknown · last update: ${value?.generated_at||'unavailable'} · unit: metadata events / reported bytes · quality: ${roomState.failed?'stale':value?.quality||'unavailable'} · bounded candidate window (top lists omit lower-ranked rows)`;
 }
-function roomVisual(parent,title,selection) {
+function roomVisual(parent,title,selection,status='Unavailable',statusKind='unavailable') {
   const article=textNode('article','','room-visual');
   const details=textNode('details');details.append(textNode('summary','Source and coverage details'),textNode('p',roomMeta(selection),'room-meta'));
-  article.append(textNode('h3',title),details);parent.append(article);return article;
+  const heading=textNode('div','','room-visual-head');heading.append(textNode('h3',title),textNode('span',status,`room-visual-state is-${statusKind}`));
+  article.append(heading,details);parent.append(article);return article;
 }
-function roomBars(parent,rows,unit='events') {
-  if(!rows.length) {parent.append(textNode('p','No qualified data available in this time range. Use Help to select or import authorized metadata.','room-empty'));return;}
+function roomEmptyPlot(parent,label='No qualified values returned') {
+  const plot=textNode('div','','room-empty-plot');plot.setAttribute('role','img');plot.setAttribute('aria-label',`${label}. The blank chart contains no synthetic values and does not establish zero traffic.`);
+  const message=textNode('div','','room-empty-plot-message');message.append(textNode('strong',label),textNode('span','No series is drawn. Missing data is not measured zero.'));plot.append(message);parent.append(plot);
+  parent.append(textNode('p','No qualified data available in this time range.','room-empty'));
+}
+function roomBars(parent,rows,unit='events',emptyLabel='No qualified values returned') {
+  if(!rows.length) {roomEmptyPlot(parent,emptyLabel);return;}
   const list=textNode('ul','','room-bars'),max=Math.max(...rows.map(r=>r[1]));
   rows.forEach(([label,count])=>{const item=textNode('li'),meter=document.createElement('meter');meter.min=0;meter.max=max;meter.value=count;meter.setAttribute('aria-label',`${label}: ${count} ${unit}`);item.append(textNode('span',label),textNode('strong',`${count}`),meter);list.append(item);});parent.append(list);
 }
 function roomTimeline(parent,selection,rows,stamp) {
-  if(!rows.length){roomBars(parent,[]);return;}
+  if(!rows.length){roomEmptyPlot(parent,'No returned points');return;}
   const bins=Array.from({length:12},()=>0),span=Math.max(1,selection.end-selection.start);
   rows.forEach(row=>bins[Math.min(11,Math.floor((Date.parse(row[stamp])-selection.start)/span*12))]++);
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 480 140');svg.setAttribute('role','img');svg.setAttribute('aria-label',`12 equal time bins, metadata record counts: ${bins.join(', ')}. Gaps do not prove no traffic.`);
+  [10,45,80,115].forEach(y=>{const line=document.createElementNS(svg.namespaceURI,'line');line.setAttribute('x1','0');line.setAttribute('x2','480');line.setAttribute('y1',String(y));line.setAttribute('y2',String(y));line.setAttribute('class','room-grid-line');svg.append(line);});
   const max=Math.max(1,...bins);
-  bins.forEach((count,i)=>{const bar=document.createElementNS(svg.namespaceURI,'rect');bar.setAttribute('x',String(i*40+4));bar.setAttribute('y',String(115-count/max*105));bar.setAttribute('width','30');bar.setAttribute('height',String(count/max*105));svg.append(bar);const label=document.createElementNS(svg.namespaceURI,'text');label.setAttribute('x',String(i*40+8));label.setAttribute('y','134');label.textContent=String(count);svg.append(label);});parent.append(svg);
+  bins.forEach((count,i)=>{const bar=document.createElementNS(svg.namespaceURI,'rect');bar.setAttribute('x',String(i*40+4));bar.setAttribute('y',String(115-count/max*105));bar.setAttribute('width','30');bar.setAttribute('height',String(count/max*105));bar.setAttribute('rx','3');svg.append(bar);const label=document.createElementNS(svg.namespaceURI,'text');label.setAttribute('x',String(i*40+8));label.setAttribute('y','134');label.textContent=String(count);svg.append(label);});parent.append(svg);
+  const axis=textNode('p','','room-chart-axis');axis.append(textNode('span',new Date(selection.start).toISOString().slice(11,16)+' UTC'),textNode('span',new Date(selection.end).toISOString().slice(11,16)+' UTC'));parent.append(axis);
   parent.append(textNode('p','12 equal time bins, left to right. An empty bin means no returned records; sensor gaps and drops are unknown.','room-meta'));
+}
+function roomDirectionUnknown(parent) {
+  const graphic=textNode('div','','room-direction-unknown');graphic.setAttribute('role','img');graphic.setAttribute('aria-label','Inbound, outbound, and internal direction are unavailable because no qualified local-subnet or sensor-vantage contract exists.');
+  ['Inbound','Outbound','Internal'].forEach(label=>{const node=textNode('div','','room-direction-node');node.append(textNode('strong',label),textNode('span','—'));graphic.append(node);});
+  parent.append(graphic,textNode('p','Unavailable — no qualified local-subnet or sensor-vantage contract. Private addresses alone do not establish direction.','room-empty'));
 }
 const roomReportFields = ['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build'];
 const roomReportLimitations = [
@@ -585,16 +617,17 @@ function renderRoom() {
     const row=textNode('tr');[e.observed_at,roomEndpoint(e.src_ip,e.src_port)+' → '+roomEndpoint(e.dst_ip,e.dst_port),e.protocol+' / '+(e.tcp_flags.join(', ')||'—'),e.byte_count,e.source+' / '+e.run_id+' / '+e.run_status,e.id].forEach(value=>row.append(textNode('td',value)));activityBody.append(row);
   });activity.append(activityBody);byId('room-activity-table').replaceChildren(activity);
   const grid=byId('room-traffic-grid');grid.replaceChildren();
-  let panel=roomVisual(grid,'Traffic volume over time',selected);roomTimeline(panel,selected,selected.events,'observed_at');
+  let panel=roomVisual(grid,'Traffic volume over time',selected,has?`${selected.events.length} returned records`:'No returned data',has?'data':'unavailable');roomTimeline(panel,selected,selected.events,'observed_at');
   if(has) panel.append(textNode('p',`${selected.events.reduce((sum,e)=>sum+BigInt(e.byte_count),0n)} reported bytes in this returned set. No packets-per-second or link-speed claim.`,'room-meta'));
-  panel=roomVisual(grid,'Protocol mix',selected);roomBars(panel,roomCounts(selected.events.map(e=>e.protocol)));panel.append(textNode('p','Recorded labels only. A port number does not prove DNS, HTTP or TLS.','room-meta'));
-  panel=roomVisual(grid,'Inbound, outbound and internal',selected);panel.append(textNode('p','Unavailable — no qualified local-subnet or sensor-vantage contract. Private addresses alone do not establish direction.','room-empty'));
-  panel=roomVisual(grid,'Top observed endpoints',selected);roomBars(panel,roomCounts(selected.events.flatMap(e=>[e.src_ip,e.dst_ip])),'endpoint appearances');panel.append(textNode('p','Which endpoints are local is unknown. Each event contributes both endpoint appearances.','room-meta'));
-  panel=roomVisual(grid,'Top conversations',selected);roomBars(panel,roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} · ${e.protocol}`)));
-  panel=roomVisual(grid,'Ports and connection indicators',selected);roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / source ${e.src_port===null?'not recorded':e.src_port}`)));roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / destination ${e.dst_port===null?'not recorded':e.dst_port}`)));roomBars(panel,roomCounts(selected.events.filter(e=>e.protocol==='TCP').map(e=>'Flags: '+(e.tcp_flags.join(', ')||'none recorded'))));panel.append(textNode('p','TCP flags are indicators; connection state and actual service identity are unavailable.','room-meta'));
-  panel=roomVisual(grid,'Source → destination → protocol / port',selected);const flow=textNode('div','','room-flow');roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} → ${e.protocol}`)).slice(0,8).forEach(([label,count])=>flow.append(textNode('p',`${label} · ${count} events`)));panel.append(flow);if(!has)roomBars(panel,[]);
-  panel=roomVisual(grid,'Coverage and gaps',selected);panel.append(textNode('p',`Candidate window limited: ${snapshot?.truncated?'Yes':'Unknown beyond returned window'}. Excluded sample/unlinked/legacy/held event candidates: ${snapshot?snapshot.excluded_event_candidates:'Unknown'}. Drops: Unknown. Rejected records: Unknown. Missing intervals: Unknown. Clock accuracy: Unknown.`,'room-meta'));
-  const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected);roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected);roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings');
+  const protocolCount=new Set(selected.events.map(e=>e.protocol)).size;
+  panel=roomVisual(grid,'Protocol mix',selected,has?`${protocolCount} recorded label${protocolCount===1?'':'s'}`:'No returned data',has?'data':'unavailable');roomBars(panel,roomCounts(selected.events.map(e=>e.protocol)),'events','No protocol labels returned');panel.append(textNode('p','Recorded labels only. A port number does not prove DNS, HTTP or TLS.','room-meta'));
+  panel=roomVisual(grid,'Inbound, outbound and internal',selected,'Not computable','unavailable');roomDirectionUnknown(panel);
+  panel=roomVisual(grid,'Top observed endpoints',selected,has?'Ranked appearances':'No returned data',has?'data':'unavailable');roomBars(panel,roomCounts(selected.events.flatMap(e=>[e.src_ip,e.dst_ip])),'endpoint appearances','No endpoint appearances returned');panel.append(textNode('p','Which endpoints are local is unknown. Each event contributes both endpoint appearances.','room-meta'));
+  panel=roomVisual(grid,'Top conversations',selected,has?'Ranked paths':'No returned data',has?'data':'unavailable');roomBars(panel,roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} · ${e.protocol}`)),'events','No conversations returned');
+  panel=roomVisual(grid,'Ports and connection indicators',selected,has?'Recorded indicators':'No returned data',has?'data':'unavailable');if(has){roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / source ${e.src_port===null?'not recorded':e.src_port}`)));roomBars(panel,roomCounts(selected.events.map(e=>`${e.protocol} / destination ${e.dst_port===null?'not recorded':e.dst_port}`)));roomBars(panel,roomCounts(selected.events.filter(e=>e.protocol==='TCP').map(e=>'Flags: '+(e.tcp_flags.join(', ')||'none recorded'))),'events','No TCP flag observations returned');}else roomEmptyPlot(panel,'No port or flag indicators returned');panel.append(textNode('p','TCP flags are indicators; connection state and actual service identity are unavailable.','room-meta'));
+  panel=roomVisual(grid,'Source → destination → protocol / port',selected,has?'Top returned paths':'No returned data',has?'data':'unavailable');const flow=textNode('div','','room-flow');roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} → ${e.protocol}`)).slice(0,8).forEach(([label,count])=>flow.append(textNode('p',`${label} · ${count} events`)));panel.append(flow);if(!has)roomEmptyPlot(panel,'No paths returned');
+  panel=roomVisual(grid,'Coverage and gaps',selected,snapshot?.status==='available'?'Bounded read':'Unavailable',snapshot?.status==='available'?'data':'unavailable');panel.append(textNode('p',`Candidate window limited: ${snapshot?.truncated?'Yes':'Unknown beyond returned window'}. Excluded sample/unlinked/legacy/held event candidates: ${snapshot?snapshot.excluded_event_candidates:'Unknown'}. Drops: Unknown. Rejected records: Unknown. Missing intervals: Unknown. Clock accuracy: Unknown.`,'room-meta'));
+  const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected,selected.findings.length?`${selected.findings.length} linked findings`:'No linked findings',selected.findings.length?'data':'unavailable');roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected,selected.findings.length?'Recorded labels':'No linked findings',selected.findings.length?'data':'unavailable');roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings','No linked finding labels returned');
   const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
   const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach(value=>row.append(textNode('td',value)));body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
   if(!roomState.report)invalidateRoomReport();

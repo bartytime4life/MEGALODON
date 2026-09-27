@@ -147,6 +147,13 @@ The Evidence chart clears its measurements and report input on a validated
 unavailable projection, while preserving reachable audit counters separately.
 Transport or contract failure preserves the prior valid view as stale.
 
+The Traffic overview draws timelines and ranked bars only from validated events
+in the selected range. When no qualified values were returned, it shows an
+explicitly blank chart frame with no series and labels the state unavailable.
+The direction panel remains not computable until a reviewed local-subnet and
+sensor-vantage contract exists. These visual states do not synthesize records,
+infer direction from private addresses, or turn missing data into zero traffic.
+
 `/api/traffic-history` accepts an inclusive ordered UTC range ending no later
 than one minute into the future, at most 31 days long, and an optional canonical
 positive safe-integer `before` cursor. Its `dashboard-traffic-history-v1`

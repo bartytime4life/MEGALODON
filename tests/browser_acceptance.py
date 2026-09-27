@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import socket
 import sqlite3
 import subprocess
@@ -250,6 +251,8 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         await expect(page.locator("#workspace-traffic")).to_be_hidden()
         traffic_views = page.locator("#workspace-live #room-traffic-grid .room-visual")
         await expect(traffic_views).to_have_count(8)
+        await expect(page.locator("#room-traffic-grid .room-visual-state")).to_have_count(8)
+        await expect(page.locator("#room-traffic-grid .room-direction-unknown")).to_have_count(1)
         for index in range(8):
             details = traffic_views.nth(index).locator(":scope > details")
             disclosure = details.locator(":scope > summary")
@@ -281,6 +284,9 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         if nonempty:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
             await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")
+            await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_have_count(0)
+            await expect(page.locator("#room-traffic-grid svg[role=img]")).to_have_count(1)
+            await expect(page.locator("#room-traffic-grid .room-visual-state.is-data")).to_have_count(7)
             await page.locator("#hud-export-prepare").click()
             await expect(page.locator("#hud-export-download")).to_be_enabled()
             summary_text = await page.locator("#hud-export-preview").inner_text()
@@ -312,6 +318,9 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
         else:
             await expect(page.locator("#room-traffic-grid")).to_contain_text("No qualified data available")
+            await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_have_count(6)
+            await expect(page.locator("#room-traffic-grid .room-empty-plot[role=img]").first).to_have_attribute("aria-label", re.compile("no synthetic values", re.I))
+            passed("empty traffic visuals contain no synthetic series", True)
         await page.locator("#workspace-tab-reports").click()
         if nonempty:
             request_counts = dict(counts)
