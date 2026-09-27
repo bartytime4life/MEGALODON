@@ -16,21 +16,26 @@ Align capability catalog, hub plan, feature coverage, Site companion description
 operator instructions and tests. Preserve traffic/globe behavior and all existing
 permission boundaries. See [the versioned contract](nmap-inventory-v1.md).
 
-## Currentness after the Nmap and ClamAV slices
+## Currentness after the Nmap, ClamAV, lifecycle and osquery slices
 
 The completed ClamAV counts-only importer was merged in PR #428. Draft PR #429
-adds companion install/removal controls and a CLI verification receipt that
-separates executable presence from metadata/process heartbeat observations.
-The published owner-only Console v39 reflects its Site assets. Neither the
-manual ClamAV import nor a green companion light proves operational health.
+subsequently merged as `cdf43bac9ffce75d1e24b97b16fdb591ec2f21ea`; it adds
+companion install/removal controls and a CLI verification receipt that separates
+executable presence from metadata/process heartbeat observations. PR #430
+merged as `e95e5223d1a12b84ff155bffac774972771019f8` with the bounded saved
+osquery package-count path. The owner-only Console is published as v40 from
+Sites source `5e5da36d53cfeb689878b2c5a841a188f3fa1d8a`; the exact version and
+deployment receipt, plus the current parity limit, are recorded in
+[source alignment](site-source-alignment.md). Manual ClamAV, Nmap and osquery
+imports and a green companion light do not prove operational health.
 
 ## Remaining work, in order
 
-The next bounded candidate adds an operator-run osqueryi `deb_packages` count
-path for Ubuntu: saved one-row JSON → exact-field exporter → counts-only manual
-import in both HUDs. It does not execute osquery or authenticate the saved result.
-Producer/version acceptance on a real installed host remains open. The broader
-osquery endpoint inventory relationship remains proposed.
+The operator-run osqueryi `deb_packages` count path is now implemented: saved
+one-row JSON → exact-field exporter → counts-only manual import in both HUDs.
+It does not execute osquery or authenticate the saved result. Producer/version
+acceptance on a real installed host remains open. The broader osquery endpoint
+inventory relationship remains proposed.
 
 | Gap | Next concrete slice | Completion evidence |
 | --- | --- | --- |
