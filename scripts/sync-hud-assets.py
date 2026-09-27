@@ -10,9 +10,6 @@ for key, filename in {
 }.items():
     (root / "site/dist" / filename).write_text(assets[key])
 
-snapshot = runpy.run_path(str(root / "megalodon/dashboard_snapshot.py"))
-(root / "site/dist/snapshot.js").write_text(snapshot["SNAPSHOT_VALIDATOR_JS"] + snapshot["SNAPSHOT_HOSTED_JS"])
-
 coverage = runpy.run_path(str(root / "megalodon/telemetry_catalog.py"))
 index = root / "site/dist/index.html"
 text = index.read_text()
