@@ -465,7 +465,15 @@ def test_matching_time_filters_preserve_dtstart_seconds(policy) -> None:
     ]
 
 
-@pytest.mark.parametrize("zone", ["Not/AZone", "America/../../etc/passwd", "America/Chicago/", "A/" + "x" * 129])
+@pytest.mark.parametrize("zone", [
+    "Not/AZone",
+    "America/../../etc/passwd",
+    "America/Chicago/",
+    "A/" + "x" * 129,
+    "+" * 128,
+    "+/" * 64,
+    "+/" * 63 + "++",
+])
 def test_invalid_timezone_name_fails_closed(zone) -> None:
     with pytest.raises(AutomationScheduleError) as caught:
         next_occurrences(
@@ -473,6 +481,15 @@ def test_invalid_timezone_name_fails_closed(zone) -> None:
             rrule="FREQ=DAILY;COUNT=1",
         )
     assert caught.value.code == "TIMEZONE_VALUE"
+
+
+@pytest.mark.parametrize("zone", ["Etc/GMT+5", "America/Argentina/Buenos_Aires"])
+def test_nested_and_plus_timezone_names_remain_supported(zone) -> None:
+    occurrences = next_occurrences(
+        dtstart="2026-01-01T00:00:00", schedule_timezone=zone,
+        rrule="FREQ=DAILY;COUNT=1",
+    )
+    assert len(occurrences) == 1
 
 
 def test_dtstart_with_offset_is_rejected() -> None:
