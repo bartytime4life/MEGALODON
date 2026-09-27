@@ -63,4 +63,7 @@ test('companion panel saves an address and copies only the selected Zabbix role'
   assert.deepEqual(copied, ['sudo apt-get install --reinstall zabbix-agent2']);
   find('Remove link').listeners.click();
   assert.equal(find('Open companion console ↗').hidden, true);
+  const hostedParent=new Element('main'); context.hostedParent=hostedParent;
+  vm.runInContext("MegalodonControls.mount(hostedParent, 'greenbone', 'Greenbone', {changed(){}})",context);
+  assert.equal(all(hostedParent).find(element=>element.textContent==='Open suggested local console ↗'), undefined);
 });

@@ -215,6 +215,10 @@ ROOM_CSS = r"""
 .hud-start .setup-launch-help { border-top:1px solid var(--line); }
 .hud-start .setup-launch-help code { margin:.5rem 0; }
 .hud-start .setup-launch-help a { text-underline-offset:.2rem; }
+.tool-management-launch { display:grid; gap:8px; margin:12px 0 16px; padding:12px; border-left:3px solid #8cdfce; background:#0a1f27; }
+.hud-start .tool-management-launch p { margin:0; color:#bfd0d9; font-size:.75rem; line-height:1.55; }
+.hud-start .tool-management-launch code { display:block; margin:0; padding:11px; border:1px solid #36515f; border-radius:6px; background:#06151e; color:#e2f5f4; font-size:.76rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; }
+.hud-start .tool-management-launch button { justify-self:start; min-height:44px; }
 .room-report-flow { display:grid; gap:1rem; max-width:900px; }
 .room-report-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; margin:0; padding:0; list-style:none; counter-reset:none; }
 .room-report-steps li { display:grid; gap:.4rem; border:1px solid #335064; border-radius:10px; padding:.85rem; background:#0e2330; }
