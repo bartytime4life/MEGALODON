@@ -284,7 +284,8 @@ async def exercise(browser, port: int, nonempty: bool) -> None:
         if nonempty:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
             await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")
-            await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_have_count(0)
+            await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_have_count(1)
+            await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_contain_text("No TCP flag observations returned")
             await expect(page.locator("#room-traffic-grid svg[role=img]")).to_have_count(1)
             await expect(page.locator("#room-traffic-grid .room-visual-state.is-data")).to_have_count(7)
             await page.locator("#hud-export-prepare").click()
