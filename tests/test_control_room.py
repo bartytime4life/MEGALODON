@@ -129,6 +129,7 @@ assert.equal(matching(byId('room-traffic-grid'),'room-empty-plot').length,6);
 assert.equal(matching(byId('room-traffic-grid'),'room-direction-unknown').length,1);
 assert.equal(matching(byId('room-traffic-grid'),'room-visual-state').length,8);
 assert.match(textOf(byId('room-traffic-grid')),/Missing data is not measured zero/);
+assert.match(run(`(()=>{const parent=document.createElement('div');roomTimeline(parent,{start:Date.parse('2026-09-01T12:00:00Z'),end:Date.parse('2026-09-02T12:00:00Z')},[{observed_at:'2026-09-01T12:00:00Z'}],'observed_at');return parent.children[1].children.map(child=>child.textContent).join(' ')})()`),/2026-09-01 12:00 UTC 2026-09-02 12:00 UTC/);
 assert.equal(run('roomEndpoint("192.0.2.1",0)'),'192.0.2.1:0');
 assert.equal(run('roomEndpoint("2001:db8::1",443)'),'[2001:db8::1]:443');
 assert.equal(run('roomEndpoint("2001:db8::1",null)'),'2001:db8::1');

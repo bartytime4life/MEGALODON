@@ -469,7 +469,7 @@ function roomVisual(parent,title,selection,status='Unavailable',statusKind='unav
 function roomEmptyPlot(parent,label='No qualified values returned') {
   const plot=textNode('div','','room-empty-plot');plot.setAttribute('role','img');plot.setAttribute('aria-label',`${label}. The blank chart contains no synthetic values and does not establish zero traffic.`);
   const message=textNode('div','','room-empty-plot-message');message.append(textNode('strong',label),textNode('span','No series is drawn. Missing data is not measured zero.'));plot.append(message);parent.append(plot);
-  parent.append(textNode('p','No qualified data available in this time range.','room-empty'));
+  parent.append(textNode('p','This chart has no qualified values for the selected range. Other charts may still contain qualified values.','room-empty'));
 }
 function roomBars(parent,rows,unit='events',emptyLabel='No qualified values returned') {
   if(!rows.length) {roomEmptyPlot(parent,emptyLabel);return;}
@@ -484,7 +484,9 @@ function roomTimeline(parent,selection,rows,stamp) {
   [10,45,80,115].forEach(y=>{const line=document.createElementNS(svg.namespaceURI,'line');line.setAttribute('x1','0');line.setAttribute('x2','480');line.setAttribute('y1',String(y));line.setAttribute('y2',String(y));line.setAttribute('class','room-grid-line');svg.append(line);});
   const max=Math.max(1,...bins);
   bins.forEach((count,i)=>{const bar=document.createElementNS(svg.namespaceURI,'rect');bar.setAttribute('x',String(i*40+4));bar.setAttribute('y',String(115-count/max*105));bar.setAttribute('width','30');bar.setAttribute('height',String(count/max*105));bar.setAttribute('rx','3');svg.append(bar);const label=document.createElementNS(svg.namespaceURI,'text');label.setAttribute('x',String(i*40+8));label.setAttribute('y','134');label.textContent=String(count);svg.append(label);});parent.append(svg);
-  const axis=textNode('p','','room-chart-axis');axis.append(textNode('span',new Date(selection.start).toISOString().slice(11,16)+' UTC'),textNode('span',new Date(selection.end).toISOString().slice(11,16)+' UTC'));parent.append(axis);
+  const startIso=new Date(selection.start).toISOString(),endIso=new Date(selection.end).toISOString(),sameDay=startIso.slice(0,10)===endIso.slice(0,10);
+  const axisLabel=iso=>(sameDay?iso.slice(11,16):iso.slice(0,16).replace('T',' '))+' UTC';
+  const axis=textNode('p','','room-chart-axis');axis.append(textNode('span',axisLabel(startIso)),textNode('span',axisLabel(endIso)));parent.append(axis);
   parent.append(textNode('p','12 equal time bins, left to right. An empty bin means no returned records; sensor gaps and drops are unknown.','room-meta'));
 }
 function roomDirectionUnknown(parent) {
