@@ -23,6 +23,9 @@ def test_seven_workspaces_and_persistent_return():
     assert 'id="room-report-download" disabled' in INDEX_HTML
     assert 'id="room-report-preview"' in INDEX_HTML
     assert 'Local report preview is unavailable' not in INDEX_HTML
+    assert 'Blank charts contain no synthetic values.' in INDEX_HTML
+    assert 'class="room-section-note"' in INDEX_HTML
+    assert 'room-empty-link' not in INDEX_HTML
 
 
 def test_only_the_headline_status_field_renders_outside_the_collapsed_details():
@@ -114,6 +117,7 @@ const document={createElement:element,createElementNS:(ns,tag)=>element(tag)};
 const byId=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
 const textNode=(tag,text='',cls='')=>Object.assign(element(tag),{textContent:text,className:cls});
 const textOf=n=>n.textContent+' '+n.children.map(textOf).join(' ');
+const matching=(n,cls)=>[...(String(n.className||'').split(/\s+/).includes(cls)?[n]:[]),...n.children.flatMap(child=>matching(child,cls))];
 function response(value,status) {const bytes=new TextEncoder().encode(JSON.stringify(value));let sent=false;return {ok:status>=200&&status<300,status,body:{getReader:()=>({read:async()=>sent?{done:true}:{done:false,value:(sent=true,bytes)},cancel:async()=>{}})}};}
 const context={document,byId,textNode,Date,BigInt,AbortSignal,TextDecoder,TextEncoder,Uint8Array,payload,
 referenceExactKeys:(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k)),
@@ -121,6 +125,10 @@ knownSeverities:new Set(['LOW','MEDIUM','HIGH','CRITICAL']),
 fetch:async(path,options)=>{calls.push({path,options});throw Error('PRIVATE_FAILURE')}};
 vm.createContext(context);vm.runInContext(code,context,{timeout:1000});
 const run=code=>vm.runInContext(code,context,{timeout:1000});run('renderRoom()');
+assert.equal(matching(byId('room-traffic-grid'),'room-empty-plot').length,6);
+assert.equal(matching(byId('room-traffic-grid'),'room-direction-unknown').length,1);
+assert.equal(matching(byId('room-traffic-grid'),'room-visual-state').length,8);
+assert.match(textOf(byId('room-traffic-grid')),/Missing data is not measured zero/);
 assert.equal(run('roomEndpoint("192.0.2.1",0)'),'192.0.2.1:0');
 assert.equal(run('roomEndpoint("2001:db8::1",443)'),'[2001:db8::1]:443');
 assert.equal(run('roomEndpoint("2001:db8::1",null)'),'2001:db8::1');
@@ -136,6 +144,9 @@ assert.equal(run('roomState.failed'),false);assert.equal(run('roomState.connecte
 assert.equal(byId('room-connection').textContent,'Connected · read-only');assert.equal(byId('room-overall').textContent,'No qualified data');
 run('roomState.snapshot=validateTraffic(payload);renderRoom()');
 assert.match(byId('room-home-summary').textContent,/1 stored metadata events and 1 linked findings/);
+assert.equal(matching(byId('room-traffic-grid'),'room-empty-plot').length,0);
+assert.equal(matching(byId('room-traffic-grid'),'room-direction-unknown').length,1);
+assert.equal(matching(byId('room-traffic-grid'),'is-data').length,7);
 assert.match(textOf(byId('room-traffic-grid')),/9223372036854775807 reported bytes/);
 assert.equal(byId('room-traffic-grid').children.length,8);
 assert.match(textOf(byId('room-traffic-grid')),/local-subnet or sensor-vantage/);
