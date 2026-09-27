@@ -1,6 +1,39 @@
 # Defense Console source alignment
 
-## Current publication — Console v39, companion lifecycle controls
+## Current publication — Console v40, saved osquery package count
+
+OBSERVED 2026-09-26 through the Sites project and deployment read APIs: the
+existing owner-only Site is live as version 40 from source
+`5e5da36d53cfeb689878b2c5a841a188f3fa1d8a`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_832d1c73a2b48191ac8924ca8ded6eea`.
+Deployment `appgdep_6ab8813fe78c819183656c7075d3e225` reported `succeeded`
+at 2026-09-27T02:37:36.508604Z. Its retained archive reports 20 files,
+419,840 bytes, and
+`sha256:0c8f078a714b57ce89f9e0cbee6d717abbd6d78ed1bfb5773efe6f21c3254520`.
+The access readback remains `custom` with one owner account and zero external
+visitors. Rollback reference: v39 /
+`c62508c1d3a85ddb773738da0c216cd419860d4b`.
+
+Version 40 adds the bounded saved osquery package-count panel delivered to the
+repository by merged PR #430 (`e95e5223d1a12b84ff155bffac774972771019f8`).
+An operator runs one fixed Ubuntu `deb_packages` count outside MEGALODON and
+manually imports a counts-only JSON summary. The Site does not run osquery,
+receive a daemon feed, retain package names, or establish installed-tool or
+host health.
+
+Local verification of the repository mirror at
+`main@e3ac3b9f322083506ca9d47ec7bc16589749526f` passed all 103 Site Node tests
+and JavaScript syntax checks. A loopback browser review at 1440x900 and 390x844
+found visible navigation labels, a Review / Install / Open first-run sequence,
+no horizontal overflow, visible keyboard focus, explicit unavailable evidence,
+and an internal Evidence-to-Runbooks transition. This is rendered evidence for
+the repository mirror, not the authenticated owner-only deployment. The Sites
+source Git endpoint could not be fetched in this readback, so fresh byte parity
+between version 40 and the repository mirror remains unverified here. No Site
+version, deployment, access policy, local installation, sensor, model, firewall,
+release, or host setting changed during this readback.
+
+## Historical publication — Console v39, companion lifecycle controls
 
 The existing owner-only Site was published from source
 `c62508c1d3a85ddb773738da0c216cd419860d4b` as version
@@ -32,7 +65,7 @@ publication. Rollback reference: v37 / `607d5cc810490fdb71fbda1f938d288d87dbacef
 Full Python suite, 94 hosted JavaScript tests, repository hygiene and build
 inventory passed locally. The hosted Site does not receive a live scanner feed.
 
-## Current publication — Console v37, saved network inventory
+## Historical publication — Console v37, saved network inventory
 
 The existing owner-private Site was published successfully from source
 `607d5cc810490fdb71fbda1f938d288d87dbacef` with deployment
