@@ -58,6 +58,7 @@ def test_uninstall_is_closed_preview_and_requires_terminal_confirmation(monkeypa
     assert tool_installer.terminal_command('core','uninstall')=='~/.local/bin/megalodon-manage uninstall'
     assert tool_installer.terminal_command('nftables','uninstall') is None
     monkeypatch.setattr(tool_setup,'uninstall_command',lambda tool:['fixed',tool])
+    monkeypatch.setattr(tool_setup,'preview_apt_removal',lambda tool,command: True)
     monkeypatch.setattr(tool_setup.subprocess,'run',lambda command,**kw: calls.append(command) or SimpleNamespace(returncode=0))
     monkeypatch.setattr(tool_setup.sys,'stdin',SimpleNamespace(isatty=lambda:False))
     assert tool_setup.main(['nmap','uninstall','--apply'])==2
@@ -69,6 +70,31 @@ def test_uninstall_is_closed_preview_and_requires_terminal_confirmation(monkeypa
     monkeypatch.setattr('builtins.input',lambda prompt:'nmap')
     assert tool_setup.main(['nmap','uninstall','--apply'])==0
     assert calls==[['fixed','nmap']]
+
+
+def test_apt_removal_plan_is_unprivileged_and_failure_prevents_confirmation(monkeypatch, capsys):
+    calls=[]
+    def run(command, **kwargs):
+        calls.append((command,kwargs))
+        return SimpleNamespace(returncode=0, stdout='The following packages will be REMOVED:\n  nmap nmap-dependant\n', stderr='')
+    monkeypatch.setattr(tool_setup.subprocess,'run',run)
+    monkeypatch.setattr(tool_setup.sys,'stdin',SimpleNamespace(isatty=lambda:True))
+    monkeypatch.setattr(tool_setup,'uninstall_command',lambda tool:['/usr/bin/sudo','/usr/bin/apt-get','remove','--no-install-recommends','nmap'])
+    monkeypatch.setattr('builtins.input',lambda prompt:'wrong')
+    assert tool_setup.main(['nmap','uninstall','--apply'])==2
+    assert [call[0] for call in calls]==[['/usr/bin/apt-get','-s','remove','--no-install-recommends','nmap']]
+    assert 'nmap-dependant' in capsys.readouterr().out
+    assert calls[0][1]['timeout']==30
+    assert calls[0][1]['env']['LC_ALL']=='C'
+    calls.clear()
+    monkeypatch.setattr(tool_setup.subprocess,'run',lambda command,**kwargs: SimpleNamespace(returncode=100,stdout='',stderr='error'))
+    monkeypatch.setattr('builtins.input',lambda prompt: pytest.fail('confirmation reached after failed simulation'))
+    assert tool_setup.main(['nmap','uninstall','--apply'])==2
+
+
+def test_apt_removal_plan_rejects_oversized_output(monkeypatch):
+    monkeypatch.setattr(tool_setup.subprocess,'run',lambda command,**kwargs: SimpleNamespace(returncode=0,stdout='x'*(tool_setup.APT_PREVIEW_MAX_CHARS+1),stderr=''))
+    assert not tool_setup.preview_apt_removal('nmap',['sudo','apt-get','remove','nmap'])
 
 
 def test_example_model_removal_is_pinned_to_loopback(monkeypatch):

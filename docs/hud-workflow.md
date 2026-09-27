@@ -89,7 +89,11 @@ workflow never automatically starts a scan, capture or firewall rule change.
 `uninstall --apply` is available for the fixed Ubuntu packages except nftables,
 the active Python environment's Scapy package, and the example Qwen model.
 It refuses noninteractive input and root, requires the exact tool ID typed in
-the terminal, and uses package-manager review without purge or autoremove.
+the terminal, and first runs unprivileged `apt-get -s remove` for Ubuntu
+packages. It displays the current dependency removal plan and stops if the
+simulation fails or its output is too large to review. After confirmation,
+the package manager may show a new plan; review it again before accepting.
+Removal uses no purge or autoremove.
 Generic removal is unavailable for private-prefix, vendor-repository,
 container, or ambiguous multi-role installations. Use
 `~/.local/bin/megalodon-manage uninstall` for the user-installed core; its

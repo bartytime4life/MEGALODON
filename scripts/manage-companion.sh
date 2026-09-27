@@ -12,7 +12,9 @@ Usage: ./scripts/manage-companion.sh TOOL [plan|install|uninstall|configure|veri
 Preview a fixed recipe or read the configuration/verification instructions.
 Install --apply executes the selected fixed recipe. Uninstall --apply requires
 an interactive terminal and the exact tool ID typed again; package managers
-may ask for confirmation. Guided tools have no automatic removal recipe.
+may ask for confirmation. Ubuntu package removals first show an unprivileged
+read-only dependency plan. Review the package manager's final plan too.
+Guided tools have no automatic removal recipe.
 
 For the MEGALODON application itself, use ./scripts/install-local.sh install
 or ~/.local/bin/megalodon-manage uninstall (preserves settings and data).

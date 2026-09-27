@@ -26,6 +26,30 @@ CONFIGURATION = {
     'nagios': ('Review /etc/nagios4/nagios.cfg and host/service definitions for authorized targets.', 'Validate with nagios4 -v /etc/nagios4/nagios.cfg before separately enabling the service; restrict the web console.'),
 }
 ALIASES = {'core':'python-sqlite','tshark':'wireshark-tshark','qwen':'qwen-ollama','nagios':'nagios-core'}
+APT_PREVIEW_TIMEOUT_SECONDS = 30
+APT_PREVIEW_MAX_CHARS = 64 * 1024
+
+
+def preview_apt_removal(tool: str, command: list[str]) -> bool:
+    """Show apt's current dependency plan without obtaining privileges or changing packages."""
+    if RECIPES[tool].kind != 'apt':
+        return True
+    # uninstall_command returns [sudo, apt-get, remove, flags, fixed packages].
+    preview = [command[1], '-s', 'remove', '--no-install-recommends', *RECIPES[tool].packages]
+    try:
+        result = subprocess.run(preview, check=False, capture_output=True, text=True,
+                                timeout=APT_PREVIEW_TIMEOUT_SECONDS,
+                                env={**os.environ, 'LC_ALL': 'C'})
+    except (OSError, subprocess.TimeoutExpired, UnicodeError):
+        print('Could not simulate package removal; no removal was started.', file=sys.stderr)
+        return False
+    output = (result.stdout or '') + (result.stderr or '')
+    if result.returncode or not output.strip() or len(output) > APT_PREVIEW_MAX_CHARS:
+        print('Package removal simulation failed or exceeded its display limit; no removal was started.', file=sys.stderr)
+        return False
+    print('Read-only apt removal plan (review every package and dependency):')
+    print(output, end='' if output.endswith('\n') else '\n')
+    return True
 
 
 def main(argv=None):
@@ -54,7 +78,7 @@ def main(argv=None):
         if args.action == 'install':
             print('Preview only. Add --apply to execute a supported fixed recipe. Package services may start; model downloads may be large.')
         if args.action == 'uninstall':
-            print('Preview only. Add --apply in an interactive terminal, then type the exact tool ID. Package removal may stop services or affect dependents; no purge or autoremove is requested.')
+            print('Preview only. Add --apply in an interactive terminal to simulate apt removal and review dependencies before typing the exact tool ID. Package removal may stop services or affect dependents; no purge or autoremove is requested.')
         return 0
     if args.action == 'uninstall':
         command = uninstall_command(args.tool)
@@ -64,8 +88,10 @@ def main(argv=None):
         if not sys.stdin.isatty():
             print('Uninstall requires an interactive terminal and exact tool confirmation.', file=sys.stderr)
             return 2
+        if not preview_apt_removal(args.tool, command):
+            return 2
         try:
-            if input(f'Type {args.tool} to review and run its removal command: ') != args.tool:
+            if input(f'Type {args.tool} to run its removal command after reviewing the plan: ') != args.tool:
                 print('Removal cancelled.', file=sys.stderr)
                 return 2
         except EOFError:
