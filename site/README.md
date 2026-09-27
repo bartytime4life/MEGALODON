@@ -22,13 +22,15 @@ is recorded in [source alignment](../docs/site-source-alignment.md).
 
 ## Navigation and install path
 
-The merged source adds view links such as `#view=integrations`, Back/Forward
+The source has four views: Activity HUD, Evidence desk, Tools & setup, and
+Boundaries. It adds view links such as `#view=integrations`, Back/Forward
 navigation, and per-view reading positions for the current page session.
 Reload restores the selected view; it does not retain reading positions or
 imported reports. Navigation labels remain visible at desktop, tablet and
-mobile widths; the first-run steps stack before their three columns become
-cramped. Unknown
-fragments are ignored, and navigation remains usable if history is unavailable.
+mobile widths. Unknown fragments, including the retired `#view=missions`, are
+ignored, and navigation remains usable if history is unavailable. Setup and
+workflow actions open the current repository guides in protected new tabs rather
+than maintaining a second command catalog in the hosted Site.
 The hosted install guide was published in Sites v29. See
 `docs/site-source-alignment.md` in the parent repository for the exact current
 publication receipt; later source edits require their own version and deployment.
@@ -50,31 +52,24 @@ lane refers to HIGH/CRITICAL findings requiring review. Actual volume meters
 and the interactive rolling-hour timeline use qualified stored data in the
 local HUD. This hosted Site has no local telemetry connection or refresh loop.
 
-## Quick-start controls
+## Direct setup and workflow guides
 
-The first view follows Review / Install / Open: from a reviewed repository root,
-run `./scripts/install-local.sh`, open **MEGALODON** from the application menu,
-and use Home → Data and tools → Check this computer. Python >=3.11 is required;
-Linux is the reference platform. See
-[`docs/local-pc-setup.md`](../docs/local-pc-setup.md) for preparation and
-troubleshooting. The installer creates a private user application and stable
-launchers, may obtain declared Python build requirements, and does not install
-companion tools or create telemetry. The separate disclosure keeps
-`./scripts/start-local.sh` available for a source-only launch.
+Activity links directly to the current
+[`docs/local-pc-setup.md`](../docs/local-pc-setup.md) guide. The disconnected
+traffic panel and Evidence desk link to
+[`docs/operator-workflows.md`](../docs/operator-workflows.md), which indexes the
+authoritative local dashboard, bounded JSONL replay, saved capture, Suricata
+review, and integration-plan documents. Tools & setup keeps the local Apps link
+and routes its setup action to the same local PC guide. These links open the
+repository documentation in protected new tabs; the Site does not execute or
+copy workflow commands.
 
-The local HUD opens before data exists and performs startup presence checks;
-Home → Data and tools contains those checks and next-launch options. Keep the
-terminal open and stop with Ctrl+C. Neither the launcher nor the browser starts
-sensors or creates sample evidence. The local link does not probe the PC.
-Disconnected hosted measurements remain under an explicit status disclosure.
-The status action opens the Site's evidence workflows; it does not run a local
-workflow. An empty local HUD is labeled unavailable rather than zero traffic.
-
-The local address points to the device opening the link; a phone cannot use it
-to reach a Linux computer. Missing or sample-only evidence is not zero traffic.
-The setup link targets the current Ubuntu guide. The brand returns to Home,
-view changes focus their heading, and saved-console filters update immediately
-when a bookmark changes.
+The local HUD can open before data exists. Neither a launcher nor the browser
+starts sensors or creates sample evidence, and an empty local HUD is labeled
+unavailable rather than zero traffic. The local address points to the device
+opening the link; a phone cannot use it to reach a Linux computer. The brand
+returns to Activity, view changes focus their heading, and saved-console filters
+update immediately when a bookmark changes.
 
 Local and hosted tool controls share the canonical Python asset constants in
 `megalodon/dashboard_tool_assets.py`. The repository's
@@ -91,7 +86,7 @@ hosted page.
 
 ## Actual behavior
 
-- No network feed is connected. The Activity view shows one passive unavailable boundary, not zeros, generated rates, detections, protocol shares or example receipts. Separate evidence imports and setup workflows retain their own controls; none starts a sensor or establishes liveness.
+- No network feed is connected. The Activity view shows one passive unavailable boundary, not zeros, generated rates, detections, protocol shares or example receipts. Separate evidence imports retain their own controls; setup and workflow actions route to repository guides. None starts a sensor or establishes liveness.
 - Fourteen integration cards show one presence light next to each name: a fresh manual note or imported executable-presence report sets it green or red, stale evidence sets it amber, and otherwise it stays grey. The imported report is an unauthenticated PATH claim, not proof of installation or service health. This hosted page cannot see the PC. The local HUD provides recent presence observations, visible unknown/stale states, setup guidance and, where implemented, separately authorized Install/Start controls (see `docs/tool-heartbeat.md`).
 - Manual notes persist in this browser's `localStorage`, expire after seven days, and can be cleared. A readiness JSON import stays only in page memory and is never uploaded or saved to `localStorage`.
 - Readiness import accepts only the closed `megalodon-tool-readiness-v1` schema, fixed registry/boundaries and at most 8,192 UTF-8 bytes. Duplicate keys, unsupported claims, malformed/future timestamps and overlapping reads fail closed. Reports older than 24 hours are marked stale; they are not authenticated.
@@ -106,7 +101,7 @@ Repository license checkpoint: merged PR #298 is now `main@a0b140093ca17ea64fbfe
 
 Historical alignment baseline: merged PR #307 at `main@f3bf5d6a08c64363651e17fae07ff2e88386c0c0` delivered the source launcher. Merged PR #323 at `main@16742fed020283aafad35e30238986c851d7542a` added the user-scoped installer and guided readiness; its Site guide was published in v29. See `docs/document-alignment-2026-09-20.md` in the repository for the older baseline and validation receipt. Installation and Site publication remain separate from a software release and operator acceptance. PR #294 delivered the closed detector registry and bounded synthetic evidence report; this Site presents that repository capability without representing it as runtime telemetry or operational accuracy. PR #269 delivered the bounded threat-context reader and exchange map; PRs #274, #276, #277 and #278 delivered the separate local traffic projection, anchored HUD, capability-state matrix and browser-local report flow. The hosted Site remains disconnected from those local runtime APIs. Readiness and the optional local Suricata view were delivered by PRs #241 and #239. The source owns `dist/`, this README, the hosting manifest and `tests/*.test.cjs`; README/tests stay outside the deployed archive. Deployment and source parity require their own receipt and do not establish runtime or independent acceptance.
 
-Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites cover the actual parser, lifecycle semantics, empty telemetry, detector-evidence and license labeling, navigation/focus, bookmark filter updates, and the user-install quick start. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
+Run `node --check dist/app.js`, `node --check dist/lifecycle.js`, `node --check dist/readiness.js` and `node --test --test-reporter=tap tests/*.test.cjs`. The current Site suites cover the actual parser, lifecycle semantics, empty telemetry, detector-evidence and license labeling, four-view navigation/focus, bookmark filter updates, and direct documentation routing. The DOM stub is not rendered-browser acceptance. The Python repository also tests real CLI-to-parser interoperability.
 
 Local browser verification at desktop, tablet and mobile widths is recorded in
 [`docs/local-pc-readiness-review.md`](../docs/local-pc-readiness-review.md).

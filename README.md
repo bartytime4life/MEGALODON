@@ -174,6 +174,7 @@ record delivery state; they do not override the checked-in contracts.
 | --- | --- |
 | Product boundary, desktop install, commands, and first run | This README and [local PC setup](docs/local-pc-setup.md) |
 | Click-by-click setup, checks, downloads, and navigation | [Visual quick start](docs/gui-quick-start.md) |
+| Existing local workflow entry points and their authority limits | [Operator workflow index](docs/operator-workflows.md) |
 | Required software and optional tools, with official links | [Software downloads](docs/software-downloads.md) |
 | Runtime behavior and acceptance boundary | [`SPECIFICATION.md`](SPECIFICATION.md) |
 | Threat model and production controls | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
@@ -693,8 +694,10 @@ that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.
 
-See [visual HUD, summary export and uniform tool setup](docs/hud-workflow.md)
-for the hosted import workflow and the `python -m megalodon.tool_setup` commands.
+See the [operator workflow index](docs/operator-workflows.md) for the documented
+local entry points and authority limits, and
+[visual HUD, summary export and uniform tool setup](docs/hud-workflow.md) for
+the local summary and `python -m megalodon.tool_setup` workflows.
 
 **Apps** shows the startup executable-presence snapshot, official setup links,
 saved companion-console addresses and copy-only maintenance controls. Choose

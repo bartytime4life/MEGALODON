@@ -47,7 +47,6 @@
           <button class="nav-item active" data-view="hud" aria-current="page"><span class="nav-glyph" aria-hidden="true">⌁</span><span>Activity HUD</span></button>
           <button class="nav-item" data-view="evidence" aria-label="Evidence desk"><span class="nav-glyph" aria-hidden="true">▤</span><span>Evidence desk</span></button>
           <button class="nav-item" data-view="integrations"><span class="nav-glyph" aria-hidden="true">⌘</span><span>Tools &amp; setup</span></button>
-          <button class="nav-item" data-view="missions"><span class="nav-glyph" aria-hidden="true">◇</span><span>Runbooks</span></button>
           <button class="nav-item" data-view="boundaries"><span class="nav-glyph" aria-hidden="true">▱</span><span>Boundaries</span></button>
         </nav>
         <section class="rail-summary" aria-labelledby="rail-summary-title">
@@ -74,7 +73,7 @@
             </div>
             <div class="hud-controls" aria-label="Connection status">
               <div class="mode-badge"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NOT CONNECTED</strong><small>Local telemetry not read</small></span></div>
-              <button class="control-button" type="button" data-jump="missions">Setup &amp; runbooks</button>
+              <a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Setup guide ↗</a>
             </div>
           </div>
 
@@ -200,7 +199,7 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
                 <div><p class="panel-kicker">AGGREGATE ACTIVITY</p><h2 id="traffic-title">Network metadata rate</h2></div>
                 <div class="chart-legend" aria-label="Chart legend"><span><i class="legend-line inbound"></i>Ingress metadata</span><span><i class="legend-line outbound"></i>Egress metadata</span><span><i class="legend-mark"></i>Detection</span></div>
               </div>
-              <div class="telemetry-empty"><strong>No ingress or egress measurements</strong><p>No sensor is connected here. An empty chart cannot establish that your network is idle or safe.</p><button class="control-button" type="button" data-jump="missions">Review local dashboard setup →</button></div>
+              <div class="telemetry-empty"><strong>No ingress or egress measurements</strong><p>No sensor is connected here. An empty chart cannot establish that your network is idle or safe.</p><a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/operator-workflows.md" target="_blank" rel="noopener noreferrer">Dashboard workflow guide ↗</a></div>
             </section>
 
             <section class="panel posture-panel" aria-labelledby="posture-title">
@@ -253,7 +252,7 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
             <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Tools &amp; consoles</h1><p>Find a tool and open its controls. Save the address of an existing web console once, or use its setup guide. The local HUD provides startup presence checks automatically.</p></div>
             <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>Operator reference</small></span></div>
           </div>
-          <div class="local-apps-route"><div><strong>Use Apps in your local HUD</strong><p>Open a HUD already running on this computer to review tool presence and available local controls. This hosted page cannot start services. Local starts, where supported, require separate operator authorization.</p></div><a class="control-button" href="http://127.0.0.1:8787/#integrations-title" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open local Apps ↗</a><button class="text-button" type="button" data-jump="hud">How to start the HUD</button></div>
+          <div class="local-apps-route"><div><strong>Use Apps in your local HUD</strong><p>Open a HUD already running on this computer to review tool presence and available local controls. This hosted page cannot start services. Local starts, where supported, require separate operator authorization.</p></div><a class="control-button" href="http://127.0.0.1:8787/#integrations-title" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open local Apps ↗</a><a class="text-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div>
           <div class="hud-tool-search"><label>Find a tool<input id="tool-search" type="search" maxlength="120" placeholder="Name, task, or data type" /></label><label>Show<select id="tool-quick-filter"><option value="all">All tools</option><option value="data">Local evidence paths</option><option value="saved">My saved consoles</option></select></label><p id="tool-result-count" role="status"></p></div>
           <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
           <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card separates unverified manual notes from imported PATH findings. Copyable commands are scoped to an installation method; unknown methods require vendor guidance. Setup links open project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Manual notes: 0 found by operator · 0 not found by operator · 0 need recheck · 14 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>
@@ -269,44 +268,6 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
             </div>
             <p class="panel-footnote">The hosted page cannot open a local bundle. The reader and local writer have source and synthetic-test evidence only; this does not establish threat-intelligence authenticity, SIEM compatibility, delivery, coverage, or production acceptance. <a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/external-exchange-contract.md" target="_blank" rel="noreferrer">Read the exchange boundary ↗</a></p>
           </section>
-        </section>
-
-        <section class="view" data-view-panel="missions" aria-labelledby="missions-title" hidden>
-          <div class="view-heading"><div><p class="eyebrow">Bounded workflows</p><h1 id="missions-title">Choose the work. See the boundary.</h1><p>Review an entry point, its evidence output, and the authority it deliberately does not receive.</p></div></div>
-          <section class="hud-start local-journey" aria-labelledby="hud-start-title">
-            <div class="launch-heading"><p class="eyebrow">User install · Linux</p><h2 id="hud-start-title">Install once. Open like an app.</h2><p>Three steps to a local, read-only workspace. Start from a reviewed checkout. The installer adds MEGALODON for your user only; companion tools and data can come later.</p></div>
-            <ol class="launch-steps" aria-label="Local PC setup path">
-              <li><span class="launch-step-number" aria-hidden="true">01</span><div><h3>Review</h3><p>Use Python 3.11 or newer on Linux. Download or clone the project, then review the source and local setup guide.</p><a href="https://github.com/bartytime4life/MEGALODON/tree/16742fed020283aafad35e30238986c851d7542a" target="_blank" rel="noopener noreferrer">Open the merged install source on GitHub ↗</a><a href="https://github.com/bartytime4life/MEGALODON/blob/16742fed020283aafad35e30238986c851d7542a/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div></li>
-              <li><span class="launch-step-number" aria-hidden="true">02</span><div><h3>Install</h3><p>From the repository root, create the private user application and menu entry:</p><div class="install-command"><code>./scripts/install-local.sh</code><button id="copy-local-install" type="button">Copy install command</button></div><p class="launch-note">No sudo. Python may download build requirements. Optional tools, sensors, telemetry, and automatic startup are not installed.</p></div></li>
-              <li><span class="launch-step-number" aria-hidden="true">03</span><div><h3>Open and check</h3><p>Open MEGALODON from the application menu, then choose Home → Data and tools → Check this computer.</p><a class="start-link" href="http://127.0.0.1:8787/" target="_blank" rel="noopener noreferrer">Open a running local HUD ↗</a><p class="launch-note">The app opens your browser after its local server binds. On a phone, 127.0.0.1 points to the phone. This Site cannot tell whether your HUD is running.</p></div></li>
-            </ol>
-            <details class="launch-installed"><summary>Prefer to run the checkout without installing?</summary><p>Use the source launcher from the repository root:</p><div class="installed-command"><code>./scripts/start-local.sh</code><button id="copy-hud-start" type="button">Copy source command</button></div><p>Keep its terminal open and stop with Ctrl+C. The source launcher does not add an app-menu entry or change an existing Python installation.</p></details>
-            <div class="launch-footer"><p>An empty local HUD means evidence is unavailable, not zero traffic.</p><button type="button" data-jump="integrations">Explore optional tools</button></div>
-          </section>
-          <section class="exchange-map local-feature-map" aria-labelledby="local-feature-title">
-            <div class="exchange-heading"><div><p class="panel-kicker">AVAILABLE IN THE LOCAL HUD</p><h2 id="local-feature-title">Explore current repository features</h2><p>These views run in your local MEGALODON workspace after you open it on this computer. This hosted page cannot read its evidence or operate its controls.</p></div><span class="status-pill bounded">Local only</span></div>
-            <div class="exchange-grid">
-              <article><div><span class="exchange-code">TRAFFIC</span><strong>Rolling-hour activity globe</strong></div><p>Review bounded stored metadata across the past 60 minutes, with a time control and linked detection signals. Optional offline IP regions are approximate; missing or unmapped activity is never a clean-network verdict.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/a767e69bcaf7ac0020e03b89578e6c76ec264560/README.md" target="_blank" rel="noopener noreferrer">Read the local Traffic guide ↗</a></article>
-              <article><div><span class="exchange-code">ACTIONS</span><strong>Reviewed scripts and time previews</strong></div><p>The local Actions workspace offers copy-only command references and a bounded recurrence preview. It creates no schedule or job, executes no copied script, and grants no firewall authority.</p><a href="https://github.com/bartytime4life/MEGALODON/blob/a767e69bcaf7ac0020e03b89578e6c76ec264560/docs/automation-contract.md" target="_blank" rel="noopener noreferrer">Read the preview boundary ↗</a></article>
-            </div>
-          </section>
-
-          <div class="mission-deck">
-            <nav class="mission-list" aria-label="Select a MEGALODON workflow">
-              <button class="mission active" data-workflow="dashboard" aria-pressed="true"><span>01</span><strong>Local dashboard</strong><small>Read your actual stored evidence</small></button>
-              <button class="mission" data-workflow="replay" aria-pressed="false"><span>02</span><strong>Bounded replay</strong><small>JSONL into audit evidence</small></button>
-              <button class="mission" data-workflow="offline" aria-pressed="false"><span>03</span><strong>Saved capture</strong><small>Isolated TShark adapter</small></button>
-              <button class="mission" data-workflow="suricata" aria-pressed="false"><span>04</span><strong>Suricata review</strong><small>Optional local startup snapshot</small></button>
-              <button class="mission" data-workflow="plans" aria-pressed="false"><span>05</span><strong>Integration plans</strong><small>Static; non-executing</small></button>
-            </nav>
-            <article class="mission-panel" aria-live="polite" aria-atomic="true">
-              <div class="mission-topline"><span id="workflow-status" class="status-pill implemented">Implemented</span><span id="workflow-platform"></span></div>
-              <h2 id="workflow-title"></h2><p id="workflow-summary"></p>
-              <div class="command-block"><span>Reviewable entry point</span><code id="workflow-command"></code><button id="copy-command" type="button">Copy</button></div>
-              <div class="mission-columns"><div><h3>Produces</h3><ul id="workflow-produces"></ul></div><div><h3>Refuses</h3><ul id="workflow-refuses"></ul></div></div>
-              <div class="boundary-line"><span>SAFETY MEMBRANE</span><strong id="workflow-boundary"></strong></div>
-            </article>
-          </div>
         </section>
 
         <section class="view" data-view-panel="boundaries" aria-labelledby="boundaries-title" hidden>

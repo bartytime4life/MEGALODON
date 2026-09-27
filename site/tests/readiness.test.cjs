@@ -119,7 +119,7 @@ test('the HTML declares unique evidence controls and loads its local validator f
   assert.match(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
   assert.match(html, /href="http:\/\/127\.0\.0\.1:8787\/#integrations-title"[^>]*>Open local Apps/);
-  assert.match(html, /How to start the HUD/);
+  assert.match(html, /local-pc-setup\.md"[^>]*>Local setup guide ↗<\/a>/);
 });
 
 const {lifecycleCommands, resolveLifecycle} = require('../dist/lifecycle.js');
@@ -229,7 +229,7 @@ test('whole application initializes and navigates without a feed or browser netw
   const context={document, URL, window:{location:{hash:""},scrollY:0,history:{pushState(a,b,hash){context.window.location.hash=hash;}},addEventListener(){},matchMedia(){return {matches:true};},scrollTo({top}){this.scrollY=top;}}, localStorage:{getItem(){return null;},setItem(){}}, Date, console};
   vm.createContext(context);
   for(const path of ['../dist/lifecycle.js','../dist/controls.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
-  for(const view of ['hud','evidence','integrations','missions','boundaries']) {
+  for(const view of ['hud','evidence','integrations','boundaries']) {
     vm.runInContext(`switchView('${view}')`,context);
     assert.equal(document.activeElement,nodes.get(`[data-view-panel="${view}"] h1`));
   }
@@ -243,7 +243,7 @@ test('whole application initializes and navigates without a feed or browser netw
   context.window.location.hash='#view=integrations';
   vm.runInContext('restoreViewFromHash()',context);
   assert.equal(context.window.scrollY,180);
-  for(const hash of ['#view=__proto__','#view=unknown','#view=integrations]']) {
+  for(const hash of ['#view=missions','#view=__proto__','#view=unknown','#view=integrations]']) {
     context.window.location.hash=hash;
     vm.runInContext('restoreViewFromHash()',context);
     assert.equal(vm.runInContext('state.activeView',context),'integrations');
