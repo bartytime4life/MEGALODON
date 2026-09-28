@@ -694,6 +694,19 @@ that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.
 
+To start the one supported live metadata writer alongside this checkout's HUD,
+use `./scripts/start-hud-data.sh --interface IFACE`. Choose an existing Linux
+interface you are authorized to observe. The script requires Scapy and existing
+capture permission in its selected Python environment, uses a finite accepted
+event ceiling, and stops the HUD when capture stops. Run
+`./scripts/start-hud-data.sh --interface IFACE --check` first to inspect local
+prerequisites without starting either process. `--config` selects the same
+existing settings file for both processes; `--geoip-db` and `--suricata-db` add
+existing private evidence sources to the HUD. The latter is a startup snapshot,
+not a live Suricata feed. This launcher does not start companion services,
+install packages, or grant capture permission. See
+[local PC setup](docs/local-pc-setup.md#start-live-metadata-and-the-hud-together).
+
 See the [operator workflow index](docs/operator-workflows.md) for the documented
 local entry points and authority limits, and
 [visual HUD, summary export and uniform tool setup](docs/hud-workflow.md) for
