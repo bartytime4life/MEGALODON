@@ -1,6 +1,34 @@
 # Defense Console source alignment
 
-## Current publication — Console v42, repository mirror aligned
+## Current publication — Console v44, repository mirror proposed
+
+OBSERVED 2026-09-28: the existing owner-only Site published version 44 from
+Sites source `0cf912b39577ea6a844a4e727cf086afda90fcf3`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_c7f137d824948191a9b2ea4f477f1d82`.
+Deployment `appgdep_6abaeb1208548191a8a54dbbab4a217a` reported
+`succeeded` at 2026-09-28T22:32:56Z at
+<https://megalodon-defense-console.blackbart-55.chatgpt.site>. The retained
+archive reports 19 files, 389,120 bytes and
+`sha256:2b7dd7d9670d1238c0b2cba2d4dda8446c3cb57c390f13843cdfed47204a5afc`.
+Access remains `custom`, restricted to the owner account with zero external
+visitors. Rollback reference: saved v42 / source
+`e10e9d162c376d24abf85dd7512ca2398f4dd2a7` / deployment
+`appgdep_6ab966dbbb4c8191835b9e9285f0ebcd` (succeeded).
+
+The Overview now links to the optional bounded Scapy metadata and local HUD
+launcher merged in repository `main@d0a853cfa1b5906c07645dd1100763a274000500`.
+It states the local prerequisites, per-launch HUD password, and separate
+acceptance gates. Publication did not install or run capture, connect this
+hosted page to local records, or establish sensor health or host acceptance.
+All 27 Site files in this proposed repository mirror matched the pushed source
+byte for byte; the complete repository Site suite passed 89/89 Node tests.
+The local preview rendered the new guidance. Authenticated rendering of the
+owner-only deployment remains unverified. Repository mirror merge is separate
+from this completed Site publication. An earlier v43 deployment was superseded
+after a Site test found a retired-view selector collision in the new section's
+CSS name; v44 corrects that name and passes the complete suite.
+
+## Historical publication — Console v42, repository mirror aligned at publication
 
 OBSERVED 2026-09-27: the existing owner-only Site published version 42 from
 Sites source `e10e9d162c376d24abf85dd7512ca2398f4dd2a7`, saved version
