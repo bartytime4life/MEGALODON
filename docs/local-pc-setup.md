@@ -102,6 +102,35 @@ environment can also use `python -m megalodon hud`. Do not recreate
 an existing virtual environment just to launch the HUD. See the
 [platform baseline](platform-baseline.md) for installing a new environment.
 
+### Start live metadata and the HUD together
+
+For an authorized Linux interface, the separate launcher starts MEGALODON's
+bounded Scapy metadata writer and the loopback HUD against the same checkout and
+configuration:
+
+```bash
+./scripts/start-hud-data.sh --interface IFACE --check
+./scripts/start-hud-data.sh --interface IFACE --max-events 1000000 --open-browser
+```
+
+Replace `IFACE` with an existing interface name. Scapy must already be installed
+in the selected Python, and that interpreter must already have capture
+permission. The check confirms only local prerequisites. It does not prove
+permission, sensor health, complete network visibility, or arriving events.
+The writer stores validated metadata only; the HUD reads those stored records
+every five seconds while its tab is visible. Press Ctrl+C to stop both. When
+the writer reaches its event ceiling or fails, the launcher stops the HUD so
+it does not continue to appear live. It never invokes `sudo` or grants capture
+permission.
+
+Use `--config /absolute/path/settings.toml` when the intended audit store is
+configured elsewhere. Optional `--geoip-db /absolute/path/regions.mmdb` loads
+an existing offline region database. Optional
+`--suricata-db /absolute/path/store.sqlite3` selects an existing private
+Suricata evidence store for one read-only HUD startup snapshot. The script does
+not start or connect a Suricata sensor or consumer. Other companion apps retain
+their separately documented manual input paths or presence-only status.
+
 ## What the source preflight establishes
 
 `--check` prints the actual Python and SQLite versions, checks Linux, and opens
