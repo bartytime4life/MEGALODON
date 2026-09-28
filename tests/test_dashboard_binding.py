@@ -83,6 +83,7 @@ def test_loopback_server_gets_numeric_host_and_closes(monkeypatch, host, expecte
     server.serve_forever.side_effect = KeyboardInterrupt
     factory = Mock(return_value=server)
     monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", lambda _: None)
     import socket
     monkeypatch.setattr(socket, "getaddrinfo", _forbidden)
     monkeypatch.setattr(socket, "gethostbyname", _forbidden)
@@ -121,12 +122,27 @@ def test_browser_opens_only_after_loopback_server_binds(monkeypatch):
     server.serve_forever.side_effect = serve_forever
     factory = Mock(return_value=server)
     monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", lambda _: None)
     monkeypatch.setattr(dashboard.webbrowser, "open_new_tab", open_tab)
     with pytest.raises(KeyboardInterrupt):
         dashboard.serve(object(), "127.0.0.1", 8787, open_browser=True)
     assert factory.call_count == 1
     assert opener_finished.wait(2)
     server.server_close.assert_called_once_with()
+
+
+def test_launch_password_is_restricted_to_a_terminal(monkeypatch):
+    writes = []
+    with monkeypatch.context() as patch:
+        patch.setattr(dashboard.sys, "stdout", SimpleNamespace(fileno=lambda: 7))
+        patch.setattr(dashboard.os, "isatty", lambda fd: False)
+        patch.setattr(dashboard.os, "write", lambda *_: pytest.fail("secret reached redirected output"))
+        with pytest.raises(ValueError, match="interactive terminal"):
+            dashboard._show_http_read_password("private-launch-password")
+        patch.setattr(dashboard.os, "isatty", lambda fd: fd == 7)
+        patch.setattr(dashboard.os, "write", lambda fd, data: writes.append((fd, data)) or len(data))
+        dashboard._show_http_read_password("private-launch-password")
+    assert writes == [(7, b"MEGALODON local dashboard sign-in: username megalodon; password private-launch-password\n")]
 
 
 @pytest.mark.parametrize("host, override", (

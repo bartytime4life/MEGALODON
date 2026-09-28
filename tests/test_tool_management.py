@@ -199,6 +199,7 @@ def test_unknown_user_identity_fails_closed(monkeypatch):
 
 def test_launch_tokens_are_separate_ephemeral_and_only_printed_on_opt_in(monkeypatch, capsys):
     handlers = []
+    monkeypatch.setattr(dashboard, "_show_http_read_password", lambda _: None)
 
     class Server:
         def __init__(self, _address, handler):

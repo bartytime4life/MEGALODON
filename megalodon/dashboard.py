@@ -1120,6 +1120,24 @@ def validate_tool_management_mode(enabled: bool, *, inspect_tools: bool) -> None
             raise ValueError("tool management requires a non-root Linux HUD; do not use sudo")
 
 
+def _show_http_read_password(password: str) -> None:
+    """Show the per-launch credential only on an interactive terminal."""
+    try:
+        terminal_fd = sys.stdout.fileno()
+    except (AttributeError, OSError, ValueError):
+        terminal_fd = -1
+    if terminal_fd < 0 or not os.isatty(terminal_fd):
+        raise ValueError("dashboard sign-in requires an interactive terminal")
+    remaining = (
+        f"MEGALODON local dashboard sign-in: username megalodon; password {password}\n"
+    ).encode("ascii")
+    while remaining:
+        written = os.write(terminal_fd, remaining)
+        if written <= 0:
+            raise OSError("dashboard sign-in terminal write failed")
+        remaining = remaining[written:]
+
+
 def serve(
     store: DashboardReader, host: str, port: int, *, enabled: bool = True,
     allow_remote: bool = False, offline_summary: dict[str, Any] | None = None,
@@ -1185,8 +1203,8 @@ def serve(
     server = ThreadingHTTPServer((host, port), handler)
     try:
         url = f"http://{host}:{port}/"
+        _show_http_read_password(http_read_password)
         print(f"MEGALODON dashboard listening on {url}", flush=True)
-        print("MEGALODON local dashboard sign-in: username megalodon; password [redacted]", flush=True)
         if install_operator_token is not None:
             print(f"MEGALODON tool management operator token (this launch only): {install_operator_token}", flush=True)
         if ai_operator_token is not None:

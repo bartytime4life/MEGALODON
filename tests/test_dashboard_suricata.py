@@ -114,6 +114,7 @@ def test_startup_owns_bytes_and_reads_optional_store_only_once(monkeypatch, proj
     server = Mock()
     factory = Mock(return_value=server)
     monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", lambda _: None)
     dashboard.serve(Mock(), "127.0.0.1", 8787, suricata_db="/private/selected.db")
     read.assert_called_once_with("/private/selected.db")
     handler = factory.call_args.args[1]
@@ -128,6 +129,7 @@ def test_missing_store_does_not_create_files_or_block_core_startup(tmp_path, mon
     path = tmp_path / "must-not-create" / "suricata.db"
     factory = Mock(return_value=Mock())
     monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", lambda _: None)
     dashboard.serve(Mock(), "127.0.0.1", 8787, suricata_db=path)
     value = json.loads(factory.call_args.args[1].suricata_evidence)
     assert value["status"] == "unavailable" and value["failure_code"] == "STORE_UNAVAILABLE"

@@ -114,6 +114,7 @@ def test_startup_captures_local_commands_and_shared_assets_remain_generic(monkey
     server = Mock()
     factory = Mock(return_value=server)
     monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", lambda _: None)
     dashboard.serve(object(), "127.0.0.1", 8787)
     handler = factory.call_args.args[1]
     script = handler.javascript.decode()
