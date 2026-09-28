@@ -1,5 +1,39 @@
 # Unified roadmap: repository reconciliation
 
+## Stage 0 acceptance-gate restoration — 2026-09-28
+
+Current GitHub basis:
+[`main@ad64c9a4a433a8e966772c87aa52c7bb24cb4632`](https://github.com/bartytime4life/MEGALODON/commit/ad64c9a4a433a8e966772c87aa52c7bb24cb4632),
+merged through [#444](https://github.com/bartytime4life/MEGALODON/pull/444).
+At that exact head, the general test, wheel-smoke, CodeQL source analysis and
+Linux browser-acceptance checks succeeded. The exact-head owner-authorization
+check did not pass, and the identity-artifact jobs were skipped. These results
+must not be summarized as an unqualified green candidate. #444 repaired the
+local HUD sign-in path that caused the prior browser failure; it did not publish
+a release, deploy a Site, operate a companion, accept the HUD, or grant host
+authority.
+
+The residual Zeek and Qwen work described in the 2026-09-25 correction now has
+explicit successor tracking:
+
+- [#445](https://github.com/bartytime4life/MEGALODON/issues/445) restores the
+  Stage 0 HOLD for one exact offline Zeek producer profile. The current
+  `zeek-PLACEHOLDER-UNSELECTED-conn-json-v1` / `0.0.0` scaffold remains
+  unqualified. The Zeek 8.0.10 private build recipe is an operator recipe, not
+  an owner selection or acceptance receipt.
+- [#446](https://github.com/bartytime4life/MEGALODON/issues/446) restores the
+  Qwen Airlock HOLD. The canonical binding remains
+  `UNBOUND / OWNER_MODEL_BINDING_NOT_RECORDED`; readiness may establish at
+  most `CANDIDATE_PACKET_CONSISTENT`. The issue requires disabled/UNBOUND
+  zero-effect evidence before any model-execution gate.
+
+For both successors, finite fixtures and deterministic refusals may progress.
+No live capture, producer/service launch, model pull/request, background model,
+host install/configuration, firewall action, release, deployment, or Site
+publication is authorized. Merge, check success, review, owner acceptance,
+release, deployment, operator acceptance, and host authority remain distinct
+lifecycle facts.
+
 ## Issue-state correction — 2026-09-25
 
 GitHub issue readback at

@@ -418,8 +418,15 @@ validation result is not independent approval or a timeless security posture.
 
 Suricata issues [#9](https://github.com/bartytime4life/MEGALODON/issues/9)
 and [#24](https://github.com/bartytime4life/MEGALODON/issues/24) closed their
-record and reader **contract** gates. No runtime reader, durable importer,
-installed-sensor compatibility, or response path follows from those closures.
+record and reader **contract** gates. Those closures alone did not establish a
+runtime reader or durable importer. Later repository work now supplies the
+pinned 8.0.7 alert-only completed-file converter, closed-envelope consumer,
+explicit durable transaction, reconciliation, and read-only projection
+described below and in
+[`docs/unified-roadmap-currentness.md`](docs/unified-roadmap-currentness.md).
+Installed-sensor compatibility, operational privacy/loss acceptance, mixed-EVE
+firehose handling, watcher/service operation, IPS, and response authority do
+not follow from either the older closures or the later implementation.
 
 ## Windows/Linux extension: proposed controls, not completed validation
 
