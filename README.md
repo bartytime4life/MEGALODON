@@ -1139,12 +1139,13 @@ literal `localhost` is mapped directly to `127.0.0.1`, without DNS resolution.
 Other hostnames, wildcard/LAN/public addresses, and IPv6 (including mapped and
 scoped forms) are refused by this IPv4 server. The legacy `--allow-remote` flag
 is retained only to give a fixed startup refusal, even with a loopback host.
-Remove it and use `--host 127.0.0.1`. The supported launcher prints a random,
-single-launch dashboard password in its terminal. When the browser asks, enter
-username `megalodon` and that password; keep the terminal private. The password
-guards the local HTTP page and API, while AI and companion actions retain their
-separate operator tokens. Local HTTP Basic authentication is not a remote-service
-security design; do not expose the server through proxies, tunnels or port
+Remove it and use `--host 127.0.0.1`. The supported launcher displays a random,
+single-launch dashboard password only on an interactive terminal; redirected
+output cannot receive it and startup refuses without a terminal. When the browser
+asks, enter username `megalodon` and that password; keep the terminal private.
+The password guards the local HTTP page and API. AI and companion actions retain
+their separate operator tokens. Local HTTP Basic authentication is not a remote
+service security design; do not expose the server through proxies, tunnels or port
 forwarding. Firewall allowlist changes,
 and public-target policy changes require separate review. Live application is
 unsupported; any future restoration must satisfy the gate below.

@@ -89,7 +89,16 @@ def dashboard(settings: Path, offline: Path | None = None):
             "--host", "127.0.0.1", "--port", str(port)]
     if offline is not None:
         args += ["--offline-run", str(offline)]
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    # Give the child a terminal for its launch password without copying that
+    # password into Actions logs or a redirected stdout pipe.
+    terminal_master, terminal_slave = os.openpty()
+    try:
+        process = subprocess.Popen(args, stdout=terminal_slave, stderr=subprocess.DEVNULL)
+    except BaseException:
+        os.close(terminal_master)
+        raise
+    finally:
+        os.close(terminal_slave)
     try:
         deadline = time.monotonic() + 10
         output = b""
@@ -97,12 +106,12 @@ def dashboard(settings: Path, offline: Path | None = None):
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 raise AssertionError("dashboard startup refused")
-            ready, _, _ = select.select([process.stdout], [], [], 0.05)
+            ready, _, _ = select.select([terminal_master], [], [], 0.05)
             if ready:
-                output += os.read(process.stdout.fileno(), 256)
+                output += os.read(terminal_master, 256)
                 if len(output) > 1024:
                     raise AssertionError("dashboard startup output exceeded bound")
-                match = re.search(rb"MEGALODON local dashboard sign-in: username megalodon; password ([A-Za-z0-9_-]{32,})\n", output)
+                match = re.search(rb"MEGALODON local dashboard sign-in: username megalodon; password ([A-Za-z0-9_-]{32,})\r?\n", output)
                 if match:
                     password = match.group(1).decode("ascii")
             if password is None:
@@ -125,8 +134,7 @@ def dashboard(settings: Path, offline: Path | None = None):
                 process.kill()
                 process.wait(timeout=5)
                 raise AssertionError("dashboard required forced cleanup")
-        if process.stdout is not None:
-            process.stdout.close()
+        os.close(terminal_master)
 
 
 def unsafe_startup(settings: Path, db: Path) -> None:
