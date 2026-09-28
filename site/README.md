@@ -64,12 +64,21 @@ to the same local PC guide without trying to open a loopback app or per-tool
 local evidence view. These links open the repository documentation in protected
 new tabs; the Site does not execute or copy workflow commands.
 
-The local HUD can open before data exists. Neither a launcher nor the browser
-starts sensors or creates sample evidence, and an empty local HUD is labeled
+The local HUD can open before data exists. Its default launcher and browser
+do not start sensors or create sample evidence, and an empty local HUD is labeled
 unavailable rather than zero traffic. The hosted Site does not navigate to a
 device loopback address. The brand returns to Overview, view changes focus
 their heading, and saved-console filters update immediately when a bookmark
 changes.
+
+The Overview links to the optional Linux launcher added on repository
+`main@d0a853cfa1b5906c07645dd1100763a274000500`. From a reviewed checkout,
+`scripts/start-hud-data.sh` can run bounded Scapy metadata capture and the local
+HUD together after local prerequisites and authority are supplied. The local
+HUD uses a per-launch password. The launcher stops both processes when either
+exits. The hosted page does not install, start, authenticate to, or read from
+either process. Its acceptance-gate link points to the dated Stage 0 status;
+source delivery and a local check do not prove host coverage or sensor health.
 
 Local and hosted tool controls share the canonical Python asset constants in
 `megalodon/dashboard_tool_assets.py`. The repository's
