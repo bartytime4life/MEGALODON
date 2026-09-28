@@ -19,8 +19,9 @@ VERIFIED against repository `main@7d79af1e2d232f9aa9a8feb2366f372fa1014622`:
 all 27 tracked `site/` source files match the pushed Sites commit byte for
 byte. All 19 packaged files match their corresponding source bytes, including
 the hosting manifest. The complete repository Site suite passed 89/89 Node
-tests, including passive Activity evidence, saved controls, Runbooks routing,
-and disconnected telemetry; JavaScript syntax checks passed. An isolated Site
+tests, including passive Activity evidence, saved controls, documentation and
+workflow-link routing, retired Runbooks absence, and disconnected telemetry;
+JavaScript syntax checks passed. An isolated Site
 checkout cannot run the documentation-routing suite without the parent
 repository's `docs/` files; the full repository run includes that suite.
 The browser reached the owner sign-in screen, so authenticated hosted rendering
