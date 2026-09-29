@@ -13,6 +13,15 @@ from megalodon.config import Settings
 from megalodon.storage import DashboardStore, StorageSchemaError, Store
 
 
+def test_setup_panel_describes_opt_in_hud_sign_in():
+    from megalodon.dashboard_setup import SETUP_HTML
+
+    assert "opens without sign-in" in SETUP_HTML
+    assert "--require-sign-in" in SETUP_HTML
+    assert "reusable password" in SETUP_HTML
+    assert "The default password is shown at launch" not in SETUP_HTML
+
+
 def test_hud_launch_without_store_never_creates_files(tmp_path, monkeypatch):
     path = tmp_path / "missing" / "audit.db"
     monkeypatch.setattr(cli, "_load", lambda _: Settings(db_path=path))

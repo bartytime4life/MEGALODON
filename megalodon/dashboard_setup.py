@@ -6,7 +6,7 @@ SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
     <header class="setup-heading">
       <div><p class="eyebrow">Set up with confidence</p><h2 id="setup-title" tabindex="-1">Data and tools</h2>
-      <p>Use MEGALODON locally without a vendor or companion-console account. Check this computer, then add only the software your workflow needs. The default password is shown at launch; the installed HUD can use a password you choose with megalodon-manage password set. Neither creates an account.</p></div>
+      <p>Use MEGALODON locally without a vendor or companion-console account. Check this computer, then add only the software your workflow needs. By default, the HUD opens without sign-in. Add <code>--require-sign-in</code> to require a password for a launch. When sign-in is enabled, the installed HUD can use a reusable password set with <code>megalodon-manage password set</code>; if none is configured, a random password appears in the launch terminal. Neither creates an account.</p></div>
       <a class="setup-help-link" href="#room-help-title">How this works <span aria-hidden="true">↗</span></a>
     </header>
     <div class="setup-main">
