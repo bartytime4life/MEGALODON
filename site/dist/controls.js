@@ -178,7 +178,7 @@ const MegalodonControls = (() => {
           ids.forEach(id => {
             if (Object.hasOwn(data, id)) { try { memory[id] = consoleURL(data[id]); } catch (_) {} }
           });
-          if (Object.hasOwn(data, 'ossec') || Object.hasOwn(data, 'zabbix')) {
+          if (['greenbone', 'nagios', 'ossec', 'zabbix'].some(id => Object.hasOwn(data, id))) {
             localStorage.setItem(storageKey, JSON.stringify(memory));
           }
         }

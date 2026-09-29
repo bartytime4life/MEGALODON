@@ -30,6 +30,11 @@ test('storage failures remain usable and explicitly report session-only persiste
   assert.equal(controls.save('nmap', 'http://127.0.0.1:8080/'), false);
   assert.equal(controls.links().nmap, 'http://127.0.0.1:8080/');
 });
+test('older retired links are purged even without OSSEC or Zabbix keys', () => {
+  const {controls, writes} = runtime(JSON.stringify({greenbone:'http://127.0.0.1:9392/',nagios:'http://127.0.0.1/nagios4/'}));
+  assert.deepEqual(Object.keys(controls.links()), []);
+  assert.deepEqual(JSON.parse(writes[0][1]), {});
+});
 test('shared controls never fetch, embed a console, or execute command text', () => {
   const source = fs.readFileSync(require.resolve('../dist/controls.js'), 'utf8');
   assert.doesNotMatch(source, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|iframe|innerHTML|\beval\s*\(|new Function/);

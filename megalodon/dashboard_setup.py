@@ -210,7 +210,7 @@ const softwareCatalog = [
   {id: 'clamav', name: 'ClamAV', mark: 'Cl', group: 'host', requirement: 'Optional · manual companion', purpose: 'Scan files with a separately operated antivirus tool.', note: 'The HUD does not scan files or update signatures. Installation can add a signature-update service.'},
   {id: 'osquery', name: 'osquery', mark: 'oq', group: 'host', requirement: 'Optional · saved count only', purpose: 'Review an operator-run DEB package count.', note: 'MEGALODON imports one counts-only result manually. It does not run queries, schedule inventory, or import package names.'},
   {id: 'qwen', name: 'Ollama + Qwen', mark: 'AI', group: 'ai', requirement: 'Optional · local advisory', purpose: 'Host an optional local language model for bounded explanations.', note: 'Ollama is the runtime; Qwen is a separate model download. The advisory workflow needs a validated local model registry. Checking observes only the Ollama executable and process.', link: 'Ollama downloads'},
-  {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · no importer', purpose: 'Explore network inventory in a separate authorized workflow.', note: 'The HUD does not scan a network. A completed XML importer is a future integration.'}
+  {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · saved aggregate import', purpose: 'Review a completed authorized network inventory.', note: 'The HUD does not scan a network. Import a completed Nmap XML report for aggregate host and port counts.'}
 ];
 // Keep reading context across check updates and filter changes; keys are the fixed catalog.
 const softwareGuidanceOpen = new Map(softwareCatalog.map(item => [item.id, false]));

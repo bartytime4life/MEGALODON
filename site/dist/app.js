@@ -89,7 +89,7 @@ function loadToolPresence() {
     const saved = JSON.parse(localStorage.getItem(toolPresenceKey) || "{}");
     if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
     const current = Object.fromEntries(Object.entries(saved).filter(([id, value]) => integrations.some((item) => item.id === id) && value && typeof value === "object" && ["installed", "missing"].includes(value.status) && Number.isFinite(value.checkedAt) && value.checkedAt > 0 && value.checkedAt <= Date.now()));
-    if (Object.hasOwn(saved, "ossec") || Object.hasOwn(saved, "zabbix")) {
+    if (["greenbone", "nagios", "ossec", "zabbix"].some(id => Object.hasOwn(saved, id))) {
       try { localStorage.setItem(toolPresenceKey, JSON.stringify(current)); } catch { /* Keep current notes in memory. */ }
     }
     return current;

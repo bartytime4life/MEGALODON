@@ -29,7 +29,7 @@ test('retired manual presence notes are discarded from browser storage', () => {
   const app = fs.readFileSync(require.resolve('../dist/app.js'), 'utf8');
   const loader = app.slice(app.indexOf('function loadToolPresence()'), app.indexOf('\nconst state ='));
   const writes = [];
-  const saved = {nmap:{status:'installed',checkedAt:Date.now()},ossec:{status:'installed',checkedAt:Date.now()},zabbix:{status:'missing',checkedAt:Date.now()}};
+  const saved = {nmap:{status:'installed',checkedAt:Date.now()},ossec:{status:'installed',checkedAt:Date.now()},zabbix:{status:'missing',checkedAt:Date.now()},greenbone:{status:'installed',checkedAt:Date.now()}};
   const context = {Date, Object, JSON, Number, integrations:[{id:'nmap'}], toolPresenceKey:'megalodon-tool-presence-v2',
     localStorage:{getItem(){return JSON.stringify(saved);},setItem(key,value){writes.push([key,value]);}}};
   vm.createContext(context);
