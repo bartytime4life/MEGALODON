@@ -32,8 +32,6 @@ _PROCESS_NAMES: dict[str, frozenset[str] | None] = {
     "osquery": frozenset({"osqueryd"}),
     "qwen-ollama": frozenset({"ollama"}),
     "nmap": None,
-    "ossec": frozenset({"ossec-analysisd", "ossec-monitord", "wazuh-agentd"}),
-    "zabbix": frozenset({"zabbix_agentd", "zabbix_agent2", "zabbix_server"}),
 }
 
 BOUNDARIES = (

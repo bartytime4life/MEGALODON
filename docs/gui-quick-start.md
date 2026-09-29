@@ -58,7 +58,7 @@ or traffic. It differs from the standalone readiness-only JSON import format.
 The software list starts with essentials. Choose a workflow or search for a
 program to see its purpose, status light and buttons. **Install** installs the
 fixed Ubuntu package, or the Python package for this HUD, after your computer's
-password prompt; MEGALODON never sees the password. Zeek, osquery and OSSEC need a vendor repository or a role choice, so
+password prompt; MEGALODON never sees the password. Zeek and osquery need a private build or vendor repository, so
 they link to their official guides instead. Download links open the publisher's
 page in a new tab.
 
@@ -91,7 +91,7 @@ packages, start their services, refresh saved metadata, inspect time ranges,
 look up reference data, preview/download reports and open official download
 pages. These actions do not require copying diagnostic commands.
 
-The one-time MEGALODON install, guided companion installs (Zeek, osquery, OSSEC), importing data,
+The one-time MEGALODON install, guided companion installs (Zeek, osquery), importing data,
 starting an authorized capture, and changing the server's source remain explicit
 local operations. After installation, the application-menu entry handles normal
 startup and browser opening. **Change data for the next launch** prepares and copies a

@@ -117,14 +117,9 @@ def test_workflow_contracts_match_their_owned_entry_points():
     assert "no raw traffic" in advisory["data_boundary"]
     assert "cannot execute commands" in advisory["action_boundary"]
 
-    for workflow in (
-        "host-integrity-import",
-        "zabbix-availability-read",
-    ):
-        item = integration_plan("linux", workflow)["workflows"][0]
-        assert item["entry_point"] is None
-        assert item["selected_status"] == "proposed"
-        assert item["integration_owner"] == "not_implemented"
+    for workflow in ("host-integrity-import", "zabbix-availability-read"):
+        with pytest.raises(ValueError, match="unknown integration workflow"):
+            integration_plan("linux", workflow)
 
 
 def test_unknown_workflow_is_rejected():

@@ -42,22 +42,7 @@ const lifecycleCommands = (() => {
       labels: {verify: "Check example model tag", uninstall: "Remove example model", reinstall: "Download example model"},
       note: "Example tag only: all three operations target qwen2.5:7b. This mutable tag is not the approved registry or an artifact digest. Commands contact the local provider; pull can download from the Internet. They neither install/remove Ollama nor establish model containment."
     },
-    nmap: apt("nmap", "command -v nmap >/dev/null && nmap --version", "No scan is launched by the diagnostic."),
-    ossec: {
-      verify: "if test -x /var/ossec/bin/ossec-control || test -x /var/ossec/bin/ossec-agentd; then echo 'OSSEC candidate at default prefix'; else exit 1; fi",
-      uninstall: null, reinstall: null,
-      note: "OSSEC server, agent and source installs have different lifecycle procedures. The installation method and role are unknown here; use the vendor guide matching your installation instead of a combined guessed package list."
-    },
-    zabbix: {
-      verify: "command -v zabbix_agent2 || command -v zabbix_agentd || command -v zabbix_server",
-      uninstall: null, reinstall: null,
-      note: "Select the exact installed role first. Each selection targets one package only. Agent 2, classic agent and server are alternatives, not one installation. PATH absence does not prove absence elsewhere.",
-      variants: {
-        agent2: {...apt("zabbix-agent2", "zabbix_agent2 --version", "Agent 2 only."), label: "Agent 2"},
-        agent: {...apt("zabbix-agent", "zabbix_agentd --version", "Classic agent only."), label: "Classic agent"},
-        mysql: {...apt("zabbix-server-mysql", "zabbix_server --version", "MySQL server package only; database, frontend and data lifecycle are separate."), label: "Server with MySQL"}
-      }
-    }
+    nmap: apt("nmap", "command -v nmap >/dev/null && nmap --version", "No scan is launched by the diagnostic.")
   };
 })();
 
@@ -74,7 +59,7 @@ if (typeof module !== "undefined") module.exports = {lifecycleCommands, resolveL
 """
 
 READINESS_JS = r"""/* Closed, bounded display schema. A report is an unauthenticated self-report. */
-const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap", "ossec", "zabbix"];
+const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap"];
 const readinessBoundaries = [
   "Executable presence only; installation, version, compatibility, trust and running state are not verified.",
   "Python/SQLite and Scapy availability are not checked by this executable-only report.",
@@ -112,11 +97,12 @@ function validateReadinessReport(text, now = Date.now()) {
     data = JSON.parse(text);
   } catch { throw new Error("Choose valid JSON without duplicate keys or excessive nesting."); }
   const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-  if (!exactKeys(data, ["schema", "checked_at", "platform", "probe_mode", "tools", "boundaries"]) || data.schema !== "megalodon-tool-readiness-v1" || data.probe_mode !== "path_presence_only" || !["linux", "windows", "other"].includes(data.platform)) throw new Error("Unsupported report schema, platform, or probe mode.");
+  if (data && data.schema === "megalodon-tool-readiness-v1") throw new Error("Old readiness report. Run python -m megalodon readiness again and import the new v2 report.");
+  if (!exactKeys(data, ["schema", "checked_at", "platform", "probe_mode", "tools", "boundaries"]) || data.schema !== "megalodon-tool-readiness-v2" || data.probe_mode !== "path_presence_only" || !["linux", "windows", "other"].includes(data.platform)) throw new Error("Unsupported report schema, platform, or probe mode.");
   if (typeof data.checked_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(data.checked_at)) throw new Error("Report requires a UTC checked_at timestamp.");
   const checkedAt = Date.parse(data.checked_at);
   if (!Number.isFinite(checkedAt) || new Date(checkedAt).toISOString().replace(".000Z", "Z") !== data.checked_at || checkedAt > now + 300000) throw new Error("Invalid or future readiness timestamp.");
-  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 12-tool presence-only registry.");
+  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 10-tool presence-only registry.");
   if (!Array.isArray(data.boundaries) || data.boundaries.length !== readinessBoundaries.length || !data.boundaries.every((value, index) => value === readinessBoundaries[index])) throw new Error("Report boundary statements do not match this schema.");
   return data;
 }
@@ -225,26 +211,6 @@ CONTROLS_JS = r"""const toolAcquisition = {
     verificationLabel: "Linux verification",
     note: "MEGALODON does not launch scans. The reserved boundary is a future completed XML report import only."
   },
-  ossec: {
-    source: "OSSEC Project",
-    url: "https://www.ossec.net/ossec-downloads/",
-    linkLabel: "Open OSSEC downloads",
-    platforms: ["Windows agents", "macOS", "Linux", "Unix"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Default-path verification",
-    note: "Use the vendor's package and role-specific instructions. Agent enrollment and active response stay outside MEGALODON."
-  },
-  zabbix: {
-    source: "Zabbix LLC",
-    url: "https://www.zabbix.com/download",
-    linkLabel: "Open Zabbix install selector",
-    platforms: ["Linux server", "Windows agents", "Containers", "Cloud"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Server or agent verification",
-    note: "Select the OS, release, database, and web server on the official page. No MEGALODON endpoint or credential contract exists yet."
-  }
 };
 
 // Publisher pages are separate from repository-specific integration recipes.
@@ -301,7 +267,7 @@ const companionSetupGuides = {
 
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
-  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'zabbix'];
+  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap'];
   const localConsoleSuggestions = Object.freeze({});
   const storageKey = 'megalodon-console-links-v1';
   let memory = null;
@@ -309,7 +275,7 @@ const MegalodonControls = (() => {
     if (typeof raw !== 'string' || raw.length > 2048 || /[\s\\]/.test(raw)) throw new Error('Use a complete http:// or https:// console address without spaces.');
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) {
-      throw new Error('Use an HTTP(S) address without a password, query, or fragment. Sign in inside the companion console.');
+      throw new Error('Use an HTTP(S) address without a password, query, or fragment.');
     }
     return url.href;
   }
@@ -320,9 +286,14 @@ const MegalodonControls = (() => {
       const raw = localStorage.getItem(storageKey);
       if (raw && raw.length <= 32768) {
         const data = JSON.parse(raw);
-        if (data && typeof data === 'object' && !Array.isArray(data)) ids.forEach(id => {
-          if (Object.hasOwn(data, id)) { try { memory[id] = consoleURL(data[id]); } catch (_) {} }
-        });
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          ids.forEach(id => {
+            if (Object.hasOwn(data, id)) { try { memory[id] = consoleURL(data[id]); } catch (_) {} }
+          });
+          if (Object.hasOwn(data, 'ossec') || Object.hasOwn(data, 'zabbix')) {
+            localStorage.setItem(storageKey, JSON.stringify(memory));
+          }
+        }
       }
     } catch (_) { /* Session-only operation remains available. */ }
     return memory;
@@ -481,12 +452,6 @@ const MegalodonControls = (() => {
       if (!entry.uninstall || !entry.reinstall) commands.append(node('p', 'Removal or reinstall depends on your installation method. Use the matching vendor instructions.', 'companion-help'));
     };
     const base = resolveLifecycle(id);
-    if (base.variants) {
-      const label = node('label', 'Installed Zabbix role');
-      const select = node('select'); const placeholder = node('option', 'Choose one role'); placeholder.value = ''; select.append(placeholder);
-      Object.entries(base.variants).forEach(([value, entry]) => { const option = node('option', entry.label); option.value = value; select.append(option); });
-      select.addEventListener('change', () => renderCommands(select.value)); label.append(select); lifecycle.append(label);
-    }
     lifecycle.append(commands); root.append(lifecycle, feedback); parent.append(root);
     repaint(); renderCommands(); return root;
   }

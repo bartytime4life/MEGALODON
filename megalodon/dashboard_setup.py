@@ -6,7 +6,7 @@ SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
     <header class="setup-heading">
       <div><p class="eyebrow">Set up with confidence</p><h2 id="setup-title" tabindex="-1">Data and tools</h2>
-      <p>Check this computer, then add only the software your workflow needs.</p></div>
+      <p>Use MEGALODON locally without a vendor or companion-console account. Check this computer, then add only the software your workflow needs. The password shown at launch protects this local session; it creates no account.</p></div>
       <a class="setup-help-link" href="#room-help-title">How this works <span aria-hidden="true">↗</span></a>
     </header>
     <div class="setup-main">
@@ -90,8 +90,8 @@ SETUP_HTML = """
 
 SETUP_JS = r"""
 const setupState = {readiness: null, runtime: null, sourceStatus: null, loadFailed: false};
-const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'zabbix'];
-const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap', 'ossec', 'zabbix'];
+const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap'];
+const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap'];
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
@@ -134,7 +134,7 @@ function renderToolStatus() {
   const names = {
     'python-sqlite': 'MEGALODON core', 'wireshark-tshark': 'Wireshark / TShark', zeek: 'Zeek', suricata: 'Suricata',
     scapy: 'Scapy', nftables: 'nftables', clamav: 'ClamAV', osquery: 'osquery', 'qwen-ollama': 'Qwen / Ollama',
-    nmap: 'Nmap', ossec: 'OSSEC', zabbix: 'Zabbix'
+    nmap: 'Nmap'
   };
   const installedCount = readiness ? readiness.tools.filter(tool => tool.status === 'executable_found').length : null;
   const runningCount = runtime ? runtime.tools.filter(tool => tool.status === 'running').length : null;
@@ -210,9 +210,7 @@ const softwareCatalog = [
   {id: 'clamav', name: 'ClamAV', mark: 'Cl', group: 'host', requirement: 'Optional · manual companion', purpose: 'Scan files with a separately operated antivirus tool.', note: 'The HUD does not scan files or update signatures. Installation can add a signature-update service.'},
   {id: 'osquery', name: 'osquery', mark: 'oq', group: 'host', requirement: 'Optional · saved count only', purpose: 'Review an operator-run DEB package count.', note: 'MEGALODON imports one counts-only result manually. It does not run queries, schedule inventory, or import package names.'},
   {id: 'qwen', name: 'Ollama + Qwen', mark: 'AI', group: 'ai', requirement: 'Optional · local advisory', purpose: 'Host an optional local language model for bounded explanations.', note: 'Ollama is the runtime; Qwen is a separate model download. The advisory workflow needs a validated local model registry. Checking observes only the Ollama executable and process.', link: 'Ollama downloads'},
-  {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · no importer', purpose: 'Explore network inventory in a separate authorized workflow.', note: 'The HUD does not scan a network. A completed XML importer is a future integration.'},
-  {id: 'ossec', name: 'OSSEC', mark: 'OS', group: 'host', requirement: 'Optional · no importer', purpose: 'Monitor host integrity using a separately managed agent.', note: 'Choose your server or agent role in the vendor guide. Enrollment and active response stay outside MEGALODON.'},
-  {id: 'zabbix', name: 'Zabbix', mark: 'Za', group: 'monitor', requirement: 'Optional · no connection', purpose: 'Monitor infrastructure in a separately managed service.', note: 'Select the server or agent package for your system. The HUD can save a console link, but has no data connection.', link: 'Zabbix download selector'}
+  {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · no importer', purpose: 'Explore network inventory in a separate authorized workflow.', note: 'The HUD does not scan a network. A completed XML importer is a future integration.'}
 ];
 // Keep reading context across check updates and filter changes; keys are the fixed catalog.
 const softwareGuidanceOpen = new Map(softwareCatalog.map(item => [item.id, false]));

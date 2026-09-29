@@ -62,8 +62,6 @@ follow the guide for the exact product and role you choose.
 | ClamAV | Local file scanning and signatures | [Download ClamAV](https://www.clamav.net/downloads) |
 | osquery | Host inventory and SQL-based endpoint queries | [Download osquery](https://github.com/osquery/osquery/releases/latest) |
 | Nmap | Authorized network discovery; the HUD does not run scans | [Download Nmap](https://nmap.org/download) |
-| OSSEC | Host monitoring; server and agent are different roles | [OSSEC downloads](https://www.ossec.net/ossec-downloads/) |
-| Zabbix | Infrastructure monitoring; select the intended server or agent | [Zabbix install selector](https://www.zabbix.com/download) |
 
 After installing something, return to **Check this computer**. Presence checks
 use the running server's PATH. If your installation changes PATH, restart the

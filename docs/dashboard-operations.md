@@ -237,7 +237,7 @@ owner, launch policy, data boundary, action boundary, and inert command template
 A command displayed as text is not an executable control or a complete install
 instruction for the selected profile.
 
-Search filters at most 14 cards in memory. The availability filter narrows
+Search filters at most 10 cards in memory. The availability filter narrows
 that same map. **Clear map filters** restores the full loaded map without another
 request. A zero-result filter is explicitly different from a failed map load.
 No filters are written to disk, local storage, the URL, or an external service.
@@ -288,7 +288,7 @@ Availability words are deliberately narrow:
   relationships. Suricata has no live sensor integration; Qwen/Ollama is
   limited to one explicitly enabled library call with no dashboard invocation or CLI entry point;
   its receipt can only be supplied programmatically at dashboard startup;
-  ClamAV is a manual companion; osquery, Nmap, OSSEC, and Zabbix
+  ClamAV is a manual companion; osquery and Nmap
   retain their separate limited or proposed paths.
 
 ## Recognize unavailable, paused, and stale data

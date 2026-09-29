@@ -66,8 +66,8 @@ def test_critical_boundaries_are_explicit():
     assert "no CLI or tool authority for that policy" in items["qwen-ollama"]["boundary"]
     assert "installed-provider acceptance remains unproved" in items["qwen-ollama"]["boundary"]
     assert items["nmap"]["selected_status"] == "evaluation_only"
-    assert items["ossec"]["selected_status"] == "proposed"
-    assert items["zabbix"]["selected_status"] == "proposed"
+    assert len(items) == 10
+    assert {"ossec", "zabbix"}.isdisjoint(items)
     assert value["excluded"] == [
         {
             "id": "npcap",
@@ -95,16 +95,12 @@ def test_suricata_runtime_status_matches_reader_and_explicit_consumer():
 
 def test_planned_interface_slots_never_claim_runtime_authority():
     items = {item["id"]: item for item in catalog("linux")["components"]}
-    planned = {"ossec", "zabbix"}
-    assert set(items) >= planned
-    assert {items[item]["selected_status"] for item in planned} <= {"contract_only", "proposed"}
+    assert {"ossec", "zabbix"}.isdisjoint(items)
     assert items["qwen-ollama"]["selected_status"] == "manual_only"
     assert "original run-count advisory" in items["qwen-ollama"]["boundary"]
     assert "Separate opt-in anomaly/AI CLI and token-gated HUD paths exist" in items["qwen-ollama"]["boundary"]
     assert "firewall application is unsupported" in items["qwen-ollama"]["boundary"]
     assert "No scan launcher" in items["nmap"]["boundary"]
-    assert "No daemon" in items["ossec"]["boundary"]
-    assert "No endpoint, credential" in items["zabbix"]["boundary"]
 
 
 @pytest.mark.parametrize(

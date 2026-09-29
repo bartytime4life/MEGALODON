@@ -33,7 +33,7 @@ def test_only_explicit_apply_executes_fixed_recipe(monkeypatch):
 
 def test_guided_install_and_presence_do_not_claim_configuration(monkeypatch,capsys):
     monkeypatch.setattr(tool_setup,'install_command',lambda tool:None)
-    assert tool_setup.main(['ossec','install','--apply'])==2
+    assert tool_setup.main(['zeek','install','--apply'])==2
     capsys.readouterr()
     for tool in RECIPES:
         assert tool_setup.main([tool,'verify'])==0
@@ -44,6 +44,12 @@ def test_guided_install_and_presence_do_not_claim_configuration(monkeypatch,caps
         assert value['heartbeat']['installed'] in {'yes','no','unknown'}
         assert value['observed_at']
         assert 'running state are not verified' in value['boundaries'][0]
+
+
+@pytest.mark.parametrize('retired', ['ossec', 'zabbix'])
+def test_retired_tools_cannot_be_managed(retired):
+    with pytest.raises(SystemExit):
+        tool_setup.main([retired, 'install', '--apply'])
 
 
 def test_verify_keeps_executable_and_heartbeat_evidence_separate(monkeypatch,capsys):
@@ -69,7 +75,7 @@ def test_uninstall_is_closed_preview_and_requires_terminal_confirmation(monkeypa
     monkeypatch.setattr(tool_installer.os,'geteuid',lambda:0)
     assert tool_installer.uninstall_command('nmap',which=which) is None
     monkeypatch.setattr(tool_installer.os,'geteuid',lambda:1000)
-    for guided in ('core','zeek','osquery','ossec','nftables'):
+    for guided in ('core','zeek','osquery','nftables'):
         assert tool_installer.uninstall_command(guided,which=which) is None
     assert tool_installer.terminal_command('core','uninstall')=='~/.local/bin/megalodon-manage uninstall'
     assert tool_installer.terminal_command('nftables','uninstall') is None

@@ -41,10 +41,10 @@ process.stdin.on('end', async () => {
     assert.match(detail.textContent, /example qwen2\.5:7b/i);
     assert.match(detail.textContent, /not.*AI readiness/i);
     assert.equal([...timers.values()][0].delay, 60000);
-    context.zabbix = {id: 'zabbix', light: 'grey', installed: 'unknown',
+    context.suricata = {id: 'suricata', light: 'grey', installed: 'unknown',
       installed_since: null, expects_service: true, service: 'stopped', model: null};
-    run("heartbeatState.byId.set('zabbix', zabbix)");
-    light.heartbeatTool = detail.heartbeatTool = 'zabbix';
+    run("heartbeatState.byId.set('suricata', suricata)");
+    light.heartbeatTool = detail.heartbeatTool = 'suricata';
     run('repaintHeartbeat()');
     assert.match(light.className, /hb-grey/);
     assert.equal(detail.textContent, 'Status unknown');

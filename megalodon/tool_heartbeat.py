@@ -56,7 +56,7 @@ class ToolProbe:
 
 
 # Keys match the HUD control ids. Fixed paths cover installs that are
-# normally off PATH (for example OSSEC in /var/ossec or a private Zeek prefix).
+# normally off PATH (for example a private Zeek prefix).
 PROBES: dict[str, ToolProbe] = {
     "core": ToolProbe(),
     "tshark": ToolProbe(("tshark",), ("/usr/bin/tshark",), processes=frozenset({"tshark"})),
@@ -71,11 +71,6 @@ PROBES: dict[str, ToolProbe] = {
     "qwen": ToolProbe(("ollama",), ("/usr/local/bin/ollama", "/usr/bin/ollama"), processes=frozenset({"ollama"}),
                       service=True),
     "nmap": ToolProbe(("nmap",)),
-    "ossec": ToolProbe((), ("/var/ossec/bin/ossec-control", "/var/ossec/bin/wazuh-control"),
-                       processes=frozenset({"ossec-analysisd", "ossec-monitord", "ossec-agentd", "wazuh-agentd"}),
-                       service=True),
-    "zabbix": ToolProbe(("zabbix_agent2", "zabbix_agentd", "zabbix_server"),
-                        processes=frozenset({"zabbix_agent2", "zabbix_agentd", "zabbix_server"}), service=True),
 }
 TOOL_IDS = tuple(PROBES)
 

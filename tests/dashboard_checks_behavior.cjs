@@ -25,7 +25,7 @@ process.stdin.on('end', async () => {
       textNode: (tag, text = '', className = '') => Object.assign(element(tag), {textContent: text, className}),
       referenceExactKeys: (v, keys) => v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v, k)),
       formatRefreshTime: date => date.toISOString(),
-      toolAcquisition: Object.fromEntries(['suricata','scapy','clamav','osquery','qwen','nmap','ossec','zabbix','tshark','zeek','nftables'].map(id => [id, {url: 'https://publisher.example/' + id}])),
+      toolAcquisition: Object.fromEntries(['suricata','scapy','clamav','osquery','qwen','nmap','tshark','zeek','nftables'].map(id => [id, {url: 'https://publisher.example/' + id}])),
       window: {setTimeout(fn, delay) {const id = ++timerId; timers.set(id, {fn, delay}); return id;}, clearTimeout(id) {timers.delete(id);}},
       navigator: {clipboard: {async writeText(value) {if (clipboardFails) throw Error('denied'); copied.push(value);}}},
       report,

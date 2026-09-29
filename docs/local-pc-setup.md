@@ -5,6 +5,14 @@ Python 3.11 or newer with the standard `sqlite3` and `tomllib` modules. It has n
 third-party runtime dependencies. Optional capture and analysis tools are
 separate choices; the HUD can open before any data exists.
 
+This is the account-free route: install the core for your user, launch the
+loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
+companion-console account is required. Each HUD launch prints a random password
+in its terminal for the local browser session. It creates no user account; keep
+the password private. The hosted reference Site remains owner-private and is
+not needed for local operation. OSSEC and Zabbix are retired from current
+support; the optional catalog contains ten tools including the core.
+
 ## Recommended: install for this user
 
 From the repository directory:

@@ -99,7 +99,7 @@ Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
 
 **Apps → Start installed services** shows the fixed local service-start controls
-for Suricata, Ollama, OSSEC and Zabbix when the HUD observes them as
+for Suricata and Ollama when the HUD observes them as
 installed. The same launch opt-in, token and confirmation apply there. Other
 app cards retain their setup guidance or explicit web-console navigation;
 opening a console does not start its service or connect its data.
@@ -690,6 +690,10 @@ python -m megalodon hud
 Open **http://127.0.0.1:8787** on the same computer. No account, subscription,
 configuration file, companion installation, or readiness-report export is needed
 to open the workspace. Existing default audit data is read automatically. If
+prompted, use username `megalodon` and the random password printed by this
+launch's terminal. That protects the local HUD and creates no account. The
+[local PC guide](docs/local-pc-setup.md) is the account-free route; the
+owner-private hosted Site is optional. If
 that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.

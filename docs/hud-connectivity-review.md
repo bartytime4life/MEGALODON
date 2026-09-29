@@ -1,5 +1,9 @@
 # HUD connectivity and realism review — 2026-09-19
 
+> Historical review: its OSSEC and Zabbix rows predate the ten-tool account-free
+> catalog. Both are retired from current support; see [local PC setup](local-pc-setup.md).
+
+
 This working-tree review covers the Python dashboard, traffic reader, browser
 assets, fourteen-tool integration map and their documentation. It does not
 certify live network coverage or installed companion applications.

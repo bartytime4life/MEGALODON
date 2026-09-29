@@ -18,12 +18,12 @@ process.stdin.on('end', async () => {
     const byId = id => {if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id);};
     const tools = [
       {id: 'scapy', installed: 'no', light: 'red', service: 'none'},
-      {id: 'zabbix', installed: 'yes', light: 'amber', expects_service: true, service: 'stopped'},
+      {id: 'suricata', installed: 'yes', light: 'amber', expects_service: true, service: 'stopped'},
       {id: 'qwen', installed: 'yes', light: 'amber', expects_service: true, service: 'running', model: 'missing'},
     ];
     const catalog = [
       {id: 'scapy', method: 'pip', one_click: true, terminal: 'python -m pip install scapy', summary: 'Synthetic Scapy package'},
-      {id: 'zabbix', method: 'apt', one_click: true, startable: true, start_terminal: 'sudo systemctl start zabbix-agent.service', uninstall_terminal: 'sudo apt-get remove --no-install-recommends zabbix-agent'},
+      {id: 'suricata', method: 'apt', one_click: true, startable: true, start_terminal: 'sudo systemctl start suricata.service', uninstall_terminal: 'sudo apt-get remove --no-install-recommends suricata'},
       {id: 'qwen', method: 'ollama', one_click: true, terminal: 'ollama pull qwen2.5:7b', summary: 'Synthetic example model'},
     ];
     const context = {Date, Map, AbortController, workflowToolIds: tools.map(tool => tool.id), byId,
@@ -55,9 +55,9 @@ process.stdin.on('end', async () => {
     assert.ok(forced, 'explicit Check now bypasses the heartbeat cache');
     assert.match(byId('tool-check-now-status').textContent, /Local presence observed/);
     const serviceRows = () => byId('app-service-start-list').children;
-    const zabbixRow = () => serviceRows().find(row => row.children[0].children[0].children[1].textContent === 'Zabbix');
+    const suricataRow = () => serviceRows().find(row => row.children[0].children[0].children[1].textContent === 'Suricata');
     assert.equal(serviceRows().length, 2, 'only installed service tools appear in Apps');
-    assert.equal(zabbixRow().children[1].children[0].disabled, true, 'Apps start needs opt-in');
+    assert.equal(suricataRow().children[1].children[0].disabled, true, 'Apps start needs opt-in');
     run("heartbeatState.report.checked_at = new Date(Date.now() - 120000).toISOString(); renderAppServiceStarts()");
     assert.match(byId('app-service-start-list').textContent, /observations are stale/);
     run('heartbeatState.report.checked_at = new Date().toISOString(); renderAppServiceStarts()');
@@ -86,19 +86,19 @@ process.stdin.on('end', async () => {
       assert.equal(request.options.headers['X-Megalodon-Install-Token'], undefined);
       assert.equal(request.path.includes(token), false);
     }
-    const service = run('installControl("zabbix", "Zabbix")'); controls.push(service);
+    const service = run('installControl("suricata", "Suricata")'); controls.push(service);
     assert.equal(service.children[0].textContent, 'Start service');
     const removal = service.children.find(child => child.tag === 'details');
     assert.ok(removal, 'installed package has a backend-provided removal plan');
-    assert.match(removal.children[2].textContent, /apt-get remove.*zabbix-agent/);
+    assert.match(removal.children[2].textContent, /apt-get remove.*suricata/);
     await service.children[0].events.click(); await settled();
     assert.equal(JSON.parse(posts()[1].options.body).action, 'start');
     observedJob = {state: 'idle'};
     await run('pollHeartbeat()');
-    assert.equal(zabbixRow().children[1].children[0].disabled, false, 'Apps start is available with a launch token');
-    await zabbixRow().children[1].children[0].events.click(); await settled();
-    assert.deepEqual(JSON.parse(posts().at(-1).options.body), {tool: 'zabbix', action: 'start'});
-    assert.match(byId('app-service-start-feedback').textContent, /Starting Zabbix/);
+    assert.equal(suricataRow().children[1].children[0].disabled, false, 'Apps start is available with a launch token');
+    await suricataRow().children[1].children[0].events.click(); await settled();
+    assert.deepEqual(JSON.parse(posts().at(-1).options.body), {tool: 'suricata', action: 'start'});
+    assert.match(byId('app-service-start-feedback').textContent, /Starting Suricata/);
     const model = run('installControl("qwen", "Qwen")');
     assert.equal(model.children[0].textContent, 'Download Qwen model');
     postStatus = 403;
@@ -118,7 +118,7 @@ process.stdin.on('end', async () => {
     byId('tool-management-token').value = token;
     for (const [tool, name, entryIndex, action, command, pending] of [
       ['scapy', 'Scapy', 0, 'install', 'Installation command', 'Installing Scapy'],
-      ['zabbix', 'Zabbix', 1, 'start', 'Service-start command', 'Starting Zabbix'],
+      ['suricata', 'Suricata', 1, 'start', 'Service-start command', 'Starting Suricata'],
     ]) {
       for (const terminal of ['succeeded', 'failed']) {
         const expected = terminal === 'succeeded'
@@ -147,16 +147,16 @@ process.stdin.on('end', async () => {
     // say so instead of leaving an unexplained disabled control.
     observedJob = {tool: 'scapy', action: 'install', state: 'running', output: []};
     await run('pollHeartbeat()');
-    const zabbixAction = zabbixRow().children[1];
-    assert.equal(zabbixAction.children[0].disabled, true, 'a different tool\'s running job disables this Start button');
-    assert.match(zabbixAction.children[1].textContent, /Another install or service start is already running/);
-    const zabbixCard = run('installControl("zabbix", "Zabbix")');
-    assert.equal(zabbixCard.children[0].disabled, true);
-    assert.match(zabbixCard.children[0].title, /Another install or service start is already running/);
+    const suricataAction = suricataRow().children[1];
+    assert.equal(suricataAction.children[0].disabled, true, 'a different tool\'s running job disables this Start button');
+    assert.match(suricataAction.children[1].textContent, /Another install or service start is already running/);
+    const suricataCard = run('installControl("suricata", "Suricata")');
+    assert.equal(suricataCard.children[0].disabled, true);
+    assert.match(suricataCard.children[0].title, /Another install or service start is already running/);
     // Disabled buttons have no focus/hover a keyboard or touch user can read
     // a title from - the reason must also be visible sibling text.
-    assert.match(zabbixCard.children[1].textContent, /Another install or service start is already running/);
-    assert.equal(zabbixCard.children[1].className, 'hb-detail');
+    assert.match(suricataCard.children[1].textContent, /Another install or service start is already running/);
+    assert.equal(suricataCard.children[1].className, 'hb-detail');
     const scapyCard = run('installControl("scapy", "Scapy")');
     assert.equal(scapyCard.children[0].textContent, 'Installing…', 'the running job\'s own button shows progress, not the elsewhere hint');
     assert.doesNotMatch(scapyCard.children[0].title, /Another install or service start/);
