@@ -40,7 +40,7 @@ inventory relationship remains proposed.
 | Gap | Next concrete slice | Completion evidence |
 | --- | --- | --- |
 | Hosted telemetry is manual | Design an explicitly configured, authenticated aggregate relay with freshness, outage and revocation behavior | Real local-to-hosted integration test; no raw records or implied browser access to loopback |
-| Four companions lack result adapters | Select one completed-result profile for OSSEC, Greenbone, Zabbix or Nagios; implement a bounded reader and separate visualization | Producer fixture, malformed-input tests, provenance, units and last observation visible |
+| Two companions lack result adapters | Select one completed-result profile for OSSEC or Zabbix; implement a bounded reader and separate visualization | Producer fixture, malformed-input tests, provenance, units and last observation visible |
 | Configuration commands are guidance | Add per-tool validate/preview commands before considering explicit configuration writers | Invalid paths/scope/credentials rejected, exact preview and rollback demonstrated |
 | Presence is not operational health | Add documented version/configuration/last-result observations to each implemented integration | Stopped, stale, unavailable and partial cases distinguishable from healthy |
 | Installation differs from publication | Exercise clean installed-package startup and the full import/export workflow on supported hosts | Native receipts with exact version; browser and package CI alone are insufficient |

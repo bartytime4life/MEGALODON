@@ -48,7 +48,7 @@ the ability to open a console are separate facts.
 | nftables | Inert firewall plans; live application refused | Configured viewer; plans remain separate evidence |
 | ClamAV | Manual companion; no scan-result importer | Configured viewer |
 | Qwen / Ollama | Bounded optional local advisory; startup display receipt | Configured model web UI; the model/provider is not itself a GUI |
-| osquery, Nmap, OSSEC, Greenbone, Zabbix, Nagios | Proposed data integrations; no implemented background ingestion or polling | Each has a viewer entry for an operator-configured web console; Nmap/Zenmap requires a separate web viewer |
+| osquery, Nmap, OSSEC, Zabbix | Proposed data integrations; no implemented background ingestion or polling | Each has a viewer entry for an operator-configured web console; Nmap/Zenmap requires a separate web viewer |
 
 Opening a console does not merge its data into the traffic store. There are no
 credentials or verified console URLs in this change. The hosted reference Site

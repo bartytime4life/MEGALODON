@@ -60,11 +60,6 @@ Addresses persist only in this browser and origin; the hosted Site and local HUD
 have separate bookmarks. Remove a link from its editor. No credentials belong
 in a saved address. No background connection test is performed.
 
-The local HUD offers fixed suggested loopback addresses for Greenbone and
-Nagios. They are literal navigation targets, are not saved automatically, and
-are absent from the hosted Site. Seeing the action does not mean the service is
-installed or reachable; choosing it only asks the browser to open that address.
-
 When the HUD is in observation mode, expand **Authorize Install and Start** on
 Home to copy the exact current launch command with
 `--enable-tool-management`. Stop the current HUD yourself, review the visible
@@ -293,8 +288,8 @@ Availability words are deliberately narrow:
   relationships. Suricata has no live sensor integration; Qwen/Ollama is
   limited to one explicitly enabled library call with no dashboard invocation or CLI entry point;
   its receipt can only be supplied programmatically at dashboard startup;
-  ClamAV is a manual companion; osquery, Nmap, OSSEC, Greenbone, Zabbix, and
-  Nagios Core remain proposed.
+  ClamAV is a manual companion; osquery, Nmap, OSSEC, and Zabbix
+  retain their separate limited or proposed paths.
 
 ## Recognize unavailable, paused, and stale data
 

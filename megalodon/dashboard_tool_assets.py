@@ -48,13 +48,6 @@ const lifecycleCommands = (() => {
       uninstall: null, reinstall: null,
       note: "OSSEC server, agent and source installs have different lifecycle procedures. The installation method and role are unknown here; use the vendor guide matching your installation instead of a combined guessed package list."
     },
-    greenbone: {
-      verify: "docker compose images",
-      uninstall: "docker compose down",
-      reinstall: "docker compose pull",
-      labels: {verify: "Inspect project images", uninstall: "Remove containers; retain data/images", reinstall: "Refresh images; do not start"},
-      note: "Run only in the reviewed Greenbone compose project. Image inventory is not service health or proof of an installed scanner. Down keeps images and named volumes; pull downloads images without starting containers. Neither is a complete uninstall/reinstall. Follow the vendor guide for data-aware removal."
-    },
     zabbix: {
       verify: "command -v zabbix_agent2 || command -v zabbix_agentd || command -v zabbix_server",
       uninstall: null, reinstall: null,
@@ -64,11 +57,6 @@ const lifecycleCommands = (() => {
         agent: {...apt("zabbix-agent", "zabbix_agentd --version", "Classic agent only."), label: "Classic agent"},
         mysql: {...apt("zabbix-server-mysql", "zabbix_server --version", "MySQL server package only; database, frontend and data lifecycle are separate."), label: "Server with MySQL"}
       }
-    },
-    nagios: {
-      verify: "if command -v nagios4 >/dev/null; then nagios4 --version; elif command -v nagios >/dev/null; then nagios --version; elif test -x /usr/local/nagios/bin/nagios; then /usr/local/nagios/bin/nagios --version; else exit 1; fi",
-      uninstall: null, reinstall: null,
-      note: "Checks the Ubuntu nagios4 executable first, then common source-install names. The linked Nagios Core guide and Ubuntu package represent different installations. Match the actual method and prefix; no generic removal/reinstall is supplied."
     }
   };
 })();
@@ -86,7 +74,7 @@ if (typeof module !== "undefined") module.exports = {lifecycleCommands, resolveL
 """
 
 READINESS_JS = r"""/* Closed, bounded display schema. A report is an unauthenticated self-report. */
-const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap", "ossec", "greenbone", "zabbix", "nagios-core"];
+const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap", "ossec", "zabbix"];
 const readinessBoundaries = [
   "Executable presence only; installation, version, compatibility, trust and running state are not verified.",
   "Python/SQLite and Scapy availability are not checked by this executable-only report.",
@@ -128,7 +116,7 @@ function validateReadinessReport(text, now = Date.now()) {
   if (typeof data.checked_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(data.checked_at)) throw new Error("Report requires a UTC checked_at timestamp.");
   const checkedAt = Date.parse(data.checked_at);
   if (!Number.isFinite(checkedAt) || new Date(checkedAt).toISOString().replace(".000Z", "Z") !== data.checked_at || checkedAt > now + 300000) throw new Error("Invalid or future readiness timestamp.");
-  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 14-tool presence-only registry.");
+  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 12-tool presence-only registry.");
   if (!Array.isArray(data.boundaries) || data.boundaries.length !== readinessBoundaries.length || !data.boundaries.every((value, index) => value === readinessBoundaries[index])) throw new Error("Report boundary statements do not match this schema.");
   return data;
 }
@@ -247,16 +235,6 @@ CONTROLS_JS = r"""const toolAcquisition = {
     verificationLabel: "Default-path verification",
     note: "Use the vendor's package and role-specific instructions. Agent enrollment and active response stay outside MEGALODON."
   },
-  greenbone: {
-    source: "Greenbone Community",
-    url: "https://greenbone.github.io/docs/latest/22.4/container/",
-    linkLabel: "Open container install guide",
-    platforms: ["Linux containers"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Container image verification",
-    note: "Greenbone is a multi-service deployment with substantial resource and privilege requirements; follow the complete official guide."
-  },
   zabbix: {
     source: "Zabbix LLC",
     url: "https://www.zabbix.com/download",
@@ -266,16 +244,6 @@ CONTROLS_JS = r"""const toolAcquisition = {
     command: null,
     verificationLabel: "Server or agent verification",
     note: "Select the OS, release, database, and web server on the official page. No MEGALODON endpoint or credential contract exists yet."
-  },
-  nagios: {
-    source: "Nagios Enterprises",
-    url: "https://www.nagios.org/projects/nagios-core/",
-    linkLabel: "Open Nagios Core downloads",
-    platforms: ["Linux server"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Linux verification",
-    note: "Nagios Core needs a host-specific installation and plugin plan. MEGALODON has no CGI, credential, or command-pipe access."
   }
 };
 
@@ -328,60 +296,13 @@ const companionSetupGuides = {
         "expected": "A version prints. Missing interpreter and PackageNotFoundError have different causes; use the guide below. A successful copy is not a successful check."
       }
     ]
-  },
-  "greenbone": {
-    "note": "Optional separate scanner. Docker Engine and Compose are required for this container route, not for MEGALODON. Host gvmd absence does not prove containers are absent. This guide targets only the local rootful Docker socket and the documented Greenbone project; stop for a different existing setup.",
-    "steps": [
-      {
-        "title": "Check Docker and Compose",
-        "kind": "Client version check",
-        "context": "Any directory. Does not contact a daemon or start a container.",
-        "command": "command -v docker && docker --version && docker compose version",
-        "expected": "Both version strings print. A missing docker group alone is not proof that Engine is absent."
-      },
-      {
-        "title": "Review Docker installation",
-        "kind": "Separate host-change decision",
-        "context": "Only when the required client/plugin is missing. Use the official signed Ubuntu repository instructions.",
-        "url": "https://docs.docker.com/engine/install/ubuntu/",
-        "linkLabel": "Open Docker Engine Ubuntu installation",
-        "expected": "Installing Docker may start a privileged service and change host networking. Docker-group membership grants root-level access; do not change permissions merely to clear an error."
-      },
-      {
-        "title": "Check the local Docker daemon",
-        "kind": "Local daemon read",
-        "context": "Any directory; existing authorized access to /var/run/docker.sock is required. This is not a rootless/Desktop/Podman probe.",
-        "command": "env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock info --format '{{.ServerVersion}}'",
-        "expected": "Server version means the selected local daemon responded. Permission denied, stopped service and missing packages are different problems; no automatic sudo or service start."
-      },
-      {
-        "title": "Get and review the Compose file",
-        "kind": "Separate download and review",
-        "context": "Follow the complete guide for $HOME/greenbone-community-edition/compose.yaml before the next check.",
-        "expected": "Use the official file, not Markdown-escaped YAML. Review published ports, image sources, mounts and scanner privileges. Keep management ports loopback-only; do not overwrite an existing deployment."
-      },
-      {
-        "title": "Validate reviewed configuration",
-        "kind": "Configuration check",
-        "context": "Any directory, after reviewing the exact file above. No images pulled or containers started.",
-        "command": "env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock compose --env-file /dev/null --project-name greenbone-community-edition --file \"$HOME/greenbone-community-edition/compose.yaml\" config --quiet",
-        "expected": "Silent zero exit means configuration validation only, not installation, health or safety. Stop on an error; do not continue with a partial download."
-      },
-      {
-        "title": "Inspect existing project containers",
-        "kind": "Local daemon read",
-        "context": "Any directory, after configuration review. Startup is a separate operator decision in the guide, not a check button.",
-        "command": "env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock compose --env-file /dev/null --project-name greenbone-community-edition --file \"$HOME/greenbone-community-edition/compose.yaml\" ps --all",
-        "expected": "Rows describe this project only. Empty output is not absence everywhere. Initialization may finish with exit 0; feed readiness and secure login still need separate checks."
-      }
-    ]
   }
 };
 
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
-  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
-  const localConsoleSuggestions = Object.freeze({greenbone: 'https://127.0.0.1/', nagios: 'http://127.0.0.1/nagios4/'});
+  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'zabbix'];
+  const localConsoleSuggestions = Object.freeze({});
   const storageKey = 'megalodon-console-links-v1';
   let memory = null;
   function consoleURL(raw) {

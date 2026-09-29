@@ -59,11 +59,8 @@ RECIPES: dict[str, Recipe] = {
                    ("qwen2.5:7b",), requires="ollama"),
     "nmap": Recipe("apt", "Installs the Ubuntu nmap package. No scan is started.", ("nmap",)),
     "ossec": Recipe("guided", "OSSEC server and agent roles install differently; use the vendor guide."),
-    "greenbone": Recipe("guided", "Greenbone is a multi-container deployment; use the official container guide."),
     "zabbix": Recipe("apt", "Installs the Ubuntu zabbix-agent package. Its service may start after installation.",
                      ("zabbix-agent",)),
-    "nagios": Recipe("apt", "Installs the Ubuntu nagios4 package. Its web service may start after installation.",
-                     ("nagios4",)),
 }
 
 
@@ -105,7 +102,6 @@ SERVICE_UNITS: dict[str, tuple[str, ...]] = {
     "qwen": ("ollama",),
     "ossec": ("ossec", "wazuh-agent"),
     "zabbix": ("zabbix-agent2", "zabbix-agent", "zabbix-server"),
-    "nagios": ("nagios4", "nagios"),
 }
 UNIT_DIRECTORIES = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
 

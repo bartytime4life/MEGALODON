@@ -119,9 +119,7 @@ def test_workflow_contracts_match_their_owned_entry_points():
 
     for workflow in (
         "host-integrity-import",
-        "vulnerability-report-import",
         "zabbix-availability-read",
-        "nagios-availability-read",
     ):
         item = integration_plan("linux", workflow)["workflows"][0]
         assert item["entry_point"] is None

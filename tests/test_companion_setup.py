@@ -62,7 +62,7 @@ function mount(id, override=null, clipboardFails=false, local=false) {
 
 CASES = [
     r"""
-for(const [id,count] of [['scapy',5],['greenbone',6]]) {
+for(const [id,count] of [['scapy',5]]) {
   const r=mount(id);
   assert.ok(r.guide);
   assert.equal(r.guide.children[0].tag,'summary');
@@ -99,36 +99,6 @@ await hosted.find('Copy step 1: Check HUD Python package').listeners.click();
 assert.equal(hosted.copied[0],'python3 -m pip show scapy');
 """,
     r"""
-const r=mount('greenbone');
-for(const title of ['Copy step 3: Check the local Docker daemon',
-                   'Copy step 5: Validate reviewed configuration',
-                   'Copy step 6: Inspect existing project containers']) {
-  await r.find(title).listeners.click();
-}
-for(const command of r.copied) {
-  assert.match(command,/^env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:\/\/\/var\/run\/docker.sock /);
-  assert.doesNotMatch(command,/(?:^|\s)(?:sudo|pull|up|down|exec|run|rm|prune|systemctl)(?:\s|$)/);
-}
-for(const command of r.copied.slice(1)) {
-  assert.match(command,/--env-file \/dev\/null --project-name greenbone-community-edition/);
-  assert.match(command,/--file "\$HOME\/greenbone-community-edition\/compose.yaml"/);
-}
-assert.ok(r.copied[1].endsWith('config --quiet'));
-assert.ok(r.copied[2].endsWith('ps --all'));
-assert.deepEqual([r.writes,r.checks,r.network],[[],[],[]]);
-""",
-    r"""
-const r=mount('greenbone');
-const notes=all(r.guide).map(n=>n.textContent).join('\n');
-assert.match(notes,/Host gvmd absence does not prove containers are absent/);
-assert.match(notes,/Docker-group membership grants root-level access/);
-assert.match(notes,/Startup is a separate operator decision/);
-assert.match(notes,/Empty output is not absence everywhere/);
-const codes=all(r.guide).filter(n=>n.tag==='code').map(n=>n.textContent);
-assert.equal(codes.length,4);
-assert.doesNotMatch(codes.join('\n'),/usermod|groupadd|chmod|apt |curl |https?:\/\//);
-""",
-    r"""
 const r=mount('scapy',null,true);
 const command=all(r.guide).find(n=>n.tag==='code').textContent;
 await r.find('Copy step 1: Check HUD Python package').listeners.click();
@@ -138,22 +108,10 @@ assert.deepEqual(r.copied,[]);
 assert.ok(all(r.guide).some(n=>n.tag==='code' && n.textContent===command));
 """,
     r"""
-const r=mount('greenbone');
-const links=all(r.guide).filter(n=>n.tag==='a');
-assert.equal(links.length,2);
-assert.match(links[0].href,/^https:\/\/github.com\/bartytime4life\/MEGALODON\/blob\/[a-f0-9]{40}\/docs\/companion-setup.md$/);
-assert.equal(links[1].href,'https://docs.docker.com/engine/install/ubuntu/');
-for(const link of links) {
-  assert.equal(link.target,'_blank');
-  assert.equal(link.rel,'noopener noreferrer');
-  assert.equal(link.referrerPolicy,'no-referrer');
-}
-""",
-    r"""
 const r=mount('core');
 assert.equal(r.guide,undefined);
 const ids=vm.runInContext('MegalodonControls.ids',r.context);
-assert.equal(ids.length,14);
+assert.equal(ids.length,12);
 assert.ok(!ids.includes('docker'));
 assert.throws(()=>mount('__proto__'));
 assert.throws(()=>mount('docker'));
@@ -168,61 +126,13 @@ assert.equal(r.copied.length,5);
 assert.deepEqual([r.writes,r.checks,r.network],[[],[],[]]);
 assert.match(r.feedback.textContent,/not executed or verified/);
 """,
-    r"""
-for(const [id,expected] of [['greenbone','https://127.0.0.1/'],['nagios','http://127.0.0.1/nagios4/']]) {
-  const local=mount(id,null,false,true);
-  const suggested=local.find('Open suggested local console ↗');
-  assert.ok(suggested);
-  assert.equal(suggested.href,expected);
-  assert.equal(suggested.target,'_blank');
-  assert.equal(suggested.rel,'noopener noreferrer');
-  assert.equal(suggested.referrerPolicy,'no-referrer');
-  assert.equal(suggested.hidden,false);
-  const view=local.find('View suggested console in HUD');
-  assert.ok(view);
-  assert.match(all(local.parent).map(n=>n.textContent).join('\n'),/Fixed suggestion; not checked or saved/);
-  assert.deepEqual([local.copied,local.writes,local.checks,local.network,local.views],[[],[],[],[],[]]);
-  view.listeners.click();
-  assert.equal(local.views.length,1);
-  assert.equal(local.views[0][0],id);
-  assert.equal(local.views[0][1],id);
-  assert.equal(local.views[0][2],expected);
-  assert.deepEqual([local.copied,local.writes,local.checks,local.network],[[],[],[],[]]);
-  const hosted=mount(id);
-  assert.equal(hosted.find('Open suggested local console ↗'),undefined);
-}
-const other=mount('zabbix',null,false,true);
-assert.equal(other.find('Open suggested local console ↗'),undefined);
-""",
-    r"""
-const r=mount('greenbone',null,false,true);
-const suggested=r.find('Open suggested local console ↗');
-const open=r.find('Open companion console ↗');
-const input=all(r.parent).find(n=>n.tag==='input');
-assert.equal(open.hidden,true);
-input.value='https://127.0.0.1:9392/';
-r.find('Save link').listeners.click();
-assert.equal(suggested.hidden,true);
-assert.equal(open.hidden,false);
-assert.equal(open.href,'https://127.0.0.1:9392/');
-const view=r.find('View saved console in HUD');
-assert.ok(view);
-view.listeners.click();
-assert.equal(r.views.length,1);
-assert.equal(r.views[0][2],'https://127.0.0.1:9392/');
-assert.equal(r.writes.length,1);
-assert.equal(JSON.parse(r.writes[0][1]).greenbone,'https://127.0.0.1:9392/');
-assert.deepEqual([r.copied,r.checks,r.network],[[],[],[]]);
-""",
 ]
 
 
 @pytest.mark.parametrize("surface", ["canonical", "mirror"])
 @pytest.mark.parametrize("case", CASES, ids=[
     "ordered-inert-steps", "scapy-environment", "serving-interpreter",
-    "fixed-local-docker", "privilege-and-absence", "clipboard-failure",
-    "pinned-guidance", "closed-registry", "no-execution",
-    "local-suggestions-only", "saved-link-precedence",
+    "clipboard-failure", "closed-registry", "no-execution",
 ])
 def test_setup_controls(surface: str, case: str) -> None:
     node = shutil.which("node")
@@ -269,7 +179,7 @@ def test_document_shell_examples_parse_without_execution() -> None:
     if not document.exists():
         pytest.skip("Operator documentation is not included in this distribution")
     blocks = re.findall(r"```bash\n(.*?)```", document.read_text(encoding="utf-8"), re.S)
-    assert len(blocks) == 12
+    assert len(blocks) == 4
     for block in blocks:
         result = subprocess.run(
             [bash, "-n"], input=block, text=True, capture_output=True,

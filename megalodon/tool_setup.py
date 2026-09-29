@@ -22,11 +22,9 @@ CONFIGURATION = {
     'qwen': ('Install and start Ollama using the publisher guide; select the exact local model in MEGALODON AI settings.', 'ollama list shows downloaded artifacts. The install recipe downloads qwen2.5:7b; it does not select or run it.'),
     'nmap': ('Choose only systems you are authorized to assess; review scan scope and flags before executing.', 'nmap --version checks the program. This setup script never starts a scan.'),
     'ossec': ('Choose agent or server role using the vendor guide before installing.', 'Review /var/ossec/etc/ossec.conf and explicitly set the manager address for an agent. Enrollment credentials stay local.'),
-    'greenbone': ('Use the official container guide; choose storage, feed synchronization and a loopback console binding.', 'Set a unique administrator password and complete feed initialization before creating authorized scan targets.'),
     'zabbix': ('Review /etc/zabbix/zabbix_agentd.conf: set Server, ServerActive and Hostname for your own monitoring server.', 'Configure TLS and restrict allowed monitoring peers before separately enabling the agent service.'),
-    'nagios': ('Review /etc/nagios4/nagios.cfg and host/service definitions for authorized targets.', 'Validate with nagios4 -v /etc/nagios4/nagios.cfg before separately enabling the service; restrict the web console.'),
 }
-ALIASES = {'core':'python-sqlite','tshark':'wireshark-tshark','qwen':'qwen-ollama','nagios':'nagios-core'}
+ALIASES = {'core':'python-sqlite','tshark':'wireshark-tshark','qwen':'qwen-ollama'}
 APT_PREVIEW_TIMEOUT_SECONDS = 30
 APT_PREVIEW_MAX_CHARS = 64 * 1024
 

@@ -78,26 +78,13 @@ const integrations = [
     nextGate: "Versioned alert contract, representative fixtures, redaction review, and limits.", ui: ["Integrity findings", "Host lane", "Import receipt"],
   },
   {
-    id: "greenbone", name: "Greenbone CE", monogram: "GB", category: "endpoint", status: "proposed", statusLabel: "Proposed",
-    summary: "Reserves a bounded review surface for a completed vulnerability report supplied by an operator.",
-    dataKind: "vulnerability report", contract: "Future completed GMP XML import", owner: "not implemented",
-    boundary: "No scanner launch, feed update, credential intake, target creation, scheduling, or remediation.",
-    nextGate: "Versioned report contract, entity-expansion defenses, privacy review, and limits.", ui: ["Finding severity", "Affected asset", "Report receipt"],
-  },
-  {
     id: "zabbix", name: "Zabbix", monogram: "ZA", category: "availability", status: "proposed", statusLabel: "Proposed",
     summary: "Reserves a future read-only availability summary with explicit endpoint and credential policy.",
     dataKind: "availability summary", contract: "Not implemented", owner: "not implemented",
     boundary: "No endpoint, credential, event history, background poller, acknowledgement, script, or remote command.",
     nextGate: "Read-only API allowlist, credential handling, request budgets, fixtures, and failure review.", ui: ["Service health", "Availability", "Read receipt"],
   },
-  {
-    id: "nagios", name: "Nagios Core", monogram: "NG", category: "availability", status: "proposed", statusLabel: "Proposed",
-    summary: "Reserves a future read-only availability surface without access to a command pipe or remote control.",
-    dataKind: "availability summary", contract: "Not implemented", owner: "not implemented",
-    boundary: "No CGI endpoint, credential, status archive, poller, acknowledgement, configuration, or command pipe.",
-    nextGate: "Read-only field allowlist, credential handling, request budgets, fixtures, and failure review.", ui: ["Host status", "Service status", "Read receipt"],
-  }
+
 ];
 
 const categories = [
@@ -167,7 +154,7 @@ function renderVerificationSummary() {
 
 function readinessFor(id) {
   if (!state.readiness) return null;
-  const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama", nagios: "nagios-core" }[id] || id;
+  const mapped = { core: "python-sqlite", tshark: "wireshark-tshark", qwen: "qwen-ollama" }[id] || id;
   return state.readiness.tools.find((tool) => tool.id === mapped) || null;
 }
 
@@ -213,7 +200,7 @@ async function importReadinessFile(file) {
     const report = validateReadinessReport(text);
     state.readiness = report;
     const age = Date.now() - Date.parse(report.checked_at);
-    $("#readiness-feedback").textContent = `${age > 86400000 ? "STALE — more than 24 hours old. " : ""}14 tool results loaded · claimed check ${report.checked_at} · ${report.platform}. Schema accepted; report authenticity is not verified. Memory only.`;
+    $("#readiness-feedback").textContent = `${age > 86400000 ? "STALE — more than 24 hours old. " : ""}${report.tools.length} tool results loaded · claimed check ${report.checked_at} · ${report.platform}. Schema accepted; report authenticity is not verified. Memory only.`;
     $("#clear-readiness").disabled = false;
   } catch (error) {
     if (sequence !== readinessImportSequence) return;

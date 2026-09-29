@@ -69,7 +69,7 @@ def test_uninstall_is_closed_preview_and_requires_terminal_confirmation(monkeypa
     monkeypatch.setattr(tool_installer.os,'geteuid',lambda:0)
     assert tool_installer.uninstall_command('nmap',which=which) is None
     monkeypatch.setattr(tool_installer.os,'geteuid',lambda:1000)
-    for guided in ('core','zeek','osquery','ossec','greenbone','nftables'):
+    for guided in ('core','zeek','osquery','ossec','nftables'):
         assert tool_installer.uninstall_command(guided,which=which) is None
     assert tool_installer.terminal_command('core','uninstall')=='~/.local/bin/megalodon-manage uninstall'
     assert tool_installer.terminal_command('nftables','uninstall') is None
