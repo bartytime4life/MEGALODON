@@ -13,9 +13,12 @@ The server binds to numeric IPv4 loopback. The public `serve()` boundary refuses
 non-loopback addresses, IPv6 for this IPv4 server, and any attempt to enable the
 legacy remote override. Expected-Host validation happens before routing or store
 access and rejects missing, duplicate, or unexpected Host values. The supported
-`serve()` path also generates a per-launch password, displays it only on an
-interactive launching terminal, and refuses startup if terminal output is
-unavailable. Redirected output cannot receive the password. HTTP Basic
+`serve()` path generates a per-launch password by default, displays it only on
+an interactive launching terminal, and refuses startup if terminal output is
+unavailable. The installed HUD can instead load a private salted verifier for
+an operator-chosen password; it prints only a no-secret notice. A malformed or
+unsafe verifier refuses startup rather than falling back to a random password.
+HTTP Basic
 authentication is required before serving the page, assets, private reads or
 POST routes. The browser sends that credential only to the same origin; no
 password is embedded in the served assets or URL.

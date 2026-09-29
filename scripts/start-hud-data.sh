@@ -119,7 +119,7 @@ if $check; then
   exit 0
 fi
 if [[ ! -t 1 ]]; then
-  echo 'The HUD requires an interactive terminal to show its sign-in password.' >&2
+  echo 'The HUD requires an interactive terminal for local sign-in.' >&2
   exit 2
 fi
 

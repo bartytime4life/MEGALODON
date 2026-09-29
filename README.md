@@ -691,7 +691,9 @@ Open **http://127.0.0.1:8787** on the same computer. No account, subscription,
 configuration file, companion installation, or readiness-report export is needed
 to open the workspace. Existing default audit data is read automatically. If
 prompted, use username `megalodon` and the random password printed by this
-launch's terminal. That protects the local HUD and creates no account. The
+launch's terminal. The installed HUD can instead use a reusable password you
+choose with `~/.local/bin/megalodon-manage password set`; enter it privately
+at the terminal prompt and restart the HUD. This creates no account. The
 [local PC guide](docs/local-pc-setup.md) is the account-free route; the
 owner-private hosted Site is optional. If
 that store does not exist, the HUD opens with **unavailable** measurements and
@@ -1156,9 +1158,11 @@ Other hostnames, wildcard/LAN/public addresses, and IPv6 (including mapped and
 scoped forms) are refused by this IPv4 server. The legacy `--allow-remote` flag
 is retained only to give a fixed startup refusal, even with a loopback host.
 Remove it and use `--host 127.0.0.1`. The supported launcher displays a random,
-single-launch dashboard password only on an interactive terminal; redirected
-output cannot receive it and startup refuses without a terminal. When the browser
-asks, enter username `megalodon` and that password; keep the terminal private.
+single-launch dashboard password only on an interactive terminal by default.
+The installed HUD can use an owner-chosen password stored as a private salted
+verifier instead; the chosen password is never printed. Startup still requires
+an interactive terminal. When the browser asks, enter username `megalodon`
+and the active password; keep the terminal private.
 The password guards the local HTTP page and API. AI and companion actions retain
 their separate operator tokens. Local HTTP Basic authentication is not a remote
 service security design; do not expose the server through proxies, tunnels or port

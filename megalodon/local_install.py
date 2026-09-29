@@ -12,7 +12,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import fcntl
+import getpass
 import hashlib
+import hmac
 from importlib import resources
 import json
 import os
@@ -29,6 +31,7 @@ from typing import Mapping
 
 from . import __version__
 from .config import load_settings
+from .hud_password import PasswordVerifier, _password_bytes
 
 
 MANIFEST_SCHEMA = "megalodon-local-install-v1"
@@ -56,6 +59,7 @@ class InstallPaths:
     data: Path
     config: Path
     settings: Path
+    hud_password: Path
     hud_launcher: Path
     manager_launcher: Path
     desktop_entry: Path
@@ -91,6 +95,7 @@ def install_paths(environment: Mapping[str, str] | None = None) -> InstallPaths:
         data=app / "data",
         config=config_home / "megalodon",
         settings=config_home / "megalodon" / "settings.toml",
+        hud_password=config_home / "megalodon" / "hud-password.json",
         hud_launcher=home / ".local" / "bin" / "megalodon-hud",
         manager_launcher=home / ".local" / "bin" / "megalodon-manage",
         desktop_entry=data_home / "applications" / "megalodon.desktop",
@@ -441,6 +446,42 @@ def _validate_settings(paths: InstallPaths) -> None:
         raise InstallError("installed settings are invalid; preserve and review them") from exc
     if not raw:
         raise InstallError("installed settings are empty")
+
+
+def load_hud_password_verifier(paths: InstallPaths | None = None) -> PasswordVerifier | None:
+    """Read a private verifier; malformed or unsafe state never enables random fallback."""
+    selected = install_paths() if paths is None else paths
+    if os.path.lexists(selected.config):
+        _owned_directory(selected.config, private=True)
+    if not os.path.lexists(selected.hud_password):
+        return None
+    raw = _regular_owned_file(selected.hud_password, maximum=512)
+    if stat.S_IMODE(selected.hud_password.lstat().st_mode) != 0o600:
+        raise InstallError("HUD password file must be owner-only (mode 0600)")
+    try:
+        record = json.loads(raw.decode("ascii"), object_pairs_hook=_pairs)
+        return PasswordVerifier.from_record(record)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise InstallError("HUD password file is invalid; preserve and review it") from exc
+
+
+def set_hud_password(password: str, paths: InstallPaths | None = None) -> None:
+    """Persist only a salted verifier in the user's private configuration directory."""
+    _require_supported_user()
+    selected = install_paths() if paths is None else paths
+    _owned_directory(selected.config, private=True)
+    load_hud_password_verifier(selected)  # Refuse unsafe existing state.
+    verifier = PasswordVerifier.from_password(password)
+    raw = (json.dumps(verifier.record(), sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
+    _atomic_write(selected.hud_password, raw, 0o600)
+
+
+def clear_hud_password(paths: InstallPaths | None = None) -> None:
+    """Return future HUD launches to random per-launch passwords."""
+    _require_supported_user()
+    selected = install_paths() if paths is None else paths
+    if load_hud_password_verifier(selected) is not None:
+        selected.hud_password.unlink()
 
 
 def _desktop_exec(path: Path) -> str:
@@ -804,6 +845,11 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", help="print the bounded status receipt as JSON")
     commands.add_parser("repair", help="restore missing managed launchers without changing data")
     commands.add_parser("uninstall", help="remove managed code and launchers while preserving data and settings")
+    password_parser = commands.add_parser("password", help="manage the local HUD sign-in password")
+    password_commands = password_parser.add_subparsers(dest="password_command", required=True)
+    password_commands.add_parser("set", help="privately enter a reusable HUD password")
+    password_commands.add_parser("status", help="show whether a reusable password is configured")
+    password_commands.add_parser("clear", help="restore random per-launch HUD passwords")
     return parser
 
 
@@ -830,6 +876,32 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "repair":
             repair()
             print("MEGALODON launchers are ready. Data and settings were preserved.")
+            return 0
+        if args.command == "password":
+            if args.password_command == "status":
+                configured = load_hud_password_verifier() is not None
+                print("Reusable HUD password is configured." if configured else "HUD uses a random password on each launch.")
+                return 0
+            if args.password_command == "clear":
+                clear_hud_password()
+                print("Future HUD launches will use a random password. Restart a running HUD to apply this change.")
+                return 0
+            if not sys.stdin.isatty() or not sys.stderr.isatty():
+                raise InstallError("choose a HUD password in an interactive terminal; do not pass it as an argument")
+            try:
+                first = getpass.getpass("New HUD password (16-64 printable ASCII characters): ")
+                confirm = getpass.getpass("Repeat new HUD password: ")
+            except (EOFError, KeyboardInterrupt) as exc:
+                raise InstallError("HUD password change was cancelled") from exc
+            try:
+                first_bytes = _password_bytes(first)
+                confirm_bytes = _password_bytes(confirm)
+            except ValueError as exc:
+                raise InstallError(str(exc)) from exc
+            if not hmac.compare_digest(first_bytes, confirm_bytes):
+                raise InstallError("HUD passwords did not match")
+            set_hud_password(first)
+            print("HUD password changed. Restart a running HUD to use it. The password was not printed or stored in plaintext.")
             return 0
         result = uninstall()
         if result["status"] == "not_installed":

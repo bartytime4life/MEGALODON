@@ -33,6 +33,7 @@ from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
 from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
 from .hub import integration_plan
+from .hud_password import PasswordVerifier
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
 from .config import AISettings, BlockingSettings
 from .reference import IanaBundle, ReferenceDataError, load_iana
@@ -411,6 +412,7 @@ def _bounded_query(query: str, *, max_fields: int) -> dict[str, list[str]]:
 
 class DashboardHandler(BaseHTTPRequestHandler):
     http_read_password: str | None = None
+    http_password_verifier: PasswordVerifier | None = None
     store: DashboardReader
     offline_summary: dict[str, Any] | None = None
     advisory_receipt: dict[str, object] | None = None
@@ -1014,10 +1016,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return supplied in expected
 
     def _has_operator_http_auth(self) -> bool:
-        """Require the launch password before any served data or action route."""
+        """Require the launch or chosen password before any data or action route."""
         password = self.http_read_password
-        if password is None:
-            return True  # Direct test handlers; serve() always sets a password.
+        verifier = self.http_password_verifier
+        if password is None and verifier is None:
+            return True  # Direct test handlers; serve() always sets one auth mode.
         values = self.headers.get_all("Authorization", [])
         authorized = False
         if len(values) == 1 and len(values[0]) <= 128 and values[0][:6].lower() == "basic ":
@@ -1025,8 +1028,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 supplied = base64.b64decode(values[0][6:], validate=True)
             except (ValueError, binascii.Error):
                 supplied = b""
-            expected = f"megalodon:{password}".encode("ascii")
-            authorized = hmac.compare_digest(supplied, expected)
+            if verifier is not None:
+                prefix = b"megalodon:"
+                authorized = supplied.startswith(prefix) and verifier.verify(supplied[len(prefix):])
+            else:
+                expected = f"megalodon:{password}".encode("ascii")
+                authorized = hmac.compare_digest(supplied, expected)
         if not authorized:
             self._send_json(
                 {"error": "local dashboard sign-in required"}, status=401,
@@ -1120,8 +1127,8 @@ def validate_tool_management_mode(enabled: bool, *, inspect_tools: bool) -> None
             raise ValueError("tool management requires a non-root Linux HUD; do not use sudo")
 
 
-def _show_http_read_password(password: str) -> None:
-    """Show the per-launch credential only on an interactive terminal."""
+def _show_http_read_password(password: str | None) -> None:
+    """Show a per-launch credential or a no-secret chosen-password notice."""
     try:
         terminal_fd = sys.stdout.fileno()
     except (AttributeError, OSError, ValueError):
@@ -1129,7 +1136,8 @@ def _show_http_read_password(password: str) -> None:
     if terminal_fd < 0 or not os.isatty(terminal_fd):
         raise ValueError("dashboard sign-in requires an interactive terminal")
     remaining = (
-        f"MEGALODON local dashboard sign-in: username megalodon; password {password}\n"
+        f"MEGALODON local dashboard sign-in: username megalodon; "
+        f"password {password if password is not None else 'your configured HUD password'}\n"
     ).encode("ascii")
     while remaining:
         written = os.write(terminal_fd, remaining)
@@ -1152,9 +1160,12 @@ def serve(
     ai_receipt_path: Path | None = None,
     ai_blocking: BlockingSettings | None = None,
     offline_locations: OfflineLocations | None = None,
+    http_password_verifier: PasswordVerifier | None = None,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
+    if http_password_verifier is not None and not isinstance(http_password_verifier, PasswordVerifier):
+        raise ValueError("invalid HUD password verifier")
     validate_tool_management_mode(enable_tool_management, inspect_tools=inspect_tools)
     refresh_seconds = _bounded_dashboard_integer(
         refresh_seconds, "dashboard refresh_seconds", MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS
@@ -1164,7 +1175,7 @@ def serve(
     ai_operator_token = secrets.token_urlsafe(24) if ai_settings is not None and ai_settings.enabled else None
     install_operator_token = secrets.token_urlsafe(24) if enable_tool_management else None
     host = loopback_host(host, allow_remote=allow_remote)
-    http_read_password = secrets.token_urlsafe(24)
+    http_read_password = secrets.token_urlsafe(24) if http_password_verifier is None else None
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
     # Capture inert command text once. HTTP input cannot choose an interpreter
@@ -1192,6 +1203,7 @@ def serve(
             "tool_management_enabled": enable_tool_management,
             "install_operator_token": install_operator_token,
             "http_read_password": http_read_password,
+            "http_password_verifier": http_password_verifier,
             "javascript": javascript,
             "ai_settings": ai_settings or AISettings(),
             "ai_receipt_path": ai_receipt_path,

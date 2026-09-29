@@ -5,11 +5,65 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import shutil
+import stat
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
 from megalodon import __version__, local_install
+
+
+def test_chosen_hud_password_is_private_rotatable_and_resettable(layout):
+    first = "synthetic private phrase 123"
+    second = "different private phrase 456"
+    assert local_install.load_hud_password_verifier(layout) is None
+    local_install.set_hud_password(first, layout)
+    raw = layout.hud_password.read_bytes()
+    assert first.encode() not in raw
+    assert stat.S_IMODE(layout.hud_password.stat().st_mode) == 0o600
+    verifier = local_install.load_hud_password_verifier(layout)
+    assert verifier is not None and verifier.verify(first.encode())
+    assert not verifier.verify(b"incorrect password 123")
+    local_install.set_hud_password(second, layout)
+    updated = local_install.load_hud_password_verifier(layout)
+    assert updated is not None and updated.verify(second.encode())
+    assert not updated.verify(first.encode())
+    local_install.clear_hud_password(layout)
+    assert local_install.load_hud_password_verifier(layout) is None
+
+
+def test_unsafe_hud_password_record_never_falls_back_to_random(layout):
+    local_install.set_hud_password("synthetic private phrase 123", layout)
+    layout.hud_password.chmod(0o644)
+    with pytest.raises(local_install.InstallError, match="owner-only"):
+        local_install.load_hud_password_verifier(layout)
+    with pytest.raises(local_install.InstallError, match="owner-only"):
+        local_install.set_hud_password("another private phrase 123", layout)
+    layout.hud_password.chmod(0o600)
+    layout.hud_password.write_text('{"schema":"unknown"}')
+    with pytest.raises(local_install.InstallError, match="invalid"):
+        local_install.load_hud_password_verifier(layout)
+
+
+def test_password_command_requires_private_terminal_and_never_echoes_secret(layout, monkeypatch, capsys):
+    monkeypatch.setattr(local_install, "install_paths", lambda: layout)
+    monkeypatch.setattr(local_install, "sys", SimpleNamespace(
+        stdin=SimpleNamespace(isatty=lambda: False),
+        stderr=SimpleNamespace(isatty=lambda: True, write=lambda _: None),
+    ))
+    assert local_install.main(["password", "set"]) == 2
+    assert not layout.hud_password.exists()
+    prompts = iter(["synthetic private phrase 123"] * 2)
+    monkeypatch.setattr(local_install, "sys", SimpleNamespace(
+        stdin=SimpleNamespace(isatty=lambda: True),
+        stderr=SimpleNamespace(isatty=lambda: True, write=lambda _: None),
+    ))
+    monkeypatch.setattr(local_install.getpass, "getpass", lambda _: next(prompts))
+    assert local_install.main(["password", "set"]) == 0
+    output = capsys.readouterr().out
+    assert "synthetic private phrase 123" not in output
+    assert local_install.load_hud_password_verifier(layout) is not None
 
 
 @pytest.fixture
@@ -141,6 +195,8 @@ def test_install_repair_status_and_uninstall_preserve_data_and_settings(
     marker = layout.data / "keep.db"
     marker.write_bytes(b"operator data")
     settings_before = layout.settings.read_bytes()
+    local_install.set_hud_password("synthetic private phrase 123", layout)
+    password_before = layout.hud_password.read_bytes()
     code, receipt = local_install.status(layout)
     assert code == 0
     assert receipt["status"] == "ready"
@@ -151,6 +207,7 @@ def test_install_repair_status_and_uninstall_preserve_data_and_settings(
     assert repaired["status"] == "ready"
     assert marker.read_bytes() == b"operator data"
     assert layout.settings.read_bytes() == settings_before
+    assert layout.hud_password.read_bytes() == password_before
 
     removed = local_install.uninstall(layout)
     assert removed == {
@@ -163,6 +220,7 @@ def test_install_repair_status_and_uninstall_preserve_data_and_settings(
     assert not layout.desktop_entry.exists()
     assert marker.read_bytes() == b"operator data"
     assert layout.settings.read_bytes() == settings_before
+    assert layout.hud_password.read_bytes() == password_before
 
 
 def test_upgrade_rolls_back_selection_and_artifacts_if_manifest_write_fails(

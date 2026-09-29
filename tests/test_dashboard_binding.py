@@ -14,8 +14,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from megalodon import cli, dashboard
+from megalodon import cli, dashboard, local_install
 from megalodon import offline_projection
+from megalodon.hud_password import PasswordVerifier
 from megalodon.storage import DashboardStore, StorageSchemaError, Store
 
 
@@ -101,6 +102,23 @@ def test_loopback_server_gets_numeric_host_and_closes(monkeypatch, host, expecte
     server.server_close.assert_called_once_with()
 
 
+def test_chosen_password_reaches_bound_handler_without_a_random_secret(monkeypatch):
+    verifier = PasswordVerifier.from_password("synthetic private phrase 123")
+    server = Mock()
+    server.serve_forever.side_effect = KeyboardInterrupt
+    factory = Mock(return_value=server)
+    notice = Mock()
+    monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", notice)
+    with pytest.raises(KeyboardInterrupt):
+        dashboard.serve(object(), "127.0.0.1", 8787, http_password_verifier=verifier)
+    handler = factory.call_args.args[1]
+    assert handler.http_read_password is None
+    assert handler.http_password_verifier is verifier
+    notice.assert_called_once_with(None)
+    server.server_close.assert_called_once_with()
+
+
 def test_browser_opens_only_after_loopback_server_binds(monkeypatch):
     server = Mock()
     opener_started = Event()
@@ -143,6 +161,15 @@ def test_launch_password_is_restricted_to_a_terminal(monkeypatch):
         patch.setattr(dashboard.os, "write", lambda fd, data: writes.append((fd, data)) or len(data))
         dashboard._show_http_read_password("private-launch-password")
     assert writes == [(7, b"MEGALODON local dashboard sign-in: username megalodon; password private-launch-password\n")]
+
+
+def test_chosen_password_notice_never_prints_a_secret(monkeypatch):
+    writes = []
+    monkeypatch.setattr(dashboard.sys, "stdout", SimpleNamespace(fileno=lambda: 7))
+    monkeypatch.setattr(dashboard.os, "isatty", lambda fd: fd == 7)
+    monkeypatch.setattr(dashboard.os, "write", lambda fd, data: writes.append(data) or len(data))
+    dashboard._show_http_read_password(None)
+    assert writes == [b"MEGALODON local dashboard sign-in: username megalodon; password your configured HUD password\n"]
 
 
 @pytest.mark.parametrize("host, override", (
@@ -233,6 +260,32 @@ def test_cli_dashboard_uses_the_dedicated_reader(tmp_path, monkeypatch):
     assert "reader" in observed
 
 
+def test_installed_hud_loads_chosen_password_verifier(tmp_path, monkeypatch):
+    settings_path = tmp_path / "settings.toml"
+    settings = SimpleNamespace(
+        dashboard=SimpleNamespace(host="127.0.0.1", port=8787, enabled=True, refresh_seconds=5, event_limit=50),
+        db_path=tmp_path / "audit.db",
+    )
+    verifier = PasswordVerifier.from_password("synthetic private phrase 123")
+    observed = {}
+
+    @contextmanager
+    def reader(*_args, **_kwargs):
+        yield dashboard.UnconfiguredDashboardReader()
+
+    monkeypatch.setattr(cli, "_load", lambda _: settings)
+    monkeypatch.setattr(cli, "_dashboard_reader", reader)
+    monkeypatch.setattr(local_install, "install_paths", lambda: SimpleNamespace(settings=settings_path))
+    monkeypatch.setattr(local_install, "load_hud_password_verifier", lambda: verifier)
+    monkeypatch.setattr(dashboard, "serve", lambda *_args, **kwargs: observed.update(kwargs))
+    args = argparse.Namespace(
+        config=settings_path, host=None, port=None, allow_remote=False,
+        offline_run=None, refresh_seconds=None, event_limit=None,
+    )
+    assert cli._dashboard(args) == 0
+    assert observed["http_password_verifier"] is verifier
+
+
 def test_cli_dashboard_missing_store_creates_nothing(tmp_path, monkeypatch, capsys):
     path = tmp_path / "missing" / "audit.db"
     settings = SimpleNamespace(
@@ -315,6 +368,33 @@ def test_launch_password_guards_private_reads_before_store_access():
         status, body, _ = _host_request(server, (host,), authorizations=(valid,))
         assert status == 200
         assert body == store.summary.return_value
+        store.summary.assert_called_once_with()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_chosen_password_guards_private_reads_before_store_access():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    verifier = PasswordVerifier.from_password("synthetic private phrase 123")
+    handler = type("ChosenPasswordHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": None, "http_password_verifier": verifier,
+    })
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host = f"127.0.0.1:{server.server_port}"
+        for supplied in (b"megalodon:wrong private phrase 123", b"other:synthetic private phrase 123"):
+            auth = "Basic " + base64.b64encode(supplied).decode("ascii")
+            status, _, _ = _host_request(server, (host,), authorizations=(auth,))
+            assert status == 401
+        assert not store.summary.called
+        auth = "Basic " + base64.b64encode(b"megalodon:synthetic private phrase 123").decode("ascii")
+        status, body, _ = _host_request(server, (host,), authorizations=(auth,))
+        assert status == 200 and body == {"events": 1}
         store.summary.assert_called_once_with()
     finally:
         server.shutdown()
