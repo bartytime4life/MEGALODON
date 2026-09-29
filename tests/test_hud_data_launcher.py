@@ -15,6 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "scripts" / "start-hud-data.sh"
 
 
+@pytest.mark.skipif(
+    not LAUNCHER.is_file(),
+    reason="Repository-only HUD data launcher is not included in the source distribution",
+)
 @pytest.mark.parametrize("first_to_stop", ["capture", "hud"])
 def test_first_exit_stops_other_process(tmp_path: Path, first_to_stop: str) -> None:
     marker = tmp_path / "calls"
