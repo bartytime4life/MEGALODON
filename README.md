@@ -689,11 +689,11 @@ python -m megalodon hud
 
 Open **http://127.0.0.1:8787** on the same computer. No account, subscription,
 configuration file, companion installation, or readiness-report export is needed
-to open the workspace. Existing default audit data is read automatically. If
-prompted by the sign-in page, use the random password printed by this
-launch's terminal. The installed HUD can instead use a reusable password you
-choose with `~/.local/bin/megalodon-manage password set`; enter it privately
-at the terminal prompt and restart the HUD. This creates no account. The
+to open the workspace. Existing default audit data is read automatically.
+Sign-in is off by default. To require it for a launch, add `--require-sign-in`;
+the terminal will show a random password. The installed HUD can instead use a
+reusable password you choose with `~/.local/bin/megalodon-manage password set`.
+This creates no account. The
 [local PC guide](docs/local-pc-setup.md) is the account-free route; the
 owner-private hosted Site is optional. If
 that store does not exist, the HUD opens with **unavailable** measurements and
@@ -1157,13 +1157,13 @@ literal `localhost` is mapped directly to `127.0.0.1`, without DNS resolution.
 Other hostnames, wildcard/LAN/public addresses, and IPv6 (including mapped and
 scoped forms) are refused by this IPv4 server. The legacy `--allow-remote` flag
 is retained only to give a fixed startup refusal, even with a loopback host.
-Remove it and use `--host 127.0.0.1`. The supported launcher displays a random,
-single-launch dashboard password only on an interactive terminal by default.
-The installed HUD can use an owner-chosen password stored as a private salted
-verifier instead; the chosen password is never printed. Startup still requires
-an interactive terminal. When the browser opens the sign-in page, enter the
-active password; keep the terminal private.
-The password guards the local HTTP page and API. AI and companion actions retain
+Remove it and use `--host 127.0.0.1`. The supported launcher opens the HUD
+without sign-in by default, including when an installed password is configured.
+Use `--require-sign-in` to require a random single-launch password printed only
+on an interactive terminal. The installed HUD can instead use an owner-chosen
+password stored as a private salted verifier; the chosen password is never
+printed. Keep that terminal private. Any local process may read the default
+HUD's local HTTP page and API while it is running. AI and companion actions retain
 their separate operator tokens. Local password authentication is not a remote
 service security design; do not expose the server through proxies, tunnels or port
 forwarding. Firewall allowlist changes,

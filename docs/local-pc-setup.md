@@ -7,10 +7,10 @@ separate choices; the HUD can open before any data exists.
 
 This is the account-free route: install the core for your user, launch the
 loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
-companion-console account is required. By default, each HUD launch prints a
-random password in its terminal for the local browser session. You can choose
-a reusable password for the installed HUD using the private terminal prompt
-below. Neither mode creates a user account. The hosted reference Site remains
+companion-console account is required. The HUD opens without sign-in by default
+on this computer. If you want local sign-in, launch it with `--require-sign-in`.
+That mode prints a random password in its terminal, or uses a reusable password
+you set for the installed HUD. Neither mode creates a user account. The hosted reference Site remains
 owner-private and is not needed for local operation. OSSEC and Zabbix are retired from current
 support; the optional catalog contains ten tools including the core.
 
@@ -27,7 +27,14 @@ local server and stays open while you work. The browser opens only after the
 loopback server binds successfully. Press **Ctrl+C** in that terminal to stop.
 No background service or login startup is installed.
 
-### Choose or change the installed HUD password
+### Optional: require a password for a launch
+
+The normal desktop launch opens directly. To require sign-in for one launch,
+run `~/.local/bin/megalodon-hud --require-sign-in` in a terminal. If no reusable
+password is configured, that terminal shows a random password for this launch.
+Sign-in is limited to loopback and is not a remote access feature.
+
+To choose or change the password used by opt-in installed HUD launches:
 
 From a terminal on this PC, run:
 
@@ -40,14 +47,14 @@ ASCII characters. Do not put the password in a command argument, environment
 variable, file you edit by hand, or chat message. MEGALODON stores only a
 salted password verifier in the owner-only file
 `~/.config/megalodon/hud-password.json`; it never prints the chosen password.
-Restart a running HUD to apply the change. Open its local address and enter the
-password you chose on the sign-in page. The password protects only the local HUD and is
+Start a HUD with `--require-sign-in` and enter the password you chose on its
+sign-in page. The password protects only that local HUD launch and is
 separate from your computer password and the optional AI/tool-management tokens.
 
 To check the mode without revealing the password, run
 `~/.local/bin/megalodon-manage password status`. To return to a fresh random
-password on every launch, run `~/.local/bin/megalodon-manage password clear`
-and restart the HUD. Keep the HUD bound to loopback; this password does not
+password for each opt-in launch, run `~/.local/bin/megalodon-manage password clear`.
+Keep the HUD bound to loopback; this password does not
 authorize remote exposure.
 
 The installer:

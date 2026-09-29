@@ -13,18 +13,21 @@ The server binds to numeric IPv4 loopback. The public `serve()` boundary refuses
 non-loopback addresses, IPv6 for this IPv4 server, and any attempt to enable the
 legacy remote override. Expected-Host validation happens before routing or store
 access and rejects missing, duplicate, or unexpected Host values. The supported
-`serve()` path generates a per-launch password by default, displays it only on
-an interactive launching terminal, and refuses startup if terminal output is
-unavailable. The installed HUD can instead load a private salted verifier for
-an operator-chosen password; it prints only a no-secret notice. A malformed or
-unsafe verifier refuses startup rather than falling back to a random password.
-The public `/sign-in` page accepts one password through a bounded same-origin
+`serve()` path opens directly by default without a password or terminal requirement.
+This gives other programs running as the local user access to the read-only HUD
+data while the server runs. With `--require-sign-in`, it generates a per-launch
+password, displays it only on an interactive launching terminal, and refuses
+startup if terminal output is unavailable. The installed HUD can instead load
+a private salted verifier for an operator-chosen password; it prints only a
+no-secret notice. A malformed or unsafe verifier refuses opt-in startup.
+When sign-in is enabled, `/sign-in` accepts one password through a bounded same-origin
 request. Success issues an HttpOnly, SameSite=Strict, launch-scoped session
-cookie. The dashboard page, its assets, private reads, and action routes still
-require authentication. API clients may use HTTP Basic with username
+cookie. In that mode, the dashboard page, its assets, private reads, and action
+routes require authentication. API clients may use HTTP Basic with username
 `megalodon`; unauthorized responses do not trigger a browser password prompt.
 No password is embedded in the served assets or URL. Five failed sign-in page
-attempts cause a 30-second pause.
+attempts cause a 30-second pause. Without sign-in, GET `/sign-in` returns to `/`
+and its assets and POST route are unavailable.
 The Host check alone is a local exposure guard, not authentication. A private
 launch terminal and ordinary same-host process isolation remain prerequisites;
 this local HTTP password does not make the HUD suitable for remote exposure.
@@ -35,7 +38,7 @@ retains its same-origin CSP, no-store responses, no-referrer policy, framing
 prohibition, MIME sniffing protection, and restricted browser permissions. There
 is no CORS permission or external script/font fetch.
 
-`POST` is accepted for `/sign-in`, the optional, separately token-gated `/api/ai/ask`,
+`POST` is accepted for `/sign-in` only in opt-in mode, the separately token-gated `/api/ai/ask`,
 explicitly enabled HUD `/api/install`, bounded read-only `/api/offline-locations`,
 and inert `/api/automation-preview` routes. The latter two do not execute host
 actions; their fixed request headers, schemas and size limits remain required.
@@ -50,8 +53,8 @@ production service.
 | GET route | Query | Successful meaning |
 | --- | --- | --- |
 | `/` | No application query contract | Same-origin dashboard document |
-| `/sign-in` | None | Public password-only landing page; no telemetry |
-| `/assets/sign-in.css`, `/assets/sign-in.js` | None | Public same-origin sign-in presentation |
+| `/sign-in` | None | Opt-in password-only landing page; otherwise redirects to `/` |
+| `/assets/sign-in.css`, `/assets/sign-in.js` | None | Opt-in same-origin sign-in presentation |
 | `/assets/dashboard.css` | No application query contract | Composed local stylesheet |
 | `/assets/dashboard.js` | No application query contract | Composed local script, one final bootstrap |
 | `/api/config` | None | Read-only flag, refresh interval, event limit, offline-selection availability |
