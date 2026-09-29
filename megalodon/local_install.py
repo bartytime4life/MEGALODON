@@ -27,6 +27,7 @@ import stat
 import subprocess
 import sys
 import tomllib
+import warnings
 from typing import Mapping
 
 from . import __version__
@@ -889,8 +890,12 @@ def main(argv: list[str] | None = None) -> int:
             if not sys.stdin.isatty() or not sys.stderr.isatty():
                 raise InstallError("choose a HUD password in an interactive terminal; do not pass it as an argument")
             try:
-                first = getpass.getpass("New HUD password (16-64 printable ASCII characters): ")
-                confirm = getpass.getpass("Repeat new HUD password: ")
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", getpass.GetPassWarning)
+                    first = getpass.getpass("New HUD password (16-64 printable ASCII characters): ")
+                    confirm = getpass.getpass("Repeat new HUD password: ")
+            except getpass.GetPassWarning as exc:
+                raise InstallError("this terminal cannot hide HUD password entry") from exc
             except (EOFError, KeyboardInterrupt) as exc:
                 raise InstallError("HUD password change was cancelled") from exc
             try:
