@@ -7,8 +7,9 @@ OSQUERY_HTML = r'''
   <label>Load package count JSON <input type="file" id="osquery-file" accept=".json,application/json"></label>
   <button type="button" id="osquery-clear" disabled>Clear package count</button>
   <p id="osquery-status" role="status">No package count loaded.</p>
+  <p id="osquery-automation">Automatic collection and report watching require an explicitly configured local HUD. <a href="http://127.0.0.1:8787/#osquery-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
   <div id="osquery-results" hidden><p id="osquery-count"></p><p id="osquery-time"></p>
-    <p>Saved, unauthenticated result. This count does not establish package safety, update status or live osquery health. Files remain in this tab.</p></div>
+    <p>Saved result. This count does not establish package safety, update status or live osquery health. Manually selected files remain in this tab.</p></div>
   <details><summary>Prepare a package count</summary><p>On a trusted Ubuntu PC with osquery already installed, run the fixed read-only query yourself. Inspect the saved result, then export and load only the counts-only JSON. Do not put package names, paths or arbitrary query output into the HUD.</p>
     <pre>umask 077
 osqueryi --json 'SELECT count(*) AS package_count FROM deb_packages;' &gt; private-osquery-result.json
@@ -45,16 +46,21 @@ function validateOsqueryCount(text,now=Date.now()) {
 if(typeof module!=='undefined')module.exports={validateOsqueryCount};
 if(typeof document!=='undefined'&&document.getElementById('osquery-file')) {
   const node=id=>document.getElementById(id);let generation=0;
+  function applyOsquery(data, source='Saved package count') {
+    data=validateOsqueryCount(JSON.stringify(data));
+    node('osquery-count').textContent=`${data.package_rows} DEB package rows reported`;
+    node('osquery-time').textContent=`Exported ${data.exported_at}. Saved observation; a configured local collector can refresh it.`;
+    node('osquery-status').textContent=`${source} loaded. Not live.`;
+    node('osquery-results').hidden=false;node('osquery-clear').disabled=false;
+  }
+  (globalThis.megalodonCompanionRender??={}).osquery=applyOsquery;
   node('osquery-file').addEventListener('change',async event=>{
     const current=++generation,file=event.target.files?.[0];event.target.value='';if(!file)return;
     try {
       if(file.size>4096)throw new Error('Too large');
       const buffer=await file.arrayBuffer();if(buffer.byteLength>4096)throw new Error('Too large');
       const data=validateOsqueryCount(new TextDecoder('utf-8',{fatal:true}).decode(buffer));if(current!==generation)return;
-      node('osquery-count').textContent=`${data.package_rows} DEB package rows reported`;
-      node('osquery-time').textContent=`Exported ${data.exported_at}. Saved observation; no automatic refresh.`;
-      node('osquery-status').textContent='Saved package count loaded. Not live.';
-      node('osquery-results').hidden=false;node('osquery-clear').disabled=false;
+      applyOsquery(data);
     } catch {if(current===generation)node('osquery-status').textContent='Import rejected. Previous package count preserved.';}
   });
   node('osquery-clear').addEventListener('click',()=>{

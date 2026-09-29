@@ -42,6 +42,7 @@ from .reference import IanaBundle, ReferenceDataError, load_iana
 from .storage import StorageSchemaError
 from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYTES, read_suricata_projection
 from .offline_locations import OfflineLocations, validate_lookup_ips, unconfigured as unconfigured_locations
+from .companion_automation import CompanionAutomation, CompanionConfig
 
 
 MIN_REFRESH_SECONDS = 2
@@ -438,6 +439,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     ai_operator_token: str | None = None
     ai_blocking: BlockingSettings = BlockingSettings()
     offline_locations: OfflineLocations | None = None
+    companion_automation: CompanionAutomation | None = None
     automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -472,8 +474,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", self.javascript)
             return
-        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install"} and route.query:
+        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install", "/api/companions"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path == "/api/companions":
+            if self.companion_automation is None:
+                self._send_json({"schema": "megalodon-companion-automation-v1", "status": {
+                    "nmap": "not configured", "clamav": "not configured", "osquery": "not configured"},
+                    "results": {}, "advisory": {}})
+            else:
+                self._send_json(self.companion_automation.snapshot())
             return
         if route.path == "/api/ai/status":
             from .ai_provider import status
@@ -1245,6 +1255,7 @@ def serve(
     ai_blocking: BlockingSettings | None = None,
     offline_locations: OfflineLocations | None = None,
     http_password_verifier: PasswordVerifier | None = None,
+    companion_config: CompanionConfig | None = None,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
@@ -1274,6 +1285,7 @@ def serve(
     )).encode()
     heartbeat = Heartbeat() if inspect_tools else None
     installer = Installer(on_finish=heartbeat.invalidate) if heartbeat is not None else None
+    companion_automation = CompanionAutomation(companion_config, ai_settings or AISettings()) if companion_config else None
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
@@ -1299,10 +1311,13 @@ def serve(
             "ai_operator_token": ai_operator_token,
             "ai_blocking": ai_blocking or BlockingSettings(),
             "offline_locations": offline_locations,
+            "companion_automation": companion_automation,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)
     try:
+        if companion_automation is not None:
+            companion_automation.start()
         url = f"http://{host}:{port}/"
         _show_http_read_password(http_read_password)
         print(f"MEGALODON dashboard listening on {url}", flush=True)
@@ -1326,4 +1341,6 @@ def serve(
             ).start()
         server.serve_forever()
     finally:
+        if companion_automation is not None:
+            companion_automation.stop()
         server.server_close()

@@ -7,11 +7,12 @@ CLAMAV_HTML = r'''
   <label>Load scan summary JSON <input type="file" id="clamav-file" accept=".json,application/json"></label>
   <button type="button" id="clamav-clear" disabled>Clear scan summary</button>
   <p id="clamav-status" role="status">No scan summary loaded. Files stay in this tab.</p>
+  <p id="clamav-automation">Automatic collection and report watching require an explicitly configured local HUD. <a href="http://127.0.0.1:8787/#clamav-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
   <div id="clamav-results" hidden>
     <p id="clamav-range"></p>
     <div class="clamav-grid"><div id="clamav-files"></div><div id="clamav-detections"></div><div id="clamav-directories"></div></div>
     <p id="clamav-scope"></p>
-    <p>Counts come from the selected report; the source is not authenticated. Zero detections do not prove complete coverage or that the files are safe. No scan runs or updates automatically.</p>
+    <p>Counts come from a completed report; the source is not authenticated. Zero detections do not prove complete coverage or that files are safe. Local collection requires explicit folder and schedule settings.</p>
   </div>
   <details><summary>Prepare a scan summary</summary><p>After an operator-run clamscan finishes, retain its output and exit status privately. Run this command with the matching exit status (0 for no matches, 1 for matches); exit status 2 and reported errors are refused. The report may include private paths, so only load the exported JSON into the HUD.</p><pre>umask 077
 python -m megalodon.clamav_summary --exit-code 0 &lt; completed-clamscan.txt &gt; scan-summary.json</pre><p>Replace 0 with the recorded exit status when it is 1. The exporter reads at most 1 MiB; it emits only times, version and counts. Times printed by clamscan are local and have no timezone. This page holds the aggregate only until cleared or closed.</p></details>
@@ -64,19 +65,24 @@ if(typeof document!=='undefined'&&document.getElementById('clamav-file')) {
     bar.min=0;bar.max=Math.max(1,max);bar.value=value;bar.setAttribute('aria-label',`${label}: ${value}; chart maximum ${bar.max}`);
     row.append(name,count,bar);root.append(row);
   }
+  function applyClamav(data, source='Saved ClamAV summary') {
+    data=validateClamavSummary(JSON.stringify(data));
+    chart('clamav-files','Files scanned',data.scanned_files,data.scanned_files);
+    chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,true);
+    chart('clamav-directories','Directories scanned',data.scanned_directories,data.scanned_directories);
+    node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
+    node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
+    node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported. Not live.`;
+    node('clamav-results').hidden=false;node('clamav-clear').disabled=false;
+  }
+  (globalThis.megalodonCompanionRender??={}).clamav=applyClamav;
   node('clamav-file').addEventListener('change',async event=>{
     const current=++generation,file=event.target.files?.[0];event.target.value='';if(!file)return;
     try {
       if(file.size>4096)throw new Error('Choose a summary JSON under 4 KiB.');
       const buffer=await file.arrayBuffer();if(buffer.byteLength>4096)throw new Error('Summary exceeds 4 KiB.');
       const data=validateClamavSummary(new TextDecoder('utf-8',{fatal:true}).decode(buffer));if(current!==generation)return;
-      chart('clamav-files','Files scanned',data.scanned_files,data.scanned_files);
-      chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,true);
-      chart('clamav-directories','Directories scanned',data.scanned_directories,data.scanned_directories);
-      node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
-      node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
-      node('clamav-status').textContent=`Saved ClamAV summary · ${data.infected_files} file matches reported. Not live.`;
-      node('clamav-results').hidden=false;node('clamav-clear').disabled=false;
+      applyClamav(data);
     } catch (_) {if(current===generation)node('clamav-status').textContent='Import rejected. Use a supported counts-only JSON under 4 KiB. Any previous scan summary is preserved.';}
   });
   node('clamav-clear').addEventListener('click',()=>{

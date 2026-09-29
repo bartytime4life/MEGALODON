@@ -2295,6 +2295,7 @@ document.addEventListener('visibilitychange', () => {
 
 from .control_room_assets import compose_control_room, ROOM_CSS, ROOM_JS
 from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
+from .dashboard_companion import COMPANION_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 
@@ -2304,4 +2305,4 @@ INDEX_HTML = compose_control_room(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + "\nbootstrap();\n"
