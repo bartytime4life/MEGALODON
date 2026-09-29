@@ -53,7 +53,11 @@ test('setup and workflow actions use protected repository documentation links', 
     assert.ok(`${html}\n${app}`.includes(label));
   }
   assert.match(app, /operator-workflows\.md#local-dashboard/);
-  assert.doesNotMatch(`${html}\n${app}`, /href="http:\/\/127\.0\.0\.1:8787/);
+  for (const link of html.matchAll(/<a\s+[^>]*href="http:\/\/127\.0\.0\.1:8787\/#[^"]+"[^>]*>/g)) {
+    assert.match(link[0], /target="_blank"/);
+    assert.match(link[0], /rel="noopener noreferrer"/);
+  }
+  assert.match(html, /Open local app controls ↗/);
   assert.doesNotMatch(`${html}\n${app}`, /Open local Apps|Open local evidence view/);
 });
 

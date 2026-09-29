@@ -1,4 +1,4 @@
-/* Static geographic reference. No network, IP mapping, or telemetry calls. */
+/* Animated geographic reference. No network, IP mapping, or telemetry calls. */
 (() => {
   const canvas = document.getElementById('reference-globe');
   if (!canvas || !window.MEGALODON_LAND_MASK) return;
@@ -11,6 +11,23 @@
   const lat0 = 20 * rad;
   let lon0 = -20 * rad;
   const image = context.createImageData(size, size);
+  const sphere = [];
+  const sin0 = Math.sin(lat0), cos0 = Math.cos(lat0);
+  for (let y = center - radius; y <= center + radius; y++) {
+    const north = (center - y) / radius;
+    for (let x = center - radius; x <= center + radius; x++) {
+      const east = (x - center) / radius, distance = east * east + north * north;
+      if (distance > 1) continue;
+      const forward = Math.sqrt(1 - distance);
+      const latitude = Math.asin(north * cos0 + forward * sin0);
+      const offset = Math.atan2(east, forward * cos0 - north * sin0) / (2 * Math.PI) + .5;
+      const landY = Math.max(0, Math.min(359, Math.floor((.5 - latitude / Math.PI) * 360)));
+      const light = Math.max(0, -.28 * east + .37 * north + .88 * forward);
+      sphere.push({index: (y * size + x) * 4, offset, landY,
+        shade: .51 + .47 * light + .10 * forward,
+        alpha: Math.min(255, Math.round(255 * Math.min(1, (1 - distance) * 95)))});
+    }
+  }
 
   function project(latitude, longitude) {
     const phi = latitude * rad;
@@ -35,29 +52,18 @@
   function draw() {
     const pixels = image.data;
     pixels.fill(0);
-    const sin0 = Math.sin(lat0), cos0 = Math.cos(lat0);
-    for (let y = center - radius; y <= center + radius; y++) {
-      const north = (center - y) / radius;
-      for (let x = center - radius; x <= center + radius; x++) {
-        const east = (x - center) / radius, distance = east * east + north * north;
-        if (distance > 1) continue;
-        const forward = Math.sqrt(1 - distance);
-        const latitude = Math.asin(north * cos0 + forward * sin0);
-        const longitude = lon0 + Math.atan2(east, forward * cos0 - north * sin0);
-        let horizontal = longitude / (2 * Math.PI) + .5;
-        horizontal -= Math.floor(horizontal);
-        const landX = Math.min(719, Math.floor(horizontal * 720));
-        const landY = Math.max(0, Math.min(359, Math.floor((.5 - latitude / Math.PI) * 360)));
-        const bit = landY * 720 + landX;
-        const isLand = (mask[bit >> 3] & (1 << (bit & 7))) !== 0;
-        const light = Math.max(0, -.28 * east + .37 * north + .88 * forward);
-        const shade = .51 + .47 * light + .10 * forward;
-        const index = (y * size + x) * 4;
-        pixels[index] = (isLand ? 72 : 16) * shade;
-        pixels[index + 1] = (isLand ? 135 : 81) * shade;
-        pixels[index + 2] = (isLand ? 113 : 116) * shade;
-        pixels[index + 3] = Math.min(255, Math.round(255 * Math.min(1, (1 - distance) * 95)));
-      }
+    const turn = lon0 / (2 * Math.PI);
+    for (const point of sphere) {
+      let horizontal = turn + point.offset;
+      horizontal -= Math.floor(horizontal);
+      const landX = Math.min(719, Math.floor(horizontal * 720));
+      const bit = point.landY * 720 + landX;
+      const isLand = (mask[bit >> 3] & (1 << (bit & 7))) !== 0;
+      const index = point.index;
+      pixels[index] = (isLand ? 72 : 16) * point.shade;
+      pixels[index + 1] = (isLand ? 135 : 81) * point.shade;
+      pixels[index + 2] = (isLand ? 113 : 116) * point.shade;
+      pixels[index + 3] = point.alpha;
     }
     context.putImageData(image, 0, 0);
     const atmosphere = context.createRadialGradient(center, center, radius - 13, center, center, radius + 24);
@@ -84,7 +90,40 @@
     context.lineWidth = 1.5;
     context.stroke();
   }
+  const motionButton = document.getElementById('globe-motion');
+  const motionPreference = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  let paused = Boolean(motionPreference?.matches), lastFrame = null, lastDraw = 0;
+  function syncButton() {
+    if (!motionButton) return;
+    motionButton.disabled = Boolean(motionPreference?.matches);
+    motionButton.setAttribute('aria-pressed', String(!paused));
+    motionButton.setAttribute('aria-label', paused ? 'Resume globe rotation' : 'Pause globe rotation');
+    motionButton.textContent = motionButton.disabled ? 'Motion reduced' : paused ? 'Resume motion' : 'Pause motion';
+  }
   document.getElementById('globe-west')?.addEventListener('click', () => { lon0 -= 30 * rad; draw(); });
   document.getElementById('globe-east')?.addEventListener('click', () => { lon0 += 30 * rad; draw(); });
+  motionButton?.addEventListener('click', () => { paused = !paused; lastFrame = null; syncButton(); });
+  motionPreference?.addEventListener?.('change', event => {
+    paused = event.matches;
+    lastFrame = null;
+    syncButton();
+  });
+  document.addEventListener('visibilitychange', () => { lastFrame = null; });
+  syncButton();
   draw();
+  if (typeof window.requestAnimationFrame !== 'function') return;
+  function animate(now) {
+    window.requestAnimationFrame(animate);
+    const view = canvas.closest?.('[data-view-panel]');
+    if (paused || document.hidden || view?.hidden) { lastFrame = null; return; }
+    if (lastFrame === null) { lastFrame = now; return; }
+    const elapsed = Math.min(80, Math.max(0, now - lastFrame));
+    lastFrame = now;
+    lon0 = (lon0 + elapsed * .009 * rad) % (2 * Math.PI);
+    if (now - lastDraw < 32) return;
+    lastDraw = now;
+    draw();
+  }
+  window.requestAnimationFrame(animate);
 })();

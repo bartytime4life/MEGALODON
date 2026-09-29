@@ -142,7 +142,7 @@ test('the HTML declares unique evidence controls and loads its local validator f
   assert.match(html, /Reports from earlier revisions are rejected/);
   assert.doesNotMatch(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
-  assert.doesNotMatch(html, /href="http:\/\/127\.0\.0\.1:8787/);
+  assert.match(html, /href="http:\/\/127\.0\.0\.1:8787\/#app-service-start-title"/);
   assert.match(html, /local-pc-setup\.md"[^>]*>Local setup guide ↗<\/a>/);
 });
 
