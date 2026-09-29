@@ -8,6 +8,7 @@ import shutil
 import stat
 import subprocess
 from types import SimpleNamespace
+import warnings
 
 import pytest
 
@@ -64,6 +65,26 @@ def test_password_command_requires_private_terminal_and_never_echoes_secret(layo
     output = capsys.readouterr().out
     assert "synthetic private phrase 123" not in output
     assert local_install.load_hud_password_verifier(layout) is not None
+
+
+def test_password_command_refuses_getpass_echo_fallback(layout, monkeypatch, capsys):
+    monkeypatch.setattr(local_install, "install_paths", lambda: layout)
+    errors = []
+    monkeypatch.setattr(local_install, "sys", SimpleNamespace(
+        stdin=SimpleNamespace(isatty=lambda: True),
+        stderr=SimpleNamespace(isatty=lambda: True, write=errors.append),
+    ))
+
+    def warning_fallback(_prompt):
+        warnings.warn("password may be echoed", local_install.getpass.GetPassWarning)
+        return "synthetic private phrase 123"
+
+    monkeypatch.setattr(local_install.getpass, "getpass", warning_fallback)
+    assert local_install.main(["password", "set"]) == 2
+    assert not layout.hud_password.exists()
+    output = capsys.readouterr()
+    assert "cannot hide HUD password entry" in "".join(errors)
+    assert "synthetic private phrase 123" not in output.out + output.err + "".join(errors)
 
 
 @pytest.fixture
