@@ -40,7 +40,7 @@ test('the retired Runbooks surface and its behavior are absent', () => {
 });
 
 test('setup and workflow actions use protected repository documentation links', () => {
-  const setup = 'https://github.com/bartytime4life/MEGALODON/blob/a3babbd9dd64ee1c6f3ff85cc7d12d3fc75a550d/docs/local-pc-setup.md';
+  const setup = 'https://github.com/bartytime4life/MEGALODON/blob/29cd2b29e45460d79df4a24132e3563362b0ea3c/docs/local-pc-setup.md';
   const workflows = 'https://github.com/bartytime4life/MEGALODON/blob/main/docs/operator-workflows.md';
   const links = [...`${html}\n${app}`.matchAll(/<a\s+[^>]*href="([^"]+)"[^>]*>/g)]
     .filter(([, href]) => href === setup || href.startsWith(workflows));
