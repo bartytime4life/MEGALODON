@@ -874,7 +874,8 @@ def _dashboard(args: argparse.Namespace) -> int:
             except InstallError as exc:
                 raise ValueError(str(exc)) from exc
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
-        companion_config = load_companion_config(args.companion_config) if args.companion_config else None
+        companion_path = getattr(args, "companion_config", None)
+        companion_config = load_companion_config(companion_path) if companion_path else None
         with _dashboard_reader(settings.db_path, allow_missing=first_launch) as store:
             locations = OfflineLocations.open(args.geoip_db) if getattr(args, "geoip_db", None) else None
             try:

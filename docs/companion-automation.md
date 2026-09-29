@@ -41,7 +41,8 @@ Start a new HUD process with:
 
 Use the same explicit flag on subsequent
 starts. The existing HUD must be stopped only when you are ready to switch
-instances; its current sign-in password changes on restart. With no flag,
+instances. The HUD opens without sign-in by default; when optional sign-in is
+enabled, a per-launch password changes on restart. With no flag,
 no companion scans, queries or file watches start. Collection begins once
 when that configured HUD starts and repeats every `interval_seconds` (300 to
 86,400). Watched files are checked every 15 seconds.

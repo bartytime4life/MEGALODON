@@ -65,6 +65,38 @@ def test_watched_report_is_aggregated_without_identifiers_and_qwen_gets_counts(t
     assert "preserved" in worker.snapshot()["status"]["osquery"]
 
 
+def test_watched_nmap_and_clamav_reports_require_complete_valid_producers(tmp_path):
+    nmap = tmp_path / "nmap.xml"
+    clamav = tmp_path / "scan.txt"
+    exit_status = tmp_path / "scan.exit"
+    nmap.write_bytes(b'<?xml version="1.0"?><!DOCTYPE nmaprun><nmaprun scanner="nmap" version="7.95" xmloutputversion="1.05" start="1700000000"><host><status state="up"/><address addr="192.168.1.5"/></host><runstats><finished exit="success" time="1700000010"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>')
+    clamav.write_text('''/private/secret: OK
+----------- SCAN SUMMARY -----------
+Known viruses: 8000000
+Engine version: 1.4.3
+Scanned directories: 1
+Scanned files: 1
+Infected files: 0
+Data scanned: 1.23 MB
+Data read: 0.80 MB (ratio 1.54:1)
+Time: 1.200 sec (0 m 1 s)
+Start Date: 2026:09:26 12:00:00
+End Date:   2026:09:26 12:00:01
+''')
+    exit_status.write_text("0\n")
+    worker = CompanionAutomation(_config(tmp_path, f'[watch]\nnmap_xml="{nmap}"\nclamscan_text="{clamav}"\nclamscan_exit="{exit_status}"\n'), AISettings())
+    worker.tick()
+    snapshot = worker.snapshot()
+    assert snapshot["results"]["nmap"]["hosts"] == [1, 0]
+    assert snapshot["results"]["clamav"]["scanned_files"] == 1
+    assert "/private/secret" not in json.dumps(snapshot)
+    assert "192.168.1.5" not in json.dumps(snapshot)
+    exit_status.write_text("2\n")
+    worker.tick()
+    assert worker.snapshot()["results"]["clamav"]["scanned_files"] == 1
+    assert "preserved" in worker.snapshot()["status"]["clamav"]
+
+
 def test_fixed_collector_runs_only_configured_action(tmp_path, monkeypatch):
     config = _config(tmp_path, '[collection]\ninterval_seconds=300\nnmap_target="127.0.0.1"\n')
     calls = []
