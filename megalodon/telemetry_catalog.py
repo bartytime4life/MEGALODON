@@ -37,7 +37,10 @@ TOOLS = (
 
 def coverage_html(hosted=False):
     if hosted:
-        hosted_overrides = {'reports': ('Reports and local summary export', 'Explicit local preview/download; not accepted by this hosted Site')}
+        hosted_overrides = {
+            'traffic': ('Traffic charts and findings', 'Local HUD refreshes by configuration; hosted summary updates only when loaded'),
+            'reports': ('Reports and local summary export', 'Explicit local export; saved summary can be loaded in this tab'),
+        }
         rows = ''.join(
             f'<tr><th scope="row">{escape(hosted_overrides.get(identifier, (name, mode))[0])}</th><td>{escape(source)}</td><td>{escape(hosted_overrides.get(identifier, (name, mode))[1])}</td></tr>'
             for identifier,name,source,mode,_ in FEATURES
@@ -45,7 +48,7 @@ def coverage_html(hosted=False):
     else:
         rows = ''.join(f'<tr><th scope="row"><a href="#{escape(target)}">{escape(name)}</a></th><td>{escape(source)}</td><td>{escape(mode)}</td></tr>' for _,name,source,mode,target in FEATURES)
     tool_rows = ''.join(f'<tr><th scope="row">{escape(name)}</th><td>{escape(source)}</td><td>{escape(mode)}</td></tr>' for _,name,source,mode in TOOLS)
-    note = 'This hosted page does not read local telemetry. Manual imports for separate evidence workflows remain separate from traffic activity evidence.' if hosted else 'These are supported data paths, not a claim that a source is currently connected. Check each view for its latest observation and scope.'
+    note = 'This hosted page has no live local telemetry connection. A loaded traffic summary is a saved snapshot; other imports remain separate evidence workflows.' if hosted else 'These are supported data paths, not a claim that a source is currently connected. Check each view for its latest observation and scope.'
     return f'''<section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
 <h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>{note}</p>
 <details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody>{rows}</tbody></table></div></details>
