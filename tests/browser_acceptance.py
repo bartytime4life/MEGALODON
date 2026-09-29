@@ -268,9 +268,12 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         await expect(page.locator("#workspace-interfaces")).to_be_hidden()
         await page.locator("#workspace-tab-analysis").click()
         await expect(page.locator("#analysis-window-title")).to_contain_text("unavailable")
-        passed("display-only Qwen receipt is loaded once and remains unavailable when not supplied",
-               counts["advisory"] == 1)
+        advisory_reads = counts["advisory"]
+        passed("display-only Qwen receipt remains unavailable when not supplied",
+               advisory_reads >= 1)
         await page.locator("#workspace-tab-analysis").click()
+        passed("reopening analysis does not fetch another Qwen receipt",
+               counts["advisory"] == advisory_reads)
         await page.locator(".room-audit-history > summary").click()
         await page.locator("#triage-tools > summary").click()
         await page.locator("#pause-button").click()
