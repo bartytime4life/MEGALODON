@@ -19,4 +19,5 @@ recursive-include tests *.py *.cjs *.json
 recursive-include tools *.py
 include scripts/install-local.sh
 include scripts/manage-companion.sh
+include scripts/start-hud-data.sh
 include scripts/start-local.sh

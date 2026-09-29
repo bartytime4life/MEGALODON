@@ -56,6 +56,7 @@ def assert_build_wiring(text):
         f'sha256sum {LOCK} "${{build_wheels[@]}}"',
         f'python -m pip install --no-index --find-links "$RUNNER_TEMP/build-wheelhouse" --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall -r {LOCK}',
         'PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/build-wheelhouse" PIP_ONLY_BINARY=:all: python -m build --sdist --wheel --outdir "$RUNNER_TEMP/distributions"',
+        'test -f "${sdist_roots[0]}/scripts/start-hud-data.sh"',
         f'cmp {LOCK} "${{sdist_roots[0]}}/{LOCK}"',
         f'cmp {TEST_LOCK} "${{sdist_roots[0]}}/{TEST_LOCK}"',
     ]
@@ -92,6 +93,10 @@ def test_lock_shape_weakenings_fail(path, names, mutation):
     }[mutation]
     with pytest.raises(AssertionError):
         read_lock(text.replace(entry, replacement, 1), names)
+
+
+def test_supported_hud_data_launcher_is_in_sdist_manifest():
+    assert "include scripts/start-hud-data.sh\\n" in (ROOT / "MANIFEST.in").read_text()
 
 
 def test_workflow_acquires_verifies_then_builds_from_local_wheels():
