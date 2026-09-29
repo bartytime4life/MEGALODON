@@ -25,7 +25,7 @@ test('Activity has no telemetry loader, localhost jump, or import-only summary c
   assert.doesNotMatch(activity, /snapshot-(?:file|clear|status|metrics|range|grid|timeline|lanes|protocols|severities|sources|detectors)|Visual evidence summary|Load summary JSON|Traffic history/);
   assert.doesNotMatch(activity, /http:\/\/127\.0\.0\.1:8787|Open local (?:visual )?HUD/);
   assert.match(activity, /Manual imports for separate evidence workflows remain separate from traffic activity evidence\./);
-  assert.match(activity, /href="https:\/\/github\.com\/bartytime4life\/MEGALODON\/blob\/29cd2b29e45460d79df4a24132e3563362b0ea3c\/docs\/local-pc-setup\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Setup guide ↗<\/a>/);
+  assert.match(activity, /href="https:\/\/github\.com\/bartytime4life\/MEGALODON\/blob\/f82f4ad743ba725c85039cee5d86f8db2461b8c4\/docs\/local-pc-setup\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Setup guide ↗<\/a>/);
   assert.match(activity, /operator-workflows\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Dashboard workflow guide ↗<\/a>/);
   assert.match(activity, /id="reference-globe"/);
 });
