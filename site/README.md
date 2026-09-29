@@ -6,10 +6,12 @@ The local dashboard's core telemetry routes are read-only. Its separately
 enabled AI question POST requires a per-launch operator token and can write
 private AI receipts and bounded report snapshots; see
 [`docs/ai-control-plane.md`](https://github.com/bartytime4life/MEGALODON/blob/main/docs/ai-control-plane.md). This hosted Site has
-no connection to those routes. Its Activity view does not accept local activity
-telemetry or `megalodon-hud-snapshot-v1` files; it shows one passive unavailable
-boundary and a reference globe. The local HUD retains its bounded summary
-preview and download workflow for private review. Source changes for the exporter
+no connection to those routes. Its Activity view accepts a bounded
+`megalodon-hud-snapshot-v1` file exported by the local HUD and draws saved
+traffic history, lane, protocol, source, severity, and detector charts.
+The file stays in the browser tab and does not create a live feed or verify
+source authenticity. The local HUD retains its bounded summary
+preview and download workflow. Source changes for the exporter
 and uniform tool setup must be installed locally before those local controls are
 available. The Site and local HUD share a generated feature/tool data-coverage
 map; use `python scripts/sync-hud-assets.py` after changing that canonical source.
@@ -43,7 +45,8 @@ bounded recurrence preview; it creates no schedule or job and runs no command.
 Those local features are not available through this hosted Site.
 
 The hosted Home view now draws the same bundled public-domain Natural Earth
-land mask as a geographic reference. West/East controls rotate the map locally.
+land mask as a geographic reference. It rotates smoothly while visible, with
+West/East and Pause controls; reduced-motion preferences keep it still.
 Separate normal and danger/critical traffic bar tracks show an explicit
 disconnected state here, with LOW/MEDIUM review signals listed separately.
 No marker, timestamp, IP location, or event count is created. The normal lane
@@ -51,6 +54,7 @@ means no returned linked finding, not proven-safe traffic; the danger/critical
 lane refers to HIGH/CRITICAL findings requiring review. Actual volume meters
 and the interactive rolling-hour timeline use qualified stored data in the
 local HUD. This hosted Site has no local telemetry connection or refresh loop.
+Its saved summary charts update only after a valid manual import.
 
 ## Direct setup and workflow guides
 
@@ -60,9 +64,10 @@ traffic panel and Evidence desk link to
 [`docs/operator-workflows.md`](../docs/operator-workflows.md), which indexes the
 authoritative local dashboard, bounded JSONL replay, saved capture, Suricata
 review, and integration-plan documents. Tools & setup routes its setup action
-to the same local PC guide without trying to open a loopback app or per-tool
-local evidence view. These links open the repository documentation in protected
-new tabs; the Site does not execute or copy workflow commands.
+to the same local PC guide and to the running local HUD on its default
+`127.0.0.1:8787` port. The local HUD has authorized Start controls for supported
+installed services. Opening that page does not start a service or connect data.
+The Site does not execute or copy workflow commands.
 
 The local HUD can open before data exists. Its default launcher and browser
 do not start sensors or create sample evidence, and an empty local HUD is labeled

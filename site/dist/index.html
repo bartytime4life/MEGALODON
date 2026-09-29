@@ -15,6 +15,7 @@
     <script src="./controls.js" defer></script>
     <script src="./globe-land.js" defer></script>
     <script src="./globe.js" defer></script>
+    <script src="./snapshot.js" defer></script>
     <script src="./app.js" defer></script>
     <script src="./inventory.js" defer></script>
     <link rel="stylesheet" href="./inventory.css">
@@ -68,18 +69,18 @@
               <div>
                 <p class="eyebrow">Observe · understand · investigate</p>
                 <h1 id="hud-title">Operations overview</h1>
-                <p>Review this hosted reference Console and its evidence boundaries. Local activity telemetry is not read here.</p>
+                <p>Explore a saved traffic summary here, or open the local HUD for refreshing observations. This page has no live local feed.</p>
               </div>
             </div>
             <div class="hud-controls" aria-label="Connection status">
-              <div class="mode-badge"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NOT CONNECTED</strong><small>Local telemetry not read</small></span></div>
+              <div class="mode-badge"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE FEED</strong><small>Saved summaries stay in this tab</small></span></div>
               <a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/29cd2b29e45460d79df4a24132e3563362b0ea3c/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Setup guide ↗</a>
             </div>
           </div>
 
           <section class="activity-evidence-boundary" aria-labelledby="activity-evidence-title">
-            <div><p class="panel-kicker">HOSTED ACTIVITY EVIDENCE</p><h2 id="activity-evidence-title">Unavailable here</h2></div>
-            <div class="activity-evidence-copy"><p>This hosted page has not read local telemetry. Activity evidence is unavailable here.</p><p>Unavailable does not mean zero traffic, healthy sensors, or a safe system. Local runtime evidence remains separate.</p></div>
+            <div><p class="panel-kicker">HOSTED ACTIVITY EVIDENCE</p><h2 id="activity-evidence-title">Live feed unavailable here</h2></div>
+            <div class="activity-evidence-copy"><p>This hosted page has no live local telemetry connection. Loaded summaries are saved, unverified snapshots.</p><p>Unavailable does not mean zero traffic, healthy sensors, or a safe system. Local runtime evidence remains separate.</p></div>
           </section>
           <section class="local-launch" aria-labelledby="local-launch-title">
             <div>
@@ -89,14 +90,28 @@
               <p class="local-launch-limit">The HUD refreshes stored records while its tab is visible; the launcher stops both processes when either exits. Publishing this page has not installed or started them. Capture coverage and sensor health still need local evidence.</p>
             </div>
             <div class="local-launch-links">
+              <a class="control-button" href="http://127.0.0.1:8787/#app-service-start-title" target="_blank" rel="noopener noreferrer">Open local app controls ↗</a>
               <a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/29cd2b29e45460d79df4a24132e3563362b0ea3c/docs/local-pc-setup.md#start-live-metadata-and-the-hud-together" target="_blank" rel="noopener noreferrer">Read local launch guide ↗</a>
               <a class="text-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/unified-roadmap-currentness.md#stage-0-acceptance-gate-restoration--2026-09-28" target="_blank" rel="noopener noreferrer">Review acceptance gates ↗</a>
             </div>
           </section>
+          <section class="snapshot-import" aria-labelledby="snapshot-title">
+            <div><p class="panel-kicker">SAVED LOCAL EVIDENCE · THIS TAB ONLY</p><h2 id="snapshot-title">Traffic visualizations</h2><p>Load an aggregate summary exported by your local HUD. The file stays in this browser tab; these charts are a saved view, not a live feed.</p></div>
+            <div class="snapshot-actions"><label class="snapshot-upload">Load summary JSON<input type="file" id="snapshot-file" accept=".json,application/json" /></label><button type="button" id="snapshot-clear" disabled>Clear summary</button><a href="http://127.0.0.1:8787/#hud-export-title" target="_blank" rel="noopener noreferrer">Open local HUD export ↗</a></div>
+            <p id="snapshot-status" role="status" aria-live="polite">No summary loaded. Run the local HUD to collect qualified metadata, then export a summary.</p>
+            <details><summary>How to prepare a summary</summary><p>In your running local HUD, open Reports and choose Prepare summary, review the preview, then Download summary JSON. Load that file here. The export contains bounded aggregate counts without addresses, ports, paths, or raw records. If the local HUD is not running, use the local setup guide above.</p><p>Source authenticity, sensor health, coverage, and geographic origin are not established by this file.</p></details>
+          </section>
+          <section class="snapshot-metrics" aria-label="Saved traffic summary totals">
+            <article><span>Metadata records</span><strong id="snapshot-events">—</strong><small>Bounded returned set</small></article>
+            <article><span>Linked findings</span><strong id="snapshot-findings">—</strong><small>Signals for review</small></article>
+            <article><span>Reported bytes</span><strong id="snapshot-bytes">—</strong><small>Metadata, not bandwidth</small></article>
+            <article><span>Source kinds</span><strong id="snapshot-sources">—</strong><small>Qualified ingestion sources</small></article>
+          </section>
+          <p id="snapshot-range" class="snapshot-range"></p>
           <section class="globe-surface" aria-labelledby="globe-surface-title">
             <div class="globe-heading">
-              <div><p class="panel-kicker">HOSTED REFERENCE · NO LOCAL EVIDENCE</p><h2 id="globe-surface-title">Activity globe</h2><p>Rotate the Natural Earth reference. This page has not read stored traffic or an offline IP map.</p></div>
-              <span class="status-pill bounded">Activity unavailable</span>
+              <div><p class="panel-kicker">HOSTED REFERENCE · NO LOCAL LOCATION EVIDENCE</p><h2 id="globe-surface-title">Activity globe</h2><p>A slowly rotating Natural Earth reference. Saved traffic charts below contain no geographic locations.</p></div>
+              <span class="status-pill bounded">Locations unavailable</span>
             </div>
             <div class="globe-content">
               <div class="globe-visual">
@@ -104,11 +119,12 @@
                 <div class="globe-turn" role="group" aria-label="Rotate globe">
                   <button type="button" id="globe-west" aria-label="Rotate globe west">← West</button>
                   <button type="button" id="globe-east" aria-label="Rotate globe east">East →</button>
+                  <button type="button" id="globe-motion" aria-pressed="true" aria-label="Pause globe rotation">Pause motion</button>
                 </div>
                 <small>Natural Earth land · 30° grid · no activity evidence shown</small>
               </div>
               <div class="globe-detail">
-                <strong>Activity evidence unavailable here</strong>
+                <strong>Location evidence unavailable here</strong>
                 <p>The local runtime can summarize 60 minutes of bounded stored metadata. Its optional offline IP regions are approximate. No source location is available on this hosted page.</p>
                 <h3>Traffic levels · records per minute</h3>
                 <p class="volume-connection">Unavailable · local telemetry not read</p>
@@ -129,6 +145,15 @@
               </div>
             </div>
           </section>
+
+          <div class="snapshot-grid" aria-label="Saved traffic charts">
+            <section class="snapshot-panel snapshot-wide"><p class="panel-kicker">ACTIVITY THROUGH TIME</p><h2>Traffic history</h2><div id="snapshot-timeline" class="snapshot-timeline" aria-label="Traffic records in twelve equal time intervals"></div><p>12 equal intervals from the first to last exported observation. Counts are records, not packets per second.</p></section>
+            <section class="snapshot-panel"><p class="panel-kicker">SEPARATE TRAFFIC LANES</p><h2>Normal, review and danger</h2><div id="snapshot-lanes-chart"></div><div class="snapshot-axis"><span>Low volume · 0</span><span>High · largest lane</span></div><p>One lane per record, using its highest linked severity. These are saved-range totals.</p></section>
+            <section class="snapshot-panel"><p class="panel-kicker">PROTOCOL DISTRIBUTION</p><h2>Protocol mix</h2><div id="snapshot-protocols-chart"></div></section>
+            <section class="snapshot-panel"><p class="panel-kicker">DETECTION PRIORITY</p><h2>Severity breakdown</h2><div id="snapshot-severities-chart"></div></section>
+            <section class="snapshot-panel"><p class="panel-kicker">SOURCE CONTRIBUTION</p><h2>Metadata by source</h2><div id="snapshot-sources-chart"></div><p>Source declarations are not independently authenticated.</p></section>
+            <section class="snapshot-panel"><p class="panel-kicker">FINDING DISTRIBUTION</p><h2>Detector signals</h2><div id="snapshot-detectors-chart"></div><p>A finding needs investigation; no linked finding does not establish safe traffic.</p></section>
+          </div>
 
           <!-- INVENTORY_START -->
 
@@ -192,8 +217,8 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
 <!-- OSQUERY_END -->
 <!-- TELEMETRY_COVERAGE_START -->
 <section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
-<h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>This hosted page does not read local telemetry. Manual imports for separate evidence workflows remain separate from traffic activity evidence.</p>
-<details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody><tr><th scope="row">Traffic charts and findings</th><td>Qualified core metadata; up to 500 event and 200 finding candidates</td><td>Configured refresh; 5 seconds by default</td></tr><tr><th scope="row">Globe and traffic-volume lanes</th><td>Rolling-hour metadata and optional approximate offline IP locations</td><td>Configured refresh; selected minute within rolling hour</td></tr><tr><th scope="row">Ingestion evidence</th><td>Source-qualified committed ingestion receipts</td><td>Startup request; source selection or retry</td></tr><tr><th scope="row">Offline packet / flow analysis</th><td>Explicitly selected TShark or Zeek summary</td><td>Startup snapshot; restart to load a different file</td></tr><tr><th scope="row">Suricata alerts</th><td>Separately selected durable external-alert store</td><td>Startup snapshot; no sensor polling</td></tr><tr><th scope="row">Legacy Qwen advisory</th><td>Explicitly supplied display-only receipt</td><td>Startup snapshot; not live AI analysis</td></tr><tr><th scope="row">AI questions and provider status</th><td>Opt-in token-gated local provider and private receipts</td><td>Only on explicit request</td></tr><tr><th scope="row">Service and protocol reference</th><td>Verified bundled IANA registrations</td><td>On explicit lookup; not network service discovery</td></tr><tr><th scope="row">Companion presence and processes</th><td>Bounded local executable/process observations</td><td>60-second heartbeat while visible; not sensor health</td></tr><tr><th scope="row">Tool installation / service jobs</th><td>Fixed optional installer job status</td><td>2 seconds while a job runs; independently observed</td></tr><tr><th scope="row">Network inventory</th><td>Completed Nmap 7.x XML 1.05 aggregate export</td><td>Explicit manual JSON import; saved observations only</td></tr><tr><th scope="row">Completed file scan</th><td>Completed clamscan report counts-only export</td><td>Explicit manual JSON import; no scanner or live telemetry</td></tr><tr><th scope="row">Saved package inventory</th><td>Completed osqueryi DEB package count export</td><td>Explicit manual JSON import; no query runner or live telemetry</td></tr><tr><th scope="row">Reports and local summary export</th><td>Validated bounded metadata, held for preview/download</td><td>Explicit local preview/download; not accepted by this hosted Site</td></tr><tr><th scope="row">Companion app viewer</th><td>User-selected companion console URL</td><td>App-owned UI; does not connect its telemetry</td></tr><tr><th scope="row">Action scripts and time preview</th><td>Closed command references and recurrence calculation</td><td>On explicit preview; no scheduled job or action</td></tr><tr><th scope="row">Threat context / SIEM / SOAR</th><td>Offline STIX reader, local SIEM exporter; SOAR contract only</td><td>Explicit offline operations; no remote feed or delivery</td></tr></tbody></table></div></details>
+<h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>This hosted page has no live local telemetry connection. A loaded traffic summary is a saved snapshot; other imports remain separate evidence workflows.</p>
+<details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody><tr><th scope="row">Traffic charts and findings</th><td>Qualified core metadata; up to 500 event and 200 finding candidates</td><td>Local HUD refreshes by configuration; hosted summary updates only when loaded</td></tr><tr><th scope="row">Globe and traffic-volume lanes</th><td>Rolling-hour metadata and optional approximate offline IP locations</td><td>Configured refresh; selected minute within rolling hour</td></tr><tr><th scope="row">Ingestion evidence</th><td>Source-qualified committed ingestion receipts</td><td>Startup request; source selection or retry</td></tr><tr><th scope="row">Offline packet / flow analysis</th><td>Explicitly selected TShark or Zeek summary</td><td>Startup snapshot; restart to load a different file</td></tr><tr><th scope="row">Suricata alerts</th><td>Separately selected durable external-alert store</td><td>Startup snapshot; no sensor polling</td></tr><tr><th scope="row">Legacy Qwen advisory</th><td>Explicitly supplied display-only receipt</td><td>Startup snapshot; not live AI analysis</td></tr><tr><th scope="row">AI questions and provider status</th><td>Opt-in token-gated local provider and private receipts</td><td>Only on explicit request</td></tr><tr><th scope="row">Service and protocol reference</th><td>Verified bundled IANA registrations</td><td>On explicit lookup; not network service discovery</td></tr><tr><th scope="row">Companion presence and processes</th><td>Bounded local executable/process observations</td><td>60-second heartbeat while visible; not sensor health</td></tr><tr><th scope="row">Tool installation / service jobs</th><td>Fixed optional installer job status</td><td>2 seconds while a job runs; independently observed</td></tr><tr><th scope="row">Network inventory</th><td>Completed Nmap 7.x XML 1.05 aggregate export</td><td>Explicit manual JSON import; saved observations only</td></tr><tr><th scope="row">Completed file scan</th><td>Completed clamscan report counts-only export</td><td>Explicit manual JSON import; no scanner or live telemetry</td></tr><tr><th scope="row">Saved package inventory</th><td>Completed osqueryi DEB package count export</td><td>Explicit manual JSON import; no query runner or live telemetry</td></tr><tr><th scope="row">Reports and local summary export</th><td>Validated bounded metadata, held for preview/download</td><td>Explicit local export; saved summary can be loaded in this tab</td></tr><tr><th scope="row">Companion app viewer</th><td>User-selected companion console URL</td><td>App-owned UI; does not connect its telemetry</td></tr><tr><th scope="row">Action scripts and time preview</th><td>Closed command references and recurrence calculation</td><td>On explicit preview; no scheduled job or action</td></tr><tr><th scope="row">Threat context / SIEM / SOAR</th><td>Offline STIX reader, local SIEM exporter; SOAR contract only</td><td>Explicit offline operations; no remote feed or delivery</td></tr></tbody></table></div></details>
 <details><summary>All 10 companions: telemetry support</summary><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody><tr><th scope="row">Python + SQLite</th><td>Qualified core traffic and finding projection</td><td>Refreshing stored metadata</td></tr><tr><th scope="row">TShark / Wireshark</th><td>Completed offline capture analysis</td><td>Selected startup summary; no live tool feed</td></tr><tr><th scope="row">Zeek</th><td>Completed conn.log analysis</td><td>Selected startup summary; flow units stay separate</td></tr><tr><th scope="row">Suricata</th><td>Committed external alert publications</td><td>Selected startup snapshot</td></tr><tr><th scope="row">Scapy</th><td>Optional separately operated metadata capture</td><td>Core projection after qualified ingestion</td></tr><tr><th scope="row">Qwen / Ollama</th><td>Explicit local AI requests and advisory receipts</td><td>On demand; presence is not model readiness</td></tr><tr><th scope="row">nftables</th><td>Deterministic response-plan evidence</td><td>No live firewall telemetry or application</td></tr><tr><th scope="row">ClamAV</th><td>Completed-report counts-only importer; manual HUD JSON load</td><td>Saved scanned / matched file counts only; no scanner or live telemetry</td></tr><tr><th scope="row">osquery</th><td>Saved DEB package-count importer; manual HUD JSON load</td><td>One fixed Ubuntu count only; no daemon, scheduler or live inventory</td></tr><tr><th scope="row">Nmap</th><td>Completed-report aggregate importer; manual HUD JSON load</td><td>Saved host / port counts only; no scanner or live telemetry</td></tr></tbody></table></div></details>
 </section>
 <!-- TELEMETRY_COVERAGE_END -->
@@ -211,7 +236,7 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
                 <div><p class="panel-kicker">AGGREGATE ACTIVITY</p><h2 id="traffic-title">Network metadata rate</h2></div>
                 <div class="chart-legend" aria-label="Chart legend"><span><i class="legend-line inbound"></i>Ingress metadata</span><span><i class="legend-line outbound"></i>Egress metadata</span><span><i class="legend-mark"></i>Detection</span></div>
               </div>
-              <div class="telemetry-empty"><strong>No ingress or egress measurements</strong><p>No sensor is connected here. An empty chart cannot establish that your network is idle or safe.</p><a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/operator-workflows.md" target="_blank" rel="noopener noreferrer">Dashboard workflow guide ↗</a></div>
+              <div class="telemetry-empty"><strong>Live ingress and egress rate unavailable</strong><p>This hosted page has no sensor connection. Load a saved summary above for aggregate history and source charts, or use the local HUD for refreshing data. Missing measurements do not establish an idle or safe network.</p><a class="control-button" href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/operator-workflows.md" target="_blank" rel="noopener noreferrer">Dashboard workflow guide ↗</a></div>
             </section>
 
             <section class="panel posture-panel" aria-labelledby="posture-title">
@@ -264,7 +289,7 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
             <div><p class="eyebrow">Companion tool surfaces</p><h1 id="integrations-title">Tools &amp; consoles</h1><p>Find a tool and open its controls. Save the address of an existing web console once, or use its setup guide. The local HUD provides startup presence checks automatically.</p></div>
             <div class="mode-badge compact"><span class="pulse-dot idle" aria-hidden="true"></span><span><strong>NO LIVE CONNECTIONS</strong><small>Operator reference</small></span></div>
           </div>
-          <div class="local-apps-route"><div><strong>Set up the local HUD</strong><p>No vendor or companion-console sign-up is needed. From a reviewed checkout, run ./scripts/install-local.sh as your user, then open MEGALODON from the app menu. The installed HUD uses a random per-launch password by default, or one you choose privately with megalodon-manage password set. Neither creates an account. This hosted page does not open the local app or start services.</p></div><a class="text-button" href="https://github.com/bartytime4life/MEGALODON/blob/29cd2b29e45460d79df4a24132e3563362b0ea3c/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div>
+          <div class="local-apps-route"><div><strong>Start installed services in the local HUD</strong><p>The local Actions &amp; apps view has authorized Start controls for supported installed services such as Suricata and Ollama. Starting a service does not connect its data. The HUD needs to be running on its default port for this link to open; if it is not, use the setup guide to launch it first.</p></div><a class="control-button" href="http://127.0.0.1:8787/#app-service-start-title" target="_blank" rel="noopener noreferrer">Open local app controls ↗</a><a class="text-button" href="https://github.com/bartytime4life/MEGALODON/blob/29cd2b29e45460d79df4a24132e3563362b0ea3c/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local setup guide ↗</a></div>
           <div class="hud-tool-search"><label>Find a tool<input id="tool-search" type="search" maxlength="120" placeholder="Name, task, or data type" /></label><label>Show<select id="tool-quick-filter"><option value="all">All tools</option><option value="data">Local evidence paths</option><option value="saved">My saved consoles</option></select></label><p id="tool-result-count" role="status"></p></div>
           <div class="integration-toolbar"><div id="category-filter" class="category-filter" role="group" aria-label="Filter integration tools"></div><div class="legend-pills" aria-label="Integration status legend"><span class="status-pill implemented">Implemented</span><span class="status-pill bounded">Bounded</span><span class="status-pill proposed">Proposed</span></div></div>
           <div class="install-trustline"><span aria-hidden="true">⌁</span><p><strong>Operator-controlled acquisition and lifecycle.</strong> Each card separates unverified manual notes from imported PATH findings. Copyable commands are scoped to an installation method; unknown methods require vendor guidance. Setup links open project or vendor guidance; this browser surface never installs, starts, configures, uninstalls, or probes a tool.<small id="verification-summary">Manual notes: 0 found by operator · 0 not found by operator · 0 need recheck · 10 not checked</small></p><button id="clear-tool-notes" class="text-button" type="button">Clear manual notes</button></div>

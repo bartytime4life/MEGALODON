@@ -45,8 +45,10 @@ and inconsistent totals. Values are rendered as text. Preview data stays in
 memory until cleared or the page closes; there is no upload or persistent
 storage. Failed refreshes preserve the previous summary and its timestamp. A
 summary is always labeled **saved**, never live, and is an unauthenticated
-self-report. The hosted geographic reference remains unpopulated because the
-hosted page does not read this export.
+self-report. The hosted Console can load a downloaded copy into browser-tab
+memory to draw aggregate history, lane, protocol, source, severity and detector
+charts. It has no live feed. The hosted geographic reference remains
+unpopulated because the export contains no location evidence.
 
 ## One setup entry point for every companion
 
