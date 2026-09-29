@@ -36,19 +36,24 @@ if(typeof document!=='undefined'&&document.getElementById('clamav-file')) {
     bar.min=0;bar.max=Math.max(1,max);bar.value=value;bar.setAttribute('aria-label',`${label}: ${value}; chart maximum ${bar.max}`);
     row.append(name,count,bar);root.append(row);
   }
+  function applyClamav(data, source='Saved ClamAV summary') {
+    data=validateClamavSummary(JSON.stringify(data));
+    chart('clamav-files','Files scanned',data.scanned_files,data.scanned_files);
+    chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,true);
+    chart('clamav-directories','Directories scanned',data.scanned_directories,data.scanned_directories);
+    node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
+    node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
+    node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported. Not live.`;
+    node('clamav-results').hidden=false;node('clamav-clear').disabled=false;
+  }
+  (globalThis.megalodonCompanionRender??={}).clamav=applyClamav;
   node('clamav-file').addEventListener('change',async event=>{
     const current=++generation,file=event.target.files?.[0];event.target.value='';if(!file)return;
     try {
       if(file.size>4096)throw new Error('Choose a summary JSON under 4 KiB.');
       const buffer=await file.arrayBuffer();if(buffer.byteLength>4096)throw new Error('Summary exceeds 4 KiB.');
       const data=validateClamavSummary(new TextDecoder('utf-8',{fatal:true}).decode(buffer));if(current!==generation)return;
-      chart('clamav-files','Files scanned',data.scanned_files,data.scanned_files);
-      chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,true);
-      chart('clamav-directories','Directories scanned',data.scanned_directories,data.scanned_directories);
-      node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
-      node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
-      node('clamav-status').textContent=`Saved ClamAV summary · ${data.infected_files} file matches reported. Not live.`;
-      node('clamav-results').hidden=false;node('clamav-clear').disabled=false;
+      applyClamav(data);
     } catch (_) {if(current===generation)node('clamav-status').textContent='Import rejected. Use a supported counts-only JSON under 4 KiB. Any previous scan summary is preserved.';}
   });
   node('clamav-clear').addEventListener('click',()=>{

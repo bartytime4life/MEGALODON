@@ -1,6 +1,27 @@
 # Defense Console source alignment
 
-## Current publication — Console v50, repository mirror proposed
+## Current publication — Console v51, repository mirror proposed
+
+CONFIRMED 2026-09-29: the existing owner-only Site published version 51 from
+Sites source `164e4bac20c9f562702d9460b37176ffd6fd44a5`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_691c7a5ae1e08191a7df33336b43bfa6`.
+Deployment `appgdep_6abbf5a4fff88191a58561e2da060598` reported
+`succeeded` at 2026-09-29T17:30:22Z at
+<https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+The Site keeps its owner-only custom access policy. Rollback reference:
+saved v50 / source `9ea3828fc447834a96e0d68a24c3c784b435f7d9` /
+deployment `appgdep_6abbee9dabf8819191127e1f2c4910cc`.
+
+The three inventory panels now point to the configured local HUD for
+automatic collection and completed-report watching, retaining manual file
+import on the static Site. Source files in this proposed repository mirror
+match the pushed Sites source byte for byte. The Site suite passed 110/110
+Node tests. Browser rendering remains unverified after the browser security
+check denied access. Local collector operation and Qwen advisory depend on
+explicit scopes, installed tools, and a contained model provider; this Site
+publication does not start those jobs.
+
+## Historical publication — Console v50, repository mirror proposed
 
 CONFIRMED 2026-09-29: the owner-only Site published version 50 from Sites source
 `9ea3828fc447834a96e0d68a24c3c784b435f7d9`, saved version

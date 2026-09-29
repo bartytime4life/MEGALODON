@@ -7,6 +7,7 @@ INVENTORY_HTML = r'''
   <label>Load inventory JSON <input type="file" id="inventory-file" accept=".json,application/json"></label>
   <button type="button" id="inventory-clear" disabled>Clear inventory</button>
   <p id="inventory-status" role="status">No inventory loaded. Files stay in this tab.</p>
+  <p id="inventory-automation">Automatic collection and report watching require an explicitly configured local HUD. <a href="http://127.0.0.1:8787/#inventory-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
   <div id="inventory-results" hidden>
     <p id="inventory-range"></p><p id="inventory-coverage"></p>
     <div class="inventory-grid">
@@ -70,18 +71,23 @@ if(typeof document!=='undefined'&&document.getElementById('inventory-file')) {
     for(const id of ['inventory-hosts','inventory-protocols','inventory-explicit','inventory-grouped'])node(id).replaceChildren();
     node('inventory-range').textContent='';node('inventory-coverage').textContent='';node('inventory-status').textContent='Inventory cleared from this tab.';
   }
+  function applyInventory(data, source='Saved inventory') {
+    data=validateInventorySummary(JSON.stringify(data));
+    chart('inventory-hosts',['Up','Down'],data.hosts);chart('inventory-protocols',['TCP','UDP','SCTP'],data.protocols);
+    chart('inventory-explicit',states,data.explicit_states);chart('inventory-grouped',states,data.grouped_states);
+    node('inventory-range').textContent=`Report interval: ${data.started_at} → ${data.finished_at}`;
+    node('inventory-coverage').textContent=`Host detail present: ${data.represented_hosts[0]} up / ${data.represented_hosts[1]} down. Report totals can include hosts whose detail was omitted.`;
+    node('inventory-status').textContent=`${source} · completed ${data.finished_at}. Not live.`;
+    node('inventory-results').hidden=false;node('inventory-clear').disabled=false;
+  }
+  (globalThis.megalodonCompanionRender??={}).nmap=applyInventory;
   node('inventory-file').addEventListener('change',async event=>{
     const current=++generation,file=event.target.files?.[0];event.target.value='';if(!file)return;
     try {
       if(file.size>4096)throw new Error('Choose an aggregate JSON smaller than 4 KiB, not a raw XML report.');
       const buffer=await file.arrayBuffer();if(buffer.byteLength>4096)throw new Error('Summary exceeds 4 KiB.');
       const data=validateInventorySummary(new TextDecoder('utf-8',{fatal:true}).decode(buffer));if(current!==generation)return;
-      chart('inventory-hosts',['Up','Down'],data.hosts);chart('inventory-protocols',['TCP','UDP','SCTP'],data.protocols);
-      chart('inventory-explicit',states,data.explicit_states);chart('inventory-grouped',states,data.grouped_states);
-      node('inventory-range').textContent=`Report interval: ${data.started_at} → ${data.finished_at}`;
-      node('inventory-coverage').textContent=`Host detail present: ${data.represented_hosts[0]} up / ${data.represented_hosts[1]} down. Report totals can include hosts whose detail was omitted.`;
-      node('inventory-status').textContent=`Saved inventory · completed ${data.finished_at}. Not live.`;
-      node('inventory-results').hidden=false;node('inventory-clear').disabled=false;
+      applyInventory(data);
     } catch (_) {if(current===generation)node('inventory-status').textContent='Import rejected. Use a supported aggregate JSON under 4 KiB. Any previous inventory is preserved.';}
   });
   node('inventory-clear').addEventListener('click',clear);
