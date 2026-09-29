@@ -38,7 +38,8 @@ if(typeof document!=='undefined'&&document.getElementById('inventory-title')) {
     chart('inventory-explicit',states,data.explicit_states);chart('inventory-grouped',states,data.grouped_states);
     node('inventory-range').textContent=`Report interval: ${data.started_at} → ${data.finished_at}`;
     node('inventory-coverage').textContent=`Host detail present: ${data.represented_hosts[0]} up / ${data.represented_hosts[1]} down. Report totals can include hosts whose detail was omitted.`;
-    node('inventory-status').textContent=`${source} · completed ${data.finished_at}. Not live.`;
+    node('inventory-status').textContent=`${source} · saved observation.`;
+    node('inventory-status').setAttribute('data-state','ready');
     node('inventory-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).nmap=applyInventory;

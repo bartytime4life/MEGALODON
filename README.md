@@ -46,6 +46,14 @@ requirements while installing this checkout. Pip destination overrides and pip
 configuration files are ignored so the package cannot be redirected outside the
 private application release.
 
+To keep the installed local HUD available after signing in, run
+`./scripts/hud-autostart.sh enable` from the reviewed checkout. The user-only
+service starts the same loopback HUD at login; the application-menu entry then
+opens its already running page. Use `./scripts/hud-autostart.sh disable` to stop
+and remove automatic startup. The installer removes this managed service on
+uninstall. This starts the fixed local companion collectors with the HUD; it
+does not start capture, a remote feed, or unrelated companion services.
+
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
 `./scripts/manage-companion.sh nmap install` to preview the fixed recipe.
@@ -743,7 +751,10 @@ within the past 60 minutes and refreshes while the tab is visible. Sweep the
 time control back to review a minute, or choose **Live** to follow the current
 rolling minute, including when that minute has no returned records. The globe scans gently until a mapped detector-linked source
 needs review, then focuses on each recent signal for no more than eight seconds
-(less during a burst) before moving on. Its bars compare event counts in the returned candidates;
+(less during a burst) before moving on.
+when traffic is unavailable, only the geographic reference rotates, with no activity marker.
+Rotation uses frame timing and stops when the tab is hidden, motion is reduced,
+or the HUD is paused. The bars compare event counts in the returned candidates;
 unlinked findings do not prove traffic is safe, and a missing minute does not
 prove there was no traffic. The history response contains at most 500 stored
 event candidates and 200 linked finding candidates, so a busy hour can be only

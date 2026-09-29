@@ -71,7 +71,7 @@ def summarize_report(raw: bytes, *, now: float | None = None) -> dict:
             refuse()
         here = '/'.join(path)
         if len(path) == 1:
-            if root_seen or name != 'nmaprun' or attrs.get('scanner') != 'nmap' or attrs.get('xmloutputversion') != '1.05' or not re.fullmatch(r'7\.[0-9]{1,3}', attrs.get('version', '')):
+            if root_seen or name != 'nmaprun' or attrs.get('scanner') != 'nmap' or attrs.get('xmloutputversion') != '1.05' or not re.fullmatch(r'7\.[0-9]{1,3}(?:SVN)?', attrs.get('version', '')):
                 refuse()
             root_seen = True
             start_time, report['started_at'] = timestamp(attrs.get('start'))

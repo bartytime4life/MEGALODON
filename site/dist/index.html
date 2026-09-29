@@ -155,54 +155,65 @@
             <section class="snapshot-panel"><p class="panel-kicker">FINDING DISTRIBUTION</p><h2>Detector signals</h2><div id="snapshot-detectors-chart"></div><p>A finding needs investigation; no linked finding does not establish safe traffic.</p></section>
           </div>
 
+          <section class="companion-section" aria-labelledby="companion-section-title">
+            <div class="companion-section-head"><div>
+              <p class="eyebrow">LOCAL PC / AUTOMATIC OBSERVATIONS</p>
+              <h2 id="companion-section-title">Computer observations</h2>
+              <p>Automatic Nmap, ClamAV and osquery counts appear in the local HUD. This hosted page cannot read this PC or show its latest collection status.</p>
+            </div><a class="companion-local-link" href="http://127.0.0.1:8787/#companion-section-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></div>
+            <div class="companion-grid">
           <!-- INVENTORY_START -->
 
-<section class="inventory-panel" aria-labelledby="inventory-title">
-  <h3 id="inventory-title" tabindex="-1">Network inventory</h3>
-  <p>Review a completed Nmap report as host and port-state counts. These observations are separate from traffic and detection severity; an open port is not a confirmed threat.</p>
-  <p id="inventory-status" role="status">Waiting for local collection.</p>
-  <p id="inventory-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#inventory-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
+<section class="companion-panel inventory-panel" aria-labelledby="inventory-title">
+  <div class="companion-head"><div><p class="companion-kicker">NMAP / NETWORK</p><h3 id="inventory-title" tabindex="-1">Network inventory</h3></div><span class="companion-kind">Hosts and ports</span></div>
+  <p id="inventory-status" class="companion-state" role="status">No completed local observation shown.</p>
+  <p id="inventory-automation" class="companion-collector">Collector status is available in the local HUD.</p>
   <div id="inventory-results" hidden>
-    <p id="inventory-range"></p><p id="inventory-coverage"></p>
+    <div class="companion-meta"><p id="inventory-range"></p><p id="inventory-coverage"></p></div>
     <div class="inventory-grid">
-      <section><h4>Hosts reported by Nmap</h4><div id="inventory-hosts"></div></section>
-      <section><h4>Protocols · individually listed ports</h4><div id="inventory-protocols"></div></section>
-      <section><h4>Individually listed port states</h4><div id="inventory-explicit"></div></section>
+      <section><h4>Host state</h4><div id="inventory-hosts"></div></section>
+      <section><h4>Listed ports by protocol</h4><div id="inventory-protocols"></div></section>
+      <section><h4>Listed port states</h4><div id="inventory-explicit"></div></section>
       <section><h4>Grouped port states</h4><div id="inventory-grouped"></div></section>
     </div>
-    <p>Counts describe a completed observation, not current reachability or complete network coverage. Grouped ports have no protocol breakdown. Source authenticity is unverified.</p>
+    <p class="companion-caveat">A completed Nmap count is not current reachability or full network coverage. Open ports are not confirmed threats. Grouped ports have no protocol breakdown; report origin is unverified.</p>
   </div>
+  <details class="companion-advisory" id="inventory-advisory-wrap" hidden><summary>Qwen note</summary><p id="inventory-advisory"></p></details>
 </section>
 
 <!-- INVENTORY_END -->
 <!-- CLAMAV_START -->
 
-<section class="clamav-panel" aria-labelledby="clamav-title">
-  <h3 id="clamav-title" tabindex="-1">Completed file scan</h3>
-  <p>Review counts from a completed ClamAV clamscan report. This is separate from network traffic and its danger levels.</p>
-  <p id="clamav-status" role="status">Waiting for local collection.</p>
-  <p id="clamav-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#clamav-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
+<section class="companion-panel clamav-panel" aria-labelledby="clamav-title">
+  <div class="companion-head"><div><p class="companion-kicker">CLAMAV / FILES</p><h3 id="clamav-title" tabindex="-1">Completed file scan</h3></div><span class="companion-kind">Files and matches</span></div>
+  <p id="clamav-status" class="companion-state" role="status">No completed local observation shown.</p>
+  <p id="clamav-automation" class="companion-collector">Collector status is available in the local HUD.</p>
   <div id="clamav-results" hidden>
-    <p id="clamav-range"></p>
+    <div class="companion-meta"><p id="clamav-range"></p><p id="clamav-scope"></p></div>
     <div class="clamav-grid"><div id="clamav-files"></div><div id="clamav-detections"></div><div id="clamav-directories"></div></div>
-    <p id="clamav-scope"></p>
-    <p>Counts come from a completed observation. Zero detections do not prove complete coverage or that files are safe.</p>
+    <p class="companion-caveat">Completed scan counts are separate from network traffic. Zero matches do not prove full coverage or file safety.</p>
   </div>
+  <details class="companion-advisory" id="clamav-advisory-wrap" hidden><summary>Qwen note</summary><p id="clamav-advisory"></p></details>
 </section>
 
 <!-- CLAMAV_END -->
 <!-- OSQUERY_START -->
 
-<section class="osquery-panel" aria-labelledby="osquery-title">
-  <h3 id="osquery-title">Package inventory</h3>
-  <p>Review one completed osquery package count. This is host inventory, separate from network traffic and findings.</p>
-  <p id="osquery-status" role="status">Waiting for local collection.</p>
-  <p id="osquery-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#osquery-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
-  <div id="osquery-results" hidden><p id="osquery-count"></p><p id="osquery-time"></p>
-    <p>This count does not establish package safety, update status or live osquery health.</p></div>
+<section class="companion-panel osquery-panel" aria-labelledby="osquery-title">
+  <div class="companion-head"><div><p class="companion-kicker">OSQUERY / HOST</p><h3 id="osquery-title" tabindex="-1">Package inventory</h3></div><span class="companion-kind">This PC</span></div>
+  <p id="osquery-status" class="companion-state" role="status">No completed local observation shown.</p>
+  <p id="osquery-automation" class="companion-collector">Collector status is available in the local HUD.</p>
+  <div id="osquery-results" hidden>
+    <div class="osquery-value"><strong id="osquery-count"></strong><span>DEB package rows reported</span></div>
+    <p id="osquery-time" class="osquery-time"></p>
+    <p class="companion-caveat">One saved count cannot show a trend. It does not establish package safety, update status or live osquery health.</p>
+  </div>
+  <details class="companion-advisory" id="osquery-advisory-wrap" hidden><summary>Qwen note</summary><p id="osquery-advisory"></p></details>
 </section>
 
 <!-- OSQUERY_END -->
+            </div>
+          </section>
 <!-- TELEMETRY_COVERAGE_START -->
 <section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
 <h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>This hosted page has no live local telemetry connection. A loaded traffic summary is a saved snapshot; local companion results stay in the local HUD.</p>

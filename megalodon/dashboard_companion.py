@@ -4,9 +4,19 @@ COMPANION_JS = r'''
 if (typeof localHudLaunch !== 'undefined' && typeof document !== 'undefined') {
   const ids = ['nmap', 'clamav', 'osquery'];
   const prefix = {nmap: 'inventory', clamav: 'clamav', osquery: 'osquery'};
+  const display = {nmap: 'Nmap', clamav: 'ClamAV', osquery: 'osquery'};
   const seen = {};
+  let inFlight = false;
+  for (const id of ids) {
+    const state = document.getElementById(prefix[id] + '-status');
+    if (state) {
+      state.textContent = 'Checking local collection…';
+      state.setAttribute('data-state', 'checking');
+    }
+  }
   async function refreshCompanions() {
-    if (document.hidden) return;
+    if (document.hidden || inFlight) return;
+    inFlight = true;
     try {
       const response = await fetch('/api/companions', {cache: 'no-store'});
       if (!response.ok) throw new Error('companion feed unavailable');
@@ -18,30 +28,55 @@ if (typeof localHudLaunch !== 'undefined' && typeof document !== 'undefined') {
       for (const id of ids) {
         const label = document.getElementById(prefix[id] + '-automation');
         if (!label) continue;
-        const status = payload.status[id];
+        const state = document.getElementById(prefix[id] + '-status');
+        const status = typeof payload.status[id] === 'string' ? payload.status[id].slice(0, 160) : 'unavailable';
         const advice = payload.advisory[id];
-        label.textContent = 'Local automation: ' + (typeof status === 'string' ? status.slice(0, 160) : 'unavailable') +
-          (typeof advice === 'string' && advice ? ' · Qwen advisory: ' + advice.slice(0, 1024) : '');
+        label.textContent = 'Collector · ' + status;
+        const adviceWrap = document.getElementById(prefix[id] + '-advisory-wrap');
+        const adviceText = document.getElementById(prefix[id] + '-advisory');
+        if (adviceWrap && adviceText) {
+          adviceText.textContent = typeof advice === 'string' ? advice.slice(0, 1024) : '';
+          adviceWrap.hidden = !adviceText.textContent;
+        }
         const result = payload.results[id];
         if (result && globalThis.megalodonCompanionRender?.[id]) {
           const key = JSON.stringify(result);
           if (seen[id] !== key || document.getElementById(prefix[id] + '-results')?.hidden) {
-            globalThis.megalodonCompanionRender[id](result, 'Automatic ' + id + ' aggregate');
-            seen[id] = key;
+            try {
+              globalThis.megalodonCompanionRender[id](result, 'Automatic ' + display[id] + ' aggregate');
+              seen[id] = key;
+            } catch (_) {
+              label.textContent = 'Collector · aggregate rejected; previous result, if any, remains saved.';
+              if (state) state.setAttribute('data-state', 'warning');
+              continue;
+            }
           }
+          if (state) {
+            const completed = / · completed; saved aggregate$/.test(status);
+            const collecting = /^Collecting local aggregate;|^Scanning configured files;|^waiting$/.test(status);
+            state.setAttribute('data-state', completed ? 'ready' : collecting ? 'checking' : 'warning');
+          }
+        } else if (state) {
+          state.textContent = status === 'waiting' ? 'Collection queued.' : status;
+          state.setAttribute('data-state', status === 'waiting' ? 'checking' : 'warning');
         }
       }
     } catch (_) {
       for (const id of ids) {
         const label = document.getElementById(prefix[id] + '-automation');
-        if (label) label.textContent = 'Local automation feed unavailable; any prior aggregate remains saved.';
+        const state = document.getElementById(prefix[id] + '-status');
+        if (label) label.textContent = 'Collector · local feed unavailable; any prior result remains saved.';
+        if (state) state.setAttribute('data-state', 'warning');
       }
+    } finally {
+      inFlight = false;
     }
   }
   async function pollCompanions() {
     await refreshCompanions();
     setTimeout(pollCompanions, 15000);
   }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshCompanions(); });
   pollCompanions();
 }
 '''

@@ -7,6 +7,6 @@ for(const text of [JSON.stringify({...fixture(),path:'/secret'}),JSON.stringify(
   test('rejects unsupported count input',()=>assert.throws(()=>validate(text)));
 function dom(){class Element{constructor(){this.children=[];this.textContent='';}replaceChildren(...x){this.children=x;}append(...x){this.children.push(...x);}setAttribute(){}}const nodes=new Map();const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);},createElement(){return new Element();}};const ctx={document,TextEncoder,globalThis:{}};vm.createContext(ctx);vm.runInContext(source,ctx);return {nodes,render:ctx.globalThis.megalodonCompanionRender.osquery};}
 test('automatic package count renders without file controls',()=>{
- const {nodes:n,render}=dom();render(fixture(),'Automatic osquery aggregate');assert.match(n.get('osquery-count').textContent,/42 DEB/);assert.equal(n.get('osquery-results').hidden,false);assert.equal(n.has('osquery-file'),false);
+ const {nodes:n,render}=dom();render(fixture(),'Automatic osquery aggregate');assert.equal(n.get('osquery-count').textContent,'42');assert.match(n.get('osquery-time').textContent,/2026-09-26T12:00:00Z/);assert.equal(n.get('osquery-results').hidden,false);assert.equal(n.has('osquery-file'),false);
 });
 test('no implicit fetch, storage or execution',()=>assert.doesNotMatch(source,/\bfetch\s*\(|XMLHttpRequest|WebSocket|localStorage|innerHTML|\beval\s*\(/));

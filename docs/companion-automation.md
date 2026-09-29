@@ -4,7 +4,8 @@ The local `hud` launcher starts a bounded worker automatically. It collects a
 fixed osquery DEB package count on this PC, scans loopback `127.0.0.1/32` with
 Nmap when Nmap is installed, and scans the current user's real `Downloads`
 folder with ClamAV when that folder and scanner exist. Collection starts when
-the HUD starts and repeats hourly. Results are aggregate counts held in HUD
+the HUD starts; Nmap and osquery repeat hourly, while the potentially long
+ClamAV scan repeats daily. Report watching continues during a scan. Results are aggregate counts held in HUD
 memory, with source and observation times shown in the panels. Unavailable
 programs and rejected results have their own status; they never create sample
 data. The `dashboard` CLI mode does not start default collection.
@@ -36,6 +37,7 @@ An explicit private TOML file can override the default scope and watch paths:
 ```toml
 [collection]
 interval_seconds = 3600
+clamav_interval_seconds = 86400
 nmap_target = "192.168.1.0/24"
 clamav_paths = ["/home/you/Downloads"]
 osquery_enabled = true
@@ -53,6 +55,9 @@ advisory = true
 Use `./scripts/start-local.sh --companion-config /absolute/private/companions.toml`
 to override. The target must be one private IPv4 host or CIDR with at most
 256 addresses. ClamAV accepts at most four existing non-root directories.
+`clamav_interval_seconds` is optional in explicit configurations; when omitted,
+ClamAV follows `interval_seconds` for compatibility. Both intervals accept
+300 through 86400 seconds.
 Do not use the example LAN range without authorization to scan it.
 
 Qwen receives only validated aggregate counts through the separately
@@ -66,3 +71,8 @@ Use `./scripts/start-local.sh --no-auto-companions` to turn off the default
 worker for that HUD session. The flag cannot be combined with
 `--companion-config`. Existing HUD processes keep their launch behavior until
 restarted; the running instance is not changed by updating source files.
+For an installed Linux desktop release, `./scripts/hud-autostart.sh enable`
+starts the loopback HUD at the next sign-in. The application-menu entry reopens
+that running page. `disable` stops the user service; this does not uninstall
+the application or erase its saved data. An explicit local configuration can
+still override the collection scope and cadence.

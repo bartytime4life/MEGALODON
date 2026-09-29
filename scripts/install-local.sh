@@ -20,6 +20,7 @@ Usage: ./scripts/install-local.sh [install | status [--json] | repair | uninstal
 Installation is Linux-only and refuses root/sudo. It may download Python build
 requirements while installing this reviewed checkout. It does not install
 optional tools, start sensors, create telemetry, or enable automatic startup.
+Use ./scripts/hud-autostart.sh enable after installation for user login startup.
 Set MEGALODON_PYTHON to one absolute Python 3.11+ interpreter path if needed.
 HELP
   exit 0
