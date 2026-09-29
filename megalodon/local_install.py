@@ -892,7 +892,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("error", getpass.GetPassWarning)
-                    first = getpass.getpass("New HUD password (16-64 printable ASCII characters): ")
+                    first = getpass.getpass("New HUD password (8-64 printable ASCII characters): ")
                     confirm = getpass.getpass("Repeat new HUD password: ")
             except getpass.GetPassWarning as exc:
                 raise InstallError("this terminal cannot hide HUD password entry") from exc

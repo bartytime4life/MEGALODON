@@ -690,7 +690,7 @@ python -m megalodon hud
 Open **http://127.0.0.1:8787** on the same computer. No account, subscription,
 configuration file, companion installation, or readiness-report export is needed
 to open the workspace. Existing default audit data is read automatically. If
-prompted, use username `megalodon` and the random password printed by this
+prompted by the sign-in page, use the random password printed by this
 launch's terminal. The installed HUD can instead use a reusable password you
 choose with `~/.local/bin/megalodon-manage password set`; enter it privately
 at the terminal prompt and restart the HUD. This creates no account. The
@@ -1161,10 +1161,10 @@ Remove it and use `--host 127.0.0.1`. The supported launcher displays a random,
 single-launch dashboard password only on an interactive terminal by default.
 The installed HUD can use an owner-chosen password stored as a private salted
 verifier instead; the chosen password is never printed. Startup still requires
-an interactive terminal. When the browser asks, enter username `megalodon`
-and the active password; keep the terminal private.
+an interactive terminal. When the browser opens the sign-in page, enter the
+active password; keep the terminal private.
 The password guards the local HTTP page and API. AI and companion actions retain
-their separate operator tokens. Local HTTP Basic authentication is not a remote
+their separate operator tokens. Local password authentication is not a remote
 service security design; do not expose the server through proxies, tunnels or port
 forwarding. Firewall allowlist changes,
 and public-target policy changes require separate review. Live application is

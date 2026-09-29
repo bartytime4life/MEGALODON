@@ -35,13 +35,13 @@ From a terminal on this PC, run:
 ~/.local/bin/megalodon-manage password set
 ```
 
-Enter the new password twice at the hidden prompts. Use 16 to 64 printable
+Enter the new password twice at the hidden prompts. Use 8 to 64 printable
 ASCII characters. Do not put the password in a command argument, environment
 variable, file you edit by hand, or chat message. MEGALODON stores only a
 salted password verifier in the owner-only file
 `~/.config/megalodon/hud-password.json`; it never prints the chosen password.
-Restart a running HUD to apply the change. Sign in with username `megalodon`
-and the password you chose. The password protects only the local HUD and is
+Restart a running HUD to apply the change. Open its local address and enter the
+password you chose on the sign-in page. The password protects only the local HUD and is
 separate from your computer password and the optional AI/tool-management tokens.
 
 To check the mode without revealing the password, run

@@ -10,7 +10,7 @@ from threading import BoundedSemaphore
 
 
 SCHEMA = "megalodon-hud-password-v1"
-MIN_LENGTH = 16
+MIN_LENGTH = 8
 MAX_LENGTH = 64
 SCRYPT_N = 1 << 14
 SCRYPT_R = 8
@@ -20,9 +20,9 @@ _VERIFY_SLOTS = BoundedSemaphore(4)
 
 def _password_bytes(value: str) -> bytes:
     if type(value) is not str or not MIN_LENGTH <= len(value) <= MAX_LENGTH:
-        raise ValueError("HUD password must contain 16 to 64 printable ASCII characters")
+        raise ValueError("HUD password must contain 8 to 64 printable ASCII characters")
     if any(not 32 <= ord(char) <= 126 for char in value):
-        raise ValueError("HUD password must contain 16 to 64 printable ASCII characters")
+        raise ValueError("HUD password must contain 8 to 64 printable ASCII characters")
     return value.encode("ascii")
 
 

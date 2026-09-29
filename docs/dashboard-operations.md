@@ -17,6 +17,9 @@ loopback server binds. From a reviewed source checkout, use
 `./scripts/start-local.sh`. An ordinary installed environment can still run
 `python -m megalodon hud` and open `http://127.0.0.1:8787` on that computer.
 There is no local cloud login or subscription.
+The browser opens a password-only sign-in page. Enter the short password shown
+in the launch terminal, or the reusable password configured for the installed
+HUD. The sign-in page never displays the password or telemetry before entry.
 
 These default launches observe tools and provide guides. Fixed Install/Start
 actions require a deliberate non-root Linux launch with
