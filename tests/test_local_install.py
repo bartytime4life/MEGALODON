@@ -34,6 +34,15 @@ def test_chosen_hud_password_is_private_rotatable_and_resettable(layout):
     assert local_install.load_hud_password_verifier(layout) is None
 
 
+def test_shorter_chosen_password_is_accepted_but_too_short_is_refused(layout):
+    local_install.set_hud_password("eight88!", layout)
+    verifier = local_install.load_hud_password_verifier(layout)
+    assert verifier is not None and verifier.verify(b"eight88!")
+    with pytest.raises(ValueError, match="8 to 64"):
+        local_install.set_hud_password("short7!", layout)
+    assert local_install.load_hud_password_verifier(layout) == verifier
+
+
 def test_unsafe_hud_password_record_never_falls_back_to_random(layout):
     local_install.set_hud_password("synthetic private phrase 123", layout)
     layout.hud_password.chmod(0o644)

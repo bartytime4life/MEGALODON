@@ -111,7 +111,7 @@ def dashboard(settings: Path, offline: Path | None = None):
                 output += os.read(terminal_master, 256)
                 if len(output) > 1024:
                     raise AssertionError("dashboard startup output exceeded bound")
-                match = re.search(rb"MEGALODON local dashboard sign-in: username megalodon; password ([A-Za-z0-9_-]{32,})\r?\n", output)
+                match = re.search(rb"MEGALODON local dashboard sign-in password: ([A-Za-z0-9_-]{12})\r?\n", output)
                 if match:
                     password = match.group(1).decode("ascii")
             if password is None:
@@ -202,8 +202,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
     from playwright.async_api import expect
     origin = f"http://127.0.0.1:{port}"
     context = await browser.new_context(viewport={"width": 1440, "height": 1000},
-                                        reduced_motion="reduce", service_workers="block",
-                                        http_credentials={"username": "megalodon", "password": password})
+                                        reduced_motion="reduce", service_workers="block")
     violations: list[str] = []
     errors: list[str] = []
     counts = {"summary": 0, "events": 0, "advisory": 0}
@@ -238,7 +237,15 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
 
     page.on("request", count)
     try:
-        response = await page.goto(origin + ("/#reference-title" if not nonempty else "/"))
+        await page.goto(origin + "/")
+        await expect(page.locator("#sign-in-form")).to_be_visible()
+        await page.locator("#password").fill(password)
+        await page.locator("#submit").click()
+        await expect(page).to_have_url(origin + "/")
+        passed("password-only sign-in page opens the local HUD")
+        response = await page.reload()
+        if not nonempty:
+            await page.goto(origin + "/#reference-title")
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await expect(page.locator("#triage-panel")).to_have_attribute("aria-busy", "false")
         if not nonempty:

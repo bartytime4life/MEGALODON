@@ -25,8 +25,10 @@ from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 import secrets
+import time
 
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
+from .dashboard_signin import SIGNIN_HTML, SIGNIN_CSS, SIGNIN_JS
 from .dashboard_action_plane import ACTION_PRESETS
 from .dashboard_commands import local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
@@ -413,6 +415,10 @@ def _bounded_query(query: str, *, max_fields: int) -> dict[str, list[str]]:
 class DashboardHandler(BaseHTTPRequestHandler):
     http_read_password: str | None = None
     http_password_verifier: PasswordVerifier | None = None
+    http_session_token: str | None = None
+    login_lock = Lock()
+    login_failures = 0
+    login_blocked_until = 0.0
     store: DashboardReader
     offline_summary: dict[str, Any] | None = None
     advisory_receipt: dict[str, object] | None = None
@@ -438,7 +444,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
-        if not self._has_operator_http_auth():
+        if self.path == "/sign-in":
+            self._send(200, "text/html; charset=utf-8", SIGNIN_HTML.encode())
+            return
+        if self.path == "/assets/sign-in.css":
+            self._send(200, "text/css; charset=utf-8", SIGNIN_CSS.encode())
+            return
+        if self.path == "/assets/sign-in.js":
+            self._send(200, "text/javascript; charset=utf-8", SIGNIN_JS.encode())
+            return
+        if not self._has_operator_http_auth(redirect=self.path == "/"):
             return
         try:
             route = urlparse(self.path)
@@ -791,6 +806,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
+        if self.path == "/sign-in":
+            self._sign_in()
+            return
         if not self._has_operator_http_auth():
             return
         if self.path == "/api/ai/ask":
@@ -1015,12 +1033,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             expected.update({"localhost", f"localhost:{bound_port}"})
         return supplied in expected
 
-    def _has_operator_http_auth(self) -> bool:
+    def _has_operator_http_auth(self, *, redirect: bool = False) -> bool:
         """Require the launch or chosen password before any data or action route."""
         password = self.http_read_password
         verifier = self.http_password_verifier
         if password is None and verifier is None:
             return True  # Direct test handlers; serve() always sets one auth mode.
+        if self._has_session_cookie():
+            return True
         values = self.headers.get_all("Authorization", [])
         authorized = False
         if len(values) == 1 and len(values[0]) <= 128 and values[0][:6].lower() == "basic ":
@@ -1035,11 +1055,75 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 expected = f"megalodon:{password}".encode("ascii")
                 authorized = hmac.compare_digest(supplied, expected)
         if not authorized:
-            self._send_json(
-                {"error": "local dashboard sign-in required"}, status=401,
-                extra_headers={"WWW-Authenticate": 'Basic realm="MEGALODON local"'},
-            )
+            if redirect:
+                self._send(303, "text/plain; charset=utf-8", b"sign in required",
+                           extra_headers={"Location": "/sign-in"})
+            else:
+                self._send_json({"error": "local dashboard sign-in required"}, status=401)
         return authorized
+
+    def _has_session_cookie(self) -> bool:
+        token = self.http_session_token
+        values = self.headers.get_all("Cookie", [])
+        if token is None or len(values) != 1 or len(values[0]) > 256:
+            return False
+        name = f"megalodon_session_{self.server.server_port}"
+        matches = [part.strip()[len(name) + 1:] for part in values[0].split(";")
+                   if part.strip().startswith(name + "=")]
+        return len(matches) == 1 and hmac.compare_digest(matches[0], token)
+
+    def _sign_in(self) -> None:
+        expected_origin = f"http://{self.headers.get('Host')}"
+        if (self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("X-Megalodon-Sign-In", []) != ["1"]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "same-origin sign-in required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit()
+                or len(lengths[0]) > 3 or not 2 <= int(lengths[0]) <= 256):
+            self._send_json({"error": "invalid sign-in request"}, status=400)
+            return
+        auth_class = type(self)
+        with auth_class.login_lock:
+            if time.monotonic() < auth_class.login_blocked_until:
+                self._send_json({"error": "try again shortly"}, status=429,
+                                extra_headers={"Retry-After": "30"})
+                return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
+        except (ValueError, UnicodeError, OSError):
+            self._send_json({"error": "invalid sign-in request"}, status=400)
+            return
+        supplied = body.get("password") if type(body) is dict and set(body) == {"password"} else None
+        valid = False
+        if type(supplied) is str and len(supplied) <= 64:
+            try:
+                encoded = supplied.encode("ascii")
+            except UnicodeError:
+                encoded = b""
+            if self.http_password_verifier is not None:
+                valid = self.http_password_verifier.verify(encoded)
+            elif self.http_read_password is not None:
+                valid = hmac.compare_digest(encoded, self.http_read_password.encode("ascii"))
+        if not valid or self.http_session_token is None:
+            with auth_class.login_lock:
+                auth_class.login_failures += 1
+                if auth_class.login_failures >= 5:
+                    auth_class.login_failures = 0
+                    auth_class.login_blocked_until = time.monotonic() + 30
+            self._send_json({"error": "invalid HUD password"}, status=401)
+            return
+        with auth_class.login_lock:
+            auth_class.login_failures = 0
+        cookie = (f"megalodon_session_{self.server.server_port}={self.http_session_token}; "
+                  "HttpOnly; SameSite=Strict; Path=/")
+        self._send_json({"status": "signed_in"}, extra_headers={"Set-Cookie": cookie})
 
     def _send_json(self, value: object, *, status: int = 200, extra_headers: dict[str, str] | None = None) -> None:
         payload = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
@@ -1136,8 +1220,8 @@ def _show_http_read_password(password: str | None) -> None:
     if terminal_fd < 0 or not os.isatty(terminal_fd):
         raise ValueError("dashboard sign-in requires an interactive terminal")
     remaining = (
-        f"MEGALODON local dashboard sign-in: username megalodon; "
-        f"password {password if password is not None else 'your configured HUD password'}\n"
+        f"MEGALODON local dashboard sign-in password: "
+        f"{password if password is not None else 'your configured HUD password'}\n"
     ).encode("ascii")
     while remaining:
         written = os.write(terminal_fd, remaining)
@@ -1175,7 +1259,8 @@ def serve(
     ai_operator_token = secrets.token_urlsafe(24) if ai_settings is not None and ai_settings.enabled else None
     install_operator_token = secrets.token_urlsafe(24) if enable_tool_management else None
     host = loopback_host(host, allow_remote=allow_remote)
-    http_read_password = secrets.token_urlsafe(24) if http_password_verifier is None else None
+    http_read_password = secrets.token_urlsafe(9) if http_password_verifier is None else None
+    http_session_token = secrets.token_urlsafe(32)
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
     # Capture inert command text once. HTTP input cannot choose an interpreter
@@ -1204,6 +1289,10 @@ def serve(
             "install_operator_token": install_operator_token,
             "http_read_password": http_read_password,
             "http_password_verifier": http_password_verifier,
+            "http_session_token": http_session_token,
+            "login_lock": Lock(),
+            "login_failures": 0,
+            "login_blocked_until": 0.0,
             "javascript": javascript,
             "ai_settings": ai_settings or AISettings(),
             "ai_receipt_path": ai_receipt_path,

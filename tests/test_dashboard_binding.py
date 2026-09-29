@@ -98,7 +98,8 @@ def test_loopback_server_gets_numeric_host_and_closes(monkeypatch, host, expecte
     assert handler.refresh_seconds == 12
     assert handler.event_limit == 25
     assert isinstance(handler.http_read_password, str)
-    assert len(handler.http_read_password) >= 32
+    assert len(handler.http_read_password) == 12
+    assert len(handler.http_session_token) >= 32
     server.server_close.assert_called_once_with()
 
 
@@ -160,7 +161,7 @@ def test_launch_password_is_restricted_to_a_terminal(monkeypatch):
         patch.setattr(dashboard.os, "isatty", lambda fd: fd == 7)
         patch.setattr(dashboard.os, "write", lambda fd, data: writes.append((fd, data)) or len(data))
         dashboard._show_http_read_password("private-launch-password")
-    assert writes == [(7, b"MEGALODON local dashboard sign-in: username megalodon; password private-launch-password\n")]
+    assert writes == [(7, b"MEGALODON local dashboard sign-in password: private-launch-password\n")]
 
 
 def test_chosen_password_notice_never_prints_a_secret(monkeypatch):
@@ -169,7 +170,7 @@ def test_chosen_password_notice_never_prints_a_secret(monkeypatch):
     monkeypatch.setattr(dashboard.os, "isatty", lambda fd: fd == 7)
     monkeypatch.setattr(dashboard.os, "write", lambda fd, data: writes.append(data) or len(data))
     dashboard._show_http_read_password(None)
-    assert writes == [b"MEGALODON local dashboard sign-in: username megalodon; password your configured HUD password\n"]
+    assert writes == [b"MEGALODON local dashboard sign-in password: your configured HUD password\n"]
 
 
 @pytest.mark.parametrize("host, override", (
@@ -352,7 +353,7 @@ def test_launch_password_guards_private_reads_before_store_access():
             status, body, headers = _host_request(server, (host,), authorizations=credentials)
             assert status == 401
             assert body == {"error": "local dashboard sign-in required"}
-            assert headers["WWW-Authenticate"] == 'Basic realm="MEGALODON local"'
+            assert "WWW-Authenticate" not in headers
         assert not store.summary.called
         valid = "Basic " + base64.b64encode(b"megalodon:private-launch-password").decode("ascii")
         status, _, _ = _host_request(server, (host,), authorizations=(valid, valid))
@@ -396,6 +397,63 @@ def test_chosen_password_guards_private_reads_before_store_access():
         status, body, _ = _host_request(server, (host,), authorizations=(auth,))
         assert status == 200 and body == {"events": 1}
         store.summary.assert_called_once_with()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_password_only_landing_page_and_session_guard_private_data():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    handler = type("SignInHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": "twelve-chars",
+        "http_session_token": "private-session-token",
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+    })
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host = f"127.0.0.1:{server.server_port}"
+
+    def request(method, path, body=None, headers=None):
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        try:
+            connection.request(method, path, body=body, headers={"Host": host, **(headers or {})})
+            response = connection.getresponse()
+            return response.status, dict(response.getheaders()), response.read()
+        finally:
+            connection.close()
+
+    try:
+        status, headers, _ = request("GET", "/")
+        assert status == 303 and headers["Location"] == "/sign-in"
+        assert "WWW-Authenticate" not in headers
+        status, _, body = request("GET", "/sign-in")
+        assert status == 200 and b'HUD password' in body
+        assert b'twelve-chars' not in body
+        assert request("GET", "/api/summary")[0] == 401
+        assert request("GET", "/assets/dashboard.js")[0] == 401
+        assert not store.summary.called
+        login_headers = {"Origin": f"http://{host}", "Content-Type": "application/json",
+                         "X-Megalodon-Sign-In": "1"}
+        assert request("POST", "/sign-in", b'{"password":"twelve-chars"}',
+                       {**login_headers, "Origin": "http://attacker.invalid"})[0] == 403
+        assert request("POST", "/sign-in", b'{"password":"wrong","password":"twelve-chars"}',
+                       login_headers)[0] == 400
+        assert request("POST", "/sign-in", b'{"password":"wrong"}', login_headers)[0] == 401
+        assert request("GET", "/api/summary")[0] == 401
+        status, headers, _ = request("POST", "/sign-in", b'{"password":"twelve-chars"}', login_headers)
+        assert status == 200
+        cookie = headers["Set-Cookie"].split(";", 1)[0]
+        assert "HttpOnly" in headers["Set-Cookie"] and "SameSite=Strict" in headers["Set-Cookie"]
+        assert request("GET", "/api/summary", headers={"Cookie": cookie})[0] == 200
+        assert request("GET", "/api/summary", headers={"Cookie": cookie + "; " + cookie})[0] == 401
+        for _ in range(5):
+            assert request("POST", "/sign-in", b'{"password":"wrong"}', login_headers)[0] == 401
+        assert request("POST", "/sign-in", b'{"password":"twelve-chars"}', login_headers)[0] == 429
+        assert request("GET", "/api/summary", headers={"Cookie": cookie})[0] == 200
+        assert store.summary.call_count == 2
     finally:
         server.shutdown()
         server.server_close()
