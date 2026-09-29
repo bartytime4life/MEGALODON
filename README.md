@@ -288,8 +288,8 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata completed-file intake | Single-threaded Linux main-thread APIs for one checksum-bound private 8.0.7 alert-only EVE file or one closed-envelope file; both return the same consumer-compatible immutable batch and terminal receipt, with no mixed firehose, persistence, dashboard write, watcher, or sensor operation |
 | Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
 | Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
-| Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and `automation-preview` CLI with explicit DST classification; no scheduler, ledger, persistence, model call, or executor |
-| Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation at `127.0.0.1:11434/api/generate`; no scheduler, discovery, pull/start, retry, redirect, tool use, detector authority, or response authority |
+| Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and `automation-preview` CLI with explicit DST classification. The separate [local companion worker](docs/companion-automation.md) runs only three fixed, explicitly scoped inventory jobs; the general automation contract has no scheduler, ledger, persistence, model call, or executor |
+| Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation. The opt-in [companion worker](docs/companion-automation.md) can request an advisory on aggregate counts through the digest-pinned local provider. Neither path gives Qwen command, target, detector, or response authority |
 | Qwen provider posture (read-only) | `megalodon.provider_containment.qwen_provider_posture()` observes, via `/proc` only, whether the fixed loopback destination is bound, whether it is also reachable beyond loopback, and (permission-gated, best-effort) its owning UID/PID/cgroup/net-namespace; never contacts the provider, never gates or feeds back into an advisory request, and reports denial/uncertainty honestly rather than guessing |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
 | Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures, plus a bounded in-memory decision engine (`megalodon/alert_lifecycle.py`) validated against those fixtures; no persistence, notifier, delivery adapter, credential path, or wiring into detection ingestion, storage, the dashboard, or the CLI |
@@ -310,8 +310,9 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Producing optional `conn.log` input | Not invoked or required by MEGALODON; the producer version is operator-declared |
 | Suricata | Optional external producer for the closed alert envelope | The Linux file reader and durable consumer never invoke or require the Suricata binary; they accept only the separately prepared contract envelope/publication |
-| ClamAV | Separate manual file scanning | Optional companion; no MEGALODON file intake, quarantine, or result importer |
-| osquery | Future endpoint-metadata evaluation | Proposed only; no query pack, scheduler, remote enrollment, or importer |
+| ClamAV | Explicitly scoped local scans or completed-report watching | Optional opt-in companion; aggregate counts only, no file-content intake, quarantine, signature update, or upload |
+| osquery | Fixed local DEB package count or completed-result watching | Optional opt-in companion; no package names, arbitrary query pack, daemon, or remote enrollment |
+| Nmap | Explicit private IPv4 target scan or completed XML watching | Optional opt-in companion; at most 256 addresses and aggregate host/port-state counts only |
 | nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
 | pytest `>=8,<10` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
@@ -344,8 +345,8 @@ MEGALODON's capability status.
 | TShark | Implemented Linux-only offline packet adapter at /usr/bin/tshark | Live-capture permission or a public capture directory |
 | Zeek | Implemented offline importer for the closed conn.log profile | A service, cluster, or automatic producer |
 | Suricata | Implemented pinned 8.0.7 alert-only raw-EVE converter, closed-envelope reader, and explicit transaction into one pre-created private durable store | Rule updates, mixed EVE firehose, sensor mode, IPS mode, watcher, or its service |
-| ClamAV | Manual companion only; no file/result/quarantine integration | A daemon, automatic update, quarantine, or deletion |
-| osquery | Proposed endpoint-inventory work; no importer | A daemon, schedule, query pack, or remote enrollment |
+| ClamAV | Opt-in fixed local scan/report watch; counts only | A daemon, automatic update, quarantine, or deletion |
+| osquery | Opt-in fixed DEB count/report watch; no package names | A daemon, arbitrary query pack, or remote enrollment |
 | nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
 
 The static catalog remains the source of truth. From the activated project
@@ -399,7 +400,7 @@ command fails.
 
 Keep the TShark capture-permission answer at **No**. MEGALODON's offline
 adapter does not need live-capture permission, and installation should not
-grant it. ClamAV is a separate manual companion, not a prerequisite for this
+grant it. ClamAV is an optional separately installed companion, not a prerequisite for this
 guide. Do not install it from this recipe: Ubuntu packaging can add its
 signature-update service, which exceeds MEGALODON's no-service/no-egress
 boundary.
@@ -421,7 +422,8 @@ alert-only EVE converter, a completed contract-envelope reader, an explicit
 create-only durable-store schema initializer, and an operator-invoked
 transaction for one immutable publication. It still has no producer control,
 mixed-firehose intake, watcher, scheduler, or IPS path;
-osquery remains proposed with no MEGALODON reader, importer, scheduler, or enrollment.
+The narrow opt-in osquery DEB count in the [local companion worker](docs/companion-automation.md)
+is separate from broader endpoint inventory, query packs, and enrollment, which remain proposed.
 
 ### 3. Build Zeek as a private, non-service producer
 
