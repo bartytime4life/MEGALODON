@@ -74,13 +74,8 @@ PROBES: dict[str, ToolProbe] = {
     "ossec": ToolProbe((), ("/var/ossec/bin/ossec-control", "/var/ossec/bin/wazuh-control"),
                        processes=frozenset({"ossec-analysisd", "ossec-monitord", "ossec-agentd", "wazuh-agentd"}),
                        service=True),
-    "greenbone": ToolProbe(("gvmd",),
-                           processes=frozenset({"gvmd", "openvas", "ospd-openvas", "gsad"}), service=True,
-                           home_configuration_files=("greenbone-community-edition/compose.yaml",)),
     "zabbix": ToolProbe(("zabbix_agent2", "zabbix_agentd", "zabbix_server"),
                         processes=frozenset({"zabbix_agent2", "zabbix_agentd", "zabbix_server"}), service=True),
-    "nagios": ToolProbe(("nagios4", "nagios"), ("/usr/local/nagios/bin/nagios",),
-                        processes=frozenset({"nagios4", "nagios"}), service=True),
 }
 TOOL_IDS = tuple(PROBES)
 

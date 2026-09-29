@@ -29,7 +29,7 @@ Current positions include:
 - nftables planning with live application refused;
 - manual ClamAV companionship with no file, result, or quarantine importer;
 - bounded completed-file STIX context reading and pure ECS/OCSF projection;
-- proposed osquery, Nmap, OSSEC, Greenbone, Zabbix, and Nagios relationships with no general runner.
+- proposed osquery, Nmap, OSSEC and Zabbix relationships with no general runner.
 
 Adding an application requires a capability status, one closed workflow, typed
 input/output contracts, privacy and action boundaries, negative tests, and

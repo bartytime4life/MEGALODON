@@ -99,7 +99,7 @@ Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
 
 **Apps → Start installed services** shows the fixed local service-start controls
-for Suricata, Ollama, OSSEC, Zabbix and Nagios when the HUD observes them as
+for Suricata, Ollama, OSSEC and Zabbix when the HUD observes them as
 installed. The same launch opt-in, token and confirmation apply there. Other
 app cards retain their setup guidance or explicit web-console navigation;
 opening a console does not start its service or connect its data.
@@ -714,8 +714,7 @@ the local summary and `python -m megalodon.tool_setup` workflows.
 
 **Apps** shows the startup executable-presence snapshot, official setup links,
 saved companion-console addresses and copy-only maintenance controls. The local
-HUD also shows fixed loopback console suggestions for Greenbone and Nagios; a
-suggestion is neither probed nor saved, and the hosted Site does not show it. Choose
+Choose
 **View in HUD** on any app card to use its configured web console in the App
 viewer. Nothing loads until you choose it. If the app refuses embedding or needs
 external sign-in, use **Open outside HUD**. Desktop GUIs such as Wireshark and

@@ -41,9 +41,7 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `local-ai-advisory` | Qwen via local Ollama | Original run-count advisory library call | One Airlock-admitted request to literal IPv4 loopback and an optional startup-supplied display receipt; this policy has no CLI invocation, traffic inspection, background analysis, tools, or action authority. Separate opt-in anomaly/AI paths are described below. |
 | `network-inventory-import` | Nmap | Optional aggregate importer | [Nmap 7.x XML 1.05 completed report](nmap-inventory-v1.md) on stdin to aggregate JSON; manual local/hosted HUD import; no scan launch, retained targets, scripts, banners, or network activity |
 | `host-integrity-import` | OSSEC | Proposed | Completed alert import only; no agent enrollment, daemon control, configuration, or active response |
-| `vulnerability-report-import` | Greenbone Community Edition | Proposed | Completed GMP report import only; no scanner, feed, target, task, or remediation control |
 | `zabbix-availability-read` | Zabbix | Proposed | No endpoint, credential, client, poller, acknowledgement, or remote command |
-| `nagios-availability-read` | Nagios Core | Proposed | No CGI endpoint, credential, poller, command pipe, acknowledgement, or remote command |
 
 The Suricata record and reader contract gates are closed as prerequisites
 ([#9](https://github.com/bartytime4life/MEGALODON/issues/9) and

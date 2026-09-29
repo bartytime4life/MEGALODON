@@ -144,17 +144,6 @@ _COMPONENTS = (
         "boundary": "No daemon, alert importer, active response, enrollment, or configuration path exists.",
     },
     {
-        "id": "greenbone",
-        "software": "Greenbone Community Edition",
-        "integration": "future_completed_vulnerability_report_import",
-        "platforms": {
-            "linux": "proposed",
-            "windows": "guest_only",
-            "other": "unsupported",
-        },
-        "boundary": "No scanner or feed control exists; only a future bounded import of completed reports is proposed.",
-    },
-    {
         "id": "zabbix",
         "software": "Zabbix",
         "integration": "future_availability_read_model",
@@ -164,17 +153,6 @@ _COMPONENTS = (
             "other": "unsupported",
         },
         "boundary": "No endpoint, credential, API client, background poller, or runtime reader is configured.",
-    },
-    {
-        "id": "nagios-core",
-        "software": "Nagios Core",
-        "integration": "future_availability_read_model",
-        "platforms": {
-            "linux": "proposed",
-            "windows": "guest_only",
-            "other": "unsupported",
-        },
-        "boundary": "No CGI endpoint, credential, command pipe, background poller, or runtime reader is configured.",
     },
 )
 

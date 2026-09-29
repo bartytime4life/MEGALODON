@@ -65,7 +65,7 @@ placeholder scaffold that selects no real Zeek producer version. The
 "remaining decision or evidence theme" column above still applies unchanged
 — only the issue tracking state moved. No successor issue currently tracks
 the residual #261/#327 gap. See
-[`docs/unified-roadmap-currentness.md`](../unified-roadmap-currentness.md)
+[`docs/unified-roadmap-currentness.md`](https://github.com/bartytime4life/MEGALODON/blob/main/docs/unified-roadmap-currentness.md)
 for the full readback.
 
 ## Evidence still needed before broader claims

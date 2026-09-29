@@ -33,9 +33,7 @@ TOOLS = (
  ('osquery','osquery','Saved DEB package-count importer; manual HUD JSON load','One fixed Ubuntu count only; no daemon, scheduler or live inventory'),
  ('nmap','Nmap','Completed-report aggregate importer; manual HUD JSON load','Saved host / port counts only; no scanner or live telemetry'),
  ('ossec','OSSEC','Presence/process observation only','Alert adapter not implemented'),
- ('greenbone','Greenbone','Presence/process observation only','Vulnerability-report adapter not implemented'),
  ('zabbix','Zabbix','Presence/process observation only','Monitoring-data adapter not implemented'),
- ('nagios','Nagios Core','Presence/process observation only','Monitoring-data adapter not implemented'),
 )
 
 
@@ -53,7 +51,7 @@ def coverage_html(hosted=False):
     return f'''<section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
 <h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>{note}</p>
 <details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody>{rows}</tbody></table></div></details>
-<details><summary>All 14 companions: telemetry support</summary><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody>{tool_rows}</tbody></table></div></details>
+<details><summary>All 12 companions: telemetry support</summary><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody>{tool_rows}</tbody></table></div></details>
 </section>'''
 
 COVERAGE_CSS = r'''

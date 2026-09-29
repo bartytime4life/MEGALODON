@@ -83,18 +83,13 @@ the HUD, and it does not install or start a companion. After running the command
 in a terminal, the separate per-launch token and confirmation controls remain
 required.
 
-Apps provides fixed loopback console suggestions for Greenbone and Nagios on
-the local HUD only. A suggestion is not probed or saved and does not establish
-installation, reachability, authentication, service health, telemetry, or
-MEGALODON integration. The hosted Site does not show these local suggestions.
-
 | IDs | Installation path |
 | --- | --- |
-| tshark, suricata, nftables, clamav, nmap, zabbix, nagios | Existing fixed Ubuntu apt recipes; OS privilege prompt through pkexec when needed |
+| tshark, suricata, nftables, clamav, nmap, zabbix | Existing fixed Ubuntu apt recipes; OS privilege prompt through pkexec when needed |
 | scapy | Existing bounded-version pip recipe in the active Python environment |
 | qwen | Existing example qwen2.5:7b download through an installed Ollama provider |
 | core | Existing reviewed `scripts/install-local.sh` user installer |
-| zeek, osquery, ossec, greenbone | Publisher/project guides; explicit build, repository, role or container decisions |
+| zeek, osquery, ossec | Publisher/project guides; explicit build, repository, role or container decisions |
 
 `install --apply` executes the same closed recipe registry as the local
 installer, with a 30-minute deadline and the package manager's terminal
@@ -135,7 +130,7 @@ installer request disables management and shows its own unavailable state while
 a valid heartbeat continues to show observed tool presence. A failed heartbeat
 continues to mark tool observations stale even when installer status succeeds.
 
-OSSEC, Greenbone, Zabbix and Nagios do not yet have their
+OSSEC and Zabbix do not yet have their
 inventory/alert/monitoring data adapters. ClamAV and Nmap have manual completed-report
 aggregate importers, and osquery has a fixed saved DEB package-count importer;
 none are live connections. Presence/process checks and manual

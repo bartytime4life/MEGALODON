@@ -14,9 +14,9 @@ test('console URLs refuse executable protocols, credentials and secret-bearing q
   assert.equal(controls.consoleURL('http://127.0.0.1:9392/'), 'http://127.0.0.1:9392/');
   assert.equal(controls.consoleURL('https://monitor.example.org/zabbix'), 'https://monitor.example.org/zabbix');
 });
-test('only the closed fourteen tool identities persist and malformed saved values are dropped', () => {
-  const {controls, writes} = runtime(JSON.stringify({greenbone:'http://127.0.0.1:9392/', qwen:'javascript:alert(1)', other:'https://example.org/'}));
-  assert.deepEqual(Object.keys(controls.links()), ['greenbone']);
+test('only the closed twelve tool identities persist and malformed saved values are dropped', () => {
+  const {controls, writes} = runtime(JSON.stringify({zabbix:'http://127.0.0.1:8080/', greenbone:'http://127.0.0.1:9392/', qwen:'javascript:alert(1)', other:'https://example.org/'}));
+  assert.deepEqual(Object.keys(controls.links()), ['zabbix']);
   assert.throws(() => controls.save('__proto__', 'https://example.org/'));
   controls.save('zabbix', 'https://monitor.example.org/');
   assert.equal(JSON.parse(writes[0][1]).zabbix, 'https://monitor.example.org/');
@@ -25,8 +25,8 @@ test('only the closed fourteen tool identities persist and malformed saved value
 });
 test('storage failures remain usable and explicitly report session-only persistence', () => {
   const {controls} = runtime(null, true);
-  assert.equal(controls.save('nagios', 'http://127.0.0.1:8080/'), false);
-  assert.equal(controls.links().nagios, 'http://127.0.0.1:8080/');
+  assert.equal(controls.save('zabbix', 'http://127.0.0.1:8080/'), false);
+  assert.equal(controls.links().zabbix, 'http://127.0.0.1:8080/');
 });
 test('shared controls never fetch, embed a console, or execute command text', () => {
   const source = fs.readFileSync(require.resolve('../dist/controls.js'), 'utf8');
@@ -64,6 +64,6 @@ test('companion panel saves an address and copies only the selected Zabbix role'
   find('Remove link').listeners.click();
   assert.equal(find('Open companion console ↗').hidden, true);
   const hostedParent=new Element('main'); context.hostedParent=hostedParent;
-  vm.runInContext("MegalodonControls.mount(hostedParent, 'greenbone', 'Greenbone', {changed(){}})",context);
+  vm.runInContext("MegalodonControls.mount(hostedParent, 'zabbix', 'Zabbix', {changed(){}})",context);
   assert.equal(all(hostedParent).find(element=>element.textContent==='Open suggested local console ↗'), undefined);
 });

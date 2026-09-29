@@ -90,7 +90,7 @@ def test_recipes_are_closed_and_never_interpolate_requests(monkeypatch):
     assert command[3].endswith("apt-get install -y --no-install-recommends tshark")
     assert install_command("tshark", which=which, is_root=True)[0] == "/bin/sh"
     assert install_command("tshark", which={}.get, is_root=False) is None
-    for guided in ("core", "zeek", "osquery", "ossec", "greenbone"):
+    for guided in ("core", "zeek", "osquery", "ossec"):
         assert install_command(guided, which=which) is None
     assert install_command("qwen", which={}.get) is None
     with pytest.raises(KeyError):

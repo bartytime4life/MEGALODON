@@ -43,13 +43,6 @@ const lifecycleCommands = (() => {
       uninstall: null, reinstall: null,
       note: "OSSEC server, agent and source installs have different lifecycle procedures. The installation method and role are unknown here; use the vendor guide matching your installation instead of a combined guessed package list."
     },
-    greenbone: {
-      verify: "docker compose images",
-      uninstall: "docker compose down",
-      reinstall: "docker compose pull",
-      labels: {verify: "Inspect project images", uninstall: "Remove containers; retain data/images", reinstall: "Refresh images; do not start"},
-      note: "Run only in the reviewed Greenbone compose project. Image inventory is not service health or proof of an installed scanner. Down keeps images and named volumes; pull downloads images without starting containers. Neither is a complete uninstall/reinstall. Follow the vendor guide for data-aware removal."
-    },
     zabbix: {
       verify: "command -v zabbix_agent2 || command -v zabbix_agentd || command -v zabbix_server",
       uninstall: null, reinstall: null,
@@ -59,11 +52,6 @@ const lifecycleCommands = (() => {
         agent: {...apt("zabbix-agent", "zabbix_agentd --version", "Classic agent only."), label: "Classic agent"},
         mysql: {...apt("zabbix-server-mysql", "zabbix_server --version", "MySQL server package only; database, frontend and data lifecycle are separate."), label: "Server with MySQL"}
       }
-    },
-    nagios: {
-      verify: "if command -v nagios4 >/dev/null; then nagios4 --version; elif command -v nagios >/dev/null; then nagios --version; elif test -x /usr/local/nagios/bin/nagios; then /usr/local/nagios/bin/nagios --version; else exit 1; fi",
-      uninstall: null, reinstall: null,
-      note: "Checks the Ubuntu nagios4 executable first, then common source-install names. The linked Nagios Core guide and Ubuntu package represent different installations. Match the actual method and prefix; no generic removal/reinstall is supplied."
     }
   };
 })();

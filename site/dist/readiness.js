@@ -1,5 +1,5 @@
 /* Closed, bounded display schema. A report is an unauthenticated self-report. */
-const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap", "ossec", "greenbone", "zabbix", "nagios-core"];
+const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap", "ossec", "zabbix"];
 const readinessBoundaries = [
   "Executable presence only; installation, version, compatibility, trust and running state are not verified.",
   "Python/SQLite and Scapy availability are not checked by this executable-only report.",
@@ -41,7 +41,7 @@ function validateReadinessReport(text, now = Date.now()) {
   if (typeof data.checked_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(data.checked_at)) throw new Error("Report requires a UTC checked_at timestamp.");
   const checkedAt = Date.parse(data.checked_at);
   if (!Number.isFinite(checkedAt) || new Date(checkedAt).toISOString().replace(".000Z", "Z") !== data.checked_at || checkedAt > now + 300000) throw new Error("Invalid or future readiness timestamp.");
-  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 14-tool presence-only registry.");
+  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 12-tool presence-only registry.");
   if (!Array.isArray(data.boundaries) || data.boundaries.length !== readinessBoundaries.length || !data.boundaries.every((value, index) => value === readinessBoundaries[index])) throw new Error("Report boundary statements do not match this schema.");
   return data;
 }

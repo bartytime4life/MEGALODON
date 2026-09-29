@@ -10,7 +10,7 @@ const parse = value => validateReadinessReport(JSON.stringify(value), now);
 
 test('accepts a complete presence-only report without promoting claims', () => {
   const result = parse(report());
-  assert.equal(result.tools.length, 14);
+  assert.equal(result.tools.length, 12);
   assert.equal(result.tools.find(tool => tool.id === 'qwen-ollama').status, 'executable_found');
   assert.equal(result.probe_mode, 'path_presence_only');
 });
@@ -78,7 +78,7 @@ test('an older rejected read cannot replace a newer accepted import', async () =
   const old = vm.runInContext('importReadinessFile(oldFile)', context);
   await vm.runInContext('importReadinessFile(newFile)', context);
   const loaded = nodes.get('#readiness-feedback').textContent;
-  assert.match(loaded, /14 tool results loaded/);
+  assert.match(loaded, /12 tool results loaded/);
   rejectOld(new Error('synthetic delayed read error')); await old;
   assert.ok(context.state.readiness);
   assert.equal(nodes.get('#readiness-feedback').textContent, loaded);
@@ -124,18 +124,12 @@ test('the HTML declares unique evidence controls and loads its local validator f
 
 const {lifecycleCommands, resolveLifecycle} = require('../dist/lifecycle.js');
 
-test('lifecycle choices cover the exact fourteen tools without inventing unknown installations', () => {
-  assert.deepEqual(Object.keys(lifecycleCommands).sort(), ['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','ossec','greenbone','zabbix','nagios'].sort());
-  for (const id of ['zeek','ossec','nagios','zabbix']) {
+test('lifecycle choices cover the exact twelve tools without inventing unknown installations', () => {
+  assert.deepEqual(Object.keys(lifecycleCommands).sort(), ['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','ossec','zabbix'].sort());
+  for (const id of ['zeek','ossec','zabbix']) {
     assert.equal(resolveLifecycle(id).uninstall, null);
     assert.equal(resolveLifecycle(id).reinstall, null);
   }
-});
-
-test('Nagios verification recognizes the Ubuntu package before source-install fallbacks', () => {
-  const nagios = resolveLifecycle('nagios');
-  assert.match(nagios.verify, /^if command -v nagios4/);
-  assert.match(nagios.verify, /\/usr\/local\/nagios\/bin\/nagios --version/);
 });
 
 test('Qwen inspect, removal and download use the same example model and literal local provider', () => {
@@ -156,15 +150,6 @@ test('Zabbix selection scopes package operations to exactly one role', () => {
   for (const invalid of [undefined, '', 'all', '__proto__']) {
     assert.equal(resolveLifecycle('zabbix', invalid).reinstall, null);
   }
-});
-
-test('Greenbone labels report container and image effects, not a complete uninstall or running scanner', () => {
-  const greenbone = resolveLifecycle('greenbone');
-  assert.equal(greenbone.verify, 'docker compose images');
-  assert.equal(greenbone.uninstall, 'docker compose down');
-  assert.match(greenbone.labels.uninstall, /retain data\/images/);
-  assert.match(greenbone.labels.reinstall, /do not start/);
-  assert.match(greenbone.note, /Neither is a complete uninstall\/reinstall/);
 });
 
 test('scanner reference does not silently add daemon/update roles or purge configuration', () => {
@@ -255,17 +240,17 @@ test('whole application initializes and navigates without a feed or browser netw
   nodes.get('.brand').listeners.click({preventDefault(){prevented=true;}});
   assert.equal(prevented,true);
   assert.equal(vm.runInContext('state.activeView',context),'hud');
-  vm.runInContext("MegalodonControls.save('nagios','http://127.0.0.1:8080/'); state.toolFilter='saved'; renderIntegrationGrid(); renderToolInspector();",context);
-  assert.equal(nodes.get('#tool-result-count').textContent,'1 of 14 tools shown');
+  vm.runInContext("MegalodonControls.save('zabbix','http://127.0.0.1:8080/'); state.toolFilter='saved'; renderIntegrationGrid(); renderToolInspector();",context);
+  assert.equal(nodes.get('#tool-result-count').textContent,'1 of 12 tools shown');
   const all=node=>[node,...node.children.flatMap(all)];
   all(nodes.get('#shared-tool-controls').children.at(-1)).find(node=>node.textContent==='Remove link').listeners.click();
-  assert.equal(nodes.get('#tool-result-count').textContent,'0 of 14 tools shown');
+  assert.equal(nodes.get('#tool-result-count').textContent,'0 of 12 tools shown');
   assert.equal(nodes.get('#tool-inspector').hidden,true);
   assert.equal(document.activeElement,nodes.get('#tool-quick-filter'));
   const reset=all(nodes.get('#integration-grid')).find(node=>node.textContent==='Clear filters');
   assert.ok(reset, 'empty results offer a recovery control');
   reset.listeners.click();
-  assert.equal(nodes.get('#tool-result-count').textContent,'14 of 14 tools shown');
+  assert.equal(nodes.get('#tool-result-count').textContent,'12 of 12 tools shown');
   assert.equal(nodes.get('#tool-inspector').hidden,false);
   assert.equal(document.activeElement,nodes.get('#tool-search'));
   context.syntheticReport=report();

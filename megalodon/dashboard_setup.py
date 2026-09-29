@@ -90,8 +90,8 @@ SETUP_HTML = """
 
 SETUP_JS = r"""
 const setupState = {readiness: null, runtime: null, sourceStatus: null, loadFailed: false};
-const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios'];
-const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap', 'ossec', 'greenbone', 'zabbix', 'nagios-core'];
+const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'zabbix'];
+const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap', 'ossec', 'zabbix'];
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
@@ -134,7 +134,7 @@ function renderToolStatus() {
   const names = {
     'python-sqlite': 'MEGALODON core', 'wireshark-tshark': 'Wireshark / TShark', zeek: 'Zeek', suricata: 'Suricata',
     scapy: 'Scapy', nftables: 'nftables', clamav: 'ClamAV', osquery: 'osquery', 'qwen-ollama': 'Qwen / Ollama',
-    nmap: 'Nmap', ossec: 'OSSEC', greenbone: 'Greenbone', zabbix: 'Zabbix', 'nagios-core': 'Nagios Core'
+    nmap: 'Nmap', ossec: 'OSSEC', zabbix: 'Zabbix'
   };
   const installedCount = readiness ? readiness.tools.filter(tool => tool.status === 'executable_found').length : null;
   const runningCount = runtime ? runtime.tools.filter(tool => tool.status === 'running').length : null;
@@ -212,9 +212,7 @@ const softwareCatalog = [
   {id: 'qwen', name: 'Ollama + Qwen', mark: 'AI', group: 'ai', requirement: 'Optional · local advisory', purpose: 'Host an optional local language model for bounded explanations.', note: 'Ollama is the runtime; Qwen is a separate model download. The advisory workflow needs a validated local model registry. Checking observes only the Ollama executable and process.', link: 'Ollama downloads'},
   {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · no importer', purpose: 'Explore network inventory in a separate authorized workflow.', note: 'The HUD does not scan a network. A completed XML importer is a future integration.'},
   {id: 'ossec', name: 'OSSEC', mark: 'OS', group: 'host', requirement: 'Optional · no importer', purpose: 'Monitor host integrity using a separately managed agent.', note: 'Choose your server or agent role in the vendor guide. Enrollment and active response stay outside MEGALODON.'},
-  {id: 'greenbone', name: 'Greenbone', mark: 'Gb', group: 'host', requirement: 'Optional · no importer', purpose: 'Manage vulnerability assessments in a separate console.', note: 'A multi-service container deployment. MEGALODON neither launches scans nor imports its reports.', link: 'Greenbone install guide'},
-  {id: 'zabbix', name: 'Zabbix', mark: 'Za', group: 'monitor', requirement: 'Optional · no connection', purpose: 'Monitor infrastructure in a separately managed service.', note: 'Select the server or agent package for your system. The HUD can save a console link, but has no data connection.', link: 'Zabbix download selector'},
-  {id: 'nagios', name: 'Nagios Core', mark: 'Na', group: 'monitor', requirement: 'Optional · no connection', purpose: 'Review service availability in its own monitoring console.', note: 'Configure hosts and plugins in Nagios. The HUD does not access its command pipe or credentials.'}
+  {id: 'zabbix', name: 'Zabbix', mark: 'Za', group: 'monitor', requirement: 'Optional · no connection', purpose: 'Monitor infrastructure in a separately managed service.', note: 'Select the server or agent package for your system. The HUD can save a console link, but has no data connection.', link: 'Zabbix download selector'}
 ];
 // Keep reading context across check updates and filter changes; keys are the fixed catalog.
 const softwareGuidanceOpen = new Map(softwareCatalog.map(item => [item.id, false]));
