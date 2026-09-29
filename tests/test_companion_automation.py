@@ -24,6 +24,9 @@ def _config(tmp_path: Path, source: str) -> CompanionConfig:
 def test_scopes_are_explicit_and_conservative(tmp_path):
     empty = _config(tmp_path, "")
     assert empty.nmap_target is None and empty.clamav_paths == () and not empty.osquery_enabled
+    assert CompanionAutomation(empty, AISettings()).snapshot()["status"] == {
+        "nmap": "not configured", "clamav": "not configured", "osquery": "not configured",
+    }
     folder = tmp_path / "scan"
     folder.mkdir()
     accepted = _config(tmp_path, f'[collection]\ninterval_seconds=300\nnmap_target="192.168.1.0/24"\nclamav_paths=["{folder}"]\nosquery_enabled=true\n')

@@ -189,7 +189,11 @@ class CompanionAutomation:
         self._lock = Lock()
         self._thread: Thread | None = None
         self._results: dict[str, dict] = {}
-        self._status = {kind: "waiting" for kind in _KINDS}
+        self._status = {
+            "nmap": "waiting" if config.nmap_target or config.watch_nmap_xml else "not configured",
+            "clamav": "waiting" if config.clamav_paths or config.watch_clamscan_text else "not configured",
+            "osquery": "waiting" if config.osquery_enabled or config.watch_osquery_json else "not configured",
+        }
         self._advisory: dict[str, str] = {}
         self._seen: dict[str, tuple] = {}
         self._next_collection = 0.0
@@ -215,7 +219,10 @@ class CompanionAutomation:
         with self._lock:
             self._results[kind] = value
             self._status[kind] = f"{source} · completed; saved aggregate"
-        if self.config.qwen_advisory and self.ai.enabled:
+        if self.config.qwen_advisory and not self.ai.enabled:
+            with self._lock:
+                self._advisory[kind] = "Qwen unavailable (DISABLED)."
+        elif self.config.qwen_advisory:
             from .ai_provider import AIProviderError, generate
             try:
                 prompt = ("Explain these completed security inventory counts in at most two sentences. "
