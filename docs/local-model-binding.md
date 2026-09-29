@@ -18,6 +18,9 @@ the existing containment-observation packet:
 The checked-in `config/model-bindings/qwen.unbound.json` is intentionally empty.
 It is the canonical repository posture until an operator supplies authenticated
 values and separately approves the completed chain.
+The [issue #446 owner-decision packet](qwen-446-owner-decision-packet.md)
+separates the historical local candidate observation from the missing exact
+binding values, zero-effect regression scope, and later acceptance holds.
 
 ```bash
 python tools/local_model_binding.py validate \
