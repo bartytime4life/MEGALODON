@@ -96,7 +96,7 @@ def test_lock_shape_weakenings_fail(path, names, mutation):
 
 
 def test_supported_hud_data_launcher_is_in_sdist_manifest():
-    assert "include scripts/start-hud-data.sh\\n" in (ROOT / "MANIFEST.in").read_text()
+    assert "include scripts/start-hud-data.sh\n" in (ROOT / "MANIFEST.in").read_text()
 
 
 def test_workflow_acquires_verifies_then_builds_from_local_wheels():
