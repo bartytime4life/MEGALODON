@@ -13,9 +13,9 @@ FEATURES = (
  ('reference','Service and protocol reference','Verified bundled IANA registrations','On explicit lookup; not network service discovery','reference-title'),
  ('tools','Companion presence and processes','Bounded local executable/process observations','60-second heartbeat while visible; not sensor health','setup-title'),
  ('management','Tool installation / service jobs','Fixed optional installer job status','2 seconds while a job runs; independently observed','tool-management-controls'),
- ('inventory','Network inventory','Completed Nmap 7.x XML 1.05 aggregate export','Explicit manual JSON import; saved observations only','inventory-title'),
- ('clamav-scan','Completed file scan','Completed clamscan report counts-only export','Explicit manual JSON import; no scanner or live telemetry','clamav-title'),
- ('osquery-count','Saved package inventory','Completed osqueryi DEB package count export','Explicit manual JSON import; no query runner or live telemetry','osquery-title'),
+ ('inventory','Network inventory','Local fixed Nmap loopback scan or watched completed XML report','Local HUD collects hourly when Nmap is installed; reports checked every 15 seconds','inventory-title'),
+ ('clamav-scan','Completed file scan','Local fixed ClamAV Downloads scan or watched completed report','Local HUD collects hourly when ClamAV and Downloads exist; reports checked every 15 seconds','clamav-title'),
+ ('osquery-count','Package inventory','Local fixed osquery DEB row count or watched completed result','Local HUD collects hourly when osquery is installed; reports checked every 15 seconds','osquery-title'),
  ('reports','Reports and hosted summary','Validated bounded metadata, held for preview/download','Explicit local export; hosted import remains a saved snapshot','room-reports-title'),
  ('viewer','Companion app viewer','User-selected companion console URL','App-owned UI; does not connect its telemetry','app-viewer-title'),
  ('automation','Action scripts and time preview','Closed command references and recurrence calculation','On explicit preview; no scheduled job or action','action-plane-title'),
@@ -29,9 +29,9 @@ TOOLS = (
  ('scapy','Scapy','Optional separately operated metadata capture','Core projection after qualified ingestion'),
  ('qwen','Qwen / Ollama','Explicit local AI requests and advisory receipts','On demand; presence is not model readiness'),
  ('nftables','nftables','Deterministic response-plan evidence','No live firewall telemetry or application'),
- ('clamav','ClamAV','Completed-report counts-only importer; manual HUD JSON load','Saved scanned / matched file counts only; no scanner or live telemetry'),
- ('osquery','osquery','Saved DEB package-count importer; manual HUD JSON load','One fixed Ubuntu count only; no daemon, scheduler or live inventory'),
- ('nmap','Nmap','Completed-report aggregate importer; manual HUD JSON load','Saved host / port counts only; no scanner or live telemetry'),
+ ('clamav','ClamAV','Local Downloads scan and completed-report watcher','Saved scanned / matched file counts; no quarantine or signature update'),
+ ('osquery','osquery','Local fixed DEB count and completed-result watcher','Aggregate count only; no daemon or arbitrary query pack'),
+ ('nmap','Nmap','Local loopback scan and completed-report watcher','Aggregate host / port states; no LAN scan by default'),
 )
 
 
@@ -40,6 +40,9 @@ def coverage_html(hosted=False):
         hosted_overrides = {
             'traffic': ('Traffic charts and findings', 'Local HUD refreshes by configuration; hosted summary updates only when loaded'),
             'reports': ('Reports and local summary export', 'Explicit local export; saved summary can be loaded in this tab'),
+            'inventory': ('Network inventory', 'Local HUD only; hosted Site cannot read this PC'),
+            'clamav-scan': ('Completed file scan', 'Local HUD only; hosted Site cannot read this PC'),
+            'osquery-count': ('Package inventory', 'Local HUD only; hosted Site cannot read this PC'),
         }
         rows = ''.join(
             f'<tr><th scope="row">{escape(hosted_overrides.get(identifier, (name, mode))[0])}</th><td>{escape(source)}</td><td>{escape(hosted_overrides.get(identifier, (name, mode))[1])}</td></tr>'
@@ -48,7 +51,7 @@ def coverage_html(hosted=False):
     else:
         rows = ''.join(f'<tr><th scope="row"><a href="#{escape(target)}">{escape(name)}</a></th><td>{escape(source)}</td><td>{escape(mode)}</td></tr>' for _,name,source,mode,target in FEATURES)
     tool_rows = ''.join(f'<tr><th scope="row">{escape(name)}</th><td>{escape(source)}</td><td>{escape(mode)}</td></tr>' for _,name,source,mode in TOOLS)
-    note = 'This hosted page has no live local telemetry connection. A loaded traffic summary is a saved snapshot; other imports remain separate evidence workflows.' if hosted else 'These are supported data paths, not a claim that a source is currently connected. Check each view for its latest observation and scope.'
+    note = 'This hosted page has no live local telemetry connection. A loaded traffic summary is a saved snapshot; local companion results stay in the local HUD.' if hosted else 'These are supported data paths, not a claim that a source is currently connected. Check each view for its latest observation and scope.'
     return f'''<section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
 <h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>{note}</p>
 <details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody>{rows}</tbody></table></div></details>

@@ -13,12 +13,8 @@ for(const [label,mutate] of Object.entries({
  'reversed interval':d=>d.scan_start_local='2026:09:27 12:00:00'
 }))test('ClamAV import refuses '+label,()=>{const data=fixture();mutate(data);assert.throws(()=>validate(JSON.stringify(data)));});
 test('ClamAV import refuses duplicate/escaped keys and excessive bytes',()=>{const input=JSON.stringify(fixture());for(const text of [input.replace('"errors":','"errors":0,"errors":'),input.replace('"errors":','"\\u0065rrors":0,"errors":'),' '.repeat(4097)])assert.throws(()=>validate(text));});
-function dom(){class Element{constructor(){this.children=[];this.handlers={};this.textContent='';}replaceChildren(...x){this.children=x;}append(...x){this.children.push(...x);}setAttribute(){}addEventListener(n,f){this.handlers[n]=f;}}const nodes=new Map();const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);},createElement(){return new Element();}};const ctx={document,TextEncoder,TextDecoder};vm.createContext(ctx);vm.runInContext(source,ctx);return nodes;}
-const file=d=>{const bytes=new TextEncoder().encode(JSON.stringify(d));return {size:bytes.length,arrayBuffer:async()=>bytes.buffer};};
-test('ClamAV charts render, preserve prior import on error, and clear cancels pending import',async()=>{
- const n=dom(),load=f=>n.get('clamav-file').handlers.change({target:{files:[f]}});
- await load(file(fixture()));assert.equal(n.get('clamav-results').hidden,false);assert.equal(n.get('clamav-detections').children[0].children[1].textContent,'1');assert.match(n.get('clamav-status').textContent,/Not live/);
- await load({size:4097,arrayBuffer:()=>assert.fail('must not read')});assert.match(n.get('clamav-status').textContent,/preserved/);assert.equal(n.get('clamav-results').hidden,false);
- let finish;const pending=load({size:100,arrayBuffer:()=>new Promise(r=>finish=r)});n.get('clamav-clear').handlers.click();finish(await file(fixture()).arrayBuffer());await pending;assert.equal(n.get('clamav-results').hidden,true);assert.equal(n.get('clamav-files').children.length,0);
+function dom(){class Element{constructor(){this.children=[];this.textContent='';}replaceChildren(...x){this.children=x;}append(...x){this.children.push(...x);}setAttribute(){}}const nodes=new Map();const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);},createElement(){return new Element();}};const ctx={document,TextEncoder,globalThis:{}};vm.createContext(ctx);vm.runInContext(source,ctx);return {nodes,render:ctx.globalThis.megalodonCompanionRender.clamav};}
+test('automatic ClamAV charts render from completed counts',()=>{
+ const {nodes:n,render}=dom();render(fixture(),'Automatic ClamAV aggregate');assert.equal(n.get('clamav-results').hidden,false);assert.equal(n.get('clamav-detections').children[0].children[1].textContent,'1');assert.match(n.get('clamav-status').textContent,/Automatic ClamAV aggregate/);assert.equal(n.has('clamav-file'),false);
 });
 test('ClamAV panel never adds network, storage or executable content',()=>assert.doesNotMatch(source,/\bfetch\s*\(|XMLHttpRequest|WebSocket|localStorage|innerHTML|\beval\s*\(/));

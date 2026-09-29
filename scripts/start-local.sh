@@ -15,10 +15,12 @@ address in your browser; press Ctrl+C here to stop it.
   --check                 Check Python, SQLite and the default data path; no server
   --port 8788             Use another localhost port
   --config /path/app.toml  Select an existing configuration (HUD options)
+  --no-auto-companions    Disable bounded local inventory collection
 
 Uses .venv312, .venv, or an available Python >=3.11. Set MEGALODON_PYTHON
 to one interpreter path to choose explicitly. No packages are installed,
-no data is created, and no sensor or automatic startup is enabled.
+no data is created, and no sensor service or system startup is enabled.
+The HUD collects bounded local companion counts while this process runs.
 HELP
   exit 0
 fi

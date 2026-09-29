@@ -222,7 +222,9 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard = sub.add_parser("dashboard", aliases=["hud"], help="serve the local dashboard; hud also checks tool presence and supports first launch")
     dashboard.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     dashboard.add_argument("--companion-config", type=Path,
-                           help="explicit local companion collection and report-watch settings; starts no jobs when omitted")
+                           help="override automatic local companion scope and report-watch settings")
+    dashboard.add_argument("--no-auto-companions", action="store_true",
+                           help="disable automatic local companion collection and report watching")
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=_bounded_cli_integer("port", 1, 65535))
     dashboard.add_argument("--allow-remote", action="store_true", help="removed unsafe option; supplying it refuses startup")
@@ -854,7 +856,7 @@ def _dashboard(args: argparse.Namespace) -> int:
     from .offline_projection import load_offline_projection
     from .offline_locations import OfflineLocations
     from .config import AISettings, BlockingSettings
-    from .companion_automation import load_config as load_companion_config
+    from .companion_automation import load_config as load_companion_config, local_default_config
 
     try:
         settings = _load(args.config)
@@ -875,7 +877,11 @@ def _dashboard(args: argparse.Namespace) -> int:
                 raise ValueError(str(exc)) from exc
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         companion_path = getattr(args, "companion_config", None)
-        companion_config = load_companion_config(companion_path) if companion_path else None
+        if companion_path and getattr(args, "no_auto_companions", False):
+            raise ValueError("--companion-config and --no-auto-companions cannot be combined")
+        companion_config = (load_companion_config(companion_path) if companion_path else
+                            None if getattr(args, "no_auto_companions", False) or not first_launch else
+                            local_default_config())
         with _dashboard_reader(settings.db_path, allow_missing=first_launch) as store:
             locations = OfflineLocations.open(args.geoip_db) if getattr(args, "geoip_db", None) else None
             try:

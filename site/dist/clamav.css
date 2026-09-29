@@ -1,6 +1,6 @@
 
 .clamav-panel{margin:1.5rem 0;padding:1.25rem;border:1px solid #495b72;border-radius:12px;background:#111d2c;color:#e6f1f6;font-size:1rem}
-.clamav-panel h3{font-size:1.3rem;margin:0 0 .6rem}.clamav-panel p{line-height:1.55}.clamav-panel input{max-width:100%;font:inherit}.clamav-panel button{font:inherit;padding:.55rem .8rem;margin:.5rem;border:1px solid #678399;border-radius:6px;background:#172f43;color:#e6f1f6}.clamav-panel button:disabled{opacity:.5}
-.clamav-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.875rem;line-height:1.6}.clamav-panel summary{cursor:pointer}.clamav-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+.clamav-panel h3{font-size:1.3rem;margin:0 0 .6rem}.clamav-panel p{line-height:1.55}
+.clamav-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
 .clamav-row{border:1px solid #365365;border-radius:8px;padding:.75rem;display:grid;grid-template-columns:1fr auto;gap:.4rem}.clamav-row meter{grid-column:1/-1;width:100%;height:1rem;accent-color:#56cbd0}.clamav-row.alert meter{accent-color:#ef9b70}
 .clamav-panel :focus-visible{outline:3px solid #7be7f0;outline-offset:3px}@media(max-width:700px){.clamav-grid{grid-template-columns:1fr}}
