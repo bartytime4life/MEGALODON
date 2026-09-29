@@ -94,7 +94,7 @@ process.stdin.on('end', async () => {
     byId('setup-software-search').value = '';
     byId('setup-software-workflow').value = 'all';
     run('renderSoftwareShelf()');
-    assert.equal(byId('setup-software-list').children.length, 13);
+    assert.equal(byId('setup-software-list').children.length, 11);
     context.fetch = async (path, options) => {calls.push({path, options}); return response(report);};
     context.document.activeElement = byId('setup-check');
     await run('runLocalChecks()');
@@ -131,7 +131,7 @@ process.stdin.on('end', async () => {
     await run('runLocalChecks()');
     const optionalRow = () => byId('setup-check-results').children.find(row => allText(row).includes('Optional tools'));
     assert.match(allText(optionalRow()), /Unable to check/);
-    assert.match(allText(optionalRow()), /0 found · 0 not found · 11 not checked/);
+    assert.match(allText(optionalRow()), /0 found · 0 not found · 9 not checked/);
     assert.equal(optionalRow().children[0].textContent, '—');
     assert.doesNotMatch(optionalRow().children[0].className, /is-ready/);
     assert.equal(byId('setup-installed-count').textContent, 'Unable to check');
@@ -140,7 +140,7 @@ process.stdin.on('end', async () => {
     partial.readiness.tools[2].status = 'not_found';
     context.fetch = async () => response(partial);
     await run('runLocalChecks()');
-    assert.match(allText(optionalRow()), /1 found · 1 not found · 9 not checked/);
+    assert.match(allText(optionalRow()), /1 found · 1 not found · 7 not checked/);
     assert.match(allText(optionalRow()), /Partial observation/);
     assert.equal(optionalRow().children[0].textContent, '—');
     run('setupState.readiness = JSON.parse(JSON.stringify(report.readiness)); setupState.readiness.tools[1].status = "not_found";');

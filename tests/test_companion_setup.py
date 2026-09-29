@@ -111,7 +111,7 @@ assert.ok(all(r.guide).some(n=>n.tag==='code' && n.textContent===command));
 const r=mount('core');
 assert.equal(r.guide,undefined);
 const ids=vm.runInContext('MegalodonControls.ids',r.context);
-assert.equal(ids.length,12);
+assert.equal(ids.length,10);
 assert.ok(!ids.includes('docker'));
 assert.throws(()=>mount('__proto__'));
 assert.throws(()=>mount('docker'));

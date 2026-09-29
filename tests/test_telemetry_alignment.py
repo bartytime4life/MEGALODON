@@ -13,7 +13,8 @@ def test_packaged_coverage_map_and_snapshot_validator():
     assert COVERAGE_CSS in DASHBOARD_CSS
     for _,_,_,_,target in FEATURES:
         assert f'id="{target}"' in INDEX_HTML
-    assert 'adapter not implemented' in coverage_html()
+    assert 'All 10 companions: telemetry support' in coverage_html()
+    assert coverage_html().count('<th scope="row">') == 27
 
 
 def test_connection_observations_do_not_promote_missing_stale_or_paused_data():
