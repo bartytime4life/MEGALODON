@@ -1,6 +1,24 @@
 # Defense Console source alignment
 
-## Current publication — Console v53, repository mirror proposed
+## Current publication — Console v54, repository mirror proposed
+
+CONFIRMED 2026-09-29: the owner-only Site published version 54 from Sites
+source `3f622ca1e44a209a531cf30f29c20fc674413783`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_b2ad15592dd881919749071666eea444`.
+Deployment `appgdep_6abc002e5454819198169f46857ce90e` reported
+`succeeded` at <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+The existing owner-only access policy remains in place. Rollback reference:
+saved v53 / source `77f9741d192013b4ae3db4cc1fef4734608eecbe` /
+deployment `appgdep_6abbff02f9008191ae3c524b1a37c171`.
+
+Version 54 corrects the hosted data-coverage table to describe automatic
+local companion collection and the hosted boundary. The Site source matches
+this proposed repository mirror for the changed assets and tests; its Node
+suite passed 110/110 tests. Browser rendering remains unverified after the
+browser security check denied access. Existing local HUD processes still need
+an updated checkout and restart to run the new collector defaults.
+
+## Historical publication — Console v53, repository mirror proposed
 
 CONFIRMED 2026-09-29: the owner-only Site published version 53 from Sites
 source `77f9741d192013b4ae3db4cc1fef4734608eecbe`, saved version
