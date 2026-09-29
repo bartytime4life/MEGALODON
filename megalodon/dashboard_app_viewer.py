@@ -40,8 +40,7 @@ const appConsole = (() => {
     clamav:'ClamAV is a scanner; a GUI must be provided separately.',
     osquery:'osquery needs a separately configured fleet console.',
     qwen:'Qwen is a model; Ollama is a provider. Configure your own compatible web UI.',
-    nmap:'Zenmap is a desktop GUI; Nmap is a command-line tool.',
-    ossec:'Use the web console configured for your OSSEC deployment.'
+    nmap:'Zenmap is a desktop GUI; Nmap is a command-line tool.'
   };
   function clear() {
     byId('app-viewer-frame').replaceChildren();

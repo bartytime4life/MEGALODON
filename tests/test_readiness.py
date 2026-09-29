@@ -35,7 +35,7 @@ def test_receipt_is_closed_bounded_catalog_aligned_and_has_no_host_details(monke
     after = datetime.now(timezone.utc).replace(microsecond=0)
     report = json.loads(rendered)
     assert set(report) == {"schema", "checked_at", "platform", "probe_mode", "tools", "boundaries"}
-    assert report["schema"] == "megalodon-tool-readiness-v1"
+    assert report["schema"] == "megalodon-tool-readiness-v2"
     assert report["platform"] == "linux"
     assert report["probe_mode"] == "path_presence_only"
     assert before <= datetime.fromisoformat(report["checked_at"].replace("Z", "+00:00")) <= after
@@ -43,6 +43,8 @@ def test_receipt_is_closed_bounded_catalog_aligned_and_has_no_host_details(monke
     assert report["boundaries"] == list(readiness.BOUNDARIES)
     expected_ids = [item["id"] for item in catalog("linux")["components"]]
     assert [item["id"] for item in report["tools"]] == expected_ids
+    assert len(report["tools"]) == 10
+    assert {"ossec", "zabbix"}.isdisjoint(expected_ids)
     assert all(set(item) == {"id", "status"} for item in report["tools"])
     assert {item["status"] for item in report["tools"]} <= readiness.STATUSES
     assert _statuses(report)["python-sqlite"] == "not_checked"
@@ -151,7 +153,8 @@ def test_probe_count_is_fixed_and_never_enumerates_directories(monkeypatch):
         guard.setattr(os, "scandir", denied)
         report = readiness.readiness_report()
     binaries = {name for _, name in readiness.TOOL_EXECUTABLES if name is not None}
-    assert len(visited) == len(binaries) * readiness.MAX_PATH_ENTRIES == 640
+    assert len(binaries) == 8
+    assert len(visited) == len(binaries) * readiness.MAX_PATH_ENTRIES
     assert accessed == visited
     assert {Path(candidate).name for candidate in visited} == binaries
     assert all(Path(candidate).parent.as_posix() in directories for candidate in visited)

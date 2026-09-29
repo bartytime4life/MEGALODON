@@ -31,7 +31,7 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_heartbeat, "runtime_platform", lambda: "linux")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("nmap", "suricata", "zabbix_agent2"):
+    for name in ("nmap", "suricata"):
         exe = bin_dir / name
         exe.write_text("#!/bin/sh\n")
         exe.chmod(0o755)
@@ -45,7 +45,7 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
         key: tool_heartbeat.ToolProbe(probe.executables, (), (), probe.python_module, probe.processes, probe.service)
         for key, probe in tool_heartbeat.PROBES.items()
     })
-    proc = _fake_proc(tmp_path / "proc", {42: ("zabbix_agent2", 500), 77: ("ollama", 1000)})
+    proc = _fake_proc(tmp_path / "proc", {42: ("osqueryd", 500), 77: ("ollama", 1000)})
     report = heartbeat_report(proc)
     tools = {tool["id"]: tool for tool in report["tools"]}
     assert report["schema"] == "megalodon-tool-heartbeat-v1"
@@ -54,9 +54,10 @@ def test_report_covers_fixed_tools_with_lights(tmp_path, monkeypatch):
     assert tools["nmap"] == {**tools["nmap"], "installed": "yes", "service": "standalone", "light": "green"}
     # Installed service that is not running is amber, not green.
     assert tools["suricata"]["light"] == "amber"
-    # A running agent is green with an uptime anchor derived from /proc.
-    assert tools["zabbix"]["light"] == "green"
-    assert tools["zabbix"]["running_since"] == "2023-11-14T22:13:25Z"
+    # A running current-tool process has an uptime anchor derived from /proc.
+    assert tools["osquery"]["light"] == "green"
+    assert tools["osquery"]["running_since"] == "2023-11-14T22:13:25Z"
+    assert {"ossec", "zabbix"}.isdisjoint(tools)
     # A running process counts as installed even when off PATH, but without
     # the model downloaded the light stays amber.
     assert tools["qwen"]["installed"] == "yes" and tools["qwen"]["model"] == "missing"
@@ -90,7 +91,7 @@ def test_recipes_are_closed_and_never_interpolate_requests(monkeypatch):
     assert command[3].endswith("apt-get install -y --no-install-recommends tshark")
     assert install_command("tshark", which=which, is_root=True)[0] == "/bin/sh"
     assert install_command("tshark", which={}.get, is_root=False) is None
-    for guided in ("core", "zeek", "osquery", "ossec"):
+    for guided in ("core", "zeek", "osquery"):
         assert install_command(guided, which=which) is None
     assert install_command("qwen", which={}.get) is None
     with pytest.raises(KeyError):
@@ -206,15 +207,15 @@ def test_start_command_uses_only_fixed_existing_units(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_installer, "runtime_platform", lambda: "linux")
     units = tmp_path / "units"
     units.mkdir()
-    (units / "zabbix-agent.service").write_text("[Unit]\n")
+    (units / "suricata.service").write_text("[Unit]\n")
     which = {"systemctl": "/usr/bin/systemctl", "pkexec": "/usr/bin/pkexec"}.get
     dirs = (str(units),)
-    assert tool_installer.start_command("zabbix", which=which, is_root=False, directories=dirs) == [
-        "/usr/bin/pkexec", "/usr/bin/systemctl", "start", "zabbix-agent.service"]
-    assert tool_installer.start_command("zabbix", which=which, is_root=True, directories=dirs)[0] == "/usr/bin/systemctl"
+    assert tool_installer.start_command("suricata", which=which, is_root=False, directories=dirs) == [
+        "/usr/bin/pkexec", "/usr/bin/systemctl", "start", "suricata.service"]
+    assert tool_installer.start_command("suricata", which=which, is_root=True, directories=dirs)[0] == "/usr/bin/systemctl"
     # No unit file, no systemctl, or a standalone tool: no command at all.
-    assert tool_installer.start_command("suricata", which=which, directories=dirs) is None
-    assert tool_installer.start_command("zabbix", which={}.get, directories=dirs) is None
+    assert tool_installer.start_command("suricata", which={}.get, directories=dirs) is None
+    assert tool_installer.start_command("zabbix", which=which, directories=dirs) is None
     assert tool_installer.start_command("nmap", which=which, directories=dirs) is None
 
 
@@ -233,10 +234,12 @@ def test_install_route_accepts_only_known_actions(monkeypatch):
     try:
         good = {"Origin": f"http://127.0.0.1:{server.server_port}", "Content-Type": "application/json",
                 "X-Megalodon-Install": "1", "X-Megalodon-Install-Token": "t" * 32}
-        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "start"}))[0] == 202
+        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "suricata", "action": "start"}))[0] == 202
         assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "stop"}))[0] == 400
         assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "extra": 1}))[0] == 400
-        assert calls == [("zabbix", "start")]
+        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "ossec", "action": "install"}))[0] == 400
+        assert _request(server, "POST", "/api/install", good, json.dumps({"tool": "zabbix", "action": "start"}))[0] == 400
+        assert calls == [("suricata", "start")]
     finally:
         server.shutdown()
         server.server_close()

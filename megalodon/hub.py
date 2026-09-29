@@ -142,32 +142,6 @@ _WORKFLOWS = (
         "action_boundary": "no scan launch, target selection, NSE execution, or network activity",
         "next_gate": "independent producer-profile, privacy and native-platform acceptance; no live adapter",
     },
-    {
-        "id": "host-integrity-import",
-        "component": "ossec",
-        "source_kind": "host_integrity_alert_metadata",
-        "integration_owner": "not_implemented",
-        "input_contract": "future bounded import of operator-supplied completed OSSEC JSON alerts",
-        "output_contract": "future source-qualified host integrity findings",
-        "entry_point": None,
-        "launch_policy": "proposed_import_only_no_daemon",
-        "data_boundary": "closed alert field inventory; no file content, process environment, or unrestricted logs",
-        "action_boundary": "no agent enrollment, daemon control, configuration change, or active response",
-        "next_gate": "versioned alert contract, representative fixtures, redaction review, and size limits",
-    },
-    {
-        "id": "zabbix-availability-read",
-        "component": "zabbix",
-        "source_kind": "availability_summary",
-        "integration_owner": "not_implemented",
-        "input_contract": "none until a bounded read-only endpoint contract and credential policy are reviewed",
-        "output_contract": "future source-qualified availability summary",
-        "entry_point": None,
-        "launch_policy": "proposed_no_connection",
-        "data_boundary": "no endpoint, credential, host inventory, event history, or API response is read",
-        "action_boundary": "no polling, acknowledgement, configuration change, script, or remote command",
-        "next_gate": "read-only API allowlist, credential handling, request budgets, fixtures, and failure-state review",
-    },
 )
 
 WORKFLOW_IDS = tuple(item["id"] for item in _WORKFLOWS)

@@ -73,7 +73,7 @@ can observe the Scapy Python module, an expected process, and the example
 Qwen model manifest without executing a companion. Neither result establishes
 service health, a valid configuration, version or integration. Python/SQLite
 and Scapy remain `not_checked` in the executable-only `presence` field; read
-the separate `heartbeat` field with its `observed_at` timestamp. All 14 cards
+the separate `heartbeat` field with its `observed_at` timestamp. All 10 cards
 offer the same copyable commands.
 
 The local HUD can prepare the exact command needed to reopen that HUD with its
@@ -85,11 +85,11 @@ required.
 
 | IDs | Installation path |
 | --- | --- |
-| tshark, suricata, nftables, clamav, nmap, zabbix | Existing fixed Ubuntu apt recipes; OS privilege prompt through pkexec when needed |
+| tshark, suricata, nftables, clamav, nmap | Existing fixed Ubuntu apt recipes; OS privilege prompt through pkexec when needed |
 | scapy | Existing bounded-version pip recipe in the active Python environment |
 | qwen | Existing example qwen2.5:7b download through an installed Ollama provider |
 | core | Existing reviewed `scripts/install-local.sh` user installer |
-| zeek, osquery, ossec | Publisher/project guides; explicit build, repository, role or container decisions |
+| zeek, osquery | Publisher/project guides; explicit build, repository or container decisions |
 
 `install --apply` executes the same closed recipe registry as the local
 installer, with a 30-minute deadline and the package manager's terminal
@@ -115,7 +115,7 @@ not prove the rest of a dependency tree was removed.
 ## Connection coverage and failure isolation
 
 Both UIs use `megalodon/telemetry_catalog.py` for the same 17-feature and
-14-companion data map. It describes supported sources and update modes, not
+10-tool data map. It describes supported sources and update modes, not
 observed runtime health. The local HUD additionally shows accepted traffic,
 heartbeat and installer-job observations with their separate timestamps/states.
 The map names each unimplemented companion data adapter explicitly.
@@ -130,8 +130,7 @@ installer request disables management and shows its own unavailable state while
 a valid heartbeat continues to show observed tool presence. A failed heartbeat
 continues to mark tool observations stale even when installer status succeeds.
 
-OSSEC and Zabbix do not yet have their
-inventory/alert/monitoring data adapters. ClamAV and Nmap have manual completed-report
+ClamAV and Nmap have manual completed-report
 aggregate importers, and osquery has a fixed saved DEB package-count importer;
 none are live connections. Presence/process checks and manual
 console links do not establish these data connections.

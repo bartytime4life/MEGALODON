@@ -132,28 +132,6 @@ _COMPONENTS = (
         },
         "boundary": "No scan launcher or script execution. A bounded Nmap 7.x XML 1.05 stdin reader emits aggregate counts for manual HUD import; no identifiers or banners retained. Native Windows acceptance remains unproved.",
     },
-    {
-        "id": "ossec",
-        "software": "OSSEC",
-        "integration": "future_host_integrity_import",
-        "platforms": {
-            "linux": "proposed",
-            "windows": "proposed",
-            "other": "unsupported",
-        },
-        "boundary": "No daemon, alert importer, active response, enrollment, or configuration path exists.",
-    },
-    {
-        "id": "zabbix",
-        "software": "Zabbix",
-        "integration": "future_availability_read_model",
-        "platforms": {
-            "linux": "proposed",
-            "windows": "proposed",
-            "other": "unsupported",
-        },
-        "boundary": "No endpoint, credential, API client, background poller, or runtime reader is configured.",
-    },
 )
 
 _EXCLUDED = (

@@ -11,7 +11,7 @@ from typing import Any
 from .capabilities import runtime_platform
 
 
-SCHEMA = "megalodon-tool-readiness-v1"
+SCHEMA = "megalodon-tool-readiness-v2"
 PROBE_MODE = "path_presence_only"
 MAX_REPORT_BYTES = 8192
 MAX_PATH_BYTES = 16_384
@@ -32,8 +32,6 @@ TOOL_EXECUTABLES = (
     ("osquery", "osqueryi"),
     ("qwen-ollama", "ollama"),
     ("nmap", "nmap"),
-    ("ossec", "ossec-control"),
-    ("zabbix", "zabbix_agentd"),
 )
 TOOL_IDS = tuple(tool_id for tool_id, _ in TOOL_EXECUTABLES)
 BOUNDARIES = (

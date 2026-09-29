@@ -1,5 +1,10 @@
 # Project gap review and action
 
+> Historical review: OSSEC and Zabbix were retired from the current
+> account-free catalog. Their former adapter proposal below is preserved as
+> dated context, not a current implementation plan.
+
+
 Baseline observed: main `e6633884703fc297b4dbc5f2e92f4cb525716015` includes
 #422's globe minute detail and #424's normal/danger meters. The separate HUD
 redesign #425 at `26698c73fbc2f10759428f349bc8850b3ddcaf1a` has incorporated that

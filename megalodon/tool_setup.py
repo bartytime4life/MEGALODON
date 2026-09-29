@@ -21,8 +21,6 @@ CONFIGURATION = {
     'osquery': ('Install the signed vendor package; review /etc/osquery/osquery.conf and explicitly choose query scope and schedule.', 'Validate with osqueryi --config_check. Enable osqueryd separately only after reviewing scheduled queries.'),
     'qwen': ('Install and start Ollama using the publisher guide; select the exact local model in MEGALODON AI settings.', 'ollama list shows downloaded artifacts. The install recipe downloads qwen2.5:7b; it does not select or run it.'),
     'nmap': ('Choose only systems you are authorized to assess; review scan scope and flags before executing.', 'nmap --version checks the program. This setup script never starts a scan.'),
-    'ossec': ('Choose agent or server role using the vendor guide before installing.', 'Review /var/ossec/etc/ossec.conf and explicitly set the manager address for an agent. Enrollment credentials stay local.'),
-    'zabbix': ('Review /etc/zabbix/zabbix_agentd.conf: set Server, ServerActive and Hostname for your own monitoring server.', 'Configure TLS and restrict allowed monitoring peers before separately enabling the agent service.'),
 }
 ALIASES = {'core':'python-sqlite','tshark':'wireshark-tshark','qwen':'qwen-ollama'}
 APT_PREVIEW_TIMEOUT_SECONDS = 30

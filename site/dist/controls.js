@@ -99,26 +99,6 @@ const toolAcquisition = {
     verificationLabel: "Linux verification",
     note: "MEGALODON does not launch scans. The reserved boundary is a future completed XML report import only."
   },
-  ossec: {
-    source: "OSSEC Project",
-    url: "https://www.ossec.net/ossec-downloads/",
-    linkLabel: "Open OSSEC downloads",
-    platforms: ["Windows agents", "macOS", "Linux", "Unix"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Default-path verification",
-    note: "Use the vendor's package and role-specific instructions. Agent enrollment and active response stay outside MEGALODON."
-  },
-  zabbix: {
-    source: "Zabbix LLC",
-    url: "https://www.zabbix.com/download",
-    linkLabel: "Open Zabbix install selector",
-    platforms: ["Linux server", "Windows agents", "Containers", "Cloud"],
-    commandLabel: null,
-    command: null,
-    verificationLabel: "Server or agent verification",
-    note: "Select the OS, release, database, and web server on the official page. No MEGALODON endpoint or credential contract exists yet."
-  }
 };
 
 // Publisher pages are separate from repository-specific integration recipes.
@@ -175,7 +155,7 @@ const companionSetupGuides = {
 
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
-  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'ossec', 'zabbix'];
+  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap'];
   const localConsoleSuggestions = Object.freeze({});
   const storageKey = 'megalodon-console-links-v1';
   let memory = null;
@@ -183,7 +163,7 @@ const MegalodonControls = (() => {
     if (typeof raw !== 'string' || raw.length > 2048 || /[\s\\]/.test(raw)) throw new Error('Use a complete http:// or https:// console address without spaces.');
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) {
-      throw new Error('Use an HTTP(S) address without a password, query, or fragment. Sign in inside the companion console.');
+      throw new Error('Use an HTTP(S) address without a password, query, or fragment.');
     }
     return url.href;
   }
@@ -194,9 +174,14 @@ const MegalodonControls = (() => {
       const raw = localStorage.getItem(storageKey);
       if (raw && raw.length <= 32768) {
         const data = JSON.parse(raw);
-        if (data && typeof data === 'object' && !Array.isArray(data)) ids.forEach(id => {
-          if (Object.hasOwn(data, id)) { try { memory[id] = consoleURL(data[id]); } catch (_) {} }
-        });
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          ids.forEach(id => {
+            if (Object.hasOwn(data, id)) { try { memory[id] = consoleURL(data[id]); } catch (_) {} }
+          });
+          if (['greenbone', 'nagios', 'ossec', 'zabbix'].some(id => Object.hasOwn(data, id))) {
+            localStorage.setItem(storageKey, JSON.stringify(memory));
+          }
+        }
       }
     } catch (_) { /* Session-only operation remains available. */ }
     return memory;
@@ -355,12 +340,6 @@ const MegalodonControls = (() => {
       if (!entry.uninstall || !entry.reinstall) commands.append(node('p', 'Removal or reinstall depends on your installation method. Use the matching vendor instructions.', 'companion-help'));
     };
     const base = resolveLifecycle(id);
-    if (base.variants) {
-      const label = node('label', 'Installed Zabbix role');
-      const select = node('select'); const placeholder = node('option', 'Choose one role'); placeholder.value = ''; select.append(placeholder);
-      Object.entries(base.variants).forEach(([value, entry]) => { const option = node('option', entry.label); option.value = value; select.append(option); });
-      select.addEventListener('change', () => renderCommands(select.value)); label.append(select); lifecycle.append(label);
-    }
     lifecycle.append(commands); root.append(lifecycle, feedback); parent.append(root);
     repaint(); renderCommands(); return root;
   }

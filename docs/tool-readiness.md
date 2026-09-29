@@ -68,8 +68,6 @@ fixed `/usr/bin/tshark` path or installed-tool acceptance gate, and finding
 | `osquery` | `osqueryi` |
 | `qwen-ollama` | `ollama` |
 | `nmap` | `nmap` |
-| `ossec` | `ossec-control` |
-| `zabbix` | `zabbix_agentd` |
 
 For tools with multiple separately installed components, this checks only the
 named representative; it does not infer the other components' state. Neither
@@ -80,13 +78,17 @@ are attempted.
 
 The closed object contains exactly `schema`, `checked_at`, `platform`,
 `probe_mode`, `tools` and `boundaries`. `schema` is
-`megalodon-tool-readiness-v1`; `probe_mode` is `path_presence_only`;
+`megalodon-tool-readiness-v2`; `probe_mode` is `path_presence_only`;
 `checked_at` is the process clock's UTC `YYYY-MM-DDTHH:MM:SSZ` time; and
 `platform` is `linux`, `windows` or `other`. The clock is not independently
-authenticated. `tools` contains exactly the 12 capability IDs above, in that
+authenticated. `tools` contains exactly the 10 capability IDs above, in that
 order, each with only `id` and `status`. `boundaries` contains the five fixed
 strings in `megalodon.readiness.BOUNDARIES`. The serialized report including its
 stdout newline is at most 8,192 UTF-8 bytes.
+
+The hosted and local reference consoles reject v1 imports. Generate a fresh
+v2 report from this revision before importing; retired OSSEC and Zabbix IDs
+are not accepted.
 
 Before any filesystem lookup, the complete PATH must satisfy all limits:
 

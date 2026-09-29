@@ -58,9 +58,6 @@ RECIPES: dict[str, Recipe] = {
     "qwen": Recipe("ollama", "Downloads the example qwen2.5:7b model into the local Ollama provider (several GB).",
                    ("qwen2.5:7b",), requires="ollama"),
     "nmap": Recipe("apt", "Installs the Ubuntu nmap package. No scan is started.", ("nmap",)),
-    "ossec": Recipe("guided", "OSSEC server and agent roles install differently; use the vendor guide."),
-    "zabbix": Recipe("apt", "Installs the Ubuntu zabbix-agent package. Its service may start after installation.",
-                     ("zabbix-agent",)),
 }
 
 
@@ -100,8 +97,6 @@ def install_command(tool_id: str, *, which: Callable[[str], str | None] = shutil
 SERVICE_UNITS: dict[str, tuple[str, ...]] = {
     "suricata": ("suricata",),
     "qwen": ("ollama",),
-    "ossec": ("ossec", "wazuh-agent"),
-    "zabbix": ("zabbix-agent2", "zabbix-agent", "zabbix-server"),
 }
 UNIT_DIRECTORIES = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
 

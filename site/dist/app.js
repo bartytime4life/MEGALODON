@@ -70,21 +70,6 @@ const integrations = [
     boundary: "No scan launch, target selection, script engine, service-banner intake, or network activity.",
     nextGate: "Independent producer-profile, privacy and native-platform acceptance; no live feed.", ui: ["Host inventory", "Port summary", "Import receipt"],
   },
-  {
-    id: "ossec", name: "OSSEC", monogram: "OS", category: "endpoint", status: "proposed", statusLabel: "Proposed",
-    summary: "Reserves a source-qualified host-integrity alert lane from completed operator-supplied records.",
-    dataKind: "host integrity alerts", contract: "Future bounded OSSEC JSON import", owner: "not implemented",
-    boundary: "No agent enrollment, daemon control, unrestricted logs, configuration change, or active response.",
-    nextGate: "Versioned alert contract, representative fixtures, redaction review, and limits.", ui: ["Integrity findings", "Host lane", "Import receipt"],
-  },
-  {
-    id: "zabbix", name: "Zabbix", monogram: "ZA", category: "availability", status: "proposed", statusLabel: "Proposed",
-    summary: "Reserves a future read-only availability summary with explicit endpoint and credential policy.",
-    dataKind: "availability summary", contract: "Not implemented", owner: "not implemented",
-    boundary: "No endpoint, credential, event history, background poller, acknowledgement, script, or remote command.",
-    nextGate: "Read-only API allowlist, credential handling, request budgets, fixtures, and failure review.", ui: ["Service health", "Availability", "Read receipt"],
-  },
-
 ];
 
 const categories = [
@@ -103,7 +88,11 @@ function loadToolPresence() {
   try {
     const saved = JSON.parse(localStorage.getItem(toolPresenceKey) || "{}");
     if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
-    return Object.fromEntries(Object.entries(saved).filter(([id, value]) => integrations.some((item) => item.id === id) && value && typeof value === "object" && ["installed", "missing"].includes(value.status) && Number.isFinite(value.checkedAt) && value.checkedAt > 0 && value.checkedAt <= Date.now()));
+    const current = Object.fromEntries(Object.entries(saved).filter(([id, value]) => integrations.some((item) => item.id === id) && value && typeof value === "object" && ["installed", "missing"].includes(value.status) && Number.isFinite(value.checkedAt) && value.checkedAt > 0 && value.checkedAt <= Date.now()));
+    if (["greenbone", "nagios", "ossec", "zabbix"].some(id => Object.hasOwn(saved, id))) {
+      try { localStorage.setItem(toolPresenceKey, JSON.stringify(current)); } catch { /* Keep current notes in memory. */ }
+    }
+    return current;
   } catch {
     return {};
   }

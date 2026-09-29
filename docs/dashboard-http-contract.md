@@ -93,7 +93,7 @@ parameters. Never encode an action or secret in a query string.
 as `dashboard`. It additionally runs the existing readiness metadata check once
 before listening. `/api/setup` returns immutable `dashboard-setup-v2` bytes:
 `source_status` is `connected` or `not_configured`, and `readiness` is either a
-closed `megalodon-tool-readiness-v1` report or null. `runtime` is either a closed
+closed `megalodon-tool-readiness-v2` report or null. `runtime` is either a closed
 `megalodon-tool-runtime-v1` receipt or null. The runtime receipt reads only a
 bounded set of Linux `/proc/*/comm` values once and returns closed tool/status
 pairs; it omits process IDs, command lines, paths, users and host identity.

@@ -135,7 +135,7 @@ def test_route_aliases_cannot_bypass_authorization(endpoint, path):
     assert endpoint[2].calls == []
 
 
-@pytest.mark.parametrize("tool,action", [("scapy", None), ("nmap", "install"), ("qwen", "install"), ("zabbix", "start")])
+@pytest.mark.parametrize("tool,action", [("scapy", None), ("nmap", "install"), ("qwen", "install"), ("suricata", "start")])
 def test_authenticated_fixed_recipe_families_remain_available(endpoint, tool, action):
     body = {"tool": tool}
     if action is not None:

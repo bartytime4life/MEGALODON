@@ -458,8 +458,8 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         await expect(page.locator("#integrations-profile")).to_contain_text("Loaded profile: linux")
         passed("real static Integration Map recovery")
         passed("four separate capability rows per supported app",
-               await page.locator("#integrations-cards .app-status-grid").count() == 12 and
-               await page.locator("#integrations-cards .app-status-row").count() == 48)
+               await page.locator("#integrations-cards .app-status-grid").count() == 10 and
+               await page.locator("#integrations-cards .app-status-row").count() == 40)
         legend = await page.locator(".app-state-legend").inner_text()
         passed("presence legend explains bounded green red and gray states",
                all(label in legend for label in ("Found candidate", "Not found", "Not checked")))

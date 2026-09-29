@@ -37,22 +37,7 @@ const lifecycleCommands = (() => {
       labels: {verify: "Check example model tag", uninstall: "Remove example model", reinstall: "Download example model"},
       note: "Example tag only: all three operations target qwen2.5:7b. This mutable tag is not the approved registry or an artifact digest. Commands contact the local provider; pull can download from the Internet. They neither install/remove Ollama nor establish model containment."
     },
-    nmap: apt("nmap", "command -v nmap >/dev/null && nmap --version", "No scan is launched by the diagnostic."),
-    ossec: {
-      verify: "if test -x /var/ossec/bin/ossec-control || test -x /var/ossec/bin/ossec-agentd; then echo 'OSSEC candidate at default prefix'; else exit 1; fi",
-      uninstall: null, reinstall: null,
-      note: "OSSEC server, agent and source installs have different lifecycle procedures. The installation method and role are unknown here; use the vendor guide matching your installation instead of a combined guessed package list."
-    },
-    zabbix: {
-      verify: "command -v zabbix_agent2 || command -v zabbix_agentd || command -v zabbix_server",
-      uninstall: null, reinstall: null,
-      note: "Select the exact installed role first. Each selection targets one package only. Agent 2, classic agent and server are alternatives, not one installation. PATH absence does not prove absence elsewhere.",
-      variants: {
-        agent2: {...apt("zabbix-agent2", "zabbix_agent2 --version", "Agent 2 only."), label: "Agent 2"},
-        agent: {...apt("zabbix-agent", "zabbix_agentd --version", "Classic agent only."), label: "Classic agent"},
-        mysql: {...apt("zabbix-server-mysql", "zabbix_server --version", "MySQL server package only; database, frontend and data lifecycle are separate."), label: "Server with MySQL"}
-      }
-    }
+    nmap: apt("nmap", "command -v nmap >/dev/null && nmap --version", "No scan is launched by the diagnostic.")
   };
 })();
 

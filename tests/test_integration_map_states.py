@@ -55,8 +55,7 @@ process.stdin.on('end', async () => {
     const event = (id, name) => get(id).listeners[name]();
     const ids = ['core-metadata', 'offline-packet-metadata', 'offline-flow-metadata', 'alert-metadata',
       'live-metadata-capture', 'time-limited-response', 'manual-file-scan', 'endpoint-inventory',
-      'local-ai-advisory', 'network-inventory-import', 'host-integrity-import',
-      'zabbix-availability-read'];
+      'local-ai-advisory', 'network-inventory-import'];
     const fixture = platform => ({
       schema: 'megalodon-integration-hub-v1', capability_schema: 'megalodon-capability-catalog-v1',
       selected_platform: platform, hub_mode: 'static_plan_only', default_posture: 'observe_only',
@@ -110,7 +109,7 @@ process.stdin.on('end', async () => {
       const pending = event('integrations-load', 'click'); edit('query');
       assert.match(status(), /Loading the static windows documentation profile/);
       assert.match(status(), /loaded linux documentation profile/);
-      assert.match(status(), /0 of 12 workflows/);
+      assert.match(status(), /0 of 10 workflows/);
       assert.match(get('integrations-profile').textContent, /Loaded profile: linux/);
       assert.equal(JSON.stringify(state().snapshot), original);
       requests[1].reject(new Error('unavailable')); await pending; idle();
@@ -134,10 +133,10 @@ process.stdin.on('end', async () => {
     } else if (scenario.startsWith('accepted:')) {
       const platform = scenario.split(':')[1]; await ready(platform); idle();
       assert.equal(state().snapshot.selected_platform, platform);
-      assert.equal(get('integrations-cards').children.length, 12);
+      assert.equal(get('integrations-cards').children.length, 10);
       edit('query'); assert.equal(get('integrations-cards').children.length, 1); // Empty-state paragraph.
-      assert.match(status(), /0 of 12 workflows/); edit('clear');
-      assert.equal(get('integrations-cards').children.length, 12); assert.equal(requests.length, 1);
+      assert.match(status(), /0 of 10 workflows/); edit('clear');
+      assert.equal(get('integrations-cards').children.length, 10); assert.equal(requests.length, 1);
     } else if (scenario.startsWith('rejected:')) {
       await ready(); const original = JSON.stringify(state().snapshot);
       get('integrations-platform').value = 'windows'; const pending = event('integrations-load', 'click');

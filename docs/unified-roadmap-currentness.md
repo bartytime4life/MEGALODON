@@ -1,5 +1,11 @@
 # Unified roadmap: repository reconciliation
 
+> Historical snapshot: OSSEC and Zabbix references below describe the prior
+> twelve-tool catalog. The current catalog has ten tools and excludes both;
+> use [local PC setup](local-pc-setup.md) and the current capability catalog
+> for present instructions.
+
+
 ## Stage 0 acceptance-gate restoration — 2026-09-28
 
 Current GitHub basis:

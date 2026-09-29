@@ -54,8 +54,8 @@ times. It never runs a tool, opens a network connection, or returns paths,
 PIDs or command lines.
 
 Detection covers the usual install locations that the earlier PATH-only check
-missed: OSSEC in `/var/ossec/bin`, private Zeek builds in `~/.local/zeek-*`,
-and all three Zabbix roles. A matching running process also counts as installed.
+missed, such as private Zeek builds in `~/.local/zeek-*`.
+A matching running process also counts as installed.
 
 For Qwen, the heartbeat also checks whether the `qwen2.5:7b` model is
 downloaded, by looking for Ollama's manifest file in `$OLLAMA_MODELS`,
@@ -100,14 +100,13 @@ package offer an **Install** button:
 |------|----------------------|
 | Wireshark / TShark | Ubuntu `tshark` (capture permission preseeded to **No**) |
 | Suricata, nftables, ClamAV, Nmap | Ubuntu packages of the same name |
-| Zabbix | Ubuntu `zabbix-agent` |
 | Scapy | `pip install 'scapy>=2.5,<3'` into the HUD's own Python environment |
 | Qwen | `ollama pull qwen2.5:7b` (after Ollama itself is installed) |
 
 System packages run through `pkexec`, so Ubuntu shows its own password dialog.
 The HUD never sees or stores the password. Some packages, such as Suricata,
-ClamAV and Zabbix, can start a service after installation. Zeek,
-osquery and OSSEC need a vendor repository or a role choice, so they keep their official guide links instead.
+ClamAV, can start a service after installation. Zeek and
+osquery need a private build or vendor repository, so they keep their guide links instead.
 
 If a computer has no graphical password agent (for example over SSH), the HUD
 shows the equivalent terminal command instead of the button.
@@ -128,8 +127,6 @@ when the observation is stale or the tool's service state is unknown.
 |------|--------------------------------------------|
 | Suricata | `suricata` |
 | Qwen (Ollama) | `ollama` |
-| OSSEC | `ossec`, `wazuh-agent` |
-| Zabbix | `zabbix-agent2`, `zabbix-agent`, `zabbix-server` |
 
 The button only starts the service; it does not enable it at boot, stop it, or
 change its configuration. When no unit file is found (for example, a source

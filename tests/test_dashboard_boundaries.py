@@ -325,7 +325,7 @@ process.stdin.on('end', async () => {
       context.bad = value;
       assert.throws(() => run("applyConfig({schema:'dashboard-config-v1',read_only:true,event_limit:50,refresh_seconds:bad})"));
     }
-    await run('loadIntegrationMap()'); assert.equal(calls.length, 1); assert.equal(nodeFor('integrations-cards').children.length, 12);
+    await run('loadIntegrationMap()'); assert.equal(calls.length, 1); assert.equal(nodeFor('integrations-cards').children.length, 10);
     assert.match(nodeFor('integrations-profile').textContent, /linux/);
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Presence not checked/);
     assert.match(textOf(nodeFor('integrations-cards')), /MEGALODON support:/);
@@ -378,7 +378,7 @@ process.stdin.on('end', async () => {
     assert.match(textOf(nodeFor('integrations-cards')), /TShark/);
     nodeFor('integrations-presence-filter').value = 'ALL'; run('renderIntegrationMap()');
     nodeFor('integrations-query').value = 'does-not-exist'; run('renderIntegrationMap()');
-    assert.match(nodeFor('integrations-status').textContent, /0 of 12/);
+    assert.match(nodeFor('integrations-status').textContent, /0 of 10/);
     nodeFor('integrations-query').value = 'Suricata'; nodeFor('integrations-status-filter').value = 'implemented'; run('renderIntegrationMap()');
     assert.equal(nodeFor('integrations-cards').children.length, 1);
     assert.match(textOf(nodeFor('integrations-cards')), /Suricata/);

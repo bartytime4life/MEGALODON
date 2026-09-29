@@ -118,8 +118,8 @@ INTEGRATIONS_JS = r"""
 // the separate heartbeat and fixed, operator-authorized start route.
 const integrationState = {snapshot: null, loading: false, pendingPlatform: null, failed: false};
 const integrationPlatforms = ['linux', 'windows', 'other'];
-const startableServiceIds = ['suricata', 'qwen', 'ossec', 'zabbix'];
-const startableServiceNames = {suricata:'Suricata', qwen:'Ollama', ossec:'OSSEC', zabbix:'Zabbix'};
+const startableServiceIds = ['suricata', 'qwen'];
+const startableServiceNames = {suricata:'Suricata', qwen:'Ollama'};
 function appServiceStartControl(id, name, tool) {
   const action = document.createElement('div');
   const entry = heartbeatState.catalog.find(item => item.id === id);
@@ -180,8 +180,7 @@ const integrationStatuses = {
 const integrationIds = [
   'core-metadata', 'offline-packet-metadata', 'offline-flow-metadata', 'alert-metadata',
   'live-metadata-capture', 'time-limited-response', 'manual-file-scan', 'endpoint-inventory',
-  'local-ai-advisory', 'network-inventory-import', 'host-integrity-import',
-  'zabbix-availability-read'
+  'local-ai-advisory', 'network-inventory-import'
 ];
 const integrationPresenceStates = {
   executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found on the bounded startup PATH; installation method and compatibility remain unverified.'},
@@ -203,9 +202,7 @@ const integrationZones = {
   'offline-flow-metadata': 'Flow data', 'alert-metadata': 'Detection data',
   'live-metadata-capture': 'Capture source', 'time-limited-response': 'Response review',
   'manual-file-scan': 'Endpoint data', 'endpoint-inventory': 'Endpoint data',
-  'local-ai-advisory': 'Advisory context', 'network-inventory-import': 'Discovery data',
-  'host-integrity-import': 'Endpoint data',
-  'zabbix-availability-read': 'Availability data'
+  'local-ai-advisory': 'Advisory context', 'network-inventory-import': 'Discovery data'
 };
 const integrationFields = [
   'id', 'component', 'software', 'selected_status', 'source_kind', 'integration_owner',
