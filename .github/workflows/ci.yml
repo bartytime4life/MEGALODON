@@ -268,6 +268,7 @@ jobs:
           sdist_roots=("$RUNNER_TEMP"/sdist-check/megalodon_defense-*)
           [ "${#sdist_roots[@]}" -eq 1 ]
           test -f "${sdist_roots[0]}/.gitignore"
+          test -f "${sdist_roots[0]}/scripts/start-hud-data.sh"
           test -f "${sdist_roots[0]}/constraints/ci.txt"
           cmp constraints/build-linux-cp312.txt "${sdist_roots[0]}/constraints/build-linux-cp312.txt"
           cmp constraints/test-linux-cp312.txt "${sdist_roots[0]}/constraints/test-linux-cp312.txt"
