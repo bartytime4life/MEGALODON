@@ -847,6 +847,7 @@ def _run(args: argparse.Namespace) -> int:
 
 def _dashboard(args: argparse.Namespace) -> int:
     from .dashboard import loopback_host, serve, UnconfiguredDashboardReader, validate_tool_management_mode
+    from .local_install import InstallError, install_paths, load_hud_password_verifier
     from .offline_projection import load_offline_projection
     from .offline_locations import OfflineLocations
     from .config import AISettings, BlockingSettings
@@ -862,6 +863,12 @@ def _dashboard(args: argparse.Namespace) -> int:
         first_launch = getattr(args, "command", "dashboard") == "hud"
         enable_tool_management = getattr(args, "enable_tool_management", False)
         validate_tool_management_mode(enable_tool_management, inspect_tools=first_launch)
+        http_password_verifier = None
+        if args.config is not None and Path(args.config) == install_paths().settings:
+            try:
+                http_password_verifier = load_hud_password_verifier()
+            except InstallError as exc:
+                raise ValueError(str(exc)) from exc
         offline_summary = load_offline_projection(args.offline_run) if args.offline_run else None
         with _dashboard_reader(settings.db_path, allow_missing=first_launch) as store:
             locations = OfflineLocations.open(args.geoip_db) if getattr(args, "geoip_db", None) else None
@@ -886,6 +893,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                     ai_receipt_path=_ai_receipt_path(settings.db_path),
                     ai_blocking=getattr(settings, "blocking", BlockingSettings()),
                     offline_locations=locations,
+                    http_password_verifier=http_password_verifier,
                 )
             finally:
                 if locations is not None:

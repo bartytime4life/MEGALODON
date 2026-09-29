@@ -7,13 +7,15 @@ cd -- "$checkout_dir"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'HELP'
-Usage: ./scripts/install-local.sh [install | status [--json] | repair | uninstall]
+Usage: ./scripts/install-local.sh [install | status [--json] | repair | uninstall | password {set|status|clear}]
 
   install     Build a private application environment and add MEGALODON to the
               current user's application menu. This is the default action.
   status      Check the installed release, launchers, settings, and desktop icon.
   repair      Restore missing managed launchers; preserve data and settings.
   uninstall   Remove managed code and launchers; preserve data and settings.
+  password    Set a reusable local HUD password at private terminal prompts,
+              check its mode, or return to random per-launch passwords.
 
 Installation is Linux-only and refuses root/sudo. It may download Python build
 requirements while installing this reviewed checkout. It does not install
@@ -62,11 +64,11 @@ case "$1" in
     fi
     exec "$local_python" -E -s -m megalodon.local_install install --source "$checkout_dir"
     ;;
-  status|repair|uninstall)
+  status|repair|uninstall|password)
     exec "$local_python" -E -s -m megalodon.local_install "$@"
     ;;
   *)
-    echo 'Choose install, status, repair, or uninstall. Use --help for details.' >&2
+    echo 'Choose install, status, repair, uninstall, or password. Use --help for details.' >&2
     exit 2
     ;;
 esac

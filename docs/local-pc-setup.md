@@ -7,10 +7,11 @@ separate choices; the HUD can open before any data exists.
 
 This is the account-free route: install the core for your user, launch the
 loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
-companion-console account is required. Each HUD launch prints a random password
-in its terminal for the local browser session. It creates no user account; keep
-the password private. The hosted reference Site remains owner-private and is
-not needed for local operation. OSSEC and Zabbix are retired from current
+companion-console account is required. By default, each HUD launch prints a
+random password in its terminal for the local browser session. You can choose
+a reusable password for the installed HUD using the private terminal prompt
+below. Neither mode creates a user account. The hosted reference Site remains
+owner-private and is not needed for local operation. OSSEC and Zabbix are retired from current
 support; the optional catalog contains ten tools including the core.
 
 ## Recommended: install for this user
@@ -25,6 +26,29 @@ Open **MEGALODON** from the Linux application menu. A terminal window owns the
 local server and stays open while you work. The browser opens only after the
 loopback server binds successfully. Press **Ctrl+C** in that terminal to stop.
 No background service or login startup is installed.
+
+### Choose or change the installed HUD password
+
+From a terminal on this PC, run:
+
+```bash
+~/.local/bin/megalodon-manage password set
+```
+
+Enter the new password twice at the hidden prompts. Use 16 to 64 printable
+ASCII characters. Do not put the password in a command argument, environment
+variable, file you edit by hand, or chat message. MEGALODON stores only a
+salted password verifier in the owner-only file
+`~/.config/megalodon/hud-password.json`; it never prints the chosen password.
+Restart a running HUD to apply the change. Sign in with username `megalodon`
+and the password you chose. The password protects only the local HUD and is
+separate from your computer password and the optional AI/tool-management tokens.
+
+To check the mode without revealing the password, run
+`~/.local/bin/megalodon-manage password status`. To return to a fresh random
+password on every launch, run `~/.local/bin/megalodon-manage password clear`
+and restart the HUD. Keep the HUD bound to loopback; this password does not
+authorize remote exposure.
 
 The installer:
 

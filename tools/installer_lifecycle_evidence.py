@@ -103,7 +103,8 @@ def temporary_paths(root, installer):
     return installer.InstallPaths(
         app=app, releases=app / "releases", current=app / "current",
         manifest=app / "install.json", data=app / "data", config=root / "config",
-        settings=root / "config/settings.toml", hud_launcher=root / "bin/megalodon-hud",
+        settings=root / "config/settings.toml", hud_password=root / "config/hud-password.json",
+        hud_launcher=root / "bin/megalodon-hud",
         manager_launcher=root / "bin/megalodon-manage", desktop_entry=root / "desktop/megalodon.desktop",
         icon=root / "icons/megalodon.svg",
     )
