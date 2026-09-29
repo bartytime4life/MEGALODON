@@ -46,8 +46,8 @@ if(typeof document!=='undefined'&&document.getElementById('clamav-title')) {
     chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,data.infected_files>0);
     chart('clamav-directories','Directories scanned',data.scanned_directories);
     node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
-    node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
-    node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported. Saved observation.`;
+    node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}.`;
+    node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported.`;
     node('clamav-status').setAttribute('data-state','ready');
     node('clamav-results').hidden=false;
   }
