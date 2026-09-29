@@ -751,7 +751,10 @@ within the past 60 minutes and refreshes while the tab is visible. Sweep the
 time control back to review a minute, or choose **Live** to follow the current
 rolling minute, including when that minute has no returned records. The globe scans gently until a mapped detector-linked source
 needs review, then focuses on each recent signal for no more than eight seconds
-(less during a burst) before moving on. Its bars compare event counts in the returned candidates;
+(less during a burst) before moving on.
+when traffic is unavailable, only the geographic reference rotates, with no activity marker.
+Rotation uses frame timing and stops when the tab is hidden, motion is reduced,
+or the HUD is paused. The bars compare event counts in the returned candidates;
 unlinked findings do not prove traffic is safe, and a missing minute does not
 prove there was no traffic. The history response contains at most 500 stored
 event candidates and 200 linked finding candidates, so a busy hour can be only

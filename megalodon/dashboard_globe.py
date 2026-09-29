@@ -212,7 +212,7 @@ GLOBE_CSS = r"""
 
 GLOBE_JS = r"""
 const globeState = {mapping: null, backendMapping: null, locationStatus: 'checking', traffic: null,
-  stale: false, latitude: 20, longitude: -20, frame: null, spinTimer: null, fileVersion: 0,
+  stale: false, latitude: 20, longitude: -20, frame: null, spinFrame: null, fileVersion: 0,
   focus: {id: null, until: 0, timer: null, seen: new Set(), selectionKey: null},
   hour: {page: null, start: null, end: null, selectedAt: null, selectedIndex: 59, live: true, fetchedAt: null,
     busy: false, failed: false, partial: false, capReached: false, started: false, timer: null, requestVersion: 0,
@@ -409,26 +409,34 @@ function orientGlobe(view) {
   globeState.frame = window.requestAnimationFrame(step);
 }
 function globeMotionMode(view, hidden, reducedMotion, paused, hasHour) {
-  if (hidden || reducedMotion || paused || !hasHour || view.kind === 'stale' || view.kind === 'unavailable') return 'still';
+  if (hidden || reducedMotion || paused || view.kind === 'stale') return 'still';
+  if (view.kind === 'unavailable') return 'reference';
+  if (!hasHour) return 'still';
   return view.active ? 'hold' : 'spin';
 }
 function stopGlobeSpin() {
-  if (globeState.spinTimer !== null) window.clearTimeout(globeState.spinTimer);
-  globeState.spinTimer = null;
+  if (globeState.spinFrame !== null && typeof window.cancelAnimationFrame === 'function')
+    window.cancelAnimationFrame(globeState.spinFrame);
+  globeState.spinFrame = null;
 }
 function startGlobeSpin(view) {
   const reduced = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const workspace = byId('workspace-live');
-  if (globeMotionMode(view, document.hidden || workspace.hidden, reduced(), state.paused, Boolean(globeState.hour.page)) !== 'spin') return;
-  const step = () => {
-    if (globeMotionMode(view, document.hidden || workspace.hidden, reduced(), state.paused, Boolean(globeState.hour.page)) !== 'spin') {
-      globeState.spinTimer = null; return;
+  const moving = () => ['spin', 'reference'].includes(globeMotionMode(
+    view, document.hidden || workspace.hidden, reduced(), state.paused, Boolean(globeState.hour.page)));
+  if (!moving() || typeof window.requestAnimationFrame !== 'function') return;
+  let previous = null, lastDraw = 0;
+  const step = now => {
+    if (!moving()) { globeState.spinFrame = null; return; }
+    if (previous !== null) {
+      const elapsed = Math.min(80, Math.max(0, now - previous));
+      globeState.longitude = ((globeState.longitude + elapsed * .00625 + 540) % 360) - 180;
+      if (now - lastDraw >= 32) { drawGlobe(view); lastDraw = now; }
     }
-    globeState.longitude = ((globeState.longitude + 1.5 + 540) % 360) - 180;
-    drawGlobe(view);
-    globeState.spinTimer = window.setTimeout(step, 240);
+    previous = now;
+    globeState.spinFrame = window.requestAnimationFrame(step);
   };
-  globeState.spinTimer = window.setTimeout(step, 240);
+  globeState.spinFrame = window.requestAnimationFrame(step);
 }
 function globeFocusDwell(count) { return count <= 1 ? 8000 : count <= 3 ? 4000 : 2500; }
 function stopGlobeFocusTimer() {
@@ -515,7 +523,7 @@ function renderGlobeView() {
   lead.textContent = view.kind === 'mapped'
     ? `Focused source: ${view.active.ip} · ${view.active.location.label}. ${globeSignalLabel(view.active.signal)}.`
     : view.kind === 'stale' ? 'Hour refresh failed. Previous source IPs are shown; no current location ping.'
-    : view.kind === 'unavailable' ? 'Qualified traffic is unavailable. No location is shown.'
+    : view.kind === 'unavailable' ? 'Qualified traffic is unavailable. The reference globe rotates without activity markers or locations.'
     : view.kind === 'empty' ? 'No qualified stored events were returned for this minute.'
     : view.kind === 'no-map' ? 'Source IPs are available. No linked finding or offline location is available for this minute.'
     : view.kind === 'signal-unmapped' ? 'A detector-linked signal is present, but its source IP has no offline location. No dot is placed.'

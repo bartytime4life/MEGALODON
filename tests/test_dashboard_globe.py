@@ -66,6 +66,42 @@ def test_embedded_natural_earth_mask_has_expected_land_and_water():
     assert not land(0, -140)  # Pacific
 
 
+def test_reference_globe_turns_smoothly_without_traffic_and_stops_when_paused():
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node required for dashboard JavaScript behavior')
+    harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+let code = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => code += chunk);
+process.stdin.on('end', () => {
+  const frames = [];
+  const context = {document: {hidden: false}, state: {paused: false}, drawCalls: 0};
+  context.byId = () => ({hidden: false});
+  context.window = {requestAnimationFrame(callback) {frames.push(callback);return frames.length;},
+    cancelAnimationFrame() {}};
+  vm.createContext(context);
+  vm.runInContext(code, context);
+  vm.runInContext('drawGlobe = () => { drawCalls += 1; };', context);
+  vm.runInContext("startGlobeSpin({kind:'unavailable',active:null})", context);
+  assert.equal(frames.length, 1);
+  frames.shift()(0);
+  frames.shift()(33);
+  const longitude = vm.runInContext('globeState.longitude', context);
+  assert.ok(longitude > -20 && longitude < -19.7);
+  assert.equal(context.drawCalls, 1);
+  context.state.paused = true;
+  frames.shift()(66);
+  assert.equal(frames.length, 0);
+});
+"""
+    result = subprocess.run([node, '-e', harness], input=GLOBE_JS, text=True,
+                            capture_output=True, timeout=5, check=False)
+    assert result.returncode == 0, result.stderr
+
+
 def test_offline_map_validation_matching_and_stale_state():
     node = shutil.which('node')
     if node is None:
@@ -217,6 +253,8 @@ process.stdin.on('end', () => {
   assert.equal(evaluate('globeLocationIps(manyTraffic).length'), 20);
   assert.equal(evaluate('globeLocationIps(manyTraffic)[0]'), '8.8.8.21');
   assert.equal(evaluate("globeMotionMode({kind:'monitoring',active:null},false,false,false,true)"), 'spin');
+  assert.equal(evaluate("globeMotionMode({kind:'unavailable',active:null},false,false,false,false)"), 'reference');
+  assert.equal(evaluate("globeMotionMode({kind:'unavailable',active:null},false,true,false,false)"), 'still');
   assert.equal(evaluate("globeMotionMode({kind:'signal-unmapped',active:null},false,false,false,true)"), 'spin');
   assert.equal(evaluate("globeMotionMode({kind:'mapped',active:{ip:'8.8.8.8'}},false,false,false,true)"), 'hold');
   assert.equal(evaluate("globeMotionMode({kind:'monitoring',active:null},false,true,false,true)"), 'still');
