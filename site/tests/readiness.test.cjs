@@ -137,9 +137,10 @@ test('the HTML declares unique evidence controls and loads its local validator f
   for (const id of ['event-search', 'event-disposition', 'event-feed', 'event-inspector', 'run-list', 'run-inspector', 'readiness-file', 'clear-readiness', 'readiness-feedback']) assert.ok(ids.includes(id));
   assert.ok(html.indexOf('src="./readiness.js"') < html.indexOf('src="./app.js"'));
   for (const match of html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)) assert.ok(fs.existsSync(path.join(path.dirname(require.resolve('../dist/index.html')), match[1])));
-  assert.match(html, /Delivered in/);
-  assert.match(html, /MEGALODON\/pull\/241/);
-  assert.match(html, /main@5583ac1/);
+  assert.match(html, /Readiness v2 is in/);
+  assert.match(html, /MEGALODON\/pull\/455/);
+  assert.match(html, /Reports from earlier revisions are rejected/);
+  assert.doesNotMatch(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
   assert.doesNotMatch(html, /href="http:\/\/127\.0\.0\.1:8787/);
   assert.match(html, /local-pc-setup\.md"[^>]*>Local setup guide ↗<\/a>/);
