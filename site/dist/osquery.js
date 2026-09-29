@@ -22,9 +22,10 @@ if(typeof document!=='undefined'&&document.getElementById('osquery-title')) {
   const node=id=>document.getElementById(id);
   function applyOsquery(data, source='Saved package count') {
     data=validateOsqueryCount(JSON.stringify(data));
-    node('osquery-count').textContent=`${data.package_rows} DEB package rows reported`;
-    node('osquery-time').textContent=`Exported ${data.exported_at}. Saved observation; a configured local collector can refresh it.`;
-    node('osquery-status').textContent=`${source} loaded. Not live.`;
+    node('osquery-count').textContent=String(data.package_rows);
+    node('osquery-time').textContent=`Observed ${data.exported_at} (UTC). Saved count.`;
+    node('osquery-status').textContent=`${source} · saved observation.`;
+    node('osquery-status').setAttribute('data-state','ready');
     node('osquery-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).osquery=applyOsquery;

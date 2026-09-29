@@ -4,7 +4,8 @@ import json
 from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
+import time
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
@@ -46,6 +47,7 @@ def test_local_defaults_are_host_only_and_missing_reports_do_not_override_collec
     config = local_default_config(tmp_path)
     assert config.nmap_target == "127.0.0.1/32"
     assert config.clamav_paths == (downloads,)
+    assert config.interval_seconds == 3600 and config.clamav_interval_seconds == 86400
     assert config.osquery_enabled and config.qwen_advisory
     assert config.watch_nmap_xml == tmp_path / ".local/share/megalodon/companion-reports/nmap.xml"
     observed = []
@@ -65,6 +67,36 @@ def test_local_defaults_are_host_only_and_missing_reports_do_not_override_collec
     assert "not installed" in result["status"]["nmap"]
     assert "not installed" in result["status"]["clamav"]
     assert result["advisory"]["osquery"] == "Qwen unavailable (DISABLED)."
+    assert 86000 < worker._next_collection["clamav"] - time.monotonic() <= 86400
+
+
+def test_clamav_schedule_and_watcher_continue_independently(tmp_path, monkeypatch):
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    report = tmp_path / "osquery.json"
+    report.write_text('[{"package_count":"7"}]')
+    config = _config(tmp_path, f'[collection]\ninterval_seconds=300\nclamav_interval_seconds=3600\nclamav_paths=["{downloads}"]\n[watch]\nosquery_json="{report}"\n')
+    assert config.clamav_interval_seconds == 3600
+    started, release = Event(), Event()
+
+    def run(argv, limit, timeout, cancel):
+        assert argv[0] == "clamscan"
+        started.set()
+        release.wait(2)
+        raise ValueError("test scan interrupted")
+
+    monkeypatch.setattr("megalodon.companion_automation._run_fixed", run)
+    worker = CompanionAutomation(config, AISettings())
+    worker.start()
+    try:
+        assert started.wait(2)
+        deadline = time.monotonic() + 2
+        while "osquery" not in worker.snapshot()["results"] and time.monotonic() < deadline:
+            time.sleep(.02)
+        assert worker.snapshot()["results"]["osquery"]["package_rows"] == 7
+    finally:
+        release.set()
+        worker.stop()
 
 
 def test_scopes_are_explicit_and_conservative(tmp_path):

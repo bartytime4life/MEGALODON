@@ -68,7 +68,17 @@ HOME_HTML = """
 </section>
 """
 
-HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML + INVENTORY_HTML + CLAMAV_HTML + OSQUERY_HTML)
+COMPANION_LOCAL_HTML = '''
+<section class="companion-section" aria-labelledby="companion-section-title">
+  <div class="companion-section-head"><div>
+    <p class="eyebrow">THIS PC / AUTOMATIC OBSERVATIONS</p>
+    <h3 id="companion-section-title">Computer observations</h3>
+    <p>Local collectors and report watching update these separate saved counts. Status, scope and observation time appear with each tool; they are not a live traffic feed.</p>
+  </div></div>
+  <div class="companion-grid">''' + INVENTORY_HTML + CLAMAV_HTML + OSQUERY_HTML + '''</div>
+</section>'''
+
+HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML + COMPANION_LOCAL_HTML)
 
 TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>

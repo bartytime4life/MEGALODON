@@ -1,20 +1,25 @@
 """Shared automatic panel for a fixed osquery package count."""
 
 OSQUERY_HTML = r'''
-<section class="osquery-panel" aria-labelledby="osquery-title">
-  <h3 id="osquery-title">Package inventory</h3>
-  <p>Review one completed osquery package count. This is host inventory, separate from network traffic and findings.</p>
-  <p id="osquery-status" role="status">Waiting for local collection.</p>
-  <p id="osquery-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#osquery-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
-  <div id="osquery-results" hidden><p id="osquery-count"></p><p id="osquery-time"></p>
-    <p>This count does not establish package safety, update status or live osquery health.</p></div>
+<section class="companion-panel osquery-panel" aria-labelledby="osquery-title">
+  <div class="companion-head"><div><p class="companion-kicker">OSQUERY / HOST</p><h3 id="osquery-title" tabindex="-1">Package inventory</h3></div><span class="companion-kind">This PC</span></div>
+  <p id="osquery-status" class="companion-state" role="status">No completed local observation shown.</p>
+  <p id="osquery-automation" class="companion-collector">Collector status is available in the local HUD.</p>
+  <div id="osquery-results" hidden>
+    <div class="osquery-value"><strong id="osquery-count"></strong><span>DEB package rows reported</span></div>
+    <p id="osquery-time" class="osquery-time"></p>
+    <p class="companion-caveat">One saved count cannot show a trend. It does not establish package safety, update status or live osquery health.</p>
+  </div>
+  <details class="companion-advisory" id="osquery-advisory-wrap" hidden><summary>Qwen note</summary><p id="osquery-advisory"></p></details>
 </section>
 '''
 
 OSQUERY_CSS = r'''
-.osquery-panel{margin:1.5rem 0;padding:1.25rem;border:1px solid #495b72;border-radius:12px;background:#111d2c;color:#e6f1f6;font-size:1rem}
-.osquery-panel h3{font-size:1.3rem;margin:0 0 .6rem}.osquery-panel p{line-height:1.55}
-.osquery-panel :focus-visible{outline:3px solid #7be7f0;outline-offset:3px}
+.osquery-panel{border-left-color:#658f9c}
+.osquery-value{display:flex;align-items:baseline;gap:.65rem;margin:.8rem 0 .45rem;padding:.65rem .75rem;border:1px solid #304e5c;border-radius:7px;background:#0a1923}
+.osquery-value strong{color:#bceeed;font-size:2rem;font-variant-numeric:tabular-nums;line-height:1}
+.osquery-value span{color:#c3d9df;font-size:.78rem}
+.companion-panel .osquery-time{margin:.4rem 0;color:#c2d7df;font-size:.76rem}
 '''
 
 OSQUERY_JS = r'''
@@ -41,9 +46,10 @@ if(typeof document!=='undefined'&&document.getElementById('osquery-title')) {
   const node=id=>document.getElementById(id);
   function applyOsquery(data, source='Saved package count') {
     data=validateOsqueryCount(JSON.stringify(data));
-    node('osquery-count').textContent=`${data.package_rows} DEB package rows reported`;
-    node('osquery-time').textContent=`Exported ${data.exported_at}. Saved observation; a configured local collector can refresh it.`;
-    node('osquery-status').textContent=`${source} loaded. Not live.`;
+    node('osquery-count').textContent=String(data.package_rows);
+    node('osquery-time').textContent=`Observed ${data.exported_at} (UTC). Saved count.`;
+    node('osquery-status').textContent=`${source} · saved observation.`;
+    node('osquery-status').setAttribute('data-state','ready');
     node('osquery-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).osquery=applyOsquery;

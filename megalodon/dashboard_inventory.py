@@ -1,31 +1,57 @@
 """Shared local/hosted inventory view for automatic local aggregates."""
 
 INVENTORY_HTML = r'''
-<section class="inventory-panel" aria-labelledby="inventory-title">
-  <h3 id="inventory-title" tabindex="-1">Network inventory</h3>
-  <p>Review a completed Nmap report as host and port-state counts. These observations are separate from traffic and detection severity; an open port is not a confirmed threat.</p>
-  <p id="inventory-status" role="status">Waiting for local collection.</p>
-  <p id="inventory-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#inventory-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
+<section class="companion-panel inventory-panel" aria-labelledby="inventory-title">
+  <div class="companion-head"><div><p class="companion-kicker">NMAP / NETWORK</p><h3 id="inventory-title" tabindex="-1">Network inventory</h3></div><span class="companion-kind">Hosts and ports</span></div>
+  <p id="inventory-status" class="companion-state" role="status">No completed local observation shown.</p>
+  <p id="inventory-automation" class="companion-collector">Collector status is available in the local HUD.</p>
   <div id="inventory-results" hidden>
-    <p id="inventory-range"></p><p id="inventory-coverage"></p>
+    <div class="companion-meta"><p id="inventory-range"></p><p id="inventory-coverage"></p></div>
     <div class="inventory-grid">
-      <section><h4>Hosts reported by Nmap</h4><div id="inventory-hosts"></div></section>
-      <section><h4>Protocols · individually listed ports</h4><div id="inventory-protocols"></div></section>
-      <section><h4>Individually listed port states</h4><div id="inventory-explicit"></div></section>
+      <section><h4>Host state</h4><div id="inventory-hosts"></div></section>
+      <section><h4>Listed ports by protocol</h4><div id="inventory-protocols"></div></section>
+      <section><h4>Listed port states</h4><div id="inventory-explicit"></div></section>
       <section><h4>Grouped port states</h4><div id="inventory-grouped"></div></section>
     </div>
-    <p>Counts describe a completed observation, not current reachability or complete network coverage. Grouped ports have no protocol breakdown. Source authenticity is unverified.</p>
+    <p class="companion-caveat">A completed Nmap count is not current reachability or full network coverage. Open ports are not confirmed threats. Grouped ports have no protocol breakdown; report origin is unverified.</p>
   </div>
+  <details class="companion-advisory" id="inventory-advisory-wrap" hidden><summary>Qwen note</summary><p id="inventory-advisory"></p></details>
 </section>
 '''
 
 INVENTORY_CSS = r'''
-.inventory-panel{margin:1.5rem 0;padding:1.25rem;border:1px solid #355266;border-radius:12px;background:#0c1925;color:#e6f1f6;font-size:1rem}
-.inventory-panel h3{font-size:1.3rem;margin:0 0 .6rem}.inventory-panel h4{font-size:1rem;margin:.5rem 0}
-.inventory-panel p{line-height:1.55}
-.inventory-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem}
-.inventory-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.25rem .5rem;margin:.8rem 0;font-size:.875rem}.inventory-row meter{grid-column:1/-1;width:100%;height:1rem;accent-color:#40c9d6}
-.inventory-panel :focus-visible{outline:3px solid #7be7f0;outline-offset:3px}@media(max-width:700px){.inventory-grid{grid-template-columns:1fr}}
+.companion-section{margin:2rem 0 1.5rem;color:#e6f1f6}
+.companion-section-head{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:1rem;padding:0 .15rem}
+.companion-section-head h2,.companion-section-head h3{margin:.15rem 0 .35rem;font-size:1.3rem;line-height:1.2;color:#f2f7f9}
+.companion-section .companion-section-head p{margin:.25rem 0;max-width:62rem;color:#b7cbd4;font-size:.88rem;line-height:1.5}
+.companion-section .companion-section-head .eyebrow{color:#73d7da;font-size:.7rem;font-weight:750;letter-spacing:.12em}
+.companion-local-link{display:inline-flex;align-items:center;min-height:44px;padding:.55rem .85rem;border:1px solid #4e8390;border-radius:7px;color:#c1f3ef;white-space:nowrap;text-decoration:none;font-size:.82rem;font-weight:700}
+.companion-local-link:hover,.companion-local-link:focus-visible{background:#143541;border-color:#89dbdc}
+.companion-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.companion-panel{min-width:0;padding:1.15rem 1.2rem;border:1px solid #345262;border-left:3px solid #3e9daa;border-radius:10px;background:#0c1c28;box-shadow:0 10px 28px rgba(0,0,0,.12);color:#e6f1f6}
+.companion-panel p{line-height:1.5;overflow-wrap:anywhere}
+.companion-head{display:flex;align-items:start;justify-content:space-between;gap:.75rem}
+.companion-head h3{margin:.1rem 0 .7rem;font-size:1.12rem;line-height:1.25;color:#f2f7f9}
+.companion-panel .companion-kicker{margin:0;color:#70ced5;font-size:.67rem;font-weight:750;letter-spacing:.12em}
+.companion-kind{border:1px solid #365564;border-radius:4px;padding:.2rem .4rem;color:#acc8d1;font-size:.68rem;line-height:1.25;white-space:nowrap}
+.companion-panel .companion-state{display:inline-block;max-width:100%;margin:.25rem 0 .4rem;padding:.38rem .58rem;border:1px solid #665d3e;border-radius:5px;background:#2b281b;color:#ead99e;font-size:.8rem;font-weight:700}
+.companion-state[data-state="ready"]{border-color:#387f7f;background:#12383b;color:#bbf0ef}
+.companion-state[data-state="checking"]{border-color:#416879;background:#152f3b;color:#c6e7ed}
+.companion-panel .companion-collector{margin:.1rem 0 .65rem;color:#bfd0d9;font-size:.79rem}
+.companion-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;margin:.7rem 0}
+.companion-panel .companion-meta p{margin:0;padding:.55rem .65rem;border:1px solid #2f4b58;border-radius:6px;background:#0a1922;color:#c5d8de;font-size:.75rem}
+.companion-panel .companion-caveat{margin:.75rem 0 0;color:#aebfc8;font-size:.73rem}
+.companion-advisory{margin-top:.7rem;border-top:1px solid #304a59;color:#bfd0d9;font-size:.75rem}
+.companion-advisory summary{padding:.6rem 0;cursor:pointer}.companion-advisory p{margin:0 0 .4rem}
+.companion-section :focus-visible{outline:3px solid #7be7f0;outline-offset:3px}
+.inventory-panel{grid-column:1/-1}
+.inventory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem}
+.inventory-grid>section{min-width:0;padding:.7rem;border:1px solid #304e5c;border-radius:7px;background:#0a1923}
+.inventory-panel h4{margin:0 0 .45rem;color:#cee4e9;font-size:.77rem;line-height:1.3}
+.inventory-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.15rem .4rem;margin:.38rem 0;font-size:.72rem}.inventory-row b{color:#d8f7f5}.inventory-row meter{grid-column:1/-1;width:100%;height:.6rem;accent-color:#47c9d4}
+@media(max-width:1000px){.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.companion-section-head{align-items:start;flex-direction:column}.companion-grid,.companion-meta,.inventory-grid{grid-template-columns:1fr}.companion-local-link{white-space:normal}.companion-panel{padding:1rem}}
+@media(prefers-reduced-motion:no-preference){.companion-panel{transition:border-color .2s ease,background-color .2s ease}.companion-panel:hover{border-color:#568493;background:#102330}.inventory-row meter{transition:opacity .2s ease}}
 '''
 
 INVENTORY_JS = r'''
@@ -68,7 +94,8 @@ if(typeof document!=='undefined'&&document.getElementById('inventory-title')) {
     chart('inventory-explicit',states,data.explicit_states);chart('inventory-grouped',states,data.grouped_states);
     node('inventory-range').textContent=`Report interval: ${data.started_at} → ${data.finished_at}`;
     node('inventory-coverage').textContent=`Host detail present: ${data.represented_hosts[0]} up / ${data.represented_hosts[1]} down. Report totals can include hosts whose detail was omitted.`;
-    node('inventory-status').textContent=`${source} · completed ${data.finished_at}. Not live.`;
+    node('inventory-status').textContent=`${source} · saved observation.`;
+    node('inventory-status').setAttribute('data-state','ready');
     node('inventory-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).nmap=applyInventory;

@@ -46,6 +46,14 @@ requirements while installing this checkout. Pip destination overrides and pip
 configuration files are ignored so the package cannot be redirected outside the
 private application release.
 
+To keep the installed local HUD available after signing in, run
+`./scripts/hud-autostart.sh enable` from the reviewed checkout. The user-only
+service starts the same loopback HUD at login; the application-menu entry then
+opens its already running page. Use `./scripts/hud-autostart.sh disable` to stop
+and remove automatic startup. The installer removes this managed service on
+uninstall. This starts the fixed local companion collectors with the HUD; it
+does not start capture, a remote feed, or unrelated companion services.
+
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
 `./scripts/manage-companion.sh nmap install` to preview the fixed recipe.

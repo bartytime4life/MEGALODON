@@ -14,7 +14,7 @@ FEATURES = (
  ('tools','Companion presence and processes','Bounded local executable/process observations','60-second heartbeat while visible; not sensor health','setup-title'),
  ('management','Tool installation / service jobs','Fixed optional installer job status','2 seconds while a job runs; independently observed','tool-management-controls'),
  ('inventory','Network inventory','Local fixed Nmap loopback scan or watched completed XML report','Local HUD collects hourly when Nmap is installed; reports checked every 15 seconds','inventory-title'),
- ('clamav-scan','Completed file scan','Local fixed ClamAV Downloads scan or watched completed report','Local HUD collects hourly when ClamAV and Downloads exist; reports checked every 15 seconds','clamav-title'),
+ ('clamav-scan','Completed file scan','Local fixed ClamAV Downloads scan or watched completed report','Local HUD scans daily when ClamAV and Downloads exist; reports checked every 15 seconds','clamav-title'),
  ('osquery-count','Package inventory','Local fixed osquery DEB row count or watched completed result','Local HUD collects hourly when osquery is installed; reports checked every 15 seconds','osquery-title'),
  ('reports','Reports and hosted summary','Validated bounded metadata, held for preview/download','Explicit local export; hosted import remains a saved snapshot','room-reports-title'),
  ('viewer','Companion app viewer','User-selected companion console URL','App-owned UI; does not connect its telemetry','app-viewer-title'),

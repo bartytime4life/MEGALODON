@@ -30,20 +30,25 @@ function validateClamavSummary(text, now=Date.now()) {
 if(typeof module!=='undefined')module.exports={validateClamavSummary};
 if(typeof document!=='undefined'&&document.getElementById('clamav-title')) {
   const node=id=>document.getElementById(id);
-  function chart(id,label,value,max,alert=false) {
-    const root=node(id),row=document.createElement('div'),name=document.createElement('span'),count=document.createElement('b'),bar=document.createElement('meter');
+  function chart(id,label,value,max=null,alert=false) {
+    const root=node(id),row=document.createElement('div'),name=document.createElement('span'),count=document.createElement('b');
     root.replaceChildren();row.className=alert?'clamav-row alert':'clamav-row';name.textContent=label;count.textContent=String(value);
-    bar.min=0;bar.max=Math.max(1,max);bar.value=value;bar.setAttribute('aria-label',`${label}: ${value}; chart maximum ${bar.max}`);
-    row.append(name,count,bar);root.append(row);
+    row.append(name,count);
+    if(max!==null) {
+      const bar=document.createElement('meter');bar.min=0;bar.max=Math.max(1,max);bar.value=value;
+      bar.setAttribute('aria-label',`${label}: ${value} of ${max} files scanned`);row.append(bar);
+    }
+    root.append(row);
   }
   function applyClamav(data, source='Saved ClamAV summary') {
     data=validateClamavSummary(JSON.stringify(data));
-    chart('clamav-files','Files scanned',data.scanned_files,data.scanned_files);
-    chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,true);
-    chart('clamav-directories','Directories scanned',data.scanned_directories,data.scanned_directories);
+    chart('clamav-files','Files scanned',data.scanned_files);
+    chart('clamav-detections','Files with matches',data.infected_files,data.scanned_files,data.infected_files>0);
+    chart('clamav-directories','Directories scanned',data.scanned_directories);
     node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
     node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
-    node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported. Not live.`;
+    node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported. Saved observation.`;
+    node('clamav-status').setAttribute('data-state','ready');
     node('clamav-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).clamav=applyClamav;

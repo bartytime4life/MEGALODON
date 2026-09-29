@@ -84,6 +84,14 @@ def test_empty_completed_report_is_zero_observation_not_failed_scan():
     assert sum(value['explicit_states']) == 0
 
 
+def test_packaged_nmap_7_94_svn_version_is_accepted_without_widening_profile():
+    value = summarize_report(report().replace(b'version="7.95"', b'version="7.94SVN"'))
+    assert value['hosts'] == [1, 2]
+    for unsupported in (b'7.94SVN-extra', b'7.94beta', b'8.0SVN'):
+        with pytest.raises(ValueError):
+            summarize_report(report().replace(b'version="7.95"', b'version="' + unsupported + b'"'))
+
+
 def test_cli_roundtrip_and_closed_failure_diagnostic():
     accepted = subprocess.run([sys.executable, '-m', 'megalodon.nmap_inventory'], input=report(), capture_output=True, timeout=10)
     assert accepted.returncode == 0
