@@ -243,7 +243,9 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         await page.locator("#submit").click()
         await expect(page).to_have_url(origin + "/")
         passed("password-only sign-in page opens the local HUD")
-        response = await page.goto(origin + ("/#reference-title" if not nonempty else "/"))
+        response = await page.reload()
+        if not nonempty:
+            await page.goto(origin + "/#reference-title")
         await expect(page.locator("#trust-strip")).to_have_class("trust-strip current")
         await expect(page.locator("#triage-panel")).to_have_attribute("aria-busy", "false")
         if not nonempty:
