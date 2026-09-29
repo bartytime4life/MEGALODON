@@ -160,10 +160,8 @@
 <section class="inventory-panel" aria-labelledby="inventory-title">
   <h3 id="inventory-title" tabindex="-1">Network inventory</h3>
   <p>Review a completed Nmap report as host and port-state counts. These observations are separate from traffic and detection severity; an open port is not a confirmed threat.</p>
-  <label>Load inventory JSON <input type="file" id="inventory-file" accept=".json,application/json"></label>
-  <button type="button" id="inventory-clear" disabled>Clear inventory</button>
-  <p id="inventory-status" role="status">No inventory loaded. Files stay in this tab.</p>
-  <p id="inventory-automation">Automatic collection and report watching require an explicitly configured local HUD. <a href="http://127.0.0.1:8787/#inventory-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
+  <p id="inventory-status" role="status">Waiting for local collection.</p>
+  <p id="inventory-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#inventory-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
   <div id="inventory-results" hidden>
     <p id="inventory-range"></p><p id="inventory-coverage"></p>
     <div class="inventory-grid">
@@ -172,10 +170,8 @@
       <section><h4>Individually listed port states</h4><div id="inventory-explicit"></div></section>
       <section><h4>Grouped port states</h4><div id="inventory-grouped"></div></section>
     </div>
-    <p>Counts describe the selected report, not current reachability or complete network coverage. Grouped ports have no protocol breakdown in this summary. Source authenticity is unverified.</p>
+    <p>Counts describe a completed observation, not current reachability or complete network coverage. Grouped ports have no protocol breakdown. Source authenticity is unverified.</p>
   </div>
-  <details><summary>Prepare an inventory summary</summary><p>With the updated MEGALODON package installed, run this in its Python environment against an existing completed report. No Nmap installation or scan is required. On Linux, set private output permissions first.</p><pre>umask 077
-python -m megalodon.nmap_inventory &lt; completed-report.xml &gt; inventory-summary.json</pre><p>Then load inventory-summary.json above. The supported profile is Nmap 7.x, XML 1.05, completed successfully, at most 2 MiB and 4,096 represented hosts. Addresses, names, port numbers, banners, scripts and command arguments are omitted. Failed or timed-out reports are refused. No data is uploaded or saved by this page.</p></details>
 </section>
 
 <!-- INVENTORY_END -->
@@ -184,37 +180,26 @@ python -m megalodon.nmap_inventory &lt; completed-report.xml &gt; inventory-summ
 <section class="clamav-panel" aria-labelledby="clamav-title">
   <h3 id="clamav-title" tabindex="-1">Completed file scan</h3>
   <p>Review counts from a completed ClamAV clamscan report. This is separate from network traffic and its danger levels.</p>
-  <label>Load scan summary JSON <input type="file" id="clamav-file" accept=".json,application/json"></label>
-  <button type="button" id="clamav-clear" disabled>Clear scan summary</button>
-  <p id="clamav-status" role="status">No scan summary loaded. Files stay in this tab.</p>
-  <p id="clamav-automation">Automatic collection and report watching require an explicitly configured local HUD. <a href="http://127.0.0.1:8787/#clamav-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
+  <p id="clamav-status" role="status">Waiting for local collection.</p>
+  <p id="clamav-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#clamav-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
   <div id="clamav-results" hidden>
     <p id="clamav-range"></p>
     <div class="clamav-grid"><div id="clamav-files"></div><div id="clamav-detections"></div><div id="clamav-directories"></div></div>
     <p id="clamav-scope"></p>
-    <p>Counts come from a completed report; the source is not authenticated. Zero detections do not prove complete coverage or that files are safe. Local collection requires explicit folder and schedule settings.</p>
+    <p>Counts come from a completed observation. Zero detections do not prove complete coverage or that files are safe.</p>
   </div>
-  <details><summary>Prepare a scan summary</summary><p>After an operator-run clamscan finishes, retain its output and exit status privately. Run this command with the matching exit status (0 for no matches, 1 for matches); exit status 2 and reported errors are refused. The report may include private paths, so only load the exported JSON into the HUD.</p><pre>umask 077
-python -m megalodon.clamav_summary --exit-code 0 &lt; completed-clamscan.txt &gt; scan-summary.json</pre><p>Replace 0 with the recorded exit status when it is 1. The exporter reads at most 1 MiB; it emits only times, version and counts. Times printed by clamscan are local and have no timezone. This page holds the aggregate only until cleared or closed.</p></details>
 </section>
 
 <!-- CLAMAV_END -->
 <!-- OSQUERY_START -->
 
 <section class="osquery-panel" aria-labelledby="osquery-title">
-  <h3 id="osquery-title">Saved package inventory</h3>
+  <h3 id="osquery-title">Package inventory</h3>
   <p>Review one completed osquery package count. This is host inventory, separate from network traffic and findings.</p>
-  <label>Load package count JSON <input type="file" id="osquery-file" accept=".json,application/json"></label>
-  <button type="button" id="osquery-clear" disabled>Clear package count</button>
-  <p id="osquery-status" role="status">No package count loaded.</p>
-  <p id="osquery-automation">Automatic collection and report watching require an explicitly configured local HUD. <a href="http://127.0.0.1:8787/#osquery-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
+  <p id="osquery-status" role="status">Waiting for local collection.</p>
+  <p id="osquery-automation">Automatic results appear in the local HUD. The hosted Console cannot read this PC. <a href="http://127.0.0.1:8787/#osquery-title" target="_blank" rel="noopener noreferrer">Open local HUD ↗</a></p>
   <div id="osquery-results" hidden><p id="osquery-count"></p><p id="osquery-time"></p>
-    <p>Saved result. This count does not establish package safety, update status or live osquery health. Manually selected files remain in this tab.</p></div>
-  <details><summary>Prepare a package count</summary><p>On a trusted Ubuntu PC with osquery already installed, run the fixed read-only query yourself. Inspect the saved result, then export and load only the counts-only JSON. Do not put package names, paths or arbitrary query output into the HUD.</p>
-    <pre>umask 077
-osqueryi --json 'SELECT count(*) AS package_count FROM deb_packages;' &gt; private-osquery-result.json
-python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; package-count.json</pre>
-    <p>A successful command alone does not authenticate the saved file or prove complete host inventory. The exporter refuses unexpected fields and inputs over 4 KiB.</p></details>
+    <p>This count does not establish package safety, update status or live osquery health.</p></div>
 </section>
 
 <!-- OSQUERY_END -->

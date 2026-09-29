@@ -1,4 +1,4 @@
-"""Local HUD poller for opt-in aggregate companion automation."""
+"""Local HUD poller for aggregate companion automation."""
 
 COMPANION_JS = r'''
 if (typeof localHudLaunch !== 'undefined' && typeof document !== 'undefined') {

@@ -301,21 +301,10 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await page.keyboard.press("Enter")
             await expect(details.locator(".room-meta")).to_be_hidden()
         passed("eight traffic views expose source and quality through keyboard-operable disclosures")
-        inventory = {"schema": "megalodon-nmap-inventory-v1", "started_at": "2023-11-14T22:13:20Z",
-                     "finished_at": "2023-11-14T22:13:30Z", "hosts": [1, 2], "represented_hosts": [1, 0],
-                     "explicit_states": [1, 0, 0, 0, 0, 0], "grouped_states": [0, 999, 0, 0, 0, 0],
-                     "protocols": [1, 0, 0]}
-        await page.locator("#inventory-file").set_input_files({"name": "inventory.json", "mimeType": "application/json", "buffer": json.dumps(inventory).encode()})
-        await expect(page.locator("#inventory-results")).to_be_visible()
-        await expect(page.locator("#inventory-status")).to_contain_text("Not live")
-        await expect(page.locator("#inventory-explicit meter")).to_have_count(6)
-        await expect(page.locator("#inventory-grouped")).to_contain_text("999")
-        await page.locator("#inventory-file").set_input_files({"name": "bad.json", "mimeType": "application/json", "buffer": b'{"raw":"private"}'})
-        await expect(page.locator("#inventory-status")).to_contain_text("Import rejected")
-        await expect(page.locator("#inventory-grouped")).to_contain_text("999")
-        await page.locator("#inventory-clear").click()
-        await expect(page.locator("#inventory-results")).to_be_hidden()
-        passed("inventory import, rejection preservation and clear work in the real browser")
+        for retired in ("inventory-file", "clamav-file", "osquery-file"):
+            await expect(page.locator("#" + retired)).to_have_count(0)
+        await expect(page.locator("#inventory-automation")).to_be_visible()
+        passed("local companion cards no longer require manual file uploads")
         if nonempty:
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
             await expect(page.locator("#room-traffic-grid")).to_contain_text("200 reported bytes")

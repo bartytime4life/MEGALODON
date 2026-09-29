@@ -18,27 +18,15 @@ function validateOsqueryCount(text,now=Date.now()) {
   return data;
 }
 if(typeof module!=='undefined')module.exports={validateOsqueryCount};
-if(typeof document!=='undefined'&&document.getElementById('osquery-file')) {
-  const node=id=>document.getElementById(id);let generation=0;
+if(typeof document!=='undefined'&&document.getElementById('osquery-title')) {
+  const node=id=>document.getElementById(id);
   function applyOsquery(data, source='Saved package count') {
     data=validateOsqueryCount(JSON.stringify(data));
     node('osquery-count').textContent=`${data.package_rows} DEB package rows reported`;
     node('osquery-time').textContent=`Exported ${data.exported_at}. Saved observation; a configured local collector can refresh it.`;
     node('osquery-status').textContent=`${source} loaded. Not live.`;
-    node('osquery-results').hidden=false;node('osquery-clear').disabled=false;
+    node('osquery-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).osquery=applyOsquery;
-  node('osquery-file').addEventListener('change',async event=>{
-    const current=++generation,file=event.target.files?.[0];event.target.value='';if(!file)return;
-    try {
-      if(file.size>4096)throw new Error('Too large');
-      const buffer=await file.arrayBuffer();if(buffer.byteLength>4096)throw new Error('Too large');
-      const data=validateOsqueryCount(new TextDecoder('utf-8',{fatal:true}).decode(buffer));if(current!==generation)return;
-      applyOsquery(data);
-    } catch {if(current===generation)node('osquery-status').textContent='Import rejected. Previous package count preserved.';}
-  });
-  node('osquery-clear').addEventListener('click',()=>{
-    generation++;node('osquery-results').hidden=true;node('osquery-clear').disabled=true;
-    node('osquery-count').textContent='';node('osquery-time').textContent='';node('osquery-status').textContent='Package count cleared from this tab.';
-  });
+
 }

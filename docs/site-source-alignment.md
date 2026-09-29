@@ -1,6 +1,25 @@
 # Defense Console source alignment
 
-## Current publication — Console v52, repository mirror proposed
+## Current publication — Console v53, repository mirror proposed
+
+CONFIRMED 2026-09-29: the owner-only Site published version 53 from Sites
+source `77f9741d192013b4ae3db4cc1fef4734608eecbe`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_1ae118e4502c8191832528d0bd1d44ca`.
+Deployment `appgdep_6abbff02f9008191ae3c524b1a37c171` reported
+`succeeded` at <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+The existing owner-only access policy remains in place. Rollback reference:
+saved v52 / source `4a3694a0db26d8c6d413b04f0d31807d5f48ff31` /
+deployment `appgdep_6abbf66161108191987d71bd4ba2d48b`.
+
+Version 53 removes the three manual inventory upload controls from the Site
+and shared local panels. The Site now points to the local HUD for automatically
+collected results. The Site source matches this proposed repository mirror for
+the changed assets and tests; its Node suite passed 110/110 tests. Browser
+rendering remains unverified after the browser security check denied access.
+The Site cannot read this PC or operate its tools; the local HUD implementation
+is a separate repository change and needs a restarted local process.
+
+## Historical publication — Console v52, repository mirror proposed
 
 CONFIRMED 2026-09-29: the existing owner-only Site published version 52 from
 Sites source `4a3694a0db26d8c6d413b04f0d31807d5f48ff31`, saved version

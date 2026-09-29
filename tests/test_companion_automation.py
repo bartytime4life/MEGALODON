@@ -1,6 +1,7 @@
-"""Opt-in companion jobs are scoped, bounded and counts-only."""
+"""Local companion jobs are scoped, bounded and counts-only."""
 
 import json
+from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -10,15 +11,60 @@ from urllib.request import urlopen
 import pytest
 
 from megalodon.companion_automation import (
-    CompanionAutomation, CompanionConfig, _run_fixed, load_config,
+    CompanionAutomation, CompanionConfig, _run_fixed, load_config, local_default_config,
 )
 from megalodon.config import AISettings
+
+
+def test_hud_starts_default_companions_and_explicit_disable_stops_them(monkeypatch):
+    from megalodon import cli, dashboard
+
+    @contextmanager
+    def reader(_path, *, allow_missing=False):
+        assert allow_missing
+        yield dashboard.UnconfiguredDashboardReader()
+
+    configs = []
+    monkeypatch.setattr(cli, "_dashboard_reader", reader)
+    monkeypatch.setattr(dashboard, "serve", lambda *_args, **kwargs: configs.append(kwargs["companion_config"]))
+    assert cli._dashboard(cli.build_parser().parse_args(["hud"])) == 0
+    assert configs[-1].nmap_target == "127.0.0.1/32"
+    assert configs[-1].osquery_enabled
+    assert cli._dashboard(cli.build_parser().parse_args(["hud", "--no-auto-companions"])) == 0
+    assert configs[-1] is None
 
 
 def _config(tmp_path: Path, source: str) -> CompanionConfig:
     config = tmp_path / "companions.toml"
     config.write_text(source)
     return load_config(config)
+
+
+def test_local_defaults_are_host_only_and_missing_reports_do_not_override_collection(tmp_path, monkeypatch):
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    config = local_default_config(tmp_path)
+    assert config.nmap_target == "127.0.0.1/32"
+    assert config.clamav_paths == (downloads,)
+    assert config.osquery_enabled and config.qwen_advisory
+    assert config.watch_nmap_xml == tmp_path / ".local/share/megalodon/companion-reports/nmap.xml"
+    observed = []
+
+    def run(argv, limit, timeout, cancel):
+        observed.append(argv)
+        if argv[0] == "osqueryi":
+            return b'[{"package_count":"42"}]', 0
+        raise ValueError("companion tool unavailable")
+
+    monkeypatch.setattr("megalodon.companion_automation._run_fixed", run)
+    worker = CompanionAutomation(config, AISettings())
+    worker.tick()
+    result = worker.snapshot()
+    assert [argv[0] for argv in observed] == ["osqueryi", "nmap", "clamscan"]
+    assert result["results"]["osquery"]["package_rows"] == 42
+    assert "not installed" in result["status"]["nmap"]
+    assert "not installed" in result["status"]["clamav"]
+    assert result["advisory"]["osquery"] == "Qwen unavailable (DISABLED)."
 
 
 def test_scopes_are_explicit_and_conservative(tmp_path):

@@ -1,4 +1,4 @@
-"""Opt-in, local collection and report watching for aggregate HUD companions.
+"""Local collection and report watching for aggregate HUD companions.
 
 The model sees counts only. It never selects commands, targets or files.
 """
@@ -43,6 +43,19 @@ class CompanionConfig:
     qwen_advisory: bool
 
 
+def local_default_config(home: Path | None = None) -> CompanionConfig:
+    """Bounded, host-only HUD defaults; an explicit file can widen the scope."""
+    root = home if home is not None else Path.home()
+    reports = root / ".local" / "share" / "megalodon" / "companion-reports"
+    downloads = root / "Downloads"
+    folders = (downloads,) if downloads.is_dir() and not downloads.is_symlink() else ()
+    return CompanionConfig(
+        3600, "127.0.0.1/32", folders, True,
+        reports / "nmap.xml", reports / "clamscan.txt", reports / "clamscan.exit",
+        reports / "osquery.json", True,
+    )
+
+
 def _absolute_file(value: object) -> Path | None:
     if value is None or value == "":
         return None
@@ -55,7 +68,7 @@ def _absolute_file(value: object) -> Path | None:
 
 
 def load_config(path: Path) -> CompanionConfig:
-    """Read one explicit TOML file. An empty/default configuration starts no jobs."""
+    """Read one explicit TOML override for local collection and watching."""
     path = _absolute_file(str(path))
     assert path is not None
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 8192:
@@ -265,17 +278,21 @@ class CompanionAutomation:
                     value = osquery_summary(raw)
                 self._seen[kind] = signature
                 self._publish(kind, value, "Watched report")
+            except FileNotFoundError:
+                # A producer has not written this optional report yet. Local
+                # collection can still provide a current aggregate.
+                continue
             except (OSError, ValueError, AssertionError):
                 self._fail(kind, "Watched report unavailable or rejected; prior aggregate preserved")
 
     def _collect(self) -> None:
         jobs = []
+        if self.config.osquery_enabled:
+            jobs.append(("osquery", ["osqueryi", "--json", "SELECT count(*) AS package_count FROM deb_packages;"], OSQUERY_MAX, 30))
         if self.config.nmap_target:
             jobs.append(("nmap", ["nmap", "-sT", "-Pn", "-n", "-p", "1-1024", "-oX", "-", self.config.nmap_target], NMAP_MAX, 300))
         if self.config.clamav_paths:
             jobs.append(("clamav", ["clamscan", "--recursive", "--infected", *map(str, self.config.clamav_paths)], CLAMAV_MAX, 900))
-        if self.config.osquery_enabled:
-            jobs.append(("osquery", ["osqueryi", "--json", "SELECT count(*) AS package_count FROM deb_packages;"], OSQUERY_MAX, 30))
         for kind, argv, limit, timeout in jobs:
             if self._stop.is_set():
                 return
@@ -289,9 +306,15 @@ class CompanionAutomation:
                     value = osquery_summary(raw)
                 else:
                     raise ValueError("tool returned an unsuccessful status")
-                self._publish(kind, value, "Local collector")
-            except (OSError, ValueError):
-                self._fail(kind, "Local collector unavailable or rejected; prior aggregate preserved")
+                scope = (self.config.nmap_target if kind == "nmap" else
+                         "Downloads" if kind == "clamav" and self.config.clamav_paths == (Path.home() / "Downloads",) else
+                         "configured folders" if kind == "clamav" else "this PC")
+                self._publish(kind, value, f"Local collector ({scope})")
+            except (OSError, ValueError) as exc:
+                if str(exc) == "companion tool unavailable":
+                    self._fail(kind, f"{argv[0]} is not installed; automatic collection unavailable")
+                else:
+                    self._fail(kind, "Local collector unavailable or rejected; prior aggregate preserved")
 
     def tick(self) -> None:
         self._watch()

@@ -28,8 +28,8 @@ function validateClamavSummary(text, now=Date.now()) {
   return data;
 }
 if(typeof module!=='undefined')module.exports={validateClamavSummary};
-if(typeof document!=='undefined'&&document.getElementById('clamav-file')) {
-  const node=id=>document.getElementById(id);let generation=0;
+if(typeof document!=='undefined'&&document.getElementById('clamav-title')) {
+  const node=id=>document.getElementById(id);
   function chart(id,label,value,max,alert=false) {
     const root=node(id),row=document.createElement('div'),name=document.createElement('span'),count=document.createElement('b'),bar=document.createElement('meter');
     root.replaceChildren();row.className=alert?'clamav-row alert':'clamav-row';name.textContent=label;count.textContent=String(value);
@@ -44,21 +44,8 @@ if(typeof document!=='undefined'&&document.getElementById('clamav-file')) {
     node('clamav-range').textContent=`Scan: ${data.scan_start_local} → ${data.scan_end_local} (source local time; timezone unknown). Engine ${data.engine_version}.`;
     node('clamav-scope').textContent=`Reported errors: ${data.errors}. Exported ${data.exported_at}; this is a saved result, not live scanner telemetry.`;
     node('clamav-status').textContent=`${source} · ${data.infected_files} file matches reported. Not live.`;
-    node('clamav-results').hidden=false;node('clamav-clear').disabled=false;
+    node('clamav-results').hidden=false;
   }
   (globalThis.megalodonCompanionRender??={}).clamav=applyClamav;
-  node('clamav-file').addEventListener('change',async event=>{
-    const current=++generation,file=event.target.files?.[0];event.target.value='';if(!file)return;
-    try {
-      if(file.size>4096)throw new Error('Choose a summary JSON under 4 KiB.');
-      const buffer=await file.arrayBuffer();if(buffer.byteLength>4096)throw new Error('Summary exceeds 4 KiB.');
-      const data=validateClamavSummary(new TextDecoder('utf-8',{fatal:true}).decode(buffer));if(current!==generation)return;
-      applyClamav(data);
-    } catch (_) {if(current===generation)node('clamav-status').textContent='Import rejected. Use a supported counts-only JSON under 4 KiB. Any previous scan summary is preserved.';}
-  });
-  node('clamav-clear').addEventListener('click',()=>{
-    generation++;node('clamav-results').hidden=true;node('clamav-clear').disabled=true;
-    for(const id of ['clamav-files','clamav-detections','clamav-directories'])node(id).replaceChildren();
-    node('clamav-range').textContent='';node('clamav-scope').textContent='';node('clamav-status').textContent='Scan summary cleared from this tab.';
-  });
+
 }
