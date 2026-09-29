@@ -49,7 +49,8 @@ land mask as a geographic reference. It rotates smoothly while visible, with
 West/East and Pause controls; reduced-motion preferences keep it still.
 Separate normal and danger/critical traffic bar tracks show an explicit
 disconnected state here, with LOW/MEDIUM review signals listed separately.
-No marker, timestamp, IP location, or event count is created. The normal lane
+The reference globe creates no marker, observed timestamp, or IP location. Saved
+charts show only the aggregate counts in a validated import. The normal lane
 means no returned linked finding, not proven-safe traffic; the danger/critical
 lane refers to HIGH/CRITICAL findings requiring review. Actual volume meters
 and the interactive rolling-hour timeline use qualified stored data in the
@@ -71,8 +72,9 @@ The Site does not execute or copy workflow commands.
 
 The local HUD can open before data exists. Its default launcher and browser
 do not start sensors or create sample evidence, and an empty local HUD is labeled
-unavailable rather than zero traffic. The hosted Site does not navigate to a
-device loopback address. The brand returns to Overview, view changes focus
+unavailable rather than zero traffic. The hosted Site offers explicit links to
+the running local HUD on the default loopback port; it does not fetch its data.
+The brand returns to Overview, view changes focus
 their heading, and saved-console filters update immediately when a bookmark
 changes.
 

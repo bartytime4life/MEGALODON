@@ -1,6 +1,27 @@
 # Defense Console source alignment
 
-## Current publication — Console v49, repository mirror proposed
+## Current publication — Console v50, repository mirror proposed
+
+CONFIRMED 2026-09-29: the owner-only Site published version 50 from Sites source
+`9ea3828fc447834a96e0d68a24c3c784b435f7d9`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_e229c1f8b1008191aa9ec78f5293226f`.
+Deployment `appgdep_6abbee9dabf8819191127e1f2c4910cc` reported
+`succeeded` at 2026-09-29T17:00:20Z at
+<https://megalodon-defense-console.blackbart-55.chatgpt.site>. The archive
+contains 20 files, 399,360 bytes, and
+`sha256:97241580456de5a2a35c380adad16e8c080bad2154281071dac70403f34f1c2f`.
+The Site remains under the existing owner-only custom access policy.
+Rollback reference: saved v49 / source
+`599b4b0983e104089b737f3125df9f7bd5f8d411` /
+deployment `appgdep_6abbed80d4dc81919c3012bde2603462`.
+
+Version 50 corrects the Site's explanation of saved counts and explicit
+loopback links. Source files in this proposed repository mirror match the
+pushed Sites source byte for byte. The complete Site suite passed 110/110 Node
+tests. Browser rendering remains unverified after the browser's security check
+denied access. Repository mirror merge is separate from Site publication.
+
+## Historical publication — Console v49, repository mirror proposed
 
 CONFIRMED 2026-09-29: the existing owner-only Site published version 49 from
 Sites source `599b4b0983e104089b737f3125df9f7bd5f8d411`, saved version
@@ -21,8 +42,8 @@ summary import restores saved traffic charts without a live connection. The
 page links to the running local HUD's authorized service-start controls.
 Those controls and the hosted publication do not start a service, collect
 traffic, connect a companion data adapter, or run Qwen scripts by themselves.
-All Site source files in this proposed repository mirror match the pushed
-Sites source byte for byte. The complete Site suite passed 110/110 Node tests,
+At v49 publication, the Site source files in the proposed repository mirror
+matched the pushed Sites source byte for byte. The complete Site suite passed 110/110 Node tests,
 including summary rejection and import races, globe motion, and existing
 boundary checks. Authenticated rendered interaction remains unverified because
 the browser's security check denied access; no browser control was bypassed.

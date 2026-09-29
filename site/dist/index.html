@@ -115,7 +115,7 @@
             </div>
             <div class="globe-content">
               <div class="globe-visual">
-                <canvas id="reference-globe" width="420" height="420" role="img" aria-label="Natural Earth globe with no activity markers because this hosted Site has not read local traffic"></canvas>
+                <canvas id="reference-globe" width="420" height="420" role="img" aria-label="Natural Earth reference globe with no activity markers or location evidence"></canvas>
                 <div class="globe-turn" role="group" aria-label="Rotate globe">
                   <button type="button" id="globe-west" aria-label="Rotate globe west">← West</button>
                   <button type="button" id="globe-east" aria-label="Rotate globe east">East →</button>
@@ -127,7 +127,7 @@
                 <strong>Location evidence unavailable here</strong>
                 <p>The local runtime can summarize 60 minutes of bounded stored metadata. Its optional offline IP regions are approximate. No source location is available on this hosted page.</p>
                 <h3>Traffic levels · records per minute</h3>
-                <p class="volume-connection">Unavailable · local telemetry not read</p>
+                <p class="volume-connection">Unavailable · no live local telemetry feed</p>
                 <div class="hosted-volume-lane normal">
                   <div><strong>Normal lane · no linked finding</strong><b>— records / min</b></div>
                   <div class="hosted-volume-track" role="img" aria-label="Normal traffic volume unavailable because local telemetry was not read"><span>No evidence available here</span></div>
@@ -222,7 +222,7 @@ python -m megalodon.osquery_inventory &lt; private-osquery-result.json &gt; pack
 <details><summary>All 10 companions: telemetry support</summary><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody><tr><th scope="row">Python + SQLite</th><td>Qualified core traffic and finding projection</td><td>Refreshing stored metadata</td></tr><tr><th scope="row">TShark / Wireshark</th><td>Completed offline capture analysis</td><td>Selected startup summary; no live tool feed</td></tr><tr><th scope="row">Zeek</th><td>Completed conn.log analysis</td><td>Selected startup summary; flow units stay separate</td></tr><tr><th scope="row">Suricata</th><td>Committed external alert publications</td><td>Selected startup snapshot</td></tr><tr><th scope="row">Scapy</th><td>Optional separately operated metadata capture</td><td>Core projection after qualified ingestion</td></tr><tr><th scope="row">Qwen / Ollama</th><td>Explicit local AI requests and advisory receipts</td><td>On demand; presence is not model readiness</td></tr><tr><th scope="row">nftables</th><td>Deterministic response-plan evidence</td><td>No live firewall telemetry or application</td></tr><tr><th scope="row">ClamAV</th><td>Completed-report counts-only importer; manual HUD JSON load</td><td>Saved scanned / matched file counts only; no scanner or live telemetry</td></tr><tr><th scope="row">osquery</th><td>Saved DEB package-count importer; manual HUD JSON load</td><td>One fixed Ubuntu count only; no daemon, scheduler or live inventory</td></tr><tr><th scope="row">Nmap</th><td>Completed-report aggregate importer; manual HUD JSON load</td><td>Saved host / port counts only; no scanner or live telemetry</td></tr></tbody></table></div></details>
 </section>
 <!-- TELEMETRY_COVERAGE_END -->
-          <details class="disconnected-details"><summary>Hosted network feed · not connected</summary><p>Actual measurements are available only in your local HUD after real evidence is ingested.</p>
+          <details class="disconnected-details"><summary>Hosted network feed · not connected</summary><p>Refreshing measurements are available only in your local HUD after real evidence is ingested. Saved aggregate charts above update when you load a valid export.</p>
           <section class="kpi-grid" aria-label="Network measurements unavailable">
             <article class="kpi-card cyan-accent"><div><span>METADATA EVENTS</span><small>no input</small></div><strong id="metric-events">—</strong><span class="metric-delta">unavailable</span></article>
             <article class="kpi-card blue-accent"><div><span>FLOW RECORDS</span><small>no input</small></div><strong id="metric-flows">—</strong><span class="metric-delta">unavailable</span></article>
