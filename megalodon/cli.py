@@ -224,6 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=_bounded_cli_integer("port", 1, 65535))
     dashboard.add_argument("--allow-remote", action="store_true", help="removed unsafe option; supplying it refuses startup")
+    dashboard.add_argument("--require-sign-in", action="store_true", help="require a local HUD password; off by default")
     dashboard.add_argument(
         "--enable-tool-management", action="store_true",
         help="hud only: enable token-gated fixed Install/Start actions for a non-root Linux launch",
@@ -864,7 +865,7 @@ def _dashboard(args: argparse.Namespace) -> int:
         enable_tool_management = getattr(args, "enable_tool_management", False)
         validate_tool_management_mode(enable_tool_management, inspect_tools=first_launch)
         http_password_verifier = None
-        if args.config is not None and Path(args.config) == install_paths().settings:
+        if getattr(args, "require_sign_in", False) and args.config is not None and Path(args.config) == install_paths().settings:
             try:
                 http_password_verifier = load_hud_password_verifier()
             except InstallError as exc:
@@ -894,6 +895,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                     ai_blocking=getattr(settings, "blocking", BlockingSettings()),
                     offline_locations=locations,
                     http_password_verifier=http_password_verifier,
+                    require_sign_in=getattr(args, "require_sign_in", False),
                 )
             finally:
                 if locations is not None:

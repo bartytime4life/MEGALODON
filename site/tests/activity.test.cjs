@@ -30,7 +30,7 @@ test('Activity restores saved summary charts without claiming a live connection'
   assert.match(activity, /The file stays in this browser tab; these charts are a saved view, not a live feed/);
   assert.match(activity, /Open local app controls/);
   assert.match(html, /Starting a service does not connect its data/);
-  assert.match(activity, /href="https:\/\/github\.com\/bartytime4life\/MEGALODON\/blob\/29cd2b29e45460d79df4a24132e3563362b0ea3c\/docs\/local-pc-setup\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Setup guide ↗<\/a>/);
+  assert.match(activity, /href="https:\/\/github\.com\/bartytime4life\/MEGALODON\/blob\/f82f4ad743ba725c85039cee5d86f8db2461b8c4\/docs\/local-pc-setup\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Setup guide ↗<\/a>/);
   assert.match(activity, /operator-workflows\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Dashboard workflow guide ↗<\/a>/);
   assert.match(activity, /id="reference-globe"/);
 });

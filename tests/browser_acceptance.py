@@ -85,7 +85,7 @@ def dashboard(settings: Path, offline: Path | None = None):
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
-    args = [sys.executable, "-m", "megalodon", "dashboard", "--config", str(settings),
+    args = [sys.executable, "-m", "megalodon", "dashboard", "--require-sign-in", "--config", str(settings),
             "--host", "127.0.0.1", "--port", str(port)]
     if offline is not None:
         args += ["--offline-run", str(offline)]

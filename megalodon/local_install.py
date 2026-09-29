@@ -478,7 +478,7 @@ def set_hud_password(password: str, paths: InstallPaths | None = None) -> None:
 
 
 def clear_hud_password(paths: InstallPaths | None = None) -> None:
-    """Return future HUD launches to random per-launch passwords."""
+    """Remove the reusable password for opt-in sign-in launches."""
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     if load_hud_password_verifier(selected) is not None:
@@ -881,11 +881,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "password":
             if args.password_command == "status":
                 configured = load_hud_password_verifier() is not None
-                print("Reusable HUD password is configured." if configured else "HUD uses a random password on each launch.")
+                print("Reusable HUD password is configured for --require-sign-in." if configured else "No reusable HUD password is configured. Sign-in is off by default.")
                 return 0
             if args.password_command == "clear":
                 clear_hud_password()
-                print("Future HUD launches will use a random password. Restart a running HUD to apply this change.")
+                print("Reusable HUD password cleared. Sign-in remains off by default; --require-sign-in will use a random password.")
                 return 0
             if not sys.stdin.isatty() or not sys.stderr.isatty():
                 raise InstallError("choose a HUD password in an interactive terminal; do not pass it as an argument")
@@ -906,7 +906,7 @@ def main(argv: list[str] | None = None) -> int:
             if not hmac.compare_digest(first_bytes, confirm_bytes):
                 raise InstallError("HUD passwords did not match")
             set_hud_password(first)
-            print("HUD password changed. Restart a running HUD to use it. The password was not printed or stored in plaintext.")
+            print("HUD password changed for --require-sign-in launches. The password was not printed or stored in plaintext.")
             return 0
         result = uninstall()
         if result["status"] == "not_installed":

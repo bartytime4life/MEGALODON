@@ -444,13 +444,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
-        if self.path == "/sign-in":
+        if self.path == "/sign-in" and self._sign_in_enabled():
             self._send(200, "text/html; charset=utf-8", SIGNIN_HTML.encode())
             return
-        if self.path == "/assets/sign-in.css":
+        if self.path == "/sign-in":
+            self._send(303, "text/plain; charset=utf-8", b"open dashboard",
+                       extra_headers={"Location": "/"})
+            return
+        if self.path == "/assets/sign-in.css" and self._sign_in_enabled():
             self._send(200, "text/css; charset=utf-8", SIGNIN_CSS.encode())
             return
-        if self.path == "/assets/sign-in.js":
+        if self.path == "/assets/sign-in.js" and self._sign_in_enabled():
             self._send(200, "text/javascript; charset=utf-8", SIGNIN_JS.encode())
             return
         if not self._has_operator_http_auth(redirect=self.path == "/"):
@@ -806,7 +810,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
-        if self.path == "/sign-in":
+        if self.path == "/sign-in" and self._sign_in_enabled():
             self._sign_in()
             return
         if not self._has_operator_http_auth():
@@ -1033,12 +1037,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             expected.update({"localhost", f"localhost:{bound_port}"})
         return supplied in expected
 
+    def _sign_in_enabled(self) -> bool:
+        return self.http_read_password is not None or self.http_password_verifier is not None
+
     def _has_operator_http_auth(self, *, redirect: bool = False) -> bool:
-        """Require the launch or chosen password before any data or action route."""
+        """Require a password only when the operator opted into local sign-in."""
         password = self.http_read_password
         verifier = self.http_password_verifier
         if password is None and verifier is None:
-            return True  # Direct test handlers; serve() always sets one auth mode.
+            return True
         if self._has_session_cookie():
             return True
         values = self.headers.get_all("Authorization", [])
@@ -1245,11 +1252,14 @@ def serve(
     ai_blocking: BlockingSettings | None = None,
     offline_locations: OfflineLocations | None = None,
     http_password_verifier: PasswordVerifier | None = None,
+    require_sign_in: bool = False,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
     if http_password_verifier is not None and not isinstance(http_password_verifier, PasswordVerifier):
         raise ValueError("invalid HUD password verifier")
+    if not isinstance(require_sign_in, bool):
+        raise ValueError("require_sign_in must be a boolean")
     validate_tool_management_mode(enable_tool_management, inspect_tools=inspect_tools)
     refresh_seconds = _bounded_dashboard_integer(
         refresh_seconds, "dashboard refresh_seconds", MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS
@@ -1259,8 +1269,9 @@ def serve(
     ai_operator_token = secrets.token_urlsafe(24) if ai_settings is not None and ai_settings.enabled else None
     install_operator_token = secrets.token_urlsafe(24) if enable_tool_management else None
     host = loopback_host(host, allow_remote=allow_remote)
-    http_read_password = secrets.token_urlsafe(9) if http_password_verifier is None else None
-    http_session_token = secrets.token_urlsafe(32)
+    sign_in_enabled = require_sign_in or http_password_verifier is not None
+    http_read_password = secrets.token_urlsafe(9) if sign_in_enabled and http_password_verifier is None else None
+    http_session_token = secrets.token_urlsafe(32) if sign_in_enabled else None
     setup_evidence = setup_snapshot(inspect_tools=inspect_tools, source_available=source_available)
     suricata_evidence = suricata_snapshot(suricata_db)
     # Capture inert command text once. HTTP input cannot choose an interpreter
@@ -1304,7 +1315,8 @@ def serve(
     server = ThreadingHTTPServer((host, port), handler)
     try:
         url = f"http://{host}:{port}/"
-        _show_http_read_password(http_read_password)
+        if sign_in_enabled:
+            _show_http_read_password(http_read_password)
         print(f"MEGALODON dashboard listening on {url}", flush=True)
         if install_operator_token is not None:
             print(f"MEGALODON tool management operator token (this launch only): {install_operator_token}", flush=True)

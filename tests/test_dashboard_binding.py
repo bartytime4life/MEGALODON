@@ -97,9 +97,8 @@ def test_loopback_server_gets_numeric_host_and_closes(monkeypatch, host, expecte
     assert handler.offline_summary == {}
     assert handler.refresh_seconds == 12
     assert handler.event_limit == 25
-    assert isinstance(handler.http_read_password, str)
-    assert len(handler.http_read_password) == 12
-    assert len(handler.http_session_token) >= 32
+    assert handler.http_read_password is None
+    assert handler.http_session_token is None
     server.server_close.assert_called_once_with()
 
 
@@ -117,6 +116,23 @@ def test_chosen_password_reaches_bound_handler_without_a_random_secret(monkeypat
     assert handler.http_read_password is None
     assert handler.http_password_verifier is verifier
     notice.assert_called_once_with(None)
+    server.server_close.assert_called_once_with()
+
+
+def test_opt_in_sign_in_generates_a_private_launch_password(monkeypatch):
+    server = Mock()
+    server.serve_forever.side_effect = KeyboardInterrupt
+    factory = Mock(return_value=server)
+    notice = Mock()
+    monkeypatch.setattr(dashboard, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dashboard, "_show_http_read_password", notice)
+    with pytest.raises(KeyboardInterrupt):
+        dashboard.serve(object(), "127.0.0.1", 8787, require_sign_in=True)
+    handler = factory.call_args.args[1]
+    assert isinstance(handler.http_read_password, str)
+    assert len(handler.http_read_password) == 12
+    assert len(handler.http_session_token) >= 32
+    notice.assert_called_once_with(handler.http_read_password)
     server.server_close.assert_called_once_with()
 
 
@@ -261,7 +277,8 @@ def test_cli_dashboard_uses_the_dedicated_reader(tmp_path, monkeypatch):
     assert "reader" in observed
 
 
-def test_installed_hud_loads_chosen_password_verifier(tmp_path, monkeypatch):
+@pytest.mark.parametrize("require_sign_in", (False, True))
+def test_installed_hud_loads_chosen_password_verifier_only_on_opt_in(tmp_path, monkeypatch, require_sign_in):
     settings_path = tmp_path / "settings.toml"
     settings = SimpleNamespace(
         dashboard=SimpleNamespace(host="127.0.0.1", port=8787, enabled=True, refresh_seconds=5, event_limit=50),
@@ -282,9 +299,11 @@ def test_installed_hud_loads_chosen_password_verifier(tmp_path, monkeypatch):
     args = argparse.Namespace(
         config=settings_path, host=None, port=None, allow_remote=False,
         offline_run=None, refresh_seconds=None, event_limit=None,
+        require_sign_in=require_sign_in,
     )
     assert cli._dashboard(args) == 0
-    assert observed["http_password_verifier"] is verifier
+    assert observed["http_password_verifier"] is (verifier if require_sign_in else None)
+    assert observed["require_sign_in"] is require_sign_in
 
 
 def test_cli_dashboard_missing_store_creates_nothing(tmp_path, monkeypatch, capsys):
@@ -454,6 +473,37 @@ def test_password_only_landing_page_and_session_guard_private_data():
         assert request("POST", "/sign-in", b'{"password":"twelve-chars"}', login_headers)[0] == 429
         assert request("GET", "/api/summary", headers={"Cookie": cookie})[0] == 200
         assert store.summary.call_count == 2
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_default_hud_opens_without_sign_in_and_keeps_host_guard():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    handler = type("OpenLocalHandler", (dashboard.DashboardHandler,), {"store": store})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host = f"127.0.0.1:{server.server_port}"
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", "/", headers={"Host": host})
+        response = connection.getresponse()
+        assert response.status == 200
+        assert b"MEGALODON" in response.read()
+        connection.close()
+        status, body, _ = _host_request(server, (host,))
+        assert status == 200 and body == {"events": 1}
+        status, _, _ = _host_request(server, ("attacker.invalid",))
+        assert status == 400
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", "/sign-in", headers={"Host": host})
+        response = connection.getresponse()
+        assert response.status == 303 and response.getheader("Location") == "/"
+        response.read()
+        connection.close()
     finally:
         server.shutdown()
         server.server_close()

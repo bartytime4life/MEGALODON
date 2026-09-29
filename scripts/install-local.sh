@@ -14,8 +14,8 @@ Usage: ./scripts/install-local.sh [install | status [--json] | repair | uninstal
   status      Check the installed release, launchers, settings, and desktop icon.
   repair      Restore missing managed launchers; preserve data and settings.
   uninstall   Remove managed code and launchers; preserve data and settings.
-  password    Set a reusable local HUD password at private terminal prompts,
-              check its mode, or return to random per-launch passwords.
+  password    Set or clear a reusable password for optional --require-sign-in
+              launches, or check whether one is configured.
 
 Installation is Linux-only and refuses root/sudo. It may download Python build
 requirements while installing this reviewed checkout. It does not install
