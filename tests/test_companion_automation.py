@@ -1,7 +1,9 @@
 """Local companion jobs are scoped, bounded and counts-only."""
 
 import json
+import os
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from threading import Event, Thread
@@ -196,6 +198,62 @@ def test_fixed_collector_runs_only_configured_action(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_old_watched_osquery_report_never_acquires_collection_time(tmp_path, monkeypatch):
+    from megalodon import osquery_inventory
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz):
+            return cls.current
+
+    Clock.current = Clock(2026, 9, 26, tzinfo=timezone.utc)
+    monkeypatch.setattr(osquery_inventory, "datetime", Clock)
+    report = tmp_path / "old.json"
+    report.write_text('[{"package_count":"137"}]')
+    os.utime(report, (1700000000, 1700000000))
+    worker = CompanionAutomation(_config(tmp_path, f'[watch]\nosquery_json="{report}"\n'), AISettings())
+    worker.tick()
+    first = worker.snapshot()["results"]["osquery"]
+    assert first["exported_at"] == "2026-09-26T00:00:00Z"
+    assert first["collection_completed_at"] is None
+    Clock.current = Clock(2026, 9, 27, tzinfo=timezone.utc)
+    os.utime(report, (1700000100, 1700000100))
+    worker.tick()
+    second = worker.snapshot()["results"]["osquery"]
+    assert second["exported_at"] == "2026-09-27T00:00:00Z"
+    assert second["collection_completed_at"] is None
+
+
+def test_osquery_completion_comes_from_successful_fixed_process_and_survives_failure(tmp_path, monkeypatch):
+    from megalodon import companion_automation
+
+    returned = False
+    completed = datetime(2026, 9, 26, tzinfo=timezone.utc)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz):
+            assert returned and tz is timezone.utc
+            return completed
+
+    def run(argv, limit, timeout, cancel):
+        nonlocal returned
+        assert argv == ["osqueryi", "--json", "SELECT count(*) AS package_count FROM deb_packages;"]
+        returned = True
+        return b'[{"package_count":"42"}]', 0
+
+    monkeypatch.setattr(companion_automation, "datetime", Clock)
+    monkeypatch.setattr(companion_automation, "_run_fixed", run)
+    worker = CompanionAutomation(_config(tmp_path, '[collection]\nosquery_enabled=true\n'), AISettings())
+    worker._collect({"osquery"})
+    first = worker.snapshot()["results"]["osquery"]
+    assert first["collection_completed_at"] == "2026-09-26T00:00:00Z"
+    monkeypatch.setattr(companion_automation, "_run_fixed", lambda *_: (b'[{"package_count":"99"}]', 1))
+    worker._collect({"osquery"})
+    assert worker.snapshot()["results"]["osquery"] == first
+    assert "preserved" in worker.snapshot()["status"]["osquery"]
+
+
 def test_child_output_is_bounded_without_shell():
     with pytest.raises(ValueError, match="exceeded limit"):
         _run_fixed(["python3", "-c", "print('x'*1000)"], 100, 5)
@@ -204,7 +262,11 @@ def test_child_output_is_bounded_without_shell():
 def test_local_hud_companion_route_is_read_only_and_query_closed(tmp_path):
     from megalodon.dashboard import DashboardHandler
 
-    worker = CompanionAutomation(_config(tmp_path, ""), AISettings())
+    report = tmp_path / "old.json"
+    report.write_text('[{"package_count":"137"}]')
+    os.utime(report, (1700000000, 1700000000))
+    worker = CompanionAutomation(_config(tmp_path, f'[watch]\nosquery_json="{report}"\n'), AISettings())
+    worker.tick()
     handler = type("CompanionHandler", (DashboardHandler,), {"companion_automation": worker})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = Thread(target=server.serve_forever, daemon=True)
@@ -214,7 +276,9 @@ def test_local_hud_companion_route_is_read_only_and_query_closed(tmp_path):
         with urlopen(base, timeout=2) as response:
             payload = json.load(response)
         assert payload["schema"] == "megalodon-companion-automation-v1"
-        assert payload["results"] == {}
+        assert payload["results"]["osquery"]["package_rows"] == 137
+        assert payload["results"]["osquery"]["collection_completed_at"] is None
+        assert payload["results"]["osquery"]["schema"] == "megalodon-osquery-package-count-v2"
         with pytest.raises(HTTPError) as error:
             urlopen(base + "?path=/etc/passwd", timeout=2)
         assert error.value.code == 400
