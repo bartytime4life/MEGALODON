@@ -54,6 +54,33 @@ and remove automatic startup. The installer removes this managed service on
 uninstall. This starts the fixed local companion collectors with the HUD; it
 does not start capture, a remote feed, or unrelated companion services.
 
+The local HUD also collects [live PC resource and network counters](docs/live-pc-telemetry.md)
+automatically: MEGALODON/companion CPU and RAM gauges, CPU and interface-rate
+history, per-app disk activity, and socket counts. This Linux monitor needs no
+extra package or signup. Packet-evidence charts retain their separate data sources.
+
+**Home → Start support apps**, above Live PC resources, opens installed desktop
+tools, starts supported services and refreshes configured collectors in one
+action. The same workflow is available from a terminal:
+
+```bash
+./scripts/start-support-apps.sh
+```
+
+Use `--check` to read startup status without starting anything. Installed
+Wireshark, Zenmap and ClamTk open in the desktop session; installed Suricata and
+Ollama services start through the system authorization prompt when needed.
+Nmap, ClamAV and osquery use the current HUD's existing collection scope.
+Missing tools are skipped and each result is shown. See
+[support startup](docs/local-pc-setup.md#start-support-apps).
+
+Beside Start support apps, **Configure apps** provides capture permissions,
+interface selection, live HUD traffic and managed Wireshark start/stop controls,
+saved Nmap and ClamAV scope, signature updates and companion checks. The same
+actions are available through `./scripts/configure-support-apps.sh --help`.
+See [local support configuration](docs/support-configuration.md) for the fixed
+actions, per-user permissions and capture limits.
+
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
 `./scripts/manage-companion.sh nmap install` to preview the fixed recipe.

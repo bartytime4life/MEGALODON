@@ -1,6 +1,39 @@
 # Defense Console source alignment
 
-## Current publication — Console v54, repository mirror proposed
+## Current publication — Console v57, automatic local PC graphs
+
+CONFIRMED 2026-09-30: the owner-only Site published version 57 from Sites
+source `73ce4277da3e686e341e4f12cbc4b31cfb8c756a`, saved version
+`appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_082f3e6c1fec8191b7ff4cfd42873844`.
+Deployment `appgdep_6abd5277e3608191a3727091e8bbbfd6` returned `succeeded`
+at <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+The 21-file static archive is 409,600 bytes with digest
+`sha256:857e6e695d4fe1813bb4a5dd9744e502a882e4c9c89b68a51e4b6f2003b4af7c`.
+The existing owner-only audience is preserved. The preceding live publication
+was v56, source `6bec6f2dba6a1fc7bd6acbe6a8ba6b5e8d723b42`.
+
+The Site provides a direct link to the installed local Live PC view and explains
+the account-free measurements without probing localhost. Saved-summary upload
+is secondary. The active ten-tool catalog retains no signup console integration.
+At publication, changed Site assets and README matched that source mirror; all 112 Site tests
+passed. Standalone Site tests reused the repository's operator-workflows guide
+outside the deployment archive for their documentation-routing assertions.
+
+The local managed application was installed and its existing enabled user HUD
+service restarted. Installed collector, UI and HTTP files match this source.
+The loopback endpoint returned `ready` and advancing real observations across
+two reads: CPU/RAM, per-app resources, 16 interfaces and available socket counts.
+This verifies local counter flow, not packet capture or detector coverage.
+The sampler adds no package or signup; the previous release, data and settings
+are retained. Independent source/DOM review passed. Browser visual acceptance
+remains unverified because the browser administrative check denied access;
+no alternative browser was used. Repository merge remains a separate step.
+
+The PR #472 merge candidate also incorporates later `main` changes. Its Site
+files are repository source only; this reconciliation has not been published as
+a new hosted Console version.
+
+## Historical publication — Console v54, repository mirror proposed
 
 CONFIRMED 2026-09-29: the owner-only Site published version 54 from Sites
 source `3f622ca1e44a209a531cf30f29c20fc674413783`, saved version

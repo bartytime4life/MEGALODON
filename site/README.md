@@ -16,11 +16,17 @@ and uniform tool setup must be installed locally before those local controls are
 available. The Site and local HUD share a generated feature/tool data-coverage
 map; use `python scripts/sync-hud-assets.py` after changing that canonical source.
 
-The current Site has no file input for the Nmap, ClamAV, or osquery observation
-panels. Those bounded automatic counts are shown only in the local HUD; the
-hosted Site cannot read or display the latest local results. This does not start
-the tools, upload package names, or establish live host health. See
-[the workflow guide](../docs/hud-workflow.md). The current publication receipt
+The hosted companion panels point to automatic local collection and report
+watching in the installed HUD. They do not require manually uploaded inventory.
+The new local **Live PC** section adds CPU/RAM gauges, CPU and network rate
+history, per-app disk activity, and socket counts. It needs no signup or separate
+monitoring package. The Site includes only the feature introduction and a local
+HUD link; it does not fetch loopback telemetry. The shared styles and introduction
+are generated from `megalodon/dashboard_host_telemetry.py`.
+The Site has no file input for the Nmap, ClamAV, or osquery observation panels.
+Their bounded automatic counts stay in the local HUD; they do not establish
+tool health or upload package names. See [the workflow guide](../docs/hud-workflow.md).
+The current publication receipt
 is recorded in [source alignment](../docs/site-source-alignment.md).
 
 ## Navigation and install path

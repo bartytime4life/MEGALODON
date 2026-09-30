@@ -3,6 +3,7 @@ from html import escape
 
 # id, feature, source, update mode, local workspace target
 FEATURES = (
+ ('host-resources','Live PC resources and interface rates','Read-only Linux CPU, memory, process, interface and socket counters','Every 2 seconds; up to 10 minutes of memory-only history','pc-live-title'),
  ('traffic','Traffic charts and findings','Qualified core metadata; up to 500 event and 200 finding candidates','Configured refresh; 5 seconds by default','room-home-title'),
  ('globe','Globe and traffic-volume lanes','Rolling-hour metadata and optional approximate offline IP locations','Configured refresh; selected minute within rolling hour','activity-globe-title'),
  ('evidence','Ingestion evidence','Source-qualified committed ingestion receipts','Startup request; source selection or retry','ingestion-runs-title'),
@@ -38,6 +39,7 @@ TOOLS = (
 def coverage_html(hosted=False):
     if hosted:
         hosted_overrides = {
+            'host-resources': ('Live PC resources and interface rates', 'Local HUD only; no hosted PC access'),
             'traffic': ('Traffic charts and findings', 'Local HUD refreshes by configuration; hosted summary updates only when loaded'),
             'reports': ('Reports and local summary export', 'Explicit local export; saved summary can be loaded in this tab'),
             'inventory': ('Network inventory', 'Local HUD only; hosted Site cannot read this PC'),
@@ -55,7 +57,7 @@ def coverage_html(hosted=False):
     return f'''<section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
 <h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>{note}</p>
 <details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody>{rows}</tbody></table></div></details>
-<details><summary>All 10 companions: telemetry support</summary><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody>{tool_rows}</tbody></table></div></details>
+<details><summary>All 10 companions: telemetry support</summary><p>These tools run locally without a vendor account. The built-in PC resource collector uses Linux counters and needs no extra install. <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer">Wireshark / TShark</a>, <a href="https://suricata.io/our-story/suricata/" target="_blank" rel="noopener noreferrer">Suricata</a> and <a href="https://www.clamav.net/" target="_blank" rel="noopener noreferrer">ClamAV</a> are free local software; optional commercial services are not required.</p><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody>{tool_rows}</tbody></table></div></details>
 </section>'''
 
 COVERAGE_CSS = r'''

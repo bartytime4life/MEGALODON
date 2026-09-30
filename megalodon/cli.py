@@ -908,6 +908,7 @@ def _dashboard(args: argparse.Namespace) -> int:
                     http_password_verifier=http_password_verifier,
                     require_sign_in=getattr(args, "require_sign_in", False),
                     companion_config=companion_config,
+                    runtime_settings=settings if first_launch else None,
                 )
             finally:
                 if locations is not None:
@@ -944,7 +945,7 @@ def _dashboard_reader(path: Path, *, allow_missing: bool = False):
             "DASHBOARD_STORE:NO_DIRECTORY", "DASHBOARD_STORE:NO_DATABASE",
         }:
             raise
-        yield UnconfiguredDashboardReader()
+        yield UnconfiguredDashboardReader(path)
         return
     with store:
         yield store

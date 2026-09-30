@@ -220,6 +220,42 @@ for help without inspecting data; pass HUD options to the launcher without
 Port availability, sensor health, capture permissions, installed optional-tool
 acceptance and native Windows support are outside this check.
 
+## Start support apps
+
+For actual capture permissions and tool configuration, use **Configure apps**
+beside the Start button. See [support configuration](support-configuration.md)
+for the live packet feed, Wireshark controls and saved collection scope.
+
+Open the local HUD and choose **Start support apps** at the top of **Home**,
+directly above **Live PC resources**. **Copy command** copies the equivalent
+installed launcher. From this checkout, run:
+
+```bash
+./scripts/start-support-apps.sh
+```
+
+The script starts the installed HUD user service if necessary, then invokes
+the same fixed action as the button. `--check` only reads startup status.
+
+- Installed Wireshark, Zenmap and ClamTk open as desktop apps. Windows requested
+  by this launcher have separate user services, so repeated clicks reuse them
+  and restarting the HUD does not close them.
+- Installed Suricata and Ollama services start if inactive. One system
+  authorization dialog may appear. A running service does not establish
+  sensor connectivity or a loaded Qwen model.
+- The existing Nmap, ClamAV and osquery worker refreshes its configured jobs;
+  queued or running scans are reused. Reports continue to be watched.
+- Missing programs are skipped. Zeek and Scapy require a selected capture or
+  configured interface; their rows explain the next step. nftables has no
+  desktop app or background service to start.
+
+Startup does not install packages, change firewall rules or select new scan
+targets. Results distinguish **Running**, **Launched**, **Queued**, **Missing**
+and **Needs setup**. Review the collector panels for completed data. The button
+is available in a normal non-root Linux HUD without a tool-management token;
+installation controls keep their separate authorization. Optional HUD sign-in
+also protects this action. On a signed-in HUD, use the button in the browser.
+
 ## Use your data
 
 Home → **Data and tools** shows the selected source and a live status light for

@@ -204,6 +204,7 @@ class CompanionAutomation:
     def __init__(self, config: CompanionConfig, ai: AISettings) -> None:
         self.config, self.ai = config, ai
         self._stop = Event()
+        self._wake = Event()
         self._lock = Lock()
         self._threads: list[Thread] = []
         self._results: dict[str, dict] = {}
@@ -215,6 +216,8 @@ class CompanionAutomation:
         self._advisory: dict[str, str] = {}
         self._seen: dict[str, tuple] = {}
         self._next_collection = {kind: 0.0 for kind in _KINDS}
+        self._requested: set[str] = set()
+        self._active: set[str] = set()
 
     def start(self) -> None:
         if self._threads:
@@ -228,8 +231,44 @@ class CompanionAutomation:
 
     def stop(self) -> None:
         self._stop.set()
+        self._wake.set()
         for thread in self._threads:
             thread.join(timeout=20)
+
+    def configure(self, updates: dict, *, before_apply=None) -> None:
+        """Swap reviewed settings after any required persistence succeeds."""
+        from dataclasses import replace
+        if set(updates) - {"nmap_target", "clamav_paths", "osquery_enabled"}:
+            raise ValueError("unsupported collector settings")
+        with self._lock:
+            if self._active:
+                raise ValueError("A collector is still running; apply setup after it finishes.")
+            proposed = replace(self.config, **updates)
+            if before_apply is not None:
+                before_apply()
+            self.config = proposed
+
+    def request_collection(self, selected: set[str] | None = None) -> dict[str, str]:
+        """Wake the existing worker; repeated requests never duplicate a scan."""
+        configured = {"nmap": bool(self.config.nmap_target), "clamav": bool(self.config.clamav_paths),
+                      "osquery": self.config.osquery_enabled}
+        executables = {"nmap": "nmap", "clamav": "clamscan", "osquery": "osqueryi"}
+        states = {}
+        with self._lock:
+            for kind in _KINDS:
+                if selected is not None and kind not in selected:
+                    continue
+                if not configured[kind]:
+                    states[kind] = "needs_setup"
+                elif shutil.which(executables[kind]) is None:
+                    states[kind] = "missing"
+                elif kind in self._active or kind in self._requested:
+                    states[kind] = "running"
+                else:
+                    self._requested.add(kind)
+                    states[kind] = "queued"
+        self._wake.set()
+        return states
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -336,18 +375,26 @@ class CompanionAutomation:
 
     def _collect_due(self) -> None:
         now = time.monotonic()
-        due = {kind for kind, next_at in self._next_collection.items() if now >= next_at}
-        for kind in due:
-            interval = self.config.interval_seconds
-            if kind == "clamav" and self.config.clamav_interval_seconds is not None:
-                interval = self.config.clamav_interval_seconds
-            self._next_collection[kind] = now + interval
-        self._collect(due)
+        with self._lock:
+            due = ({kind for kind, next_at in self._next_collection.items() if now >= next_at} | self._requested) - self._active
+            self._requested.difference_update(due)
+            self._active.update(due)
+            for kind in due:
+                interval = self.config.interval_seconds
+                if kind == "clamav" and self.config.clamav_interval_seconds is not None:
+                    interval = self.config.clamav_interval_seconds
+                self._next_collection[kind] = now + interval
+        try:
+            self._collect(due)
+        finally:
+            with self._lock:
+                self._active.difference_update(due)
 
     def _collection_loop(self) -> None:
         while not self._stop.is_set():
+            self._wake.clear()
             self._collect_due()
-            self._stop.wait(15)
+            self._wake.wait(15)
 
     def _watch_loop(self) -> None:
         while not self._stop.is_set():
