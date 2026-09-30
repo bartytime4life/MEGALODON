@@ -280,6 +280,38 @@ def test_upgrade_rolls_back_selection_and_artifacts_if_manifest_write_fails(
     assert not (layout.releases / "1.0-20260920T120100Z-e5f6a7b8").exists()
 
 
+def test_upgrade_replaces_legacy_reopen_launcher_without_changing_service_or_data(layout, source, monkeypatch):
+    from megalodon import hud_autostart
+
+    ids = iter(["1.0-20260920T120000Z-a1b2c3d4", "1.0-20260920T120100Z-e5f6a7b8"])
+    monkeypatch.setattr(local_install, "_create_release", release_factory(layout, ids))
+    current_contents = local_install._artifact_contents
+
+    def legacy_contents(paths):
+        values = current_contents(paths)
+        values["hud_launcher"] = values["hud_launcher"].replace(b'if [ "$#" -eq 0 ] && ', b'if ')
+        return values
+
+    monkeypatch.setattr(local_install, "_artifact_contents", legacy_contents)
+    first = local_install.install(source, layout)
+    marker = layout.data / "saved-evidence"
+    marker.write_bytes(b"synthetic saved evidence")
+    settings_before = layout.settings.read_bytes()
+    unit = hud_autostart.unit_path(layout)
+    unit.parent.mkdir(parents=True)
+    unit.write_bytes(hud_autostart.unit_contents(layout))
+    unit_before = unit.read_bytes()
+    monkeypatch.setattr(hud_autostart, "_systemctl", lambda *args: pytest.fail("Upgrade changed host services"))
+    monkeypatch.setattr(local_install, "_artifact_contents", current_contents)
+    second = local_install.install(source, layout)
+    assert second["previous_release"] == first["active_release"]
+    assert layout.hud_launcher.read_bytes() == current_contents(layout)["hud_launcher"]
+    assert local_install.status(layout)[0] == 0
+    assert layout.settings.read_bytes() == settings_before
+    assert marker.read_bytes() == b"synthetic saved evidence"
+    assert unit.read_bytes() == unit_before
+
+
 def test_modified_managed_file_blocks_repair_and_uninstall(layout, source, monkeypatch):
     monkeypatch.setattr(
         local_install,
