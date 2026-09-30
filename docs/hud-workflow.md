@@ -79,9 +79,9 @@ the separate `heartbeat` field with its `observed_at` timestamp. All 10 cards
 offer the same copyable commands.
 
 The local HUD can prepare the exact command needed to reopen that HUD with its
-existing fixed Install/Start controls enabled. Expand **Authorize Install and
-Start** on Home and copy the displayed command. Copying does not stop or restart
-the HUD, and it does not install or start a companion. After running the command
+existing fixed Install/Start/Open controls enabled. Expand **Authorize Install,
+Start and Open** on Home and copy the displayed command. Copying does not stop or restart
+the HUD, and it does not install, start or open a companion. After running the command
 in a terminal, the separate per-launch token and confirmation controls remain
 required.
 
