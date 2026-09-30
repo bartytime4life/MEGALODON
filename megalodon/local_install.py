@@ -502,7 +502,7 @@ def _artifact_contents(paths: InstallPaths) -> dict[str, bytes]:
         "#!/bin/sh\nset -eu\n"
         "export MEGALODON_INSTALL_MODE=desktop\n"
         f"export MEGALODON_LAUNCHER_PATH={shlex.quote(str(paths.hud_launcher))}\n"
-        "if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet megalodon-hud.service; then\n"
+        'if [ "$#" -eq 0 ] && command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet megalodon-hud.service; then\n'
         f"  exec {shlex.quote(str(python))} -I -m megalodon.hud_reopen {shlex.quote(str(paths.settings))}\n"
         "fi\n"
         f"exec {shlex.quote(str(python))} -I -m megalodon hud --config "
