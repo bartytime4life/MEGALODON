@@ -241,7 +241,7 @@ def test_codeql_scans_python_source_with_only_required_permissions():
     workflow = (ROOT / ".github" / "workflows" / "codeql.yml").read_text(
         encoding="utf-8"
     )
-    codeql_revision = "1c5b675653bb5c22dbe9b12b556ec555138e09fd"
+    codeql_revision = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
 
     assert "name: CodeQL\n" in workflow
     assert "push:\n    branches: [main]" in workflow
