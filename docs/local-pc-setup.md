@@ -5,6 +5,10 @@ Python 3.11 or newer with the standard `sqlite3` and `tomllib` modules. It has n
 third-party runtime dependencies. Optional capture and analysis tools are
 separate choices; the HUD can open before any data exists.
 
+The desktop installer includes the `geo` extra's small `maxminddb` reader for the
+[live connection atlas](live-connection-globe.md). The geographic database and
+public internet-exit lookup are a separate explicit setup choice in the HUD.
+
 This is the account-free route: install the core for your user, launch the
 loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
 companion-console account is required. The HUD opens without sign-in by default

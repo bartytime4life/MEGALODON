@@ -248,3 +248,39 @@ def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     release.set();manager._thread.join(2)
     assert started==[]
     assert 'cancelled' in manager.snapshot()['job']['message']
+
+
+def test_background_setting_persists_but_does_not_enable_external_geography(manager,monkeypatch):
+    starts=[]
+    monkeypatch.setattr(manager.background,'start',lambda interface:starts.append(interface))
+    manager.start({'action':'background_start','interface':'eth0'})
+    manager._thread.join(3)
+    assert starts==['eth0']
+    assert manager._background_enabled and not manager._geography_enabled
+    saved=json.loads(manager.profile.read_text())
+    assert saved['background_enabled'] and not saved['geography_enabled']
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    monkeypatch.setattr(restored.background,'start',lambda interface:starts.append(interface))
+    restored.resume()
+    assert starts==['eth0','eth0']
+    restored.start({'action':'background_stop'})
+    assert json.loads(manager.profile.read_text())['background_enabled'] is False
+
+
+def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,monkeypatch):
+    calls=[]
+    monkeypatch.setattr(manager.background,'refresh_geography',lambda:calls.append(True))
+    manager.start({'action':'geography_refresh'})
+    manager._thread.join(3)
+    assert calls==[True]
+    assert json.loads(manager.profile.read_text())['geography_enabled'] is True
+
+
+def test_live_endpoint_is_read_only_bounded_and_uses_existing_local_gates(endpoint,monkeypatch):
+    code,value=request(endpoint,method='GET',body=b'',path='/api/live-connections')
+    assert code==200 and value['schema']=='megalodon-live-connections-v1'
+    assert value['connections']==[] and endpoint[2]==[]
+    assert request(endpoint,method='GET',body=b'',path='/api/live-connections?limit=9999')[0]==400
+    assert request(endpoint,method='GET',body=b'',path='/api/live-connections',omit=('X-Megalodon-Check',))[0]==403
+    monkeypatch.setattr(dashboard,'_tool_management_user',lambda:False)
+    assert request(endpoint,method='GET',body=b'',path='/api/live-connections')[0]==403

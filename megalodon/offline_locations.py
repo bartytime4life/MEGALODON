@@ -1,6 +1,6 @@
 """Optional, read-only coarse IP regions from an operator-installed MMDB file.
 
-The dashboard never downloads a database or contacts an IP lookup service.
+This reader never downloads a database or contacts an IP lookup service.
 """
 
 from __future__ import annotations
@@ -60,6 +60,40 @@ class OfflineLocations:
 
     def close(self) -> None:
         self._reader.close()
+
+    def detail(self, text: str) -> dict[str, object] | None:
+        """Provider coordinates for the separately labelled local live view."""
+        address = ip_address(text)
+        if not address.is_global:
+            return None
+        try:
+            record = self._reader.get(str(address))
+        except ValueError:
+            return None
+        if not isinstance(record, dict) or not isinstance(record.get('location'), dict):
+            return None
+        point = record['location']
+        lat, lon = point.get('latitude'), point.get('longitude')
+        if (type(lat) not in (int, float) or type(lon) not in (int, float)
+                or not math.isfinite(lat) or not math.isfinite(lon)
+                or not -90 <= lat <= 90 or not -180 <= lon <= 180):
+            return None
+        def name(section):
+            value = record.get(section, {})
+            names = value.get('names', {}) if isinstance(value, dict) else {}
+            label = names.get('en', '') if isinstance(names, dict) else ''
+            return ''.join(c for c in label if c.isprintable())[:80] if isinstance(label, str) else ''
+        country_record = record.get('country')
+        country = country_record.get('iso_code', '') if isinstance(country_record, dict) else ''
+        country = country if isinstance(country, str) and len(country) == 2 and country.isascii() and country.isalpha() else ''
+        radius = point.get('accuracy_radius')
+        if type(radius) not in (int, float) or not math.isfinite(radius) or not 0 <= radius <= 20000:
+            radius = None
+        return dict(latitude=lat, longitude=lon, label=', '.join(filter(None, (name('city'), name('country')))) or 'Approximate network location',
+                    country=country, accuracy_radius_km=radius, source='DB-IP City Lite', approximate=True)
+
+    def metadata(self):
+        return self._reader.metadata()
 
     def lookup(self, ips: list[str]) -> dict[str, object]:
         addresses = validate_lookup_ips(ips)

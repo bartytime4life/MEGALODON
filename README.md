@@ -81,6 +81,12 @@ actions are available through `./scripts/configure-support-apps.sh --help`.
 See [local support configuration](docs/support-configuration.md) for the fixed
 actions, per-user permissions and capture limits.
 
+The local **Live connection atlas** animates observed send/receive directions at
+approximate IP locations. **Enable background monitoring** saves automatic capture
+resumption; **Set up IP locations** separately enables the free DB-IP database
+and public internet-exit lookup. See [live connection globe](docs/live-connection-globe.md)
+for geographic accuracy, source coverage, resource bounds and stop controls.
+
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
 `./scripts/manage-companion.sh nmap install` to preview the fixed recipe.
@@ -780,7 +786,7 @@ observation are separate timestamps; neither establishes whole-network coverage.
 Sample, unlinked and unqualified receipts are excluded. Endpoint addresses,
 ports, reported byte counts and source/run provenance appear in Activity detail.
 
-The activity globe's rolling hour view shows the newest bounded stored metadata
+Under **History**, the stored activity globe's rolling hour view shows the newest bounded stored metadata
 within the past 60 minutes and refreshes while the tab is visible. Sweep the
 time control back to review a minute, or choose **Live** to follow the current
 rolling minute, including when that minute has no returned records. The globe scans gently until a mapped detector-linked source

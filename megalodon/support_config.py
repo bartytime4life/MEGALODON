@@ -19,6 +19,9 @@ import time
 from .companion_automation import _run_fixed
 from .local_install import _owned_directory, _regular_owned_file, _atomic_write
 from .managed_capture import ManagedCapture, now
+from .live_geography import Geography
+from .live_connections import LiveConnections
+from .background_monitor import BackgroundMonitor
 
 SCHEMA = 'megalodon-support-config-v1'
 COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config'
@@ -28,10 +31,12 @@ ACTION_FIELDS = {
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
     'signature_update': set(), 'osquery_configure': set(), 'qwen_check': set(),
     'zeek_check': set(), 'suricata_check': set(),
+    'background_start': {'interface'}, 'background_stop': set(), 'geography_refresh': set(),
 }
 TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
-              'qwen':'Ollama / Qwen', 'zeek':'Zeek', 'suricata':'Suricata'}
+              'qwen':'Ollama / Qwen', 'zeek':'Zeek', 'suricata':'Suricata',
+              'background':'Background traffic', 'geography':'IP geography'}
 # Only a root-owned packaged capture helper gains two packet capabilities.
 # PKEXEC_UID is supplied by pkexec, never by an HTTP parameter. ACL access is
 # immediate for this user, so a desktop logout/group refresh is unnecessary.
@@ -121,9 +126,14 @@ class SupportConfiguration:
         self._settings = dict(interface=next((r['name'] for r in choices if r['default']), ''),
                               nmap_target='127.0.0.1/32', scan_folder='Downloads')
         self._configured = set()
+        self._background_enabled = False
+        self._geography_enabled = False
         self._tools = {}
         self._job = dict(state='idle', action=None, message='Choose an app to configure.', started_at=None, finished_at=None)
-        self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready)
+        self.geography = Geography(self.home)
+        self.connections = LiveConnections(self.geography)
+        self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready, connections=self.connections)
+        self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         try:
             self._load()
         except (OSError, ValueError):
@@ -139,8 +149,15 @@ class SupportConfiguration:
             return
         from .ai_provider import _strict_pairs
         value = json.loads(_regular_owned_file(self.profile, maximum=2048), object_pairs_hook=_strict_pairs)
-        if type(value) is not dict or set(value) != {'schema','settings','configured'} or value['schema'] != SCHEMA:
+        if (type(value) is not dict or not {'schema','settings','configured'} <= set(value)
+                or set(value)-{'schema','settings','configured','background_enabled','geography_enabled'} or value['schema'] != SCHEMA):
             raise ValueError('saved profile')
+        enabled = value.get('background_enabled',False)
+        if type(enabled) is not bool:
+            raise ValueError('saved background mode')
+        geography_enabled = value.get('geography_enabled',False)
+        if type(geography_enabled) is not bool:
+            raise ValueError('saved geography mode')
         settings = value['settings']
         if type(settings) is not dict or set(settings) != set(self._settings):
             raise ValueError('saved settings')
@@ -152,6 +169,8 @@ class SupportConfiguration:
             raise ValueError('saved collectors')
         self._settings = dict(settings)
         self._configured = set(configured)
+        self._background_enabled = enabled
+        self._geography_enabled = geography_enabled
         if self.companions:
             updates = self._collector_updates()
             self.companions.configure(updates)
@@ -173,13 +192,13 @@ class SupportConfiguration:
         self._paths()
         if os.path.lexists(self.profile):
             _regular_owned_file(self.profile, maximum=2048)
-        value = dict(schema=SCHEMA, settings=self._settings, configured=sorted(self._configured))
+        value = dict(schema=SCHEMA, settings=self._settings, configured=sorted(self._configured), background_enabled=self._background_enabled, geography_enabled=self._geography_enabled)
         _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
 
     def snapshot(self, include_token=False):
         with self._lock:
             value = dict(schema=SCHEMA, interfaces=interfaces(), settings=dict(self._settings),
-                         job=dict(self._job), capture=self.capture.snapshot(),
+                         job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -187,17 +206,24 @@ class SupportConfiguration:
 
     def start(self, request):
         request = validate_action(request)
-        if request['action'] == 'capture_stop':
+        if request['action'] in {'capture_stop','background_stop'}:
             with self._lock:
                 self._cancel_capture_start = True
-            self.capture.stop()
+                was_enabled = self._background_enabled
+                self._background_enabled = False
+            self.background.stop()
+            if was_enabled:
+                self._save()
             self._tool('capture', 'ready', 'HUD capture stopped; stored metadata remains available.')
+            with self._lock:
+                if self._job['state'] != 'running':
+                    self._job.update(state='finished',action=request['action'],message='Background and HUD traffic capture stopped; stored metadata remains available.',started_at=now(),finished_at=now())
             return self.snapshot()
         with self._lock:
             if self._job['state'] == 'running' or (self.startup and self.startup.snapshot()['state'] == 'running'):
                 raise ConfigBusy('Another support action is running.')
             self._job.update(state='running', action=request['action'], message='Applying the selected configuration…', started_at=now(), finished_at=None)
-            if request['action'] == 'capture_start':
+            if request['action'] in {'capture_start','background_start'}:
                 self._cancel_capture_start = False
             self._thread = Thread(target=self._work, args=(request,), daemon=True, name='megalodon-support-config')
             self._thread.start()
@@ -241,7 +267,7 @@ class SupportConfiguration:
         tool = {'signature':'clamav','wireshark':'wireshark'}.get(tool, tool)
         failed = False
         try:
-            if action in {'capture_permissions','capture_start','wireshark_open'}:
+            if action in {'capture_permissions','capture_start','wireshark_open','background_start'}:
                 valid_interface(request['interface'])
                 with self._lock:
                     self._settings['interface'] = request['interface']
@@ -252,6 +278,8 @@ class SupportConfiguration:
                 message = 'Capture permissions configured for this user and interface access verified. Wireshark and the HUD run as your normal user.'
                 tool = 'wireshark'
             elif action == 'capture_start':
+                if self.background.snapshot()['enabled']:
+                    raise ValueError('Background monitoring already owns traffic collection. Stop monitoring before starting a manual session.')
                 if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
                     raise ValueError('Install Wireshark / TShark before starting HUD capture.')
                 with self._lock:
@@ -259,6 +287,24 @@ class SupportConfiguration:
                         raise ValueError('Capture start was cancelled.')
                     self.capture.start(request['interface'])
                 message = 'HUD capture requested. Watch accepted metadata counts to confirm the data connection.'
+            elif action == 'background_start':
+                if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
+                    raise ValueError('Install Wireshark / TShark before starting background traffic.')
+                self.background.stop()
+                with self._lock:
+                    if self._cancel_capture_start:
+                        raise ValueError('Background start was cancelled.')
+                    self._background_enabled = True
+                    self.background.start(request['interface'])
+                self._save()
+                if self.companions:
+                    self.companions.request_collection()
+                message = 'Background traffic enabled and configured inventory collectors queued. Monitoring resumes automatically with the local HUD.'
+            elif action == 'geography_refresh':
+                self._geography_enabled = True
+                self._save()
+                self.background.refresh_geography()
+                message = 'Location refresh requested. Peer addresses stay on this PC; the public internet address lookup identifies this connection only.'
             elif action == 'capture_stop':
                 self.capture.stop()
                 message = 'HUD capture stopped; stored metadata remains available.'
@@ -336,7 +382,19 @@ class SupportConfiguration:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
-        self.capture.stop()
+        self.background.stop()
+        self.geography.close()
+
+    def resume(self):
+        if self._background_enabled:
+            try:
+                self._paths()
+                self.background.start(valid_interface(self._settings['interface']))
+            except (OSError,ValueError):
+                self._tool('background','needs_setup','Saved monitoring could not resume; review interface and private paths.')
+
+    def live_snapshot(self):
+        return self.connections.snapshot(self.capture.snapshot(),self.background.snapshot())
 
 
 def main(argv=None):

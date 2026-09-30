@@ -382,7 +382,7 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
         python = venv / "bin" / "python"
         if _run([
             str(python), "-I", "-m", "pip", "install", "--disable-pip-version-check",
-            "--no-deps", str(source),
+            str(source) + "[geo]",
         ]).returncode != 0:
             raise InstallError(
                 "MEGALODON could not be installed; review the network and Python build-tool output above"
