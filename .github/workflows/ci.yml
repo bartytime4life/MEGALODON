@@ -271,6 +271,7 @@ jobs:
           test -f "${sdist_roots[0]}/scripts/start-hud-data.sh"
           test -f "${sdist_roots[0]}/constraints/ci.txt"
           cmp constraints/build-linux-cp312.txt "${sdist_roots[0]}/constraints/build-linux-cp312.txt"
+          cmp constraints/installer-linux-cp312.txt "${sdist_roots[0]}/constraints/installer-linux-cp312.txt"
           cmp constraints/test-linux-cp312.txt "${sdist_roots[0]}/constraints/test-linux-cp312.txt"
           cmp constraints/test-linux-cp311.txt "${sdist_roots[0]}/constraints/test-linux-cp311.txt"
           cmp constraints/browser-linux-cp311.txt "${sdist_roots[0]}/constraints/browser-linux-cp311.txt"

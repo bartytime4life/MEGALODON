@@ -44,6 +44,24 @@
     {
       "direct_packages": [
         {
+          "declared_sha256": "sha256:8e8ff70716a4f565ba9c7e91d86e3e60e4baac9794b944e5c35b772e7aedb21e",
+          "name": "maxminddb",
+          "version": "3.2.0"
+        }
+      ],
+      "id": "installer-linux-cp312",
+      "includes": [
+        "constraints/build-linux-cp312.txt"
+      ],
+      "path": "constraints/installer-linux-cp312.txt",
+      "platform": "linux-glibc-x86_64",
+      "python": "3.12",
+      "role": "native installer rehearsal with geography reader",
+      "source_sha256": "571ad3fa18d2b6417d6b43c485d94683d14ba4c0791bfcc11d73cb88199ac8d7"
+    },
+    {
+      "direct_packages": [
+        {
           "declared_sha256": "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309",
           "name": "attrs",
           "version": "26.1.0"

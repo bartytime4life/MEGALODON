@@ -25,9 +25,9 @@ The inventory covers only:
 - project build-system, declared runtime, and declared optional dependencies
   from pyproject.toml;
 - the committed source bytes and direct hash-pinned entries of the reviewed
-  build-linux-cp312, test-linux-cp311, test-linux-cp312, and
-  browser-linux-cp311 profiles; and
-- the browser profile's one reviewed, relative source include.
+  build-linux-cp312, installer-linux-cp312, test-linux-cp311,
+  test-linux-cp312, and browser-linux-cp311 profiles; and
+- the installer and browser profiles' reviewed, relative source includes.
 
 Its parser intentionally rejects URLs, arbitrary requirement operators,
 markers, extras, alternate hashes, duplicate packages, unreviewed includes, and
