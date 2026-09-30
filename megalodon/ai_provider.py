@@ -157,7 +157,7 @@ def inventory(settings: AISettings) -> dict[str, object]:
         return {"model_present": False, "digest_matches": False, "error_code": exc.code}
 
 
-def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256) -> str:
+def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text') -> str:
     """One deterministic request after live listener and manifest admission."""
     if type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 15:
         raise AIProviderError("POLICY_REJECTION")
@@ -167,12 +167,23 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256) -> str
         raise AIProviderError("REQUEST_TOO_LARGE")
     if type(max_tokens) is not int or not 1 <= max_tokens <= 256:
         raise AIProviderError("POLICY_REJECTION")
-    body = json.dumps({
+    if response_format not in ('text','defense'):
+        raise AIProviderError('POLICY_REJECTION')
+    payload = {
         "model": settings.model, "prompt": prompt, "stream": False,
         "think": False, "raw": True, "keep_alive": 0,
         "options": {"temperature": 0, "num_ctx": settings.max_context,
                     "num_predict": max_tokens},
-    }, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    }
+    if response_format == 'defense':
+        # Short interactive analysis does not need the default large prompt batch.
+        # Bound its compute buffers when the pinned model nearly fills GPU memory.
+        payload['options']['num_batch'] = 64
+        payload['format'] = {'type':'object','additionalProperties':False,
+            'properties':{'explanation':{'type':'string','minLength':1,'maxLength':240},
+                          'proposal':{'type':'string','enum':['observe','refresh_inventory','scan_files','contain']}},
+            'required':['explanation','proposal']}
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise AIProviderError("REQUEST_TIMEOUT")

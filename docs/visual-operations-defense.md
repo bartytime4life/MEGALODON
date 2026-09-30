@@ -35,6 +35,12 @@ scan files, or prepare containment. A proposal never executes. The operator
 chooses the fixed workflow from the HUD. Refresh inventory and scan files use
 the existing configured targets/folders and collectors.
 
+Interactive analysis uses a fixed two-field JSON schema, a 128-token output
+budget, a 240-character explanation and a 64-token prompt batch to limit compute
+buffer memory. The application validates the answer independently. Local model
+busy, unavailable, invalid and failed responses remain visible and never trigger
+a proposal. The schema transport follows [Ollama structured outputs](https://docs.ollama.com/api/generate).
+
 Terminal equivalents use the running HUD's same local controls:
 
 ```bash

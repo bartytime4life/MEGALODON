@@ -37,6 +37,37 @@ def test_model_cannot_apply_even_when_it_proposes_containment(manager):
     assert defense.path.exists()
 
 
+def test_analysis_uses_real_provider_contract_without_model_authority(manager,monkeypatch):
+    from megalodon import ai_provider
+    defense,calls,_=manager
+    monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda:{'listening':'yes','loopback_only':True})
+    def transport(path,method,body,timeout):
+        if path=='/api/tags':
+            return json.dumps({'models':[{'name':AISettings.model,'digest':AISettings.model_digest}]}).encode()
+        payload=json.loads(body)
+        assert 1<=payload['options']['num_predict']<=256
+        assert len(payload['prompt'].encode())<=4096
+        assert payload['format']['properties']['proposal']['enum']==['observe','refresh_inventory','scan_files','contain']
+        assert payload['format']['additionalProperties'] is False
+        assert payload['options']['num_batch']==64
+        return json.dumps({'model':AISettings.model,'response':'{"explanation":"Observed traffic; no hostile evidence.","proposal":"observe"}','done':True,'done_reason':'stop'}).encode()
+    monkeypatch.setattr(ai_provider,'_request',transport)
+    defense.model=ai_provider.generate
+    result=perform(defense,dict(action='analyze',ip='1.1.1.1'))
+    assert result['state']=='finished' and result['result']['proposal']=='observe'
+    assert not calls
+
+
+def test_provider_busy_reports_retry_without_action(manager):
+    from megalodon.ai_provider import AIProviderError
+    defense,calls,_=manager
+    def busy(*a,**k):raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
+    defense.model=busy
+    result=perform(defense,dict(action='analyze',ip='1.1.1.1'))
+    assert result['state']=='failed' and 'Retry' in result['message']
+    assert not calls
+
+
 def test_preview_apply_release_are_distinct_receipted_actions(manager):
     defense,calls,_=manager
     plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
