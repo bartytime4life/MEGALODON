@@ -28,7 +28,7 @@ test('Activity restores saved summary charts without claiming a live connection'
     assert.match(activity, new RegExp('id="' + id + '"'));
   }
   assert.match(activity, /The file stays in this browser tab; these charts are a saved view, not a live feed/);
-  assert.match(activity, /Open local app controls/);
+  assert.match(activity, /href="http:\/\/127\.0\.0\.1:8787\/#pc-live-title"[^>]*>Open local HUD/);
   assert.match(html, /Starting a service does not connect its data/);
   assert.match(activity, /href="https:\/\/github\.com\/bartytime4life\/MEGALODON\/blob\/f82f4ad743ba725c85039cee5d86f8db2461b8c4\/docs\/local-pc-setup\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Setup guide ↗<\/a>/);
   assert.match(activity, /operator-workflows\.md"[^>]*target="_blank"[^>]*rel="noopener noreferrer">Dashboard workflow guide ↗<\/a>/);
@@ -38,4 +38,15 @@ test('Activity restores saved summary charts without claiming a live connection'
 test('the bounded hosted summary script is shipped and loaded', () => {
   assert.match(html, /src="\.\/snapshot\.js"/);
   assert.equal(fs.existsSync(path.join(path.dirname(htmlPath), 'snapshot.js')), true);
+});
+
+
+test('local launch leads with automatic observations and discloses optional packet capture', () => {
+  const launch = activity.slice(activity.indexOf('<section class="local-launch"'), activity.indexOf('<!-- HOST_TELEMETRY_START -->'));
+  assert.match(launch, /LOCAL PC \/ AUTOMATIC OBSERVATIONS/);
+  assert.match(launch, /Start the installed MEGALODON app/);
+  assert.match(launch, /<details><summary>Optional: collect packet metadata/);
+  assert.match(launch, /capture permission, and an interactive terminal/);
+  assert.doesNotMatch(launch, /MERGED REPOSITORY SOURCE/);
+  assert.equal((launch.match(/href="http:\/\/127\.0\.0\.1:8787/g) || []).length, 1);
 });

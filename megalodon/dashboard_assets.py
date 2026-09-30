@@ -5,6 +5,7 @@ probe a host, or start an integration. The dashboard module re-exports these
 constants to preserve the existing public/test interface.
 """
 
+from .dashboard_host_telemetry import HOST_TELEMETRY_HTML, HOST_TELEMETRY_CSS, HOST_TELEMETRY_JS
 from .dashboard_inventory import INVENTORY_JS, INVENTORY_CSS
 from .dashboard_clamav import CLAMAV_JS, CLAMAV_CSS
 from .dashboard_osquery import OSQUERY_JS, OSQUERY_CSS
@@ -746,6 +747,7 @@ const maxTimelineBins = 12;
 const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
 const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
+  'pc-live-title': 'live',
   'activity-globe-title': 'live', 'hud-export-title': 'live', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
   'workspace-traffic': 'traffic', 'workspace-findings': 'findings',
   'workspace-reports': 'reports', 'workspace-help': 'help',
@@ -2299,10 +2301,11 @@ from .dashboard_companion import COMPANION_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS
+DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = compose_control_room(INDEX_HTML)
+INDEX_HTML = INDEX_HTML.replace('<!-- HUD_PC_TELEMETRY -->', HOST_TELEMETRY_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + "\nbootstrap();\n"

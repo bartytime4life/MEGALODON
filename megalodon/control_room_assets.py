@@ -44,6 +44,7 @@ HOME_HTML = """
 <section class="room-home panel" aria-labelledby="room-home-title">
   <p class="eyebrow">MEGALODON / Operations</p><h2 id="room-home-title" tabindex="-1">Your evidence at a glance</h2>
   <p id="room-home-summary">No qualified data available. Your saved audit data and optional tools are checked separately.</p>
+  <!-- HUD_PC_TELEMETRY -->
   <div class="hud-metrics" aria-label="Selected evidence totals">
     <article><span>Metadata records</span><strong id="hud-records">—</strong></article>
     <article><span>Linked findings</span><strong id="hud-findings">—</strong></article>

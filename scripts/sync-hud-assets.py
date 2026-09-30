@@ -43,3 +43,11 @@ text = index.read_text()
 start, end = '<!-- OSQUERY_START -->', '<!-- OSQUERY_END -->'
 a, b = text.index(start) + len(start), text.index(end)
 index.write_text(text[:a] + '\n' + osquery['OSQUERY_HTML'] + '\n' + text[b:])
+
+# Live PC telemetry has shared styling and an inert hosted introduction.
+host = runpy.run_path(str(root / "megalodon/dashboard_host_telemetry.py"))
+(root / "site/dist/host-telemetry.css").write_text(host['HOST_TELEMETRY_CSS'])
+text = index.read_text()
+start, end = '<!-- HOST_TELEMETRY_START -->', '<!-- HOST_TELEMETRY_END -->'
+a, b = text.index(start) + len(start), text.index(end)
+index.write_text(text[:a] + '\n' + host['HOST_TELEMETRY_HOSTED_HTML'] + '\n' + text[b:])

@@ -43,6 +43,7 @@ from .storage import StorageSchemaError
 from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYTES, read_suricata_projection
 from .offline_locations import OfflineLocations, validate_lookup_ips, unconfigured as unconfigured_locations
 from .companion_automation import CompanionAutomation, CompanionConfig
+from .host_telemetry import HostTelemetry
 
 
 MIN_REFRESH_SECONDS = 2
@@ -440,6 +441,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     ai_blocking: BlockingSettings = BlockingSettings()
     offline_locations: OfflineLocations | None = None
     companion_automation: CompanionAutomation | None = None
+    host_telemetry: HostTelemetry | None = None
     automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -480,6 +482,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install", "/api/companions"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path == "/api/host-telemetry":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+            elif self.host_telemetry is None:
+                self._send_json({"error": "PC counters require local HUD mode"}, status=403)
+            else:
+                self._send_json(self.host_telemetry.snapshot())
             return
         if route.path == "/api/companions":
             if self.companion_automation is None:
@@ -1297,6 +1309,7 @@ def serve(
     heartbeat = Heartbeat() if inspect_tools else None
     installer = Installer(on_finish=heartbeat.invalidate) if heartbeat is not None else None
     companion_automation = CompanionAutomation(companion_config, ai_settings or AISettings()) if companion_config else None
+    host_telemetry = HostTelemetry() if inspect_tools else None
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
@@ -1323,10 +1336,13 @@ def serve(
             "ai_blocking": ai_blocking or BlockingSettings(),
             "offline_locations": offline_locations,
             "companion_automation": companion_automation,
+            "host_telemetry": host_telemetry,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)
     try:
+        if host_telemetry is not None:
+            host_telemetry.start()
         if companion_automation is not None:
             companion_automation.start()
         url = f"http://{host}:{port}/"
@@ -1353,6 +1369,8 @@ def serve(
             ).start()
         server.serve_forever()
     finally:
+        if host_telemetry is not None:
+            host_telemetry.stop()
         if companion_automation is not None:
             companion_automation.stop()
         server.server_close()

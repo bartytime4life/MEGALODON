@@ -54,6 +54,11 @@ and remove automatic startup. The installer removes this managed service on
 uninstall. This starts the fixed local companion collectors with the HUD; it
 does not start capture, a remote feed, or unrelated companion services.
 
+The local HUD also collects [live PC resource and network counters](docs/live-pc-telemetry.md)
+automatically: MEGALODON/companion CPU and RAM gauges, CPU and interface-rate
+history, per-app disk activity, and socket counts. This Linux monitor needs no
+extra package or signup. Packet-evidence charts retain their separate data sources.
+
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
 `./scripts/manage-companion.sh nmap install` to preview the fixed recipe.
