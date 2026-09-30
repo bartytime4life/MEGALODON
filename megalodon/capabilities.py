@@ -86,7 +86,7 @@ _COMPONENTS = (
             "windows": "unsupported",
             "other": "unsupported",
         },
-        "boundary": "Plans are inert review evidence; live application is unsupported and refused.",
+        "boundary": "Legacy firewall CLI plans remain inert. The separate Linux HUD defense workflow permits an operator-reviewed five-minute public-IP block in its own table, with OS authorization, readback, release and kernel expiry. Models cannot apply blocks.",
     },
     {
         "id": "clamav",
@@ -119,7 +119,7 @@ _COMPONENTS = (
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The original run-count advisory permits one explicitly enabled Python call to 127.0.0.1:11434, with no CLI or tool authority for that policy. Separate opt-in anomaly/AI CLI and token-gated HUD paths exist; Linux background collector advice uses an explicitly configured pinned local model; Windows installed-provider acceptance remains unproved; current acceptance is shown by the live workflow check and firewall application is unsupported.",
+        "boundary": "The original run-count advisory permits one explicitly enabled Python call to 127.0.0.1:11434, with no CLI or tool authority for that policy. Separate opt-in anomaly/AI CLI and token-gated HUD paths exist; Linux background collector advice uses an explicitly configured pinned local model; Windows installed-provider acceptance remains unproved. Qwen IP analysis proposes fixed workflows; an operator separately reviews and authorizes local containment. Model requests cannot apply firewall changes.",
     },
     {
         "id": "nmap",

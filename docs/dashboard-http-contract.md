@@ -83,6 +83,8 @@ production service.
 | `/api/support-start` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
 | `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
 | `/api/support-workflows` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Passive, bounded status and aggregate metrics for ten background tools; never starts services, scans or model inference. See [background tools](background-tools.md). |
+| `/api/operations` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Bounded live traffic pulse, IP details, passive sensor context and storage counters; no network lookups or model call |
+| `/api/defense` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed workflow state, private audit summary, active/uncertain containment and separate POST nonce; [defense contract](visual-operations-defense.md) |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,

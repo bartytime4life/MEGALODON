@@ -20,6 +20,7 @@ from .config import BlockingSettings
 from .offline.tshark import FIELDS, parse_fields
 from .service import MegalodonService
 from .storage import Store, StorageCapacityError
+from .validation import ValidationError
 
 MAX_PACKETS = 50000
 MAX_SECONDS = 900
@@ -47,7 +48,7 @@ class ManagedCapture:
         self._lock, self._stop = Lock(), Event()
         self._thread = None
         self._state = dict(state='idle', interface='', received=0, accepted=0, skipped=0,
-                           started_at=None, finished_at=None, message='No HUD capture started.')
+                           timestamp_rejected=0,started_at=None, finished_at=None, message='No HUD capture started.')
 
     def snapshot(self):
         with self._lock:
@@ -60,7 +61,7 @@ class ManagedCapture:
             if self._thread and self._thread.is_alive():
                 raise ConfigBusy('A HUD capture is already running.')
             self._stop.clear()
-            self._state.update(state='starting', interface=interface, received=0, accepted=0, skipped=0,
+            self._state.update(state='starting', interface=interface, received=0, accepted=0, skipped=0,timestamp_rejected=0,
                                started_at=now(), finished_at=None, message='Opening the selected interface…')
             self._thread = Thread(target=self._run, args=(interface,), daemon=True, name='megalodon-managed-capture')
             self._thread.start()
@@ -130,7 +131,18 @@ class ManagedCapture:
                                 with self._lock:
                                     self._state['skipped'] += 1
                                 continue
-                            service.process(event, run_id=run_id)
+                            try:
+                                service.process(event, run_id=run_id)
+                            except ValidationError as exc:
+                                if str(exc) not in {'event timestamp precedes source high watermark','event timestamp exceeds allowed future skew'}:
+                                    raise
+                                # NIC queues can deliver timestamps out of order.
+                                # Keep detector ordering strict; reject this row,
+                                # account for the gap and continue finite intake.
+                                with self._lock:
+                                    self._state['skipped'] += 1
+                                    self._state['timestamp_rejected'] += 1
+                                continue
                             if self.connections is not None:
                                 self.connections.observe(event)
                             with self._lock:

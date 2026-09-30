@@ -3,7 +3,7 @@ let input='';process.stdin.on('data',chunk=>input+=chunk);
 process.stdin.on('end',async()=>{
  const {code,fixture}=JSON.parse(input),nodes=new Map(),listeners={},timers=new Map(),requests=[];let seq=0,intersection,mutation;
  function element(){return {textContent:'',children:[],attributes:{},dataset:{},events:{},value:'',hidden:false,disabled:false,setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){this.children=v;},addEventListener(k,v){this.events[k]=v;},focus(){}};}
- const get=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
+ const get=id=>{if(id==='workspace-setup')return null; /* legacy embedding contract */ if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
  const document={hidden:false,getElementById:get,createElement:element,addEventListener:(k,v)=>listeners[k]=v};
  const payload={...fixture,background:{enabled:true,state:'running',message:'Monitoring continues.',session_count:1},capture:{...fixture.capture,state:'running'}};
  const context={localHudLaunch:{},document,window:{},TextEncoder,TextDecoder,Uint8Array,AbortController,

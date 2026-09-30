@@ -5,6 +5,7 @@ probe a host, or start an integration. The dashboard module re-exports these
 constants to preserve the existing public/test interface.
 """
 
+from .dashboard_operations import OPERATIONS_CSS, OPERATIONS_JS, compose_operations
 from .dashboard_workflows import WORKFLOWS_CSS, WORKFLOWS_JS, compose_workflows, local_workflow_script
 from .dashboard_live_globe import LIVE_GLOBE_CSS, LIVE_GLOBE_JS, compose_live_globe
 from .dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS, local_support_help, local_support_script
@@ -748,19 +749,19 @@ const eventFields = ['detected_at', 'message', 'rule_id', 'severity', 'src_ip'];
 const knownSeverities = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
 const prioritySeverities = new Set(['CRITICAL', 'HIGH']);
 const maxTimelineBins = 12;
-const workspaceIds = ['live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'];
+const workspaceIds = ['live', 'findings', 'interfaces', 'setup', 'reports', 'analysis', 'help'];
 const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
-  'live-globe-title': 'live', 'live-globe-history': 'live', 'support-config-title': 'live', 'support-apps-title': 'live', 'pc-live-title': 'live',
+  'live-globe-title': 'live', 'live-globe-history': 'live', 'support-config-title': 'setup', 'support-apps-title': 'live', 'pc-live-title': 'live',
   'activity-globe-title': 'live', 'hud-export-title': 'live', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
-  'workspace-traffic': 'traffic', 'workspace-findings': 'findings',
-  'workspace-reports': 'reports', 'workspace-help': 'help',
+  'workspace-traffic': 'live', 'workspace-findings': 'findings',
+  'setup-location-title':'setup', 'support-capture-title':'setup', 'support-config-interface':'setup', 'workspace-setup':'setup', 'settings':'setup', 'operations-title':'live', 'operations-history':'live', 'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
-  'room-home-title': 'live', 'setup-title': 'live', 'tool-management-controls': 'live', 'room-traffic-title': 'traffic', 'room-findings-title': 'findings',
-  'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'live',
+  'room-home-title': 'live', 'setup-title': 'setup', 'tool-management-controls': 'setup', 'room-traffic-title': 'live', 'room-findings-title': 'findings',
+  'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'setup',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
-  'workspace-interfaces': 'interfaces', 'action-plane-title': 'interfaces', 'app-service-start-title': 'interfaces', 'app-viewer-title': 'interfaces', 'analysis-window-title': 'analysis',
+  'workspace-interfaces': 'interfaces', 'action-plane-title': 'setup', 'app-service-start-title': 'setup', 'app-viewer-title': 'setup', 'analysis-window-title': 'analysis',
   'help-language': 'help', 'status-glossary': 'help'
 };
 const state = {
@@ -858,7 +859,7 @@ function restoreWorkspaceFromHash() {
   const workspace = workspaceFromHash(hash);
   if (!workspace) return;
   activateWorkspace(workspace);
-  const targetId = hash.startsWith('#') ? hash.slice(1) : '';
+  const targetId = hash === '#workspace-traffic' ? 'operations-history' : hash.startsWith('#') ? hash.slice(1) : '';
   const target = targetId ? byId(targetId) : null;
   revealTargetDisclosure(target);
   if (target && !targetId.startsWith('workspace-') && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'start'});
@@ -886,7 +887,7 @@ document.addEventListener('click', event => {
   // A tab change can hide the current hash target. Reveal it on every link
   // activation, including repeated fragments that do not fire hashchange.
   activateWorkspace(workspace);
-  const target = byId(hash.slice(1));
+  const target = byId(hash === '#workspace-traffic' ? 'operations-history' : hash.slice(1));
   revealTargetDisclosure(target);
   if (target && typeof target.focus === 'function') target.focus({preventScroll: true});
   // Keep native fragment history and scrolling after exposing the target.
@@ -2305,7 +2306,7 @@ from .dashboard_companion import COMPANION_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS + SUPPORT_APPS_CSS + SUPPORT_CONFIG_CSS + LIVE_GLOBE_CSS + WORKFLOWS_CSS
+DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS + SUPPORT_APPS_CSS + SUPPORT_CONFIG_CSS + LIVE_GLOBE_CSS + WORKFLOWS_CSS + OPERATIONS_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = local_support_help(compose_control_room(INDEX_HTML))
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_SUPPORT_APPS -->', SUPPORT_APPS_HTML)
@@ -2314,7 +2315,8 @@ INDEX_HTML = INDEX_HTML.replace('<!-- HUD_PC_TELEMETRY -->', HOST_TELEMETRY_HTML
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = compose_workflows(compose_live_globe(INDEX_HTML, GLOBE_HTML))
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
+INDEX_HTML = compose_operations(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

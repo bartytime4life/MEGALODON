@@ -32,11 +32,11 @@ def test_live_globe_behavior_and_geometry():
 
 
 def test_local_live_globe_composition_preserves_history():
-    assert LIVE_GLOBE_HTML in INDEX_HTML
+    assert 'id="live-globe"' in INDEX_HTML
     assert LIVE_GLOBE_CSS in DASHBOARD_CSS
     assert LIVE_GLOBE_JS in DASHBOARD_JS
     assert GLOBE_HTML in INDEX_HTML
-    assert INDEX_HTML.index(LIVE_GLOBE_HTML) < INDEX_HTML.index('id="live-globe-history"') < INDEX_HTML.index(GLOBE_HTML)
+    assert INDEX_HTML.index('id="live-globe"') < INDEX_HTML.index('id="live-globe-history"') < INDEX_HTML.index(GLOBE_HTML)
     assert '<details class="live-globe-history" id="live-globe-history">' in INDEX_HTML
     assert 'https://db-ip.com' in LIVE_GLOBE_HTML
     assert 'aria-describedby="live-geography-destinations"' in LIVE_GLOBE_HTML

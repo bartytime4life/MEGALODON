@@ -150,7 +150,7 @@ TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML)
 def compose_control_room(html: str) -> str:
     start = html.index('  <nav class="section-nav"')
     end = html.index('  <div class="workspace-scroll"', start)
-    tabs = (("live", "HUD"), ("traffic", "Traffic"), ("findings", "Findings"), ("interfaces", "Actions"),
+    tabs = (("live", "HUD"), ("findings", "Findings"), ("interfaces", "Sensors"), ("setup", "Setup"),
             ("reports", "Reports"), ("analysis", "Evidence"), ("help", "Help"))
     nav = '<nav class="section-nav" aria-label="Command center workspaces" role="tablist">'
     for key, name in tabs:

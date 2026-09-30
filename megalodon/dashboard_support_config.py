@@ -102,9 +102,11 @@ SUPPORT_CONFIG_JS = r'''
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
   const working=()=>state.payload && state.payload.job.state==='running';
-  const workspace=el('workspace-live');
-  const workspaceVisible=()=>!document.hidden&&!(workspace&&workspace.hidden);
-  const viewVisible=()=>workspaceVisible()&&(typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
+  const workspace=el('workspace-live'),setupWorkspace=el('workspace-setup');
+  const liveVisible=()=>!document.hidden&&!(workspace&&workspace.hidden);
+  const setupVisible=()=>!!setupWorkspace&&!document.hidden&&!setupWorkspace.hidden;
+  const workspaceVisible=()=>liveVisible()||setupVisible();
+  const viewVisible=()=>workspaceVisible()&&(setupVisible()||typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
   function feedback(message,kind='ready'){if(state.liveAction && el('live-action-status'))el('live-action-status').textContent=message;el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
   function controls(){
     const blocked=state.pending || !state.valid || !workspaceVisible();
@@ -185,7 +187,8 @@ SUPPORT_CONFIG_JS = r'''
     try{const value=await request(payload);if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
     catch(error){fail(error);}finally{state.pending=false;controls();schedule();}
   }
-  function open(value){state.open=value;el('support-config').hidden=!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
+  function open(value){state.open=value;el('support-config').hidden=setupWorkspace?false:!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
+    if(setupWorkspace&&typeof navigateWorkspace==='function')navigateWorkspace(value?'setup':'live');
     if(value){el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
   el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',()=>read(true));if(el('live-action-retry'))el('live-action-retry').addEventListener('click',()=>read(true));
   for(const [id,action] of Object.entries(actions))if(el(id))el(id).addEventListener('click',()=>act(action));
@@ -194,7 +197,7 @@ SUPPORT_CONFIG_JS = r'''
   if(typeof window!=='undefined')window.megalodonSupportConfiguration={refresh:read,open:()=>{open(true);el('support-config-interface').focus();}};
   function syncView(){cancel();if(!viewVisible()){if(state.hydrated)feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');controls();}else read();}
   document.addEventListener('visibilitychange',syncView);
-  if(typeof MutationObserver!=='undefined'&&workspace)new MutationObserver(syncView).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+  if(typeof MutationObserver!=='undefined')for(const panel of [workspace,setupWorkspace])if(panel)new MutationObserver(syncView).observe(panel,{attributes:true,attributeFilter:['hidden']});
   if(typeof IntersectionObserver!=='undefined'){
     const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.target===el('support-config'))state.configVisible=entry.isIntersecting;if(entry.target===el('live-globe'))state.globeVisible=entry.isIntersecting;}syncView();},{root:el('workspace-content'),rootMargin:'80px'});
     observer.observe(el('support-config'));if(el('live-globe'))observer.observe(el('live-globe'));

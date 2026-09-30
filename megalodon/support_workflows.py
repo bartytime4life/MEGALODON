@@ -16,7 +16,7 @@ def snapshot(configuration, companions):
     for key,name in (('zeek','Zeek'),('suricata','Suricata')):
         add(key,name,**sensors[key])
     add('scapy','Scapy','standby','Alternative capture engine. TShark already supplies live packets, so a second Python capture is unnecessary.')
-    add('nftables','nftables','standby','Firewall response planning stays inside MEGALODON. No extra window or automatic firewall changes.')
+    add('nftables','nftables','standby','Local containment is available from the IP inspector after preview and OS authorization. Startup and model output do not change firewall rules.')
     data=companions.snapshot() if companions else dict(results={},status={},advisory={})
     for key,name in (('clamav','ClamAV'),('osquery','osquery'),('nmap','Nmap')):
         result=data['results'].get(key)

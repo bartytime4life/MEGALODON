@@ -44,6 +44,7 @@ SUPPORT_APPS_JS = r'''
 (() => {
   const el = id => document.getElementById(id);
   if (typeof localHudLaunch === 'undefined' || !el('support-apps')) return;
+  const workspace=el('workspace-live'),visible=()=>!document.hidden&&!(workspace&&workspace.hidden);
   const app = {payload:null, token:null, command:null, pending:false, starting:false, valid:false, timer:null, deadline:0};
   const labels = {idle:'Not started',checking:'Checking',running:'Running',launched:'Launch requested',queued:'Queued',missing:'Not installed',needs_setup:'Needs setup',failed:'Failed',not_needed:'Ready'};
   const text = (v,max=512) => typeof v === 'string' && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
@@ -100,7 +101,7 @@ SUPPORT_APPS_JS = r'''
   function cancelPoll() {if(app.timer!==null)clearTimeout(app.timer);app.timer=null;}
   function schedule() {
     cancelPoll();
-    if(document.hidden || !app.valid || !app.payload || app.payload.state!=='running')return;
+    if(!visible() || !app.valid || !app.payload || app.payload.state!=='running')return;
     if(Date.now()>=app.deadline){app.valid=false;feedback('Startup is taking longer than expected. Check status to see the latest result.','stale');el('support-apps-check').hidden=false;controls();return;}
     app.timer=setTimeout(()=>read(false),2000);
   }
@@ -118,7 +119,7 @@ SUPPORT_APPS_JS = r'''
   function accept(v) {app.payload=v;if(v.token)app.token=v.token;app.command=v.command;app.valid=true;el('support-apps-command').value=v.command;el('support-apps-check').hidden=true;render(v);}
   function failed() {app.valid=false;app.token=null;feedback('Unable to confirm background startup status. Check status before trying again.','failed');el('support-apps-check').hidden=false;}
   async function read(reset=true) {
-    if(app.pending || document.hidden)return;
+    if(app.pending || !visible())return;
     cancelPoll();if(reset)app.deadline=Date.now()+300000;app.pending=true;controls();
     try {accept(await request('GET'));}catch(_){failed();}finally{app.pending=false;controls();schedule();}
   }
@@ -140,6 +141,7 @@ SUPPORT_APPS_JS = r'''
     cancelPoll();if(document.hidden){feedback('Updates paused while this tab is hidden. Background startup continues on this PC.','stale');controls();}
     else read(true);
   });
+  if(typeof MutationObserver!=='undefined'&&workspace)new MutationObserver(()=>{cancelPoll();if(visible())read(true);else controls();}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
   read(true);
 })();
 '''

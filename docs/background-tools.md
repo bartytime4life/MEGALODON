@@ -23,7 +23,7 @@ workflow status; a saved inventory result is distinct from an active feed.
 | osquery | Scheduled fixed installed-package query |
 | Qwen / Ollama | Bounded explanation of completed aggregate collector results |
 | Scapy | Alternative capture engine; not started alongside the TShark feed |
-| nftables | Inert response planning; startup does not change firewall rules |
+| nftables | Operator-reviewed local containment from the IP inspector; startup does not change firewall rules |
 
 ## First-time service configuration
 

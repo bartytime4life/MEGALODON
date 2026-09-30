@@ -311,6 +311,20 @@ def test_capture_storage_limit_is_actionable_and_preserves_failure_receipt(manag
     assert reader.ingestion_runs()[0]['failure_code']=='CAPTURE_ERROR'
 
 
+def test_reordered_capture_row_is_rejected_without_stopping_live_feed(manager):
+    rows=[field_row(),field_row().replace('1788710400.123456','1788710399.123456'),field_row().replace('1788710400.123456','1788710401.123456')]
+    def spawn(argv,**kwargs):
+        code='pass' if argv[0].endswith('dumpcap') else '\n'.join('print('+repr(row)+')' for row in rows)
+        return subprocess.Popen([sys.executable,'-c',code],**kwargs)
+    capture=ManagedCapture(manager.settings,manager.home,popen=spawn)
+    capture.start('eth0');capture._thread.join(5)
+    value=capture.snapshot()
+    assert value['state']=='stopped'
+    assert (value['accepted'],value['skipped'],value['timestamp_rejected'])==(2,1,1)
+    reader=dashboard.UnconfiguredDashboardReader(manager.settings.db_path)
+    assert reader.ingestion_runs()[0]['processed_count']==2
+
+
 def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     from threading import Event
     waiting,release=Event(),Event()

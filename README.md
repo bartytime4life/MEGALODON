@@ -12,8 +12,10 @@ metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
 audit trail, and offers a read-only localhost telemetry projection. Live capture, offline
 analysis, and firewall planning are separate choices, not mandatory parts of
-every configuration. The evaluation-release candidate is plan-only and does
-not support live firewall application.
+every configuration. Legacy firewall CLI routes remain plan-only. The separate
+Linux HUD [local defense workflow](docs/visual-operations-defense.md) supports
+operator-reviewed five-minute containment of one observed public IP on this PC,
+with OS authorization, audit records, readback and release. Qwen cannot apply it.
 
 Linux is the current implementation and CI reference, not a claim that every
 workflow requires Ubuntu or every platform has equal support. Native Windows
@@ -272,7 +274,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; the same immutable alert publication and receipt | Main thread of a single-threaded Linux process, reusing the guarded `SIGALRM` deadline; one private file, no persistence, dashboard projection, sensor launch, watcher, or IPS |
 | Persist one validated Suricata publication | `megalodon.offline.suricata_consumer.consume_publication`; explicit pre-created private store | One fixed-capacity local transaction with durable replay identity, terminal receipt, and exact commit readback. No migration, retention, watcher, CLI, dashboard projection, sensor launch, model call, network access, or response action |
 | Reconcile one unknown Suricata consumer attempt | `megalodon.offline.suricata_consumer.reconcile_publication`; exact immutable publication and attempt ID | Explicit query-only readback returns only `committed`, `not_committed`, or `indeterminate`. It never retries, repairs, migrates, creates, deletes, projects, or acts |
-| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
+| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; legacy CLI application is refused; the separate HUD supports operator-reviewed five-minute local containment |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
 can use both commands, and the dashboard can be started later against the same
@@ -289,7 +291,7 @@ entry point, not a replacement platform contract.
 
 | Environment | What can be considered | Evidence / support boundary |
 | --- | --- | --- |
-| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and plan-only nftables response | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; live firewall application is unsupported |
+| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and optional operator-reviewed local containment | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; legacy firewall CLI apply remains unsupported |
 | Other Linux distributions or architectures | Evaluate the same bounded workflows where prerequisites and safety checks hold | Not certified by the Ubuntu CI lane. Validate Python, filesystem/privilege behavior, tool paths, and each selected integration; do not remove guards to make a recipe run |
 | Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **UNVERIFIED / evaluation only.** No native MEGALODON capture, offline adapter, or Windows firewall backend. Windows acceptance is tracked separately |
 | A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
@@ -328,7 +330,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
 | Dashboard | Read-only loopback HUD with Home, Traffic, Findings, Apps, Reports, Evidence and Help. Traffic shows qualified metadata with bounded automatic refresh, UTC history pages, event details and local reports. Apps separates startup presence from support and unknown health, with an explicitly opened console viewer and external-open fallback. Optional offline, Suricata and Qwen evidence remains startup-only; opening an app UI does not ingest its data or establish sensor health |
-| Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
+| Firewall boundary | Legacy isolated `inet megalodon` plans remain inert. Separate HUD containment uses `inet megalodon_guard`, an exact preview, OS authorization, five-minute timeout, readback and release; model output cannot apply it |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
@@ -361,7 +363,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | ClamAV | Explicitly scoped local scans or completed-report watching | Optional automatic local HUD companion; aggregate counts only, no file-content intake, quarantine, signature update, or upload |
 | osquery | Fixed local DEB package count or completed-result watching | Optional automatic local HUD companion; no package names, arbitrary query pack, daemon, or remote enrollment |
 | Nmap | Explicit private IPv4 target scan or completed XML watching | Optional automatic local HUD companion; defaults to loopback, with at most 256 addresses when explicitly configured, and aggregate host/port-state counts only |
-| nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
+| nftables | Legacy plan review and separate HUD temporary containment | Plan mode needs no privilege. Optional HUD apply requires OS authorization and affects only its managed table |
 | pytest `>=8,<10` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
 The core Python package currently has no third-party runtime dependency. Git is
@@ -395,7 +397,7 @@ MEGALODON's capability status.
 | Suricata | Implemented pinned 8.0.7 alert-only raw-EVE converter, closed-envelope reader, and explicit transaction into one pre-created private durable store | Rule updates, mixed EVE firehose, sensor mode, IPS mode, watcher, or its service |
 | ClamAV | Opt-in fixed local scan/report watch; counts only | A daemon, automatic update, quarantine, or deletion |
 | osquery | Opt-in fixed DEB count/report watch; no package names | A daemon, arbitrary query pack, or remote enrollment |
-| nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
+| nftables | Legacy plan-only CLI; separate operator-reviewed HUD containment | Automatic blocking or arbitrary ruleset loading; use the fixed HUD preview/confirmation workflow for a temporary managed block |
 
 The static catalog remains the source of truth. From the activated project
 environment, inspect it without probing or launching any companion tool:

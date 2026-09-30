@@ -3,7 +3,7 @@ let input='';process.stdin.on('data',chunk=>input+=chunk);
 process.stdin.on('end',async()=>{
  const {code,fixture}=JSON.parse(input),nodes=new Map(),listeners={},timers=new Map(),requests=[];let seq=0,payload=fixture,responseStatus=200,failure=false,oversized=false,hold=null;
  function element(tag=''){return {tag,textContent:'',children:[],attributes:{},dataset:{},events:{},value:'',hidden:false,disabled:false,setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){this.children=v;},addEventListener(k,v){this.events[k]=v;},focus(){this.focused=true;}};}
- const get=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
+ const get=id=>{if(id==='workspace-setup')return null; /* legacy embedding contract */ if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
  const document={hidden:false,getElementById:get,createElement:element,addEventListener:(k,v)=>listeners[k]=v};
  const context={localHudLaunch:{},softwareCatalog:[{id:'tshark',note:'The HUD never starts capture.'},{id:'clamav',note:'It does not update signatures.'}],document,TextEncoder,TextDecoder,Uint8Array,AbortController,setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,opts)=>{requests.push({path,opts});if(hold)await hold;if(failure)throw Error('offline');const status=responseStatus;responseStatus=200;return {status,ok:status>=200&&status<300,headers:{get:()=>oversized?'65537':null},text:async()=>JSON.stringify(payload)};}};
  const settle=()=>new Promise(resolve=>setImmediate(resolve));const click=id=>get(id).events.click();const status=()=>get('support-config-status').textContent;

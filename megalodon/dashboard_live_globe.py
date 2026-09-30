@@ -56,7 +56,8 @@ const LiveGlobeMath = (()=>{
 (() => {
   const el=id=>document.getElementById(id);if(typeof localHudLaunch==='undefined'||!el('live-globe'))return;
   const history=el('live-globe-history'),workspace=el('workspace-live');
-  const historyVisible=()=>!!history&&history.open&&!document.hidden&&!workspace.hidden;
+  const operationsHistory=el('operations-history');
+  const historyVisible=()=>!!history&&history.open&&(!operationsHistory||operationsHistory.open)&&!document.hidden&&!workspace.hidden;
   // Guard only the local composition. Original stored-history functions and Site assets stay intact.
   if(typeof refreshGlobeHour==='function'){const original=refreshGlobeHour;refreshGlobeHour=function(force=false){if(historyVisible())return original(force);};}
   if(typeof startGlobeHour==='function')startGlobeHour=function(){if(!historyVisible()||globeState.hour.started)return;const hour=globeState.hour;hour.started=true;const tick=async()=>{if(!historyVisible()){hour.started=false;return;}if(!state.paused)await refreshGlobeHour();if(historyVisible()&&hour.started)hour.timer=window.setTimeout(tick,Math.max(2,state.config.refresh_seconds)*1000);};tick();};
@@ -66,7 +67,7 @@ const LiveGlobeMath = (()=>{
   if(typeof drawGlobe==='function'){const original=drawGlobe;drawGlobe=function(view){if(historyVisible())return original(view);};}
   function historySync(){if(historyVisible()){if(typeof initializeGlobe==='function'&&typeof globeState!=='undefined'){startGlobeHour();renderGlobeView();}}else{if(typeof stopGlobeSpin==='function')stopGlobeSpin();if(typeof stopGlobeFocusTimer==='function')stopGlobeFocusTimer();if(typeof globeState!=='undefined'){if(globeState.frame!==null)window.cancelAnimationFrame(globeState.frame);globeState.frame=null;if(globeState.hour.timer!==null)window.clearTimeout(globeState.hour.timer);globeState.hour.timer=null;globeState.hour.started=false;}}}
   function revealHistory(){if(history&&window.location&&/^#(?:activity-globe|traffic-volume|live-globe-history)/.test(window.location.hash)){history.open=true;historySync();}}
-  if(history)history.addEventListener('toggle',historySync);if(typeof window.addEventListener==='function')window.addEventListener('hashchange',revealHistory);revealHistory();
+  if(history)history.addEventListener('toggle',historySync);if(operationsHistory)operationsHistory.addEventListener('toggle',historySync);if(typeof window.addEventListener==='function')window.addEventListener('hashchange',revealHistory);revealHistory();
   const motion=typeof window.matchMedia==='function'?window.matchMedia('(prefers-reduced-motion: reduce)'):{matches:false};
   const view={payload:null,valid:false,pending:false,poll:null,frame:null,controller:null,paused:false,latitude:20,longitude:-30,elapsed:0,lastFrame:null,lastLand:0,landDirty:true,lastStatus:0,centered:false,drag:null,paths:new Map(),land:null,visible:typeof IntersectionObserver==='undefined'};
   const object=v=>v&&typeof v==='object'&&!Array.isArray(v),text=(v,max=512)=>typeof v==='string'&&v.length<=max&&!/[\x00-\x1f\x7f]/.test(v),count=v=>Number.isSafeInteger(v)&&v>=0,stamp=v=>typeof v==='string'&&v.length<=40&&/Z$/.test(v)&&Number.isFinite(Date.parse(v)),optionalStamp=v=>v===null||stamp(v);

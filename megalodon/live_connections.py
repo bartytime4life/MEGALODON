@@ -44,6 +44,8 @@ class LiveConnections:
         self._local = set()
         self._packets = self._bytes = 0
         self._evicted = 0
+        self._timeline = {}
+        self._interface = None
 
     def begin(self, interface):
         try:
@@ -51,6 +53,9 @@ class LiveConnections:
         except (OSError, ValueError, TypeError):
             local = set()
         with self._lock:
+            if self._interface != interface:
+                self._timeline.clear()
+            self._interface = interface
             self._local = local
             # A new capture can reuse transport tuples; do not splice its counters.
             self._flows.clear()
@@ -79,19 +84,31 @@ class LiveConnections:
                 observed = event.observed_at.isoformat().replace('+00:00','Z')
                 self._flows[key] = dict(id=hashlib.sha256(repr(key).encode()).hexdigest()[:20], protocol=event.protocol,
                     a=dict(ip=a[0],port=a[1],local=a[0] in self._local), b=dict(ip=b[0],port=b[1],local=b[0] in self._local),
-                    a_to_b=dict(empty), b_to_a=dict(empty), first_seen=observed, last_seen=observed, state='recent', _seen=stamp)
+                    a_to_b=dict(empty), b_to_a=dict(empty), first_seen=observed, last_seen=observed, state='recent', flags=[], _seen=stamp)
             row = self._flows[key]
             direction = row['b_to_a' if reverse else 'a_to_b']
             direction['packets'] += 1
             direction['bytes'] += event.byte_count or 0
             direction['last_seen'] = event.observed_at.isoformat().replace('+00:00','Z')
             row['last_seen'], row['_seen'] = direction['last_seen'], stamp
+            row['flags'] = sorted(set(row['flags']) | set(event.tcp_flags))[:8]
             if 'RST' in event.tcp_flags:
                 row['state'] = 'closed'
             elif 'FIN' in event.tcp_flags:
                 row['state'] = 'closing'
             self._packets += 1
             self._bytes += event.byte_count or 0
+            bucket = int(event.observed_at.timestamp()) // 5 * 5
+            if bucket not in self._timeline:
+                self._timeline[bucket] = dict(at=datetime.fromtimestamp(bucket,timezone.utc).isoformat().replace('+00:00','Z'),
+                    sent_bytes=0,received_bytes=0,unattributed_bytes=0,packets=0,_seen=stamp)
+            point = self._timeline[bucket]
+            lane = ('sent_bytes' if src in self._local and dst not in self._local else
+                    'received_bytes' if dst in self._local and src not in self._local else 'unattributed_bytes')
+            point[lane] += event.byte_count or 0
+            point['packets'] += 1
+            point['_seen'] = stamp
+            self._timeline = {k:v for k,v in sorted(self._timeline.items())[-24:] if stamp-v['_seen']<=60}
 
     def snapshot(self, capture, background):
         now = self.clock()
@@ -100,6 +117,7 @@ class LiveConnections:
             active = sum(now-r['_seen']<=IDLE_SECONDS and r['state']!='closed' for r in retained) if capture['state']=='running' else 0
             rows = deepcopy(retained[:MAX_CONNECTIONS])
             packets, byte_count, evicted = self._packets, self._bytes, self._evicted
+            timeline = [{k:v for k,v in point.items() if k!='_seen'} for _,point in sorted(self._timeline.items()) if now-point['_seen']<=60]
         geo = self.geography.snapshot()
         anchor = geo['anchor']
         unmapped = 0
@@ -111,7 +129,7 @@ class LiveConnections:
             if not row['a']['location'] or not row['b']['location']:
                 unmapped += 1
         value = dict(schema='megalodon-live-connections-v1', generated_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
-                    capture=capture, background=background, geography=geo, connections=rows,
+                    capture=capture, background=background, geography=geo, connections=rows,timeline=timeline,
                     totals=dict(active=active,returned=len(rows),unmapped=unmapped,truncated=len(retained)>len(rows) or evicted>0,packets=packets,bytes=byte_count,evicted=evicted),
                     limits=dict(idle_seconds=IDLE_SECONDS,retention_seconds=RETENTION_SECONDS,max_connections=MAX_CONNECTIONS,tracked_connections=MAX_TRACKED))
         while rows and len(json.dumps(value).encode()) > MAX_RESPONSE_BYTES:
