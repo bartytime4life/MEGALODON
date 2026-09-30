@@ -6,7 +6,7 @@ Nmap when Nmap is installed, and scans the current user's real `Downloads`
 folder with ClamAV when that folder and scanner exist. Collection starts when
 the HUD starts; Nmap and osquery repeat hourly, while the potentially long
 ClamAV scan repeats daily. Report watching continues during a scan. Results are aggregate counts held in HUD
-memory, with source and observation times shown in the panels. Unavailable
+memory, with source and available time provenance shown in the panels. Unavailable
 programs and rejected results have their own status; they never create sample
 data. The `dashboard` CLI mode does not start default collection.
 
@@ -31,6 +31,33 @@ read-only: it does not quarantine, remove or update signatures. The fixed
 osquery query counts `deb_packages` rows without collecting package names.
 Each command has a deadline and output bound. These observations do not prove
 complete coverage, safety, or that an open port is a threat.
+
+### Reading osquery times
+
+The package panel separates **Local collection completed** from **Processed**.
+Collection completion is the local HUD clock immediately after its fixed
+osquery process successfully returns. It is not an exact timestamp from osquery
+or proof that osquery is still running. Processing time is when MEGALODON
+validated and exported the count; it does not establish when packages were counted.
+
+A watched osquery report contains only `[{"package_count":"137"}]` (with the
+actual count substituted). It supplies no observation timestamp, so the panel
+shows **Observation time unknown**, even when the report was just copied or
+modified. Neither the file's modification time nor a later reprocessing time
+becomes a collection time. Old v1 exports also show unknown observation time.
+A rejected or failed replacement preserves the prior count and its times, with
+a separate collector failure status.
+
+The bounded `python -m megalodon.osquery_inventory < /absolute/report.json`
+exporter emits `megalodon-osquery-package-count-v2`: exactly `schema`,
+`exported_at`, `collection_completed_at`, and `package_rows`. `exported_at`
+is processing time in UTC; `collection_completed_at` is `null` for this saved-file
+CLI and watched reports. Only the fixed local collector supplies its completion
+clock, in canonical UTC seconds no later than processing. The HUD still reads
+v1 aggregates without inventing a collection time. There is no CLI option or raw
+report field for asserting a collection timestamp.
+
+### Choosing collection scope
 
 An explicit private TOML file can override the default scope and watch paths:
 

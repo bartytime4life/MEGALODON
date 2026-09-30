@@ -6,6 +6,7 @@ The model sees counts only. It never selects commands, targets or files.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from ipaddress import ip_network
 import json
 import os
@@ -314,7 +315,9 @@ class CompanionAutomation:
                 elif kind == "clamav" and code in (0, 1):
                     value = clamav_summary(raw, code)
                 elif kind == "osquery" and code == 0:
-                    value = osquery_summary(raw)
+                    # Only this fixed, completed local process establishes a
+                    # collection time. Watched reports have no source clock.
+                    value = osquery_summary(raw, collection_completed_at=datetime.now(timezone.utc))
                 else:
                     raise ValueError("tool returned an unsuccessful status")
                 scope = (self.config.nmap_target if kind == "nmap" else
