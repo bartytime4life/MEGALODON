@@ -78,7 +78,7 @@ process.stdin.on('end', async () => {
       assert.equal(byId('setup-copy').disabled, true);
       assert.equal(byId('setup-reopen-copy').disabled, true);
       assert.equal(byId('tool-management-copy').disabled, true);
-      assert.equal(byId('tool-management-command').textContent, 'Restart command for Install/Start unavailable');
+      assert.equal(byId('tool-management-command').textContent, 'Restart command for Install/Start/Open unavailable');
       assert.doesNotMatch(byId('setup-launch-intro').textContent, /PRIVATE|bad\ncommand/);
     }
     context.localHudLaunch = {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"};

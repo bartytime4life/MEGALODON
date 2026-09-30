@@ -116,8 +116,8 @@ capture-buffer sizing or loss-free operation under production load.
    bounded report snapshot; it cannot mutate core telemetry or the firewall.
    Companion tool management is a separate, default-disabled host-maintenance
    route: an explicit non-root Linux HUD launch and its per-launch operator
-   token authorize fixed installation/service-start recipes, not telemetry or
-   firewall application.
+   token authorize fixed installation/service-start recipes and opening a
+   closed list of desktop support apps, not telemetry or firewall application.
 9. **Loopback binds only.** The dashboard refuses non-loopback addresses and
    the legacy remote opt-in. It does not provide remote authentication.
 10. **Fail closed for live response.** Every CLI and direct-backend apply
@@ -447,8 +447,9 @@ workspace. Its telemetry endpoints return 503, never fabricated zero counters.
 Unsafe, corrupt or incompatible existing stores still refuse startup. The
 original `dashboard` command retains its existing-store/no-probe behavior.
 `hud --enable-tool-management` explicitly enables fixed companion installation,
-example model download and service-start actions on Linux only when both real
-and effective UIDs are nonzero. The CLI and direct `serve()` API refuse other
+example model download, service-start actions, and GUI-only launch of fixed
+desktop support apps on Linux only when both real and effective UIDs are
+nonzero. The CLI and direct `serve()` API refuse other
 opt-in modes before source access or server startup. Ordinary HUD launches keep
 heartbeat observations, recipe guidance and job status without action authority.
 An enabled launch prints a separate random 192-bit operator token only to its
@@ -458,8 +459,12 @@ token. Each POST checks the token and current non-root Linux identity before
 dispatch, alongside exact Host/Origin, explicit headers and a closed bounded
 body. Fixed package recipes may start services as an installation side effect;
 service-start recipes use fixed existing systemd units and do not enable boot
-startup. These optional host changes are distinct from read-only telemetry,
-AI authority and the closed firewall-application boundary.
+startup. Desktop-app launch accepts only fixed Wireshark, Zenmap and ClamTk ids,
+starts the selected GUI as the current user and does not start a scan, capture,
+sensor or service. A successful launch request does not establish that a window
+opened or that the app is healthy or connected. These optional host actions are
+distinct from read-only telemetry, AI authority and the closed firewall-
+application boundary.
 The HUD's **Check this computer** button adds an explicit metadata-only refresh
 through `/api/local-checks`; it does not change the startup snapshot. It reports
 the running Python/SQLite versions, a bounded read of the already selected

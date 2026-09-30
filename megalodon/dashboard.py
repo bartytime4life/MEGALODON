@@ -2,7 +2,8 @@
 
 HUD mode also serves a cached tool heartbeat and an inert recipe catalog.
 Explicitly enabled, non-root Linux tool management requires a per-launch
-operator token before fixed installation or service-start recipes can run.
+operator token before fixed installation, service-start, or desktop-app launch
+actions can run.
 
 The presentation constants live in ``dashboard_assets``; this module retains the
 public Python API and the security boundary for every HTTP route.
@@ -34,6 +35,12 @@ from .dashboard_commands import local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
 from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
+from .support_apps import (
+    SupportAppBusy,
+    SupportAppLaunchFailed,
+    SupportAppLauncher,
+    SupportAppUnavailable,
+)
 from .hub import integration_plan
 from .hud_password import PasswordVerifier
 from .qwen_advisory import QwenAdvisoryResult, validated_qwen_result
@@ -433,6 +440,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     installer: Installer | None = None
     tool_management_enabled: bool = False
     install_operator_token: str | None = None
+    support_app_launcher: SupportAppLauncher | None = None
     javascript: bytes = DASHBOARD_JS.encode()
     ai_settings: AISettings = AISettings()
     ai_receipt_path: Path | None = None
@@ -478,7 +486,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", self.javascript)
             return
-        if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install", "/api/companions"} and route.query:
+        if route.path in {
+            "/api/config", "/api/setup", "/api/local-checks", "/api/summary",
+            "/api/traffic", "/api/hud-snapshot", "/api/offline-summary",
+            "/api/advisory-receipt", "/api/suricata", "/api/reference/status",
+            "/api/heartbeat", "/api/install", "/api/support-apps", "/api/companions",
+        } and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
         if route.path == "/api/companions":
@@ -525,19 +538,28 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             self._send(200, "application/json; charset=utf-8", payload)
             return
-        if route.path in {"/api/heartbeat", "/api/install"}:
+        if route.path in {"/api/heartbeat", "/api/install", "/api/support-apps"}:
             if self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
                 self._send_json({"error": "explicit local check required"}, status=403)
                 return
-            if self.heartbeat is None or self.installer is None:
+            if self.heartbeat is None:
                 self._send_json({"error": "heartbeat requires HUD mode"}, status=403)
                 return
             if route.path == "/api/install":
+                if self.installer is None:
+                    self._send_json({"error": "tool management unavailable"}, status=403)
+                    return
                 enabled = (self.tool_management_enabled is True
                            and self.install_operator_token is not None and _tool_management_user())
                 self._send_json({**install_catalog(), "job": self.installer.status(),
                                  "management": {"enabled": enabled,
                                                 "authorization": "per_launch_token" if enabled else "disabled"}})
+                return
+            if route.path == "/api/support-apps":
+                if self.support_app_launcher is None:
+                    self._send_json({"error": "support-app actions require HUD mode"}, status=403)
+                    return
+                self._send_json(self.support_app_launcher.catalog())
                 return
             try:
                 refresh_headers = self.headers.get_all("X-Megalodon-Refresh", [])
@@ -831,6 +853,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/install":
             self._install()
             return
+        if self.path == "/api/support-apps":
+            self._open_support_app()
+            return
         if self.path == "/api/offline-locations":
             self._offline_locations()
             return
@@ -1002,6 +1027,54 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "this action is not available for this tool on this computer"}, status=422)
             return
         self._send_json(status, status=202)
+
+    def _open_support_app(self) -> None:
+        expected_origin = f"http://{self.headers.get('Host')}"
+        tokens = self.headers.get_all("X-Megalodon-Install-Token", [])
+        if (self.support_app_launcher is None
+                or self.tool_management_enabled is not True
+                or self.install_operator_token is None
+                or not _tool_management_user()
+                or len(tokens) != 1 or len(tokens[0]) != 32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0], self.install_operator_token)
+                or self.headers.get_all("X-Megalodon-Support-App", []) != ["1"]
+                or self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "support-app operator authorization required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 2
+                or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 7 <= int(lengths[0]) <= 64):
+            self._send_json({"error": "invalid support-app request length"}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
+        except (ValueError, OSError):
+            self._send_json({"error": "invalid support-app request"}, status=400)
+            return
+        if (type(body) is not dict or set(body) != {"app"}
+                or type(body["app"]) is not str):
+            self._send_json({"error": "unknown support app"}, status=400)
+            return
+        try:
+            result = self.support_app_launcher.launch(body["app"])
+        except SupportAppBusy:
+            self._send_json({"error": "wait before opening this app again"}, status=429,
+                            extra_headers={"Retry-After": "1"})
+            return
+        except SupportAppUnavailable:
+            self._send_json({"error": "this app is unavailable in the current desktop session"}, status=422)
+            return
+        except SupportAppLaunchFailed:
+            self._send_json({"error": "the app could not be opened"}, status=503)
+            return
+        self._send_json(result, status=202)
 
     def _reference_library(self) -> ReferenceLibrary:
         library = self.reference_library
@@ -1296,6 +1369,7 @@ def serve(
     )).encode()
     heartbeat = Heartbeat() if inspect_tools else None
     installer = Installer(on_finish=heartbeat.invalidate) if heartbeat is not None else None
+    support_app_launcher = SupportAppLauncher() if heartbeat is not None else None
     companion_automation = CompanionAutomation(companion_config, ai_settings or AISettings()) if companion_config else None
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
@@ -1308,6 +1382,7 @@ def serve(
             "local_checks": LocalChecks(store, source_available=source_available) if inspect_tools else None,
             "heartbeat": heartbeat,
             "installer": installer,
+            "support_app_launcher": support_app_launcher,
             "tool_management_enabled": enable_tool_management,
             "install_operator_token": install_operator_token,
             "http_read_password": http_read_password,

@@ -27,7 +27,7 @@ HEARTBEAT_CSS = r"""
 """
 
 HEARTBEAT_JS = r"""
-const heartbeatState = {report: null, byId: new Map(), catalog: null, job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false, catalogFailed: false};
+const heartbeatState = {report: null, byId: new Map(), catalog: null, supportApps: null, supportAppsFailed: false, launchingApps: new Set(), job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false, catalogFailed: false};
 const heartbeatLabels = {green: 'Presence observed', amber: 'Setup incomplete', red: 'Not found', grey: 'Status unknown'};
 function heartbeatStale() {
   return heartbeatState.failed || Boolean(heartbeatState.report &&
@@ -101,7 +101,7 @@ function installDisabledReason(mine, running) {
   if (mine && running) return null;
   if (running) return 'Another install or service start is already running on this computer; wait for it to finish.';
   if (heartbeatStale()) return 'Tool observations are stale; wait for the next check.';
-  if (!toolManagementToken()) return 'Enter the operator token above to use Install and Start.';
+  if (!toolManagementToken()) return 'Enter the operator token above to use Install, Start and Open.';
   return null;
 }
 function installControl(id, name) {
@@ -121,8 +121,8 @@ function paintToolManagement() {
     if (!heartbeatState.managementEnabled) input.value = '';
   }
   if (status) status.textContent = heartbeatState.catalogFailed ? 'Install status unavailable. Tool observations are checked separately; management is disabled until status recovers.' : heartbeatState.managementEnabled
-    ? 'Tool management is enabled for this launch. Paste its token from the HUD terminal to use Install and Start. Each action still needs your confirmation.'
-    : 'Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user. Guides and terminal commands remain available.';
+    ? 'Tool management is enabled for this launch. Paste its token from the HUD terminal to use Install, Start and Open. Each action still needs your confirmation.'
+    : 'Observation mode. To use Install, Start and Open, restart the HUD with --enable-tool-management as your ordinary Linux user. Guides and terminal commands remain available.';
 }
 function appendRemovalPlan(wrap, entry, tool, name) {
   if (!entry.uninstall_terminal || !tool || tool.installed !== 'yes' || heartbeatStale()
@@ -206,6 +206,7 @@ function repaintHeartbeat() {
   document.querySelectorAll('[data-heartbeat-detail]').forEach(node => { node.textContent = heartbeatText(heartbeatState.byId.get(node.heartbeatTool)); });
   document.querySelectorAll('[data-heartbeat-install]').forEach(paintInstallControl);
   if (typeof renderAppServiceStarts === 'function') renderAppServiceStarts();
+  if (typeof renderSupportApps === 'function') renderSupportApps();
   // The live light supersedes the launch-time PATH line and per-tool check buttons.
   const live = heartbeatState.byId.size > 0;
   document.querySelectorAll('.software-presence, .software-check').forEach(node => { if (!node.id || node.id !== 'software-check-python') node.hidden = live; });
@@ -260,7 +261,9 @@ async function pollHeartbeat(force = false) {
   window.clearTimeout(heartbeatState.timer);
   if (document.visibilityState === 'hidden') return;
   heartbeatState.polling = true;
-  const [reportResult, installResult] = await Promise.allSettled([heartbeatFetch('/api/heartbeat', force === true ? {headers: {'X-Megalodon-Refresh': '1'}} : {}), heartbeatFetch('/api/install')]);
+  const [reportResult, installResult, supportAppsResult] = await Promise.allSettled([
+    heartbeatFetch('/api/heartbeat', force === true ? {headers: {'X-Megalodon-Refresh': '1'}} : {}),
+    heartbeatFetch('/api/install'), heartbeatFetch('/api/support-apps')]);
   try {
     if (reportResult.status !== 'fulfilled') throw new Error('Heartbeat unavailable');
     const report = validHeartbeat(reportResult.value);
@@ -286,6 +289,24 @@ async function pollHeartbeat(force = false) {
     heartbeatState.managementEnabled = false;
     heartbeatState.catalog = null;
     heartbeatState.job = null;
+  }
+  try {
+    if (supportAppsResult.status !== 'fulfilled') throw new Error('Support-app status unavailable');
+    const supportApps = supportAppsResult.value;
+    const expected = [['wireshark','Wireshark'],['zenmap','Zenmap'],['clamtk','ClamTk']];
+    if (!supportApps || supportApps.schema !== 'megalodon-support-apps-v1'
+        || !Array.isArray(supportApps.apps) || supportApps.apps.length !== expected.length) throw new Error('Invalid support-app catalog');
+    supportApps.apps.forEach((app, index) => {
+      if (!app || app.id !== expected[index][0] || app.name !== expected[index][1]
+          || typeof app.available !== 'boolean'
+          || !['available','unsupported_platform','no_desktop_session','not_found'].includes(app.reason)
+          || app.available !== (app.reason === 'available')) throw new Error('Invalid support-app entry');
+    });
+    heartbeatState.supportApps = supportApps;
+    heartbeatState.supportAppsFailed = false;
+  } catch (_) {
+    heartbeatState.supportApps = null;
+    heartbeatState.supportAppsFailed = true;
   }
   heartbeatState.polling = false;
   repaintHeartbeat();
