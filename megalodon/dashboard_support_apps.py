@@ -48,7 +48,7 @@ SUPPORT_APPS_JS = r'''
   const text = (v,max=512) => typeof v === 'string' && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
   const timestamp = v => v === null || (text(v,40) && /Z$/.test(v) && Number.isFinite(Date.parse(v)));
   function checked(v, needToken) {
-    if (!v || typeof v !== 'object' || Array.isArray(v) || v.schema !== 'megalodon-support-apps-v1'
+    if (!v || typeof v !== 'object' || Array.isArray(v) || v.schema !== 'megalodon-support-startup-v1'
       || !['idle','running','finished'].includes(v.state) || !timestamp(v.started_at) || !timestamp(v.finished_at)
       || !Array.isArray(v.items) || v.items.length > 16
       || !v.items.every(i => i && text(i.id,60) && text(i.name,80) && Object.hasOwn(labels,i.state) && text(i.message))
@@ -108,7 +108,7 @@ SUPPORT_APPS_JS = r'''
     try {
       const options={method,cache:'no-store',credentials:'same-origin',signal:controller.signal,headers:method==='GET'?{'X-Megalodon-Check':'1'}:{'Content-Type':'application/json','X-Megalodon-Support-Token':app.token}};
       if(method==='POST')options.body=JSON.stringify({action:'start'});
-      const response=await fetch('/api/support-apps',options);
+      const response=await fetch('/api/support-start',options);
       if(method==='POST' && response.status===409)return null;
       if(!response.ok)throw Error('Support-app request failed');
       return checked(await responseBody(response),method==='GET');

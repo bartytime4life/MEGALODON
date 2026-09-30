@@ -117,11 +117,12 @@ AI readiness. The lights refresh in the background while
 the tab is visible. Observation is the default; guides and terminal commands
 remain available. On Linux, deliberately launch `hud --enable-tool-management`
 as your ordinary user and paste the launch token from its terminal into
-**Authorize Install and Start** to enable fixed **Install** and **Start service**
-actions. Each action needs confirmation; system packages and service starts also
-use the computer's password prompt ([details](docs/tool-heartbeat.md)). **Check this computer** also
-reports the running environment and selected data file. Use **Help** to find
-the next step. Keep the
+**Authorize Install, Start and Open** to enable fixed **Install**, **Start service**
+and **Open desktop app** actions. Each action needs confirmation; system package
+installs and service starts also use the computer's password prompt
+([details](docs/tool-heartbeat.md)). **Check this computer** also reports the
+running environment and selected data file. Use **Help** to find the next step.
+Keep the
 terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
 Python 3.11+ environment and uses this checkout's data path. It does not install
 packages, create sample data, start capture, or enable automatic startup.
@@ -131,6 +132,12 @@ for Suricata and Ollama when the HUD observes them as
 installed. The same launch opt-in, token and confirmation apply there. Other
 app cards retain their setup guidance or explicit web-console navigation;
 opening a console does not start its service or connect its data.
+
+**Apps → Open desktop support apps** offers fixed Wireshark, Zenmap and ClamTk
+launch buttons when those Linux GUI apps and a desktop session are available.
+The same per-launch opt-in, token and confirmation apply. These buttons open
+the GUI only; they do not start a scan, capture, sensor or service, and MEGALODON
+does not verify that a window appeared.
 
 **[Start with the visual guide](docs/gui-quick-start.md)** ·
 **[Find software downloads](docs/software-downloads.md)** ·

@@ -20,7 +20,7 @@ process.stdin.on('end',async()=>{
   const poll=async()=>{const next=[...timers.entries()].find(([,v])=>v.ms===2000);assert.ok(next,'poll scheduled');timers.delete(next[0]);await next[1].fn();await settled();};
   const click=id=>get(id).events.click();
   vm.runInNewContext(code,context);await settled();
-  assert.equal(requests.length,1);assert.equal(requests[0].path,'/api/support-apps');assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');
+  assert.equal(requests.length,1);assert.equal(requests[0].path,'/api/support-start');assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');
   assert.equal(polls().length,0,'idle read does not start a poll chain');assert.equal(get('support-apps-start').disabled,false);assert.match(status(),/Ready when you are/);
   await click('support-apps-copy');assert.equal(clipboard,fixture.command);assert.ok(!clipboard.includes(fixture.token));
   assert.ok(!JSON.stringify([...nodes.values()]).includes(fixture.token),'action token never enters the DOM');

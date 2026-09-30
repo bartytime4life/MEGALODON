@@ -8,6 +8,7 @@ import errno
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
+import socket
 from threading import Event, Thread
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -31,6 +32,33 @@ INVALID_HOSTS = (
 
 def _forbidden(*args, **kwargs):
     raise AssertionError("startup crossed a forbidden boundary")
+
+
+def test_occupied_port_refuses_before_collection_or_browser_open(monkeypatch, capsys):
+    from megalodon.config import Settings
+
+    @contextmanager
+    def reader(*args, **kwargs):
+        yield dashboard.UnconfiguredDashboardReader()
+
+    monkeypatch.setattr(cli, "_load", lambda _: Settings())
+    monkeypatch.setattr(cli, "_dashboard_reader", reader)
+    monkeypatch.setattr(dashboard, "setup_snapshot", lambda **kwargs: b"{}")
+    monkeypatch.setattr(dashboard.CompanionAutomation, "start", _forbidden)
+    monkeypatch.setattr(dashboard.webbrowser, "open_new_tab", _forbidden)
+    with socket.socket() as occupied:
+        occupied.bind(("127.0.0.1", 0))
+        occupied.listen(1)
+        port = occupied.getsockname()[1]
+        args = cli.build_parser().parse_args(["hud", "--port", str(port), "--open-browser"])
+        assert cli._dashboard(args) == 2
+        # The original listener is still present, with no replacement or stop.
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            pass
+    error = capsys.readouterr().err
+    assert "did not apply the requested settings or start companion collection" in error
+    assert "Existing sessions keep their settings" in error
+    assert "--port 8788" in error
 
 
 @pytest.mark.parametrize("failure, expected_code, message", (

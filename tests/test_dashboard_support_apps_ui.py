@@ -14,9 +14,9 @@ def test_support_apps_behavior():
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node unavailable")
-    fixture = dict(schema="megalodon-support-apps-v1", state="idle", started_at=None,
+    fixture = dict(schema="megalodon-support-startup-v1", state="idle", started_at=None,
                    finished_at=None, token="a" * 32, items=[],
-                   command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_apps")
+                   command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_startup")
     result = subprocess.run([node, str(Path(__file__).with_name("support_apps_browser.cjs"))],
                             input=json.dumps(dict(code=SUPPORT_APPS_JS, fixture=fixture)),
                             capture_output=True, text=True, timeout=10, check=False)

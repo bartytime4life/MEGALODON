@@ -63,10 +63,12 @@ tool management is disabled by default and requires `hud --enable-tool-managemen
 on Linux with nonzero real/effective UIDs. An independent random per-launch
 operator token is printed only in the launch terminal and entered into a browser
 password field; it is never served, persisted, put in a URL, or shared with AI
-authorization. `/api/install` authenticates exactly one token header and checks
-current non-root identity before selecting a fixed installation or service-start
-recipe. Exact Origin/Host and custom headers remain CSRF defenses, not substitutes
-for authentication. Repeated JSON keys, untyped/unknown tools or actions, encoded
+authorization. `/api/install` and `/api/support-apps` authenticate exactly one
+token header and check current non-root identity before selecting a fixed
+installation, service-start recipe or closed-list desktop GUI launch action. Desktop launches
+never accept an executable or arguments from the request and do not start scans,
+captures or services. Exact Origin/Host and custom headers remain CSRF defenses,
+not substitutes for authentication. Repeated JSON keys, untyped/unknown tools or actions, encoded
 bodies and ambiguous or overlong lengths fail closed. Default HUD observations
 and guides still work without a token.
 

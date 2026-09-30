@@ -231,7 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--require-sign-in", action="store_true", help="require a local HUD password; off by default")
     dashboard.add_argument(
         "--enable-tool-management", action="store_true",
-        help="hud only: enable token-gated fixed Install/Start actions for a non-root Linux launch",
+        help="hud only: enable token-gated fixed Install/Start/Open actions for a non-root Linux launch",
     )
     dashboard.add_argument(
         "--refresh-seconds",
@@ -917,8 +917,10 @@ def _dashboard(args: argparse.Namespace) -> int:
     except OSError as exc:
         if exc.errno == errno.EADDRINUSE:
             print(
-                "megalodon: dashboard address is already in use; stop the existing "
-                "server or choose another port with --port 8788",
+                "megalodon: dashboard address is already in use; this launch did not "
+                "apply the requested settings or start companion collection. Existing "
+                "sessions keep their settings. Choose an unused port with --port 8788 "
+                "(or another free port), or stop a foreground HUD with Ctrl+C in its terminal.",
                 file=sys.stderr,
             )
         else:

@@ -23,7 +23,10 @@ history, per-app disk activity, and socket counts. It needs no signup or separat
 monitoring package. The Site includes only the feature introduction and a local
 HUD link; it does not fetch loopback telemetry. The shared styles and introduction
 are generated from `megalodon/dashboard_host_telemetry.py`.
-See [the workflow guide](../docs/hud-workflow.md). The current publication receipt
+The Site has no file input for the Nmap, ClamAV, or osquery observation panels.
+Their bounded automatic counts stay in the local HUD; they do not establish
+tool health or upload package names. See [the workflow guide](../docs/hud-workflow.md).
+The current publication receipt
 is recorded in [source alignment](../docs/site-source-alignment.md).
 
 ## Navigation and install path
@@ -94,7 +97,7 @@ source delivery and a local check do not prove host coverage or sensor health.
 Local and hosted tool controls share the canonical Python asset constants in
 `megalodon/dashboard_tool_assets.py`. The repository's
 `scripts/sync-hud-assets.py` regenerates `controls.js`, `controls.css`,
-`lifecycle.js` and `readiness.js`; parity is tested. Fourteen fixed tools support
+`lifecycle.js` and `readiness.js`; parity is tested. Ten fixed tools support
 official setup links and copy-only maintenance commands. Optional saved console
 addresses persist per browser origin; they open the actual companion app in a
 separate tab. No embedding, probing, credential storage or host execution occurs.
@@ -102,7 +105,8 @@ Tool search includes local evidence paths and saved-console filters; an empty
 result offers a filter reset. The integrations view points to the documented
 local setup entry point. Supported evidence cards state that their local views
 remain separate without opening loopback URLs. Manual presence-report import
-remains optional for this hosted page.
+remains optional for this hosted page. The Home view has no upload controls for
+Nmap, ClamAV, or osquery results; use the local HUD to view those observations.
 
 ## Actual behavior
 

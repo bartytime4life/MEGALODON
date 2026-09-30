@@ -10,6 +10,12 @@ From your reviewed Linux checkout, run `./scripts/install-local.sh`, then open
 after the loopback server binds. Keep its terminal open while you work;
 **Ctrl+C** stops the server.
 
+If you separately enabled HUD autostart, the menu instead reopens the existing
+background session. Explicit launcher options start a new foreground session;
+they do not update the background HUD. Use **Data and tools → Change data for
+the next launch → Local port** to prepare a command on an unused port, then open
+the address printed by the new session. See [separate-session launch options](local-pc-setup.md#open-a-separate-session-with-explicit-options).
+
 To try the checkout without installing it, run `./scripts/start-local.sh` and
 open the printed local address (normally <http://127.0.0.1:8787/>).
 
@@ -95,8 +101,10 @@ The one-time MEGALODON install, guided companion installs (Zeek, osquery), impor
 starting an authorized capture, and changing the server's source remain explicit
 local operations. After installation, the application-menu entry handles normal
 startup and browser opening. **Change data for the next launch** prepares and copies a
-quoted command. It takes effect after you stop and relaunch the HUD; typing a
-path into the form does not open that file.
+quoted command. Run it in a terminal to start a new session, using an unused
+port if another HUD is running. Typing a path into the form does not open that
+file. Existing sessions retain their settings, including companion collection
+and sign-in choices.
 
 The [hosted reference console](../site/README.md) has no connection to this PC.
 Its download links and local report import are useful, but status lights,
