@@ -22,6 +22,7 @@ def test_support_config_behavior(script):
                    capture=dict(state="idle", interface="", received=0, accepted=0, skipped=0,
                                 started_at=None, finished_at=None, message="Not capturing."), tools=[],
                    background=dict(enabled=False, state="stopped", message="Background off.", session_count=0),
+                   geography_enabled=False,
                    command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config")
     result = subprocess.run([node, str(Path(__file__).with_name(script))],
                             input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture)),

@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from megalodon import dashboard, support_config as config
-from megalodon.config import Settings, AISettings
+from megalodon.config import Settings, AISettings, DashboardSettings
 from megalodon.companion_automation import CompanionAutomation, local_default_config
 from megalodon.managed_capture import ManagedCapture, capture_commands
 from megalodon.offline.tshark import FIELDS
@@ -22,6 +22,7 @@ from megalodon.offline.tshark import FIELDS
 @pytest.fixture
 def manager(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'interfaces', lambda:[dict(name='eth0',default=True,up=True)])
+    monkeypatch.setattr(config, 'capture_tools_available', lambda:True)
     monkeypatch.setattr(dashboard, '_tool_management_user', lambda:True)
     home=tmp_path/'home'
     home.mkdir(mode=0o700)
@@ -38,6 +39,7 @@ def manager(tmp_path, monkeypatch):
     {'action':'nmap_configure','nmap_target':'8.8.8.8'}, {'action':'nmap_configure','nmap_target':'10.0.0.0/8'},
     {'action':'nmap_configure','nmap_target':'::1'}, {'action':'clamav_configure','scan_folder':'/'},
     {'action':'clamav_configure','scan_folder':'../Downloads'}, {'action':'qwen_check','url':'http://remote'},
+    {'action':'geography_disable','url':'http://remote'},
 ])
 def test_only_fixed_actions_and_bounded_scopes(manager,body):
     with pytest.raises(ValueError):
@@ -45,17 +47,34 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     assert manager.snapshot()['job']['state']=='idle'
 
 
-def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager):
+def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager,monkeypatch):
+    requested=[]
+    monkeypatch.setattr(manager.companions,'request_collection',
+                        lambda selected:requested.append(selected) or {'nmap':'queued'})
     before=manager.companions.config.watch_nmap_xml
     manager.start({'action':'nmap_configure','nmap_target':'192.168.2.22'})
     manager._thread.join(2)
     assert manager.snapshot()['job']['state']=='finished'
     assert manager.companions.config.nmap_target=='192.168.2.22/32'
     assert manager.companions.config.watch_nmap_xml==before
-    assert set(manager.companions._requested)=={'nmap'}
+    assert requested==[{'nmap'}]
     assert os.stat(manager.profile).st_mode & 0o777 == 0o600
     other=config.SupportConfiguration(manager.settings, CompanionAutomation(local_default_config(manager.home),AISettings()),home=manager.home)
     assert other.companions.config.nmap_target=='192.168.2.22/32'
+
+
+def test_failed_profile_write_does_not_change_active_collector(manager,monkeypatch):
+    original = manager.companions.config
+    def fail_save(*args):
+        raise OSError('test-only write failure')
+    monkeypatch.setattr(manager,'_save',fail_save)
+    manager.start({'action':'nmap_configure','nmap_target':'192.168.2.22'})
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='failed'
+    assert manager.companions.config==original
+    assert manager.snapshot()['settings']['nmap_target']=='127.0.0.1/32'
+    assert manager._configured==set()
+    assert manager.companions._requested==set()
 
 
 def test_active_scan_prevents_scope_change(manager):
@@ -269,11 +288,40 @@ def test_background_setting_persists_but_does_not_enable_external_geography(mana
 
 def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,monkeypatch):
     calls=[]
+    starts=[]
+    monkeypatch.setattr(manager.background,'start',lambda interface:starts.append(interface))
     monkeypatch.setattr(manager.background,'refresh_geography',lambda:calls.append(True))
+    manager.start({'action':'background_start','interface':'eth0'})
+    manager._thread.join(3)
     manager.start({'action':'geography_refresh'})
     manager._thread.join(3)
     assert calls==[True]
     assert json.loads(manager.profile.read_text())['geography_enabled'] is True
+
+    manager.start({'action':'geography_disable'})
+    manager._thread.join(3)
+    assert manager.snapshot()['geography_enabled'] is False
+    assert json.loads(manager.profile.read_text())['geography_enabled'] is False
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    monkeypatch.setattr(restored.background,'start',lambda interface:starts.append(interface))
+    restored.resume()
+    assert starts==['eth0','eth0']
+    assert restored._background_enabled is True
+    assert restored._geography_enabled is False
+    assert restored.background.geography_enabled() is False
+
+
+def test_missing_capture_tools_fail_closed(manager,monkeypatch):
+    monkeypatch.setattr(config,'capture_tools_available',lambda:False)
+    started=[]
+    monkeypatch.setattr(manager.capture,'start',lambda interface:started.append(interface))
+    monkeypatch.setattr(manager.background,'start',lambda interface:started.append(interface))
+    for action in ('capture_start','background_start'):
+        manager.start({'action':action,'interface':'eth0'})
+        manager._thread.join(3)
+        assert manager.snapshot()['job']['state']=='failed'
+    assert started==[]
+    assert not manager._background_enabled
 
 
 def test_live_endpoint_is_read_only_bounded_and_uses_existing_local_gates(endpoint,monkeypatch):
@@ -284,3 +332,25 @@ def test_live_endpoint_is_read_only_bounded_and_uses_existing_local_gates(endpoi
     assert request(endpoint,method='GET',body=b'',path='/api/live-connections',omit=('X-Megalodon-Check',))[0]==403
     monkeypatch.setattr(dashboard,'_tool_management_user',lambda:False)
     assert request(endpoint,method='GET',body=b'',path='/api/live-connections')[0]==403
+
+
+@pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])
+def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,expected):
+    requests=[]
+    payload={'schema':config.SCHEMA,'token':'x'*32,
+             'job':{'state':'finished','message':'Ready.'},
+             'capture':{'state':'idle','accepted':0},'tools':[]}
+    class Connection:
+        def __init__(self,host,port,timeout):
+            assert host==expected
+        def request(self,method,path,**kwargs):
+            requests.append((method,kwargs.get('headers',{}).get('Origin')))
+        def getresponse(self):
+            return SimpleNamespace(status=200,read=lambda limit:json.dumps(payload).encode())
+        def close(self):
+            pass
+    monkeypatch.setattr('megalodon.config.load_settings',
+                        lambda path:Settings(dashboard=DashboardSettings(host=configured)))
+    monkeypatch.setattr(config,'HTTPConnection',Connection)
+    assert config.main(['qwen_check'])==0
+    assert requests==[('GET',None),('POST',f'http://{expected}:8787')]

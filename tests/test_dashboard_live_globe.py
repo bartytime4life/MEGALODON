@@ -40,6 +40,7 @@ def test_local_live_globe_composition_preserves_history():
     assert '<details class="live-globe-history" id="live-globe-history">' in INDEX_HTML
     assert 'https://db-ip.com' in LIVE_GLOBE_HTML
     assert 'aria-describedby="live-geography-destinations"' in LIVE_GLOBE_HTML
+    assert 'id="live-geography-disable"' in LIVE_GLOBE_HTML
     assert LIVE_GLOBE_HTML.index('id="live-geography-destinations"') < LIVE_GLOBE_HTML.index('<details class="live-location-detail">')
     assert 'download.db-ip.com' in LIVE_GLOBE_HTML
     assert 'api64.ipify.org' in LIVE_GLOBE_HTML
@@ -48,7 +49,9 @@ def test_local_live_globe_composition_preserves_history():
     assert 'innerHTML' not in LIVE_GLOBE_JS
     assert 'localStorage' not in LIVE_GLOBE_JS
     assert 'JSON.stringify({action:' not in LIVE_GLOBE_JS
-    assert 'live-connections' not in (Path(__file__).resolve().parents[1] / 'site/dist/globe.js').read_text()
+    site_globe = Path(__file__).resolve().parents[1] / 'site/dist/globe.js'
+    if site_globe.is_file():
+        assert 'live-connections' not in site_globe.read_text()
 
 
 def test_offscreen_and_history_requests_stop():

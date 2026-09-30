@@ -17,11 +17,25 @@ from threading import Lock, Thread
 import time
 
 from .companion_automation import _run_fixed
-from .local_install import _owned_directory, _regular_owned_file, _atomic_write
 from .managed_capture import ManagedCapture, now
 from .live_geography import Geography
 from .live_connections import LiveConnections
 from .background_monitor import BackgroundMonitor
+
+
+def _owned_directory(path, *, private):
+    from .local_install import _owned_directory as owned_directory
+    return owned_directory(path, private=private)
+
+
+def _regular_owned_file(path, *, maximum):
+    from .local_install import _regular_owned_file as regular_owned_file
+    return regular_owned_file(path, maximum=maximum)
+
+
+def _atomic_write(path, value, mode):
+    from .local_install import _atomic_write as atomic_write
+    return atomic_write(path, value, mode)
 
 SCHEMA = 'megalodon-support-config-v1'
 COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config'
@@ -31,7 +45,8 @@ ACTION_FIELDS = {
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
     'signature_update': set(), 'osquery_configure': set(), 'qwen_check': set(),
     'zeek_check': set(), 'suricata_check': set(),
-    'background_start': {'interface'}, 'background_stop': set(), 'geography_refresh': set(),
+    'background_start': {'interface'}, 'background_stop': set(),
+    'geography_refresh': set(), 'geography_disable': set(),
 }
 TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
@@ -94,6 +109,10 @@ def valid_target(value):
     if network.version != 4 or network.num_addresses > 256 or not any(network.subnet_of(item) for item in allowed):
         raise ValueError('Choose a private IPv4 target or range of at most 256 addresses.')
     return str(network)
+
+
+def capture_tools_available():
+    return all(Path(path).is_file() for path in ('/usr/bin/dumpcap', '/usr/bin/tshark'))
 
 
 def validate_action(value):
@@ -188,17 +207,20 @@ class SupportConfiguration:
             updates['osquery_enabled'] = True
         return updates
 
-    def _save(self):
+    def _save(self, settings=None, configured=None):
         self._paths()
         if os.path.lexists(self.profile):
             _regular_owned_file(self.profile, maximum=2048)
-        value = dict(schema=SCHEMA, settings=self._settings, configured=sorted(self._configured), background_enabled=self._background_enabled, geography_enabled=self._geography_enabled)
+        value = dict(schema=SCHEMA, settings=self._settings if settings is None else settings,
+                     configured=sorted(self._configured if configured is None else configured),
+                     background_enabled=self._background_enabled, geography_enabled=self._geography_enabled)
         _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
 
     def snapshot(self, include_token=False):
         with self._lock:
             value = dict(schema=SCHEMA, interfaces=interfaces(), settings=dict(self._settings),
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
+                         geography_enabled=self._geography_enabled,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -280,15 +302,15 @@ class SupportConfiguration:
             elif action == 'capture_start':
                 if self.background.snapshot()['enabled']:
                     raise ValueError('Background monitoring already owns traffic collection. Stop monitoring before starting a manual session.')
-                if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
-                    raise ValueError('Install Wireshark / TShark before starting HUD capture.')
                 with self._lock:
                     if self._cancel_capture_start:
                         raise ValueError('Capture start was cancelled.')
+                    if not capture_tools_available():
+                        raise ValueError('Install Wireshark / TShark before starting HUD capture.')
                     self.capture.start(request['interface'])
                 message = 'HUD capture requested. Watch accepted metadata counts to confirm the data connection.'
             elif action == 'background_start':
-                if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
+                if not capture_tools_available():
                     raise ValueError('Install Wireshark / TShark before starting background traffic.')
                 self.background.stop()
                 with self._lock:
@@ -305,6 +327,10 @@ class SupportConfiguration:
                 self._save()
                 self.background.refresh_geography()
                 message = 'Location refresh requested. Peer addresses stay on this PC; the public internet address lookup identifies this connection only.'
+            elif action == 'geography_disable':
+                self._geography_enabled = False
+                self._save()
+                message = 'Automatic location updates disabled. Saved local location data remains available.'
             elif action == 'capture_stop':
                 self.capture.stop()
                 message = 'HUD capture stopped; stored metadata remains available.'
@@ -326,11 +352,11 @@ class SupportConfiguration:
                     updates = {'clamav_paths':(folder,)}
                 else:
                     updates = {'osquery_enabled':True}
-                self.companions.configure(updates)
+                configured = self._configured | {tool}
+                self.companions.configure(updates, before_apply=lambda: self._save(proposed, configured))
                 with self._lock:
                     self._settings = proposed
-                    self._configured.add(tool)
-                self._save()
+                    self._configured = configured
                 states = self.companions.request_collection({tool})
                 message = f'Configuration saved. Collector {states[tool]}; results appear in its HUD panel.'
             elif action == 'signature_update':
@@ -406,14 +432,14 @@ def main(argv=None):
     parser.add_argument('--config', type=Path)
     args = parser.parse_args(argv)
     from .config import load_settings
+    from .dashboard import loopback_host
     try:
         path = args.config or Path.home()/'.config/megalodon/settings.toml'
         settings = load_settings(path)
-        if settings.dashboard.host != '127.0.0.1':
-            raise ValueError('Use the local IPv4 loopback HUD.')
-        origin = f'http://127.0.0.1:{settings.dashboard.port}'
+        host = loopback_host(settings.dashboard.host)
+        origin = f'http://{host}:{settings.dashboard.port}'
         def call(method='GET', value=None, token=None):
-            connection = HTTPConnection('127.0.0.1',settings.dashboard.port,timeout=5)
+            connection = HTTPConnection(host,settings.dashboard.port,timeout=5)
             headers = {'X-Megalodon-Check':'1'}
             if method == 'POST':
                 headers.update({'Origin':origin,'Content-Type':'application/json','X-Megalodon-Config-Token':token})

@@ -43,6 +43,9 @@ process.stdin.on('end',async()=>{
  payload={...payload,job:{...fixture.job,state:'running',action:'geography_refresh',started_at:'2026-09-30T20:10:00Z'}};await poll(2000);assert.equal(get('live-background-stop').disabled,false,'stop remains available during another setup action');payload={...payload,job:fixture.job};
  await click('live-background-stop');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'background_stop'});
  await click('live-geography-refresh');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'geography_refresh'});
+ payload={...payload,geography_enabled:true};await poll(2000);assert.equal(get('live-geography-disable').disabled,false);assert.match(get('live-geography-opt-in').textContent,/enabled/);
+ await click('live-geography-disable');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'geography_disable'});
+ payload={...payload,geography_enabled:false};await poll(2000);assert.equal(get('live-geography-disable').disabled,true);assert.match(get('live-geography-opt-in').textContent,/off/);
  responseStatus=403;await click('live-geography-refresh');assert.equal(get('live-action-retry').hidden,false);const retryPosts=postCount();await click('live-action-retry');assert.equal(postCount(),retryPosts,'retry only refreshes controls');assert.equal(get('live-action-retry').hidden,true);
  await click('support-config-capture-stop');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'capture_stop'});
  payload={...payload,capture:{...payload.capture,received:12,accepted:9,skipped:3},tools:[{id:'tshark',name:'<b>TShark</b>',state:'ready',message:'<img src=x>',checked_at:'2026-09-30T20:11:00Z'},{id:'wireshark',name:'Wireshark / capture access',state:'ready',message:'Live Wireshark launch requested for eth0.',checked_at:'2026-09-30T20:09:50Z'}]};await poll(2000);

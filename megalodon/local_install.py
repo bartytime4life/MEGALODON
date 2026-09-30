@@ -11,7 +11,10 @@ import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import fcntl
+try:
+    import fcntl
+except ImportError:  # The Windows synthetic core imports the HUD, not the Linux installer.
+    fcntl = None
 import getpass
 import hashlib
 import hmac
@@ -550,6 +553,8 @@ def _prepare_directories(paths: InstallPaths) -> None:
 
 @contextmanager
 def _mutation_lock(paths: InstallPaths):
+    if fcntl is None:
+        raise InstallError("installation maintenance requires Linux")
     lock_path = paths.app / ".install.lock"
     flags = os.O_RDWR | os.O_CREAT
     if hasattr(os, "O_CLOEXEC"):

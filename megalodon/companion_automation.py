@@ -235,15 +235,18 @@ class CompanionAutomation:
         for thread in self._threads:
             thread.join(timeout=20)
 
-    def configure(self, updates: dict) -> None:
-        """Swap reviewed inventory settings only when no scan is in flight."""
+    def configure(self, updates: dict, *, before_apply=None) -> None:
+        """Swap reviewed settings after any required persistence succeeds."""
         from dataclasses import replace
         if set(updates) - {"nmap_target", "clamav_paths", "osquery_enabled"}:
             raise ValueError("unsupported collector settings")
         with self._lock:
             if self._active:
                 raise ValueError("A collector is still running; apply setup after it finishes.")
-            self.config = replace(self.config, **updates)
+            proposed = replace(self.config, **updates)
+            if before_apply is not None:
+                before_apply()
+            self.config = proposed
 
     def request_collection(self, selected: set[str] | None = None) -> dict[str, str]:
         """Wake the existing worker; repeated requests never duplicate a scan."""

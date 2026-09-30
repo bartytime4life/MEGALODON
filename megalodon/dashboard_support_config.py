@@ -76,8 +76,8 @@ SUPPORT_CONFIG_JS = r'''
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
     'support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
-    'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh'};
-  const actionNames={capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_check:'Checking local Qwen',zeek_check:'Preparing Zeek workspace',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data'};
+    'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
+  const actionNames={capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_check:'Checking local Qwen',zeek_check:'Preparing Zeek workspace',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
@@ -95,6 +95,7 @@ SUPPORT_CONFIG_JS = r'''
       || !stamp(v.capture.started_at) || !stamp(v.capture.finished_at) || !text(v.capture.message) || !(v.capture.interface===undefined || text(v.capture.interface,64))
       || !Array.isArray(v.tools) || v.tools.length>16 || !v.tools.every(t=>object(t)&&text(t.id,64)&&text(t.name,80)&&text(t.state,40)&&text(t.message)&& (t.checked_at===undefined||stamp(t.checked_at)))
       || (v.background!==undefined&&(!object(v.background)||typeof v.background.enabled!=='boolean'||!['stopped','starting','running','waiting','failed'].includes(v.background.state)||!text(v.background.message)||!count(v.background.session_count)))
+      || typeof v.geography_enabled!=='boolean'
       || !text(v.command,512) || (needToken&&!/^[A-Za-z0-9_-]{32}$/.test(v.token||'')) || (v.token!==undefined&&!/^[A-Za-z0-9_-]{32}$/.test(v.token)))throw Error('Invalid configuration response');
     return v;
   }
@@ -109,7 +110,8 @@ SUPPORT_CONFIG_JS = r'''
     for(const [id,action] of Object.entries(actions)){
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
-        || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing());
+        || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
+        || (action==='geography_disable'&&!state.payload?.geography_enabled);
     }
     for(const id of inputIds)el(id).disabled=blocked||!!working();
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
@@ -124,6 +126,7 @@ SUPPORT_CONFIG_JS = r'''
     if(!state.dirty.has('scan_folder'))el('support-config-scan-folder').value=v.settings.scan_folder;
     const chosen=v.interfaces.find(i=>i.name===el('support-config-interface').value);
     if(el('live-background-start'))el('live-background-start').textContent=v.background?.state==='failed'?'Retry monitoring':'Enable background monitoring';
+    if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent=v.geography_enabled?'Automatic location updates enabled':'Automatic location updates off';
     if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface · '+(v.settings.interface||'not selected');
     el('support-config-interface-note').textContent=chosen ? `${chosen.name}${chosen.up?' is up.':' is down; capture may fail.'} Capture starts only with the buttons below.` : 'Choose an available interface before configuring or starting capture.';
     const names={idle:'Not capturing',starting:'Starting',running:'HUD capture running',stopped:'Capture stopped',failed:'Capture failed'};
@@ -177,7 +180,7 @@ SUPPORT_CONFIG_JS = r'''
     const button=Object.entries(actions).find(([,value])=>value===action);
     if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible())return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
-    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh'].includes(action);feedback(`${actionNames[action]}… A system authorization prompt may appear.`,'working');controls();
+    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]}… A system authorization prompt may appear.`,'working');controls();
     try{const value=await request(payload);if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
     catch(error){fail(error);}finally{state.pending=false;controls();schedule();}
   }

@@ -40,6 +40,10 @@ receipt and an atomic validated database replacement. Downloads are capped at
 
 While monitoring is enabled, the public internet location is refreshed every
 10 minutes; the database is downloaded again only for a new monthly release.
+**Disable automatic location updates** revokes the saved opt-in while leaving
+background packet capture and the local database available. An already started
+location request may finish; later monitoring restarts do not resume online
+location refreshes unless you explicitly enable them again.
 GET requests never perform either network action. A failed lookup clears the
 internet-exit anchor rather than keeping an old marker as current.
 
@@ -79,9 +83,11 @@ the new fixed actions on `POST /api/support-config`:
 
 ```bash
 ./scripts/configure-support-apps.sh geography_refresh
+./scripts/configure-support-apps.sh geography_disable
 ./scripts/configure-support-apps.sh background_start --interface enp11s0
 ./scripts/configure-support-apps.sh background_stop
 ```
 
-Use the actual interface selected in the HUD. The geography action enables its
-saved online opt-in; background monitoring by itself does not enable it.
+Use the actual interface selected in the HUD. Geography refresh enables the saved
+online opt-in; geography disable revokes it. Background monitoring by itself does
+not enable location lookups.
