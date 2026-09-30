@@ -20,9 +20,10 @@ from ipaddress import AddressValueError, IPv4Address
 import hmac
 import json
 import os
+import signal
 from pathlib import Path
 import sys
-from threading import BoundedSemaphore, Lock, Thread
+from threading import BoundedSemaphore, Lock, Thread, current_thread, main_thread
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 import webbrowser
@@ -46,6 +47,7 @@ from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYT
 from .offline_locations import OfflineLocations, validate_lookup_ips, unconfigured as unconfigured_locations
 from .companion_automation import CompanionAutomation, CompanionConfig
 from .support_apps import SupportApps, SupportBusy
+from .support_config import SupportConfiguration, ConfigBusy
 from .host_telemetry import HostTelemetry
 
 
@@ -125,17 +127,30 @@ class DashboardReader(Protocol):
 class UnconfiguredDashboardReader:
     """A missing source is unavailable, never an empty/healthy database."""
 
+    def __init__(self, path: Path | None = None):
+        self.path = path
+
+    def _read(self, method, *args, **kwargs):
+        if self.path is None:
+            raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+        from .dashboard_traffic import TrafficDashboardStore
+        with TrafficDashboardStore(self.path) as reader:
+            return getattr(reader, method)(*args, **kwargs)
+
     def summary(self) -> dict[str, Any]:
-        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+        return self._read("summary")
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:
-        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+        return self._read("recent", limit)
 
     def ingestion_runs(self, limit: int = DEFAULT_INGESTION_RUN_LIMIT, *, source: str | None = None) -> list[dict[str, Any]]:
-        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+        return self._read("ingestion_runs", limit, source=source)
 
     def traffic(self) -> dict[str, Any]:
-        raise StorageSchemaError("DASHBOARD_STORE:NO_DATABASE")
+        return self._read("traffic")
+
+    def traffic_history(self, **kwargs):
+        return self._read("traffic_history", **kwargs)
 
 
 def setup_snapshot(*, inspect_tools: bool = False, source_available: bool = True) -> bytes:
@@ -446,6 +461,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     companion_automation: CompanionAutomation | None = None
     host_telemetry: HostTelemetry | None = None
     support_apps: SupportApps | None = None
+    support_config: SupportConfiguration | None = None
     automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -486,6 +502,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install", "/api/companions"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path == "/api/support-config":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+            elif self.support_config is None or not _tool_management_user():
+                self._send_json({"error": "configuration requires a non-root local Linux HUD"}, status=403)
+            else:
+                self._send_json(self.support_config.snapshot(include_token=True))
             return
         if route.path == "/api/support-apps":
             if route.query:
@@ -860,6 +886,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/support-apps":
             self._support_apps_start()
             return
+        if self.path == "/api/support-config":
+            self._support_config_action()
+            return
         if self.path == "/api/offline-locations":
             self._offline_locations()
             return
@@ -983,6 +1012,43 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError, OSError, RuntimeError) as exc:
             self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
                              "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
+
+    def _support_config_action(self) -> None:
+        expected_origin = f"http://{self.headers.get('Host')}"
+        tokens = self.headers.get_all("X-Megalodon-Config-Token", [])
+        if (self.support_config is None or not _tool_management_user()
+                or len(tokens) != 1 or len(tokens[0]) != 32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0], self.support_config.token)
+                or self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "same-origin local configuration action required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 4
+                or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 2 <= int(lengths[0]) <= 2048):
+            self._send_json({"error": "invalid configuration request length"}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            from .support_config import validate_action
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"), object_pairs_hook=_strict_pairs)
+            validate_action(body)
+        except (ValueError, OSError):
+            self._send_json({"error": "unsupported configuration request"}, status=400)
+            return
+        try:
+            response = self.support_config.start(body)
+        except ConfigBusy:
+            self._send_json({"error": "another support action is running"}, status=409)
+            return
+        except ValueError:
+            self._send_json({"error": "configuration changed or action did not finish; check status"}, status=422)
+            return
+        self._send_json(response, status=202)
 
     def _support_apps_start(self) -> None:
         """One fixed local start plan, protected from cross-site invocation."""
@@ -1329,6 +1395,7 @@ def serve(
     http_password_verifier: PasswordVerifier | None = None,
     require_sign_in: bool = False,
     companion_config: CompanionConfig | None = None,
+    runtime_settings=None,
 ) -> None:
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
@@ -1396,7 +1463,21 @@ def serve(
             "support_apps": support_apps,
         },
     )
+    if inspect_tools and _tool_management_user() and runtime_settings is not None:
+        def capture_store_ready():
+            evidence = json.loads(handler.setup_evidence)
+            evidence["source_status"] = "connected"
+            handler.setup_evidence = json.dumps(evidence).encode()
+            handler.local_checks = LocalChecks(store, source_available=True)
+        handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
+                                                       support_apps, capture_store_ready)
     server = ThreadingHTTPServer((host, port), handler)
+    previous_sigterm = None
+    if current_thread() is main_thread():
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+        def stop_on_sigterm(_signum, _frame):
+            raise KeyboardInterrupt
+        signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
         if host_telemetry is not None:
             host_telemetry.start()
@@ -1426,6 +1507,13 @@ def serve(
             ).start()
         server.serve_forever()
     finally:
+        if previous_sigterm is not None:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+        if handler.support_config is not None:
+            try:
+                handler.support_config.close()
+            except ValueError:
+                print("Capture shutdown needs review; check ingestion receipts before restarting capture.", flush=True)
         if host_telemetry is not None:
             host_telemetry.stop()
         if companion_automation is not None:

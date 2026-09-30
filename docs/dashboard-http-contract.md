@@ -40,7 +40,7 @@ is no CORS permission or external script/font fetch.
 
 `POST` is accepted for `/sign-in` only in opt-in mode, the separately token-gated `/api/ai/ask`,
 explicitly enabled HUD `/api/install`, fixed local HUD `/api/support-apps`, bounded read-only `/api/offline-locations`,
-and inert `/api/automation-preview` routes. The latter two do not execute host
+fixed local `/api/support-config`, and inert `/api/automation-preview` routes. Offline locations and automation preview do not execute host
 actions; their fixed request headers, schemas and size limits remain required.
 Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
 methods remain unsupported. Unknown paths return 404. Fixed validation errors
@@ -79,6 +79,7 @@ production service.
 | `/api/host-telemetry` | None; requires `X-Megalodon-Check: 1`, HUD mode | Automatic two-second CPU, RAM, per-interface rates and socket observations; see [live PC telemetry](live-pc-telemetry.md). Bounded in-memory history; no captures or writes. |
 | `/api/install` | None; requires `X-Megalodon-Check: 1`, HUD mode | Fixed install-recipe catalog and the current job status |
 | `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
+| `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate

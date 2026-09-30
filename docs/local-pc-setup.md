@@ -191,6 +191,10 @@ acceptance and native Windows support are outside this check.
 
 ## Start support apps
 
+For actual capture permissions and tool configuration, use **Configure apps**
+beside the Start button. See [support configuration](support-configuration.md)
+for the live packet feed, Wireshark controls and saved collection scope.
+
 Open the local HUD and choose **Start support apps** at the top of **Home**,
 directly above **Live PC resources**. **Copy command** copies the equivalent
 installed launcher. From this checkout, run:

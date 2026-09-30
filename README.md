@@ -74,6 +74,13 @@ Nmap, ClamAV and osquery use the current HUD's existing collection scope.
 Missing tools are skipped and each result is shown. See
 [support startup](docs/local-pc-setup.md#start-support-apps).
 
+Beside Start support apps, **Configure apps** provides capture permissions,
+interface selection, live HUD traffic and managed Wireshark start/stop controls,
+saved Nmap and ClamAV scope, signature updates and companion checks. The same
+actions are available through `./scripts/configure-support-apps.sh --help`.
+See [local support configuration](docs/support-configuration.md) for the fixed
+actions, per-user permissions and capture limits.
+
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
 `./scripts/manage-companion.sh nmap install` to preview the fixed recipe.

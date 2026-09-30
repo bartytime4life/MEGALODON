@@ -4,10 +4,11 @@ SUPPORT_APPS_HTML = r'''
 <section class="support-apps" id="support-apps" aria-labelledby="support-apps-title">
   <div class="support-apps-main">
     <div class="support-apps-copy"><p class="eyebrow">READY YOUR WORKSPACE</p><h3 id="support-apps-title" tabindex="-1">Support apps</h3><p>Start installed desktop apps, supported services and configured collectors together.</p></div>
-    <div class="support-apps-actions"><button type="button" id="support-apps-start" disabled>Start support apps</button><button type="button" id="support-apps-copy" class="button-secondary" disabled>Copy command</button><p id="support-apps-copy-status" class="support-apps-copy-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
+    <div class="support-apps-actions"><button type="button" id="support-apps-start" disabled>Start support apps</button><button type="button" id="support-apps-configure" aria-expanded="false" aria-controls="support-config">Configure apps</button><button type="button" id="support-apps-copy" class="button-secondary" disabled>Copy command</button><p id="support-apps-copy-status" class="support-apps-copy-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
   </div>
   <div class="support-apps-feedback"><p id="support-apps-status" role="status" aria-live="polite" aria-atomic="true">Checking support-app controls…</p><button type="button" id="support-apps-check" class="button-secondary" hidden>Check status</button></div>
   <p class="support-apps-note">A system authorization prompt may appear when a service needs permission.</p>
+  <!-- HUD_SUPPORT_CONFIG -->
   <details id="support-apps-details"><summary id="support-apps-summary">App-by-app status</summary><ul id="support-apps-items"><li>Waiting for the local service.</li></ul><p class="support-apps-note">Opening an app does not connect its packet telemetry. Collectors use their saved configuration. Missing tools and setup steps appear here.</p><div id="support-apps-command-wrap" hidden><label for="support-apps-command">Command for your terminal</label><input id="support-apps-command" readonly spellcheck="false"></div></details>
 </section>
 '''

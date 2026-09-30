@@ -461,7 +461,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
         assert f'"{private_field}"' not in INDEX_HTML + DASHBOARD_JS
         assert not re.search(r"\." + re.escape(private_field) + r"\b", DASHBOARD_JS)
     # Browser POSTs are the fixed-recipe installer, an explicit support-app
-    # start, and a read-only lookup into the configured offline region database.
+    # start, fixed support-tool configuration actions, and a read-only lookup
+    # into the configured offline region database.
     # Support-app requests share a GET/POST helper; the behavior test verifies
     # only the Start click sends this fixed action and separate action nonce.
     assert DASHBOARD_JS.count("method: 'POST'") == 2
@@ -471,6 +472,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "fetch('/api/support-apps',options)" in SUPPORT_APPS_JS
     assert "JSON.stringify({action:'start'})" in SUPPORT_APPS_JS
     assert "'X-Megalodon-Support-Token':app.token" in SUPPORT_APPS_JS
+    from megalodon.dashboard_support_config import SUPPORT_CONFIG_JS
+    assert "fetch('/api/support-config',options)" in SUPPORT_CONFIG_JS
+    assert "method:payload?'POST':'GET'" in SUPPORT_CONFIG_JS
+    assert "'X-Megalodon-Config-Token':state.token" in SUPPORT_CONFIG_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
     assert INDEX_HTML.count('type="file"') == 1

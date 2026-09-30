@@ -24,7 +24,8 @@ def test_support_apps_behavior():
 
 
 def test_support_apps_local_composition():
-    assert SUPPORT_APPS_HTML in INDEX_HTML
+    from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML
+    assert SUPPORT_APPS_HTML.replace('<!-- HUD_SUPPORT_CONFIG -->', SUPPORT_CONFIG_HTML) in INDEX_HTML
     assert SUPPORT_APPS_CSS in DASHBOARD_CSS
     assert SUPPORT_APPS_JS in DASHBOARD_JS
     assert INDEX_HTML.index('id="support-apps-title"') < INDEX_HTML.index('id="pc-live-title"')

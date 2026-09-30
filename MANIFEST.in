@@ -22,3 +22,4 @@ include scripts/manage-companion.sh
 include scripts/start-hud-data.sh
 include scripts/start-local.sh
 include scripts/start-support-apps.sh
+include scripts/configure-support-apps.sh
