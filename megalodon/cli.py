@@ -231,7 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--require-sign-in", action="store_true", help="require a local HUD password; off by default")
     dashboard.add_argument(
         "--enable-tool-management", action="store_true",
-        help="hud only: enable token-gated fixed Install/Start actions for a non-root Linux launch",
+        help="hud only: enable token-gated fixed Install/Start/Open actions for a non-root Linux launch",
     )
     dashboard.add_argument(
         "--refresh-seconds",

@@ -21,11 +21,11 @@ default. For an optional password-only sign-in page, launch with
 `--require-sign-in` and enter the password shown in the terminal, or the
 reusable password configured for the installed HUD.
 
-These default launches observe tools and provide guides. Fixed Install/Start
+These default launches observe tools and provide guides. Fixed Install/Start/Open
 actions require a deliberate non-root Linux launch with
 `hud --enable-tool-management` and that launch's separate operator token from
-the terminal. Enter it under **Home → Data and tools → Authorize Install and
-Start**; see [tool-management authorization](tool-heartbeat.md#authorize-tool-management-for-one-launch).
+the terminal. Enter it under **Home → Data and tools → Authorize Install, Start
+and Open**; see [tool-management authorization](tool-heartbeat.md#authorize-tool-management-for-one-launch).
 This host-maintenance opt-in does not change telemetry or firewall authority.
 
 The desktop installer selects its owner-private XDG settings and data path.
@@ -63,12 +63,12 @@ Addresses persist only in this browser and origin; the hosted Site and local HUD
 have separate bookmarks. Remove a link from its editor. No credentials belong
 in a saved address. No background connection test is performed.
 
-When the HUD is in observation mode, expand **Authorize Install and Start** on
+When the HUD is in observation mode, expand **Authorize Install, Start and Open** on
 Home to copy the exact current launch command with
 `--enable-tool-management`. Stop the current HUD yourself, review the visible
 command, and run it in the terminal. The page does not execute the copied
 command. The restarted HUD still requires its per-launch terminal token and an
-explicit confirmation before an existing fixed Install or Start action.
+explicit confirmation before an existing fixed Install, Start or Open action.
 
 On the local Linux dashboard, the Python/SQLite and Scapy maintenance cards
 use the absolute Python executable running that dashboard. Copied commands work

@@ -71,8 +71,9 @@ configured model is loaded, safe, or authorized for inference.
 ## Authorize tool management for one launch
 
 The default HUD observes tools and offers official guides and terminal commands.
-To enable its fixed Install, Download and Start actions, deliberately launch it
-from your existing MEGALODON environment as your ordinary Linux user:
+To enable its fixed Install, Download, Start and desktop-app open actions,
+deliberately launch it from your existing MEGALODON environment as your
+ordinary Linux user:
 
 ```bash
 python -m megalodon hud --enable-tool-management
@@ -84,12 +85,13 @@ The ordinary `dashboard` command, root real/effective IDs, and other platforms
 refuse this opt-in. Do not use `sudo` to run the HUD.
 
 Copy the **tool management operator token** printed in that launch's terminal
-into **Home → Data and tools → Authorize Install and Start**. It is separate
+into **Home → Data and tools → Authorize Install, Start and Open**. It is separate
 from the AI token and the operating system password. The token remains only in
-page memory, is sent only in the Install/Start request header, and is not stored
+page memory, is sent only in a local action request header, and is not stored
 in browser storage or exposed by any GET route. Reload or **Forget token** clears
-it; restarting the HUD generates a new token. Keep it private. Each action still
-requires a confirmation dialog, and stale observations disable its buttons.
+it; restarting the HUD generates a new token. Keep it private. Every launch or
+maintenance action still requires a confirmation dialog. Stale tool observations
+disable the related install and service-start actions.
 
 ## Install button
 
@@ -133,6 +135,16 @@ change its configuration. When no unit file is found (for example, a source
 install), the HUD shows no button. When a unit exists but there is no password
 prompt, it shows the `sudo systemctl start` command instead. For Qwen, Start
 comes before Download, because `ollama pull` needs the server running.
+
+## Open desktop support apps
+
+**Apps → Open desktop support apps** offers Wireshark, Zenmap and ClamTk when
+their fixed executable is available in an active Linux desktop session. Each
+button asks for confirmation and starts only the selected GUI as the current
+user. It does not start a scan, packet capture, sensor or service. A launch
+request does not verify that a window appeared or connect app data to MEGALODON.
+The buttons remain disabled by default and require the same non-root HUD launch
+opt-in and per-launch token described above.
 
 ## HTTP contract
 

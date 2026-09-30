@@ -77,6 +77,7 @@ production service.
 | `/api/ai/status` | None; explicit check header and operator token | One optional local model status check |
 | `/api/heartbeat` | None; requires `X-Megalodon-Check: 1`, HUD mode | Cached per-tool installed/running/uptime light; see [tool heartbeat](tool-heartbeat.md) |
 | `/api/install` | None; requires `X-Megalodon-Check: 1`, HUD mode | Fixed install-recipe catalog and the current job status |
+| `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, HUD mode | Availability of the fixed Linux desktop-app list in the current session |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate
@@ -93,6 +94,15 @@ default HUD still serves heartbeat and catalog GETs, whose `management` object
 reports enabled/disabled state without a secret. It starts one recipe or one fixed systemd unit from the closed
 registries in `megalodon/tool_installer.py`; privileged steps go through the OS
 `pkexec` password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
+
+`POST /api/support-apps` uses the same non-root HUD opt-in and per-launch token,
+exact same-site `Origin`, `Content-Type: application/json`, and bounded strict
+JSON checks, plus `X-Megalodon-Support-App: 1`. It accepts exactly one fixed app
+id (`wireshark`, `zenmap` or `clamtk`); the body cannot provide a path or
+arguments. The server starts the selected GUI as the current user in a detached
+session. It does not start a
+scan, capture, sensor or service, and reports only that the launch was requested,
+not that a window appeared.
 
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
