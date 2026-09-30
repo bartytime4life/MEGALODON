@@ -1,4 +1,5 @@
 from copy import deepcopy
+from ipaddress import ip_address
 from types import SimpleNamespace
 import json
 import pytest
@@ -108,7 +109,8 @@ def test_ambiguous_host_action_retains_release_path_after_restart(manager):
 @pytest.mark.parametrize('ip',['127.0.0.1','192.168.1.1','224.0.0.1','::1','::ffff:101:101'])
 def test_local_and_nonpublic_containment_refused(manager,ip):
     defense,calls,_=manager
-    assert perform(defense,dict(action='plan_containment',ip=ip))['state']=='failed'
+    # Python releases differ in their canonical rendering of mapped IPv6.
+    assert perform(defense,dict(action='plan_containment',ip=str(ip_address(ip))))['state']=='failed'
     assert calls==[]
 
 

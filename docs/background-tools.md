@@ -9,7 +9,7 @@ Use **Start background tools** in the local HUD, or:
 The script can start the installed HUD user service, then invokes the same
 fixed background workflow as the button. `--check` reads the latest startup
 result. Normal startup never opens Wireshark, Zenmap or ClamTk windows. Those
-remain explicit optional controls under Advanced. Actions shows current
+remain explicit optional controls under Advanced in Setup. Sensors shows current
 workflow status; a saved inventory result is distinct from an active feed.
 
 | Tool | Background role |
@@ -21,7 +21,7 @@ workflow status; a saved inventory result is distinct from an active feed.
 | Nmap | Scheduled inventory of the configured private target; default loopback |
 | ClamAV | Scheduled scan of the configured folder; separate FreshClam updater |
 | osquery | Scheduled fixed installed-package query |
-| Qwen / Ollama | Bounded explanation of completed aggregate collector results |
+| Qwen / Ollama | Bounded explanations of completed aggregate collector results and selected observed IPs; operator-reviewed proposals only |
 | Scapy | Alternative capture engine; not started alongside the TShark feed |
 | nftables | Operator-reviewed local containment from the IP inspector; startup does not change firewall rules |
 

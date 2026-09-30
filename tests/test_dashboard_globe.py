@@ -1,6 +1,7 @@
 """Browser-only source context must never create a location from invalid input."""
 
 import base64
+from html.parser import HTMLParser
 import shutil
 import subprocess
 
@@ -11,13 +12,35 @@ from megalodon.dashboard_globe_land import LAND_MASK_BASE64, LAND_MASK_WIDTH, LA
 from megalodon.dashboard import INDEX_HTML, DASHBOARD_JS
 
 
-def test_globe_is_in_visible_hud_workspace_and_uses_validated_projection():
+def test_globe_history_is_in_hud_disclosures_and_uses_validated_projection():
     assert GLOBE_HTML in INDEX_HTML
     assert 'id="room-globe-entry-title">Activity globe' in INDEX_HTML
     assert INDEX_HTML.index('id="room-globe-entry-title"') < INDEX_HTML.index('id="workspace-analysis"')
     assert '<a href="#activity-globe-title">View globe' in INDEX_HTML
-    assert INDEX_HTML.index('id="workspace-live"') < INDEX_HTML.index(GLOBE_HTML) < INDEX_HTML.index('id="workspace-traffic"')
+    assert INDEX_HTML.index('id="workspace-live"') < INDEX_HTML.index(GLOBE_HTML) < INDEX_HTML.index('id="workspace-analysis"')
     assert INDEX_HTML.index(GLOBE_HTML) < INDEX_HTML.index('id="room-traffic-grid"')
+    class Owners(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parents = []
+            self.globe = None
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if attrs.get('id') == 'activity-globe':
+                self.globe = list(self.parents)
+            if tag not in {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'}:
+                self.parents.append((tag, attrs))
+        def handle_endtag(self, tag):
+            for index in range(len(self.parents) - 1, -1, -1):
+                if self.parents[index][0] == tag:
+                    del self.parents[index:]
+                    break
+    owners = Owners()
+    owners.feed(INDEX_HTML)
+    assert [attrs['id'] for _, attrs in owners.globe if attrs.get('role') == 'tabpanel'] == ['workspace-live']
+    disclosures = [attrs for tag, attrs in owners.globe if tag == 'details']
+    assert [attrs['id'] for attrs in disclosures] == ['operations-history', 'live-globe-history']
+    assert all('open' not in attrs for attrs in disclosures)
     projection = DASHBOARD_JS.split('function validatedTraffic(value)', 1)[1].split('function unavailableTrafficResponse', 1)[0]
     assert 'const source = validateTraffic(value)' in projection
     assert 'src_ip: event.src_ip' in projection

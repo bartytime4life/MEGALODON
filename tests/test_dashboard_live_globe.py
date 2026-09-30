@@ -1,5 +1,8 @@
 """Live globe uses observed packet directions and bounded geographic source data."""
 import json
+from html.parser import HTMLParser
+import re
+from urllib.parse import urlsplit
 from pathlib import Path
 import shutil
 import subprocess
@@ -38,12 +41,43 @@ def test_local_live_globe_composition_preserves_history():
     assert GLOBE_HTML in INDEX_HTML
     assert INDEX_HTML.index('id="live-globe"') < INDEX_HTML.index('id="live-globe-history"') < INDEX_HTML.index(GLOBE_HTML)
     assert '<details class="live-globe-history" id="live-globe-history">' in INDEX_HTML
-    assert 'https://db-ip.com' in LIVE_GLOBE_HTML
+    class GeographyMarkup(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.anchors = []
+            self.anchor = None
+            self.destinations = []
+            self.in_destinations = False
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == 'a':
+                self.anchor = {'attrs': attrs, 'text': ''}
+                self.anchors.append(self.anchor)
+            if tag == 'p' and attrs.get('id') == 'live-geography-destinations':
+                self.in_destinations = True
+        def handle_data(self, data):
+            if self.anchor is not None:
+                self.anchor['text'] += data
+            if self.in_destinations:
+                self.destinations.append(data)
+        def handle_endtag(self, tag):
+            if tag == 'a':
+                self.anchor = None
+            if tag == 'p':
+                self.in_destinations = False
+    markup = GeographyMarkup()
+    markup.feed(LIVE_GLOBE_HTML)
+    attribution, = [link for link in markup.anchors if link['text'] == 'DB-IP City Lite']
+    assert urlsplit(attribution['attrs']['href']) == urlsplit('https://db-ip.com')
+    assert attribution['attrs']['target'] == '_blank'
+    assert set(attribution['attrs']['rel'].split()) == {'noopener', 'noreferrer'}
     assert 'aria-describedby="live-geography-destinations"' in LIVE_GLOBE_HTML
     assert 'id="live-geography-disable"' in LIVE_GLOBE_HTML
     assert LIVE_GLOBE_HTML.index('id="live-geography-destinations"') < LIVE_GLOBE_HTML.index('<details class="live-location-detail">')
-    assert 'download.db-ip.com' in LIVE_GLOBE_HTML
-    assert 'api64.ipify.org' in LIVE_GLOBE_HTML
+    description = ''.join(markup.destinations)
+    host_tokens = re.findall(r'\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b', description)
+    assert {urlsplit('https://' + token).hostname for token in host_tokens} == {'download.db-ip.com', 'api64.ipify.org'}
+    assert 'No captured peer addresses are uploaded.' in description
     assert 'Enable background monitoring' in LIVE_GLOBE_HTML
     assert 'Stop monitoring' in LIVE_GLOBE_HTML
     assert 'innerHTML' not in LIVE_GLOBE_JS

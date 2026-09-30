@@ -54,14 +54,15 @@ service starts the same loopback HUD at login; the application-menu entry then
 opens its already running page. Use `./scripts/hud-autostart.sh disable` to stop
 and remove automatic startup. The installer removes this managed service on
 uninstall. This starts the fixed local companion collectors with the HUD; it
-does not start capture, a remote feed, or unrelated companion services.
+resumes capture only when background monitoring was previously enabled. It does
+not enable a new remote feed or unrelated companion services.
 
 The local HUD also collects [live PC resource and network counters](docs/live-pc-telemetry.md)
 automatically: MEGALODON/companion CPU and RAM gauges, CPU and interface-rate
 history, per-app disk activity, and socket counts. This Linux monitor needs no
 extra package or signup. Packet-evidence charts retain their separate data sources.
 
-**Home → Start background tools**, above Live PC resources, enables CLI packet/flow collection,
+**HUD → Start background tools**, above the resource strip, enables CLI packet/flow collection,
 starts configured services and refreshes collectors without opening extra application windows. The same workflow is available from a terminal:
 
 ```bash
@@ -75,7 +76,7 @@ Nmap, ClamAV and osquery use the current HUD's existing collection scope.
 Missing tools are skipped and each result is shown. See
 [support startup](docs/local-pc-setup.md#start-support-apps).
 
-Beside Start background tools, **Configure apps** provides capture permissions,
+The **Setup** tab (also reached through **Configure apps**) provides capture permissions,
 interface selection, live HUD traffic and managed Wireshark start/stop controls,
 saved Nmap and ClamAV scope, signature updates and companion checks. The same
 actions are available through `./scripts/configure-support-apps.sh --help`.
@@ -329,7 +330,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
-| Dashboard | Read-only loopback HUD with Home, Traffic, Findings, Apps, Reports, Evidence and Help. Traffic shows qualified metadata with bounded automatic refresh, UTC history pages, event details and local reports. Apps separates startup presence from support and unknown health, with an explicitly opened console viewer and external-open fallback. Optional offline, Suricata and Qwen evidence remains startup-only; opening an app UI does not ingest its data or establish sensor health |
+| Dashboard | Local loopback HUD with live traffic, connection globe, resources, IP inspection and historical traffic in the HUD; Sensors shows background workflows; Setup holds configuration and downloads. Explicit local actions use separate request checks and audit records. Completed offline and admitted Suricata evidence retains its separate projection contract; opening a companion window does not establish telemetry |
 | Firewall boundary | Legacy isolated `inet megalodon` plans remain inert. Separate HUD containment uses `inet megalodon_guard`, an exact preview, OS authorization, five-minute timeout, readback and release; model output cannot apply it |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
@@ -339,7 +340,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
 | Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and `automation-preview` CLI with explicit DST classification. The separate [local companion worker](docs/companion-automation.md) runs three fixed, host-scoped inventory jobs by default in `hud` mode; the general automation contract has no scheduler, ledger, persistence, model call, or executor |
-| Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation. The local [companion worker](docs/companion-automation.md) can request an advisory on aggregate counts through the digest-pinned local provider. Neither path gives Qwen command, target, detector, or response authority |
+| Local Qwen advisory | The original run-count policy is a manual Python API. The [offline anomaly command](docs/anomaly-triage.md), [companion worker](docs/companion-automation.md), and [HUD IP inspector](docs/visual-operations-defense.md) request bounded explanations through the digest-pinned local provider. Qwen has no command, target, detector, or response authority; the operator selects fixed local workflows |
 | Qwen provider posture (read-only) | `megalodon.provider_containment.qwen_provider_posture()` observes, via `/proc` only, whether the fixed loopback destination is bound, whether it is also reachable beyond loopback, and (permission-gated, best-effort) its owning UID/PID/cgroup/net-namespace; never contacts the provider, never gates or feeds back into an advisory request, and reports denial/uncertainty honestly rather than guessing |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
 | Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures, plus a bounded in-memory decision engine (`megalodon/alert_lifecycle.py`) validated against those fixtures; no persistence, notifier, delivery adapter, credential path, or wiring into detection ingestion, storage, the dashboard, or the CLI |

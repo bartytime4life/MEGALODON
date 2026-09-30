@@ -51,7 +51,9 @@ def test_action_plane_links_to_real_local_controls():
                    "action-script-copy", "action-schedule-preview", "app-service-start-title"):
         assert f'id="{target}"' in INDEX_HTML
     assert 'id="workspace-tab-interfaces"' in INDEX_HTML
-    assert '>Actions</button>' in INDEX_HTML
+    assert '>Sensors</button>' in INDEX_HTML
+    assert 'id="workspace-tab-setup"' in INDEX_HTML
+    assert "'action-plane-title': 'setup'" in DASHBOARD_JS
     assert "byId('setup-check').click()" in DASHBOARD_JS
     assert "byId('room-refresh').click()" in DASHBOARD_JS
     assert "requestBoundedJSON('/api/automation-preview', 4096" in DASHBOARD_JS

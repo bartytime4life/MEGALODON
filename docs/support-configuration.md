@@ -1,6 +1,6 @@
 # Configure support apps from the local HUD
 
-At the top of **Home**, beside **Start support apps**, choose **Configure apps**.
+Choose the **Setup** tab, or **Configure apps** beside **Start background tools** in the HUD.
 The panel contains actual configuration and control actions. They are available
 in a normal non-root Linux HUD, with the same optional sign-in as the dashboard.
 The hosted Site cannot operate these controls.

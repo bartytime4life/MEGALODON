@@ -230,8 +230,8 @@ For actual capture permissions and tool configuration, use **Configure apps**
 beside the Start button. See [support configuration](support-configuration.md)
 for the live packet feed, Wireshark controls and saved collection scope.
 
-Open the local HUD and choose **Start background tools** at the top of **Home**,
-directly above **Live PC resources**. **Copy command** copies the equivalent
+Open the local HUD and choose **Start background tools** at the top of **HUD**,
+directly above the resource strip. **Copy command** copies the equivalent
 installed launcher. From this checkout, run:
 
 ```bash
@@ -247,9 +247,10 @@ the same fixed action as the button. `--check` only reads startup status.
   Configure apps; a system authorization prompt may appear.
 - Nmap, ClamAV and osquery refresh their configured jobs without duplicating
   running work. Reports continue to be watched.
-- Scapy remains an alternative capture engine; nftables remains a response-plan
-  tool. Neither needs a separate window or redundant background process.
-- Current workflow observations and metrics appear in Actions. Sensor samples,
+- Scapy remains an alternative capture engine. Optional nftables containment
+  is available through the IP inspector after preview and OS authorization.
+  Neither needs a separate window or redundant background process.
+- Current workflow observations and metrics appear in Sensors. Sensor samples,
   saved collector results and qualified packet/detection evidence stay distinct.
 
 Startup does not install packages, change firewall rules or select new scan
