@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from megalodon import dashboard, support_config as config
-from megalodon.config import Settings, AISettings
+from megalodon.config import Settings, AISettings, DashboardSettings
 from megalodon.companion_automation import CompanionAutomation, local_default_config
 from megalodon.managed_capture import ManagedCapture, capture_commands
 from megalodon.offline.tshark import FIELDS
@@ -45,7 +45,9 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     assert manager.snapshot()['job']['state']=='idle'
 
 
-def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager):
+def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager,monkeypatch):
+    monkeypatch.setattr('megalodon.companion_automation.shutil.which',
+                        lambda name: '/usr/bin/nmap' if name == 'nmap' else None)
     before=manager.companions.config.watch_nmap_xml
     manager.start({'action':'nmap_configure','nmap_target':'192.168.2.22'})
     manager._thread.join(2)
@@ -56,6 +58,20 @@ def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manag
     assert os.stat(manager.profile).st_mode & 0o777 == 0o600
     other=config.SupportConfiguration(manager.settings, CompanionAutomation(local_default_config(manager.home),AISettings()),home=manager.home)
     assert other.companions.config.nmap_target=='192.168.2.22/32'
+
+
+def test_failed_profile_write_does_not_change_active_collector(manager,monkeypatch):
+    original = manager.companions.config
+    def fail_save(*args):
+        raise OSError('test-only write failure')
+    monkeypatch.setattr(manager,'_save',fail_save)
+    manager.start({'action':'nmap_configure','nmap_target':'192.168.2.22'})
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='failed'
+    assert manager.companions.config==original
+    assert manager.snapshot()['settings']['nmap_target']=='127.0.0.1/32'
+    assert manager._configured==set()
+    assert manager.companions._requested==set()
 
 
 def test_active_scan_prevents_scope_change(manager):
@@ -248,3 +264,25 @@ def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     release.set();manager._thread.join(2)
     assert started==[]
     assert 'cancelled' in manager.snapshot()['job']['message']
+
+
+@pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])
+def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,expected):
+    requests=[]
+    payload={'schema':config.SCHEMA,'token':'x'*32,
+             'job':{'state':'finished','message':'Ready.'},
+             'capture':{'state':'idle','accepted':0},'tools':[]}
+    class Connection:
+        def __init__(self,host,port,timeout):
+            assert host==expected
+        def request(self,method,path,**kwargs):
+            requests.append((method,kwargs.get('headers',{}).get('Origin')))
+        def getresponse(self):
+            return SimpleNamespace(status=200,read=lambda limit:json.dumps(payload).encode())
+        def close(self):
+            pass
+    monkeypatch.setattr('megalodon.config.load_settings',
+                        lambda path:Settings(dashboard=DashboardSettings(host=configured)))
+    monkeypatch.setattr(config,'HTTPConnection',Connection)
+    assert config.main(['qwen_check'])==0
+    assert requests==[('GET',None),('POST',f'http://{expected}:8787')]

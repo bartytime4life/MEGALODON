@@ -17,8 +17,22 @@ from threading import Lock, Thread
 import time
 
 from .companion_automation import _run_fixed
-from .local_install import _owned_directory, _regular_owned_file, _atomic_write
 from .managed_capture import ManagedCapture, now
+
+
+def _owned_directory(path, *, private):
+    from .local_install import _owned_directory as owned_directory
+    return owned_directory(path, private=private)
+
+
+def _regular_owned_file(path, *, maximum):
+    from .local_install import _regular_owned_file as regular_owned_file
+    return regular_owned_file(path, maximum=maximum)
+
+
+def _atomic_write(path, value, mode):
+    from .local_install import _atomic_write as atomic_write
+    return atomic_write(path, value, mode)
 
 SCHEMA = 'megalodon-support-config-v1'
 COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config'
@@ -169,11 +183,12 @@ class SupportConfiguration:
             updates['osquery_enabled'] = True
         return updates
 
-    def _save(self):
+    def _save(self, settings=None, configured=None):
         self._paths()
         if os.path.lexists(self.profile):
             _regular_owned_file(self.profile, maximum=2048)
-        value = dict(schema=SCHEMA, settings=self._settings, configured=sorted(self._configured))
+        value = dict(schema=SCHEMA, settings=self._settings if settings is None else settings,
+                     configured=sorted(self._configured if configured is None else configured))
         _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
 
     def snapshot(self, include_token=False):
@@ -252,11 +267,11 @@ class SupportConfiguration:
                 message = 'Capture permissions configured for this user and interface access verified. Wireshark and the HUD run as your normal user.'
                 tool = 'wireshark'
             elif action == 'capture_start':
-                if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
-                    raise ValueError('Install Wireshark / TShark before starting HUD capture.')
                 with self._lock:
                     if self._cancel_capture_start:
                         raise ValueError('Capture start was cancelled.')
+                    if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
+                        raise ValueError('Install Wireshark / TShark before starting HUD capture.')
                     self.capture.start(request['interface'])
                 message = 'HUD capture requested. Watch accepted metadata counts to confirm the data connection.'
             elif action == 'capture_stop':
@@ -280,11 +295,11 @@ class SupportConfiguration:
                     updates = {'clamav_paths':(folder,)}
                 else:
                     updates = {'osquery_enabled':True}
-                self.companions.configure(updates)
+                configured = self._configured | {tool}
+                self.companions.configure(updates, before_apply=lambda: self._save(proposed, configured))
                 with self._lock:
                     self._settings = proposed
-                    self._configured.add(tool)
-                self._save()
+                    self._configured = configured
                 states = self.companions.request_collection({tool})
                 message = f'Configuration saved. Collector {states[tool]}; results appear in its HUD panel.'
             elif action == 'signature_update':
@@ -348,14 +363,14 @@ def main(argv=None):
     parser.add_argument('--config', type=Path)
     args = parser.parse_args(argv)
     from .config import load_settings
+    from .dashboard import loopback_host
     try:
         path = args.config or Path.home()/'.config/megalodon/settings.toml'
         settings = load_settings(path)
-        if settings.dashboard.host != '127.0.0.1':
-            raise ValueError('Use the local IPv4 loopback HUD.')
-        origin = f'http://127.0.0.1:{settings.dashboard.port}'
+        host = loopback_host(settings.dashboard.host)
+        origin = f'http://{host}:{settings.dashboard.port}'
         def call(method='GET', value=None, token=None):
-            connection = HTTPConnection('127.0.0.1',settings.dashboard.port,timeout=5)
+            connection = HTTPConnection(host,settings.dashboard.port,timeout=5)
             headers = {'X-Megalodon-Check':'1'}
             if method == 'POST':
                 headers.update({'Origin':origin,'Content-Type':'application/json','X-Megalodon-Config-Token':token})
