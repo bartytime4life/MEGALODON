@@ -41,6 +41,15 @@ PROFILE_SPECS = (
         "packages": frozenset({"build", "packaging", "pyproject-hooks", "setuptools"}),
     },
     {
+        "id": "installer-linux-cp312",
+        "path": "constraints/installer-linux-cp312.txt",
+        "role": "native installer rehearsal with geography reader",
+        "platform": "linux-glibc-x86_64",
+        "python": "3.12",
+        "includes": ("build-linux-cp312.txt",),
+        "packages": frozenset({"maxminddb"}),
+    },
+    {
         "id": "test-linux-cp311",
         "path": "constraints/test-linux-cp311.txt",
         "role": "required test job",

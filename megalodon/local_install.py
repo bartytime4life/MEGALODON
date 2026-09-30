@@ -11,7 +11,10 @@ import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import fcntl
+try:
+    import fcntl
+except ImportError:  # The Windows synthetic core imports the HUD, not the Linux installer.
+    fcntl = None
 import getpass
 import hashlib
 import hmac
@@ -382,7 +385,7 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
         python = venv / "bin" / "python"
         if _run([
             str(python), "-I", "-m", "pip", "install", "--disable-pip-version-check",
-            "--no-deps", str(source),
+            str(source) + "[geo]",
         ]).returncode != 0:
             raise InstallError(
                 "MEGALODON could not be installed; review the network and Python build-tool output above"
@@ -550,6 +553,8 @@ def _prepare_directories(paths: InstallPaths) -> None:
 
 @contextmanager
 def _mutation_lock(paths: InstallPaths):
+    if fcntl is None:
+        raise InstallError("installation maintenance requires Linux")
     lock_path = paths.app / ".install.lock"
     flags = os.O_RDWR | os.O_CREAT
     if hasattr(os, "O_CLOEXEC"):

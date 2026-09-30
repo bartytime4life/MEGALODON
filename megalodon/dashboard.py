@@ -516,6 +516,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         } and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
+        if route.path == "/api/live-connections":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+            elif self.support_config is None or not _tool_management_user():
+                self._send_json({"error": "live connections require a local Linux HUD"}, status=403)
+            else:
+                self._send_json(self.support_config.live_snapshot())
+            return
         if route.path == "/api/support-config":
             if route.query:
                 self._send_json({"error": "unsupported query parameter"}, status=400)
@@ -1554,6 +1564,8 @@ def serve(
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
+        if handler.support_config is not None:
+            handler.support_config.resume()
         if host_telemetry is not None:
             host_telemetry.start()
         if companion_automation is not None:

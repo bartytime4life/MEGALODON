@@ -5,6 +5,12 @@ The panel contains actual configuration and control actions. They are available
 in a normal non-root Linux HUD, with the same optional sign-in as the dashboard.
 The hosted Site cannot operate these controls.
 
+The [live connection atlas](live-connection-globe.md) adds background monitoring,
+directional geographic animation and a separate opt-in for automatic IP location
+data. Monitoring resumes across local HUD restarts once enabled. **Disable automatic
+location updates** revokes the separate online lookup opt-in without stopping
+traffic capture.
+
 ## Network capture
 
 1. Select the interface to observe. The current default-route interface is

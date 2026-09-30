@@ -41,8 +41,9 @@ def capture_commands(interface):
 
 
 class ManagedCapture:
-    def __init__(self, settings, home, on_ready=None, *, popen=subprocess.Popen):
+    def __init__(self, settings, home, on_ready=None, *, popen=subprocess.Popen, connections=None):
         self.settings, self.home, self.on_ready, self.popen = settings, home, on_ready, popen
+        self.connections = connections
         self._lock, self._stop = Lock(), Event()
         self._thread = None
         self._state = dict(state='idle', interface='', received=0, accepted=0, skipped=0,
@@ -78,6 +79,8 @@ class ManagedCapture:
         store = None
         reason, failure = 'source_exhausted', None
         try:
+            if self.connections is not None:
+                self.connections.begin(interface)
             # A separate analyzer HOME prevents personal scripts/configuration
             # from changing this fixed parser. No raw capture path is created.
             env = {'PATH':'/usr/bin:/bin', 'HOME':str(self.home), 'LC_ALL':'C',
@@ -128,6 +131,8 @@ class ManagedCapture:
                                     self._state['skipped'] += 1
                                 continue
                             service.process(event, run_id=run_id)
+                            if self.connections is not None:
+                                self.connections.observe(event)
                             with self._lock:
                                 self._state['accepted'] += 1
                                 self._state['message'] = 'Accepted metadata is feeding the HUD traffic and finding charts. Capture drops are unknown.'
