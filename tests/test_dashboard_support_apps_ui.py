@@ -14,9 +14,9 @@ def test_support_apps_behavior():
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node unavailable")
-    fixture = dict(schema="megalodon-support-apps-v1", state="idle", started_at=None,
+    fixture = dict(schema="megalodon-support-startup-v1", state="idle", started_at=None,
                    finished_at=None, token="a" * 32, items=[],
-                   command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_apps")
+                   command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_startup")
     result = subprocess.run([node, str(Path(__file__).with_name("support_apps_browser.cjs"))],
                             input=json.dumps(dict(code=SUPPORT_APPS_JS, fixture=fixture)),
                             capture_output=True, text=True, timeout=10, check=False)
@@ -33,3 +33,14 @@ def test_support_apps_local_composition():
     assert 'type="button" id="support-apps-start"' in INDEX_HTML
     assert 'role="status" aria-live="polite" aria-atomic="true"' in SUPPORT_APPS_HTML
     assert 'innerHTML' not in SUPPORT_APPS_JS
+
+
+def test_bulk_start_and_individual_launch_routes_remain_separate():
+    assert "fetch('/api/support-start',options)" in SUPPORT_APPS_JS
+    assert "megalodon-support-startup-v1" in SUPPORT_APPS_JS
+    assert "/api/support-apps" not in SUPPORT_APPS_JS
+    assert "heartbeatFetch('/api/support-apps', {method:'POST', body:JSON.stringify({app:appId})" in DASHBOARD_JS
+    assert "'X-Megalodon-Support-App':'1'" in DASHBOARD_JS
+    assert "window_verified !== false" in DASHBOARD_JS
+    assert "The HUD has no stop, removal, or configuration action." not in DASHBOARD_JS
+    assert "These individual app launchers do not close apps or change their configuration." in DASHBOARD_JS

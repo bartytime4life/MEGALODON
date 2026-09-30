@@ -60,6 +60,8 @@ process.stdin.on('end', async () => {
     run('renderLaunchHelp()');
     assert.match(byId('setup-launch-intro').textContent, /application menu/);
     assert.match(byId('help-launch-intro').textContent, /stable launcher/);
+    assert.match(byId('setup-launch-intro').textContent, /background HUD keeps its existing settings/);
+    assert.match(byId('help-launch-intro').textContent, /Explicit options start a separate foreground session/);
     assert.equal(byId('setup-source-launch').hidden, true);
     assert.equal(byId('help-source-launch').hidden, true);
     assert.equal(run('hudLaunchCommand({})'), context.localHudLaunch.command);
@@ -71,6 +73,23 @@ process.stdin.on('end', async () => {
     context.localHudLaunch = {mode: 'desktop', command: "'/home/example/.local/bin/megalodon-hud' --config '/home/example/.config/MEGALODON/settings.toml'"};
     assert.equal(run('hudLaunchCommand({config: "/tmp/override.toml"})'), context.localHudLaunch.command + " --config '/tmp/override.toml'");
     assert.match(byId('setup-config-note').textContent, /overrides that default/);
+    byId('setup-port').value = '8798';
+    byId('setup-build').listeners.click();
+    assert.equal(byId('setup-command').textContent, context.localHudLaunch.command + ' --port 8798');
+    assert.match(byId('setup-feedback').textContent, /Command prepared, not run/);
+    assert.match(byId('setup-feedback').textContent, /address printed by the new session/);
+    await byId('setup-copy').listeners.click();
+    assert.equal(copied.pop(), context.localHudLaunch.command + ' --port 8798');
+    assert.equal(calls.length, 0, 'Preparing or copying a launch must not make a request');
+    byId('setup-port').value = '0';
+    byId('setup-port').listeners.input();
+    assert.equal(byId('setup-copy').disabled, true);
+    byId('setup-build').listeners.click();
+    assert.equal(byId('setup-copy').disabled, true);
+    assert.match(byId('setup-feedback').textContent, /port from 1 to 65535/);
+    byId('setup-port').value = '';
+    byId('setup-build').listeners.click();
+    assert.equal(byId('setup-command').textContent, context.localHudLaunch.command);
     for (const invalid of [{mode: 'desktop', command: 'safe', extra: 'PRIVATE'}, {mode: 'bogus', command: 'safe'}, {mode: 'source', command: ''}, {mode: 'source', command: 'bad\ncommand'}, null]) {
       context.localHudLaunch = invalid;
       assert.throws(() => run('hudLaunchCommand({})'));
@@ -78,7 +97,7 @@ process.stdin.on('end', async () => {
       assert.equal(byId('setup-copy').disabled, true);
       assert.equal(byId('setup-reopen-copy').disabled, true);
       assert.equal(byId('tool-management-copy').disabled, true);
-      assert.equal(byId('tool-management-command').textContent, 'Restart command for Install/Start unavailable');
+      assert.equal(byId('tool-management-command').textContent, 'Restart command for Install/Start/Open unavailable');
       assert.doesNotMatch(byId('setup-launch-intro').textContent, /PRIVATE|bad\ncommand/);
     }
     context.localHudLaunch = {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"};

@@ -39,8 +39,9 @@ prohibition, MIME sniffing protection, and restricted browser permissions. There
 is no CORS permission or external script/font fetch.
 
 `POST` is accepted for `/sign-in` only in opt-in mode, the separately token-gated `/api/ai/ask`,
-explicitly enabled HUD `/api/install`, fixed local HUD `/api/support-apps`, bounded read-only `/api/offline-locations`,
-fixed local `/api/support-config`, and inert `/api/automation-preview` routes. Offline locations and automation preview do not execute host
+explicitly enabled HUD `/api/install`, fixed local HUD `/api/support-apps` and
+`/api/support-start`, fixed local `/api/support-config`, bounded read-only `/api/offline-locations`,
+and inert `/api/automation-preview` routes. The latter two do not execute host
 actions; their fixed request headers, schemas and size limits remain required.
 Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
 methods remain unsupported. Unknown paths return 404. Fixed validation errors
@@ -78,7 +79,8 @@ production service.
 | `/api/heartbeat` | None; requires `X-Megalodon-Check: 1`, HUD mode | Cached per-tool installed/running/uptime light; see [tool heartbeat](tool-heartbeat.md) |
 | `/api/host-telemetry` | None; requires `X-Megalodon-Check: 1`, HUD mode | Automatic two-second CPU, RAM, per-interface rates and socket observations; see [live PC telemetry](live-pc-telemetry.md). Bounded in-memory history; no captures or writes. |
 | `/api/install` | None; requires `X-Megalodon-Check: 1`, HUD mode | Fixed install-recipe catalog and the current job status |
-| `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
+| `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, HUD mode | Availability of the fixed Linux desktop-app list in the current session |
+| `/api/support-start` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
 | `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
@@ -97,11 +99,20 @@ reports enabled/disabled state without a secret. It starts one recipe or one fix
 registries in `megalodon/tool_installer.py`; privileged steps go through the OS
 `pkexec` password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
 
+`POST /api/support-apps` uses the same non-root HUD opt-in and per-launch token,
+exact same-site `Origin`, `Content-Type: application/json`, and bounded strict
+JSON checks, plus `X-Megalodon-Support-App: 1`. It accepts exactly one fixed app
+id (`wireshark`, `zenmap` or `clamtk`); the body cannot provide a path or
+arguments. The server starts the selected GUI as the current user in a detached
+session. It does not start a
+scan, capture, sensor or service, and reports only that the launch was requested,
+not that a window appeared.
+
 Data routes with no query contract reject nonempty queries. UI/static asset URLs
 are not parameterized application APIs. A bare empty query is equivalent to no
 parameters. Never encode an action or secret in a query string.
 
-`POST /api/support-apps` accepts only `{"action":"start"}` with exact same-origin
+`POST /api/support-start` accepts only `{"action":"start"}` with exact same-origin
 `Origin`, a single `X-Megalodon-Support-Token` from its GET, JSON content type and
 a 2–64 byte body. Duplicate keys/headers, query aliases, content/transfer
 encodings and other execution parameters are refused. The per-HUD-launch nonce

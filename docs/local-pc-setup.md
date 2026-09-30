@@ -22,10 +22,41 @@ From the repository directory:
 ./scripts/install-local.sh
 ```
 
-Open **MEGALODON** from the Linux application menu. A terminal window owns the
-local server and stays open while you work. The browser opens only after the
-loopback server binds successfully. Press **Ctrl+C** in that terminal to stop.
-No background service or login startup is installed.
+Open **MEGALODON** from the Linux application menu. Normally a terminal window
+owns the local server and stays open while you work. The browser opens only
+after the loopback server binds successfully. Press **Ctrl+C** in that terminal
+to stop. The installer itself adds no background service or login startup.
+If you separately enabled HUD autostart, the menu reopens that background
+session with its existing settings.
+
+### Open a separate session with explicit options
+
+The installed launcher reopens an active background HUD only when called
+without options. Any explicit options, including `--help`, go to a new
+foreground invocation. They never change an already-running session.
+
+To open a separate HUD with companion collection disabled, run this from any
+directory, choosing an unused port:
+
+```bash
+~/.local/bin/megalodon-hud --port 8788 --no-auto-companions
+```
+
+For a different data source, add `--config /absolute/private/settings.toml`.
+For local sign-in, add `--require-sign-in` and use the new launch terminal's
+password instructions. Open the address printed by that new session; an old
+browser tab still points at the old HUD. `--no-auto-companions` disables
+collection only in the new session. The background HUD keeps its original
+collection and sign-in settings.
+
+In **Data and tools → Change data for the next launch**, the optional **Local
+port** field prepares the same bounded port option. Blank keeps the launcher's
+configured port. Preparing or copying a command does not execute it.
+
+If the selected port is occupied, launch exits with an error before opening a
+browser or starting companion collection. Choose another unused port, or stop
+a foreground HUD with Ctrl+C in its own terminal first. The launcher never
+stops, restarts, or reconfigures the existing background service.
 
 ### Optional: require a password for a launch
 
@@ -264,7 +295,7 @@ not connect this PC, and this launcher does not publish site changes.
 | Build or package installation failed | Preserve the terminal output. Check Python venv support, network/package-source access, and declared build requirements; the selected release is unchanged. |
 | Installation needs repair | Run `~/.local/bin/megalodon-manage status`, then `repair`. Modified artifacts are refused so they can be reviewed instead of overwritten. |
 | MEGALODON is missing from the application menu | Run `status`; if ready, sign out/in or refresh the desktop application cache. The stable `~/.local/bin/megalodon-hud` launcher remains available. |
-| Address already in use | Stop your existing HUD, or run `./scripts/start-local.sh --port 8788` and use its printed URL. The launcher does not terminate another process. |
+| Address already in use | Requested settings were not applied. Choose an unused port with `--port 8788` (or another free port) on your installed or source launcher, then open its printed URL. Existing sessions keep their settings; only a foreground HUD can be stopped with Ctrl+C in its launch terminal. |
 | `DASHBOARD_STORE:UNSAFE_ANCESTOR` | Check ownership and write permissions of the path's ancestors. In a remapped development sandbox, run from a normal local terminal. Keep the ownership checks enabled. |
 | `UNSAFE_DIRECTORY` or `UNSAFE_DATABASE` | Inspect the chosen path. The database's leaf directory must be owner-private (0700), and the database must be an owner-owned, single-link regular file (0600). Do not recursively change permissions or relocate live data as a shortcut. |
 | `SCHEMA_MISMATCH` | Preserve the database and review the explicit migration/recovery workflow in the README. Startup never migrates it. |

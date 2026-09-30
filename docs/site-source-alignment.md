@@ -15,7 +15,7 @@ was v56, source `6bec6f2dba6a1fc7bd6acbe6a8ba6b5e8d723b42`.
 The Site provides a direct link to the installed local Live PC view and explains
 the account-free measurements without probing localhost. Saved-summary upload
 is secondary. The active ten-tool catalog retains no signup console integration.
-Changed Site assets and README match this repository mirror; all 112 Site tests
+At publication, changed Site assets and README matched that source mirror; all 112 Site tests
 passed. Standalone Site tests reused the repository's operator-workflows guide
 outside the deployment archive for their documentation-routing assertions.
 
@@ -28,6 +28,10 @@ The sampler adds no package or signup; the previous release, data and settings
 are retained. Independent source/DOM review passed. Browser visual acceptance
 remains unverified because the browser administrative check denied access;
 no alternative browser was used. Repository merge remains a separate step.
+
+The PR #472 merge candidate also incorporates later `main` changes. Its Site
+files are repository source only; this reconciliation has not been published as
+a new hosted Console version.
 
 ## Historical publication — Console v54, repository mirror proposed
 
@@ -46,6 +50,11 @@ this proposed repository mirror for the changed assets and tests; its Node
 suite passed 110/110 tests. Browser rendering remains unverified after the
 browser security check denied access. Existing local HUD processes still need
 an updated checkout and restart to run the new collector defaults.
+
+This repository proposal also corrects a stale readiness link in the mirrored
+Site and updates `site/README.md` to describe its ten tool cards and automatic
+local-observation boundary. These follow-up edits are not part of published
+version 54; this change does not save or deploy a Site version.
 
 ## Historical publication — Console v53, repository mirror proposed
 

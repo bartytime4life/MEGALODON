@@ -5,7 +5,7 @@ probe a host, or start an integration. The dashboard module re-exports these
 constants to preserve the existing public/test interface.
 """
 
-from .dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS, local_support_help
+from .dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS, local_support_help, local_support_script
 from .dashboard_support_apps import SUPPORT_APPS_HTML, SUPPORT_APPS_CSS, SUPPORT_APPS_JS
 from .dashboard_host_telemetry import HOST_TELEMETRY_HTML, HOST_TELEMETRY_CSS, HOST_TELEMETRY_JS
 from .dashboard_inventory import INVENTORY_JS, INVENTORY_CSS
@@ -2313,3 +2313,5 @@ INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
 DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + "\nbootstrap();\n"
+
+DASHBOARD_JS = local_support_script(DASHBOARD_JS)

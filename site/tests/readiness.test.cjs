@@ -137,9 +137,8 @@ test('the HTML declares unique evidence controls and loads its local validator f
   for (const id of ['event-search', 'event-disposition', 'event-feed', 'event-inspector', 'run-list', 'run-inspector', 'readiness-file', 'clear-readiness', 'readiness-feedback']) assert.ok(ids.includes(id));
   assert.ok(html.indexOf('src="./readiness.js"') < html.indexOf('src="./app.js"'));
   for (const match of html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)) assert.ok(fs.existsSync(path.join(path.dirname(require.resolve('../dist/index.html')), match[1])));
-  assert.match(html, /Account-free companion catalog<\/a> is merged/);
-  assert.doesNotMatch(html, /draft PR #455/);
-  assert.match(html, /MEGALODON\/pull\/455/);
+  assert.match(html, /local readiness guide<\/a>/);
+  assert.match(html, /MEGALODON\/blob\/main\/docs\/tool-readiness\.md/);
   assert.match(html, /Reports from earlier revisions are rejected/);
   assert.doesNotMatch(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);

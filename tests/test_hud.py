@@ -126,6 +126,12 @@ def test_launch_builder_quotes_paths_and_rejects_incomplete_values():
 const assert = require('node:assert/strict');
 const localHudLaunch = {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"};
 assert.equal(hudLaunchCommand({}), localHudLaunch.command);
+assert.equal(hudLaunchCommand({port: ''}), localHudLaunch.command);
+for (const port of ['1', '8788', '65535']) assert.equal(hudLaunchCommand({port}), `${localHudLaunch.command} --port ${port}`);
+assert.equal(hudLaunchCommand({port: '00080'}), localHudLaunch.command + ' --port 80');
+for (const port of ['0', '65536', '100000', '-1', '+80', '8.5', '1e3', ' 80', '80 ', '80\n', '80;touch NEVER', '$(touch NEVER)', null, true, 80, {}, []]) {
+  assert.throws(() => hudLaunchCommand({port}), /local port/);
+}
 assert.throws(() => hudLaunchCommand({offline: 'relative/path'}));
 assert.throws(() => hudLaunchCommand({config: '/tmp/a\nb'}));
 console.log(hudLaunchCommand({offline: "/tmp/one ' $(touch NEVER_EXECUTE)"}));
@@ -142,3 +148,33 @@ def test_explicit_settings_override_wins_over_installed_launcher_default():
         ["hud", "--config", "/tmp/installed.toml", "--config", "/tmp/override.toml"]
     )
     assert args.config == "/tmp/override.toml"
+
+
+@pytest.mark.parametrize("extra, expected_disabled, expected_sign_in", [
+    (["--no-auto-companions"], True, False),
+    (["--require-sign-in"], False, True),
+    (["--no-auto-companions", "--require-sign-in"], True, True),
+])
+def test_explicit_session_uses_selected_settings_port_and_flags(tmp_path, monkeypatch, extra, expected_disabled, expected_sign_in):
+    config = tmp_path / "selected settings.toml"
+    database = tmp_path / "private" / "selected.db"
+    config.write_text(f'[app]\ndb_path = {json.dumps(str(database))}\n[dashboard]\nport = 8787\n')
+    # The selected store is disposable; opening first-launch UI must not create it.
+    observed = []
+    monkeypatch.setattr(dashboard, "serve", lambda *args, **kwargs: observed.append((args, kwargs)))
+    from contextlib import contextmanager
+
+    @contextmanager
+    def reader(path, *, allow_missing):
+        assert path == database and allow_missing
+        yield dashboard.UnconfiguredDashboardReader()
+
+    monkeypatch.setattr(cli, "_dashboard_reader", reader)
+    args = cli.build_parser().parse_args(["hud", "--config", str(config), "--port", "8798", *extra])
+    assert cli._dashboard(args) == 0
+    positional, options = observed[0]
+    assert positional[1:] == ("127.0.0.1", 8798)
+    assert (options["companion_config"] is None) == expected_disabled
+    assert options["require_sign_in"] is expected_sign_in
+    assert options["source_available"] is False
+    assert not database.exists()

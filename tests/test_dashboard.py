@@ -469,7 +469,7 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "heartbeatFetch('/api/install', {method: 'POST'" in DASHBOARD_JS
     assert "fetch('/api/offline-locations', {method: 'POST'" in DASHBOARD_JS
     assert SUPPORT_APPS_JS.count("request('POST')") == 1
-    assert "fetch('/api/support-apps',options)" in SUPPORT_APPS_JS
+    assert "fetch('/api/support-start',options)" in SUPPORT_APPS_JS
     assert "JSON.stringify({action:'start'})" in SUPPORT_APPS_JS
     assert "'X-Megalodon-Support-Token':app.token" in SUPPORT_APPS_JS
     from megalodon.dashboard_support_config import SUPPORT_CONFIG_JS

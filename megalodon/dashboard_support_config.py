@@ -193,3 +193,11 @@ def local_support_help(html: str) -> str:
         "Installing software, starting or stopping the HUD, selecting a new data source, and importing metadata happen outside this page. Downloads open the official publisher instructions.",
         'Install software and reopen or stop the HUD using your desktop or terminal. Use <a href="#support-apps-title">Configure apps in the HUD</a> to choose a capture interface, prepare capture access, and start local traffic collection. Other saved-file imports use their adapter commands. Downloads open the official publisher instructions.',
     )
+
+
+def local_support_script(script: str) -> str:
+    """Scope legacy launcher copy after local composition, preserving shared assets."""
+    return script.replace(
+        "The HUD has no stop, removal, or configuration action.",
+        "These individual app launchers do not close apps or change their configuration. Configure apps in the HUD provides separate supported setup and managed capture controls.",
+    )

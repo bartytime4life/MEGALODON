@@ -39,12 +39,12 @@ SETUP_HTML = """
         <h3 id="setup-software-title" tabindex="-1">Software, without the guesswork</h3>
         <p>Python runs the HUD. Everything else supports a specific workflow; you do not need to download every tool.</p>
         <details class="tool-status-details" id="tool-management-controls">
-          <summary>Authorize Install and Start</summary>
-          <p id="tool-management-status" role="status">Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
+          <summary>Authorize Install, Start and Open</summary>
+          <p id="tool-management-status" role="status">Observation mode. To use Install, Start and Open, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
           <div class="tool-management-launch">
-            <p>Copy the restart command for Install/Start from this exact HUD launcher. Copying does not stop, restart, install, or start anything.</p>
-            <code id="tool-management-command">Restart command for Install/Start unavailable</code>
-            <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start</button>
+            <p>Copy the restart command for Install/Start/Open from this exact HUD launcher. Copying does not stop, restart, install, start, or open anything. To leave an existing session running, append <code>--port 8788</code> (or another unused port) before running it in a terminal.</p>
+            <code id="tool-management-command">Restart command for Install/Start/Open unavailable</code>
+            <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start/Open</button>
             <p id="tool-management-copy-status" role="status" aria-live="polite">Reading this HUD's launch method…</p>
           </div>
           <label class="field" for="tool-management-token">Tool management token from the HUD terminal<input id="tool-management-token" type="password" autocomplete="off" spellcheck="false" maxlength="32" disabled></label>
@@ -66,7 +66,7 @@ SETUP_HTML = """
         <p id="setup-launch-intro">Reading the launch method for this HUD…</p>
         <code id="setup-reopen-command">Launch command unavailable</code>
         <button id="setup-reopen-copy" type="button" disabled>Copy reopen command</button>
-        <p id="setup-launch-context">The terminal window owns this running session. Keep it open; press Ctrl+C there to stop the HUD.</p>
+        <p id="setup-launch-context">For a foreground HUD, keep its launch terminal open; Ctrl+C there stops that session. A HUD started automatically runs in the background and keeps its existing settings when reopened.</p>
         <p id="setup-reopen-feedback" role="status"></p>
         <div id="setup-source-launch" hidden><p>From the reviewed repository folder, you can also check and launch the checkout:</p><code>./scripts/start-local.sh --check</code><code>./scripts/start-local.sh</code><p>The source launcher selects a compatible Python environment; it does not install packages or create sample data.</p></div>
         <p><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Open the local PC setup guide ↗</a> · <a href="#room-help-title">Get help in the HUD</a></p>
@@ -79,6 +79,9 @@ SETUP_HTML = """
           <p id="setup-config-note">An explicit settings file overrides the launcher's default settings for this launch only.</p>
           <label class="field">Completed offline run<input id="setup-offline" placeholder="/absolute/private/completed-run" maxlength="512"></label>
           <label class="field">Suricata store<input id="setup-suricata" placeholder="/absolute/private/suricata.db" maxlength="512"></label>
+          <label class="field">Local port (optional)<input id="setup-port" inputmode="numeric" placeholder="8788" maxlength="5" aria-describedby="setup-port-note"></label>
+          <p id="setup-port-note">Leave blank to use the configured port. Choose an unused port from 1 to 65535 to leave an existing HUD running.</p>
+          <p>Launch options affect only the new session. For example, <code>--no-auto-companions</code> disables collection only in that session; an existing background HUD keeps running with its original settings.</p>
           <button id="setup-build" type="button">Prepare launch command</button>
           <code id="setup-command">Launch command unavailable</code><button id="setup-copy" type="button" disabled>Copy launch command</button>
           <p id="setup-feedback" role="status">Run the prepared command in your MEGALODON terminal.</p>
@@ -417,6 +420,12 @@ function hudLaunchCommand(values) {
     if (typeof value !== 'string' || value.length > 512 || !value.startsWith('/') || /[\x00-\x1f\x7f]/.test(value)) throw new Error('Use absolute Linux paths without control characters.');
     command += ` ${flag} '${value.replace(/'/g, "'\"'\"'")}'`;
   });
+  if (values.port !== undefined && values.port !== '') {
+    if (typeof values.port !== 'string' || !/^[0-9]{1,5}$/.test(values.port) || Number(values.port) < 1 || Number(values.port) > 65535) {
+      throw new Error('Use a local port from 1 to 65535, or leave it blank.');
+    }
+    command += ` --port ${Number(values.port)}`;
+  }
   return command;
 }
 function validatedHudLaunch(value) {
@@ -439,7 +448,7 @@ function renderLaunchHelp() {
     const launch = validatedHudLaunch(typeof localHudLaunch === 'undefined' ? null : localHudLaunch);
     const desktop = launch.mode === 'desktop';
     const intro = desktop
-      ? 'Reopen MEGALODON from your application menu, or use this stable launcher in a terminal.'
+      ? 'Reopen MEGALODON from your application menu, or use this stable launcher without options. An active background HUD keeps its existing settings. Explicit options start a separate foreground session; choose an unused port to leave the background HUD running.'
       : 'This HUD is running from a source environment. Use this command to reopen the same environment, or use the source launcher from your reviewed checkout.';
     ['setup-launch-intro', 'help-launch-intro'].forEach(id => { byId(id).textContent = intro; });
     ['setup-reopen-command', 'help-reopen-command', 'setup-command'].forEach(id => { byId(id).textContent = launch.command; });
@@ -458,19 +467,19 @@ function renderLaunchHelp() {
     ['setup-reopen-command', 'help-reopen-command', 'setup-command'].forEach(id => { byId(id).textContent = 'Launch command unavailable'; });
     ['setup-source-launch', 'help-source-launch'].forEach(id => { byId(id).hidden = true; });
     ['setup-reopen-copy', 'setup-copy', 'setup-build'].forEach(id => { byId(id).disabled = true; });
-    byId('tool-management-command').textContent = 'Restart command for Install/Start unavailable';
+    byId('tool-management-command').textContent = 'Restart command for Install/Start/Open unavailable';
     byId('tool-management-copy').disabled = true;
-    byId('tool-management-copy-status').textContent = 'Use the launcher that opened this HUD; no restart command for Install/Start was prepared.';
+    byId('tool-management-copy-status').textContent = 'Use the launcher that opened this HUD; no restart command for Install/Start/Open was prepared.';
   }
 }
 byId('setup-build').addEventListener('click', () => {
   try {
-    byId('setup-command').textContent = hudLaunchCommand({config: byId('setup-config').value, offline: byId('setup-offline').value, suricata: byId('setup-suricata').value});
+    byId('setup-command').textContent = hudLaunchCommand({config: byId('setup-config').value, offline: byId('setup-offline').value, suricata: byId('setup-suricata').value, port: byId('setup-port').value});
     byId('setup-copy').disabled = false;
-    byId('setup-feedback').textContent = 'Command prepared for this launcher. Stop the current HUD with Ctrl+C in its terminal, then run the command in a terminal.';
+    byId('setup-feedback').textContent = 'Command prepared, not run. Explicit options start a new session. Use an unused port to keep an existing HUD running, or stop a foreground HUD with Ctrl+C in its terminal first. Open the address printed by the new session.';
   } catch (error) { byId('setup-copy').disabled = true; byId('setup-feedback').textContent = error.message; }
 });
-['setup-config', 'setup-offline', 'setup-suricata'].forEach(id => byId(id).addEventListener('input', () => {
+['setup-config', 'setup-offline', 'setup-suricata', 'setup-port'].forEach(id => byId(id).addEventListener('input', () => {
   byId('setup-copy').disabled = true; byId('setup-feedback').textContent = 'Choose Prepare launch command to apply these changes.';
 }));
 byId('setup-copy').addEventListener('click', async () => {
@@ -487,7 +496,7 @@ byId('tool-management-copy').addEventListener('click', async () => {
   if (byId('tool-management-copy').disabled) return;
   try {
     await navigator.clipboard.writeText(toolManagementLaunchCommand());
-    byId('tool-management-copy-status').textContent = 'Restart command for Install/Start copied. It was not run.';
+    byId('tool-management-copy-status').textContent = 'Restart command for Install/Start/Open copied. It was not run.';
   } catch (_) {
     byId('tool-management-copy-status').textContent = 'Clipboard unavailable. Select and copy the displayed command. It was not run.';
   }
