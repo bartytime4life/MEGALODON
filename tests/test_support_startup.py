@@ -4,13 +4,14 @@ from http.server import ThreadingHTTPServer
 import json
 from threading import Event, Thread
 from types import SimpleNamespace
+import stat
 import time
 
 import pytest
 
 from megalodon import dashboard, support_startup
 from megalodon.companion_automation import CompanionAutomation, CompanionConfig
-from megalodon.config import AISettings
+from megalodon.config import AISettings, DashboardSettings, Settings
 
 
 @pytest.fixture
@@ -163,6 +164,7 @@ def test_fixed_start_plan_skips_running_and_missing_tools(monkeypatch):
     def which(name):
         return None if name == 'clamtk' else '/bin/' + name
     monkeypatch.setattr(support_startup, 'service_unit', lambda tool: {'qwen':'ollama','suricata':'suricata'}[tool])
+    monkeypatch.setattr(support_startup, '_trusted_system_executable', lambda name: '/bin/'+name)
     collectors = SimpleNamespace(request_collection=lambda: {'nmap':'queued','clamav':'missing','osquery':'running'})
     manager = support_startup.SupportApps(collectors, run=run, which=which, on_finish=lambda: completed.append(True))
     manager.start()
@@ -186,8 +188,36 @@ def test_fixed_start_plan_skips_running_and_missing_tools(monkeypatch):
         manager.start()
 
 
+def test_privileged_start_rejects_untrusted_system_binary(monkeypatch):
+    calls = []
+    monkeypatch.setattr(support_startup, 'service_unit', lambda tool: tool)
+    monkeypatch.setattr(support_startup, '_trusted_system_executable',
+                        lambda name: None if name == 'systemctl' else '/usr/bin/pkexec')
+    manager = support_startup.SupportApps(
+        run=lambda argv, **kwargs: calls.append(argv) or SimpleNamespace(returncode=3),
+        which=lambda name: '/tmp/user-bin/' + name)
+    manager._services()
+    assert not any('start' in argv for argv in calls)
+    assert {item['state'] for item in manager.snapshot()['items']} == {'missing'}
+
+
+@pytest.mark.parametrize('mode,owner,expected', [
+    (stat.S_IFREG | 0o755, 0, '/usr/bin/systemctl'),
+    (stat.S_IFREG | 0o777, 0, None),
+    (stat.S_IFREG | 0o755, 1000, None),
+    (stat.S_IFLNK | 0o777, 0, None),
+    (stat.S_IFREG | 0o644, 0, None),
+])
+def test_privileged_binary_requires_trusted_file(monkeypatch,mode,owner,expected):
+    monkeypatch.setattr(support_startup.Path, 'lstat',
+                        lambda path: SimpleNamespace(st_mode=mode, st_uid=owner))
+    assert support_startup._trusted_system_executable('systemctl') == expected
+    assert support_startup._trusted_system_executable('../other') is None
+
+
 def test_denied_service_authorization_preserves_other_results(monkeypatch):
     monkeypatch.setattr(support_startup, 'service_unit', lambda tool: tool)
+    monkeypatch.setattr(support_startup, '_trusted_system_executable', lambda name: '/bin/'+name)
     manager = support_startup.SupportApps(which=lambda name: '/bin/'+name if name in {'systemctl','pkexec'} else None,
                                      run=lambda *args, **kw: SimpleNamespace(returncode=1))
     manager.start()
@@ -300,3 +330,25 @@ def test_cli_start_wakes_fixed_hud_service_then_posts_fixed_action(monkeypatch, 
     assert post['headers']['X-Megalodon-Support-Token'] == 'x'*32
     assert post['headers']['Origin'].startswith('http://127.0.0.1:')
     assert 'x'*32 not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])
+def test_cli_uses_configured_loopback_host(monkeypatch,configured,expected):
+    requests = []
+    payload = {'schema':support_startup.SCHEMA,'state':'idle','items':[],'token':'x'*32}
+    class Connection:
+        def __init__(self,host,port,timeout):
+            assert host == expected
+        def request(self,method,path,**kwargs):
+            requests.append((method,kwargs.get('headers',{}).get('Origin')))
+        def getresponse(self):
+            return SimpleNamespace(status=200,read=lambda limit:json.dumps(payload).encode())
+        def close(self):
+            pass
+    monkeypatch.setattr('megalodon.config.load_settings',
+                        lambda path:Settings(dashboard=DashboardSettings(host=configured)))
+    monkeypatch.setattr(support_startup,'HTTPConnection',Connection)
+    monkeypatch.setattr(support_startup.os,'getuid',lambda:1000)
+    monkeypatch.setattr(support_startup.os,'geteuid',lambda:1000)
+    assert support_startup.main(['--check']) == 0
+    assert requests == [('GET',None)]

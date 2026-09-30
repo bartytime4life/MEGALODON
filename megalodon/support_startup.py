@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 from threading import Lock, Thread
@@ -25,6 +26,21 @@ SCHEMA = "megalodon-support-startup-v1"
 COMMAND = "~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_startup"
 DESKTOP_APPS = (("wireshark", "Wireshark", "wireshark"), ("zenmap", "Zenmap", "zenmap"), ("clamtk", "ClamTk", "clamtk"))
 SERVICES = (("suricata", "Suricata", "suricata"), ("qwen", "Ollama / Qwen", "ollama"))
+
+
+def _trusted_system_executable(name):
+    """Use only a root-owned system binary for an authorized service start."""
+    if name not in {"systemctl", "pkexec"}:
+        return None
+    path = Path('/usr/bin') / name
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+            or info.st_mode & 0o022 or not info.st_mode & 0o111):
+        return None
+    return str(path)
 
 
 def _now():
@@ -111,7 +127,8 @@ class SupportApps:
                            "Could not open the app. Check that a graphical desktop session is active.")
 
     def _services(self):
-        systemctl, pkexec = self.which("systemctl"), self.which("pkexec")
+        systemctl = _trusted_system_executable("systemctl")
+        pkexec = _trusted_system_executable("pkexec")
         pending = []
         for identifier, name, unit in SERVICES:
             if self._active(unit + ".service"):
@@ -163,6 +180,7 @@ def main(argv=None):
     parser.add_argument("--config", type=Path, help="local HUD settings (default: the installed app's settings)")
     args = parser.parse_args(argv)
     from .config import load_settings
+    from .dashboard import loopback_host
     if sys.platform != "linux" or os.getuid() == 0 or os.geteuid() == 0:
         print("Run this command as your normal Linux desktop user.", file=sys.stderr)
         return 2
@@ -171,13 +189,12 @@ def main(argv=None):
         if args.config and not config.is_file():
             raise ValueError("The selected HUD settings file does not exist.")
         settings = load_settings(config if config.exists() else None)
-        if settings.dashboard.host != "127.0.0.1":
-            raise ValueError("The support launcher requires an IPv4 loopback HUD.")
+        host = loopback_host(settings.dashboard.host)
         port = settings.dashboard.port
-        origin = f"http://127.0.0.1:{port}"
+        origin = f"http://{host}:{port}"
 
         def request(method="GET", token=None):
-            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection = HTTPConnection(host, port, timeout=5)
             headers = {"X-Megalodon-Check": "1"}
             body = None
             if method == "POST":
