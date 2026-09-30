@@ -44,6 +44,7 @@ HOME_HTML = """
 <section class="room-home panel" aria-labelledby="room-home-title">
   <p class="eyebrow">MEGALODON / Operations</p><h2 id="room-home-title" tabindex="-1">Your evidence at a glance</h2>
   <p id="room-home-summary">No qualified data available. Your saved audit data and optional tools are checked separately.</p>
+  <!-- HUD_SUPPORT_APPS -->
   <!-- HUD_PC_TELEMETRY -->
   <div class="hud-metrics" aria-label="Selected evidence totals">
     <article><span>Metadata records</span><strong id="hud-records">—</strong></article>
@@ -116,7 +117,7 @@ TRAFFIC_HTML = """
   <p>Start with a check. Add software when you need it. Review evidence when it is available.</p>
   <div class="room-help-grid">
     <section aria-labelledby="help-here"><h3 id="help-here">You can do this here</h3>
-      <ul><li>Check the local service, runtime versions, data readability, executables, and process names.</li><li>Find official downloads by workflow and check availability again after installing.</li><li>Review saved traffic and findings, filter by time, and export a local report.</li><li>Save a companion console link in Apps and open that app in its own tab.</li></ul>
+      <ul><li>Start installed support apps and configured collectors from the <a href="#support-apps-title">Support apps control in the HUD</a>.</li><li>Check the local service, runtime versions, data readability, executables, and process names.</li><li>Find official downloads by workflow and check availability again after installing.</li><li>Review saved traffic and findings, filter by time, and export a local report.</li><li>Save a companion console link in Apps and open that app in its own tab.</li></ul>
       <div class="room-actions"><a href="#setup-title">Check this computer →</a><a href="#setup-software-title">Find software →</a></div>
     </section>
     <section aria-labelledby="help-terminal"><h3 id="help-terminal">Use a terminal or another app</h3>

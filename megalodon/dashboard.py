@@ -3,6 +3,8 @@
 HUD mode also serves a cached tool heartbeat and an inert recipe catalog.
 Explicitly enabled, non-root Linux tool management requires a per-launch
 operator token before fixed installation or service-start recipes can run.
+The separate support-start action is available in a non-root Linux HUD with
+a same-origin action nonce and a fixed plan; it cannot install or reconfigure.
 
 The presentation constants live in ``dashboard_assets``; this module retains the
 public Python API and the security boundary for every HTTP route.
@@ -43,6 +45,7 @@ from .storage import StorageSchemaError
 from .suricata_projection import MAX_RESPONSE_BYTES as MAX_SURICATA_RESPONSE_BYTES, read_suricata_projection
 from .offline_locations import OfflineLocations, validate_lookup_ips, unconfigured as unconfigured_locations
 from .companion_automation import CompanionAutomation, CompanionConfig
+from .support_apps import SupportApps, SupportBusy
 from .host_telemetry import HostTelemetry
 
 
@@ -442,6 +445,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     offline_locations: OfflineLocations | None = None
     companion_automation: CompanionAutomation | None = None
     host_telemetry: HostTelemetry | None = None
+    support_apps: SupportApps | None = None
     automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -482,6 +486,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path in {"/api/config", "/api/setup", "/api/local-checks", "/api/summary", "/api/traffic", "/api/hud-snapshot", "/api/offline-summary", "/api/advisory-receipt", "/api/suricata", "/api/reference/status", "/api/heartbeat", "/api/install", "/api/companions"} and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path == "/api/support-apps":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+            elif self.support_apps is None or not _tool_management_user():
+                self._send_json({"error": "support startup requires a non-root local Linux HUD"}, status=403)
+            else:
+                self._send_json(self.support_apps.snapshot(include_token=True))
             return
         if route.path == "/api/host-telemetry":
             if route.query:
@@ -843,6 +857,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/install":
             self._install()
             return
+        if self.path == "/api/support-apps":
+            self._support_apps_start()
+            return
         if self.path == "/api/offline-locations":
             self._offline_locations()
             return
@@ -966,6 +983,42 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError, OSError, RuntimeError) as exc:
             self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
                              "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
+
+    def _support_apps_start(self) -> None:
+        """One fixed local start plan, protected from cross-site invocation."""
+        expected_origin = f"http://{self.headers.get('Host')}"
+        tokens = self.headers.get_all("X-Megalodon-Support-Token", [])
+        if (self.support_apps is None or not _tool_management_user()
+                or len(tokens) != 1 or len(tokens[0]) != 32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0], self.support_apps.token)
+                or self.headers.get_all("Origin", []) != [expected_origin]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", [])
+                or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "same-origin local support action required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 2
+                or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 2 <= int(lengths[0]) <= 64):
+            self._send_json({"error": "invalid support request length"}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),
+                              object_pairs_hook=_strict_pairs)
+            if type(body) is not dict or body != {"action": "start"}:
+                raise ValueError("invalid support action")
+        except (ValueError, OSError):
+            self._send_json({"error": "only the fixed support start action is allowed"}, status=400)
+            return
+        try:
+            status = self.support_apps.start()
+        except SupportBusy:
+            self._send_json({"error": "support startup or tool maintenance is already in progress"}, status=409)
+            return
+        self._send_json(status, status=202)
 
     def _install(self) -> None:
         # Origin/custom headers prevent cross-site browser requests, but only
@@ -1310,6 +1363,9 @@ def serve(
     installer = Installer(on_finish=heartbeat.invalidate) if heartbeat is not None else None
     companion_automation = CompanionAutomation(companion_config, ai_settings or AISettings()) if companion_config else None
     host_telemetry = HostTelemetry() if inspect_tools else None
+    support_apps = (SupportApps(companion_automation, installer=installer,
+                               on_finish=heartbeat.invalidate)
+                    if heartbeat is not None and _tool_management_user() else None)
     handler = type(
         "BoundDashboardHandler", (DashboardHandler,), {
             "store": store, "offline_summary": offline_summary,
@@ -1337,6 +1393,7 @@ def serve(
             "offline_locations": offline_locations,
             "companion_automation": companion_automation,
             "host_telemetry": host_telemetry,
+            "support_apps": support_apps,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)

@@ -10,6 +10,12 @@ memory, with source and observation times shown in the panels. Unavailable
 programs and rejected results have their own status; they never create sample
 data. The `dashboard` CLI mode does not start default collection.
 
+The local HUD's prominent **Start support apps** button (or
+`./scripts/start-support-apps.sh`) also wakes this existing worker. It refreshes
+configured, installed collectors immediately without creating another worker
+or duplicating queued/running jobs. The current scopes and report watchers stay
+in force; later automatic runs resume their normal cadence from the refresh.
+
 The same worker checks these optional report paths every 15 seconds:
 
 | Producer | Completed report path |

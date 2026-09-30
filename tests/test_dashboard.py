@@ -344,7 +344,7 @@ def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
     assert "Stored findings" in INDEX_HTML
-    assert "What MEGALODON has stored" in INDEX_HTML
+    assert "Your local defense workspace" in INDEX_HTML
     assert "Inspect one source at a time" in INDEX_HTML
     assert "Qwen advisory receipt · checking" in INDEX_HTML
     assert "Explicit local requests use the separate control above." in INDEX_HTML
@@ -430,7 +430,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     from megalodon.dashboard_tool_assets import CONTROLS_JS
     assert "localStorage" not in DASHBOARD_JS.replace(CONTROLS_JS, "")
     from megalodon.dashboard_setup import SETUP_JS
-    dashboard_without_user_exports = DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "")
+    from megalodon.dashboard_support_apps import SUPPORT_APPS_JS
+    dashboard_without_user_exports = DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "").replace(SUPPORT_APPS_JS, "")
     assert dashboard_without_user_exports.count("navigator.clipboard") == 2
     assert "navigator.clipboard.writeText(reportPlainText(report))" in dashboard_without_user_exports
     assert "navigator.clipboard.writeText(command)" in dashboard_without_user_exports
@@ -459,11 +460,17 @@ def test_dashboard_ui_has_accessible_read_only_states():
         assert f"'{private_field}'" not in INDEX_HTML + DASHBOARD_JS
         assert f'"{private_field}"' not in INDEX_HTML + DASHBOARD_JS
         assert not re.search(r"\." + re.escape(private_field) + r"\b", DASHBOARD_JS)
-    # Browser POSTs are the fixed-recipe installer and a read-only, same-origin
-    # lookup into an explicitly configured offline region database.
+    # Browser POSTs are the fixed-recipe installer, an explicit support-app
+    # start, and a read-only lookup into the configured offline region database.
+    # Support-app requests share a GET/POST helper; the behavior test verifies
+    # only the Start click sends this fixed action and separate action nonce.
     assert DASHBOARD_JS.count("method: 'POST'") == 2
     assert "heartbeatFetch('/api/install', {method: 'POST'" in DASHBOARD_JS
     assert "fetch('/api/offline-locations', {method: 'POST'" in DASHBOARD_JS
+    assert SUPPORT_APPS_JS.count("request('POST')") == 1
+    assert "fetch('/api/support-apps',options)" in SUPPORT_APPS_JS
+    assert "JSON.stringify({action:'start'})" in SUPPORT_APPS_JS
+    assert "'X-Megalodon-Support-Token':app.token" in SUPPORT_APPS_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
     assert INDEX_HTML.count('type="file"') == 1
