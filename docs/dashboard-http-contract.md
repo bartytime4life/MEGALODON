@@ -82,6 +82,7 @@ production service.
 | `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, HUD mode | Availability of the fixed Linux desktop-app list in the current session |
 | `/api/support-start` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
 | `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
+| `/api/support-workflows` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Passive, bounded status and aggregate metrics for ten background tools; never starts services, scans or model inference. See [background tools](background-tools.md). |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,

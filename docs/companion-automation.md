@@ -10,7 +10,7 @@ memory, with source and available time provenance shown in the panels. Unavailab
 programs and rejected results have their own status; they never create sample
 data. The `dashboard` CLI mode does not start default collection.
 
-The local HUD's prominent **Start support apps** button (or
+The local HUD's prominent **Start background tools** button (or
 `./scripts/start-support-apps.sh`) also wakes this existing worker. It refreshes
 configured, installed collectors immediately without creating another worker
 or duplicating queued/running jobs. The current scopes and report watchers stay

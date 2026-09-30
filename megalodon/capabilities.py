@@ -42,7 +42,7 @@ _COMPONENTS = (
             "windows": "manual_only",
             "other": "unsupported",
         },
-        "boundary": "The MEGALODON TShark adapter is Linux-only; Windows may open saved captures manually.",
+        "boundary": "Linux supports background dumpcap/TShark metadata capture and offline imports. No Wireshark window is needed. Windows may open saved captures manually.",
     },
     {
         "id": "zeek",
@@ -53,7 +53,7 @@ _COMPONENTS = (
             "windows": "guest_only",
             "other": "unsupported",
         },
-        "boundary": "MEGALODON imports a bounded conn.log profile and never starts Zeek.",
+        "boundary": "Linux background monitoring runs bounded Zeek CLI samples, separately summarized from packet totals. Qualified conn.log import remains a distinct evidence workflow.",
     },
     {
         "id": "suricata",
@@ -64,7 +64,7 @@ _COMPONENTS = (
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The Linux main-thread API reads one completed private contract envelope file; a separate checksum-bound Suricata 8.0.7 alert-only EVE converter produces the same immutable publication. Non-root capability-free APIs persist it and read-only reconcile an unknown commit in one pre-created private store. An explicit read-only dashboard startup snapshot shows bounded external-alert evidence; no permission repair, sensor, ruleset manager, watcher, dashboard control, or IPS path exists.",
+        "boundary": "The Linux main-thread API reads one completed private contract envelope file; a separate checksum-bound Suricata 8.0.7 alert-only EVE converter produces the same immutable publication. Non-root capability-free APIs persist it and read-only reconcile an unknown commit in one pre-created private store. An explicit read-only dashboard startup snapshot shows bounded external-alert evidence; The local HUD can configure the passive system service and read bounded recent EVE summaries; those summaries are separate from admitted alerts. No IPS action is performed.",
     },
     {
         "id": "scapy",
@@ -91,35 +91,35 @@ _COMPONENTS = (
     {
         "id": "clamav",
         "software": "ClamAV",
-        "integration": "separate_manual_file_scan",
+        "integration": "scheduled_local_file_scan",
         "platforms": {
-            "linux": "manual_only",
+            "linux": "implemented",
             "windows": "manual_only",
             "other": "proposed",
         },
-        "boundary": "Completed-report counts-only export and manual HUD import; no file-content intake, quarantine, signature update, daemon, scan launcher, or live result feed.",
+        "boundary": "Linux schedules fixed CLI scans of configured folders and automatically updates aggregate HUD results. Signature updater controls exist; file contents and quarantine are outside this feed.",
     },
     {
         "id": "osquery",
         "software": "osquery",
-        "integration": "future_endpoint_metadata",
+        "integration": "scheduled_local_package_inventory",
         "platforms": {
-            "linux": "proposed",
+            "linux": "implemented",
             "windows": "proposed",
             "other": "proposed",
         },
-        "boundary": "A fixed saved DEB package-count importer exists on Linux; no query pack, arbitrary SQL, daemon, scheduler, remote enrollment, or broader endpoint importer exists.",
+        "boundary": "Linux schedules a fixed osquery CLI query for installed DEB package counts, with automatic HUD results. No arbitrary SQL, enrollment, or broader endpoint query pack is enabled.",
     },
     {
         "id": "qwen-ollama",
         "software": "Qwen via local Ollama",
         "integration": "explicit_literal_loopback_advisory",
         "platforms": {
-            "linux": "manual_only",
+            "linux": "optional",
             "windows": "contract_only",
             "other": "unsupported",
         },
-        "boundary": "The original run-count advisory permits one explicitly enabled Python call to 127.0.0.1:11434, with no CLI or tool authority for that policy. Separate opt-in anomaly/AI CLI and token-gated HUD paths exist; installed-provider acceptance remains unproved and firewall application is unsupported.",
+        "boundary": "The original run-count advisory permits one explicitly enabled Python call to 127.0.0.1:11434, with no CLI or tool authority for that policy. Separate opt-in anomaly/AI CLI and token-gated HUD paths exist; Linux background collector advice uses an explicitly configured pinned local model; Windows installed-provider acceptance remains unproved; current acceptance is shown by the live workflow check and firewall application is unsupported.",
     },
     {
         "id": "nmap",
@@ -130,7 +130,7 @@ _COMPONENTS = (
             "windows": "evaluation_only",
             "other": "unsupported",
         },
-        "boundary": "No scan launcher or script execution. A bounded Nmap 7.x XML 1.05 stdin reader emits aggregate counts for manual HUD import; no identifiers or banners retained. Native Windows acceptance remains unproved.",
+        "boundary": "Linux schedules fixed Nmap CLI inventory of one configured private target/range and watches completed reports. No arbitrary NSE or commands; aggregate counts retain no identifiers or banners. Native Windows acceptance remains unproved.",
     },
 )
 

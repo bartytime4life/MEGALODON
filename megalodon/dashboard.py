@@ -516,6 +516,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         } and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
             return
+        if route.path == "/api/support-workflows":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"] or self.support_config is None or not _tool_management_user():
+                self._send_json({"error": "explicit local workflow check required"}, status=403)
+            else:
+                from .support_workflows import snapshot
+                self._send_json(snapshot(self.support_config, self.companion_automation))
+            return
         if route.path == "/api/live-connections":
             if route.query:
                 self._send_json({"error": "unsupported query parameter"}, status=400)
@@ -1556,6 +1565,8 @@ def serve(
             handler.local_checks = LocalChecks(store, source_available=True)
         handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                        support_startup, capture_store_ready)
+        if support_startup is not None:
+            support_startup.configuration = handler.support_config
     server = ThreadingHTTPServer((host, port), handler)
     previous_sigterm = None
     if current_thread() is main_thread():

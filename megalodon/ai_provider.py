@@ -199,7 +199,7 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
         pass
     try:
         if probe:
-            challenge = generate(settings, "Reply with the single word READY.", max_tokens=32)
+            challenge = generate(settings, "Reply with exactly READY and nothing else. Do not add punctuation.", max_tokens=32)
             if challenge != "READY":
                 raise AIProviderError("INVALID_RESPONSE")
             base["state"] = "model_ready"

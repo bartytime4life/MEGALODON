@@ -24,6 +24,7 @@ def manager(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'interfaces', lambda:[dict(name='eth0',default=True,up=True)])
     monkeypatch.setattr(config, 'capture_tools_available', lambda:True)
     monkeypatch.setattr(dashboard, '_tool_management_user', lambda:True)
+    monkeypatch.setattr(config, 'SupportSensors', lambda home: SimpleNamespace(start=lambda interface:None,stop=lambda:None,snapshot=lambda:{}))
     home=tmp_path/'home'
     home.mkdir(mode=0o700)
     worker=CompanionAutomation(local_default_config(home),AISettings())
@@ -45,6 +46,46 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     with pytest.raises(ValueError):
         manager.start(body)
     assert manager.snapshot()['job']['state']=='idle'
+
+
+def test_qwen_configuration_pins_existing_model_and_restores_background_advice(manager,monkeypatch):
+    monkeypatch.setattr(config,'local_qwen_models',lambda:[dict(name='qwen2.5:trusted',digest=AISettings.model_digest)])
+    monkeypatch.setattr('megalodon.ai_provider.status',lambda *a,**k:dict(inference_verified=True,state='model_ready'))
+    commands=[]
+    manager.run=lambda argv,*a:commands.append(argv) or (b'',0)
+    manager.start({'action':'qwen_configure'});manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='finished'
+    assert manager.companions.ai.enabled and manager.companions.ai.model=='qwen2.5:trusted'
+    assert commands[0][:3]==['/usr/bin/pkexec','/bin/sh','-c']
+    assert 'OLLAMA_HOST=127.0.0.1:11434' in commands[0][3]
+    other=config.SupportConfiguration(manager.settings,home=manager.home)
+    assert other.settings.ai.enabled and other.settings.ai.model_digest==AISettings.model_digest
+
+
+def test_qwen_retry_waits_for_newly_restarted_local_socket(monkeypatch):
+    calls=[]
+    class Connection:
+        def __init__(self,host,port,timeout): assert host=='127.0.0.1' and port==11434
+        def request(self,*a):
+            calls.append(True)
+            if len(calls)==1: raise ConnectionRefusedError()
+        def getresponse(self): return SimpleNamespace(status=200,read=lambda size:b'{"models":[]}')
+        def close(self): pass
+    monkeypatch.setattr(config,'HTTPConnection',Connection)
+    monkeypatch.setattr(config.time,'sleep',lambda seconds:None)
+    assert config.local_qwen_models()==[] and len(calls)==2
+
+
+def test_suricata_configuration_is_fixed_passive_cli_and_bounded_interface(manager):
+    commands=[]
+    manager.run=lambda argv,*a:commands.append(argv) or (b'',0)
+    manager.start({'action':'suricata_configure','interface':'eth0'});manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='finished'
+    assert commands[0][-2:]==['megalodon-suricata','eth0']
+    assert '--runmode single' in commands[0][3] and '--af-packet=$1' in commands[0][3]
+    assert 'ExecStart=/usr/bin/suricata' in commands[0][3]
+    with pytest.raises(ValueError):
+        manager.start({'action':'suricata_configure','interface':'eth0;id'})
 
 
 def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager,monkeypatch):
@@ -253,6 +294,23 @@ def test_failed_capture_marks_receipt_and_cleans_up(manager):
     assert reader.ingestion_runs()[0]['failure_code']=='CAPTURE_ERROR'
 
 
+def test_capture_storage_limit_is_actionable_and_preserves_failure_receipt(manager,monkeypatch):
+    from megalodon import managed_capture
+    from megalodon.storage import StorageCapacityError
+    def full(*args,**kwargs):
+        raise StorageCapacityError('STORAGE_CAPACITY:HIGH_WATER')
+    monkeypatch.setattr(managed_capture.MegalodonService,'process',full)
+    def spawn(argv,**kwargs):
+        code='pass' if argv[0].endswith('dumpcap') else 'print('+repr(field_row())+')'
+        return subprocess.Popen([sys.executable,'-c',code],**kwargs)
+    capture=ManagedCapture(manager.settings,manager.home,popen=spawn)
+    capture.start('eth0');capture._thread.join(5)
+    assert capture.snapshot()['state']=='failed'
+    assert capture.snapshot()['message'].startswith('Packet storage limit reached.')
+    reader=dashboard.UnconfiguredDashboardReader(manager.settings.db_path)
+    assert reader.ingestion_runs()[0]['failure_code']=='CAPTURE_ERROR'
+
+
 def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     from threading import Event
     waiting,release=Event(),Event()
@@ -332,6 +390,16 @@ def test_live_endpoint_is_read_only_bounded_and_uses_existing_local_gates(endpoi
     assert request(endpoint,method='GET',body=b'',path='/api/live-connections',omit=('X-Megalodon-Check',))[0]==403
     monkeypatch.setattr(dashboard,'_tool_management_user',lambda:False)
     assert request(endpoint,method='GET',body=b'',path='/api/live-connections')[0]==403
+
+
+def test_workflow_endpoint_observes_without_model_or_service_execution(endpoint,monkeypatch):
+    idle=dict(state='stopped',message='Not started',updated_at=None,metrics=[])
+    monkeypatch.setattr(endpoint[1].sensors,'snapshot',lambda:dict(zeek=idle,suricata=idle))
+    code,value=request(endpoint,method='GET',body=b'',path='/api/support-workflows')
+    assert code==200 and value['schema']=='megalodon-support-workflows-v1'
+    assert len(value['tools'])==10 and endpoint[2]==[]
+    assert request(endpoint,method='GET',body=b'',path='/api/support-workflows?start=true')[0]==400
+    assert request(endpoint,method='GET',body=b'',path='/api/support-workflows',omit=('X-Megalodon-Check',))[0]==403
 
 
 @pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])

@@ -24,7 +24,6 @@ from .tool_installer import service_unit
 
 SCHEMA = "megalodon-support-startup-v1"
 COMMAND = "~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_startup"
-DESKTOP_APPS = (("wireshark", "Wireshark", "wireshark"), ("zenmap", "Zenmap", "zenmap"), ("clamtk", "ClamTk", "clamtk"))
 SERVICES = (("suricata", "Suricata", "suricata"), ("qwen", "Ollama / Qwen", "ollama"))
 
 
@@ -55,6 +54,7 @@ class SupportApps:
     def __init__(self, companions=None, *, installer=None, on_finish=None,
                  run=subprocess.run, which=shutil.which):
         self.companions, self.installer, self.on_finish = companions, installer, on_finish
+        self.configuration = None
         self.run, self.which = run, which
         self.token = secrets.token_urlsafe(24)
         self._lock = Lock()
@@ -102,30 +102,6 @@ class SupportApps:
         systemctl = self.which("systemctl")
         return bool(systemctl and self._command([systemctl, *(["--user"] if user else []), "is-active", "--quiet", unit]))
 
-    def _desktop(self):
-        # A graphical HUD started at login may predate DISPLAY importing. The
-        # user service manager supplies the current desktop environment to the
-        # independent GUI units; no environment values are returned or logged.
-        runner = self.which("systemd-run")
-        for identifier, name, binary in DESKTOP_APPS:
-            unit = f"megalodon-support-{identifier}.service"
-            if self._active(unit, user=True):
-                self._item(identifier, name, "running", "Already running in the desktop session.")
-                continue
-            executable = self.which(binary)
-            if not executable:
-                self._item(identifier, name, "missing", "Desktop app is not installed; skipped.")
-            elif runner is None:
-                self._item(identifier, name, "needs_setup", "A Linux user service session is required to open this app from the HUD.")
-            else:
-                self._item(identifier, name, "checking", "Opening in the desktop session…")
-                success = self._command([runner, "--user", "--collect", f"--unit=megalodon-support-{identifier}",
-                                         "--property=Type=exec", "--", executable], timeout=10)
-                # The service manager confirms execution, not rendered windows.
-                self._item(identifier, name, "launched" if success else "failed",
-                           "Launch requested. The desktop window is managed separately." if success else
-                           "Could not open the app. Check that a graphical desktop session is active.")
-
     def _services(self):
         systemctl = _trusted_system_executable("systemctl")
         pkexec = _trusted_system_executable("pkexec")
@@ -133,6 +109,8 @@ class SupportApps:
         for identifier, name, unit in SERVICES:
             if self._active(unit + ".service"):
                 self._item(identifier, name, "running", "Service is already active. Data and model readiness are checked separately.")
+            elif identifier == 'suricata' and not Path('/etc/systemd/system/suricata.service.d/zz-megalodon-passive.conf').is_file():
+                self._item(identifier,name,'needs_setup','Use Configure Suricata once to select the passive interface and allow HUD log access.')
             elif not systemctl or service_unit(identifier) is None:
                 self._item(identifier, name, "missing", "No supported installed service was found; skipped.")
             elif not pkexec:
@@ -159,10 +137,20 @@ class SupportApps:
                            "missing": "The collector executable is not installed; skipped.",
                            "needs_setup": "Collection is not configured for this tool in the current HUD."}[state]
                 self._item(identifier, name, state, message)
-            self._desktop()
+            if self.configuration:
+                from .support_config import ConfigBusy
+                try:
+                    capture = self.configuration.start_background_tools()
+                    self._item("tshark", "Wireshark / TShark", "running" if capture["state"]=="running" else "queued",
+                               "Background packet metadata collection is enabled. No desktop window is opened.")
+                except ConfigBusy:
+                    self._item('tshark','Wireshark / TShark','needs_setup','A configuration action is still running. Retry background tools after it finishes.')
+                    return
+                except (ValueError, RuntimeError):
+                    self._item("tshark", "Wireshark / TShark", "needs_setup", "Choose an interface and configure capture access in Configure apps.")
             self._services()
-            self._item("zeek", "Zeek", "needs_setup", "Runs against a selected capture or configured sensor; no input is selected by this launcher.")
-            self._item("scapy", "Scapy / live capture", "needs_setup", "Use the configured packet-capture launcher for an interface with capture permission.")
+            self._item("zeek", "Zeek", "queued" if self.configuration and self.configuration.background.snapshot()["enabled"] else "needs_setup", "Background monitoring owns bounded CLI samples; current flow counts appear in Apps.")
+            self._item("scapy", "Scapy / alternate capture", "not_needed", "Standby alternative: the TShark feed supplies live packets, avoiding a redundant Python capture process.")
             self._item("nftables", "nftables", "not_needed", "Command-line tool; no app to open. Firewall rules are not changed by startup.")
         except Exception:
             # No subprocess error strings, paths or environment values escape.
@@ -175,7 +163,7 @@ class SupportApps:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Start installed support apps and configured collectors through the local MEGALODON HUD")
+    parser = argparse.ArgumentParser(description="Start background support tools and configured collectors inside the local MEGALODON HUD")
     parser.add_argument("--check", action="store_true", help="show current startup status without starting anything")
     parser.add_argument("--config", type=Path, help="local HUD settings (default: the installed app's settings)")
     args = parser.parse_args(argv)
@@ -235,7 +223,7 @@ def main(argv=None):
         if not args.check:
             request("POST", value["token"])
             deadline = time.monotonic() + 120
-            print("Starting support apps. A system authorization prompt may appear.", flush=True)
+            print("Starting background tools; no extra application windows will open.", flush=True)
             while time.monotonic() < deadline:
                 value = request()
                 if value["state"] != "running":

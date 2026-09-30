@@ -27,7 +27,7 @@ process.stdin.on('end',async()=>{
   // An explicit start uses only the action nonce and fixed action; duplicate clicks are ignored.
   payload={...fixture,state:'running',started_at:'2026-09-30T20:00:00Z',token:undefined,items:[{id:'wireshark',name:'Wireshark',state:'checking',message:'Checking desktop session.'}]};
   let release;hold=new Promise(resolve=>release=resolve);const starting=click('support-apps-start');await settled();
-  assert.match(status(),/Starting support apps/);assert.equal(get('support-apps-start').disabled,true);await click('support-apps-start');
+  assert.match(status(),/Starting background tools/);assert.equal(get('support-apps-start').disabled,true);await click('support-apps-start');
   assert.equal(requests.filter(r=>r.opts.method==='POST').length,1);
   const post=requests.at(-1);assert.equal(post.opts.headers['X-Megalodon-Support-Token'],fixture.token);assert.equal(post.opts.headers['Content-Type'],'application/json');assert.equal(post.opts.body,'{"action":"start"}');
   release();hold=null;await starting;assert.equal(polls().length,1);assert.equal(get('support-apps-start').disabled,true);

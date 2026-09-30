@@ -59,22 +59,21 @@ automatically: MEGALODON/companion CPU and RAM gauges, CPU and interface-rate
 history, per-app disk activity, and socket counts. This Linux monitor needs no
 extra package or signup. Packet-evidence charts retain their separate data sources.
 
-**Home → Start support apps**, above Live PC resources, opens installed desktop
-tools, starts supported services and refreshes configured collectors in one
-action. The same workflow is available from a terminal:
+**Home → Start background tools**, above Live PC resources, enables CLI packet/flow collection,
+starts configured services and refreshes collectors without opening extra application windows. The same workflow is available from a terminal:
 
 ```bash
 ./scripts/start-support-apps.sh
 ```
 
 Use `--check` to read startup status without starting anything. Installed
-Wireshark, Zenmap and ClamTk open in the desktop session; installed Suricata and
-Ollama services start through the system authorization prompt when needed.
+Wireshark, Zenmap and ClamTk windows are optional Advanced actions. Configured
+Suricata and Ollama services run in the background; first-time setup may use a system authorization prompt.
 Nmap, ClamAV and osquery use the current HUD's existing collection scope.
 Missing tools are skipped and each result is shown. See
 [support startup](docs/local-pc-setup.md#start-support-apps).
 
-Beside Start support apps, **Configure apps** provides capture permissions,
+Beside Start background tools, **Configure apps** provides capture permissions,
 interface selection, live HUD traffic and managed Wireshark start/stop controls,
 saved Nmap and ClamAV scope, signature updates and companion checks. The same
 actions are available through `./scripts/configure-support-apps.sh --help`.
@@ -86,6 +85,7 @@ approximate IP locations. **Enable background monitoring** saves automatic captu
 resumption; **Set up IP locations** separately enables the free DB-IP database
 and public internet-exit lookup. See [live connection globe](docs/live-connection-globe.md)
 for geographic accuracy, source coverage, resource bounds and stop controls.
+See [background tool workflows](docs/background-tools.md) for CLI automation, sensor summaries and local Qwen setup.
 
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
@@ -266,7 +266,7 @@ not new named profiles, automatic installers, or a universal security suite.
 | Replay authorized metadata, without live capture | `run --source jsonl`; audit database; optional local UI | Existing Linux core path. Windows evaluation uses synthetic fixtures only until native acceptance; arbitrary sensor logs are not this input contract |
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
-| Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
+| Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; separate background Zeek sampling also exists. Packet, flow, and alert counts are different units |
 | Read one completed STIX 2.1 context bundle | `megalodon.threat_context.read_completed_bundle`; immutable bounded context plus a receipt | Linux-only, non-root, capability-free, owner-private completed file with an exact operator-supplied SHA-256 digest. No TAXII, pattern execution, persistence, detection, attribution, model, or action authority |
 | Convert one completed Suricata 8.0.7 alert-only EVE file | `megalodon.offline.suricata_eve.read_completed_raw_eve`; existing immutable alert publication and receipt | Exact SHA-256, private single-link file, closed run identity, and guarded Linux deadline. Mixed firehose records, payload/packet/application expansions, persistence, sensor launch, watcher, and IPS are refused |
 | Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; the same immutable alert publication and receipt | Main thread of a single-threaded Linux process, reusing the guarded `SIGALRM` deadline; one private file, no persistence, dashboard projection, sensor launch, watcher, or IPS |

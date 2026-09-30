@@ -3,13 +3,13 @@
 SUPPORT_APPS_HTML = r'''
 <section class="support-apps" id="support-apps" aria-labelledby="support-apps-title">
   <div class="support-apps-main">
-    <div class="support-apps-copy"><p class="eyebrow">READY YOUR WORKSPACE</p><h3 id="support-apps-title" tabindex="-1">Support apps</h3><p>Start installed desktop apps, supported services and configured collectors together.</p></div>
-    <div class="support-apps-actions"><button type="button" id="support-apps-start" disabled>Start support apps</button><button type="button" id="support-apps-configure" aria-expanded="false" aria-controls="support-config">Configure apps</button><button type="button" id="support-apps-copy" class="button-secondary" disabled>Copy command</button><p id="support-apps-copy-status" class="support-apps-copy-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
+    <div class="support-apps-copy"><p class="eyebrow">BACKGROUND WORKSPACE</p><h3 id="support-apps-title" tabindex="-1">Background tools</h3><p>Start installed services and configured collectors together. No Wireshark, Zenmap or ClamTk windows open.</p></div>
+    <div class="support-apps-actions"><button type="button" id="support-apps-start" disabled>Start background tools</button><button type="button" id="support-apps-configure" aria-expanded="false" aria-controls="support-config">Configure apps</button><button type="button" id="support-apps-copy" class="button-secondary" disabled>Copy command</button><p id="support-apps-copy-status" class="support-apps-copy-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
   </div>
-  <div class="support-apps-feedback"><p id="support-apps-status" role="status" aria-live="polite" aria-atomic="true">Checking support-app controls…</p><button type="button" id="support-apps-check" class="button-secondary" hidden>Check status</button></div>
-  <p class="support-apps-note">A system authorization prompt may appear when a service needs permission.</p>
+  <div class="support-apps-feedback"><p id="support-apps-status" role="status" aria-live="polite" aria-atomic="true">Checking background controls…</p><button type="button" id="support-apps-check" class="button-secondary" hidden>Check status</button></div>
+  <p class="support-apps-note">A system authorization prompt may appear when a service needs permission. <a href="#integrations-title">View tool status</a> · <a href="#live-globe-title">Background monitoring controls</a></p>
   <!-- HUD_SUPPORT_CONFIG -->
-  <details id="support-apps-details"><summary id="support-apps-summary">App-by-app status</summary><ul id="support-apps-items"><li>Waiting for the local service.</li></ul><p class="support-apps-note">Opening an app does not connect its packet telemetry. Collectors use their saved configuration. Missing tools and setup steps appear here.</p><div id="support-apps-command-wrap" hidden><label for="support-apps-command">Command for your terminal</label><input id="support-apps-command" readonly spellcheck="false"></div></details>
+  <details id="support-apps-details"><summary id="support-apps-summary">Tool startup status</summary><ul id="support-apps-items"><li>Waiting for the local service.</li></ul><p class="support-apps-note">These are startup outcomes. Open Actions for current tool status and source updates. Collectors use their saved configuration.</p><div id="support-apps-command-wrap" hidden><label for="support-apps-command">Command for your terminal</label><input id="support-apps-command" readonly spellcheck="false"></div></details>
 </section>
 '''
 
@@ -62,7 +62,7 @@ SUPPORT_APPS_JS = r'''
   function controls() {
     const busy=app.pending || (app.payload && app.payload.state === 'running');
     el('support-apps-start').disabled=!!busy || !app.valid || document.hidden;
-    el('support-apps-start').textContent=(app.starting || (app.valid && app.payload && app.payload.state==='running')) ? 'Starting support apps…' : 'Start support apps';
+    el('support-apps-start').textContent=(app.starting || (app.valid && app.payload && app.payload.state==='running')) ? 'Starting background tools…' : 'Start background tools';
     el('support-apps-start').setAttribute('aria-busy',app.pending ? 'true' : 'false');
     el('support-apps-copy').disabled=!app.command;
     el('support-apps-check').disabled=app.pending;
@@ -75,15 +75,15 @@ SUPPORT_APPS_JS = r'''
       const message=document.createElement('span');message.textContent=item.message;row.append(name,state,message);return row;
     });
     el('support-apps-items').replaceChildren(...rows);
-    el('support-apps-summary').textContent=`${v.state === 'finished' ? 'Last startup results' : 'App-by-app status'}${v.items.length ? ' · '+v.items.length+' tools' : ''}`;
+    el('support-apps-summary').textContent=`${v.state === 'finished' ? 'Last startup results' : 'Tool startup status'}${v.items.length ? ' · '+v.items.length+' tools' : ''}`;
     const count=states=>v.items.filter(item=>states.includes(item.state)).length;
-    if (v.state === 'running') feedback(`Starting support apps… ${count(['running','launched','queued','not_needed'])} ready or queued.`, 'running');
+    if (v.state === 'running') feedback(`Starting background tools… ${count(['running','launched','queued','not_needed'])} ready or queued.`, 'running');
     else if (v.state === 'finished') {
       const ready=count(['running','not_needed']),launched=count(['launched']),queued=count(['queued']),attention=count(['missing','needs_setup','failed']);
       const completed=v.finished_at ? ' at '+new Date(v.finished_at).toISOString().replace('T',' ').replace('.000Z',' UTC') : ' · completion time unavailable';
       feedback(`Last start completed${completed} · ${ready} were running or ready${launched ? ' · '+launched+' launch request'+(launched===1 ? '' : 's') : ''}${queued ? ' · '+queued+' queued' : ''}${attention ? ' · '+attention+' need attention — see last startup results.' : '.'}`, attention ? 'stale' : 'finished');
-    } else feedback('Ready when you are. Apps start only when you press Start support apps.');
-    if (document.hidden) feedback('Updates paused while this tab is hidden. App startup continues on this PC.', 'stale');
+    } else feedback('Ready when you are. Background tools start when you press Start background tools.');
+    if (document.hidden) feedback('Updates paused while this tab is hidden. Background startup continues on this PC.', 'stale');
   }
   async function responseBody(response) {
     const size=response.headers.get('content-length');
@@ -116,7 +116,7 @@ SUPPORT_APPS_JS = r'''
     } finally {clearTimeout(timeout);}
   }
   function accept(v) {app.payload=v;if(v.token)app.token=v.token;app.command=v.command;app.valid=true;el('support-apps-command').value=v.command;el('support-apps-check').hidden=true;render(v);}
-  function failed() {app.valid=false;app.token=null;feedback('Unable to confirm support-app status. Check status before trying again.','failed');el('support-apps-check').hidden=false;}
+  function failed() {app.valid=false;app.token=null;feedback('Unable to confirm background startup status. Check status before trying again.','failed');el('support-apps-check').hidden=false;}
   async function read(reset=true) {
     if(app.pending || document.hidden)return;
     cancelPoll();if(reset)app.deadline=Date.now()+300000;app.pending=true;controls();
@@ -124,7 +124,7 @@ SUPPORT_APPS_JS = r'''
   }
   async function start() {
     if(app.pending || !app.valid || !app.token || document.hidden || app.payload.state==='running')return;
-    cancelPoll();app.pending=true;app.starting=true;app.deadline=Date.now()+300000;feedback('Starting support apps… Checking what is already running.','running');controls();
+    cancelPoll();app.pending=true;app.starting=true;app.deadline=Date.now()+300000;feedback('Starting background tools… Checking what is already running.','running');controls();
     try {const v=await request('POST');if(v)accept(v);else accept(await request('GET'));}
     catch(_){failed();}
     finally{app.pending=false;app.starting=false;controls();schedule();}
@@ -137,7 +137,7 @@ SUPPORT_APPS_JS = r'''
     catch(_){el('support-apps-command-wrap').hidden=false;el('support-apps-details').open=true;el('support-apps-command').focus();el('support-apps-command').select();el('support-apps-copy-status').textContent='Select and copy the command shown below.';}
   });
   document.addEventListener('visibilitychange',()=>{
-    cancelPoll();if(document.hidden){feedback('Updates paused while this tab is hidden. App startup continues on this PC.','stale');controls();}
+    cancelPoll();if(document.hidden){feedback('Updates paused while this tab is hidden. Background startup continues on this PC.','stale');controls();}
     else read(true);
   });
   read(true);

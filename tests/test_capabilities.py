@@ -96,11 +96,11 @@ def test_suricata_runtime_status_matches_reader_and_explicit_consumer():
 def test_planned_interface_slots_never_claim_runtime_authority():
     items = {item["id"]: item for item in catalog("linux")["components"]}
     assert {"ossec", "zabbix"}.isdisjoint(items)
-    assert items["qwen-ollama"]["selected_status"] == "manual_only"
+    assert items["qwen-ollama"]["selected_status"] == "optional"
     assert "original run-count advisory" in items["qwen-ollama"]["boundary"]
     assert "Separate opt-in anomaly/AI CLI and token-gated HUD paths exist" in items["qwen-ollama"]["boundary"]
     assert "firewall application is unsupported" in items["qwen-ollama"]["boundary"]
-    assert "No scan launcher" in items["nmap"]["boundary"]
+    assert "No arbitrary NSE or commands" in items["nmap"]["boundary"]
 
 
 @pytest.mark.parametrize(

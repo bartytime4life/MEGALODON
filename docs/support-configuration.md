@@ -50,12 +50,12 @@ requests bounded capture cleanup and finalizes its ingestion receipt.
 
 | Tool | Action and scope |
 | --- | --- |
-| Nmap / Zenmap | Save a private IPv4 target/range of at most 256 addresses and queue the existing inventory worker. Default is loopback. Zenmap can still be opened with Start support apps. |
+| Nmap / Zenmap | Save a private IPv4 target/range of at most 256 addresses and queue the existing inventory worker. Default is loopback. Zenmap remains an optional Advanced desktop action. |
 | ClamAV / ClamTk | Select this user's Downloads or Documents folder, save the scanner scope and queue collection. A separate button starts the installed FreshClam signature updater through system authorization. |
 | osquery | Enable and queue the existing fixed DEB package count. No arbitrary SQL or enrollment. |
-| Ollama / Qwen | Query the loopback model inventory. No model download, model change or execution authority is granted. Advisory requests still use their configured model/digest contract. |
-| Zeek | Verify the installed executable and prepare a private workspace. Completed qualified conn.log intake remains the separate offline workflow. |
-| Suricata | Run the installed configuration's native validation in a private log folder. Rules, sensor interfaces and evidence intake are not rewritten. |
+| Ollama / Qwen | Configure the installed Ollama service for PC-only listening, select an already-installed model matching the supported digest, and enable bounded collector advice. No model download or command authority. The model inventory check remains available. |
+| Zeek | Verify the CLI and prepare automatic 10-second / 2,000-frame samples while background monitoring is enabled. Completed qualified conn.log intake remains separate. |
+| Suricata | Configure the passive system service for the selected interface, one worker, its runtime directory, and EVE read access. Existing rules are retained. Recent log summaries are separate from admitted alert evidence. |
 
 Collector scopes persist in `~/.config/megalodon/support-config.json`; report
 watching remains active. A scope change is refused while a collector is running.
@@ -83,8 +83,10 @@ The same actions are available from the reviewed checkout:
 ./scripts/configure-support-apps.sh clamav_configure --scan-folder Downloads
 ./scripts/configure-support-apps.sh signature_update
 ./scripts/configure-support-apps.sh osquery_configure
+./scripts/configure-support-apps.sh qwen_configure
 ./scripts/configure-support-apps.sh qwen_check
 ./scripts/configure-support-apps.sh zeek_check
+./scripts/configure-support-apps.sh suricata_configure --interface enp11s0
 ./scripts/configure-support-apps.sh suricata_check
 ```
 

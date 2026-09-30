@@ -230,7 +230,7 @@ For actual capture permissions and tool configuration, use **Configure apps**
 beside the Start button. See [support configuration](support-configuration.md)
 for the live packet feed, Wireshark controls and saved collection scope.
 
-Open the local HUD and choose **Start support apps** at the top of **Home**,
+Open the local HUD and choose **Start background tools** at the top of **Home**,
 directly above **Live PC resources**. **Copy command** copies the equivalent
 installed launcher. From this checkout, run:
 
@@ -241,17 +241,16 @@ installed launcher. From this checkout, run:
 The script starts the installed HUD user service if necessary, then invokes
 the same fixed action as the button. `--check` only reads startup status.
 
-- Installed Wireshark, Zenmap and ClamTk open as desktop apps. Windows requested
-  by this launcher have separate user services, so repeated clicks reuse them
-  and restarting the HUD does not close them.
-- Installed Suricata and Ollama services start if inactive. One system
-  authorization dialog may appear. A running service does not establish
-  sensor connectivity or a loaded Qwen model.
-- The existing Nmap, ClamAV and osquery worker refreshes its configured jobs;
-  queued or running scans are reused. Reports continue to be watched.
-- Missing programs are skipped. Zeek and Scapy require a selected capture or
-  configured interface; their rows explain the next step. nftables has no
-  desktop app or background service to start.
+- TShark supplies continuous metadata; Zeek supplies separate bounded CLI samples.
+  Wireshark, Zenmap and ClamTk windows are optional Advanced actions only.
+- Configured Suricata and Ollama services start if inactive. First-time setup uses
+  Configure apps; a system authorization prompt may appear.
+- Nmap, ClamAV and osquery refresh their configured jobs without duplicating
+  running work. Reports continue to be watched.
+- Scapy remains an alternative capture engine; nftables remains a response-plan
+  tool. Neither needs a separate window or redundant background process.
+- Current workflow observations and metrics appear in Actions. Sensor samples,
+  saved collector results and qualified packet/detection evidence stay distinct.
 
 Startup does not install packages, change firewall rules or select new scan
 targets. Results distinguish **Running**, **Launched**, **Queued**, **Missing**

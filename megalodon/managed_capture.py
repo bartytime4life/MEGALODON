@@ -19,7 +19,7 @@ from .capture import _jsonl_event
 from .config import BlockingSettings
 from .offline.tshark import FIELDS, parse_fields
 from .service import MegalodonService
-from .storage import Store
+from .storage import Store, StorageCapacityError
 
 MAX_PACKETS = 50000
 MAX_SECONDS = 900
@@ -144,6 +144,13 @@ class ManagedCapture:
                 raise ValueError('capture tool failed')
             elif self._state['received'] >= MAX_PACKETS:
                 reason = 'event_limit_reached'
+        except StorageCapacityError as exc:
+            reason, failure = 'failed', 'CAPTURE_ERROR'
+            message = ('Packet storage limit reached. Existing records are preserved; increase the configured storage budget or review retention before restarting.'
+                       if str(exc) == 'STORAGE_CAPACITY:HIGH_WATER' else
+                       'Packet storage could not be validated. Existing records are preserved; review private storage access before restarting.')
+            with self._lock:
+                self._state.update(state='failed', message=message)
         except Exception:
             reason, failure = 'failed', 'CAPTURE_ERROR'
             with self._lock:
