@@ -16,10 +16,11 @@ and uniform tool setup must be installed locally before those local controls are
 available. The Site and local HUD share a generated feature/tool data-coverage
 map; use `python scripts/sync-hud-assets.py` after changing that canonical source.
 
-The saved osquery package-count panel accepts only a counts-only JSON produced
-from one operator-run `deb_packages` count. It stays in the browser tab and
-does not start osquery, upload package names, or establish live host health.
-See [the workflow guide](../docs/hud-workflow.md). The current publication receipt
+The current Site has no file input for the Nmap, ClamAV, or osquery observation
+panels. Those bounded automatic counts are shown only in the local HUD; the
+hosted Site cannot read or display the latest local results. This does not start
+the tools, upload package names, or establish live host health. See
+[the workflow guide](../docs/hud-workflow.md). The current publication receipt
 is recorded in [source alignment](../docs/site-source-alignment.md).
 
 ## Navigation and install path
@@ -90,7 +91,7 @@ source delivery and a local check do not prove host coverage or sensor health.
 Local and hosted tool controls share the canonical Python asset constants in
 `megalodon/dashboard_tool_assets.py`. The repository's
 `scripts/sync-hud-assets.py` regenerates `controls.js`, `controls.css`,
-`lifecycle.js` and `readiness.js`; parity is tested. Fourteen fixed tools support
+`lifecycle.js` and `readiness.js`; parity is tested. Ten fixed tools support
 official setup links and copy-only maintenance commands. Optional saved console
 addresses persist per browser origin; they open the actual companion app in a
 separate tab. No embedding, probing, credential storage or host execution occurs.
@@ -98,12 +99,13 @@ Tool search includes local evidence paths and saved-console filters; an empty
 result offers a filter reset. The integrations view points to the documented
 local setup entry point. Supported evidence cards state that their local views
 remain separate without opening loopback URLs. Manual presence-report import
-remains optional for this hosted page.
+remains optional for this hosted page. The Home view has no upload controls for
+Nmap, ClamAV, or osquery results; use the local HUD to view those observations.
 
 ## Actual behavior
 
 - No network feed is connected. The Activity view shows one passive unavailable boundary, not zeros, generated rates, detections, protocol shares or example receipts. Separate evidence imports retain their own controls; setup and workflow actions route to repository guides. None starts a sensor or establishes liveness.
-- Fourteen integration cards show one presence light next to each name: a fresh manual note or imported executable-presence report sets it green or red, stale evidence sets it amber, and otherwise it stays grey. The imported report is an unauthenticated PATH claim, not proof of installation or service health. This hosted page cannot see the PC. The local HUD provides recent presence observations, visible unknown/stale states, setup guidance and, where implemented, separately authorized Install/Start controls (see `docs/tool-heartbeat.md`).
+- Ten integration cards show one presence light next to each name: a fresh manual note or imported executable-presence report sets it green or red, stale evidence sets it amber, and otherwise it stays grey. The imported report is an unauthenticated PATH claim, not proof of installation or service health. This hosted page cannot see the PC. The local HUD provides recent presence observations, visible unknown/stale states, setup guidance and, where implemented, separately authorized Install/Start controls (see `docs/tool-heartbeat.md`).
 - Manual notes persist in this browser's `localStorage`, expire after seven days, and can be cleared. A readiness JSON import stays only in page memory and is never uploaded or saved to `localStorage`.
 - Readiness import accepts only the closed `megalodon-tool-readiness-v2` schema with ten tools, fixed registry/boundaries and at most 8,192 UTF-8 bytes. Old v1 reports require regeneration. Duplicate keys, unsupported claims, malformed/future timestamps and overlapping reads fail closed. Reports older than 24 hours are marked stale; they are not authenticated.
 - Lifecycle diagnostics and commands are reference text. The browser never executes them. Qwen operations use one explicit example model tag and literal local provider; the tag is mutable and not an approved digest. Zeek defers to the actual installation method instead of inventing universal package commands.
