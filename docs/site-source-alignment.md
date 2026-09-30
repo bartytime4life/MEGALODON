@@ -18,6 +18,11 @@ suite passed 110/110 tests. Browser rendering remains unverified after the
 browser security check denied access. Existing local HUD processes still need
 an updated checkout and restart to run the new collector defaults.
 
+This repository proposal also corrects a stale readiness link in the mirrored
+Site and updates `site/README.md` to describe its ten tool cards and automatic
+local-observation boundary. These follow-up edits are not part of published
+version 54; this change does not save or deploy a Site version.
+
 ## Historical publication — Console v53, repository mirror proposed
 
 CONFIRMED 2026-09-29: the owner-only Site published version 53 from Sites

@@ -39,12 +39,12 @@ SETUP_HTML = """
         <h3 id="setup-software-title" tabindex="-1">Software, without the guesswork</h3>
         <p>Python runs the HUD. Everything else supports a specific workflow; you do not need to download every tool.</p>
         <details class="tool-status-details" id="tool-management-controls">
-          <summary>Authorize Install and Start</summary>
-          <p id="tool-management-status" role="status">Observation mode. To use Install and Start, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
+          <summary>Authorize Install, Start and Open</summary>
+          <p id="tool-management-status" role="status">Observation mode. To use Install, Start and Open, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
           <div class="tool-management-launch">
-            <p>Copy the restart command for Install/Start from this exact HUD launcher. Copying does not stop, restart, install, or start anything.</p>
-            <code id="tool-management-command">Restart command for Install/Start unavailable</code>
-            <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start</button>
+            <p>Copy the restart command for Install/Start/Open from this exact HUD launcher. Copying does not stop, restart, install, start, or open anything.</p>
+            <code id="tool-management-command">Restart command for Install/Start/Open unavailable</code>
+            <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start/Open</button>
             <p id="tool-management-copy-status" role="status" aria-live="polite">Reading this HUD's launch method…</p>
           </div>
           <label class="field" for="tool-management-token">Tool management token from the HUD terminal<input id="tool-management-token" type="password" autocomplete="off" spellcheck="false" maxlength="32" disabled></label>
@@ -458,9 +458,9 @@ function renderLaunchHelp() {
     ['setup-reopen-command', 'help-reopen-command', 'setup-command'].forEach(id => { byId(id).textContent = 'Launch command unavailable'; });
     ['setup-source-launch', 'help-source-launch'].forEach(id => { byId(id).hidden = true; });
     ['setup-reopen-copy', 'setup-copy', 'setup-build'].forEach(id => { byId(id).disabled = true; });
-    byId('tool-management-command').textContent = 'Restart command for Install/Start unavailable';
+    byId('tool-management-command').textContent = 'Restart command for Install/Start/Open unavailable';
     byId('tool-management-copy').disabled = true;
-    byId('tool-management-copy-status').textContent = 'Use the launcher that opened this HUD; no restart command for Install/Start was prepared.';
+    byId('tool-management-copy-status').textContent = 'Use the launcher that opened this HUD; no restart command for Install/Start/Open was prepared.';
   }
 }
 byId('setup-build').addEventListener('click', () => {
@@ -487,7 +487,7 @@ byId('tool-management-copy').addEventListener('click', async () => {
   if (byId('tool-management-copy').disabled) return;
   try {
     await navigator.clipboard.writeText(toolManagementLaunchCommand());
-    byId('tool-management-copy-status').textContent = 'Restart command for Install/Start copied. It was not run.';
+    byId('tool-management-copy-status').textContent = 'Restart command for Install/Start/Open copied. It was not run.';
   } catch (_) {
     byId('tool-management-copy-status').textContent = 'Clipboard unavailable. Select and copy the displayed command. It was not run.';
   }

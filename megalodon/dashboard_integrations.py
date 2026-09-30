@@ -48,6 +48,12 @@ INTEGRATIONS_HTML = """
       <div id="app-service-start-list" class="app-service-start-list">Reading local service observations…</div>
       <p id="app-service-start-feedback" role="status" aria-live="polite"></p>
     </section>
+    <section class="support-app-launch" aria-labelledby="support-app-launch-title">
+      <h3 id="support-app-launch-title">Open desktop support apps</h3>
+      <p>These buttons open a selected GUI app as your current user. They do not start scans, packet captures, sensors, or services, and opening an app does not connect its data to MEGALODON.</p>
+      <div id="support-app-launch-list" class="support-app-launch-list">Checking this desktop session…</div>
+      <p id="support-app-launch-feedback" role="status" aria-live="polite"></p>
+    </section>
     <!-- APP_VIEWER -->
     <div class="integration-cards" id="integrations-cards" aria-busy="false"></div>
     <p class="integration-footnote">Commands in details are reference templates. An app's own console uses that app's permissions and may include administration controls. Viewing a console does not connect its data to MEGALODON. Desktop apps need a separately configured web viewer.</p>
@@ -103,10 +109,17 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 .app-service-start-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; padding:.7rem; border:1px solid var(--line); border-radius:9px; }
 .app-service-start-row > div { min-width:0; overflow-wrap:anywhere; }
 .app-service-start-row .hb-detail { margin-left:1.1rem; }
+.support-app-launch { margin:14px 22px 0; padding:14px; border:1px solid var(--line); border-radius:12px; background:rgba(3,13,19,.34); }
+.support-app-launch h3 { margin:0 0 .4rem; font-size:.95rem; }
+.support-app-launch > p { margin:.25rem 0 .8rem; color:var(--muted); font-size:.76rem; line-height:1.5; }
+.support-app-launch-list { display:grid; gap:.55rem; font-size:.8rem; }
+.support-app-launch-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; padding:.7rem; border:1px solid var(--line); border-radius:9px; }
+.support-app-launch-row > div { min-width:0; overflow-wrap:anywhere; }
 @media (max-width: 720px) { .integration-card > summary { grid-template-columns: 1fr; } .integration-summary-status { justify-content: flex-start; } }
 @media (max-width: 560px) {
   .integration-controls, .integration-cards { padding-right: 14px; padding-left: 14px; }
   .app-service-start { margin-right:14px; margin-left:14px; }
+  .support-app-launch { margin-right:14px; margin-left:14px; }
   .integration-footnote { padding-right: 14px; padding-left: 14px; }
   .integration-controls .field, .integration-controls button { flex-basis: 100%; }
 }
@@ -115,7 +128,7 @@ h1[id], h2[id] { scroll-margin-top: 18px; }
 INTEGRATIONS_JS = r"""
 
 // The integration map is a static read model. The service controls below use
-// the separate heartbeat and fixed, operator-authorized start route.
+// separate heartbeat and fixed, operator-authorized local action routes.
 const integrationState = {snapshot: null, loading: false, pendingPlatform: null, failed: false};
 const integrationPlatforms = ['linux', 'windows', 'other'];
 const startableServiceIds = ['suricata', 'qwen'];
@@ -171,6 +184,69 @@ function renderAppServiceStarts() {
     return [row];
   });
   list.replaceChildren(...(rows.length ? rows : [textNode('p', 'No supported installed service was observed. Check the app cards for setup guidance.') ]));
+}
+const supportAppNames = {wireshark:'Wireshark', zenmap:'Zenmap', clamtk:'ClamTk'};
+const supportAppUnavailableReasons = {
+  unsupported_platform:'Desktop app buttons are supported on Linux only.',
+  no_desktop_session:'No active Linux desktop session was detected.',
+  not_found:'The app executable was not found on this computer.'
+};
+function supportAppFetchStatus() {
+  if (heartbeatState.supportAppsFailed) return 'Desktop app availability is unavailable; reconnect to refresh it.';
+  if (!heartbeatState.supportApps) return 'Checking this desktop session…';
+  return '';
+}
+function supportAppFeedback(message) {
+  const feedback = byId('support-app-launch-feedback');
+  if (feedback) feedback.textContent = message;
+}
+function renderSupportApps() {
+  const list = byId('support-app-launch-list');
+  if (!list) return;
+  const unavailable = supportAppFetchStatus();
+  if (unavailable) { list.textContent = unavailable; return; }
+  const rows = heartbeatState.supportApps.apps.map(app => {
+    const row = document.createElement('div'); row.className = 'support-app-launch-row';
+    const identity = document.createElement('div');
+    const detail = app.available ? 'Available in this desktop session.' : supportAppUnavailableReasons[app.reason];
+    identity.append(textNode('strong', supportAppNames[app.id]), textNode('span', detail, 'hb-detail'));
+    const action = document.createElement('div');
+    const launching = heartbeatState.launchingApps.has(app.id);
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
+    button.textContent = launching ? 'Opening…' : `Open ${supportAppNames[app.id]}`;
+    button.disabled = Boolean(!app.available || !heartbeatState.managementEnabled
+      || !toolManagementToken() || launching);
+    button.addEventListener('click', () => openSupportApp(app.id));
+    action.append(button);
+    if (app.available && (!heartbeatState.managementEnabled || !toolManagementToken())) {
+      const authorize = textNode('a', heartbeatState.managementEnabled ? 'Enter launch token' : 'Enable local actions in this HUD', 'hb-detail');
+      authorize.href = '#tool-management-controls'; action.append(authorize);
+    }
+    row.append(identity, action);
+    return row;
+  });
+  list.replaceChildren(...rows);
+}
+async function openSupportApp(appId) {
+  const name = supportAppNames[appId], token = toolManagementToken();
+  const app = heartbeatState.supportApps && heartbeatState.supportApps.apps.find(item => item.id === appId);
+  if (!name || !app || !app.available || !heartbeatState.managementEnabled || !token) {
+    supportAppFeedback('Opening a desktop app needs an available app, an enabled HUD launch, and its operator token.');
+    return;
+  }
+  if (!window.confirm(`Open ${name}?\n\nThis opens the GUI only. It does not start a scan, capture, sensor, or service.`)) return;
+  heartbeatState.launchingApps.add(appId); repaintHeartbeat();
+  try {
+    const result = await heartbeatFetch('/api/support-apps', {method:'POST', body:JSON.stringify({app:appId}),
+      headers:{'Content-Type':'application/json','X-Megalodon-Support-App':'1','X-Megalodon-Install-Token':token}});
+    if (!result || result.app !== appId || result.state !== 'launch_requested' || result.window_verified !== false) throw new Error('Invalid launch response');
+    supportAppFeedback(`${name} launch requested. MEGALODON cannot confirm that a window opened; no scan, capture, sensor, or service was started.`);
+  } catch (error) {
+    if (error.status === 403) byId('tool-management-token').value = '';
+    supportAppFeedback(`${name} could not be opened: ${error.message}.`);
+  } finally {
+    heartbeatState.launchingApps.delete(appId); repaintHeartbeat();
+  }
 }
 const integrationStatuses = {
   implemented: 'Implemented', optional: 'Optional', evaluation_only: 'Evaluation only — unverified',
@@ -257,7 +333,7 @@ function integrationCapabilityState(toolIndex, item) {
     qualification: {...integrationQualificationStates[item.selected_status],
       detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
     administration: {className: 'state-unknown', label: 'Operator managed',
-      detail: 'Observation is the default. An explicitly enabled Linux HUD and its operator token allow fixed Install/Start actions after confirmation. The HUD has no stop, removal, or configuration action.'},
+      detail: 'Observation is the default. An explicitly enabled Linux HUD and its operator token allow fixed Install/Start actions and GUI-only support-app launches after confirmation. The HUD has no stop, removal, or configuration action.'},
     health: {className: 'state-unknown', label: 'See the status light',
       detail: 'The heartbeat observes installation, process uptime and service state. It does not probe endpoints, sensor liveness, data freshness, or coverage.'}
   };
