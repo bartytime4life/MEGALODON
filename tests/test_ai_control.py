@@ -50,6 +50,8 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     assert status(AISettings(enabled=True))["state"] == "model_missing"
 
     def fake(path, method, body, timeout):
+        if path == '/api/show':
+            return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
         if path == "/api/tags":
             return json.dumps({"models": [{"name": AISettings.model, "digest": AISettings.model_digest}]}).encode()
         assert method == "POST" and json.loads(body)["model"] == AISettings.model
@@ -61,6 +63,8 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     assert status(AISettings(enabled=True))["state"] == "model_ready"
 
     def wrong_challenge(path, method, body, timeout):
+        if path == '/api/show':
+            return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
         if path == "/api/tags":
             return json.dumps({"models": [{"name": AISettings.model, "digest": AISettings.model_digest}]}).encode()
         return json.dumps({"model": AISettings.model, "response": "BROKEN", "done": True,

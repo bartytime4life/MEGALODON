@@ -4,10 +4,10 @@ from .status_glossary import GLOSSARY_ANCHOR_ID
 
 AI_PANEL = """
   <details class="panel ai-control" id="ai-control" aria-labelledby="ai-control-title">
-    <summary><span><strong id="ai-control-title">Local AI control</strong><small>Ask Qwen about bounded MEGALODON metadata after a live model check.</small></span><span class="summary-action" id="ai-control-action">Open AI controls</span></summary>
+    <summary><span><strong id="ai-control-title">Local AI control</strong><small>Ask the selected local model about bounded MEGALODON metadata after a live model check.</small></span><span class="summary-action" id="ai-control-action">Open AI controls</span></summary>
     <p>Model output is advice. Tool selection passes through MEGALODON policy and every attempt gets an audit receipt. This HUD offers bounded reads and report snapshots; firewall application remains unavailable. (This panel's own states are explained in full below; other pages' statuses are in the <a href="#__GLOSSARY_ANCHOR__">status glossary</a>.)</p>
     <div class="ai-controls">
-      <button id="ai-check" type="button">Check Ollama and Qwen</button>
+      <button id="ai-check" type="button">Verify selected model</button>
       <label class="field" for="ai-token"><span>Operator token from the HUD terminal</span>
         <span class="token-field">
           <input id="ai-token" type="password" autocomplete="off" spellcheck="false" maxlength="64">
@@ -20,7 +20,7 @@ AI_PANEL = """
         <option value="changed">What changed during the last hour?</option>
         <option value="alerts">Why are recent alerts present?</option>
         <option value="integrations">Which integrations are available?</option>
-        <option value="model">Is Ollama healthy and which Qwen model is active?</option>
+        <option value="model">Is Ollama healthy and which local model is active?</option>
         <option value="safe">What can be safely fixed automatically?</option>
         <option value="plan">Prepare a remediation plan</option>
         <option value="report">Generate a security summary report</option>
@@ -33,7 +33,7 @@ AI_PANEL = """
     <p id="ai-state" role="status" aria-live="polite">AI has not been checked. It is disabled until configured and verified — run <code>megalodon ai doctor --config config/settings.toml</code>, then see docs/ai-control-plane.md.</p>
     <dl class="ai-result" id="ai-result" hidden>
       <div><dt>OBSERVED · broker output</dt><dd><pre id="ai-observed"></pre></dd></div>
-      <div><dt>INFERRED · Qwen advice</dt><dd id="ai-inferred"></dd></div>
+      <div><dt>INFERRED · local model advice</dt><dd id="ai-inferred"></dd></div>
       <div><dt>PROPOSED / APPROVED / APPLIED</dt><dd id="ai-action-state">No host action requested or approved.</dd></div>
       <div><dt>Receipt</dt><dd id="ai-receipt"></dd></div>
     </dl>
@@ -74,7 +74,7 @@ let aiUserCanceled = false;
 const AI_STATE_TEXT = {
   disabled: 'Local AI is turned off in configuration. Run megalodon ai doctor --config config/settings.toml, then set [ai] enabled = true (see docs/ai-control-plane.md).',
   ollama_unavailable: 'Ollama is not reachable on loopback.',
-  model_missing: 'The configured Qwen model is not installed in Ollama.',
+  model_missing: 'The configured local model is not installed in Ollama.',
   model_available: 'The model tag is present but has not completed a live inference check.',
   model_loading: 'Another local AI request is already using the one inference slot. Try again in a moment.',
   concurrency_unavailable: "MEGALODON could not establish its own local concurrency lock, so no request to Ollama was attempted. This is a local platform or filesystem issue, not an Ollama or model problem.",
@@ -162,7 +162,7 @@ aiCheck.addEventListener('click', async () => {
     aiState.textContent = err && err.name === 'AbortError'
       ? (aiUserCanceled ? 'AI check canceled by operator.' : 'AI check timed out client-side.')
       : 'AI check failed. Core MEGALODON remains available.';
-  } finally { aiBusy = false; aiCheck.disabled = false; aiCheck.textContent = 'Check Ollama and Qwen'; aiCancel.hidden = true; }
+  } finally { aiBusy = false; aiCheck.disabled = false; aiCheck.textContent = 'Verify selected model'; aiCancel.hidden = true; }
 });
 aiAsk.addEventListener('click', async () => {
   if (aiBusy || aiAsk.disabled) return;

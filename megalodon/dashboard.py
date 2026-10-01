@@ -629,8 +629,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path == "/api/ai/status":
             from .ai_provider import status
-            if not self.ai_settings.enabled and not route.query:
-                self._send_json(status(self.ai_settings, probe=False))
+            if not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled and not route.query:
+                self._send_json(status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=False))
                 return
             token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
             if (route.query or self.headers.get_all("X-Megalodon-AI-Check", []) != ["1"]
@@ -638,7 +638,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     or not hmac.compare_digest(token_values[0], self.ai_operator_token)):
                 self._send_json({"error": "explicit local AI check required"}, status=403)
                 return
-            self._send_json(status(self.ai_settings, probe=True))
+            self._send_json(status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=True))
             return
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
@@ -1250,7 +1250,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _ai_ask(self) -> None:
         token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
         expected_origin = f"http://{self.headers.get('Host')}"
-        if (not self.ai_settings.enabled or self.ai_operator_token is None
+        if (not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled or self.ai_operator_token is None
                 or len(token_values) != 1
                 or not hmac.compare_digest(token_values[0], self.ai_operator_token)
                 or self.headers.get_all("Origin", []) != [expected_origin]
@@ -1279,7 +1279,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             from .managed_receipts import ManagedReceipts
             with (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
                 answer = ask(body["question"], Broker(
-                    self.store, receipts, self.ai_settings, self.ai_blocking))
+                    self.store, receipts, self.support_config.settings.ai if self.support_config is not None else self.ai_settings, self.ai_blocking))
             self._send_json(answer)
         except (ValueError, OSError, RuntimeError) as exc:
             self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
@@ -1795,6 +1795,7 @@ def serve(
                 handler.local_checks = LocalChecks(handler.store, source_available=True)
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
+            if heartbeat is not None:heartbeat.model_observer=handler.support_config.model_telemetry.snapshot
             from .operations import Operations
             from .defense import Defense
             handler.operations = Operations(handler.support_config)

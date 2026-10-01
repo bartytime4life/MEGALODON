@@ -474,7 +474,7 @@ APPS_SETUP_HTML = r'''
 APPS_SETUP_JS = r'''
 (() => {
  const root=byId('apps-setup-cards');if(!root||typeof window.addEventListener!=='function')return;
- const names={core:'Python and SQLite',tshark:'Wireshark and TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Qwen via local Ollama',nmap:'Nmap'};
+ const names={core:'Python and SQLite',tshark:'Wireshark and TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI via Ollama',nmap:'Nmap'};
  const settings={tshark:'support-capture-title',scapy:'support-capture-title',zeek:'support-config-zeek',suricata:'support-config-suricata-setup',clamav:'support-config-clamav-save',osquery:'support-config-osquery',qwen:'support-config-qwen-setup',nmap:'support-config-nmap-save'};
  const cards=[];
  for(const id of MegalodonControls.ids){
@@ -484,7 +484,7 @@ APPS_SETUP_JS = r'''
   const status=textNode('p');status.append(heartbeatLight(id),heartbeatDetail(id));content.append(status,installControl(id,names[id]));
   if(settings[id]){const configure=textNode('a','Configure for MEGALODON →','companion-button');configure.href='#'+settings[id];content.append(configure);}
   const options=Object.assign({local:true},typeof appConsole==='undefined'?{}:appConsole);MegalodonControls.mount(content,id,names[id],options);
-  card.append(content);root.append(card);cards.push({id,card,name:names[id].toLowerCase()});
+  card.append(content);root.append(card);cards.push({id,card,name:(names[id]+' '+id).toLowerCase()});
  }
  function filter(){const query=byId('apps-setup-query').value.trim().toLowerCase().slice(0,80);let shown=0;for(const item of cards){item.card.hidden=!item.name.includes(query);if(!item.card.hidden)shown++;}byId('apps-setup-status').textContent=shown+' of '+cards.length+' apps.';}
  function anchor(){const target=(window.location?.hash||'').slice(1),item=cards.find(item=>'setup-app-'+item.id===target);if(item){byId('apps-setup-query').value='';filter();item.card.open=true;item.card.querySelector('summary').focus({preventScroll:true});}}

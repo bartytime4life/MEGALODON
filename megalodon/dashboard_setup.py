@@ -138,7 +138,7 @@ function renderToolStatus() {
   const runtime = evidence.runtime;
   const names = {
     'python-sqlite': 'MEGALODON core', 'wireshark-tshark': 'Wireshark / TShark', zeek: 'Zeek', suricata: 'Suricata',
-    scapy: 'Scapy', nftables: 'nftables', clamav: 'ClamAV', osquery: 'osquery', 'qwen-ollama': 'Qwen / Ollama',
+    scapy: 'Scapy', nftables: 'nftables', clamav: 'ClamAV', osquery: 'osquery', 'qwen-ollama': 'Local AI / Ollama',
     nmap: 'Nmap'
   };
   const installedCount = readiness ? readiness.tools.filter(tool => tool.status === 'executable_found').length : null;
@@ -214,7 +214,7 @@ const softwareCatalog = [
   {id: 'nftables', name: 'nftables', mark: 'nf', group: 'host', requirement: 'Optional · Linux only', purpose: 'Linux firewall tooling for reviewing response plans.', note: 'Installing nftables changes no rules. The local defense workflow can preview and, after separate approval, apply a five-minute block for an observed remote address on this PC.', url: 'https://netfilter.org/projects/nftables/index.html', link: 'nftables install guide'},
   {id: 'clamav', name: 'ClamAV', mark: 'Cl', group: 'host', requirement: 'Optional · scoped local collection', purpose: 'Scan the local Downloads folder daily and review aggregate counts.', note: 'The local HUD automatically runs fixed scans and watches completed reports when ClamAV and Downloads are available. Use the signature update control in Setup when needed. Collection does not quarantine or upload files.'},
   {id: 'osquery', name: 'osquery', mark: 'oq', group: 'host', requirement: 'Optional · local package count', purpose: 'Review a fixed DEB package-count query.', note: 'The local HUD automatically runs the fixed read-only count hourly and watches completed results when osquery is available. It never imports package names.'},
-  {id: 'qwen', name: 'Ollama + Qwen', mark: 'AI', group: 'ai', requirement: 'Optional · local advisory', purpose: 'Host an optional local language model for bounded explanations.', note: 'Ollama is the runtime; Qwen is a separate model download. The advisory workflow needs a validated local model registry. Checking observes only the Ollama executable and process.', link: 'Ollama downloads'},
+  {id: 'qwen', name: 'Local AI + Ollama', mark: 'AI', group: 'ai', requirement: 'Optional · local advisory', purpose: 'Host an optional local language model for bounded explanations.', note: 'Ollama runs installed models locally. Choose a model in Local AI; availability and completed responses are checked separately.', link: 'Ollama downloads'},
   {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · scoped local collection', purpose: 'Review a completed authorized network inventory.', note: 'The local HUD runs hourly inventory and watches completed XML reports. Configure an authorized target here; inventory supplies aggregate counts. Separate bounded host discovery populates the local-network map for a scope selected in Setup.'}
 ];
 // Keep reading context across check updates and filter changes; keys are the fixed catalog.
@@ -331,7 +331,7 @@ function renderSoftwareShelf() {
       if (generation === softwareShelfGeneration) softwareGuidanceOpen.set(item.id, more.open);
     });
     more.append(textNode('summary', 'What to know before installing'), textNode('p', item.note));
-    if (item.id === 'qwen') { const model = textNode('a', 'Browse Qwen models separately ↗'); model.href = 'https://ollama.com/library/qwen2.5'; model.target = '_blank'; model.rel = 'noopener noreferrer'; more.append(model); }
+    if (item.id === 'qwen') { const model = textNode('a', 'Browse Ollama models ↗'); model.href = 'https://ollama.com/library'; model.target = '_blank'; model.rel = 'noopener noreferrer'; more.append(model); }
     if (['tshark', 'zeek', 'nftables'].includes(item.id)) { const guide = textNode('a', 'MEGALODON setup guidance ↗'); guide.href = toolAcquisition[item.id].url; guide.target = '_blank'; guide.rel = 'noopener noreferrer'; more.append(guide); }
     row.append(presence, actions, more); return row;
   });

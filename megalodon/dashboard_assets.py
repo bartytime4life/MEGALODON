@@ -736,7 +736,7 @@ const workspaceTargets = {
   'live-globe-title': 'live', 'live-globe-history': 'live', 'support-config-title': 'setup', 'support-apps-title': 'live', 'pc-live-title': 'live',
   'activity-globe-title': 'live', 'hud-export-title': 'reports', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
   'workspace-traffic': 'live', 'workspace-findings': 'findings',
-  'storage-history-title':'setup', 'network-setup-title':'setup', 'storage-evidence-title':'analysis', 'network-title':'live', 'setup-location-title':'setup', 'support-capture-title':'setup', 'support-config-interface':'setup', 'workspace-setup':'setup', 'settings':'setup', 'operations-title':'live', 'operations-history':'live', 'workspace-reports': 'reports', 'workspace-help': 'help',
+  'storage-history-title':'setup', 'network-setup-title':'setup', 'storage-evidence-title':'analysis', 'network-title':'live', 'support-model-title':'setup', 'setup-location-title':'setup', 'support-capture-title':'setup', 'support-config-interface':'setup', 'workspace-setup':'setup', 'settings':'setup', 'operations-title':'live', 'operations-history':'live', 'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
   'room-home-title': 'live', 'setup-title': 'setup', 'tool-management-controls': 'setup', 'room-traffic-title': 'live', 'room-findings-title': 'findings',
   'apps-connections-title':'setup', 'apps-connections':'setup', 'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'setup',

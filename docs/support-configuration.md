@@ -53,7 +53,7 @@ requests bounded capture cleanup and finalizes its ingestion receipt.
 | Nmap / Zenmap | Save a private IPv4 target/range of at most 256 addresses and queue the existing inventory worker. Default is loopback. Zenmap remains an optional Advanced desktop action. |
 | ClamAV / ClamTk | Select this user's Downloads or Documents folder, save the scanner scope and queue collection. A separate button starts the installed FreshClam signature updater through system authorization. |
 | osquery | Enable and queue the existing fixed DEB package count. No arbitrary SQL or enrollment. |
-| Ollama / Qwen | Configure the installed Ollama service for PC-only listening, select an already-installed model matching the supported digest, and enable bounded collector advice. No model download or command authority. The model inventory check remains available. |
+| Local AI / Ollama | Configure PC-only listening, choose any installed local text-completion model, and verify its response. The saved exact digest is shared by HUD analysis and collector advice. See [model selection](local-model-selection.md). |
 | Zeek | Verify the CLI and prepare automatic 10-second / 2,000-frame samples while background monitoring is enabled. Completed qualified conn.log intake remains separate. |
 | Suricata | Configure the passive system service for the selected interface, one worker, its runtime directory, and EVE read access. Existing rules are retained. Recent log summaries are separate from admitted alert evidence. |
 
@@ -85,6 +85,7 @@ The same actions are available from the reviewed checkout:
 ./scripts/configure-support-apps.sh osquery_configure
 ./scripts/configure-support-apps.sh qwen_configure
 ./scripts/configure-support-apps.sh qwen_check
+./scripts/configure-support-apps.sh model_refresh
 ./scripts/configure-support-apps.sh zeek_check
 ./scripts/configure-support-apps.sh suricata_configure --interface enp11s0
 ./scripts/configure-support-apps.sh suricata_check
@@ -100,7 +101,7 @@ buttons after signing in. Passwords are entered only in the OS/sign-in UI.
 settings, interfaces, action/capture results and a separate in-memory nonce.
 GET never launches a tool. `POST` requires the exact same Origin, its nonce in
 `X-Megalodon-Config-Token`, JSON content type and a 2–2048 byte closed body.
-Each action accepts only its documented interface, private target or folder
-choice. Duplicate keys/headers, encodings, query aliases, paths, commands,
+Each action accepts only its documented interface, private target, folder
+choice or exact installed model identity and compute mode. Duplicate keys/headers, encodings, query aliases, paths, commands,
 services, arbitrary URLs and extra fields are rejected. Responses stay below
 64 KiB. No CORS access is granted. Host and optional HTTP sign-in apply first.

@@ -33,10 +33,16 @@ def snapshot(configuration, companions):
         collecting=any(word in message.lower() for word in ('scanning','collecting','queued','waiting'))
         state='collecting' if collecting else 'connected' if result else 'needs_setup'
         add(key,name,state,message[:512],stamp,metrics)
-    qwen=dict(configuration.qwen_status)
+    if hasattr(configuration,'model_telemetry'):
+        observed=configuration.model_telemetry.snapshot()
+        qwen={k:observed[k] for k in ('state','message','updated_at')};qwen['metrics']=[]
+        if observed.get('response_ms') is not None:qwen['metrics'].append(metric('Last response',observed['response_ms'],'ms'))
+        if observed.get('memory_bytes') is not None:qwen['metrics'].append(metric('Loaded allocation',observed['memory_bytes']/1024**3,'GiB'))
+        if observed.get('vram_bytes') is not None:qwen['metrics'].append(metric('GPU allocation',observed['vram_bytes']/1024**3,'GiB'))
+    else:qwen=dict(configuration.qwen_status)
     good=[v for v in data['advisory'].values() if v and not v.startswith('Qwen unavailable')]
     if good:
         # A saved answer is evidence of past use, not current provider readiness.
         qwen['metrics']=[*qwen.get('metrics',[]),metric('Saved summaries with advice',len(good))]
-    add('qwen','Qwen via local Ollama',**qwen)
+    add('qwen','Local AI via Ollama',**qwen)
     return dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)

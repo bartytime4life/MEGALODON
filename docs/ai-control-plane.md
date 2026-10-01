@@ -1,6 +1,6 @@
 # Local AI control plane (draft, opt-in)
 
-The control path is `Qwen -> bounded literal-loopback adapter -> closed request
+The control path is `selected local model -> bounded literal-loopback adapter -> closed request
 validator -> fixed tool registry -> policy -> application adapter -> private
 SQLite receipt`. The model never receives a shell, executable name, SQL
 statement, filesystem path, network destination, credential, or approval token
@@ -25,12 +25,15 @@ The request timeout is at most 15 seconds, context at most 4096 tokens, and
 output at most 256 tokens. Readiness, ordinary advice and defense requests all
 set the processing batch to 64 tokens to reduce temporary GPU memory demand.
 This is an [Ollama runner option](https://github.com/ollama/ollama/blob/main/api/types.go),
-not a change to the context or output limit. Model and endpoint cannot come from a model reply or
-HTTP request. Changing the TOML pin requires an operator edit and review.
+not a change to the context or output limit. Model and endpoint cannot come from a model reply. The protected
+[Setup model selector](local-model-selection.md) can pin an installed local
+completion model for the HUD and backend. Provider destination remains fixed.
+CPU compute is the default; automatic compute is an explicit operator choice.
 
 Before every inference, the adapter observes `/proc/net/tcp{,6}` and refuses
 an absent, non-loopback, or inconclusive listener; it then checks the exact tag
-digest using one bounded `GET /api/tags`. Inference uses one non-streaming
+digest using one bounded `GET /api/tags`, then checks `/api/show` for local GGUF
+completion capabilities and rejects cloud model references. Inference uses one non-streaming
 `POST /api/generate` on the existing literal-loopback transport with no proxy,
 DNS, redirect, retry, cloud fallback or model-requested tool field. The
 transport uses the existing one-slot process lock, response-framing budget,
@@ -38,7 +41,7 @@ and active deadline. A successful TCP connection or tag lookup is never
 reported as `model_ready`; one bounded validated inference must complete.
 The status states are `disabled`, `ollama_unavailable`, `model_missing`,
 `model_available`, `model_loading`, `concurrency_unavailable`, `model_ready`,
-`request_timeout`, `invalid_response`, and `policy_rejection`.
+`request_timeout`, `invalid_response`, `provider_error`, `model_not_local`, and `policy_rejection`.
 `model_loading` means another request already holds the one inference slot;
 `concurrency_unavailable` means MEGALODON's own local lock could not be
 established (an unsupported platform or a filesystem fault), so no request
@@ -62,7 +65,7 @@ prompt. Durations and fixed error codes accompany durable state transitions.
 
 The current HUD offers fixed question IDs and permits only the Level 0 tools
 listed for each question, plus the Level 1 report tool for the report question.
-Qwen selects one tool by JSON; the broker validates the selection before reading
+The selected model selects one tool by JSON; the broker validates the selection before reading
 data. A second bounded request may explain the resulting typed projection.
 Unexpected tool selection and malformed model output fail closed. Tool
 selections with non-string names are routed to a failed `UNKNOWN_TOOL`

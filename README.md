@@ -197,6 +197,10 @@ reject non-normal completions and misleading text controls, while preserving
 deterministic evidence on malformed AI results. Anomaly dashboard display,
 installed-model acceptance and measured detection accuracy remain separate gates.
 
+Choose an installed Ollama model in **Setup → Local AI** for HUD analysis and
+background collector advice. See [model selection](docs/local-model-selection.md)
+for verification, compute options and local-only limits.
+
 The opt-in [local AI control plane](docs/ai-control-plane.md) adds fixed
 metadata tools, explicit model health, a bounded report action and auditable
 firewall proposals. It is disabled by default and does not enable live

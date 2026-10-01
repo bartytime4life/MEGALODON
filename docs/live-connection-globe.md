@@ -91,3 +91,13 @@ the new fixed actions on `POST /api/support-config`:
 Use the actual interface selected in the HUD. Geography refresh enables the saved
 online opt-in; geography disable revokes it. Background monitoring by itself does
 not enable location lookups.
+
+
+## Incoming-origin rings
+
+Red animated rings mark mapped remote sources of recently observed incoming
+traffic. Connections at the same approximate coordinate share a ring. Rings use
+the globe's projection and animation clock, disappear with stale or stopped feeds,
+and become static when motion is paused or reduced. They are traffic markers,
+not attack verdicts or active network pings. Unmapped sources do not acquire a
+made-up location. DB-IP locations remain approximate internet locations.

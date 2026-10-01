@@ -543,3 +543,13 @@ found executable does not prove configured, running or providing accepted data.
 The retained-history v2 read additionally requires `X-Megalodon-Check: 1`.
 Its chart page opens at most 32 visited source segments; background report jobs
 retain their separate 2,048-segment bound.
+
+
+### Installed local model selection
+
+The protected support-configuration API now exposes shared cached `model`
+telemetry and the closed `model_refresh` / `model_select` actions. See
+[the model-selection contract](local-model-selection.md#persistence-and-interfaces)
+for fields, bounds, persistence and legacy compatibility. Model selection never
+accepts a provider destination or generates a host command. Availability reads
+do not infer; selection and `qwen_check` perform an explicit bounded response test.

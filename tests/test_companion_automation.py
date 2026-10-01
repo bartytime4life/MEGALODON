@@ -68,7 +68,7 @@ def test_local_defaults_are_host_only_and_missing_reports_do_not_override_collec
     assert result["results"]["osquery"]["package_rows"] == 42
     assert "not installed" in result["status"]["nmap"]
     assert "not installed" in result["status"]["clamav"]
-    assert result["advisory"]["osquery"] == "Qwen unavailable (DISABLED)."
+    assert result["advisory"]["osquery"] == "Local AI unavailable (DISABLED)."
     assert 86000 < worker._next_collection["clamav"] - time.monotonic() <= 86400
 
 

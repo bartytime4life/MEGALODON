@@ -3,15 +3,15 @@
   "baseline": "4b5f8f8",
   "method": "Every file is read and classified; machine checks are not a line-by-line independent audit.",
   "counts": {
-    "documentation": 108,
+    "documentation": 109,
     "workflow": 14,
     "configuration": 31,
-    "source": 166,
+    "source": 167,
     "asset": 2,
     "fixture-or-contract": 247,
     "historical": 13,
     "retired": 32,
-    "test": 209
+    "test": 210
   },
   "files": [
     {
@@ -365,8 +365,8 @@
       "path": "README.md",
       "classification": "documentation",
       "purpose": "MEGALODON Defense MVP",
-      "bytes": 108387,
-      "sha256": "ef081cbb82276e9fa16388faf4c8af7f0baa7aaa0387dfd16fdee99b0d7e42bc",
+      "bytes": 108607,
+      "sha256": "c5c4001dd83aaf6e6298849f00d374b67e903e8feeb94bbe160cf3be1c9b711e",
       "dependencies": [
         "LICENSE",
         "SECURITY_REVIEW.md",
@@ -411,6 +411,7 @@
         "docs/live-connection-globe.md",
         "docs/live-pc-telemetry.md",
         "docs/local-model-advisory-contract.md",
+        "docs/local-model-selection.md",
         "docs/local-pc-setup.md",
         "docs/local-pc-setup.md#start-live-metadata-and-the-hud-together",
         "docs/local-pc-setup.md#start-support-apps",
@@ -629,10 +630,10 @@
       "path": "config/settings.toml",
       "classification": "configuration",
       "purpose": "settings",
-      "bytes": 1586,
-      "sha256": "fd92f23502941f35da3004651a1c00b8aa4d6870f3c1ffedf65c462c3d3b7293",
+      "bytes": 1674,
+      "sha256": "3151c5472683eb5f9b0acc104ae2b44de50920cffe7518dd016f148c1c44e5b6",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "TOML parsed"
@@ -3528,9 +3529,10 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 12363,
-      "sha256": "8f12d92b5e45245131ae63ba7193e7b45df072e7c6d2629d112dcf4a5717e019",
+      "bytes": 12699,
+      "sha256": "760d338354cfe1edfa558ef7b8f7eca14a1fb0c1085856539465d8e251d093d2",
       "dependencies": [
+        "local-model-selection.md",
         "qwen-provider-hardening.md"
       ],
       "disposition": "corrected",
@@ -3694,7 +3696,7 @@
         "schema",
         "workflow_url"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -4276,8 +4278,8 @@
       "path": "docs/dashboard-http-contract.md",
       "classification": "documentation",
       "purpose": "Dashboard HTTP and presentation contract",
-      "bytes": 38784,
-      "sha256": "3b1673288422e431f91c8f75e6f029ba8e3724d0405478db1fb6fb83c4cd00cd",
+      "bytes": 39295,
+      "sha256": "26a9d7db8bce7f745cfeb6a790119965c01519fa445b930169b2c58cb3125eef",
       "dependencies": [
         "../megalodon/dashboard.py",
         "../megalodon/dashboard_assets.py",
@@ -4289,6 +4291,7 @@
         "efficient-recording-reports.md",
         "live-connection-globe.md",
         "live-pc-telemetry.md",
+        "local-model-selection.md#persistence-and-interfaces",
         "support-configuration.md",
         "suricata-evidence-projection.md",
         "tool-heartbeat.md",
@@ -4658,10 +4661,10 @@
       "path": "docs/live-connection-globe.md",
       "classification": "documentation",
       "purpose": "Live connection atlas",
-      "bytes": 5427,
-      "sha256": "171530981560ee09102d8b757605e4eb04000571d5f9cb07d9058dda243036cd",
+      "bytes": 5924,
+      "sha256": "556e478bd270419be0292311c6efc525c0695fdac95371ee86f02534d3602c75",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -4750,6 +4753,20 @@
       "purpose": "Local Ollama/Qwen readiness integration",
       "bytes": 2938,
       "sha256": "ff438d0c9d1aeaa8e83ce1438d3f1aa0849a7b5397edc1b69ddda9d5898fbcc6",
+      "dependencies": [],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Markdown read and relative links checked"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/local-model-selection.md",
+      "classification": "documentation",
+      "purpose": "Choose a local AI model",
+      "bytes": 3861,
+      "sha256": "5f1ec0e3ee9e2b69cb4d3c1883d75c18d6187ed5f23ea2b8cfe1b1489b99a1bc",
       "dependencies": [],
       "disposition": "retained",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -5402,12 +5419,13 @@
       "path": "docs/support-configuration.md",
       "classification": "documentation",
       "purpose": "Configure support apps from the local HUD",
-      "bytes": 6725,
-      "sha256": "57ab92a534c421e2328e37754ef41ecdf18c3eacb258bfccc20099925db84d2d",
+      "bytes": 6803,
+      "sha256": "ddd6a382158854506616c0c3b259985c42f17a66ef563a6159cbe90aa09e5630",
       "dependencies": [
-        "live-connection-globe.md"
+        "live-connection-globe.md",
+        "local-model-selection.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -6003,13 +6021,15 @@
       "path": "megalodon/ai_provider.py",
       "classification": "source",
       "purpose": "Explicit, bounded Ollama checks and text generation for the AI control plane.",
-      "bytes": 11505,
-      "sha256": "087956f8abf1307b9c003d38ffc8e3ae661f00d3d1ff0665487d8a799384466b",
+      "bytes": 16697,
+      "sha256": "afcdd5115a635ce38d44e0bc23818e3f4ca2fe1129a01f1846038f30ef03716d",
       "dependencies": [
         ".",
         ".config",
         ".provider_containment",
         "__future__",
+        "collections",
+        "datetime",
         "http.client",
         "json",
         "os",
@@ -6030,6 +6050,7 @@
         "tests/test_companion_automation.py",
         "tests/test_dashboard_ai_control.py",
         "tests/test_defense.py",
+        "tests/test_model_selection.py",
         "tests/test_support_config.py"
       ]
     },
@@ -6256,6 +6277,7 @@
         "tests/test_model_profile_integration.py",
         "tests/test_model_profile_repair.py",
         "tests/test_model_profile_snapshot.py",
+        "tests/test_model_selection.py",
         "tests/test_network_topology.py",
         "tests/test_nmap_inventory.py",
         "tests/test_offline.py",
@@ -6424,10 +6446,13 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_control.py",
         "tests/test_automation_contract.py",
         "tests/test_capabilities.py",
+        "tests/test_defense.py",
         "tests/test_hub.py",
         "tests/test_local_model_readiness.py",
+        "tests/test_model_selection.py",
         "tests/test_offline.py",
         "tests/test_ollama_identity.py",
         "tests/test_readiness.py",
@@ -6703,8 +6728,8 @@
       "path": "megalodon/companion_automation.py",
       "classification": "source",
       "purpose": "Local collection and report watching for aggregate HUD companions.",
-      "bytes": 20333,
-      "sha256": "de60ac690b09718d445a122a71a35606565aa3cc9a04889f7805156375bd665b",
+      "bytes": 20454,
+      "sha256": "bf947c8be93fdb2341e3fdcc8e41298451947114d2adebba921ef09e1e41fcf7",
       "dependencies": [
         ".ai_provider",
         ".clamav_summary",
@@ -6727,7 +6752,7 @@
         "time",
         "tomllib"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -6742,8 +6767,8 @@
       "path": "megalodon/config.py",
       "classification": "source",
       "purpose": "Typed TOML configuration with conservative defaults.",
-      "bytes": 11399,
-      "sha256": "48720a724b8c87ecf9a13cf2f9b50b0477814c05de690f7c476aaf8ade7ed78a",
+      "bytes": 11858,
+      "sha256": "eef9aeffc4666b5087fc39396b32fd791035f3dc90a4e6244a396535ffef1c0f",
       "dependencies": [
         ".validation",
         "__future__",
@@ -6753,7 +6778,7 @@
         "re",
         "tomllib"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -6804,6 +6829,7 @@
         "tests/test_local_model_containment.py",
         "tests/test_local_model_containment_trust_boundary.py",
         "tests/test_local_setup.py",
+        "tests/test_model_selection.py",
         "tests/test_network_topology.py",
         "tests/test_offline_locations.py",
         "tests/test_operations.py",
@@ -6888,8 +6914,8 @@
       "path": "megalodon/dashboard.py",
       "classification": "source",
       "purpose": "Local dashboard. Telemetry routes are read-only.",
-      "bytes": 96843,
-      "sha256": "8fcdaa394d48ace2e91f2517dbf65f7cacbf2edd5583a922670139330a2922b3",
+      "bytes": 97317,
+      "sha256": "a0e4e43e5ab226a94c3441fe48d3765cd4a71b34eff974aa8d2b3818df27b46e",
       "dependencies": [
         ".ai_broker",
         ".ai_interface",
@@ -7044,12 +7070,12 @@
       "path": "megalodon/dashboard_ai_assets.py",
       "classification": "source",
       "purpose": "Explicit, bounded local AI controls for the Investigate workspace.",
-      "bytes": 12858,
-      "sha256": "49aaf668dd195e0c2410dfe0058340d1db87d94376ce2546334a82c4fa9117ad",
+      "bytes": 12887,
+      "sha256": "a5c475499a1be605565eb13f69e3c2464d1071fb48304df3534d3f67d622bd2b",
       "dependencies": [
         ".status_glossary"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7076,8 +7102,8 @@
       "path": "megalodon/dashboard_assets.py",
       "classification": "source",
       "purpose": "Same-origin dashboard assets, kept separate from HTTP request handling.",
-      "bytes": 146259,
-      "sha256": "289ec2436cb20ff1530e421eeffea7e3559f0129c87bed8bb044e0122b7e3f85",
+      "bytes": 146290,
+      "sha256": "5139d052a91c4d3a90e974349c5cd5229a0686e04e2e52c4953b78a7681ad05c",
       "dependencies": [
         ".control_room_assets",
         ".dashboard_action_plane",
@@ -7165,10 +7191,10 @@
       "path": "megalodon/dashboard_clamav.py",
       "classification": "source",
       "purpose": "Shared local and hosted automatic ClamAV summary panel.",
-      "bytes": 5377,
-      "sha256": "f462e050afb15d54c45478233aa7a08ed74dc90162f3b2b28e6488c3fc11afc6",
+      "bytes": 5381,
+      "sha256": "5f59f87b8adda80c6779aa25a3de41be73765d59751399ea5306ec09324b1b98",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7255,10 +7281,10 @@
       "path": "megalodon/dashboard_heartbeat.py",
       "classification": "source",
       "purpose": "Status lights and one-click installs for the local HUD.",
-      "bytes": 24989,
-      "sha256": "ff5a7777788445c61b445f4e2ad43e61efeaeb470ca7e80f08470e7b6743b351",
+      "bytes": 25493,
+      "sha256": "040b4154830e7fb9c298fd6ad34b378855ab322e81965e336837b65be59572f6",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7304,8 +7330,8 @@
       "path": "megalodon/dashboard_integrations.py",
       "classification": "source",
       "purpose": "Presentation for the static integration map; no tool or telemetry access.",
-      "bytes": 36428,
-      "sha256": "594005f21e92a47c5b77b2b0f5d85182cfc52eae8d5c2b47b50db4a118308574",
+      "bytes": 36435,
+      "sha256": "437ba83ab623358fe2fef7d92b3264ba9fe3965d776441b2aa0cf8c19056157e",
       "dependencies": [
         ".dashboard_action_plane",
         ".status_glossary"
@@ -7326,10 +7352,10 @@
       "path": "megalodon/dashboard_inventory.py",
       "classification": "source",
       "purpose": "Shared local/hosted inventory view for automatic local aggregates.",
-      "bytes": 9062,
-      "sha256": "81a3fe76e2a64396cf4d5371354469eb0d9458afef78952b624c675bcf31e2ed",
+      "bytes": 9066,
+      "sha256": "b4c687a80938192751a4715281ee8caf4af9cc4027fe7c871f17469c52c78d92",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7342,8 +7368,8 @@
       "path": "megalodon/dashboard_live_globe.py",
       "classification": "source",
       "purpose": "Local-only live geographic connection view and legacy history visibility hooks.",
-      "bytes": 35482,
-      "sha256": "b4be0ae6454d0ac8ae8f69cca539217b310f882b321dcf689636016a9bc65854",
+      "bytes": 38364,
+      "sha256": "e835bba7633d72573aa6d4f058dd6346c293335ff66e0bcaa6ee88f392619ee0",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7374,15 +7400,15 @@
       "path": "megalodon/dashboard_operations.py",
       "classification": "source",
       "purpose": "Visual local operations desk; bounded metadata and reviewed local defense.",
-      "bytes": 57330,
-      "sha256": "26ab2b74816d343ed64160eeef88e3e9a86a5b5d22118a050d3fe2cbec2dd2c2",
+      "bytes": 57359,
+      "sha256": "8dce8d2319111ecd89cfcae0dce48ba765d9d16aa7c494c9762cbacb4c1e9126",
       "dependencies": [
         ".dashboard_network",
         ".dashboard_setup",
         ".dashboard_storage",
         "re"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7395,10 +7421,10 @@
       "path": "megalodon/dashboard_osquery.py",
       "classification": "source",
       "purpose": "Shared automatic panel for a fixed osquery package count.",
-      "bytes": 3867,
-      "sha256": "639e6ce213d6f23d0c1880d3b38a056f2f171bf61989dd619c03db80b787c6f8",
+      "bytes": 3871,
+      "sha256": "28ebf71063267ad03518d86e0e2c8e92f6fc5911e8ca98ede080abb2bbd4ab51",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7442,8 +7468,8 @@
       "path": "megalodon/dashboard_setup.py",
       "classification": "source",
       "purpose": "First-launch presentation and bounded startup receipt rendering.",
-      "bytes": 44149,
-      "sha256": "5cea78dbf49913cddf4f0c80947da2e2206fa250f0880351cb11570e0080b59f",
+      "bytes": 44089,
+      "sha256": "538d98f0eeea02a090098e25d3d0ad147643231035e97aa4b466e9640a486761",
       "dependencies": [
         ".dashboard_heartbeat"
       ],
@@ -7528,8 +7554,8 @@
       "path": "megalodon/dashboard_support_config.py",
       "classification": "source",
       "purpose": "Explicit local support-tool setup and bounded capture controls.",
-      "bytes": 32491,
-      "sha256": "da36d46bd4abb5bd760bbd45759e48b882a6fd4cb07028a023cd9c9874f37c83",
+      "bytes": 36509,
+      "sha256": "ad3b14bb0635e6bfc3629e54b10ed5304eb6636ce905713a78fdeec48029baa1",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7599,8 +7625,8 @@
       "path": "megalodon/dashboard_workflows.py",
       "classification": "source",
       "purpose": "Local-only background workflow presentation over bounded observed status.",
-      "bytes": 15827,
-      "sha256": "8b0b75dc0fcaa7f98b5963164603d96dbb3ecf99f6d5b7f33afcf73aa8198567",
+      "bytes": 15831,
+      "sha256": "ecc687b7caffeced1e84130934d6a38d5d24237e731cf2d0a9a91fb585e11bc6",
       "dependencies": [
         ".dashboard_action_plane",
         ".dashboard_integrations",
@@ -7618,9 +7644,9 @@
     {
       "path": "megalodon/defense.py",
       "classification": "source",
-      "purpose": "Audited fixed local defense workflows. Qwen can propose, never authorize.",
-      "bytes": 17555,
-      "sha256": "d5285035b8f6e83a70b5141e5867e7fe78a70005b619595342d2647ff50f01c5",
+      "purpose": "Audited fixed local defense workflows. Local AI can propose, never authorize.",
+      "bytes": 17994,
+      "sha256": "dc61f137b46acb73c8e7109c3ed34d4b6ecfbd80d01e84af7c3af7bf7248d9a8",
       "dependencies": [
         ".ai_broker",
         ".ai_provider",
@@ -7643,7 +7669,7 @@
         "threading",
         "uuid"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8372,6 +8398,27 @@
       ]
     },
     {
+      "path": "megalodon/model_telemetry.py",
+      "classification": "source",
+      "purpose": "Shared cached model observations. Refreshes never load or infer with a model.",
+      "bytes": 5706,
+      "sha256": "6d4ccb9992e40f0d8665502d26948c8db09305c0ffc7bf6ea514bfc4ae77881a",
+      "dependencies": [
+        ".",
+        "datetime",
+        "threading",
+        "time"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_model_selection.py"
+      ]
+    },
+    {
       "path": "megalodon/models.py",
       "classification": "source",
       "purpose": "Typed domain objects. Packet payloads are intentionally not represented.",
@@ -8416,6 +8463,7 @@
         "tests/test_live_connections.py",
         "tests/test_local_model_advisory_contract.py",
         "tests/test_model_boundaries.py",
+        "tests/test_model_selection.py",
         "tests/test_offline.py",
         "tests/test_operations.py",
         "tests/test_packet_compaction.py",
@@ -9095,8 +9143,8 @@
       "path": "megalodon/offline_locations.py",
       "classification": "source",
       "purpose": "Optional, read-only coarse IP regions from an operator-installed MMDB file.",
-      "bytes": 6839,
-      "sha256": "680458bce5215bbfc4bfff52ed32b960a78dfe941ff2eba5187cc179045e3595",
+      "bytes": 7077,
+      "sha256": "24a8d699be0e65045ba56103225d45dc698ee58b640965e483473f163ab78a7d",
       "dependencies": [
         ".storage",
         "__future__",
@@ -9108,7 +9156,7 @@
         "stat",
         "typing"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -9325,6 +9373,7 @@
         "tests/test_hub.py",
         "tests/test_integration_map_states.py",
         "tests/test_local_model_readiness.py",
+        "tests/test_model_selection.py",
         "tests/test_posture.py",
         "tests/test_provider_containment.py"
       ]
@@ -12608,8 +12657,8 @@
       "path": "megalodon/support_config.py",
       "classification": "source",
       "purpose": "Fixed local companion configuration actions; no browser-selected commands.",
-      "bytes": 31493,
-      "sha256": "4ca4c96b32f2dfca11d6e42f1b04ab870cf1a360f8d6034e640db020cff7ac70",
+      "bytes": 33979,
+      "sha256": "95efcc612fd1404f0418612f7ae09fd22312d5418e21260a897ad7bc3e344d03",
       "dependencies": [
         ".ai_provider",
         ".background_monitor",
@@ -12620,6 +12669,7 @@
         ".live_geography",
         ".local_install",
         ".managed_capture",
+        ".model_telemetry",
         ".support_sensors",
         ".support_services",
         "__future__",
@@ -12648,6 +12698,7 @@
         "tests/test_dashboard.py",
         "tests/test_dashboard_support_apps_ui.py",
         "tests/test_dashboard_support_config_ui.py",
+        "tests/test_model_selection.py",
         "tests/test_support_config.py"
       ]
     },
@@ -12741,8 +12792,8 @@
       "path": "megalodon/support_workflows.py",
       "classification": "source",
       "purpose": "Current HUD-owned workflow observations; reads never start tools.",
-      "bytes": 3034,
-      "sha256": "636fac276ea81a6e8a669d2837268d37354a1378465b8e5e0c26eda868303628",
+      "bytes": 3641,
+      "sha256": "58be659eb906dc46bfce7c50c9e8984dcf513f028ec94f011ce938fd5e0a5bfd",
       "dependencies": [
         ".managed_capture",
         ".support_sensors"
@@ -12870,8 +12921,8 @@
       "path": "megalodon/tool_heartbeat.py",
       "classification": "source",
       "purpose": "Background tool heartbeat: installed, running and uptime per companion tool.",
-      "bytes": 16091,
-      "sha256": "51ae71fd333670f5bd2d83d1fd5770854b7607db251ec82fb799499e20a39dae",
+      "bytes": 16673,
+      "sha256": "bf3bba242f547fdc90059420a0494708ee75dfd7ffae83bb8f213f86a141b3fb",
       "dependencies": [
         ".capabilities",
         "__future__",
@@ -12888,7 +12939,7 @@
         "time",
         "typing"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -13004,6 +13055,7 @@
         "tests/test_model_profile_repair.py",
         "tests/test_model_profile_snapshot.py",
         "tests/test_offline.py",
+        "tests/test_offline_locations.py",
         "tests/test_ollama_identity.py",
         "tests/test_release_evidence_packet.py",
         "tests/test_reporting.py",
@@ -13669,8 +13721,8 @@
       "path": "tests/live_globe_browser.cjs",
       "classification": "test",
       "purpose": "live globe browser",
-      "bytes": 11164,
-      "sha256": "084ff0635c29d20ed63230d2b0c201634490289305825010122a2064a759ebbf",
+      "bytes": 14575,
+      "sha256": "2dc020cdcf60327fee8f595b158d27e935924fa02d129b061846ab67a2a91289",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -13806,8 +13858,8 @@
       "path": "tests/support_config_browser.cjs",
       "classification": "test",
       "purpose": "support config browser",
-      "bytes": 13591,
-      "sha256": "dfd648feb65877cefd094e252c4536aa63496e692f08a15be8952e834a181720",
+      "bytes": 14911,
+      "sha256": "b3fed47c97c0f426165358c8644711163212a5c13438d0ed8be70fbc68589008",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -13918,8 +13970,8 @@
       "path": "tests/test_ai_control.py",
       "classification": "test",
       "purpose": "Closed AI control boundary using synthetic metadata and a fake provider.",
-      "bytes": 17834,
-      "sha256": "1da5f6bea3e09d64376871ab76225889ebeb458762edf6e2da42e9bfacaeeaca",
+      "bytes": 18098,
+      "sha256": "b1fbbfe01d1d96b66f99b2bfebce7084c6011906001e2f87a08a9ec775e1bcfd",
       "dependencies": [
         "__future__",
         "datetime",
@@ -14670,8 +14722,8 @@
       "path": "tests/test_companion_automation.py",
       "classification": "test",
       "purpose": "Local companion jobs are scoped, bounded and counts-only.",
-      "bytes": 12564,
-      "sha256": "d12dc718c11a1e4caa394133158d6a1de8fdb578466d3acf72dfa3a1e912379a",
+      "bytes": 12568,
+      "sha256": "be2845c3cf17a57e80df1f35288466d997723a741b82081c7429591be0d37f58",
       "dependencies": [
         "contextlib",
         "datetime",
@@ -14689,7 +14741,7 @@
         "urllib.error",
         "urllib.request"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -14723,8 +14775,8 @@
       "path": "tests/test_config.py",
       "classification": "test",
       "purpose": "test config",
-      "bytes": 6704,
-      "sha256": "64d4f79f0298fe7e9d4bd9fc12c6fc194584f719f55ca804362c098a5dd1b665",
+      "bytes": 6743,
+      "sha256": "02ce416bb908894ac5b79f1dc9aa1e9e4b309e14d10df681c316b1bfc4e491a8",
       "dependencies": [
         "__future__",
         "megalodon.config",
@@ -14733,7 +14785,7 @@
         "tempfile",
         "unittest"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -15535,8 +15587,8 @@
       "path": "tests/test_defense.py",
       "classification": "test",
       "purpose": "test defense",
-      "bytes": 7710,
-      "sha256": "fe3f55951aab5544b7bf1af3c0b9f8645e272daffdb2b2117ae525f8c1c479ed",
+      "bytes": 7842,
+      "sha256": "e29bb58b667993acae2f2534a831787d55340cc8b2fd8256fc04de9e6348aced",
       "dependencies": [
         "copy",
         "ipaddress",
@@ -15549,7 +15601,7 @@
         "pytest",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -16559,6 +16611,29 @@
       "related_tests": []
     },
     {
+      "path": "tests/test_model_selection.py",
+      "classification": "test",
+      "purpose": "Selectable local artifacts retain admission, atomic settings and truthful status.",
+      "bytes": 7765,
+      "sha256": "b0b4ac3c4f504337b68bc9b5ae8aca25f4ec4f779fd0656df05e6cf3a5314140",
+      "dependencies": [
+        "dataclasses",
+        "json",
+        "megalodon",
+        "megalodon.config",
+        "megalodon.model_telemetry",
+        "pathlib",
+        "pytest",
+        "types"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "tests/test_network_topology.py",
       "classification": "test",
       "purpose": "Bounded local topology, explicit discovery, cancellation and truthful edges.",
@@ -16643,8 +16718,8 @@
       "path": "tests/test_offline_locations.py",
       "classification": "test",
       "purpose": "The optional local region lookup uses synthetic addresses and a fake MMDB reader.",
-      "bytes": 5998,
-      "sha256": "402149ae2203cc79561a037770fcd55be9f652e9109fc78d65896fd6cb42fdb7",
+      "bytes": 6323,
+      "sha256": "5b9293d2182f99dd0fcac23bfcc016bc5aab62574b648f373cbee60d942716be",
       "dependencies": [
         "http.client",
         "http.server",
@@ -16659,7 +16734,7 @@
         "threading",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -18396,10 +18471,10 @@
       "path": "tests/workflows_browser.cjs",
       "classification": "test",
       "purpose": "workflows browser",
-      "bytes": 9539,
-      "sha256": "1b639f441d85720c4c06f9dc4541b703b1a44dda7f517b3d77980d46cdff7e2e",
+      "bytes": 9543,
+      "sha256": "58bc45c44a384f8cddf599b50a3a5c9ac4db71f664012bb5e84a4235d2059f27",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -20185,6 +20260,42 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
+      "element": "select",
+      "id": "support-model-select",
+      "type": null,
+      "label": null,
+      "disabled": true,
+      "source_references": 5,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "select",
+      "id": "support-model-compute",
+      "type": null,
+      "label": null,
+      "disabled": true,
+      "source_references": 4,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "support-model-save",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 1,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "support-model-refresh",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 1,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
       "element": "button",
       "id": "support-config-qwen-setup",
       "type": "button",
@@ -20500,7 +20611,7 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
-  "control_count": 158,
+  "control_count": 162,
   "duplicate_ids": [],
   "missing_anchors": [],
   "exclusions": [

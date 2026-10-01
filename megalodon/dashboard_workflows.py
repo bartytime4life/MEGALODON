@@ -82,7 +82,7 @@ WORKFLOWS_JS = r'''
 (() => {
   if(typeof localHudLaunch==='undefined'||!byId('workflows-refresh'))return;
   const ids=['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'];
-  const names={core:'MEGALODON',tshark:'TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Qwen',nmap:'Nmap'};
+  const names={core:'MEGALODON',tshark:'TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI',nmap:'Nmap'};
   const labels={connected:'Data connected',saved_result:'Saved result available',collecting:'Collecting',ready:'Ready',stopped:'Configured · stopped',standby:'Standby alternative',needs_setup:'Needs setup',unavailable:'Unavailable',error:'Error'};
   const view={payload:null,failed:false,pending:false,visible:false,timer:null,lastAt:0,open:new Set(),reference:new Set()};
   const workspace=byId('workspace-interfaces');

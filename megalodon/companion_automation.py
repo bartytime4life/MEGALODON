@@ -287,19 +287,20 @@ class CompanionAutomation:
             self._status[kind] = f"{source} · completed; saved aggregate"
         if self.config.qwen_advisory and not self.ai.enabled:
             with self._lock:
-                self._advisory[kind] = "Qwen unavailable (DISABLED)."
+                self._advisory[kind] = "Local AI unavailable (DISABLED)."
         elif self.config.qwen_advisory:
             from .ai_provider import AIProviderError, generate
+            model_settings = self.ai
             try:
                 prompt = ("Explain these completed security inventory counts in at most two sentences. "
                           "State that counts are not proof of safety or a threat. Do not propose commands, "
                           "targets or actions. Data: " + json.dumps({"kind": kind, "counts": value}, sort_keys=True))
-                explanation = generate(self.ai, prompt, max_tokens=120)
+                explanation = generate(model_settings, prompt, max_tokens=120)
             except (AIProviderError, ValueError) as exc:
-                explanation = f"Qwen unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
+                explanation = f"Local AI unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
             if self.evidence is not None and self.evidence.enabled:
                 self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
-                    source='local Qwen advisory',data=dict(tool=kind,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
+                    source='local model advisory',data=dict(tool=kind,model=model_settings.model,model_digest=model_settings.model_digest,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
             with self._lock:
                 self._advisory[kind] = explanation[:1024]
 
