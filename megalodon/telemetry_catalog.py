@@ -4,11 +4,11 @@ from html import escape
 # id, feature, source, update mode, local workspace target
 FEATURES = (
  ('host-resources','Live PC resources and interface rates','Read-only Linux CPU, memory, process, interface and socket counters','Every 2 seconds; up to 10 minutes of memory-only history','pc-live-title'),
- ('traffic','Traffic charts and findings','Qualified core metadata; up to 500 event and 200 finding candidates','Configured refresh; 5 seconds by default','room-home-title'),
- ('globe','Globe and traffic-volume lanes','Rolling-hour metadata and optional approximate offline IP locations','Configured refresh; selected minute within rolling hour','activity-globe-title'),
+ ('traffic','Traffic charts and findings','Newest qualified packet window or retained packet detail / compact summaries','5-second latest refresh; bounded historical pages on request','room-home-title'),
+ ('globe','Live connection globe','Captured directions and approximate offline IP locations','Live / recently retained conversations; unavailable locations remain unmapped','activity-globe-title'),
  ('evidence','Ingestion evidence','Source-qualified committed ingestion receipts','Startup request; source selection or retry','ingestion-runs-title'),
  ('offline','Offline packet / flow analysis','Explicitly selected TShark or Zeek summary','Startup snapshot; restart to load a different file','offline-title'),
- ('suricata','Suricata alerts','Separately selected durable external-alert store','Startup snapshot; no sensor polling','suricata-title'),
+ ('suricata','Suricata','Configured EVE flow and alert intake; separate legacy durable-store view','Managed source checkpoints; permission and source gaps remain explicit'),
  ('advisory','Legacy Qwen advisory','Explicitly supplied display-only receipt','Startup snapshot; not live AI analysis','analysis-window-title'),
  ('ai','AI questions and provider status','Opt-in token-gated local provider and private receipts','Only on explicit request','deep-analysis-title'),
  ('reference','Service and protocol reference','Verified bundled IANA registrations','On explicit lookup; not network service discovery','reference-title'),
@@ -17,22 +17,24 @@ FEATURES = (
  ('inventory','Network inventory','Local fixed Nmap loopback scan or watched completed XML report','Local HUD collects hourly when Nmap is installed; reports checked every 15 seconds','inventory-title'),
  ('clamav-scan','Completed file scan','Local fixed ClamAV Downloads scan or watched completed report','Local HUD scans daily when ClamAV and Downloads exist; reports checked every 15 seconds','clamav-title'),
  ('osquery-count','Package inventory','Local fixed osquery DEB row count or watched completed result','Local HUD collects hourly when osquery is installed; reports checked every 15 seconds','osquery-title'),
- ('reports','Reports and hosted summary','Validated bounded metadata, held for preview/download','Explicit local export; hosted import remains a saved snapshot','room-reports-title'),
+ ('topology','Local network topology','This PC, routes, neighbors, captured peers and optional authorized discovery','Passive snapshots; selected host discovery every 15 minutes','network-title'),
+ ('storage','Managed storage and compact history','Catalog, SQLite sidecars, managed working files and retained evidence','Automatic age / byte accounting and verified compact-history rotation','storage-evidence-title'),
+ ('reports','Visual local reports','Selected dates across retained evidence and verified compact summaries','Daily at 9 AM local by default; on-demand generation and cached downloads','room-reports-title'),
  ('viewer','Companion app viewer','User-selected companion console URL','App-owned UI; does not connect its telemetry','app-viewer-title'),
  ('automation','Action scripts and time preview','Closed command references and recurrence calculation','On explicit preview; no scheduled job or action','action-plane-title'),
  ('exchange','Threat context / SIEM / SOAR','Offline STIX reader, local SIEM exporter; SOAR contract only','Explicit offline operations; no remote feed or delivery','integrations-title'),
 )
 TOOLS = (
  ('core','Python + SQLite','Qualified core traffic and finding projection','Refreshing stored metadata'),
- ('tshark','TShark / Wireshark','Completed offline capture analysis','Selected startup summary; no live tool feed'),
- ('zeek','Zeek','Completed conn.log analysis','Selected startup summary; flow units stay separate'),
- ('suricata','Suricata','Committed external alert publications','Selected startup snapshot'),
+ ('tshark','TShark / Wireshark','Background header-only packet metadata and optional offline analysis','Configured interface and permissions; capture state and accepted data are separate'),
+ ('zeek','Zeek','Managed background conn.log summaries or selected offline log','Source-qualified flow updates; not added to packet counts'),
+ ('suricata','Suricata','Configured EVE flow and alert intake; separate legacy durable-store view','Managed source checkpoints; permission and source gaps remain explicit'),
  ('scapy','Scapy','Optional separately operated metadata capture','Core projection after qualified ingestion'),
  ('qwen','Qwen / Ollama','Explicit local AI requests and advisory receipts','On demand; presence is not model readiness'),
- ('nftables','nftables','Deterministic response-plan evidence','No live firewall telemetry or application'),
- ('clamav','ClamAV','Local Downloads scan and completed-report watcher','Saved scanned / matched file counts; no quarantine or signature update'),
+ ('nftables','nftables','Operator-reviewed temporary containment and response evidence','Fixed local defense workflow, OS authorization, readback and release'),
+ ('clamav','ClamAV','Configured local folder scan and completed-report watcher','Saved scanned / matched counts; signature update in Setup; no automatic quarantine'),
  ('osquery','osquery','Local fixed DEB count and completed-result watcher','Aggregate count only; no daemon or arbitrary query pack'),
- ('nmap','Nmap','Local loopback scan and completed-report watcher','Aggregate host / port states; no LAN scan by default'),
+ ('nmap','Nmap','Configured inventory scan, report watcher and selected-scope host discovery','Loopback inventory by default; LAN discovery requires selected authorized scope'),
 )
 
 

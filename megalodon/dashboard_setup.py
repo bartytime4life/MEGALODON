@@ -29,7 +29,7 @@ SETUP_HTML = """
         </div>
         <p id="setup-readiness" role="status">Reading startup information…</p>
         <details class="tool-status-details"><summary>See every tool observation</summary>
-          <p class="setup-boundary">Found means an executable is on the checked PATH. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
+          <p class="setup-boundary">Found means an executable is in a checked PATH or known installation prefix. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
           <div id="setup-tool-status" class="tool-status-list"></div>
         </details>
         <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration. Tool management requires an explicitly enabled launch, its operator token, and your confirmation.</p>
@@ -100,7 +100,7 @@ const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata',
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
-  const labels = {executable_found: 'Executable found', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
+  const labels = {executable_found: 'Executable found', not_found: 'Not found in checked locations', not_checked: 'Not checked by executable discovery'};
   return labels[report.tools[index].status];
 }
 // Apps & integrations intentionally keeps the one-shot HUD-launch presence
@@ -279,7 +279,7 @@ function optionalToolSummary(readiness) {
   const counts = `${found} found · ${missing} not found · ${unchecked} not checked`;
   if (eligibleUnchecked === eligible.length) return {
     result: 'Unable to check', state: 'neutral',
-    detail: `${counts}. Executable discovery could not check any eligible tools. This check inspects Linux PATH only; Scapy needs a separate Python-package check.`
+    detail: `${counts}. Executable discovery could not check any eligible tools. This check inspects Linux PATH and known installation prefixes; Scapy needs a separate Python-package check.`
   };
   return {result: counts, state: eligibleUnchecked ? 'neutral' : 'ready', detail: eligibleUnchecked
     ? 'Partial observation: some eligible tools could not be checked. Missing optional software does not block the HUD.'
@@ -293,7 +293,7 @@ function softwarePresence(item) {
   const index = workflowToolIds.indexOf(item.id);
   const evidence = latestToolEvidence();
   if (!evidence.readiness || index < 0) return 'Availability not checked';
-  const labels = {executable_found: 'Executable found', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
+  const labels = {executable_found: 'Executable found', not_found: 'Not found in checked locations', not_checked: 'Not checked by executable discovery'};
   const stamp = receipt ? 'at last check' : 'at HUD launch';
   return `${stale}${labels[evidence.readiness.tools[index].status]} · ${stamp}`;
 }

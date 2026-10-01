@@ -33,6 +33,7 @@ import webbrowser
 import secrets
 import time
 
+from .build_identity import PACKAGE_DIGEST
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .dashboard_signin import SIGNIN_HTML, SIGNIN_CSS, SIGNIN_JS
 from .dashboard_action_plane import ACTION_PRESETS
@@ -485,6 +486,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
+        if self.path == '/healthz':
+            self._send_json({'status': 'ready', 'package_sha256': PACKAGE_DIGEST})
+            return
         if self.path == "/sign-in" and self._sign_in_enabled():
             self._send(200, "text/html; charset=utf-8", SIGNIN_HTML.encode())
             return
@@ -724,6 +728,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "HUD summary unavailable"}, status=503)
                 return
             self._send(200, "application/json; charset=utf-8", payload)
+            return
+        if route.path == '/api/traffic-history-v2':
+            try:
+                params = _bounded_query(route.query, max_fields=3)
+                if set(params)-{'start','end','cursor'} or not {'start','end'}<=set(params) or any(len(v)!=1 for v in params.values()):
+                    raise ValueError('Invalid history query')
+                if self.evidence is None:
+                    self._send_json({'error':'Managed history is unavailable'},status=503)
+                    return
+                from .retained_history import RetainedEvidenceReader
+                payload=RetainedEvidenceReader(self.evidence).history_page(**{k:v[0] for k,v in params.items()})
+                if len(json.dumps(payload).encode())>256*1024:raise ValueError('History response bound')
+                self._send_json(payload)
+            except (ValueError,OSError,sqlite3.Error):
+                self._send_json({'error':'History is unavailable or its query is invalid'},status=422)
             return
         if route.path == "/api/traffic-history":
             from .dashboard_traffic import MAX_BYTES, history_parameters

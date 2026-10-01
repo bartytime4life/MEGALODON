@@ -104,7 +104,10 @@ class Cancelled(Exception):
     pass
 
 
-class ReportService:
+from .retained_history import RetainedEvidenceReader
+
+
+class ReportService(RetainedEvidenceReader):
     def __init__(self, evidence, *, clock=None, monotonic=time.monotonic, zone=None):
         self.evidence = evidence
         self.clock = clock or evidence.clock
@@ -240,88 +243,6 @@ class ReportService:
     def _check(self):
         if self.cancel_event.is_set() or self.stop_event.is_set():
             raise Cancelled()
-
-    def _sources(self, start, end):
-        sources, gaps = [], []
-        with self.evidence.lock:
-            entries = deepcopy(self.evidence._catalog['entries'])
-        packet_by_id = {e['id']:e for e in entries if e['category']=='packets' and e['state'] in {'open','closed'}}
-        verified_rollups = {e['source_segment']:e['id'] for e in entries if e['category']=='packet_rollups'
-                            and e['state']=='closed' and e.get('source_segment')
-                            and (e['source_segment'] not in packet_by_id or
-                                 packet_by_id[e['source_segment']].get('compacted_to')==e['id'])}
-        candidates = [e for e in entries if e['category'] not in {'reports', 'cases'} and e['state'] in {'open', 'closed'}
-                      and not (e['category']=='packets' and e['id'] in verified_rollups)
-                      and not (e['category']=='packet_rollups' and verified_rollups.get(e.get('source_segment'))!=e['id'])
-                      and (not e.get('last_at') or epoch(e['last_at']) >= start)
-                      and (not e.get('first_at') or epoch(e['first_at']) < end)]
-        if any(e['state'] == 'needs_review' for e in entries):
-            gaps.append('Protected evidence requiring recovery review was excluded.')
-        if len(candidates) > MAX_SEGMENTS:
-            gaps.append('The 2,048-segment report limit was reached; the result is incomplete.')
-        for entry in candidates[:MAX_SEGMENTS]:
-            self._check()
-            try:
-                with self.evidence.lock, self.evidence._db(entry) as db:
-                    table, key = ('events', 'id') if entry['kind'] == 'core' else ('ai_receipt_events', 'sequence') if entry['kind'] == 'receipt' else ('records', 'id')
-                    maximum = db.execute(f'SELECT MAX({key}) FROM {table}').fetchone()[0] or 0
-                sources.append((entry, maximum))
-                if entry.get('recovered_incomplete'):
-                    gaps.append('An interrupted capture contributes committed evidence; capture coverage is incomplete.')
-                if entry.get('source_incomplete'):
-                    gaps.append('A compacted source has an incomplete capture receipt; unobserved traffic remains unknown.')
-            except (OSError, ValueError, sqlite3.Error):
-                gaps.append('A source segment expired or could not be read before aggregation.')
-        return sources, gaps
-
-    def _pages(self, entry, maximum, start, end):
-        last = 0
-        while last < maximum:
-            self._check()
-            with self.evidence.lock, self.evidence._db(entry) as db:
-                table, key = ('events', 'id') if entry['kind'] == 'core' else ('ai_receipt_events', 'sequence') if entry['kind'] == 'receipt' else ('records', 'id')
-                rows = db.execute(f'SELECT * FROM {table} WHERE {key}>? AND {key}<=? ORDER BY {key} LIMIT 512', (last, maximum)).fetchall()
-                if not rows:
-                    return
-                linked = {}
-                if entry['kind'] == 'core':
-                    # No per-event query loop: findings and their verified action
-                    # relationships are selected once for this fixed event page.
-                    for item in db.execute('SELECT * FROM detections WHERE event_id>? AND event_id<=? ORDER BY id', (last, rows[-1]['id'])):
-                        item = dict(item)
-                        linked.setdefault(item['event_id'], []).append(item)
-                    actions = [dict(r) for r in db.execute('SELECT a.*, d.event_id FROM actions a JOIN detection_actions l ON l.action_id=a.id JOIN detections d ON d.id=l.detection_id WHERE d.event_id>? AND d.event_id<=?', (last, rows[-1]['id']))]
-                else:
-                    actions = []
-            output = []
-            for row in rows:
-                row = dict(row)
-                stamp = row['observed_at'] if entry['kind'] != 'receipt' else row['timestamp']
-                if entry['kind'] == 'core':
-                    if not start <= epoch(stamp) < end:continue
-                    row.pop('metadata_json', None)
-                    row['findings'] = linked.get(row['id'], [])
-                    row['actions'] = [a for a in actions if a['event_id'] == row['id']]
-                    source, data = 'accepted packet metadata', row
-                elif entry['kind'] == 'receipt':
-                    if not start <= epoch(stamp) < end:continue
-                    source, data = 'legacy receipt ledger', json.loads(row['payload_json'])
-                else:
-                    source, data = row['source'], json.loads(row['data'])
-                    if entry['category']=='packet_rollups' and data.get('kind')=='conversation_v1':
-                        first,last=epoch(data['first_at']),epoch(data['last_at'])
-                        if last<start or first>=end:continue
-                        if first<start or last>=end:
-                            data=dict(kind='partial_interval')
-                            stamp=utc(max(start,first))
-                    elif not start <= epoch(stamp) < end:continue
-                output.append(dict(id=entry['id'] + ':' + str(row[key]), category=entry['category'], observed_at=stamp, source=source, data=data))
-            last = rows[-1][key]
-            yield output, len(rows)
-            # Yield the writer between pages; reports never hold a long read
-            # transaction that blocks checkpoint reclamation.
-            if self.stop_event.wait(.001):
-                raise Cancelled()
 
     def _aggregate(self, identifier, start, end):
         sources, gaps = self._sources(start, end)

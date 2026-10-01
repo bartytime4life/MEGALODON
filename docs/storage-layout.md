@@ -41,7 +41,7 @@ authorized external producer.
 | `contracts/*/v1/` | Inert schemas, accepted/rejected fixtures, and per-contract `README.md` boundary notes | Maintainers | Contract tests; `tools/build_reference_assets.py` and related build tooling |
 | `megalodon/reference/iana-v1/` (2.7 MiB) | SHA-256-pinned IANA service/port and protocol snapshot | `tools/build_reference_assets.py` | `megalodon/reference/loader.py`; the dashboard's read-only Reference Library panel |
 | `megalodon/reference/corpus-v1/` (1.7 MiB) | Deterministic synthetic detector-evaluation corpus | `tools/build_reference_assets.py` | `megalodon.reference.loader.evaluate_corpus`, exposed by `python -m megalodon.evaluation corpus` |
-| `site/dist/` | Static Defense Console source mirror (HTML/CSS/JS, no build step); equality with the hosted version is separately receipted and may be unverified | Maintainers; current deployment status is recorded in [`docs/site-source-alignment.md`](site-source-alignment.md) | A browser only; no MEGALODON process reads `site/` at runtime |
+| `site/retired/` | HTTP 410 retirement worker; former hosted assets are recoverable in Git | Historical deployment identity only | No runtime dependency |
 | `examples/` | Bounded JSONL replay fixture | Maintainers | `python -m megalodon run` examples in the README |
 
 None of these paths grow at runtime. Updating them is a source change reviewed

@@ -113,10 +113,3 @@ def test_packaged_parser_and_both_hud_surfaces():
     assert json.loads(result.stdout) == value
 
 
-def test_repository_mirror():
-    root = Path(__file__).resolve().parents[1]
-    if not (root/'site/dist').is_dir():
-        pytest.skip('Hosted source is separate from sdist')
-    assert (root/'site/dist/inventory.js').read_text() == INVENTORY_JS
-    assert (root/'site/dist/inventory.css').read_text() == INVENTORY_CSS
-    assert INVENTORY_HTML in (root/'site/dist/index.html').read_text()

@@ -105,15 +105,6 @@ def test_ordinary_dashboard_setup_performs_no_readiness_check(monkeypatch):
     assert receipt["runtime"] is None
 
 
-def test_local_and_hosted_companion_assets_match():
-    from megalodon import dashboard_tool_assets as assets
-    root = Path(__file__).resolve().parents[1]
-    if not (root / "site/dist").exists():
-        pytest.skip("Site mirror is not part of the Python distribution")
-    for key, file in {"LIFECYCLE_JS": "lifecycle.js", "READINESS_JS": "readiness.js", "CONTROLS_JS": "controls.js", "CONTROLS_CSS": "controls.css"}.items():
-        assert getattr(assets, key) == (root / "site/dist" / file).read_text()
-
-
 def test_launch_builder_quotes_paths_and_rejects_incomplete_values():
     import shutil
     from megalodon.dashboard_setup import SETUP_JS

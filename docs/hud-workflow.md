@@ -9,46 +9,20 @@ uses its own rolling hour and selected minute. Existing same-origin read-only
 `/api/traffic` and `/api/traffic-history` supply data at the configured refresh
 interval (five seconds by default). No sensor is started by opening a view.
 
-## Local summary export
+## Visual reports and advanced exports
 
-The local HUD retains a private summary preview and download workflow. Select
-**Prepare summary**, review the aggregate JSON, then **Download summary JSON**
-for private review. Preparation uses the latest bounded database window,
-independently of the displayed time filter. A failed refresh preserves the
-previous preview and its original timestamp. The hosted reference Site cannot
-read localhost or your database and does not accept this activity summary.
+Open Reports for the latest saved visual report. **Make report now**, **Save
+report**, and **Print / save PDF** are the primary actions. The default interval
+is the preceding 24 hours; daily generation runs at 9 AM in this PC's time zone
+while the local service is running. Selected dates aggregate retained segments
+and verified compact summaries with explicit coverage limits. Reports remain
+local and downloads reuse completed results. See
+[efficient recording and reports](efficient-recording-reports.md).
 
-Alternatively, run this in the Python environment containing this revision:
-
-```sh
-umask 077
-python -m megalodon.hud_snapshot --database /absolute/path/to/megalodon.db > hud-summary.json
-```
-
-Replace the database path before running the command. The exporter uses the
-existing bounded read-only projection: at most 500 event
-candidates and 200 linked finding candidates. Sample/unlinked events remain
-excluded. No database is created. A missing/unavailable source exits nonzero
-without writing a JSON document; shell redirection may leave an empty file.
-
-`megalodon-hud-snapshot-v1` contains aggregate counts, reported-byte totals as
-an exact decimal string, twelve equal time bins, protocol/source/severity/
-detector counts, three exclusive traffic lanes, timestamps and quality flags.
-It contains no IPs, ports, raw records, messages, credentials or filesystem paths.
-Highest linked finding severity determines each event's lane. No finding is
-not evidence of safety. Counts are metadata records, not link bandwidth.
-
-The local HUD accepts at most 16 KiB from its same-origin summary endpoint, then
-checks strict JSON, closed keys and fixed arrays. It rejects duplicate keys,
-invalid/future dates, excessive nesting, unknown quality, out-of-range counts
-and inconsistent totals. Values are rendered as text. Preview data stays in
-memory until cleared or the page closes; there is no upload or persistent
-storage. Failed refreshes preserve the previous summary and its timestamp. A
-summary is always labeled **saved**, never live, and is an unauthenticated
-self-report. The hosted Console can load a downloaded copy into browser-tab
-memory to draw aggregate history, lane, protocol, source, severity and detector
-charts. It has no live feed. The hosted geographic reference remains
-unpopulated because the export contains no location evidence.
+Advanced exports retain CSV, JSON and the address-free HUD summary. The summary
+is a compatibility export of the newest bounded window, independent of selected
+historical dates. It is not a complete report and has no hosted import workflow.
+The former large raw-JSON preview and hosted console are retired.
 
 ## One setup entry point for every companion
 
@@ -153,7 +127,7 @@ in the Completed file scan panel. It is a saved report, not a live feed.
 ## Completed network inventory
 
 
-The local HUD and hosted overview share a Network inventory panel. Use
+The local HUD provides an automatic Network inventory panel. Use
 `python -m megalodon.nmap_inventory < completed-report.xml > inventory-summary.json`
 in the installed MEGALODON environment, then load the aggregate JSON into either
 panel. The [versioned profile](nmap-inventory-v1.md) explains bounds and omissions.

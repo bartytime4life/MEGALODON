@@ -375,6 +375,10 @@ def _release_id() -> str:
 
 
 def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, str]]:
+    from .build_identity import package_digest
+    from .install_lifecycle import selected_extras
+    expected_digest = package_digest(source / 'megalodon')
+    extras = selected_extras(paths)
     release_id = _release_id()
     release = paths.releases / release_id
     release.mkdir(mode=0o700)
@@ -385,7 +389,7 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
         python = venv / "bin" / "python"
         if _run([
             str(python), "-I", "-m", "pip", "install", "--disable-pip-version-check",
-            str(source) + "[geo]",
+            str(source) + '[' + ','.join(extras) + ']',
         ]).returncode != 0:
             raise InstallError(
                 "MEGALODON could not be installed; review the network and Python build-tool output above"
@@ -395,7 +399,8 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
             "import json,megalodon,pathlib,sys;"
             "p=pathlib.Path(megalodon.__file__).resolve();"
             "root=pathlib.Path(sys.prefix).resolve();"
-            "print(json.dumps({'version':megalodon.__version__,'inside':p.is_relative_to(root)}))",
+            "from megalodon.build_identity import PACKAGE_DIGEST;"
+            "print(json.dumps({'version':megalodon.__version__,'inside':p.is_relative_to(root),'package_sha256':PACKAGE_DIGEST}))",
         ], capture=True)
         if smoke.returncode != 0:
             raise InstallError("the installed application did not pass its import check")
@@ -403,8 +408,10 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
             receipt = json.loads(smoke.stdout)
         except json.JSONDecodeError as exc:
             raise InstallError("the installed application returned an invalid import receipt") from exc
-        if receipt != {"version": __version__, "inside": True}:
+        if receipt != {"version": __version__, "inside": True, "package_sha256": expected_digest}:
             raise InstallError("the installed package identity did not match this reviewed source")
+        _atomic_write(release / 'release.json', json.dumps(dict(schema='megalodon-release-v1',
+            package_sha256=expected_digest, extras=extras), sort_keys=True).encode(), 0o600)
         return release_id, {
             "id": release_id,
             "version": __version__,
@@ -658,20 +665,27 @@ def install(source: Path, paths: InstallPaths | None = None) -> dict[str, object
 
 
 def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) -> dict[str, object]:
+    from .install_lifecycle import service_running, service_action, verify_running, retire_releases
     existing = _load_manifest(selected)
     if existing is not None and len(existing["releases"]) >= 32:
-        raise InstallError("the install history is full; uninstall the managed code before reinstalling")
+        existing = retire_releases(selected, existing)
+        if len(existing['releases']) >= 32:
+            raise InstallError("Previous releases are still in use; close older MEGALODON sessions before upgrading")
     previous_bytes: dict[str, bytes | None] = {}
     modes = _artifact_modes()
     for name, path in _artifact_paths(selected).items():
         expected = None if existing is None else str(existing["artifacts"][name]["sha256"])
         previous_bytes[name] = _guard_artifact(path, expected, modes[name])
     _ensure_settings(selected)
+    was_running = service_running(selected) if existing else False
+    previous_manifest = selected.manifest.read_bytes() if existing else None
     release_id, release = _create_release(selected, source)
     contents = _artifact_contents(selected)
     old_target: Path | None = None
     activated = False
     try:
+        if was_running:
+            service_action('stop')
         for name, path in _artifact_paths(selected).items():
             _atomic_write(path, contents[name], modes[name])
         old_target = _activate(selected, release_id, existing)
@@ -696,8 +710,14 @@ def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) ->
             (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
             0o600,
         )
-        return manifest
+        if was_running:
+            service_action('start')
+            identity = json.loads(_regular_owned_file(selected.releases / release_id / 'release.json', maximum=4096))
+            verify_running(selected, identity['package_sha256'])
     except Exception:
+        if was_running and activated:
+            # Never remove code from a process whose stop could not be confirmed.
+            service_action('stop')
         if activated:
             _restore_active(selected, old_target)
         for name, path in _artifact_paths(selected).items():
@@ -709,8 +729,20 @@ def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) ->
                     pass
             else:
                 _atomic_write(path, prior, modes[name])
+        if previous_manifest is not None and selected.manifest.read_bytes() != previous_manifest:
+            _atomic_write(selected.manifest, previous_manifest, 0o600)
+        elif previous_manifest is None and selected.manifest.exists():
+            selected.manifest.unlink()
+        if was_running:
+            service_action('start')
         shutil.rmtree(_expected_release(selected, release_id), ignore_errors=True)
         raise
+    try:
+        return retire_releases(selected, manifest)
+    except (OSError, InstallError):
+        # Installation is already verified. Keep older releases if their safe
+        # retirement cannot be established; retry on the next upgrade.
+        return manifest
 
 
 def _artifact_health(paths: InstallPaths, manifest: dict[str, object]) -> dict[str, str]:

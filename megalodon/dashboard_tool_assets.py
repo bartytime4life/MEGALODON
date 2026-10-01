@@ -98,12 +98,14 @@ function validateReadinessReport(text, now = Date.now()) {
   } catch { throw new Error("Choose valid JSON without duplicate keys or excessive nesting."); }
   const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
   if (data && data.schema === "megalodon-tool-readiness-v1") throw new Error("Old readiness report. Run python -m megalodon readiness again and import the new v2 report.");
-  if (!exactKeys(data, ["schema", "checked_at", "platform", "probe_mode", "tools", "boundaries"]) || data.schema !== "megalodon-tool-readiness-v2" || data.probe_mode !== "path_presence_only" || !["linux", "windows", "other"].includes(data.platform)) throw new Error("Unsupported report schema, platform, or probe mode.");
+  const known = data && data.schema === 'megalodon-tool-readiness-v3' && data.probe_mode === 'known_install_presence';
+  if (!exactKeys(data, ["schema", "checked_at", "platform", "probe_mode", "tools", "boundaries"]) || (!known && (data.schema !== "megalodon-tool-readiness-v2" || data.probe_mode !== "path_presence_only")) || !["linux", "windows", "other"].includes(data.platform)) throw new Error("Unsupported report schema, platform, or probe mode.");
   if (typeof data.checked_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(data.checked_at)) throw new Error("Report requires a UTC checked_at timestamp.");
   const checkedAt = Date.parse(data.checked_at);
   if (!Number.isFinite(checkedAt) || new Date(checkedAt).toISOString().replace(".000Z", "Z") !== data.checked_at || checkedAt > now + 300000) throw new Error("Invalid or future readiness timestamp.");
   if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 10-tool presence-only registry.");
-  if (!Array.isArray(data.boundaries) || data.boundaries.length !== readinessBoundaries.length || !data.boundaries.every((value, index) => value === readinessBoundaries[index])) throw new Error("Report boundary statements do not match this schema.");
+  const boundaries = known ? [...readinessBoundaries.slice(0,-1), 'Linux PATH and bounded known installation prefixes are checked; presence does not establish accepted telemetry.'] : readinessBoundaries;
+  if (!Array.isArray(data.boundaries) || data.boundaries.length !== boundaries.length || !data.boundaries.every((value, index) => value === boundaries[index])) throw new Error("Report boundary statements do not match this schema.");
   return data;
 }
 

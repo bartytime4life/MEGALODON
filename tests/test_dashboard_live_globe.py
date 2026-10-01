@@ -83,9 +83,6 @@ def test_local_live_globe_composition_preserves_history():
     assert 'innerHTML' not in LIVE_GLOBE_JS
     assert 'localStorage' not in LIVE_GLOBE_JS
     assert 'JSON.stringify({action:' not in LIVE_GLOBE_JS
-    site_globe = Path(__file__).resolve().parents[1] / 'site/dist/globe.js'
-    if site_globe.is_file():
-        assert 'live-connections' not in site_globe.read_text()
 
 
 def test_offscreen_and_history_requests_stop():

@@ -1,6 +1,0 @@
-
-.osquery-panel{border-left-color:#658f9c}
-.osquery-value{display:flex;align-items:baseline;gap:.65rem;margin:.8rem 0 .45rem;padding:.65rem .75rem;border:1px solid #304e5c;border-radius:7px;background:#0a1923}
-.osquery-value strong{color:#bceeed;font-size:2rem;font-variant-numeric:tabular-nums;line-height:1}
-.osquery-value span{color:#c3d9df;font-size:.78rem}
-.companion-panel .osquery-time{margin:.4rem 0;color:#c2d7df;font-size:.76rem}

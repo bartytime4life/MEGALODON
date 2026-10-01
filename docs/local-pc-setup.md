@@ -316,7 +316,7 @@ Use your existing compatible test environment:
 ```bash
 .venv312/bin/python -m pip check
 .venv312/bin/python -m pytest -o addopts='' -q tests/test_local_install.py tests/test_local_setup.py tests/test_dashboard_checks.py
-node --test site/tests/*.test.cjs
+python -m pytest tests/test_site_readiness.py tests/test_companion_setup.py
 git diff --check
 ```
 
@@ -362,3 +362,22 @@ active home storage policy remained 14 days / 20 GiB. Capture resumed after the
 service restart. No companion package was installed or removed as part of these
 checks. Browser-rendered acceptance is still unverified following the earlier
 administrative browser denial; no alternate browser was used to bypass it.
+
+## Verified upgrades
+
+Run `./Start-MEGALODON.sh --update` from the reviewed checkout. The installer
+builds and verifies a private release before stopping the managed user service.
+Stopping flushes pending evidence. It then activates, restarts and compares the
+service's `/healthz` package digest with the new release receipt. Startup failure
+restores the prior selector, manifest and launchers and attempts to restart the
+old service. If that restart also fails, the installer reports failure; review
+the service journal before retrying.
+
+The release receipt records package content identity and supported selected
+extras. Geography support is retained; an installed Scapy capture extra carries
+forward. Arbitrary packages from a user's environment are never copied. The
+four newest releases plus current/previous selections remain available; older
+manifest-owned releases are retired only when no observed process uses them.
+Uncertain process inspection preserves the release. User data, models and
+settings are outside retirement. Modified service units require review before
+activation; a foreground/manual HUD must be closed and relaunched separately.

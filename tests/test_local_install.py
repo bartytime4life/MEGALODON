@@ -458,8 +458,10 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
             python.write_text("synthetic")
             return subprocess.CompletedProcess(command, 0, "", "")
         if capture:
+            from megalodon.build_identity import package_digest
             return subprocess.CompletedProcess(
-                command, 0, f'{{"version":"{__version__}","inside":true}}\n', ""
+                command, 0, __import__('json').dumps(dict(version=__version__, inside=True,
+                    package_sha256=package_digest(source/'megalodon'))), ""
             )
         return subprocess.CompletedProcess(command, 0, "", "")
 

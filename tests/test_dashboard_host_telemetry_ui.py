@@ -46,19 +46,11 @@ def test_host_telemetry_behavior():
     assert result.returncode == 0, result.stderr
 
 
-def test_local_composition_and_hosted_source_parity():
+def test_local_composition():
     assert 'id="pc-live"' in INDEX_HTML
     assert 'class="ops-resource-detail"' in INDEX_HTML
     assert HOST_TELEMETRY_CSS in DASHBOARD_CSS
     assert HOST_TELEMETRY_JS in DASHBOARD_JS
     assert INDEX_HTML.index('id="pc-live-title"') < INDEX_HTML.index('id="room-traffic-grid"')
     assert 'prefers-reduced-motion:reduce' in HOST_TELEMETRY_CSS
-    root = Path(__file__).resolve().parents[1]
-    if not (root / "site/dist").exists():
-        return
-    assert (root / "site/dist/host-telemetry.css").read_text() == HOST_TELEMETRY_CSS
-    hosted = (root / "site/dist/index.html").read_text()
-    assert HOST_TELEMETRY_HOSTED_HTML in hosted
-    assert '/api/host-telemetry' not in hosted
-    assert 'host-telemetry.js' not in hosted
-    assert 'Optional: explore a saved summary' in hosted
+

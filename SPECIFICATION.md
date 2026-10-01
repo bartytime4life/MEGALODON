@@ -1,5 +1,14 @@
 # MEGALODON MVP specification and proposed platform extension
 
+> **Scope note — 2026-10-01:** This document contains dated architecture and
+> acceptance records. The local Linux HUD is now the sole supported application.
+> Current installer, protected actions, managed storage and report behavior are
+> described in [the HTTP contract](docs/dashboard-http-contract.md),
+> [local setup](docs/local-pc-setup.md), and
+> [the repository correction record](docs/repository-audit.md). Earlier
+> read-only/plan-only statements apply to their named legacy interfaces, not
+> every current HUD action. Historical evidence below is preserved as recorded.
+
 MEGALODON means **Malware Elimination Gateway And Layered Operations Defense
 Online Network**. The name describes the system’s defensive mission; it does
 not change the evidence and safety boundaries below.

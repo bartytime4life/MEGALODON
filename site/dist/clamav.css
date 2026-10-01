@@ -1,6 +1,0 @@
-
-.clamav-panel{border-left-color:#438f9c}
-.clamav-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}
-.clamav-row{min-width:0;border:1px solid #304e5c;border-radius:7px;padding:.65rem;background:#0a1923;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.3rem;font-size:.73rem}
-.clamav-row b{color:#d8f7f5}.clamav-row meter{grid-column:1/-1;width:100%;height:.65rem;accent-color:#56cbd0}.clamav-row.alert meter{accent-color:#ef9b70}
-@media(max-width:1150px){.clamav-grid{grid-template-columns:1fr}}

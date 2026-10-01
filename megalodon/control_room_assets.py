@@ -451,6 +451,7 @@ function roomSelection(snapshot, range, custom, now=Date.now()) {
 function roomCounts(values) {const counts=new Map();values.forEach(v=>counts.set(v,(counts.get(v)||0)+1));return [...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,10);}
 function roomEndpoint(address,port) {return port===null?address:`${address.includes(':')?`[${address}]`:address}:${port}`;}
 function roomMeta(selection) {
+  if(roomState.history && roomState.managedHistory) return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · retained, source-qualified page · ${roomState.failed?'stale':'read on request'} · packet detail and conversation summaries share one provenance; sensor flow updates stay separate · missing intervals are unknown · top lists omit lower-ranked rows`;
   const value=roomState.snapshot;
   return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · source: ${[...new Set(selection.events.map(e=>e.source))].join(', ')||'unavailable'} · vantage: unknown · last update: ${value?.generated_at||'unavailable'} · unit: metadata events / reported bytes · quality: ${roomState.failed?'stale':value?.quality||'unavailable'} · bounded candidate window (top lists omit lower-ranked rows)`;
 }
@@ -489,6 +490,7 @@ function roomDirectionUnknown(parent) {
   parent.append(graphic,textNode('p','Unavailable — no qualified local-subnet or sensor-vantage contract. Private addresses alone do not establish direction.','room-empty'));
 }
 function renderRoom() {
+  if(roomState.history && roomState.managedHistory){renderManagedHistory();return;}
   let selected;
   try {selected=roomSelection(roomState.snapshot,roomState.history?'custom':roomState.range,roomState.history||roomState.custom);} catch(error) {byId('room-notice').textContent=error.message;return;}
   roomState.selection=selected;
@@ -581,8 +583,11 @@ async function refreshRoom(request=undefined) {
   const history=request?.history===null?null:request?.history||roomState.history;
   roomState.busy=true;renderRoomControls();
   try {
-    const path=history?`/api/traffic-history?start=${encodeURIComponent(new Date(history.start).toISOString())}&end=${encodeURIComponent(new Date(history.end).toISOString())}`+(history.before?'&before='+history.before:''):'/api/traffic';
-    const payload=await requestRoomSnapshot(path);
+    const path=history?`/api/traffic-history-v2?start=${encodeURIComponent(new Date(history.start).toISOString())}&end=${encodeURIComponent(new Date(history.end).toISOString())}`+(history.before?'&cursor='+encodeURIComponent(history.before):''):'/api/traffic';
+    let payload;
+    try{payload=await requestRoomSnapshot(path);}catch(error){if(!history||error.status!==503)throw error;payload=await requestRoomSnapshot(path.replace('/api/traffic-history-v2','/api/traffic-history').replace('&cursor=','&before='));}
+    roomState.managedHistory=null;
+    if(history && payload.schema==='megalodon-traffic-history-v2'){const page=validateManagedHistory(payload,history);roomState.managedHistory=page;roomState.history={...history,next:page.next_cursor,candidates:page.candidate_count};roomState.failed=false;roomState.connected=true;if(request?.range)roomState.range=request.range;return;}
     if(history){const page=validateHistory(payload,history);roomState.history={...history,next:page.next_before,candidates:page.candidate_count};roomState.snapshot=page.traffic;}
     else {roomState.snapshot=validateTraffic(payload);roomState.history=null;}
     if(request?.range){roomState.range=request.range;roomState.custom=request.custom||null;}
@@ -610,3 +615,6 @@ byId('room-latest').addEventListener('click',()=>{byId('room-range').value='reco
 byId('room-pause').addEventListener('click',()=>{if(typeof togglePause==='function'){togglePause();renderRoomControls();}});
 byId('room-refresh').addEventListener('click',refreshRoom);
 """
+
+from .dashboard_history import HISTORY_JS
+ROOM_JS += HISTORY_JS

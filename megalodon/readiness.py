@@ -123,3 +123,26 @@ def readiness_json() -> str:
     if len(result.encode("utf-8")) + 1 > MAX_REPORT_BYTES:
         raise ValueError("tool readiness report exceeds its fixed output limit")
     return result
+
+
+def local_readiness_report():
+    """HUD presence uses the same fixed-prefix registry as its heartbeat.
+
+    The exported v2 CLI contract stays PATH-only. No discovered executable is
+    run, and the environment/package and process checks keep separate meanings.
+    """
+    from pathlib import Path
+    from .tool_heartbeat import PROBES, _installed
+    result = readiness_report()
+    result['schema'] = 'megalodon-tool-readiness-v3'
+    result['probe_mode'] = 'known_install_presence'
+    result['boundaries'][-1] = 'Linux PATH and bounded known installation prefixes are checked; presence does not establish accepted telemetry.'
+    directories = _path_directories(os.environ.get('PATH'))
+    names = {'wireshark-tshark':'tshark', 'qwen-ollama':'qwen'}
+    if result['platform'] == 'linux' and directories is not None:
+        for row in result['tools']:
+            if row['id'] in {'python-sqlite', 'scapy'}:
+                continue
+            presence, _ = _installed(PROBES[names.get(row['id'],row['id'])], directories, Path.home())
+            row['status'] = {'yes':'executable_found','no':'not_found','unknown':'not_checked'}[presence]
+    return result

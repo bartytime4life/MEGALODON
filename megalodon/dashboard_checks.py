@@ -14,7 +14,7 @@ from threading import Lock
 from time import monotonic
 
 from .capabilities import runtime_platform
-from .readiness import readiness_report
+from .readiness import local_readiness_report as readiness_report
 from .runtime_status import runtime_report
 from .storage import StorageSchemaError
 
