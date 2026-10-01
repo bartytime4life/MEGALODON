@@ -90,7 +90,7 @@ def collect():
     c=Controls();c.feed(INDEX_HTML)
     for item in c.items:
         item['source_references']=DASHBOARD_JS.count(item['id']) if item['id'] else 0
-        item['verification']='Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending'
+        item['verification']='Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification'
     return dict(schema='megalodon-repository-audit-v1',baseline=BASE,method='Every file is read and classified; machine checks are not a line-by-line independent audit.',
                 counts=dict(Counter(r['classification'] for r in rows)),files=rows,
                 controls=c.items,control_count=len(c.items),duplicate_ids=sorted(k for k,v in Counter(c.ids).items() if v>1),

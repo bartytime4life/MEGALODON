@@ -42,6 +42,7 @@ repository source and are excluded from the public ledger.
 | Reports | Shared source-qualified history, local cached visual reports, existing schedule and cancellation retained | Report aggregation, HTTP, schedule and rendering tests |
 | Product scope | Duplicate hosted build/tests/scripts removed; canonical local compatibility tests retained; historical publications clearly separated | Reference search, syntax and package checks |
 | Dependencies | Test dependency minimum excludes the known pytest advisory; development environment uses the existing hash-pinned pytest 9.1.1 | [Version-specific advisory check](audit/dependency-check.json), lock inventory and pip consistency check |
+| Rendered acceptance | Findings skip link opens and focuses the correct workspace; narrow headers fit; report charts have sufficient column width; failed feeds and unavailable schedules have truthful states; printing offers a saved-HTML fallback | Installed browser checks, isolated CLI feed failure/recovery, focused regressions and [dated receipt](audit/browser-local-acceptance.json) |
 
 Storage remains **14 days / 20 GiB**; reports remain **daily at 9 AM local time**.
 No automatic cloud upload was added. Known publishers and licenses remain
@@ -93,11 +94,20 @@ or reconfigured merely to exercise a button.
 
 ### External acceptance limits
 
-Rendered desktop, ultrawide, laptop, mobile, keyboard/focus and printed-report
-acceptance remains **unverified**: the browser access policy previously blocked
-this session's inspection. No alternative browser mechanism was used to bypass
-that restriction. DOM/JavaScript tests and readable report HTML are not visual
-acceptance. A reviewer must still verify those views at normal display scale.
+The local HUD is now accessible through the supported Codex in-app browser.
+Desktop, ultrawide, laptop and mobile views, selected keyboard/focus journeys,
+real report creation, chart tables, cached downloads, and empty/failed/recovered
+feed states were checked visually. The [browser receipt](audit/browser-local-acceptance.json)
+lists actual viewport sizes and the boundaries of each check. This supersedes
+the earlier browser-access limitation, without declaring every control accepted.
+
+**Print pagination remains unverified:** the print action ran, but this browser
+adapter exposed no print preview. The UI now explains how to print saved HTML
+in a browser. Native reduced-motion preference and hidden-window suspension
+were not exercised by this adapter; deterministic motion tests passed separately.
+Live geographic arc accuracy remains unverified because IP-location updates are
+disabled in the existing settings. Unmapped connections remain explicitly labeled.
+No browser policy was bypassed and no location setting was changed.
 
 Physical power interruption, actual full host disks, long-running server traffic
 and every optional publisher installation are not performed on this working PC.
@@ -133,11 +143,11 @@ focused tests passed; they do not change the verified installation procedure.
 
 ### Installed local acceptance
 
-Release `0.1.0-20261001T200909Z-f1febb77` is running from the corrected source.
-All 239 installed package files match the checkout. The managed service owns
-the verified local listener. Settings are byte-for-byte unchanged; the 14-day /
+The earlier release `0.1.0-20261001T200909Z-f1febb77` passed the initial local check.
+All 239 installed package files matched that checkout. The managed service owned
+the verified local listener. Settings were byte-for-byte unchanged; the 14-day /
 20-GiB policy, 9 AM America/Chicago schedule, oldest evidence and all three saved
-reports are preserved. All three report HTML downloads remain readable, including
+reports were preserved. All three report HTML downloads were readable, including
 the report already marked incomplete. Recording resumed and accepted additional
 traffic with zero reported write failures or unconfirmed records at inspection.
 
@@ -146,8 +156,20 @@ coverage notice correctly identifies an older incomplete capture receipt; this
 does not assert complete historical coverage. Setup now finds the private Zeek
 installation. Live workflow checks show accepted TShark, Zeek, Suricata, Nmap and
 osquery observations; ClamAV was collecting when checked. See the sanitized
-[installed validation receipt](audit/runtime-validation.json). Rendered and print
-acceptance remains unresolved as described above.
+[installed validation receipt](audit/runtime-validation.json). This dated receipt
+preserves its then-unverified browser status; the later browser receipt records
+the additional checks and remaining limits above.
+
+The current installed release is `0.1.0-20261001T204152Z-5d0f0d28`, built from
+application source `b8c71b8`. All 239 installed package files match the repository.
+The update preserved settings byte-for-byte, the policy, schedule, oldest evidence
+and all three existing reports. A fourth report was then created through the
+Reports UI for a selected 15-minute interval and reached Ready. Monitoring is
+running with zero reported write failures at final inspection. Viewing the
+existing reports did not regenerate them; an actual downloaded HTML file matched
+the cached server response byte-for-byte and contained no scripts or external
+asset dependencies. Screenshots and telemetry stay in ignored, private local
+acceptance output; only a sanitized receipt is committed.
 
 The installed acceptance probe also exposed an intermittent Ollama GPU-memory
 failure: readiness used the provider's default 512-token processing batch while

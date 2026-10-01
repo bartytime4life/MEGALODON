@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 108,
     "workflow": 14,
-    "configuration": 29,
+    "configuration": 30,
     "source": 166,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3678,6 +3678,43 @@
       "related_tests": []
     },
     {
+      "path": "docs/audit/browser-local-acceptance.json",
+      "classification": "configuration",
+      "purpose": "browser local acceptance",
+      "bytes": 5795,
+      "sha256": "12228bab88823b9b2f52e5f3edadf4d5e86d8f539dfca6f8801c2230fa9c5b43",
+      "dependencies": [
+        "application_source_revision",
+        "checked_at",
+        "download",
+        "installed_package_files",
+        "managed_listener_verified",
+        "method",
+        "monitoring",
+        "package_sha256",
+        "passed_journeys",
+        "policy",
+        "preservation",
+        "privacy",
+        "private_screenshots",
+        "regression",
+        "release",
+        "responsive_checks",
+        "schedule",
+        "schema",
+        "source_package_matches",
+        "status",
+        "unverified",
+        "viewport_note"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "docs/audit/dependency-check.json",
       "classification": "configuration",
       "purpose": "dependency check",
@@ -4195,14 +4232,15 @@
       "path": "docs/dashboard-browser-acceptance.md",
       "classification": "documentation",
       "purpose": "Linux dashboard browser acceptance",
-      "bytes": 8723,
-      "sha256": "32a437dcc4b4ddf563b3cf9dcfd6ddf5ff4ea01df092f1e73a30ce63693b2bf7",
+      "bytes": 9608,
+      "sha256": "ff5749ee2ddd1339644a0abd68de7ffec1441734574f8cc94d5241f02c2c1841",
       "dependencies": [
         "../SECURITY_REVIEW.md",
         "../SPECIFICATION.md",
+        "audit/browser-local-acceptance.json",
         "dashboard-operations.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -5100,9 +5138,10 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 11113,
-      "sha256": "cec85b379d0c1e73f3ce19a0cf518e4a6c5664ae9d3290ac89859024fad43a91",
+      "bytes": 13006,
+      "sha256": "b72b14ad255871ee1281b86f51b7d7c086b3a3229fe66cb1ded8ff525e57a7f3",
       "dependencies": [
+        "audit/browser-local-acceptance.json",
         "audit/dependency-check.json",
         "audit/installer-rehearsal.json",
         "audit/repository-files.json",
@@ -18839,8 +18878,8 @@
       "path": "tools/repository_audit.py",
       "classification": "source",
       "purpose": "Reproducible file dispositions and static HUD controls, without host telemetry.",
-      "bytes": 7173,
-      "sha256": "f03e85f20884eaf6b852f1910150a5a38b62f1c24ef23611b968ef0c61b8ffdb",
+      "bytes": 7265,
+      "sha256": "b0215d7e6742c3466cadcc1da52e73bfe78b5de49656a31018db7e2edaa4fda9",
       "dependencies": [
         "__future__",
         "argparse",
@@ -19019,7 +19058,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19028,7 +19067,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19037,7 +19076,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19046,7 +19085,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19055,7 +19094,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19064,7 +19103,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19073,7 +19112,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19082,7 +19121,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19091,7 +19130,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19100,7 +19139,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19109,7 +19148,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19118,7 +19157,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19127,7 +19166,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19136,7 +19175,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19145,7 +19184,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19154,7 +19193,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19163,7 +19202,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19172,7 +19211,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19181,7 +19220,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19190,7 +19229,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19199,7 +19238,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19208,7 +19247,7 @@
       "label": "Upload and download speed units",
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19217,7 +19256,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19226,7 +19265,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19235,7 +19274,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19244,7 +19283,7 @@
       "label": null,
       "disabled": false,
       "source_references": 8,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19253,7 +19292,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19262,7 +19301,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19271,7 +19310,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19280,7 +19319,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19289,7 +19328,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19298,7 +19337,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19307,7 +19346,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19316,7 +19355,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19325,7 +19364,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19334,7 +19373,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19343,7 +19382,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19352,7 +19391,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19361,7 +19400,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19370,7 +19409,7 @@
       "label": null,
       "disabled": true,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19379,7 +19418,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19388,7 +19427,7 @@
       "label": null,
       "disabled": true,
       "source_references": 6,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19397,7 +19436,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19406,7 +19445,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19415,7 +19454,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19424,7 +19463,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19433,7 +19472,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19442,7 +19481,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19451,7 +19490,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19460,7 +19499,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19469,7 +19508,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19478,7 +19517,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19487,7 +19526,7 @@
       "label": null,
       "disabled": true,
       "source_references": 14,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19496,7 +19535,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19505,7 +19544,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19514,7 +19553,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19523,7 +19562,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19532,7 +19571,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19541,7 +19580,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19550,7 +19589,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19559,7 +19598,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19568,7 +19607,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19577,7 +19616,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19586,7 +19625,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19595,7 +19634,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19604,7 +19643,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19613,7 +19652,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19622,7 +19661,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19631,7 +19670,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19640,7 +19679,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19649,7 +19688,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19658,7 +19697,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19667,7 +19706,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19676,7 +19715,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19685,7 +19724,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19694,7 +19733,7 @@
       "label": null,
       "disabled": false,
       "source_references": 0,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19703,7 +19742,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19712,7 +19751,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19721,7 +19760,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19730,7 +19769,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19739,7 +19778,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19748,7 +19787,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19757,7 +19796,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19766,7 +19805,7 @@
       "label": null,
       "disabled": true,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19775,7 +19814,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19784,7 +19823,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19793,7 +19832,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19802,7 +19841,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19811,7 +19850,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19820,7 +19859,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19829,7 +19868,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19838,7 +19877,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19847,7 +19886,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19856,7 +19895,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19865,7 +19904,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19874,7 +19913,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19883,7 +19922,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19892,7 +19931,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19901,7 +19940,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19910,7 +19949,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -19919,7 +19958,7 @@
       "label": null,
       "disabled": false,
       "source_references": 6,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19928,7 +19967,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19937,7 +19976,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19946,7 +19985,7 @@
       "label": null,
       "disabled": true,
       "source_references": 11,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19955,7 +19994,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19964,7 +20003,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -19973,7 +20012,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "textarea",
@@ -19982,7 +20021,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -19991,7 +20030,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20000,7 +20039,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20009,7 +20048,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20018,7 +20057,7 @@
       "label": null,
       "disabled": true,
       "source_references": 11,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20027,7 +20066,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20036,7 +20075,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20045,7 +20084,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20054,7 +20093,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20063,7 +20102,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20072,7 +20111,7 @@
       "label": null,
       "disabled": true,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20081,7 +20120,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20090,7 +20129,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20099,7 +20138,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20108,7 +20147,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20117,7 +20156,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20126,7 +20165,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20135,7 +20174,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20144,7 +20183,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20153,7 +20192,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20162,7 +20201,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20171,7 +20210,7 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20180,7 +20219,7 @@
       "label": null,
       "disabled": true,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20189,7 +20228,7 @@
       "label": null,
       "disabled": false,
       "source_references": 22,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20198,7 +20237,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20207,7 +20246,7 @@
       "label": null,
       "disabled": false,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20216,7 +20255,7 @@
       "label": null,
       "disabled": true,
       "source_references": 8,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20225,7 +20264,7 @@
       "label": null,
       "disabled": true,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20234,7 +20273,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20243,7 +20282,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20252,7 +20291,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20261,7 +20300,7 @@
       "label": null,
       "disabled": true,
       "source_references": 4,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20270,7 +20309,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20279,7 +20318,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20288,7 +20327,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20297,7 +20336,7 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20306,7 +20345,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20315,7 +20354,7 @@
       "label": null,
       "disabled": true,
       "source_references": 7,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20324,7 +20363,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20333,7 +20372,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20342,7 +20381,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20351,7 +20390,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20360,7 +20399,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "input",
@@ -20369,7 +20408,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20378,7 +20417,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20387,7 +20426,7 @@
       "label": null,
       "disabled": false,
       "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20396,7 +20435,7 @@
       "label": null,
       "disabled": false,
       "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20405,7 +20444,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "select",
@@ -20414,7 +20453,7 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20423,7 +20462,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
       "element": "button",
@@ -20432,7 +20471,7 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; rendered acceptance pending"
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
   "control_count": 158,
