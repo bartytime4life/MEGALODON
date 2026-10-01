@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 109,
     "workflow": 14,
-    "configuration": 31,
+    "configuration": 32,
     "source": 167,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3783,6 +3783,35 @@
       "related_tests": []
     },
     {
+      "path": "docs/audit/local-model-acceptance.json",
+      "classification": "configuration",
+      "purpose": "local model acceptance",
+      "bytes": 2390,
+      "sha256": "8d9c4c0f686891c0242422b49e181f9fa56d870e6db79bda8b5520017fc5e59c",
+      "dependencies": [
+        "application_source",
+        "browser",
+        "capture_state",
+        "geography",
+        "installed_content_matches_source",
+        "installed_release",
+        "local_listener_verified",
+        "models",
+        "observed_date",
+        "package_sha256",
+        "preservation",
+        "schema",
+        "security",
+        "tests"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "docs/audit/runtime-validation.json",
       "classification": "configuration",
       "purpose": "runtime validation",
@@ -5180,13 +5209,14 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 13722,
-      "sha256": "eec616488f97a6a087962940f4c8090bcf9941b440602ba1e8e3d5546b1dd7fa",
+      "bytes": 17042,
+      "sha256": "d38eb3573a0f73f2003ff2c6ee8d09ba59ac5a7ac9f19e0591e38340b51846db",
       "dependencies": [
         "audit/browser-ci-acceptance.json",
         "audit/browser-local-acceptance.json",
         "audit/dependency-check.json",
         "audit/installer-rehearsal.json",
+        "audit/local-model-acceptance.json",
         "audit/repository-files.json",
         "audit/runtime-validation.json",
         "benchmarks/efficient-recording-comparison.json",
@@ -5194,7 +5224,8 @@
         "benchmarks/repository-audit-recording.json",
         "benchmarks/repository-audit-suricata.json",
         "benchmarks/repository-audit-sustained.json",
-        "benchmarks/repository-audit-zeek.json"
+        "benchmarks/repository-audit-zeek.json",
+        "local-model-selection.md"
       ],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -14127,8 +14158,8 @@
       "path": "tests/test_anomaly_advisory.py",
       "classification": "test",
       "purpose": "Separate anomaly policy admission and shared provider boundary regression.",
-      "bytes": 13536,
-      "sha256": "8ca13df30db1afdcc65902050ab91b8a2738f96ca8c95558816b1cf4cb3fce8b",
+      "bytes": 13694,
+      "sha256": "9b2aefbb9d1fa73a01f6697e95feb0119017a9aa29a899a6eb25210109e0881c",
       "dependencies": [
         "builtins",
         "copy",
@@ -14148,7 +14179,7 @@
         "test_qwen_advisory",
         "threading"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -14159,8 +14190,8 @@
       "path": "tests/test_anomaly_triage.py",
       "classification": "test",
       "purpose": "Operator command wiring, failure isolation and real privilege acceptance.",
-      "bytes": 12306,
-      "sha256": "b613c9ecaa780e1878d2c89105ae2805077b318738cc14a35900b5455d109728",
+      "bytes": 12464,
+      "sha256": "9891d557c44d91b98b863d08a9e4f882e6aa88f8402e0643dafc2389b495ed76",
       "dependencies": [
         "copy",
         "json",
@@ -14180,7 +14211,7 @@
         "test_anomaly_advisory",
         "test_qwen_advisory"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"

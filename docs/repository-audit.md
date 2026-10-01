@@ -189,3 +189,53 @@ the exact readiness response. Loopback restrictions, timeouts, context/output
 limits and defense authorization are preserved; the separate legacy advisory
 wire contract is unchanged. The focused provider/companion/defense tests and the final complete regression
 suite passed. The installed adapter also returned a verified readiness response.
+
+### 2026-10-01: Installed model selection and incoming origin rings
+
+The subsequent installed release `0.1.0-20261001T215514Z-19f4235f` uses application
+source `1b0b389`. Its package SHA-256 is
+`f3aa2e788aae3182816ab2989303af5fb29d6094551689fa9cf534276d2f6f3c`.
+Installed application content matches the checkout, the local listener is verified,
+and monitoring is running. The 14-day / 20-GiB policy, four reports, and daily
+09:00 America/Chicago schedule remain intact. The existing pinned model was
+preserved while its profile migrated through the real Setup selection control.
+
+Setup now lists six installed Ollama model entries and shares the saved selection
+with HUD endpoint analysis and automatic collector advice. All six passed local
+GGUF completion metadata admission; only the preserved Qwen model received a real
+readiness probe, returning the expected response in 4.11 seconds at
+2026-10-01T21:56:10.418670Z. This is not inference acceptance for all six models.
+Some longer background requests subsequently reached the existing 15-second
+deadline. Setup correctly shows that latest failure alongside the earlier
+accepted-response timestamp. CPU/GPU allocation, installed availability, and
+successful inference remain distinct. See [model selection](local-model-selection.md).
+
+The final full run, with installed TShark acceptance enabled, passed **4,355 tests,
+204 subtests, with two platform-specific skips**, in 103.68 seconds. An earlier run
+overlapped a real model request: 52 synthetic-provider tests contended for the
+production process lock. Their provider fixtures now use private test lock
+directories; production locking and dedicated process-lock tests are unchanged.
+Focused model/telemetry tests passed separately. The file inventory and static
+control/anchor checks were regenerated after these corrections.
+
+Rendered checks covered normal desktop, 3440×1440, 1366×768, and 390×844 views.
+The installed Setup journey exercised changing a draft model choice, restoring
+the existing model, saving with the keyboard, and verifying the saved result.
+This verifies selected journeys, not every control. Print pagination and this
+PC's native reduced-motion preference remain separate unresolved checks.
+
+With the user's authorization, approximate location updates are now enabled.
+A real DB-IP database and internet-exit lookup succeeded after correcting the
+maxminddb file-descriptor API usage. Incoming origin rings were visible on actual
+mapped traffic; deterministic tests cover direction, freshness, grouping, depth,
+pause, and reduced motion. This supersedes the earlier location-disabled check.
+Markers indicate observed inbound traffic, not attacks or active ICMP probes.
+IP geography remains approximate, and unmapped endpoints remain labeled.
+
+Codex Security scan `028d1ba6-d6eb-493a-846e-0c45409c1299` covered all 39 changed
+files in immutable diff `908ffe0..a31ec38` and returned no security findings or
+deferred candidates. A supplemental review of `d73511b` and `1b0b389` found no
+new issue; these commits are outside the sealed scan's revision. This is a
+focused static review, not a security certification. Raw local telemetry and
+screenshots remain in ignored acceptance output. The sanitized
+[acceptance receipt](audit/local-model-acceptance.json) contains the bounded claims.
