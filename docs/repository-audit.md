@@ -133,7 +133,7 @@ focused tests passed; they do not change the verified installation procedure.
 
 ### Installed local acceptance
 
-Release `0.1.0-20261001T195948Z-43aa06ad` is running from the corrected source.
+Release `0.1.0-20261001T200909Z-f1febb77` is running from the corrected source.
 All 239 installed package files match the checkout. The managed service owns
 the verified local listener. Settings are byte-for-byte unchanged; the 14-day /
 20-GiB policy, 9 AM America/Chicago schedule, oldest evidence and all three saved
@@ -155,4 +155,5 @@ defense requests already used 64. The control adapter now uses 64 for readiness
 and ordinary advice too. A real request with the same pinned model then returned
 the exact readiness response. Loopback restrictions, timeouts, context/output
 limits and defense authorization are preserved; the separate legacy advisory
-wire contract is unchanged. The focused provider/companion/defense tests passed.
+wire contract is unchanged. The focused provider/companion/defense tests and the final complete regression
+suite passed. The installed adapter also returned a verified readiness response.

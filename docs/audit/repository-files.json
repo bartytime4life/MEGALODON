@@ -3723,8 +3723,8 @@
       "path": "docs/audit/runtime-validation.json",
       "classification": "configuration",
       "purpose": "runtime validation",
-      "bytes": 1728,
-      "sha256": "573909ff15ec0151d086e3f70a3e439f2f4be7f24f232f3d83b6d19d6f226580",
+      "bytes": 1864,
+      "sha256": "c850742f56651da3a8c4916903aae931d122b0f5fa76a6417da1f29c7a5b0254",
       "dependencies": [
         "checked_at",
         "existing_reports_preserved",
@@ -3736,6 +3736,7 @@
         "oldest_evidence_preserved",
         "package_sha256",
         "policy",
+        "qwen",
         "readiness_schema",
         "release",
         "rendered_acceptance",
@@ -3747,7 +3748,7 @@
         "source_package_matches",
         "source_revision"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3758,8 +3759,8 @@
       "path": "docs/audit/validation.json",
       "classification": "configuration",
       "purpose": "validation",
-      "bytes": 1126,
-      "sha256": "11e2df1837baf4787ec4043c63b2ae25f3079250615b4e32d8a39c0343116dd9",
+      "bytes": 1260,
+      "sha256": "5bb42fdd5b37355bf7fb480b0258fabe38800415047ac80b6e27f5c48ec6c772",
       "dependencies": [
         "full_regression",
         "installed_tshark",
@@ -5099,8 +5100,8 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 11006,
-      "sha256": "6f481d92b36e3b097b783f49b5db15e167b78d135d13430e94b6195e5666bf29",
+      "bytes": 11113,
+      "sha256": "cec85b379d0c1e73f3ce19a0cf518e4a6c5664ae9d3290ac89859024fad43a91",
       "dependencies": [
         "audit/dependency-check.json",
         "audit/installer-rehearsal.json",
