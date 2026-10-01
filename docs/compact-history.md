@@ -25,3 +25,9 @@ The first rollout does not shorten the configured retention period or delete cur
 ## Validation
 
 `tests/test_packet_compaction.py` exercises verified counts and byte totals, findings/actions/run receipts, report deduplication before and after raw rotation, high-cardinality fallback, and interrupted-build restart. Existing storage and reporting tests cover age/cap eviction, file identity, readers and report boundaries. Rendered browser acceptance remains a separate gate.
+
+Compact conversion requires qualified ingestion links for every source event.
+Sample, unlinked or otherwise unqualified sources remain in original form under
+the existing age/cap policy. Readers also check preserved run receipts and totals
+before admitting older compact summaries. This prevents compaction from changing
+which source records qualify for charts and reports.

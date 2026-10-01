@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const context = {module:{exports:{}}};
+const context = {TextEncoder, module:{exports:{}}};
 vm.runInNewContext(require('node:fs').readFileSync(0,'utf8'),context);
 const {validateReadinessReport, readinessToolIds, readinessBoundaries} = context.module.exports;
 

@@ -1,6 +1,6 @@
-"""Shared inert companion controls, canonical for local and hosted HUDs.
+"""Companion reference controls and strict readiness validation for the local HUD.
 
-Run scripts/sync-hud-assets.py after editing. Import performs no I/O.
+Import performs no I/O. The former hosted asset mirror is retired.
 """
 
 LIFECYCLE_JS = r"""/* Reference text only. Nothing in this module executes a command. */

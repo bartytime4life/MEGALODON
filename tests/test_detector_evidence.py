@@ -116,26 +116,6 @@ def test_report_preserves_legacy_results_and_never_invents_classification_metric
     assert len(json.dumps(report, allow_nan=False).encode()) < 32 * 1024
 
 
-def test_console_corpus_totals_match_the_unfiltered_evaluator_report():
-    report = corpus_evidence_report(**SOURCE)
-    site_source = (
-        Path(__file__).resolve().parents[1] / "site" / "dist" / "index.html"
-    )
-    if not site_source.is_file():
-        pytest.skip("repository-only Site source is not included in the sdist")
-    html = site_source.read_text(encoding="utf-8")
-    displayed = re.search(
-        r"<strong>([\d,]+) synthetic scenarios · ([\d,]+) metadata events</strong>",
-        html,
-    )
-
-    assert displayed is not None
-    assert tuple(int(value.replace(",", "")) for value in displayed.groups()) == (
-        report["denominators"]["selected_scenarios"],
-        report["denominators"]["selected_events"],
-    )
-
-
 def test_selected_report_accounts_for_exclusions_and_uses_selected_event_times():
     report = corpus_evidence_report(**SOURCE, scenario_id=SCENARIO)
     bundle = load_corpus()

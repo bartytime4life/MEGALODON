@@ -17,7 +17,7 @@ def local_workflow_script(script: str) -> str:
 
 
 def compose_workflows(html: str) -> str:
-    """Keep the shared hosted map unchanged; compose local live rows in its place."""
+    """Keep the compatibility reference separate from current workflow observations."""
     source = INTEGRATIONS_HTML
     before, advanced = source.split(ACTION_HTML, 1)
     advanced = ACTION_HTML + advanced

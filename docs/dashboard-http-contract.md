@@ -539,3 +539,7 @@ separate from packet counts.
 Setup discovery uses readiness v3 (`known_install_presence`), sharing heartbeat
 PATH and bounded known-prefix checks. CLI PATH-only v2 remains compatible. A
 found executable does not prove configured, running or providing accepted data.
+
+The retained-history v2 read additionally requires `X-Megalodon-Check: 1`.
+Its chart page opens at most 32 visited source segments; background report jobs
+retain their separate 2,048-segment bound.

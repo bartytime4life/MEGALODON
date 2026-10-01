@@ -10,6 +10,7 @@ from collections import defaultdict
 import json
 
 from .evidence_storage import epoch, utc
+from .packet_qualification import qualified_event_ids
 
 EVENT_BATCH = 1024
 MAX_LINKED_FINDINGS = 4096
@@ -54,6 +55,9 @@ def _event_rows(manager, source, cursor):
         if not events:
             return [], [], [], []
         last = events[-1]['id']
+        qualified = qualified_event_ids(db,cursor,last)
+        if any(event['id'] not in qualified for event in events):
+            return None, [], [], []
         findings = [dict(row) for row in db.execute(
             'SELECT * FROM detections WHERE event_id>? AND event_id<=? ORDER BY id LIMIT ?',
             (cursor, last, MAX_LINKED_FINDINGS + 1)).fetchall()]
@@ -95,6 +99,8 @@ def step(manager, source, target):
     progress = _read_checkpoint(manager, target)
     if progress['stage'] == 'events':
         events, findings, links, _ = _event_rows(manager, source, progress['cursor'])
+        if events is None:
+            return 'ineligible'
         if events:
             rows = _group(events, source['id'])
             by_event = {event['id']: event for event in events}

@@ -934,7 +934,7 @@ class EvidenceStorage:
             # history build. The worker retries after the write queue drains.
             if self._recording.get('pending_records',0)>128:return False
             sources=[e for e in self._catalog['entries'] if e['category']=='packets' and e['state']=='closed'
-                     and not e.get('legacy') and e.get('records',0)>0 and e.get('compaction_state') not in {'complete','inefficient'}]
+                     and not e.get('legacy') and e.get('records',0)>0 and e.get('compaction_state') not in {'complete','inefficient','ineligible'}]
             if not sources:return False
             source=min(sources,key=lambda e:e.get('first_at') or e['created_at'])
             if source.get('compaction_state')!='building':
@@ -946,7 +946,7 @@ class EvidenceStorage:
                 raise ValueError('An interrupted compact history needs review; the original remains protected.')
             target=targets[0] if targets else self._new('packet_rollups',state='building',source_segment=source['id'])
             outcome=step(self,source,target) if target['state']=='building' else True
-            if outcome=='inefficient':
+            if outcome in {'inefficient','ineligible'}:
                 # A high-cardinality source did not compress. Remove only the
                 # incomplete derivative, never its original packet evidence.
                 context=self._write_dbs.pop(target['id'],None)
@@ -954,7 +954,7 @@ class EvidenceStorage:
                 target.update(state='deleting',deletion_bytes=0,deletion_records=0,deletion_at=utc(self.clock()))
                 self._save();self._recover_deletion(target)
                 self._catalog['entries'].remove(target)
-                source['compaction_state']='inefficient';self._save()
+                source['compaction_state']=outcome;self._save()
                 return True
             if outcome is True:
                 if target['state']=='building':self._seal(target)

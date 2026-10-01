@@ -10,7 +10,7 @@ INTEGRATIONS_HTML = """
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
     __ACTION_PLANE__
-    <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
+    <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found in the checked PATH or known installation locations. Red means it was not found in those locations. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
     <p class="reference-status" id="integrations-freshness">Presence: not checked yet.</p>
     <div class="app-state-legend" aria-label="App status legend">
       <span class="state-found"><i class="app-dot" aria-hidden="true"></i>Found candidate</span>
@@ -259,8 +259,8 @@ const integrationIds = [
   'local-ai-advisory', 'network-inventory-import'
 ];
 const integrationPresenceStates = {
-  executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found on the bounded startup PATH; installation method and compatibility remain unverified.'},
-  not_found: {filter: 'missing', className: 'state-missing', label: 'Not found on checked PATH', detail: 'The executable was absent from the checked Linux PATH; it may exist elsewhere.'},
+  executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found in the bounded PATH or known installation locations; installation method and compatibility remain unverified.'},
+  not_found: {filter: 'missing', className: 'state-missing', label: 'Not found in checked locations', detail: 'The executable was absent from the checked Linux locations; it may exist elsewhere.'},
   not_checked: {filter: 'unknown', className: 'state-unknown', label: 'Presence not checked', detail: 'This app was not eligible for the executable-only startup check.'}
 };
 const integrationQualificationStates = {
@@ -333,7 +333,7 @@ function integrationCapabilityState(toolIndex, item) {
     qualification: {...integrationQualificationStates[item.selected_status],
       detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
     administration: {className: 'state-unknown', label: 'Operator managed',
-      detail: 'Observation is the default. An explicitly enabled Linux HUD and its operator token allow fixed Install/Start actions and GUI-only support-app launches after confirmation. The HUD has no stop, removal, or configuration action.'},
+      detail: 'Setup contains fixed installation, configuration, verification and supported removal workflows. Privileged changes require OS authorization. Startup remains in the HUD; optional desktop launches are separate.'},
     health: {className: 'state-unknown', label: 'See the status light',
       detail: 'The heartbeat observes installation, process uptime and service state. It does not probe endpoints, sensor liveness, data freshness, or coverage.'}
   };

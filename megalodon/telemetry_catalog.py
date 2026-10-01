@@ -8,7 +8,7 @@ FEATURES = (
  ('globe','Live connection globe','Captured directions and approximate offline IP locations','Live / recently retained conversations; unavailable locations remain unmapped','activity-globe-title'),
  ('evidence','Ingestion evidence','Source-qualified committed ingestion receipts','Startup request; source selection or retry','ingestion-runs-title'),
  ('offline','Offline packet / flow analysis','Explicitly selected TShark or Zeek summary','Startup snapshot; restart to load a different file','offline-title'),
- ('suricata','Suricata','Configured EVE flow and alert intake; separate legacy durable-store view','Managed source checkpoints; permission and source gaps remain explicit'),
+ ('suricata','Suricata evidence','Separately selected durable external-alert store; live EVE summaries use background workflows','Legacy startup snapshot; live source state shown in Sensors','suricata-title'),
  ('advisory','Legacy Qwen advisory','Explicitly supplied display-only receipt','Startup snapshot; not live AI analysis','analysis-window-title'),
  ('ai','AI questions and provider status','Opt-in token-gated local provider and private receipts','Only on explicit request','deep-analysis-title'),
  ('reference','Service and protocol reference','Verified bundled IANA registrations','On explicit lookup; not network service discovery','reference-title'),

@@ -81,3 +81,13 @@ def test_workflow_read_is_passive_and_separates_readiness_from_data():
     assert rows['scapy']['state']==rows['nftables']['state']=='standby'
     assert rows['qwen']['state']=='stopped'
     assert 'token' not in json.dumps(v)
+
+
+def test_old_qwen_advice_does_not_override_current_failure():
+    idle=dict(state='needs_setup',message='Provider unavailable',updated_at=None,metrics=[])
+    config=SimpleNamespace(capture=SimpleNamespace(snapshot=lambda:dict(state='stopped',accepted=0,skipped=0,started_at=None,message='Stopped')),
+        sensors=SimpleNamespace(snapshot=lambda:dict(zeek=idle,suricata=idle)),qwen_status=dict(idle))
+    companions=SimpleNamespace(snapshot=lambda:dict(results={},status={},advisory={'nmap':'Saved old advice'}))
+    row=next(r for r in snapshot(config,companions)['tools'] if r['id']=='qwen')
+    assert row['state']=='needs_setup' and row['message']=='Provider unavailable'
+    assert row['metrics'][-1]['label']=='Saved summaries with advice'

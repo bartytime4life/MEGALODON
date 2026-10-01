@@ -381,3 +381,10 @@ manifest-owned releases are retired only when no observed process uses them.
 Uncertain process inspection preserves the release. User data, models and
 settings are outside retirement. Modified service units require review before
 activation; a foreground/manual HUD must be closed and relaunched separately.
+
+Upgrade readiness checks the restarted systemd process owns the configured
+loopback listener before and after reading its package identity. A matching
+public hash from an unrelated local process is insufficient. Running releases
+hold a read-only directory descriptor so automatic retirement can identify code
+still in use even after the active selector changes. Older ambiguous processes
+keep their releases protected.

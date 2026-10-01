@@ -730,6 +730,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send(200, "application/json; charset=utf-8", payload)
             return
         if route.path == '/api/traffic-history-v2':
+            if self.headers.get_all('X-Megalodon-Check') != ['1']:
+                self._send_json({'error':'Local check header required'},status=403)
+                return
             try:
                 params = _bounded_query(route.query, max_fields=3)
                 if set(params)-{'start','end','cursor'} or not {'start','end'}<=set(params) or any(len(v)!=1 for v in params.values()):

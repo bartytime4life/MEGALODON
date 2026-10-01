@@ -5,6 +5,7 @@ import sqlite3
 import re
 from threading import Event
 from .evidence_storage import epoch, utc
+from .packet_qualification import qualified_event_ids, qualified_receipt
 
 MAX_SEGMENTS = 2048
 
@@ -21,7 +22,7 @@ class RetainedEvidenceReader:
         from .dashboard_traffic import history_parameters
         history_parameters(start, end)
         first, last = epoch(start), epoch(end)
-        sources, gaps = self._sources(first, last)
+        sources, gaps = self._sources(first, last,watermarks=False)
         sources = sorted([(e, maximum) for e, maximum in sources
                           if e['category'] in {'packets','packet_rollups','flows','findings'}],
                          key=lambda row:(row[0]['created_at'],row[0]['id']))
@@ -42,6 +43,9 @@ class RetainedEvidenceReader:
             if index:after=0
             self.read_cursor=after
             try:
+                with self.evidence.lock, self.evidence._db(entry) as db:
+                    table='events' if entry['kind']=='core' else 'records'
+                    maximum=db.execute(f'SELECT MAX(id) FROM {table}').fetchone()[0] or 0
                 pages=self._pages(entry,maximum,first,last,after=after,page_size=128)
                 page,count=next(pages,([],0));pages.close()
                 for row in page:
@@ -70,7 +74,8 @@ class RetainedEvidenceReader:
                     records.append(row)
                 scanned+=count
             except (OSError,ValueError,sqlite3.Error):
-                gaps.append('A source segment expired or could not be read.');self.read_cursor=maximum
+                gaps.append('A source segment expired, was unqualified, or could not be read.');self.read_cursor=maximum or 0
+                maximum=maximum or 0
             if self.read_cursor < maximum:
                 next_cursor=entry['id']+':'+str(self.read_cursor);break
             if records or scanned>=128:
@@ -82,7 +87,7 @@ class RetainedEvidenceReader:
                     range=dict(start=utc(first),end=utc(last)),candidate_count=scanned,
                     truncated=bool(next_cursor or gaps),gaps=list(dict.fromkeys(gaps)),source_segments=visited)
 
-    def _sources(self, start, end):
+    def _sources(self, start, end, *, watermarks=True):
         sources, gaps = [], []
         with self.evidence.lock:
             entries = deepcopy(self.evidence._catalog['entries'])
@@ -102,20 +107,34 @@ class RetainedEvidenceReader:
             gaps.append('The 2,048-segment report limit was reached; the result is incomplete.')
         for entry in candidates[:MAX_SEGMENTS]:
             self._check()
+            if entry.get('recovered_incomplete'):
+                gaps.append('An interrupted capture contributes committed evidence; capture coverage is incomplete.')
+            if entry.get('source_incomplete'):
+                gaps.append('A compacted source has an incomplete capture receipt; unobserved traffic remains unknown.')
             try:
+                if not watermarks:
+                    sources.append((entry,None))
+                    continue
                 with self.evidence.lock, self.evidence._db(entry) as db:
                     table, key = ('events', 'id') if entry['kind'] == 'core' else ('ai_receipt_events', 'sequence') if entry['kind'] == 'receipt' else ('records', 'id')
                     maximum = db.execute(f'SELECT MAX({key}) FROM {table}').fetchone()[0] or 0
                 sources.append((entry, maximum))
-                if entry.get('recovered_incomplete'):
-                    gaps.append('An interrupted capture contributes committed evidence; capture coverage is incomplete.')
-                if entry.get('source_incomplete'):
-                    gaps.append('A compacted source has an incomplete capture receipt; unobserved traffic remains unknown.')
             except (OSError, ValueError, sqlite3.Error):
                 gaps.append('A source segment expired or could not be read before aggregation.')
         return sources, gaps
 
     def _pages(self, entry, maximum, start, end, *, after=0, page_size=512):
+        if entry['category']=='packet_rollups':
+            # Also qualify summaries produced by earlier versions. Receipts
+            # and verified totals must cover every represented original event.
+            with self.evidence.lock,self.evidence._db(entry) as db:
+                receipt_rows=db.execute("SELECT data FROM records WHERE source='preserved-capture-receipt' LIMIT 4097").fetchall()
+                checkpoint=db.execute("SELECT value FROM checkpoints WHERE key='packet_compaction'").fetchone()
+            receipts=[json.loads(row[0])['receipt'] for row in receipt_rows]
+            progress=json.loads(checkpoint[0]) if checkpoint else {}
+            if (not receipts or len(receipts)>4096 or not all(qualified_receipt(r) for r in receipts)
+                    or sum(r.get('processed_count',0) for r in receipts)!=progress.get('processed_count')):
+                raise ValueError('Compact source qualification is unavailable')
         last = after
         while last < maximum:
             self._check()
@@ -126,7 +145,7 @@ class RetainedEvidenceReader:
                     return
                 linked = {}
                 if entry['kind'] == 'core':
-                    qualified = {r[0] for r in db.execute("SELECT l.event_id FROM ingestion_run_events l JOIN ingestion_runs r ON r.id=l.run_id WHERE l.event_id>? AND l.event_id<=? AND r.source IN ('jsonl','scapy') AND r.receipt_version=3 AND ((r.status='running' AND r.termination_reason IS NULL) OR (r.status='completed' AND r.termination_reason='source_exhausted') OR (r.status='incomplete' AND r.termination_reason='event_limit_reached') OR (r.status='failed' AND r.termination_reason IN ('failed','interrupted')))", (last, rows[-1]['id']))}
+                    qualified = qualified_event_ids(db,last,rows[-1]['id'])
                     # No per-event query loop: findings and their verified action
                     # relationships are selected once for this fixed event page.
                     for item in db.execute('SELECT * FROM detections WHERE event_id>? AND event_id<=? ORDER BY id', (last, rows[-1]['id'])):
