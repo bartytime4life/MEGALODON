@@ -3707,7 +3707,7 @@
         "unverified",
         "viewport_note"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -4251,8 +4251,8 @@
       "path": "docs/dashboard-http-contract.md",
       "classification": "documentation",
       "purpose": "Dashboard HTTP and presentation contract",
-      "bytes": 38758,
-      "sha256": "2d5eea34f843a903f1df4b1c59215c9d18e749aac1808b5b178d50d8e2a828ed",
+      "bytes": 38784,
+      "sha256": "3b1673288422e431f91c8f75e6f029ba8e3724d0405478db1fb6fb83c4cd00cd",
       "dependencies": [
         "../megalodon/dashboard.py",
         "../megalodon/dashboard_assets.py",
@@ -13430,8 +13430,8 @@
       "path": "tests/browser_acceptance.py",
       "classification": "test",
       "purpose": "Opt-in real-browser acceptance; synthetic data, real CLI/SQLite/HTTP, no sensor.",
-      "bytes": 40011,
-      "sha256": "dbeefb5b2da09288084cd391538f692cf5c86efcd4f88fda51b1d5f633c2c313",
+      "bytes": 40861,
+      "sha256": "2fb66b21e0ed8a54f1ece91fabce9dbd2611a57747e3d912f02e1f3fe4b91650",
       "dependencies": [
         "__future__",
         "asyncio",

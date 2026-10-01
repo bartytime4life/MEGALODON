@@ -324,12 +324,18 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await expect(page.locator("#room-traffic-grid .room-visual-state.is-data")).to_have_count(7)
             await page.locator("#workspace-tab-reports").click()
             await page.locator("#reports-advanced > summary").click()
-            async with page.expect_download() as summary_download:
-                await page.locator("#hud-export-download").click()
-            downloaded = await summary_download.value
-            summary_text = Path(await downloaded.path()).read_text()
+            await expect(page.locator("#hud-export-download")).to_have_count(0)
+            await expect(page.locator("#reports-json")).to_be_visible()
+            await expect(page.locator("#reports-csv")).to_be_visible()
+            # Local reports replaced the hosted export UI. Preserve a real
+            # HTTP check of the intentionally retained compatibility endpoint.
+            summary_status, summary_headers, summary_body = request(
+                port, "/api/hud-snapshot", password=password)
+            passed("retained summary HTTP boundary", summary_status == 200 and
+                   summary_headers.get("Cache-Control") == "no-store" and len(summary_body) <= 16384)
+            summary_text = summary_body.decode("utf-8")
             summary = json.loads(summary_text)
-            passed("one-click hosted summary export uses bounded backend under Advanced exports",
+            passed("local-only Reports preserves the address-free compatibility endpoint",
                    summary["schema"] == "megalodon-hud-snapshot-v1" and
                    summary["events"] == 2 and summary["findings"] == 2 and
                    summary["reported_bytes"] == "200" and
@@ -382,6 +388,11 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         await page.locator(".skip-link").focus()
         await page.keyboard.press("Enter")
         passed("skip-link keyboard target", await page.evaluate("document.activeElement.id") == "room-findings-title")
+        await expect(page.locator("#workspace-findings")).to_be_visible()
+        # The corrected skip link opens Findings. Historical search belongs to
+        # Evidence, so follow that visible navigation before filling its input.
+        await page.locator("#workspace-tab-analysis").click()
+        await expect(page.locator("#workspace-analysis")).to_be_visible()
         await page.locator("#filter-query").fill("no-synthetic-match")
         await expect(page.locator("#events")).to_contain_text("No detections match these filters.")
         await page.locator("#clear-filters").click()
