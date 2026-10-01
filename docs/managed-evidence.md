@@ -20,7 +20,7 @@ Longer histories help investigate delayed discoveries and compare recurring patt
 
 ## What shares the budget
 
-Managed packet metadata, event/finding/action relationships, sensor connection summaries, structured alerts, local topology snapshots, collector results, resource samples, saved cases and Qwen/response receipts share one policy. Cases preserve the original observation time and do not pin records indefinitely. Database indexes, WAL/journal/SHM sidecars, the catalog and bounded temporary sensor output are included in accounting. Admission reserves 16 MiB for the next transaction/catalog replacement and preserves 2 GiB of free disk.
+Managed packet metadata, event/finding/action relationships, sensor connection summaries, structured alerts, compact per-device observation rows (and retained legacy topology snapshots), collector results, resource samples, saved cases and Qwen/response receipts share one policy. Cases preserve the original observation time and do not pin records indefinitely. Database indexes, WAL/journal/SHM sidecars, the catalog and bounded temporary sensor output are included in accounting. Admission reserves 16 MiB for the next transaction/catalog replacement and preserves 2 GiB of free disk.
 
 The original Suricata EVE source in `/var/log/suricata`, user-selected source reports, user exports, installed programs and Ollama model files are separately identified external inputs/assets. MEGALODON retains normalized metadata from those sources; it does not remove their original files or alter the OS service's log-rotation policy. Temporary Zeek output normally disappears after each bounded sample. Unexpected or unaccountable working files require review rather than being silently excluded from the cap.
 
@@ -50,9 +50,11 @@ Server mode chooses a recent readable Suricata flow source, otherwise a recent Z
 
 Suricata findings retain the bounded structured alert object, source flow ID, addresses, ports, protocol, optional application label and supplied flow context. Raw packet content is excluded. [Suricata's EVE format](https://docs.suricata.io/en/latest/output/eve/eve-json-format.html) defines the source fields and correlation IDs. Invalid/oversized records count as rejections. Source rotations, bounded initial tail admission, discard resynchronization and sampled coverage are explicit gap counters. A stale source is not labeled healthy.
 
-Live visuals deliberately track at most 512 connections and return at most 128, with a reported truncation/eviction count. The paginated evidence store retains the full admitted record stream subject to the reviewed policy. Existing packet-history charts cover the newest retained packet segment; the Evidence tab spans all retained segments. See [measured capacity](managed-evidence-capacity.md) for the synthetic ingestion envelope and its limits.
+Live visuals deliberately track at most 512 connections and return at most 128, with a reported truncation/eviction count. The paginated evidence store retains the full admitted record stream subject to the reviewed policy. Packet-history charts and the Evidence tab use bounded retained history across segments and verified compact summaries. See [measured capacity](managed-evidence-capacity.md) for the synthetic ingestion envelope and its limits.
 
-## Verification boundary
+## Earlier verification boundary
+
+The following describes the original implementation session. Current browser and installation receipts are in [repository acceptance](repository-audit.md).
 
 The changes have native filesystem/API tests, browserless DOM/interaction checks and synthetic ingestion benchmarks. Browser automation was administratively denied in this session. Desktop/ultrawide/laptop/mobile rendered appearance, perceptual frame smoothness and final visual acceptance are therefore **unverified**, even though responsive rules, backing-surface resizing, projection synchronization, keyboard controls, hidden-view suspension and reduced-motion behavior have source/behavior checks.
 
@@ -68,3 +70,29 @@ The implementation is separated into independently testable surfaces:
 - Storage: `tests/test_evidence_storage.py` covers all 7–30 day boundaries, reviewed legacy enrollment, physical capacity eviction, source identities, cases, history cursors, audited restart recovery, interrupted core receipts, clocks, working space and net growth accounting.
 - Ingestion: `tests/test_flow_ingestion.py` and `tests/test_support_sensors.py` cover normalization, source selection, cumulative deltas, completion/staleness, bounded samples, checkpoint recovery and malformed/oversized inputs.
 - Capacity: the reproducible burst and paced workloads in `tools/benchmark_flow_ingestion.py` publish source-qualified results separately from packet-capture performance.
+
+## Device observations — current behavior
+
+The map defaults to local device addresses, with an optional view including
+internet peers. The list is open by default and searches addresses, MACs, observed
+names and service protocols. Local discovery accepts native Nmap XML’s inert
+`DOCTYPE nmaprun`; external/internal DTDs and entities remain rejected. Unicast
+addresses are used for device placement. Prior responding devices remain in the
+live inventory for up to 24 hours with their actual last-discovery time; a failed
+probe is not an offline verdict.
+
+Each minute, the worker saves compact per-device rows in bounded batches. It no
+longer attempts to put a whole large topology into one 32-KiB evidence record.
+These saved observations share the existing retention/cap policy. History errors
+are visible separately from a functioning live feed. Selecting an address shows
+saved observations and a continuation for earlier evidence. Source-qualified
+Suricata application protocols are context, separate from packet byte totals.
+An observed TLS/HTTP/DNS protocol is not proof of a particular installed app.
+
+Google/Nest Wifi’s local status surface provides router health. Google documents
+connected-device usage in the [Google Home app](https://support.google.com/googlehome/answer/6263633?hl=en); MEGALODON does not currently import those app-private counters.
+Seeing peer-to-peer or other devices’ internet traffic needs an appropriately
+placed mirrored-port capture, router flow feed, or endpoint sensor. A sensor
+outside NAT usually cannot recover individual private-device identity. Discovery
+alone does not establish this coverage. No router configuration, port forwarding,
+account credentials, or network interception was changed by this work.

@@ -49,7 +49,7 @@ ACTION_FIELDS = {
     'zeek_check': set(), 'suricata_check': set(),
     'background_start': {'interface'}, 'background_stop': set(),
     'geography_refresh': set(), 'geography_disable': set(),
-    'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(),
+    'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
 TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'capture':'HUD packet metadata',
@@ -145,8 +145,10 @@ def validate_action(value):
     if type(value) is not dict or type(value.get('action')) is not str or value['action'] not in ACTION_FIELDS:
         raise ValueError('Choose a supported configuration action.')
     action = value['action']
-    if set(value) != {'action'} | ACTION_FIELDS[action]:
+    if set(value) not in ({'action'} | ACTION_FIELDS[action], {'action','timeout_seconds'} | ACTION_FIELDS[action]) or ('timeout_seconds' in value and action!='model_select'):
         raise ValueError('Unexpected configuration fields.')
+    if 'timeout_seconds' in value and (type(value['timeout_seconds']) is not int or not 1<=value['timeout_seconds']<=1800):
+        raise ValueError('Choose an AI response limit from 1 to 1800 seconds.')
     if 'interface' in value:
         valid_interface(value['interface'])
     if 'nmap_target' in value:
@@ -207,7 +209,8 @@ class SupportConfiguration:
             if type(value) is not dict:
                 raise ValueError('Invalid local model profile')
             legacy=set(value)=={'model','model_digest'} and value.get('model_digest')==AISettings.model_digest
-            selected=(set(value)=={'schema','model','model_digest','compute_mode'} and value.get('schema')=='megalodon-local-model-v1'
+            selected=((set(value)=={'schema','model','model_digest','compute_mode'} and value.get('schema')=='megalodon-local-model-v1' or
+                       set(value)=={'schema','model','model_digest','compute_mode','timeout_seconds'} and value.get('schema')=='megalodon-local-model-v2' and type(value['timeout_seconds']) is int and 1<=value['timeout_seconds']<=1800)
                       and value.get('compute_mode') in ('cpu','auto'))
             if (not (legacy or selected) or not valid_model_name(value.get('model')) or type(value.get('model_digest')) is not str
                     or not re.fullmatch(r'[a-f0-9]{64}',value['model_digest'])):
@@ -305,6 +308,10 @@ class SupportConfiguration:
             with self._lock:
                 if self._job['state'] != 'running':
                     self._job.update(state='finished',action=request['action'],message='Background and HUD traffic capture stopped; stored metadata remains available.',started_at=now(),finished_at=now())
+            return self.snapshot()
+        if request['action']=='model_cancel':
+            from .ai_provider import cancel_current
+            cancel_current()
             return self.snapshot()
         with self._lock:
             if self._job['state'] == 'running' or (self.startup and self.startup.snapshot()['state'] == 'running'):
@@ -441,7 +448,7 @@ class SupportConfiguration:
                 if not matches:
                     raise ValueError('Ollama access configured. Choose an installed model under Local AI in Setup.')
                 chosen = sorted(matches,key=lambda r:r['name'] != configured.model)[0]
-                value = dict(schema='megalodon-local-model-v1',model=chosen['name'],model_digest=configured.model_digest,compute_mode=configured.compute_mode)
+                value = dict(schema='megalodon-local-model-v2',model=chosen['name'],model_digest=configured.model_digest,compute_mode=configured.compute_mode,timeout_seconds=configured.timeout_seconds)
                 self._paths()
                 path = self.home/'.config/megalodon/qwen-profile.json'
                 if os.path.lexists(path):
@@ -459,11 +466,11 @@ class SupportConfiguration:
                 message = 'Passive Suricata service configured for the selected interface; the HUD reads bounded recent EVE summaries while monitoring runs.'
             elif action == 'model_select':
                 from .ai_provider import _admitted, status
-                candidate=replace(self.settings.ai,enabled=True,model=request['model'],model_digest=request['model_digest'],compute_mode=request['compute_mode'])
+                candidate=replace(self.settings.ai,enabled=True,model=request['model'],model_digest=request['model_digest'],compute_mode=request['compute_mode'],timeout_seconds=request.get('timeout_seconds',self.settings.ai.timeout_seconds))
                 _admitted(candidate)  # Fresh local capability and digest check before changing the profile.
                 self._paths();path=self.home/'.config/megalodon/qwen-profile.json'
                 if os.path.lexists(path):_regular_owned_file(path,maximum=1024)
-                value=dict(schema='megalodon-local-model-v1',model=candidate.model,model_digest=candidate.model_digest,compute_mode=candidate.compute_mode)
+                value=dict(schema='megalodon-local-model-v2',model=candidate.model,model_digest=candidate.model_digest,compute_mode=candidate.compute_mode,timeout_seconds=candidate.timeout_seconds)
                 _atomic_write(path,json.dumps(value).encode(),0o600)
                 self._load_qwen();self.model_telemetry.invalidate()
                 result=status(self.settings.ai,probe=True)
@@ -507,6 +514,9 @@ class SupportConfiguration:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
+        from .ai_provider import cancel_current
+        cancel_current()
+        if self._thread:self._thread.join(3)
         self.sensors.stop()
         self.background.stop()
         self.geography.close()
@@ -552,6 +562,7 @@ def main(argv=None):
     parser.add_argument('--model')
     parser.add_argument('--model-digest')
     parser.add_argument('--compute-mode', choices=['cpu','auto'],default='cpu')
+    parser.add_argument('--timeout-seconds',type=int)
     parser.add_argument('--config', type=Path)
     args = parser.parse_args(argv)
     from .config import load_settings
@@ -583,9 +594,11 @@ def main(argv=None):
             body = {'action':args.action}
             for field in ACTION_FIELDS[args.action]:
                 body[field] = getattr(args, field)
+            if args.timeout_seconds is not None:
+                body['timeout_seconds']=args.timeout_seconds
             validate_action(body)
             value = call('POST',body,value['token'])
-            deadline = time.monotonic()+125
+            deadline = time.monotonic()+1925
             print('Applying setup. A system authorization prompt may appear.',flush=True)
             while value['job']['state'] == 'running' and time.monotonic()<deadline:
                 time.sleep(.5)

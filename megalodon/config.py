@@ -55,7 +55,7 @@ class AISettings:
     endpoint: str = "http://127.0.0.1:11434"
     model: str = "qwen2.5:7b-instruct-fp16"
     model_digest: str = "59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c"
-    timeout_seconds: int = 15
+    timeout_seconds: int = 300
     max_context: int = 2048
     compute_mode: str = "cpu"
 
@@ -303,7 +303,7 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
         ai=AISettings(
             enabled=_boolean(ai.get("enabled", False), "ai.enabled"),
             model=model, model_digest=digest, compute_mode=ai.get("compute_mode", "cpu"),
-            timeout_seconds=_bounded_integer(ai.get("timeout_seconds", 15), "ai.timeout_seconds", 1, 15),
+            timeout_seconds=_bounded_integer(ai.get("timeout_seconds", 300), "ai.timeout_seconds", 1, 1800),
             max_context=_bounded_integer(ai.get("max_context", 2048), "ai.max_context", 256, 4096),
         ),
     )

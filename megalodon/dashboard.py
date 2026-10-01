@@ -528,26 +528,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == '/api/reports' or route.path.startswith('/api/reports/'):
             self._reports_read(route)
             return
-        if route.path in {'/api/storage','/api/storage/history','/api/network'}:
-            provider=self.network_topology if route.path=='/api/network' else self.evidence
+        if route.path in {'/api/storage','/api/storage/history','/api/network','/api/network/history'}:
+            provider=self.network_topology if route.path.startswith('/api/network') else self.evidence
             if self.headers.get_all('X-Megalodon-Check',[])!=['1'] or provider is None or not _tool_management_user():
                 self._send_json({'error':'explicit local evidence check required'},status=403)
                 return
             try:
                 if len(route.query)>1024:raise ValueError('Query too long')
                 query=parse_qs(route.query,keep_blank_values=True,strict_parsing=True) if route.query else {}
-                allowed={'offset','limit','query','group'} if route.path=='/api/network' else {'offset','limit','category','cursor','order'} if route.path.endswith('/history') else set()
+                allowed={'ip','interface','cursor','limit'} if route.path=='/api/network/history' else {'offset','limit','query','group','view'} if route.path=='/api/network' else {'offset','limit','category','cursor','order'} if route.path.endswith('/history') else set()
                 if set(query)-allowed or any(len(v)!=1 for v in query.values()):raise ValueError('Unsupported query')
                 values={k:v[0] for k,v in query.items()}
                 for key in ('offset','limit'):
                     if key in values:
                         if not re.fullmatch(r'[0-9]{1,6}',values[key]):raise ValueError('Invalid page')
                         values[key]=int(values[key])
-                if route.path=='/api/storage':value=provider.snapshot(include_token=True)
+                if route.path=='/api/network/history':value=provider.device_history(**values)
+                elif route.path=='/api/storage':value=provider.snapshot(include_token=True)
                 elif route.path.endswith('/history'):value=provider.history(**values)
                 else:value=provider.snapshot(include_token=True,**values)
                 self._send_json(value)
-            except (ValueError,OSError,sqlite3.Error):self._send_json({'error':'evidence view unavailable or invalid query'},status=422)
+            except (ValueError,TypeError,OSError,sqlite3.Error):self._send_json({'error':'evidence view unavailable or invalid query'},status=422)
             return
         if route.path in {
             "/api/config", "/api/setup", "/api/local-checks", "/api/summary",
@@ -982,6 +983,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def do_POST(self) -> None:  # noqa: N802
+        # Validate the support action before choosing its lock policy. Cancellation
+        # must be reachable while a synchronous compatibility AI request owns it.
+        if self.path == '/api/support-config':
+            self._dispatch_POST()
+            return
         if not self.maintenance_lock.acquire(blocking=False):
             self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
             return
@@ -1312,6 +1318,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError, OSError):
             self._send_json({"error": "unsupported configuration request"}, status=400)
             return
+        needs_lock = body['action'] != 'model_cancel'
+        if needs_lock and not self.maintenance_lock.acquire(blocking=False):
+            self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
+            return
         try:
             response = self.support_config.start(body)
         except ConfigBusy:
@@ -1320,6 +1330,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json({"error": "configuration changed or action did not finish; check status"}, status=422)
             return
+        finally:
+            if needs_lock:
+                self.maintenance_lock.release()
         self._send_json(response, status=202)
 
     def _support_apps_start(self) -> None:

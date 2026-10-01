@@ -25,7 +25,7 @@ process.stdin.on('end',async()=>{
  assert.equal(get('support-model-select').value,'qwen3.6:latest');
  change('support-model-select','llama3.2:3b');change('support-model-compute','auto');await poll(10000);
  assert.equal(get('support-model-select').value,'llama3.2:3b');assert.equal(get('support-model-compute').value,'auto');
- await click('support-model-save');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_select',model:'llama3.2:3b',model_digest:'b'.repeat(64),compute_mode:'auto'});
+ await click('support-model-save');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_select',model:'llama3.2:3b',model_digest:'b'.repeat(64),compute_mode:'auto',timeout_seconds:300});
  assert.equal(requests.at(-1).opts.headers['X-Megalodon-Config-Token'],fixture.token);
  await click('support-model-refresh');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_refresh'});
  change('support-model-select','');const modelPosts=postCount();await click('support-model-save');assert.equal(postCount(),modelPosts);

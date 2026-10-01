@@ -1460,6 +1460,12 @@ def managed_evidence_http(monkeypatch):
     class Network:
         token = "n" * 32
 
+        def device_history(self, **query):
+            calls.append(("network.device_history", query))
+            if not query.get('ip'):
+                raise ValueError('PRIVATE_DEVICE_QUERY')
+            return {"schema":"megalodon-device-history-v1","records":[],"next_cursor":None,"truncated":False,"gaps":[]}
+
         def snapshot(self, *, include_token=False, **query):
             calls.append(("network.snapshot", include_token, query))
             return {"schema": "megalodon-network-v1", "token": self.token,
@@ -1571,6 +1577,18 @@ def test_managed_evidence_reads_bind_providers_and_stable_history_parameters(man
     assert status == 200 and body["schema"] == "megalodon-network-v1"
     assert body["token"] == h.network.token
     assert h.calls == [("network.snapshot", True, {"offset": 50, "limit": 50, "query": "printer room", "group": "lan-1"})]
+
+
+def test_device_history_keeps_local_read_protections_and_closed_query(managed_evidence_http):
+    h=managed_evidence_http
+    route='/api/network/history?ip=192.168.2.20&interface=eth0&limit=20'
+    assert h.request('GET',route,omit=('X-Megalodon-Check',))[0]==403
+    assert not h.calls
+    status,body,_=h.request('GET',route)
+    assert status==200 and body['schema']=='megalodon-device-history-v1'
+    assert h.calls==[('network.device_history',dict(ip='192.168.2.20',interface='eth0',limit=20))]
+    for query in ('path=/etc/passwd','ip=x&ip=y','ip=x&limit=1.2'):
+        assert h.request('GET','/api/network/history?'+query)[0]==422
 
 
 def test_managed_evidence_reads_reject_ambiguous_checks_queries_and_unavailable_providers(managed_evidence_http, monkeypatch):
@@ -1755,3 +1773,27 @@ def test_maintenance_lock_serializes_mutations_without_blocking_reads(managed_ev
     h.calls.clear()
     assert h.request("POST", "/api/storage", {"action": "preview", "policy": {}})[0] == 200
     assert h.calls == [("storage.preview", {})]
+
+
+def test_protected_ai_cancel_remains_available_during_synchronous_work(managed_evidence_http):
+    h = managed_evidence_http
+    h.support.token = 'c' * 32
+    h.support.start = lambda body: h.calls.append(('support.start', body)) or {'accepted': True}
+    headers = [('X-Megalodon-Config-Token', h.support.token)]
+    h.handler.maintenance_lock.acquire()
+    try:
+        assert h.request('POST', '/api/support-config', {'action': 'model_cancel'}, extra=headers)[0] == 202
+        assert h.calls == [('support.start', {'action': 'model_cancel'})]
+        h.calls.clear()
+        assert h.request('POST', '/api/support-config', {'action': 'model_refresh'}, extra=headers)[0] == 409
+        assert h.request('POST', '/api/support-config', {'action': 'model_cancel'})[0] == 403
+        assert h.request('POST', '/api/support-config', {'action': 'model_cancel'}, extra=headers, omit=('Origin',))[0] == 403
+        assert h.request('POST', '/api/support-config', {'action': 'model_cancel'}, extra=headers+[('Origin', 'https://other.test')])[0] == 403
+        assert h.request('POST', '/api/support-config', {'action': 'model_cancel'}, extra=headers+[('Host', 'other.test')])[0] == 400
+        assert h.request('POST', '/api/support-config', {'action': 'model_cancel', 'command': 'untrusted'}, extra=headers)[0] == 400
+        assert h.calls == [] and h.handler.maintenance_lock.locked()
+    finally:
+        h.handler.maintenance_lock.release()
+    assert h.request('POST', '/api/support-config', {'action': 'model_refresh'}, extra=headers)[0] == 202
+    assert h.calls == [('support.start', {'action': 'model_refresh'})]
+    assert not h.handler.maintenance_lock.locked()

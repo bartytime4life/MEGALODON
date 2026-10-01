@@ -7,6 +7,8 @@ from . import ai_provider
 
 
 MESSAGES = {
+    'cancelled': 'The local AI request was cancelled. You can retry when ready.',
+    'generating': 'Local AI is working. Traffic collection continues in the background.',
     'model_not_local': 'This model is remote or does not support local text completion. Select another installed model.',
     'disabled': 'Not configured. Select an installed model in Setup.',
     'ollama_unavailable': 'Ollama is unavailable on this PC. Check its service in Setup.',
@@ -18,7 +20,7 @@ MESSAGES = {
     'model_loading': 'Another local model check is in progress.',
     'concurrency_unavailable': 'The local request lock is unavailable. Review the local service.',
 }
-ERROR_STATES = {'PROVIDER_ERROR':'provider_error','REQUEST_TIMEOUT':'request_timeout',
+ERROR_STATES = {'REQUEST_CANCELLED':'cancelled','PROVIDER_ERROR':'provider_error','REQUEST_TIMEOUT':'request_timeout',
                 'INVALID_RESPONSE':'invalid_response','OLLAMA_UNAVAILABLE':'ollama_unavailable',
                 'MODEL_MISSING':'model_missing','MODEL_MISMATCH':'policy_rejection','POLICY_REJECTION':'policy_rejection','MODEL_NOT_LOCAL':'model_not_local',
                 'CONCURRENCY_LIMIT_REACHED':'model_loading','CONCURRENCY_CONTROL_UNAVAILABLE':'concurrency_unavailable'}
@@ -69,13 +71,14 @@ class ModelTelemetry:
         error=observation.get('error_code')
         if state=='model_available' and error:state=ERROR_STATES.get(error,'invalid_response')
         if stale:state='stale'
+        if observation.get('running'):state='generating'
         verified=state=='model_available' and bool(accepted) and not error
         message=MESSAGES.get(state,'Checking the configured local model.' if state=='checking' else
             'Model observation is stale; checking again.' if state=='stale' else
             'Configured model is present; verify its response in Setup.' if not accepted else
             'Configured model is present. Last accepted response '+accepted+'.')
-        workflow='connected' if verified else 'ready' if state=='model_available' else 'collecting' if state in ('checking','model_loading') else 'needs_setup' if state=='disabled' else 'error'
-        return dict(options=value.get('options',[]),truncated=value.get('truncated',False),compute_mode=settings.compute_mode,selected_digest=settings.model_digest,state=workflow,model=settings.model,model_state=state,model_present=value.get('state')=='model_available',
+        workflow='connected' if verified else 'ready' if state=='model_available' else 'collecting' if state in ('checking','model_loading','generating') else 'needs_setup' if state=='disabled' else 'error'
+        return dict(timeout_seconds=settings.timeout_seconds,running=bool(observation.get('running')),started_at=observation.get('started_at'),options=value.get('options',[]),truncated=value.get('truncated',False),compute_mode=settings.compute_mode,selected_digest=settings.model_digest,state=workflow,model=settings.model,model_state=state,model_present=value.get('state')=='model_available',
             message=(settings.model+' · '+('CPU' if settings.compute_mode=='cpu' else 'Ollama automatic compute')+' advice. '+message)[:512],updated_at=value.get('checked_at'),
             last_response_at=accepted,last_attempt_at=observation.get('last_attempt_at'),error_code=error,
             response_ms=observation.get('duration_ms'),inference_verified=verified,**{k:value.get(k) for k in ('loaded','memory_bytes','vram_bytes')})

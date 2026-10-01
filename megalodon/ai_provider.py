@@ -24,6 +24,14 @@ from . import qwen_advisory as transport
 
 _observations: OrderedDict = OrderedDict()
 _observation_lock = threading.Lock()
+_generation_lock = threading.Lock()
+_active_cancel = threading.Event()
+_request_context = threading.local()
+
+
+def cancel_current() -> None:
+    """Interrupt only this process's active model request; no Ollama service kill."""
+    _active_cancel.set()
 
 
 def last_observation(settings: AISettings) -> dict:
@@ -86,7 +94,7 @@ def _request(path: str, method: str, body: bytes | None, timeout: float) -> byte
         )
         if path != '/api/generate':
             connection.response_class = _ModelMetadataResponse
-        guard = transport._InvocationGuard(connection, None, deadline)
+        guard = transport._InvocationGuard(connection, getattr(_request_context,"cancel",None), deadline)
         guard.start()
         headers = {"Accept": "application/json", "Connection": "close"}
         if body is not None:
@@ -100,19 +108,24 @@ def _request(path: str, method: str, body: bytes | None, timeout: float) -> byte
         content_type = response.getheader("Content-Type", "")
         if not content_type.lower().startswith("application/json"):
             raise AIProviderError("INVALID_RESPONSE")
-        data = transport._read_provider_body(response, connection, deadline, None)
-        if guard.finish() is not None:
-            raise AIProviderError("REQUEST_TIMEOUT")
+        data = transport._read_provider_body(response, connection, deadline, getattr(_request_context,"cancel",None))
+        reason = guard.finish()
+        if reason is not None:
+            raise AIProviderError("REQUEST_CANCELLED" if reason == 'CANCELLED_DURING_RESPONSE' else "REQUEST_TIMEOUT")
         return data
     except AIProviderError:
         raise
     except (TimeoutError, socket.timeout):
         raise AIProviderError("REQUEST_TIMEOUT") from None
     except (OSError, http.client.HTTPException):
+        if getattr(_request_context,"cancel",None) is not None and _request_context.cancel.is_set():
+            raise AIProviderError('REQUEST_CANCELLED') from None
         if guard is not None and guard.finish() == 'PROVIDER_TIMEOUT':
             raise AIProviderError('REQUEST_TIMEOUT') from None
         raise AIProviderError("OLLAMA_UNAVAILABLE") from None
     except (ValueError, transport._ProviderResponseInvalid):
+        if getattr(_request_context,"cancel",None) is not None and _request_context.cancel.is_set():
+            raise AIProviderError('REQUEST_CANCELLED') from None
         raise AIProviderError("INVALID_RESPONSE") from None
     finally:
         if guard is not None:
@@ -140,7 +153,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
             or not valid_model_name(settings.model)
             or type(settings.model_digest) is not str
             or re.fullmatch(r"[a-f0-9]{64}", settings.model_digest) is None
-            or type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 15
+            or type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 1800
             or settings.compute_mode not in ("cpu", "auto")
             or type(settings.max_context) is not int or not 256 <= settings.max_context <= 4096):
         raise AIProviderError("POLICY_REJECTION")
@@ -152,7 +165,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
         raise AIProviderError("OLLAMA_UNAVAILABLE")
     if posture["loopback_only"] is not True:
         raise AIProviderError("POLICY_REJECTION")
-    remaining = settings.timeout_seconds if deadline is None else min(settings.timeout_seconds, deadline - time.monotonic())
+    remaining = 3 if deadline is None else min(3, deadline - time.monotonic())
     if remaining <= 0:
         raise AIProviderError("REQUEST_TIMEOUT")
     tags = _json(_request("/api/tags", "GET", None, remaining))
@@ -166,7 +179,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
         raise AIProviderError("INVALID_RESPONSE")
     if digest != settings.model_digest:
         raise AIProviderError("MODEL_MISMATCH")
-    remaining=settings.timeout_seconds if deadline is None else min(settings.timeout_seconds,deadline-time.monotonic())
+    remaining=3 if deadline is None else min(3,deadline-time.monotonic())
     if remaining<=0:raise AIProviderError('REQUEST_TIMEOUT')
     details=_json(_request('/api/show','POST',json.dumps({'model':settings.model}).encode(),remaining))
     # A loopback daemon may proxy cloud models. Never send evidence to those.
@@ -219,7 +232,7 @@ def inventory(settings: AISettings) -> dict[str, object]:
 
 def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text') -> str:
     """One deterministic request after live listener and manifest admission."""
-    if type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 15:
+    if type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 1800:
         raise AIProviderError("POLICY_REJECTION")
     deadline = time.monotonic() + settings.timeout_seconds
     _admitted(settings, deadline)
@@ -269,6 +282,10 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
             entry.update(fields);_observations.move_to_end(key)
             while len(_observations)>16:_observations.popitem(last=False)
     stamp=lambda:datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
+    if not _generation_lock.acquire(blocking=False):
+        raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
+    _active_cancel.clear();_request_context.cancel=_active_cancel
+    record(running=True,started_at=stamp(),timeout_seconds=settings.timeout_seconds)
     try:
         result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format)
     except AIProviderError as exc:
@@ -276,6 +293,10 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
         if exc.code!='CONCURRENCY_LIMIT_REACHED':
             record(last_attempt_at=stamp(),error_code=exc.code,duration_ms=round((time.monotonic()-start)*1000))
         raise
+    finally:
+        record(running=False)
+        _request_context.cancel=None
+        _generation_lock.release()
     record(last_attempt_at=stamp(),last_response_at=stamp(),error_code=None,duration_ms=round((time.monotonic()-start)*1000))
     return result
 
@@ -324,7 +345,7 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
             "DISABLED": "disabled", "OLLAMA_UNAVAILABLE": "ollama_unavailable",
             "MODEL_MISSING": "model_missing", "MODEL_MISMATCH": "policy_rejection",
             "POLICY_REJECTION": "policy_rejection", "MODEL_NOT_LOCAL": "model_not_local", "REQUEST_TIMEOUT": "request_timeout",
-            "INVALID_RESPONSE": "invalid_response", "CONCURRENCY_LIMIT_REACHED": "model_loading",
+            "REQUEST_CANCELLED": "cancelled", "INVALID_RESPONSE": "invalid_response", "CONCURRENCY_LIMIT_REACHED": "model_loading",
             "CONCURRENCY_CONTROL_UNAVAILABLE": "concurrency_unavailable", "PROVIDER_ERROR": "provider_error",
         }.get(exc.code, "invalid_response")
         base["error_code"] = exc.code

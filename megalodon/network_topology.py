@@ -74,7 +74,7 @@ def _node(address, interface, role, source, stamp, **extra):
     return dict(id=_node_id(address,interface),ip=address,name='This PC' if role=='pc' else ('Gateway' if role=='gateway' else address),
                 interface=interface,group=interface or 'unattributed',role=role,mac=None,source=source,
                 first_seen=stamp,last_seen=stamp,discovered=False,observed=False,sent_bytes=None,received_bytes=None,
-                packets=None,ports=[],names=[],findings=[],scope=_scope(address),local=role=='pc',active_connections=0,**extra)
+                packets=None,ports=[],names=[],findings=[],services=[],protocols=[],on_link=True,scope=_scope(address),local=role=='pc',active_connections=0,**extra)
 
 
 def _strict_pairs(pairs):
@@ -172,6 +172,10 @@ def discovery_jobs(scopes, inventory):
 
 def parse_discovery(raw, target, interface, stamp):
     """Nmap XML carries discovery evidence, never an inferred connection."""
+    if len(raw)>2*1024*1024:raise ValueError('Discovery report exceeds bounds')
+    # Native Nmap emits this inert declaration. No internal/external DTD or
+    # entity declaration is accepted; ElementTree never fetches the stylesheet.
+    raw=re.sub(rb'<!DOCTYPE\s+nmaprun\s*>',b'',raw,count=1)
     if len(raw)>2*1024*1024 or b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():
         raise ValueError('Discovery report exceeds bounds')
     try: root=ET.fromstring(raw)
@@ -193,6 +197,7 @@ def parse_discovery(raw, target, interface, stamp):
             item['discovered']=True
             mac=next((value.get('addr') for value in host.findall('address') if value.get('addrtype')=='mac'),None)
             if _text(mac,32): item['mac']=mac
+            item['last_discovered_at']=stamp
             result[item['id']]=item
     return result
 
@@ -211,6 +216,7 @@ class NetworkTopology:
         self._coverage=[];self._settings=dict(scopes=[],enabled=False,interval_seconds=INTERVAL_SECONDS)
         self._discovery=dict(state='disabled',last_run_at=None,next_run_at=None,message='Host discovery is off. Passive local observations remain available.')
         self._next_discovery=0;self._generation=0;self._last_evidence=0
+        self._persistence=dict(state='waiting',last_saved_at=None,message='Waiting for a network observation.')
         self._restore()
 
     def _restore(self):
@@ -317,8 +323,10 @@ class NetworkTopology:
             if generation!=self._generation or self._cancel.is_set() or cancel.is_set(): return
             for key,node in found.items():
                 if key in self._discovered: node['first_seen']=self._discovered[key]['first_seen']
-            # Only successful observations from this run are current discovery results.
-            self._discovered=found
+            # Keep prior identities for a day, with their actual last response time.
+            retained={key:node for key,node in self._discovered.items() if started_wall-datetime.fromisoformat(node['last_seen'].replace('Z','+00:00')).timestamp()<86400}
+            retained.update(found)
+            self._discovered=dict(sorted(retained.items(),key=lambda item:item[1]['last_seen'],reverse=True)[:MAX_HOSTS])
             self._next_discovery=started+INTERVAL_SECONDS
             self._discovery.update(state='partial' if failures else 'ready',last_run_at=stamp,next_run_at=_stamp(started_wall+INTERVAL_SECONDS),
                 message=f'{len(found)} responding device(s). '+('Some discovery batches were unavailable; absence is unknown.' if failures else 'Discovery is not complete network visibility.'))
@@ -333,13 +341,56 @@ class NetworkTopology:
                     if due and idle:
                         self._discovery_thread=Thread(target=self._discover,name='megalodon-network-discovery',daemon=True)
                         self._discovery_thread.start()
-                if self.evidence is not None and time.monotonic()-self._last_evidence>=PASSIVE_SECONDS:
-                    value=self.snapshot(include_token=False,limit=200)
-                    self.evidence.append_records('network',[dict(observed_at=value['observed_at'] or _now(),source='local-network-topology',data=value)])
+                if self.evidence is not None and time.monotonic()-self._last_evidence>=60:
+                    self._persist_observations()
                     self._last_evidence=time.monotonic()
             except (OSError,ValueError,TypeError):
                 with self._lock: self._state='partial';self._message='Some network observations are unavailable; last known inventory is retained.'
             self._wake.wait(PASSIVE_SECONDS);self._wake.clear()
+
+    def _persist_observations(self):
+        """One compact row per returned device, with bounded batches and no tokens."""
+        try:
+            if not self.evidence.enabled:
+                self._persistence.update(state='disabled',message='Enable managed history in Setup to retain device observations.');return
+            first=self.snapshot(include_token=False,limit=200,view='devices')
+            rows=[];stamp=_now()
+            for offset in range(0,min(first['total'],MAX_NODES),200):
+                page=first if offset==0 else self.snapshot(include_token=False,limit=200,offset=offset,view='devices')
+                rows.extend(dict(observed_at=stamp,source='network-device-observation',data=dict(node=node,window_seconds=60,coverage='Sensor-visible traffic only; window counters overlap across observations.')) for node in page['nodes'])
+                if rows:self.evidence.append_records('network',rows)
+                rows=[]
+            self._persistence=dict(state='saved',last_saved_at=stamp,message='Device observations saved at most once per minute under Storage & history limits.')
+        except (OSError,ValueError,TypeError):
+            self._persistence=dict(state='error',last_saved_at=self._persistence['last_saved_at'],message='Network history could not be saved. Check managed storage; current observations remain visible.')
+
+    def device_history(self,ip,interface='',cursor=None,limit=20):
+        address=str(ip_address(ip))
+        if interface:_interface(interface)
+        if type(limit) is not int or not 1<=limit<=50:raise ValueError('Invalid history limit')
+        result=[];gaps=[];next_cursor=cursor;scanned=0
+        if self.evidence is None or not self.evidence.enabled:return dict(schema='megalodon-device-history-v1',records=[],next_cursor=None,truncated=False,gaps=['Managed history unavailable.'])
+        while scanned<500 and len(result)<limit:
+            page=self.evidence.history(category='network',limit=min(100,limit-len(result)),cursor=next_cursor)
+            scanned+=len(page['records']);gaps.extend(page['gaps'])
+            for record in page['records']:
+                data=record['data'];nodes=[data['node']] if record['source']=='network-device-observation' and isinstance(data.get('node'),dict) else data.get('nodes',[])
+                for node in nodes[:200]:
+                    if node.get('ip')==address and (not interface or node.get('interface')==interface):
+                        result.append(dict(id=record['id'],observed_at=record['observed_at'],source=record['source'],node=node));break
+            next_cursor=page['next_cursor']
+            if not next_cursor or not page['records']:break
+        while result and len(json.dumps(result).encode())>240*1024:
+            result.pop()
+            next_cursor=result[-1]['id'] if result else cursor
+        return dict(schema='megalodon-device-history-v1',records=result,next_cursor=next_cursor,truncated=bool(next_cursor or gaps),gaps=list(dict.fromkeys(gaps)),scanned=scanned)
+
+    @staticmethod
+    def _direction_active(direction,flow,live):
+        if not flow.get('active') or live.get('capture',{}).get('state')!='running':return False
+        if 'last_seen' not in direction:return bool(direction.get('bytes'))
+        try:return -5<time.time()-datetime.fromisoformat(direction['last_seen'].replace('Z','+00:00')).timestamp()<=15
+        except (ValueError,AttributeError,TypeError):return False
 
     def _overlay(self,inventory,discovered):
         nodes=inventory['nodes'];edges=inventory['edges'];groups=inventory['groups']
@@ -347,11 +398,13 @@ class NetworkTopology:
             if row['interface'] not in groups: continue
             if key in nodes:
                 nodes[key]['discovered']=True
+                nodes[key]['last_discovered_at']=row.get('last_discovered_at',row['last_seen'])
                 if not nodes[key]['mac']: nodes[key]['mac']=row['mac']
             else: nodes[key]=row
         try: live=self.configuration.live_snapshot();ops=self.operations.snapshot()
         except (OSError,ValueError,KeyError,TypeError): return inventory,True
-        context={r['ip']:r for r in ops.get('endpoints',[])[:64]}
+        context={r['ip']:r for r in ops.get('sensor_endpoints',[])[:128]}
+        context.update({r['ip']:{**context.get(r['ip'],{}),**r} for r in ops.get('endpoints',[])[:64]})
         selected=live.get('capture',{}).get('interface')
         if selected not in groups: selected='unattributed'
         groups.setdefault('unattributed',dict(id='unattributed',label='Observed peers / route unknown',kind='other'))
@@ -360,12 +413,14 @@ class NetworkTopology:
             try:
                 ab,ba=flow['a_to_b'],flow['b_to_a']
                 for side in ('a','b'):
-                    endpoint=flow[side];address=str(ip_address(endpoint['ip']))
+                    endpoint=flow[side];parsed=ip_address(endpoint['ip']);address=str(parsed)
+                    if parsed.is_unspecified or parsed.is_multicast:raise ValueError('Not a unicast device')
                     matches=[row for row in nodes.values() if row['ip']==address and (not endpoint.get('local') or row['role']=='pc')]
                     row=next((r for r in matches if r['interface']==selected),matches[0] if matches else None)
                     if row is None:
                         row=_node(address,selected,'pc' if endpoint.get('local') else 'device','Observed packet metadata',flow['last_seen'])
                         nodes[row['id']]=row
+                    row['on_link']=row['role'] in {'pc','gateway'} or any(parsed.version==network.version and parsed in network and name==row['interface'] for network,name in inventory['networks'])
                     if not row['observed']:
                         row.update(sent_bytes=0,received_bytes=0,packets=0,active_connections=0)
                     outgoing,incoming=(ab,ba) if side=='a' else (ba,ab)
@@ -376,12 +431,24 @@ class NetworkTopology:
                     row['last_seen']=max(row['last_seen'],flow['last_seen']);row['first_seen']=min(row['first_seen'],flow['first_seen'])
                     detail=context.get(address)
                     if detail:
-                        for key in ('ports','names','findings'):
+                        for key in ('ports','names','findings','services'):
                             row[key]=deepcopy(detail.get(key,row[key]))
+                    protocol=flow.get('protocol')
+                    if protocol and protocol not in row['protocols'] and len(row['protocols'])<16:row['protocols'].append(protocol)
+                    port=endpoint.get('port')
+                    if isinstance(port,int) and 0<=port<=65535:
+                        from .operations import PORT_HINTS
+                        item=dict(protocol=protocol or 'OTHER',port=port,hint=PORT_HINTS.get(port))
+                        if item not in row['ports'] and len(row['ports'])<12:row['ports'].append(item)
                     pair.append(row)
                 edges.append(dict(id='flow-'+str(flow['id']),source=pair[0]['id'],target=pair[1]['id'],kind='observed',
-                    sent_bytes=ab['bytes'],received_bytes=ba['bytes'],active=bool(flow['active'] and live['capture']['state']=='running')))
+                    sent_bytes=ab['bytes'],received_bytes=ba['bytes'],active=bool(flow['active'] and live['capture']['state']=='running'),
+                    sent_active=self._direction_active(ab,flow,live),received_active=self._direction_active(ba,flow,live)))
             except (ValueError,KeyError,TypeError): continue
+        for row in nodes.values():
+            detail=context.get(row['ip'],{})
+            for key in ('names','findings','services'):
+                if detail.get(key):row[key]=deepcopy(detail[key])
         # Discovery and neighbor placement is a schematic relationship, never observed traffic.
         linked={row['target'] for row in edges}
         for row in list(nodes.values()):
@@ -390,7 +457,8 @@ class NetworkTopology:
             if local: edges.append(dict(id='known-'+row['id'],source=local['id'],target=row['id'],kind='discovered',sent_bytes=None,received_bytes=None,active=False))
         return inventory,bool(live.get('totals',{}).get('truncated'))
 
-    def snapshot(self,include_token=True,offset=0,limit=50,query='',group=''):
+    def snapshot(self,include_token=True,offset=0,limit=50,query='',group='',view='devices'):
+        if view not in {'devices','all'}:raise ValueError('Choose devices or all peers')
         if type(offset) is not int or not 0<=offset<=MAX_NODES or type(limit) is not int or not 1<=limit<=200 or type(query) is not str or len(query)>128 or type(group) is not str or len(group)>32:
             raise ValueError('Invalid topology page')
         with self._lock:
@@ -404,16 +472,16 @@ class NetworkTopology:
             network=ip_network(address+'/128')
             if _private(network): available.append(dict(cidr=str(network),interface=interface,label=f'{interface} · known IPv6 peer'))
         inventory,flow_partial=self._overlay(inventory,discovered)
-        rows=sorted(inventory['nodes'].values(),key=lambda r:(r['role']!='pc',r['role']!='gateway',not r['observed'],r['group'],r['ip']))
-        filtered=[r for r in rows[:MAX_NODES] if (not group or r['group']==group) and (not query or query.casefold() in (r['ip']+' '+r['name']+' '+r['interface']+' '+str(r['mac'] or '')).casefold())]
+        rows=sorted(inventory['nodes'].values(),key=lambda r:(r['role']!='pc',r['role']!='gateway',not r.get('on_link',True),not r['discovered'],not r['observed'],r['group'],r['ip']))
+        filtered=[r for r in rows[:MAX_NODES] if (view=='all' or r.get('on_link',True)) and (not group or r['group']==group) and (not query or query.casefold() in (r['ip']+' '+r['name']+' '+r['interface']+' '+str(r['mac'] or '')+' '+json.dumps(r['names'])+' '+json.dumps(r['services'])).casefold())]
         selected=filtered[offset:offset+limit];ids={r['id'] for r in selected}
         edges=[r for r in inventory['edges'] if r['source'] in ids and r['target'] in ids][:1024]
-        value=dict(schema=SCHEMA,observed_at=stamp,state=state,message=message,settings=settings,available_scopes=available[:MAX_SCOPES],
+        value=dict(schema=SCHEMA,view=view,persistence=deepcopy(self._persistence),observed_at=stamp,state=state,message=message,settings=settings,available_scopes=available[:MAX_SCOPES],
             groups=list(inventory['groups'].values())[:129],nodes=selected,edges=edges,total=len(filtered),offset=offset,limit=limit,
             truncated=len(rows)>MAX_NODES or len(inventory['edges'])>1024 or offset+len(selected)<len(filtered) or flow_partial,discovery=discovery,
             coverage=coverage+['Map and list show the returned page. Dashed relationships are logical placement, not measured physical links.',
-                'Solid traffic edges represent accepted packet metadata retained for up to 60 seconds; only recently active directions animate.',
-                'Discovery runs every 15 minutes only for explicitly configured scopes. Devices may ignore probes; absent devices are unknown.'])
+                'Traffic edges show sensor-visible packet or flow observations retained for up to 60 seconds. Other devices need router, mirrored-port or endpoint coverage.',
+                'Discovery runs every 15 minutes for saved scopes. Previously discovered identities remain for 24 hours; an absent response is not proof that a device is offline.'])
         if include_token: value['token']=self.token
         while selected and len(json.dumps(value,separators=(',',':')).encode())>MAX_RESPONSE_BYTES:
             selected.pop();ids={r['id'] for r in selected};value['edges']=[r for r in edges if r['source'] in ids and r['target'] in ids];value['truncated']=True

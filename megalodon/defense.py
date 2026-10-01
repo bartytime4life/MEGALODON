@@ -205,6 +205,7 @@ class Defense:
         except Exception as exc:
             provider_message = {
                 'CONCURRENCY_LIMIT_REACHED':'Local AI is working on another local summary. Retry this analysis shortly.',
+                'REQUEST_CANCELLED':'Local AI request cancelled; no model proposal was executed.',
                 'REQUEST_TIMEOUT':'Local AI did not finish within the local time limit. Retry this analysis.',
                 'OLLAMA_UNAVAILABLE':'Local Ollama is unavailable. Check Local AI in Setup.',
                 'DISABLED':'Configure local AI in Setup before requesting IP analysis.',
@@ -226,6 +227,8 @@ class Defense:
             with self._lock:self._job['finished_at']=now()
 
     def close(self):
+        from .ai_provider import cancel_current
+        cancel_current()
         if self._thread:self._thread.join(2)
 
 

@@ -115,6 +115,7 @@ def normalize_suricata(value):
                     observation='Suricata sensor finding; structured metadata only; not an admitted core detector finding')
         if 'app_proto' in value:data['app_proto']=metadata_label(value['app_proto'])
         if 'flow' in value:data['flow_context']=alert_flow_context(value['flow'])
+    if kind=='flow' and 'app_proto' in value:data['app_proto']=metadata_label(value['app_proto'])
     return ('flows' if kind=='flow' else 'findings',dict(observed_at=stamp,source='suricata-eve',data=data))
 
 
@@ -136,6 +137,7 @@ def normalize_zeek(value):
               sent_packets=count(value['orig_pkts']) if 'orig_pkts' in value else None,received_packets=count(value['resp_pkts']) if 'resp_pkts' in value else None,
               byte_basis=basis,
               completed=True,first_seen=utc(start),last_seen=utc(start+duration),observation='Zeek connection summary')
+    if value.get('service') not in (None,'-',''):data['app_proto']=metadata_label(value['service'])
     return 'flows',dict(observed_at=utc(start+duration),source='zeek-conn',data=data)
 
 

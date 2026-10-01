@@ -88,7 +88,7 @@ def test_selector_persists_exact_identity_and_restarts(model_provider,tmp_path,m
     assert manager.snapshot()['job']['state']=='finished'
     assert manager.settings.ai.model==settings.model and manager.settings.ai.enabled
     persisted=json.loads((tmp_path/'.config/megalodon/qwen-profile.json').read_text())
-    assert persisted['schema']=='megalodon-local-model-v1'
+    assert persisted['schema']=='megalodon-local-model-v2'
     restarted=support_config.SupportConfiguration(Settings(db_path=tmp_path/'data/events.db'),home=tmp_path)
     assert restarted.settings.ai.model==settings.model and restarted.settings.ai.model_digest==settings.model_digest
     prior=manager.settings
@@ -170,3 +170,52 @@ def test_deadline_socket_close_is_reported_as_timeout(monkeypatch,reason,expecte
     monkeypatch.setattr(provider.transport,'_InvocationGuard',Guard)
     monkeypatch.setattr(provider.transport,'_acquire_process_invocation_lock',lambda:None)
     with pytest.raises(provider.AIProviderError,match=expected):provider._request('/api/generate','POST',b'{}',1)
+
+
+def test_long_budget_keeps_metadata_fast_and_rejects_unbounded_requests(model_provider,monkeypatch):
+    settings,_,_=model_provider
+    assert settings.timeout_seconds==300
+    seen=[];original=provider._request
+    def request(path,method,body,timeout):
+        seen.append((path,timeout));return original(path,method,body,timeout)
+    monkeypatch.setattr(provider,'_request',request)
+    assert provider.generate(replace(settings,timeout_seconds=1800),'READY')=='READY'
+    assert all(seconds<=3 for path,seconds in seen if path!='/api/generate')
+    assert seen[-1][1]>1790
+    for value in (0,1801,True,1.5):
+        count=len(seen)
+        with pytest.raises(provider.AIProviderError,match='POLICY_REJECTION'):
+            provider.generate(replace(settings,timeout_seconds=value),'READY')
+        assert len(seen)==count
+
+
+def test_long_generation_exposes_progress_cancels_and_releases_lock(model_provider,monkeypatch):
+    from threading import Event,Thread
+    settings,_,_=model_provider;entered=Event();errors=[]
+    def slow(*args,**kwargs):
+        entered.set()
+        assert provider._request_context.cancel.wait(2)
+        raise provider.AIProviderError('REQUEST_CANCELLED')
+    monkeypatch.setattr(provider,'_generate',slow)
+    def run():
+        try:provider.generate(settings,'READY')
+        except provider.AIProviderError as exc:errors.append(exc.code)
+    thread=Thread(target=run);thread.start();assert entered.wait(1)
+    assert provider.last_observation(settings)['running']
+    with pytest.raises(provider.AIProviderError,match='CONCURRENCY_LIMIT_REACHED'):provider.generate(settings,'duplicate')
+    provider.cancel_current();thread.join(2)
+    assert not thread.is_alive() and errors==['REQUEST_CANCELLED']
+    value=provider.last_observation(settings)
+    assert not value['running'] and value['error_code']=='REQUEST_CANCELLED'
+    assert not value.get('last_response_at')
+
+
+def test_timeout_selection_survives_restart(model_provider,tmp_path,monkeypatch):
+    settings,_,_=model_provider;monkeypatch.setattr(support_config,'interfaces',lambda:[])
+    manager=support_config.SupportConfiguration(Settings(db_path=tmp_path/'events.db'),home=tmp_path)
+    manager.start(dict(action='model_select',model=settings.model,model_digest=settings.model_digest,compute_mode='cpu',timeout_seconds=900));manager._thread.join(3)
+    assert manager.settings.ai.timeout_seconds==900
+    restarted=support_config.SupportConfiguration(Settings(db_path=tmp_path/'events.db'),home=tmp_path)
+    assert restarted.settings.ai.timeout_seconds==900
+    for value in (0,1801,True):
+        with pytest.raises(ValueError):support_config.validate_action(dict(action='model_select',model=settings.model,model_digest=settings.model_digest,compute_mode='cpu',timeout_seconds=value))

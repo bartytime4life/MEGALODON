@@ -21,7 +21,7 @@ actually loaded into memory.
 `ollama`, fixed endpoint `http://127.0.0.1:11434`, configured candidate tag
 `qwen2.5:7b-instruct-fp16`, and observed manifest digest
 `59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c`.
-The request timeout is at most 15 seconds, context at most 4096 tokens, and
+The request timeout defaults to 300 seconds and is bounded at 1,800 seconds, context at most 4096 tokens, and
 output at most 256 tokens. Readiness, ordinary advice and defense requests all
 set the processing batch to 64 tokens to reduce temporary GPU memory demand.
 This is an [Ollama runner option](https://github.com/ollama/ollama/blob/main/api/types.go),

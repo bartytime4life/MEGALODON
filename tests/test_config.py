@@ -79,7 +79,7 @@ class ConfigTests(unittest.TestCase):
             'model = "../bad"',
             'compute_mode = "remote"',
             'model_digest = "missing"',
-            'timeout_seconds = 16',
+            'timeout_seconds = 1801',
             'max_context = 100000',
             'tool = "shell"',
         )
