@@ -36,11 +36,11 @@ def snapshot(configuration, companions):
     if hasattr(configuration,'model_telemetry'):
         observed=configuration.model_telemetry.snapshot()
         qwen={k:observed[k] for k in ('state','message','updated_at')};qwen['metrics']=[]
-        if observed.get('response_ms') is not None:qwen['metrics'].append(metric('Last response',observed['response_ms'],'ms'))
+        if observed.get('response_ms') is not None:qwen['metrics'].append(metric('Last request',observed['response_ms'],'ms'))
         if observed.get('memory_bytes') is not None:qwen['metrics'].append(metric('Loaded allocation',observed['memory_bytes']/1024**3,'GiB'))
         if observed.get('vram_bytes') is not None:qwen['metrics'].append(metric('GPU allocation',observed['vram_bytes']/1024**3,'GiB'))
     else:qwen=dict(configuration.qwen_status)
-    good=[v for v in data['advisory'].values() if v and not v.startswith('Qwen unavailable')]
+    good=[v for v in data['advisory'].values() if v and not v.startswith(('Qwen unavailable','Local AI unavailable'))]
     if good:
         # A saved answer is evidence of past use, not current provider readiness.
         qwen['metrics']=[*qwen.get('metrics',[]),metric('Saved summaries with advice',len(good))]

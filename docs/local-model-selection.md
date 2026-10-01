@@ -20,7 +20,9 @@ that an address is hostile or execute their generated commands.
   in the list but fail the completion-capability check when selected.
 - The adapter verifies the loopback listener, exact tag digest, and `/api/show`
   local completion capabilities before each response. A loopback Ollama service
-  alone does not establish that a model runs locally.
+  alone does not establish that a model runs locally. Metadata replies have a
+  separate 256-KiB bound because model descriptions include tensor names and
+  licenses. Generated-response and protocol-framing limits remain unchanged.
 - CPU is the default for short background advice. Automatic compute lets Ollama
   choose GPU use and can compete with models in other applications. Large models
   may not finish within the fixed 15-second request deadline. Context remains

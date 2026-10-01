@@ -4765,10 +4765,10 @@
       "path": "docs/local-model-selection.md",
       "classification": "documentation",
       "purpose": "Choose a local AI model",
-      "bytes": 3861,
-      "sha256": "5f1ec0e3ee9e2b69cb4d3c1883d75c18d6187ed5f23ea2b8cfe1b1489b99a1bc",
+      "bytes": 4039,
+      "sha256": "ca824c0f6f5d2e65695c4e0952921d93d53ff0a42d0d702ba94224a13ba7532c",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -5867,6 +5867,7 @@
         "tests/test_live_geography.py",
         "tests/test_local_install.py",
         "tests/test_local_setup.py",
+        "tests/test_model_selection.py",
         "tests/test_qwen_advisory.py",
         "tests/test_release_evidence_packet.py",
         "tests/test_service_acceptance.py",
@@ -5948,6 +5949,7 @@
         "tests/test_model_profile.py",
         "tests/test_model_profile_repair.py",
         "tests/test_model_profile_snapshot.py",
+        "tests/test_model_selection.py",
         "tests/test_ollama_generate_contract.py",
         "tests/test_provider_containment.py",
         "tests/test_qwen_advisory.py",
@@ -6021,8 +6023,8 @@
       "path": "megalodon/ai_provider.py",
       "classification": "source",
       "purpose": "Explicit, bounded Ollama checks and text generation for the AI control plane.",
-      "bytes": 16697,
-      "sha256": "afcdd5115a635ce38d44e0bc23818e3f4ca2fe1129a01f1846038f30ef03716d",
+      "bytes": 16975,
+      "sha256": "0decc887766f95e715b5f77c1c5ef6681831359dbdb3dcf31ca373cf42006ecb",
       "dependencies": [
         ".",
         ".config",
@@ -6153,6 +6155,7 @@
         "tests/test_live_geography.py",
         "tests/test_local_install.py",
         "tests/test_local_setup.py",
+        "tests/test_model_selection.py",
         "tests/test_qwen_advisory.py",
         "tests/test_release_evidence_packet.py",
         "tests/test_service_acceptance.py",
@@ -8409,7 +8412,7 @@
         "threading",
         "time"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8573,6 +8576,7 @@
         "tests/test_live_geography.py",
         "tests/test_local_install.py",
         "tests/test_local_setup.py",
+        "tests/test_model_selection.py",
         "tests/test_qwen_advisory.py",
         "tests/test_release_evidence_packet.py",
         "tests/test_service_acceptance.py",
@@ -9411,8 +9415,8 @@
       "path": "megalodon/qwen_advisory.py",
       "classification": "source",
       "purpose": "One explicit, bounded Qwen advisory request to a literal loopback provider.",
-      "bytes": 36195,
-      "sha256": "7af57df11ea324d5a7f8f09881f024a7b3797f33a101431e50856e142540792c",
+      "bytes": 36306,
+      "sha256": "164548afb04a69a04a357a40e16a137f3c63c308922becab0a22bbf2c74728b3",
       "dependencies": [
         ".advisory",
         ".anomaly_advisory",
@@ -9431,7 +9435,7 @@
         "time",
         "typing"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -9447,6 +9451,7 @@
         "tests/test_companion_automation.py",
         "tests/test_dashboard_advisory_receipt.py",
         "tests/test_hub.py",
+        "tests/test_model_selection.py",
         "tests/test_provider_containment.py",
         "tests/test_qwen_advisory.py",
         "tests/test_support_startup.py"
@@ -9522,6 +9527,7 @@
         "tests/test_live_geography.py",
         "tests/test_local_install.py",
         "tests/test_local_setup.py",
+        "tests/test_model_selection.py",
         "tests/test_qwen_advisory.py",
         "tests/test_release_evidence_packet.py",
         "tests/test_service_acceptance.py",
@@ -12792,8 +12798,8 @@
       "path": "megalodon/support_workflows.py",
       "classification": "source",
       "purpose": "Current HUD-owned workflow observations; reads never start tools.",
-      "bytes": 3641,
-      "sha256": "58be659eb906dc46bfce7c50c9e8984dcf513f028ec94f011ce938fd5e0a5bfd",
+      "bytes": 3665,
+      "sha256": "72ec64f0f7d5a0b17afdc33271afa735fef2320da7a443baea1c4d551d4456a8",
       "dependencies": [
         ".managed_capture",
         ".support_sensors"
@@ -16614,19 +16620,21 @@
       "path": "tests/test_model_selection.py",
       "classification": "test",
       "purpose": "Selectable local artifacts retain admission, atomic settings and truthful status.",
-      "bytes": 7765,
-      "sha256": "b0b4ac3c4f504337b68bc9b5ae8aca25f4ec4f779fd0656df05e6cf3a5314140",
+      "bytes": 8872,
+      "sha256": "44e11e85a1842b088562428f00986d31f499e51323a8828a856863c2396b8b2a",
       "dependencies": [
         "dataclasses",
+        "io",
         "json",
         "megalodon",
         "megalodon.config",
         "megalodon.model_telemetry",
         "pathlib",
         "pytest",
+        "time",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17848,8 +17856,8 @@
       "path": "tests/test_support_sensors.py",
       "classification": "test",
       "purpose": "test support sensors",
-      "bytes": 5026,
-      "sha256": "5ae33402850809d41c42161a74185afa4f46ce0a4b739b5fe2406f6c979e6b33",
+      "bytes": 5160,
+      "sha256": "cd347d341fbf2e87ce5bcae370876975c962351c7767c25a668781ec33bf4f2a",
       "dependencies": [
         "contextlib",
         "datetime",

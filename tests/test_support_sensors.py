@@ -87,7 +87,9 @@ def test_old_qwen_advice_does_not_override_current_failure():
     idle=dict(state='needs_setup',message='Provider unavailable',updated_at=None,metrics=[])
     config=SimpleNamespace(capture=SimpleNamespace(snapshot=lambda:dict(state='stopped',accepted=0,skipped=0,started_at=None,message='Stopped')),
         sensors=SimpleNamespace(snapshot=lambda:dict(zeek=idle,suricata=idle)),qwen_status=dict(idle))
-    companions=SimpleNamespace(snapshot=lambda:dict(results={},status={},advisory={'nmap':'Saved old advice'}))
+    companions=SimpleNamespace(snapshot=lambda:dict(results={},status={},advisory={'nmap':'Saved old advice','clamav':'Local AI unavailable (PROVIDER_ERROR).','osquery':'Qwen unavailable (DISABLED).'}))
     row=next(r for r in snapshot(config,companions)['tools'] if r['id']=='qwen')
     assert row['state']=='needs_setup' and row['message']=='Provider unavailable'
     assert row['metrics'][-1]['label']=='Saved summaries with advice'
+
+    assert row['metrics'][-1]['value']==1

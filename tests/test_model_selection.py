@@ -135,3 +135,22 @@ def test_ollama_access_configuration_preserves_non_qwen_selection(model_provider
     manager.start(dict(action='qwen_configure'));manager._thread.join(3)
     assert manager.snapshot()['job']['state']=='finished'
     assert manager.settings.ai.model==settings.model
+
+
+@pytest.mark.parametrize('chunked',[False,True])
+def test_metadata_has_separate_bounded_body_without_relaxing_generated_output(chunked):
+    import io,time
+    from megalodon import qwen_advisory as transport
+    class Socket:
+        def __init__(self,raw):self.raw=raw
+        def makefile(self,*a):return io.BytesIO(self.raw)
+    class Connection:
+        sock=None
+    def read(response_class,size):
+        body=b'x'*size
+        framing=(b'Transfer-Encoding: chunked\r\n\r\n'+format(size,'x').encode()+b'\r\n'+body+b'\r\n0\r\n\r\n' if chunked else b'Content-Length: '+str(size).encode()+b'\r\n\r\n'+body)
+        response=response_class(Socket(b'HTTP/1.1 200 OK\r\n'+framing));response.begin()
+        return transport._read_provider_body(response,Connection(),time.monotonic()+2,None)
+    assert len(read(provider._ModelMetadataResponse,50_280))==50_280
+    with pytest.raises(transport._ProviderResponseInvalid):read(provider._ModelMetadataResponse,256*1024+1)
+    with pytest.raises(transport._ProviderResponseInvalid):read(transport._BoundedHTTPResponse,transport.MAX_PROVIDER_ENVELOPE_BYTES+1)

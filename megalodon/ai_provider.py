@@ -47,6 +47,12 @@ class AIProviderError(RuntimeError):
         self.code = code
 
 
+class _ModelMetadataResponse(transport._BoundedHTTPResponse):
+    """Model metadata includes tensor names and licenses; generated text does not."""
+
+    body_limit = 256 * 1024
+
+
 def _strict_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
@@ -78,6 +84,8 @@ def _request(path: str, method: str, body: bytes | None, timeout: float) -> byte
         connection = transport._LiteralLoopbackHTTPConnection(
             transport.LOOPBACK_HOST, transport.LOOPBACK_PORT, timeout=timeout,
         )
+        if path != '/api/generate':
+            connection.response_class = _ModelMetadataResponse
         guard = transport._InvocationGuard(connection, None, deadline)
         guard.start()
         headers = {"Accept": "application/json", "Connection": "close"}
