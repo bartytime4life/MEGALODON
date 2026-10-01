@@ -8,10 +8,11 @@ def package_digest(root):
     root = Path(root)
     digest = sha256()
     for path in sorted(root.rglob('*')):
-        if '__pycache__' in path.parts or path.suffix == '.pyc' or not path.is_file():
+        if '__pycache__' in path.parts or path.suffix == '.pyc':
             continue
         if path.is_symlink():
             raise ValueError('Package identity cannot include symbolic links')
+        if not path.is_file():continue
         digest.update(path.relative_to(root).as_posix().encode() + b'\0')
         digest.update(sha256(path.read_bytes()).digest())
     return digest.hexdigest()

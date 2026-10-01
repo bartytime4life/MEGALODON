@@ -388,3 +388,9 @@ public hash from an unrelated local process is insufficient. Running releases
 hold a read-only directory descriptor so automatic retirement can identify code
 still in use even after the active selector changes. Older ambiguous processes
 keep their releases protected.
+
+The installer copies the reviewed package and build metadata into a fresh private
+build directory. It never reuses the checkout's generated `build/lib` tree.
+The temporary copy is removed after pip finishes, and `release.json` retains the
+original source path, package digest and selected supported extras. A failed
+content comparison prevents activation.

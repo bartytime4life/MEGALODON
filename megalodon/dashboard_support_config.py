@@ -207,7 +207,7 @@ SUPPORT_CONFIG_JS = r'''
 
 
 def local_support_help(html: str) -> str:
-    """Update only composed local HUD help; shared offline/Site copy is unchanged."""
+    """Compose local operational help from the compatibility reference."""
     return html.replace(
         "Saved metadata in the shared time range. No capture starts here.",
         'Saved metadata in the shared time range. Start live collection with Configure apps in the <a href="#support-apps-title">HUD support controls</a>.',
@@ -218,8 +218,5 @@ def local_support_help(html: str) -> str:
 
 
 def local_support_script(script: str) -> str:
-    """Scope legacy launcher copy after local composition, preserving shared assets."""
-    return script.replace(
-        "The HUD has no stop, removal, or configuration action.",
-        "These individual app launchers do not close apps or change their configuration. Configure apps in the HUD provides separate supported setup and managed capture controls.",
-    )
+    """Compatibility hook; canonical local copy now owns administration help."""
+    return script

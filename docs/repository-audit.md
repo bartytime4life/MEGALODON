@@ -32,7 +32,7 @@ repository source and are excluded from the public ledger.
 
 | Area | Correction | Verification |
 | --- | --- | --- |
-| Installation | Package-content identity and supported extra preservation; stop/flush, activate, restart, health verification and rollback; verified unused release retirement | Installer tests, isolated real installation rehearsal, installed identity check |
+| Installation | Fresh private build inputs exclude stale generated modules; package-content identity and supported extra preservation; stop/flush, activate, restart, health verification and rollback; verified unused release retirement | Installer tests, isolated real installation rehearsal, installed identity check |
 | Upgrade identity | Readiness must match the expected package and the managed service's own loopback listening socket; an unrelated responder cannot bless an upgrade | Original-code HTTP reproduction and regression tests |
 | Release use | A read-only directory descriptor identifies the imported release after the `current` alias changes; uncertain older processes prevent retirement | Process-descriptor fixture and retention tests |
 | Setup and Sensors | Shared discovery includes known private locations such as Zeek; saved Qwen advice cannot override current readiness; stale manual-only instructions corrected | Python and browserless JavaScript workflow tests |
@@ -101,3 +101,18 @@ Physical power interruption, actual full host disks, long-running server traffic
 and every optional publisher installation are not performed on this working PC.
 Their deterministic failure tests and finite replays establish only the tested
 envelope. The hosted registration remains an external administrative limitation.
+
+## Focused Codex Security review
+
+Completed scan `76c7a1f7-eeb5-4c15-8f64-1a7c862c472d` covered the immutable
+correction diff `7b6cead..7be7eeb`: 15 changed source review items plus necessary
+supporting controls. It found one low-severity local upgrade identity issue.
+A disposable HTTP responder reproduced false acceptance by the old verifier;
+the complete cross-user port race was not attempted. Commit `17eadde` adds
+managed process/socket ownership checks and focused positive/negative tests.
+This is a focused diff review, not an exhaustive security certification of the
+whole repository. The sealed report retains the original finding and revision.
+
+The plugin's cumulative three-thread usage receipt reports 15,942,004 tokens,
+including 15,292,160 cached input tokens; it includes shared conversation context
+and is not a count of newly generated review text.

@@ -48,7 +48,7 @@ _WORKFLOWS = (
         "entry_point": "python -m megalodon.offline with source zeek-json or zeek-tsv",
         "launch_policy": "import_only_external_producer",
         "data_boundary": "closed conn.log field inventory; flow counts never become packet counts",
-        "action_boundary": "MEGALODON never starts Zeek and performs no response or egress",
+        "action_boundary": "This offline adapter never starts Zeek and performs no response or egress",
         "next_gate": "producer-profile compatibility and representative flow fixtures",
     },
     {
@@ -96,11 +96,11 @@ _WORKFLOWS = (
         "source_kind": "file_scan_result",
         "integration_owner": "external_operator",
         "input_contract": "completed clamscan text (bounded stdin), operator-supplied exit status 0 or 1",
-        "output_contract": "megalodon-clamscan-summary-v1 counts-only JSON; explicit HUD import",
+        "output_contract": "megalodon-clamscan-summary-v1 counts-only JSON; standalone converter output",
         "entry_point": "python -m megalodon.clamav_summary --exit-code 0",
         "launch_policy": "separate_manual_tool",
         "data_boundary": "no file content, file path, file hash, quarantine request, or live scan-result intake; local completed report is reduced to counts",
-        "action_boundary": "MEGALODON does not scan, update signatures, remove, or quarantine files",
+        "action_boundary": "This standalone converter does not scan, update signatures, remove, or quarantine files",
         "next_gate": "producer-profile acceptance and independent false-positive review before operational claims",
     },
     {

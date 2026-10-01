@@ -374,7 +374,7 @@ function integrationCard(item) {
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);
   const details = document.createElement('details');
-  details.append(textNode('summary', 'Data connection details'), flow, textNode('p', `Next gate: ${item.next_gate}`, 'integration-gate'));
+  details.append(textNode('summary', 'Legacy CLI adapter details'), flow, textNode('p', `Next gate: ${item.next_gate}`, 'integration-gate'));
   const facts = document.createElement('dl');
   [
     ['Workflow', item.id], ['Source kind', item.source_kind], ['Integration owner', item.integration_owner],

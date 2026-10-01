@@ -3689,7 +3689,7 @@
         "packages",
         "source"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3860,7 +3860,7 @@
         "source_bytes",
         "verified_represented_records"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3890,7 +3890,7 @@
         "seconds",
         "write_syscalls"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3915,7 +3915,7 @@
         "schema",
         "workload"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3940,7 +3940,7 @@
         "schema",
         "workload"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3965,7 +3965,7 @@
         "schema",
         "workload"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -4636,8 +4636,8 @@
       "path": "docs/local-pc-setup.md",
       "classification": "documentation",
       "purpose": "Install or run MEGALODON on a local Linux PC",
-      "bytes": 21456,
-      "sha256": "5c15a7b0e2791a26b5de5195c677916e83f8cb405267f57d7c8809282d47a025",
+      "bytes": 21813,
+      "sha256": "0aa686313709357166b4bc0eaebd9cdc2c7772b0e69c023a8a836f8172e72838",
       "dependencies": [
         "../README.md",
         "live-connection-globe.md",
@@ -5019,8 +5019,8 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 7483,
-      "sha256": "2730acce3dd6a98c053e3e916efd1ad5f686630aa59200ab2519f9509cb13802",
+      "bytes": 8412,
+      "sha256": "ef52daf8867891efe730175de354ca6f65f2481c743974ab7a3cb5661f3a2ea2",
       "dependencies": [
         "audit/dependency-check.json",
         "audit/repository-files.json",
@@ -5031,7 +5031,7 @@
         "benchmarks/repository-audit-sustained.json",
         "benchmarks/repository-audit-zeek.json"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -6243,8 +6243,8 @@
       "path": "megalodon/build_identity.py",
       "classification": "source",
       "purpose": "Content identity for packaged code and reference assets; no host identifiers.",
-      "bytes": 1121,
-      "sha256": "38162d2c5d7e47d5783c32ba9c004e73be69a642aae99e9e2f53d3d7722eb556",
+      "bytes": 1138,
+      "sha256": "492460ed742f4b8c0021cc23e8de83ce2e9564119425b2a9d40e62501e96b01c",
       "dependencies": [
         "hashlib",
         "os",
@@ -7156,8 +7156,8 @@
       "path": "megalodon/dashboard_integrations.py",
       "classification": "source",
       "purpose": "Presentation for the static integration map; no tool or telemetry access.",
-      "bytes": 36425,
-      "sha256": "62f5fa90ddd142aa65a1eef62dbb55f430d16df757ecc035ce3fda7954102faf",
+      "bytes": 36428,
+      "sha256": "594005f21e92a47c5b77b2b0f5d85182cfc52eae8d5c2b47b50db4a118308574",
       "dependencies": [
         ".dashboard_action_plane",
         ".status_glossary"
@@ -7380,10 +7380,10 @@
       "path": "megalodon/dashboard_support_config.py",
       "classification": "source",
       "purpose": "Explicit local support-tool setup and bounded capture controls.",
-      "bytes": 32545,
-      "sha256": "49851808c414f870aa7546ab2ab320c46b030b3b02acaaef5cd8ea1ecf37560a",
+      "bytes": 32265,
+      "sha256": "1831fe881469b17df0886925a9644f2e174df55446557f2d896915d69dcf0ba7",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7791,14 +7791,14 @@
       "path": "megalodon/hub.py",
       "classification": "source",
       "purpose": "Closed, non-executing integration plans for MEGALODON's companion tools.",
-      "bytes": 10389,
-      "sha256": "d610c3dd4237fb376b6d651aabac9ece0271b19e2f326c16bb78e9fb254a45c0",
+      "bytes": 10424,
+      "sha256": "43aa99fb9d7535098afe336638a834b01476ac541fbba3a5823c913021907df7",
       "dependencies": [
         ".capabilities",
         "__future__",
         "typing"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8017,8 +8017,8 @@
       "path": "megalodon/local_install.py",
       "classification": "source",
       "purpose": "User-scoped Linux desktop installation for the local MEGALODON HUD.",
-      "bytes": 41283,
-      "sha256": "d97fdbc6904ab0060d1b48b4b589cb6ebbd2c7f4a730a8bd3788a768db470580",
+      "bytes": 42047,
+      "sha256": "52426a11fd96c56d45fcf3c82b4ea3e3bdde32a74bccd82b4743b1869dcc516a",
       "dependencies": [
         ".",
         ".build_identity",
@@ -8045,6 +8045,7 @@
         "stat",
         "subprocess",
         "sys",
+        "tempfile",
         "tomllib",
         "typing",
         "warnings"
@@ -9143,7 +9144,7 @@
       "bytes": 1066,
       "sha256": "69e90a6def0d84515264b5760e383cc2e746a40af65827f0a0186caa9b063a7f",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -14815,8 +14816,8 @@
       "path": "tests/test_dashboard_boundaries.py",
       "classification": "test",
       "purpose": "Read-only HTTP and Integration Map regressions; synthetic inputs only.",
-      "bytes": 32325,
-      "sha256": "27b0a690b2265b9e9b7dd59482294112a90109c96f6b21ca3ea4778d7470e55b",
+      "bytes": 32335,
+      "sha256": "59004b0396384ea9c1e60bd9c8f9e0cd136cbd108067b3bb46cb0dcc561b5a90",
       "dependencies": [
         "__future__",
         "copy",
@@ -14835,7 +14836,7 @@
         "subprocess",
         "threading"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -15240,8 +15241,8 @@
       "path": "tests/test_dashboard_support_apps_ui.py",
       "classification": "test",
       "purpose": "Support-app startup is prominent, explicit, bounded and retryable.",
-      "bytes": 2373,
-      "sha256": "de170ee317a6dc9956d45119a50e5dc4d208f1df37f549dd31e7a8a928ad062f",
+      "bytes": 2389,
+      "sha256": "9f855aae52822138fbf5fa74b77bcbacdce2aa175ba2c9a425821e5811cbe1e8",
       "dependencies": [
         "json",
         "megalodon.dashboard_assets",
@@ -15252,7 +15253,7 @@
         "shutil",
         "subprocess"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -16114,8 +16115,8 @@
       "path": "tests/test_local_install.py",
       "classification": "test",
       "purpose": "User installation owns bounded artifacts and preserves local data.",
-      "bytes": 20011,
-      "sha256": "266dee4456ff268c80f6abbfd756bc89bc2cba7bb37ba7711c01fc6fb7525a09",
+      "bytes": 20449,
+      "sha256": "a09d4ca2eac94010029e95cde5ade7bd4c330717a7e969512241b93a30486d58",
       "dependencies": [
         "__future__",
         "megalodon",
@@ -18278,7 +18279,7 @@
         "tempfile",
         "time"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -18488,8 +18489,8 @@
       "path": "tools/installer_lifecycle_evidence.py",
       "classification": "source",
       "purpose": "Real Linux installer rehearsal in disposable paths, never host acceptance.",
-      "bytes": 18434,
-      "sha256": "9e372be4c97b6d44104a65fe756df1d0a405bd307ff6bc5b90c7cfee789f7f13",
+      "bytes": 18824,
+      "sha256": "20035089e8b65c24b49942e9f6a5c7764e5d0e54e11ff8dbebf08270975fef6b",
       "dependencies": [
         "__future__",
         "argparse",
@@ -18505,7 +18506,7 @@
         "sys",
         "tempfile"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -18772,7 +18773,7 @@
         "sys",
         "tomllib"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"

@@ -28,6 +28,7 @@ import shlex
 import shutil
 import stat
 import subprocess
+import tempfile
 import sys
 import tomllib
 import warnings
@@ -387,13 +388,22 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
         if _run([sys.executable, "-I", "-m", "venv", str(venv)]).returncode != 0:
             raise InstallError("Python could not create the private application environment")
         python = venv / "bin" / "python"
-        if _run([
-            str(python), "-I", "-m", "pip", "install", "--disable-pip-version-check",
-            str(source) + '[' + ','.join(extras) + ']',
-        ]).returncode != 0:
-            raise InstallError(
-                "MEGALODON could not be installed; review the network and Python build-tool output above"
-            )
+        # setuptools may reuse source/build/lib, including deleted modules.
+        # A fresh private build input prevents ignored artifacts entering the
+        # release. The package digest below still binds it to reviewed source.
+        with tempfile.TemporaryDirectory(prefix='build-source-',dir=release) as temporary:
+            clean_source=Path(temporary)
+            for name in ('pyproject.toml','README.md','LICENSE','MANIFEST.in'):
+                if (source/name).is_file():shutil.copyfile(source/name,clean_source/name)
+            shutil.copytree(source/'megalodon',clean_source/'megalodon',
+                            ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+            if _run([
+                str(python), "-I", "-m", "pip", "install", "--disable-pip-version-check",
+                str(clean_source) + '[' + ','.join(extras) + ']',
+            ]).returncode != 0:
+                raise InstallError(
+                    "MEGALODON could not be installed; review the network and Python build-tool output above"
+                )
         smoke = _run([
             str(python), "-I", "-c",
             "import json,megalodon,pathlib,sys;"
@@ -411,7 +421,7 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
         if receipt != {"version": __version__, "inside": True, "package_sha256": expected_digest}:
             raise InstallError("the installed package identity did not match this reviewed source")
         _atomic_write(release / 'release.json', json.dumps(dict(schema='megalodon-release-v1',
-            package_sha256=expected_digest, extras=extras), sort_keys=True).encode(), 0o600)
+            package_sha256=expected_digest, extras=extras,source_path=str(source)), sort_keys=True).encode(), 0o600)
         return release_id, {
             "id": release_id,
             "version": __version__,
