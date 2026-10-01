@@ -109,6 +109,8 @@ def _request(path: str, method: str, body: bytes | None, timeout: float) -> byte
     except (TimeoutError, socket.timeout):
         raise AIProviderError("REQUEST_TIMEOUT") from None
     except (OSError, http.client.HTTPException):
+        if guard is not None and guard.finish() == 'PROVIDER_TIMEOUT':
+            raise AIProviderError('REQUEST_TIMEOUT') from None
         raise AIProviderError("OLLAMA_UNAVAILABLE") from None
     except (ValueError, transport._ProviderResponseInvalid):
         raise AIProviderError("INVALID_RESPONSE") from None

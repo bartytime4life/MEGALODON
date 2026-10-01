@@ -132,7 +132,7 @@ SUPPORT_CONFIG_JS = r'''
     if(v.model){
       const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')?select.value:model.model;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
-      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':'No installed models returned';select.replaceChildren(placeholder,...options);select.value=model.options.some(row=>row.name===chosen)?chosen:'';
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';select.replaceChildren(placeholder,...options);select.value=model.options.some(row=>row.name===chosen)?chosen:'';
       if(!state.dirty.has('compute_mode'))el('support-model-compute').value=model.compute_mode;
       el('support-model-status').textContent=model.message+(model.truncated?' First 64 installed artifacts shown.':'');
       const metrics=[];if(model.last_response_at)metrics.push('Last accepted response '+time(model.last_response_at));if(model.response_ms!==null)metrics.push('Last request '+(model.response_ms/1000).toFixed(2)+' s');
@@ -202,7 +202,7 @@ SUPPORT_CONFIG_JS = r'''
     const button=Object.entries(actions).find(([,value])=>value===action);
     if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible())return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
-    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]}… A system authorization prompt may appear.`,'working');controls();
+    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]}…${['capture_permissions','signature_update','qwen_configure','suricata_configure'].includes(action)?' A system authorization prompt may appear.':''}`,'working');controls();
     try{const value=await request(payload);if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
     catch(error){fail(error);}finally{state.pending=false;controls();schedule();}
   }

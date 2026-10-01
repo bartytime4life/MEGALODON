@@ -32,7 +32,8 @@ that an address is hostile or execute their generated commands.
 - The UI distinguishes installed availability, loaded allocation, a completed
   response, and the latest failed attempt. Loaded allocation includes CPU/GPU
   memory reported by Ollama; it is not MEGALODON process RSS or GPU utilization.
-  Metadata refreshes are shared and cached for 30 seconds, without model inference.
+  Metadata refreshes are shared and cached for 30 seconds, without model inference;
+  a busy provider lock is retried after two seconds.
   Last-response observations are held in memory and reset on service restart;
   existing evidence and response receipts follow managed retention.
 

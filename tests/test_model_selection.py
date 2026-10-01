@@ -154,3 +154,19 @@ def test_metadata_has_separate_bounded_body_without_relaxing_generated_output(ch
     assert len(read(provider._ModelMetadataResponse,50_280))==50_280
     with pytest.raises(transport._ProviderResponseInvalid):read(provider._ModelMetadataResponse,256*1024+1)
     with pytest.raises(transport._ProviderResponseInvalid):read(transport._BoundedHTTPResponse,transport.MAX_PROVIDER_ENVELOPE_BYTES+1)
+
+
+@pytest.mark.parametrize('reason,expected',[(None,'OLLAMA_UNAVAILABLE'),('PROVIDER_TIMEOUT','REQUEST_TIMEOUT')])
+def test_deadline_socket_close_is_reported_as_timeout(monkeypatch,reason,expected):
+    class Connection:
+        def __init__(self,*a,**kw):pass
+        def request(self,*a,**kw):raise OSError('closed by deadline')
+        def close(self):pass
+    class Guard:
+        def __init__(self,*a):pass
+        def start(self):pass
+        def finish(self):return reason
+    monkeypatch.setattr(provider.transport,'_LiteralLoopbackHTTPConnection',Connection)
+    monkeypatch.setattr(provider.transport,'_InvocationGuard',Guard)
+    monkeypatch.setattr(provider.transport,'_acquire_process_invocation_lock',lambda:None)
+    with pytest.raises(provider.AIProviderError,match=expected):provider._request('/api/generate','POST',b'{}',1)

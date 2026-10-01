@@ -60,7 +60,8 @@ class ModelTelemetry:
         settings=self.settings();key=(settings.enabled,settings.model,settings.model_digest,settings.compute_mode)
         with self._lock:
             if key!=self._key:self._key=key;self._value=None;self._at=0
-            if not self._pending and (self._value is None or monotonic()-self._at>=30):
+            refresh_after=2 if (self._value or {}).get('state')=='model_loading' else 30
+            if not self._pending and (self._value is None or monotonic()-self._at>=refresh_after):
                 self._pending=True;self._thread=Thread(target=self._refresh,args=(settings,key),daemon=True,name='megalodon-model-status');self._thread.start()
             value=dict(self._value or {});stale=bool(self._value and monotonic()-self._at>90)
         observation=ai_provider.last_observation(settings)
