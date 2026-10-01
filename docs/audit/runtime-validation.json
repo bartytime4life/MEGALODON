@@ -1,0 +1,67 @@
+{
+  "schema": "megalodon-installed-audit-v1",
+  "checked_at": "2026-10-01T20:01:16.148527+00:00",
+  "source_revision": "357ad53821898393ba271107d7ac43c1b258e760",
+  "release": "0.1.0-20261001T195948Z-43aa06ad",
+  "package_sha256": "a006abc9a796aeefd07cb766a08d52a9a8f83b0401cd87396d45aecaaa4f7962",
+  "source_package_matches": true,
+  "installed_package_files": 239,
+  "managed_listener_verified": true,
+  "settings_unchanged": true,
+  "policy": {
+    "cap_bytes": 21474836480,
+    "profile": "home",
+    "recording_mode": "packet_metadata",
+    "retention_days": 14
+  },
+  "schedule": {
+    "enabled": true,
+    "frequency": "daily",
+    "last_error": null,
+    "next_at": "2026-10-02T14:00:00.000000Z",
+    "time": "09:00",
+    "timezone": "America/Chicago",
+    "weekday": 0
+  },
+  "oldest_evidence_preserved": true,
+  "history_records_before": 40801367,
+  "history_records_after": 40830607,
+  "existing_reports_preserved": true,
+  "reports": [
+    {
+      "state": "incomplete",
+      "html_readable": true,
+      "bytes": 252577
+    },
+    {
+      "state": "ready",
+      "html_readable": true,
+      "bytes": 127875
+    },
+    {
+      "state": "ready",
+      "html_readable": true,
+      "bytes": 11445
+    }
+  ],
+  "monitoring": {
+    "state": "running",
+    "accepted_increase": 5629,
+    "write_failures": 0,
+    "unconfirmed_records": 0
+  },
+  "retained_history": {
+    "pages": 2,
+    "records": [
+      128,
+      128
+    ],
+    "gaps": [
+      "A compacted source has an incomplete capture receipt; unobserved traffic remains unknown."
+    ],
+    "bounded": true,
+    "duplicate_ids": false
+  },
+  "readiness_schema": "dashboard-local-checks-v1",
+  "rendered_acceptance": "unverified; browser access restriction"
+}

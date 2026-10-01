@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 108,
     "workflow": 14,
-    "configuration": 28,
+    "configuration": 29,
     "source": 166,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3528,12 +3528,12 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 12097,
-      "sha256": "d5844957f148405448a7fb279f8830f348162ed5772085b6fe68f37f658b3a58",
+      "bytes": 12363,
+      "sha256": "8f12d92b5e45245131ae63ba7193e7b45df072e7c6d2629d112dcf4a5717e019",
       "dependencies": [
         "qwen-provider-hardening.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -3712,6 +3712,41 @@
         "source",
         "status"
       ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/audit/runtime-validation.json",
+      "classification": "configuration",
+      "purpose": "runtime validation",
+      "bytes": 1728,
+      "sha256": "573909ff15ec0151d086e3f70a3e439f2f4be7f24f232f3d83b6d19d6f226580",
+      "dependencies": [
+        "checked_at",
+        "existing_reports_preserved",
+        "history_records_after",
+        "history_records_before",
+        "installed_package_files",
+        "managed_listener_verified",
+        "monitoring",
+        "oldest_evidence_preserved",
+        "package_sha256",
+        "policy",
+        "readiness_schema",
+        "release",
+        "rendered_acceptance",
+        "reports",
+        "retained_history",
+        "schedule",
+        "schema",
+        "settings_unchanged",
+        "source_package_matches",
+        "source_revision"
+      ],
       "disposition": "retained",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
@@ -3734,7 +3769,7 @@
         "schema",
         "source"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -5064,12 +5099,13 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 9326,
-      "sha256": "5167dbf9d325698546e14c46daa26ad05fc00f03eb1bd43a169f28ae080abc29",
+      "bytes": 11006,
+      "sha256": "6f481d92b36e3b097b783f49b5db15e167b78d135d13430e94b6195e5666bf29",
       "dependencies": [
         "audit/dependency-check.json",
         "audit/installer-rehearsal.json",
         "audit/repository-files.json",
+        "audit/runtime-validation.json",
         "benchmarks/efficient-recording-comparison.json",
         "benchmarks/repository-audit-compaction.json",
         "benchmarks/repository-audit-recording.json",
@@ -5901,8 +5937,8 @@
       "path": "megalodon/ai_provider.py",
       "classification": "source",
       "purpose": "Explicit, bounded Ollama checks and text generation for the AI control plane.",
-      "bytes": 11544,
-      "sha256": "5af1f279db9a862c4bd7c819d99b44b6149e0ed19465e133b318018ba01926df",
+      "bytes": 11505,
+      "sha256": "087956f8abf1307b9c003d38ffc8e3ae661f00d3d1ff0665487d8a799384466b",
       "dependencies": [
         ".",
         ".config",
@@ -5917,7 +5953,7 @@
         "time",
         "typing"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -13816,8 +13852,8 @@
       "path": "tests/test_ai_control.py",
       "classification": "test",
       "purpose": "Closed AI control boundary using synthetic metadata and a fake provider.",
-      "bytes": 17772,
-      "sha256": "a8388447face632d4edd221e5360610484549be426134db5233d3c4a5b47e655",
+      "bytes": 17834,
+      "sha256": "1da5f6bea3e09d64376871ab76225889ebeb458762edf6e2da42e9bfacaeeaca",
       "dependencies": [
         "__future__",
         "datetime",
@@ -13833,7 +13869,7 @@
         "sqlite3",
         "uuid"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"

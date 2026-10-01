@@ -172,13 +172,12 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
     payload = {
         "model": settings.model, "prompt": prompt, "stream": False,
         "think": False, "raw": True, "keep_alive": 0,
-        "options": {"temperature": 0, "num_ctx": settings.max_context,
+        # Bound readiness and ordinary advice as well as defense requests: the
+        # default 512-token processing batch can exhaust a nearly full GPU.
+        "options": {"temperature": 0, "num_ctx": settings.max_context, "num_batch": 64,
                     "num_predict": max_tokens},
     }
     if response_format == 'defense':
-        # Short interactive analysis does not need the default large prompt batch.
-        # Bound its compute buffers when the pinned model nearly fills GPU memory.
-        payload['options']['num_batch'] = 64
         payload['format'] = {'type':'object','additionalProperties':False,
             'properties':{'explanation':{'type':'string','minLength':1,'maxLength':240},
                           'proposal':{'type':'string','enum':['observe','refresh_inventory','scan_files','contain']}},

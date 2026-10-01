@@ -53,6 +53,7 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
         if path == "/api/tags":
             return json.dumps({"models": [{"name": AISettings.model, "digest": AISettings.model_digest}]}).encode()
         assert method == "POST" and json.loads(body)["model"] == AISettings.model
+        assert json.loads(body)["options"]["num_batch"] == 64
         return json.dumps({"model": AISettings.model, "response": "READY", "done": True,
                            "done_reason": "stop"}).encode()
 

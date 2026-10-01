@@ -130,3 +130,29 @@ source and wheel hashes. The first rehearsal caught a stale generated module;
 the installer now builds from fresh private source and verifies all package files
 before activation. Two final explanatory strings were then corrected and their
 focused tests passed; they do not change the verified installation procedure.
+
+### Installed local acceptance
+
+Release `0.1.0-20261001T195948Z-43aa06ad` is running from the corrected source.
+All 239 installed package files match the checkout. The managed service owns
+the verified local listener. Settings are byte-for-byte unchanged; the 14-day /
+20-GiB policy, 9 AM America/Chicago schedule, oldest evidence and all three saved
+reports are preserved. All three report HTML downloads remain readable, including
+the report already marked incomplete. Recording resumed and accepted additional
+traffic with zero reported write failures or unconfirmed records at inspection.
+
+Two live historical pages returned 128 records each without duplicate IDs. Their
+coverage notice correctly identifies an older incomplete capture receipt; this
+does not assert complete historical coverage. Setup now finds the private Zeek
+installation. Live workflow checks show accepted TShark, Zeek, Suricata, Nmap and
+osquery observations; ClamAV was collecting when checked. See the sanitized
+[installed validation receipt](audit/runtime-validation.json). Rendered and print
+acceptance remains unresolved as described above.
+
+The installed acceptance probe also exposed an intermittent Ollama GPU-memory
+failure: readiness used the provider's default 512-token processing batch while
+defense requests already used 64. The control adapter now uses 64 for readiness
+and ordinary advice too. A real request with the same pinned model then returned
+the exact readiness response. Loopback restrictions, timeouts, context/output
+limits and defense authorization are preserved; the separate legacy advisory
+wire contract is unchanged. The focused provider/companion/defense tests passed.
