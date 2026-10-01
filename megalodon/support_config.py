@@ -415,7 +415,7 @@ class SupportConfiguration:
             elif action == 'signature_update':
                 self._execute(['pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
-                message = 'ClamAV signature updater is active. Updated signatures are available to the next file scan.'
+                message = 'ClamAV signature updater is active. Signature download completion and database freshness have not been verified.'
             elif action == 'qwen_configure':
                 from .config import AISettings
                 from .ai_provider import status

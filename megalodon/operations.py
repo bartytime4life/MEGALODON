@@ -170,7 +170,7 @@ class Operations:
                 managed=evidence.snapshot()
                 result['storage']=dict(storage,status='ready',used_bytes=managed['used_bytes'],limit_bytes=managed['policy']['cap_bytes'],percent=managed['percent'],
                     actual_days=managed['actual_days'],estimated_days=managed['estimated_days'],retention_days=managed['policy']['retention_days'],warnings=managed['warnings'])
-                result['coverage']['notes'].append('Historical packet charts use the newest retained packet segment. Evidence provides paginated history across every retained segment.')
+                result['coverage']['notes'].append('Live packet projections are bounded recent observations. Selected historical dates use retained segments and verified compact summaries with pagination and coverage limits.')
                 if evidence.recording_mode=='connection_summaries':
                     result['coverage']['notes'][:2]=['Retained sensor connection summaries; counts are reported by the selected primary sensor.',
                         'Timeline bins show flow-summary updates, not packet arrival times or wire speed. Use interface speeds for measured throughput.']

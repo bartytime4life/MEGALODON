@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 108,
     "workflow": 14,
-    "configuration": 26,
+    "configuration": 28,
     "source": 166,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3681,8 +3681,8 @@
       "path": "docs/audit/dependency-check.json",
       "classification": "configuration",
       "purpose": "dependency check",
-      "bytes": 1615,
-      "sha256": "d87fd5cbc0de9cfb74209da20514edef1f9352576898bd901e1510009ed14a0c",
+      "bytes": 2233,
+      "sha256": "bb58c98bb81b1eb113f506c7b51e562dd9a6f89fc3f33f1489eeca84e539da4c",
       "dependencies": [
         "checked_at",
         "note",
@@ -3690,6 +3690,51 @@
         "source"
       ],
       "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/audit/installer-rehearsal.json",
+      "classification": "configuration",
+      "purpose": "installer rehearsal",
+      "bytes": 2257,
+      "sha256": "60d619cdd6be9c4eff246c33b6063277c0b8eba4c15358c66b9d7adef7bcafa3",
+      "dependencies": [
+        "build_inputs",
+        "checks",
+        "exclusions",
+        "package",
+        "platform",
+        "schema",
+        "source",
+        "status"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/audit/validation.json",
+      "classification": "configuration",
+      "purpose": "validation",
+      "bytes": 1126,
+      "sha256": "11e2df1837baf4787ec4043c63b2ae25f3079250615b4e32d8a39c0343116dd9",
+      "dependencies": [
+        "full_regression",
+        "installed_tshark",
+        "limits",
+        "logs",
+        "package_builds",
+        "schema",
+        "source"
+      ],
+      "disposition": "retained",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -5019,10 +5064,11 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 8412,
-      "sha256": "ef52daf8867891efe730175de354ca6f65f2481c743974ab7a3cb5661f3a2ea2",
+      "bytes": 9326,
+      "sha256": "5167dbf9d325698546e14c46daa26ad05fc00f03eb1bd43a169f28ae080abc29",
       "dependencies": [
         "audit/dependency-check.json",
+        "audit/installer-rehearsal.json",
         "audit/repository-files.json",
         "benchmarks/efficient-recording-comparison.json",
         "benchmarks/repository-audit-compaction.json",
@@ -9057,8 +9103,8 @@
       "path": "megalodon/operations.py",
       "classification": "source",
       "purpose": "Bounded passive IP context for the local visual operations HUD.",
-      "bytes": 11105,
-      "sha256": "84c349deab0ea11fd979c0142bfb2347108ca9468c2defb372b64007dd9c6cde",
+      "bytes": 11146,
+      "sha256": "b58cea953214f1ca52a29bca50491ffe49188528d1c80df1a1575d2aca8069cc",
       "dependencies": [
         ".managed_capture",
         "collections",
@@ -9073,7 +9119,7 @@
         "threading",
         "time"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -12460,8 +12506,8 @@
       "path": "megalodon/support_config.py",
       "classification": "source",
       "purpose": "Fixed local companion configuration actions; no browser-selected commands.",
-      "bytes": 31472,
-      "sha256": "03f6caeaad7f8d64710405f1ebe824747f57f1f0d9b82507d3a75b97a1975e24",
+      "bytes": 31493,
+      "sha256": "4ca4c96b32f2dfca11d6e42f1b04ab870cf1a360f8d6034e640db020cff7ac70",
       "dependencies": [
         ".ai_provider",
         ".background_monitor",
@@ -12491,7 +12537,7 @@
         "threading",
         "time"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"

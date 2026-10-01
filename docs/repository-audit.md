@@ -78,8 +78,10 @@ Neither OS write counters nor these finite tests establish physical drive wear,
 
 ## Acceptance record
 
-Final regression, package, installed-release and security results are appended
-below after the checks complete. Tests include storage exhaustion, rollback,
+The complete Python 3.12 regression run passed **4,329 tests and 203 subtests**,
+with three conditional skips. The installed-TShark case passed when explicitly
+enabled; the other two skips require an OS layout where `/tmp` is a symlink.
+Both wheel and source archive built successfully. Tests include storage exhaustion, rollback,
 rotation/readers, compaction restart, source overlap, IPv4/IPv6 topology,
 missing sensor data, report cancellation, downtime and daylight-saving scheduling.
 
@@ -116,3 +118,15 @@ whole repository. The sealed report retains the original finding and revision.
 The plugin's cumulative three-thread usage receipt reports 15,942,004 tokens,
 including 15,292,160 cached input tokens; it includes shared conversation context
 and is not a count of newly generated review text.
+
+### Real installation rehearsal
+
+The offline, owner-private rehearsal at source `a8984e4` passed real initial
+installation, same-source replacement, missing-launcher repair, refusal of
+modified artifacts, injected manifest failure, rollback, installed CLI/import
+identity, settings/data preservation, and uninstall. Its disposable paths were
+removed afterward. The [receipt](audit/installer-rehearsal.json) records exact
+source and wheel hashes. The first rehearsal caught a stale generated module;
+the installer now builds from fresh private source and verifies all package files
+before activation. Two final explanatory strings were then corrected and their
+focused tests passed; they do not change the verified installation procedure.

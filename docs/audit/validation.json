@@ -1,0 +1,41 @@
+{
+  "schema": "megalodon-audit-validation-v1",
+  "source": "a8984e4",
+  "full_regression": {
+    "passed": 4329,
+    "skipped": 3,
+    "subtests_passed": 203
+  },
+  "installed_tshark": "passed in explicit focused lane",
+  "package_builds": [
+    "wheel",
+    "sdist"
+  ],
+  "logs": [
+    {
+      "name": "regression-release.log",
+      "sha256": "33bb3ffe6681569b2a2bf7d60da3571b30dcf17098a9d32b3c2c8e2f2a9978fa"
+    },
+    {
+      "name": "focused-final.log",
+      "sha256": "4d2df7a96ce4a667da3ccf295f2d16c728a65ed0e861a3baa919f7bb469b02b5"
+    },
+    {
+      "name": "installer-focused-final.log",
+      "sha256": "9352925e5e271773731e7ca3a390daf15479f6b144d2d059ca8d677d62821619"
+    },
+    {
+      "name": "final-copy.log",
+      "sha256": "1c296f620adc850f9ed88d75c847738d725f60f1de7a89002059c40eff811d9a"
+    },
+    {
+      "name": "package-build.log",
+      "sha256": "9fb19ee44f14000e58adf7d1e49297c53459add4e4f3d0bcc5567bf7b52d9ed0"
+    }
+  ],
+  "limits": [
+    "No rendered or print acceptance",
+    "Deterministic failure simulations, no physical power-loss test",
+    "Final wording checks run separately"
+  ]
+}
