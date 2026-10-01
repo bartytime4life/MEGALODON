@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 108,
     "workflow": 14,
-    "configuration": 30,
+    "configuration": 31,
     "source": 166,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3678,6 +3678,30 @@
       "related_tests": []
     },
     {
+      "path": "docs/audit/browser-ci-acceptance.json",
+      "classification": "configuration",
+      "purpose": "browser ci acceptance",
+      "bytes": 7339,
+      "sha256": "7f94fd1eaf43fe4e1358e510aac94844f9eec420230e24432e60b1acca78314e",
+      "dependencies": [
+        "candidate_head",
+        "checkout_note",
+        "driver_receipt",
+        "passed_check_count",
+        "pull_request",
+        "receipt",
+        "remaining_limits",
+        "schema",
+        "workflow_url"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "docs/audit/browser-local-acceptance.json",
       "classification": "configuration",
       "purpose": "browser local acceptance",
@@ -4232,11 +4256,12 @@
       "path": "docs/dashboard-browser-acceptance.md",
       "classification": "documentation",
       "purpose": "Linux dashboard browser acceptance",
-      "bytes": 9608,
-      "sha256": "ff5749ee2ddd1339644a0abd68de7ffec1441734574f8cc94d5241f02c2c1841",
+      "bytes": 9990,
+      "sha256": "62cbcd9b7aede8763af40b5c9261d967c235591e493adf2f49a85bb010e24ff3",
       "dependencies": [
         "../SECURITY_REVIEW.md",
         "../SPECIFICATION.md",
+        "audit/browser-ci-acceptance.json",
         "audit/browser-local-acceptance.json",
         "dashboard-operations.md"
       ],
@@ -5138,9 +5163,10 @@
       "path": "docs/repository-audit.md",
       "classification": "documentation",
       "purpose": "Repository audit and correction \u2014 October 1, 2026",
-      "bytes": 13006,
-      "sha256": "b72b14ad255871ee1281b86f51b7d7c086b3a3229fe66cb1ded8ff525e57a7f3",
+      "bytes": 13722,
+      "sha256": "eec616488f97a6a087962940f4c8090bcf9941b440602ba1e8e3d5546b1dd7fa",
       "dependencies": [
+        "audit/browser-ci-acceptance.json",
         "audit/browser-local-acceptance.json",
         "audit/dependency-check.json",
         "audit/installer-rehearsal.json",

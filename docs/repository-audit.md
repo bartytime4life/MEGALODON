@@ -109,6 +109,16 @@ Live geographic arc accuracy remains unverified because IP-location updates are
 disabled in the existing settings. Unmapped connections remain explicitly labeled.
 No browser policy was bypassed and no location setting was changed.
 
+The separate [native Linux browser CI run](audit/browser-ci-acceptance.json)
+passed all 83 checks for candidate `6f4187c` through its recorded PR merge commit.
+It exercised real minimized-window polling suspension and foreground recovery,
+keyboard focus, feed failure/recovery, mobile layout, and 200%/400% viewport
+reflow equivalence with the browser's reduced-motion setting. That synthetic
+runner does not establish this PC's OS preference behavior or printed pagination.
+The initial CI run caught a retired hosted-summary control in the test itself;
+the corrected driver checks the local Reports controls and separately verifies
+the retained address-free HTTP endpoint, preserving its count/privacy assertions.
+
 Physical power interruption, actual full host disks, long-running server traffic
 and every optional publisher installation are not performed on this working PC.
 Their deterministic failure tests and finite replays establish only the tested
