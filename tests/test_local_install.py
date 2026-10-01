@@ -473,6 +473,6 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
     assert release_id == receipt["id"]
     assert calls[0][1:4] == ["-I", "-m", "venv"]
     assert calls[1][1:4] == ["-I", "-m", "pip"]
-    assert calls[1][-2:] == ["--no-deps", str(source)]
+    assert calls[1][-1] == str(source) + "[geo]"
     assert calls[2][1:3] == ["-I", "-c"]
     assert (layout.releases / release_id / "venv" / "bin" / "python").exists()

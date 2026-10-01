@@ -14,7 +14,7 @@ from test_dashboard_traffic import add_run
 
 
 def test_seven_workspaces_and_persistent_return():
-    for name in ('live', 'traffic', 'findings', 'interfaces', 'reports', 'analysis', 'help'):
+    for name in ('live', 'setup', 'findings', 'interfaces', 'reports', 'analysis', 'help'):
         assert f'id="workspace-tab-{name}"' in INDEX_HTML
         assert f'id="workspace-{name}"' in INDEX_HTML
     assert INDEX_HTML.count('class="room-back"') == 1
@@ -81,18 +81,18 @@ def test_startup_controls_belong_to_home_outside_audit_history():
         if not element_id.startswith('setup-'):
             continue
         workspaces = [attrs['id'] for _, attrs in parents if attrs.get('role') == 'tabpanel']
-        assert workspaces == ['workspace-live']
+        assert workspaces == ['workspace-setup']
         assert not any('room-audit-history' in attrs.get('class', '').split() for _, attrs in parents)
     assert not any(tag == 'details' for tag, _ in parser.owners['setup-title'])
     assert 'id="setup-title" tabindex="-1"' in INDEX_HTML
     assert 'href="#setup-title"' in INDEX_HTML
     for element_id in detail_ids:
         disclosures = [attrs for tag, attrs in parser.owners[element_id] if tag == 'details']
-        assert len(disclosures) == 1
-        assert disclosures[0].get('class') == 'room-feed-details'
-        assert 'open' not in disclosures[0]
+        assert len(disclosures) == 2
+        assert disclosures[-1].get('class') == 'room-feed-details'
+        assert 'open' not in disclosures[-1]
     for element_id in control_ids:
-        assert not any(tag == 'details' for tag, _ in parser.owners[element_id])
+        assert any(attrs.get('class') == 'ops-range' for tag, attrs in parser.owners[element_id] if tag == 'details')
 
 
 def test_projection_browser_filters_truth_and_failure(tmp_path):
@@ -262,20 +262,20 @@ const window = {location:{hash:''}, addEventListener(k,v){listeners[k]=v;},
     checks = r'''
 const scroll = byId('workspace-content');
 scroll.scrollTop = 210;
-navigateWorkspace('traffic');
+navigateWorkspace('setup');
 assert.equal(scroll.scrollTop, 0);
-assert.equal(window.location.hash, '#workspace-traffic');
+assert.equal(window.location.hash, '#workspace-setup');
 scroll.scrollTop = 95;
 navigateWorkspace('live');
 assert.equal(scroll.scrollTop, 210);
 navigateWorkspace('live');
 assert.equal(scroll.scrollTop, 210);
 assert.equal(history.length, 2);
-window.location.hash = '#workspace-traffic'; listeners.popstate();
+window.location.hash = '#workspace-setup'; listeners.popstate();
 assert.equal(scroll.scrollTop, 95);
-assert.equal(byId('workspace-tab-traffic').attrs['aria-selected'], 'true');
+assert.equal(byId('workspace-tab-setup').attrs['aria-selected'], 'true');
 assert.equal(byId('workspace-live').hidden, true);
-assert.equal(byId('workspace-traffic').scrolled, undefined);
+assert.equal(byId('workspace-setup').scrolled, undefined);
 for (const id of workspaceIds) assert.equal(workspaceFromHash('#workspace-' + id), id);
 for (const hash of ['#constructor', '#__proto__', '#workspace-unknown', '#'.repeat(129)]) {
   assert.equal(workspaceFromHash(hash), null);
@@ -291,16 +291,16 @@ for (const [width, height] of [[375,812], [720,500]]) {
   viewportWidth = width; viewportHeight = height;
   navigateWorkspace('live');
   document.scrollingElement.scrollTop = 840;
-  navigateWorkspace('traffic');
+  navigateWorkspace('setup');
   document.scrollingElement.scrollTop = 630;
   navigateWorkspace('live');
   assert.equal(document.scrollingElement.scrollTop, 840);
-  window.location.hash = '#workspace-traffic'; listeners.popstate();
+  window.location.hash = '#workspace-setup'; listeners.popstate();
   assert.equal(document.scrollingElement.scrollTop, 630);
-  assert.equal(byId('workspace-traffic').hidden, false);
-  const trafficTab = byId('workspace-tab-traffic');
+  assert.equal(byId('workspace-setup').hidden, false);
+  const trafficTab = byId('workspace-tab-setup');
   trafficTab.listeners.keydown({key:'ArrowRight', preventDefault(){}});
-  const focusedTab = byId('workspace-tab-findings');
+  const focusedTab = byId('workspace-tab-reports');
   assert.equal(document.activeElement, focusedTab);
   assert.equal(focusedTab.attrs['aria-selected'], 'true');
   assert.equal(focusedTab.focusOptions, undefined,
@@ -312,7 +312,7 @@ for (const [width, height] of [[375,812], [720,500]]) {
 viewportWidth = 1440; viewportHeight = 1000;
 navigateWorkspace('live');
 assert.equal(scroll.scrollTop, 210, 'Desktop keeps its own saved workspace position');
-navigateWorkspace('traffic');
+navigateWorkspace('setup');
 assert.equal(scroll.scrollTop, 95);
 '''
     result = subprocess.run([shutil.which('node'), '-e', harness + constants + navigation + checks],

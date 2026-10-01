@@ -5,6 +5,10 @@ Python 3.11 or newer with the standard `sqlite3` and `tomllib` modules. It has n
 third-party runtime dependencies. Optional capture and analysis tools are
 separate choices; the HUD can open before any data exists.
 
+The desktop installer includes the `geo` extra's small `maxminddb` reader for the
+[live connection atlas](live-connection-globe.md). The geographic database and
+public internet-exit lookup are a separate explicit setup choice in the HUD.
+
 This is the account-free route: install the core for your user, launch the
 loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
 companion-console account is required. The HUD opens without sign-in by default
@@ -226,8 +230,8 @@ For actual capture permissions and tool configuration, use **Configure apps**
 beside the Start button. See [support configuration](support-configuration.md)
 for the live packet feed, Wireshark controls and saved collection scope.
 
-Open the local HUD and choose **Start support apps** at the top of **Home**,
-directly above **Live PC resources**. **Copy command** copies the equivalent
+Open the local HUD and choose **Start background tools** at the top of **HUD**,
+directly above the resource strip. **Copy command** copies the equivalent
 installed launcher. From this checkout, run:
 
 ```bash
@@ -237,17 +241,17 @@ installed launcher. From this checkout, run:
 The script starts the installed HUD user service if necessary, then invokes
 the same fixed action as the button. `--check` only reads startup status.
 
-- Installed Wireshark, Zenmap and ClamTk open as desktop apps. Windows requested
-  by this launcher have separate user services, so repeated clicks reuse them
-  and restarting the HUD does not close them.
-- Installed Suricata and Ollama services start if inactive. One system
-  authorization dialog may appear. A running service does not establish
-  sensor connectivity or a loaded Qwen model.
-- The existing Nmap, ClamAV and osquery worker refreshes its configured jobs;
-  queued or running scans are reused. Reports continue to be watched.
-- Missing programs are skipped. Zeek and Scapy require a selected capture or
-  configured interface; their rows explain the next step. nftables has no
-  desktop app or background service to start.
+- TShark supplies continuous metadata; Zeek supplies separate bounded CLI samples.
+  Wireshark, Zenmap and ClamTk windows are optional Advanced actions only.
+- Configured Suricata and Ollama services start if inactive. First-time setup uses
+  Configure apps; a system authorization prompt may appear.
+- Nmap, ClamAV and osquery refresh their configured jobs without duplicating
+  running work. Reports continue to be watched.
+- Scapy remains an alternative capture engine. Optional nftables containment
+  is available through the IP inspector after preview and OS authorization.
+  Neither needs a separate window or redundant background process.
+- Current workflow observations and metrics appear in Sensors. Sensor samples,
+  saved collector results and qualified packet/detection evidence stay distinct.
 
 Startup does not install packages, change firewall rules or select new scan
 targets. Results distinguish **Running**, **Launched**, **Queued**, **Missing**

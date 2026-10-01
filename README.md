@@ -12,8 +12,10 @@ metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
 audit trail, and offers a read-only localhost telemetry projection. Live capture, offline
 analysis, and firewall planning are separate choices, not mandatory parts of
-every configuration. The evaluation-release candidate is plan-only and does
-not support live firewall application.
+every configuration. Legacy firewall CLI routes remain plan-only. The separate
+Linux HUD [local defense workflow](docs/visual-operations-defense.md) supports
+operator-reviewed five-minute containment of one observed public IP on this PC,
+with OS authorization, audit records, readback and release. Qwen cannot apply it.
 
 Linux is the current implementation and CI reference, not a claim that every
 workflow requires Ubuntu or every platform has equal support. Native Windows
@@ -52,34 +54,41 @@ service starts the same loopback HUD at login; the application-menu entry then
 opens its already running page. Use `./scripts/hud-autostart.sh disable` to stop
 and remove automatic startup. The installer removes this managed service on
 uninstall. This starts the fixed local companion collectors with the HUD; it
-does not start capture, a remote feed, or unrelated companion services.
+resumes capture only when background monitoring was previously enabled. It does
+not enable a new remote feed or unrelated companion services.
 
 The local HUD also collects [live PC resource and network counters](docs/live-pc-telemetry.md)
 automatically: MEGALODON/companion CPU and RAM gauges, CPU and interface-rate
 history, per-app disk activity, and socket counts. This Linux monitor needs no
 extra package or signup. Packet-evidence charts retain their separate data sources.
 
-**Home → Start support apps**, above Live PC resources, opens installed desktop
-tools, starts supported services and refreshes configured collectors in one
-action. The same workflow is available from a terminal:
+**HUD → Start background tools**, above the resource strip, enables CLI packet/flow collection,
+starts configured services and refreshes collectors without opening extra application windows. The same workflow is available from a terminal:
 
 ```bash
 ./scripts/start-support-apps.sh
 ```
 
 Use `--check` to read startup status without starting anything. Installed
-Wireshark, Zenmap and ClamTk open in the desktop session; installed Suricata and
-Ollama services start through the system authorization prompt when needed.
+Wireshark, Zenmap and ClamTk windows are optional Advanced actions. Configured
+Suricata and Ollama services run in the background; first-time setup may use a system authorization prompt.
 Nmap, ClamAV and osquery use the current HUD's existing collection scope.
 Missing tools are skipped and each result is shown. See
 [support startup](docs/local-pc-setup.md#start-support-apps).
 
-Beside Start support apps, **Configure apps** provides capture permissions,
+The **Setup** tab (also reached through **Configure apps**) provides capture permissions,
 interface selection, live HUD traffic and managed Wireshark start/stop controls,
 saved Nmap and ClamAV scope, signature updates and companion checks. The same
 actions are available through `./scripts/configure-support-apps.sh --help`.
 See [local support configuration](docs/support-configuration.md) for the fixed
 actions, per-user permissions and capture limits.
+
+The local **Live connection atlas** animates observed send/receive directions at
+approximate IP locations. **Enable background monitoring** saves automatic capture
+resumption; **Set up IP locations** separately enables the free DB-IP database
+and public internet-exit lookup. See [live connection globe](docs/live-connection-globe.md)
+for geographic accuracy, source coverage, resource bounds and stop controls.
+See [background tool workflows](docs/background-tools.md) for CLI automation, sensor summaries and local Qwen setup.
 
 For optional companion dependencies, use
 `./scripts/manage-companion.sh nmap plan` in this reviewed checkout, then
@@ -260,13 +269,13 @@ not new named profiles, automatic installers, or a universal security suite.
 | Replay authorized metadata, without live capture | `run --source jsonl`; audit database; optional local UI | Existing Linux core path. Windows evaluation uses synthetic fixtures only until native acceptance; arbitrary sensor logs are not this input contract |
 | Observe an explicitly selected interface | Core plus the optional Scapy `capture` extra | Linux capture path; separate capture authority and permission review. Not enabled by installation or sample replay |
 | Analyze saved packet captures | Separate `megalodon.offline --source tshark`; private local reports | Linux-only adapter and fixed system TShark path; non-root isolated analyst environment. Windows desktop Wireshark use is separate, not adapter support |
-| Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; MEGALODON does not launch Zeek. Packet, flow, and alert counts are different units |
+| Analyze separately produced connection logs | Separate offline `zeek-json` or `zeek-tsv` adapter; flow reports | Linux-only importer; separate background Zeek sampling also exists. Packet, flow, and alert counts are different units |
 | Read one completed STIX 2.1 context bundle | `megalodon.threat_context.read_completed_bundle`; immutable bounded context plus a receipt | Linux-only, non-root, capability-free, owner-private completed file with an exact operator-supplied SHA-256 digest. No TAXII, pattern execution, persistence, detection, attribution, model, or action authority |
 | Convert one completed Suricata 8.0.7 alert-only EVE file | `megalodon.offline.suricata_eve.read_completed_raw_eve`; existing immutable alert publication and receipt | Exact SHA-256, private single-link file, closed run identity, and guarded Linux deadline. Mixed firehose records, payload/packet/application expansions, persistence, sensor launch, watcher, and IPS are refused |
 | Validate a completed Suricata contract-envelope file | `megalodon.offline.suricata.read_completed_file`; the same immutable alert publication and receipt | Main thread of a single-threaded Linux process, reusing the guarded `SIGALRM` deadline; one private file, no persistence, dashboard projection, sensor launch, watcher, or IPS |
 | Persist one validated Suricata publication | `megalodon.offline.suricata_consumer.consume_publication`; explicit pre-created private store | One fixed-capacity local transaction with durable replay identity, terminal receipt, and exact commit readback. No migration, retention, watcher, CLI, dashboard projection, sensor launch, model call, network access, or response action |
 | Reconcile one unknown Suricata consumer attempt | `megalodon.offline.suricata_consumer.reconcile_publication`; exact immutable publication and attempt ID | Explicit query-only readback returns only `committed`, `not_committed`, or `indeterminate`. It never retries, repairs, migrates, creates, deletes, projects, or acts |
-| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; live application is unsupported in the evaluation-release candidate |
+| Inspect integration or response plans | Static `capabilities` / `hub-plan`, or the separate nftables planner | Catalog/hub output executes nothing. Firewall plans are Linux-backend plans and record local audit decisions; legacy CLI application is refused; the separate HUD supports operator-reviewed five-minute local containment |
 
 The core can run **headless**: `run` does not start `dashboard`. A local desktop
 can use both commands, and the dashboard can be started later against the same
@@ -283,7 +292,7 @@ entry point, not a replacement platform contract.
 
 | Environment | What can be considered | Evidence / support boundary |
 | --- | --- | --- |
-| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and plan-only nftables response | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; live firewall application is unsupported |
+| Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and optional operator-reviewed local containment | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; legacy firewall CLI apply remains unsupported |
 | Other Linux distributions or architectures | Evaluate the same bounded workflows where prerequisites and safety checks hold | Not certified by the Ubuntu CI lane. Validate Python, filesystem/privilege behavior, tool paths, and each selected integration; do not remove guards to make a recipe run |
 | Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **UNVERIFIED / evaluation only.** No native MEGALODON capture, offline adapter, or Windows firewall backend. Windows acceptance is tracked separately |
 | A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
@@ -321,8 +330,8 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Inputs | Built-in sample metadata, bounded JSONL replay, and optional Linux interface-specific Scapy capture |
 | Detection | Fixed `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` metadata heuristics with bounded per-source state and cooldowns |
 | Audit | SQLite events, detections, and action decisions using parameterized WAL writes; each accepted event decision and its run counters commit atomically |
-| Dashboard | Read-only loopback HUD with Home, Traffic, Findings, Apps, Reports, Evidence and Help. Traffic shows qualified metadata with bounded automatic refresh, UTC history pages, event details and local reports. Apps separates startup presence from support and unknown health, with an explicitly opened console viewer and external-open fallback. Optional offline, Suricata and Qwen evidence remains startup-only; opening an app UI does not ingest its data or establish sensor health |
-| Firewall boundary | Plan-only isolated `inet megalodon` nftables proposals; retained `--apply` options refuse before configuration or host/process interaction |
+| Dashboard | Local loopback HUD with live traffic, connection globe, resources, IP inspection and historical traffic in the HUD; Sensors shows background workflows; Setup holds configuration and downloads. Explicit local actions use separate request checks and audit records. Completed offline and admitted Suricata evidence retains its separate projection contract; opening a companion window does not establish telemetry |
+| Firewall boundary | Legacy isolated `inet megalodon` plans remain inert. Separate HUD containment uses `inet megalodon_guard`, an exact preview, OS authorization, five-minute timeout, readback and release; model output cannot apply it |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
 | Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
@@ -331,7 +340,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
 | Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and `automation-preview` CLI with explicit DST classification. The separate [local companion worker](docs/companion-automation.md) runs three fixed, host-scoped inventory jobs by default in `hud` mode; the general automation contract has no scheduler, ledger, persistence, model call, or executor |
-| Local Qwen advisory | The original run-count policy is a manual Python API. A separately versioned [offline anomaly command](docs/anomaly-triage.md) can explicitly request one bounded Qwen explanation. The local [companion worker](docs/companion-automation.md) can request an advisory on aggregate counts through the digest-pinned local provider. Neither path gives Qwen command, target, detector, or response authority |
+| Local Qwen advisory | The original run-count policy is a manual Python API. The [offline anomaly command](docs/anomaly-triage.md), [companion worker](docs/companion-automation.md), and [HUD IP inspector](docs/visual-operations-defense.md) request bounded explanations through the digest-pinned local provider. Qwen has no command, target, detector, or response authority; the operator selects fixed local workflows |
 | Qwen provider posture (read-only) | `megalodon.provider_containment.qwen_provider_posture()` observes, via `/proc` only, whether the fixed loopback destination is bound, whether it is also reachable beyond loopback, and (permission-gated, best-effort) its owning UID/PID/cgroup/net-namespace; never contacts the provider, never gates or feeds back into an advisory request, and reports denial/uncertainty honestly rather than guessing |
 | Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
 | Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures, plus a bounded in-memory decision engine (`megalodon/alert_lifecycle.py`) validated against those fixtures; no persistence, notifier, delivery adapter, credential path, or wiring into detection ingestion, storage, the dashboard, or the CLI |
@@ -355,7 +364,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | ClamAV | Explicitly scoped local scans or completed-report watching | Optional automatic local HUD companion; aggregate counts only, no file-content intake, quarantine, signature update, or upload |
 | osquery | Fixed local DEB package count or completed-result watching | Optional automatic local HUD companion; no package names, arbitrary query pack, daemon, or remote enrollment |
 | Nmap | Explicit private IPv4 target scan or completed XML watching | Optional automatic local HUD companion; defaults to loopback, with at most 256 addresses when explicitly configured, and aggregate host/port-state counts only |
-| nftables | Review of Linux firewall table/block plans | Optional; not invoked by the evaluation-release candidate, and no firewall privilege is needed for plan mode |
+| nftables | Legacy plan review and separate HUD temporary containment | Plan mode needs no privilege. Optional HUD apply requires OS authorization and affects only its managed table |
 | pytest `>=8,<10` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
 
 The core Python package currently has no third-party runtime dependency. Git is
@@ -389,7 +398,7 @@ MEGALODON's capability status.
 | Suricata | Implemented pinned 8.0.7 alert-only raw-EVE converter, closed-envelope reader, and explicit transaction into one pre-created private durable store | Rule updates, mixed EVE firehose, sensor mode, IPS mode, watcher, or its service |
 | ClamAV | Opt-in fixed local scan/report watch; counts only | A daemon, automatic update, quarantine, or deletion |
 | osquery | Opt-in fixed DEB count/report watch; no package names | A daemon, arbitrary query pack, or remote enrollment |
-| nftables | Plan-only review vocabulary; retained live application is refused | Ruleset loading, a service, or host-firewall changes |
+| nftables | Legacy plan-only CLI; separate operator-reviewed HUD containment | Automatic blocking or arbitrary ruleset loading; use the fixed HUD preview/confirmation workflow for a temporary managed block |
 
 The static catalog remains the source of truth. From the activated project
 environment, inspect it without probing or launching any companion tool:
@@ -780,7 +789,7 @@ observation are separate timestamps; neither establishes whole-network coverage.
 Sample, unlinked and unqualified receipts are excluded. Endpoint addresses,
 ports, reported byte counts and source/run provenance appear in Activity detail.
 
-The activity globe's rolling hour view shows the newest bounded stored metadata
+Under **History**, the stored activity globe's rolling hour view shows the newest bounded stored metadata
 within the past 60 minutes and refreshes while the tab is visible. Sweep the
 time control back to review a minute, or choose **Live** to follow the current
 rolling minute, including when that minute has no returned records. The globe scans gently until a mapped detector-linked source

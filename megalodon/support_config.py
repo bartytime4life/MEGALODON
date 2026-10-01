@@ -18,6 +18,11 @@ import time
 
 from .companion_automation import _run_fixed
 from .managed_capture import ManagedCapture, now
+from .live_geography import Geography
+from .live_connections import LiveConnections
+from .background_monitor import BackgroundMonitor
+from .support_sensors import SupportSensors, zeek_binary
+from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 
 
 def _owned_directory(path, *, private):
@@ -42,10 +47,14 @@ ACTION_FIELDS = {
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
     'signature_update': set(), 'osquery_configure': set(), 'qwen_check': set(),
     'zeek_check': set(), 'suricata_check': set(),
+    'background_start': {'interface'}, 'background_stop': set(),
+    'geography_refresh': set(), 'geography_disable': set(),
+    'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
 TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
-              'qwen':'Ollama / Qwen', 'zeek':'Zeek', 'suricata':'Suricata'}
+              'qwen':'Ollama / Qwen', 'zeek':'Zeek', 'suricata':'Suricata',
+              'background':'Background traffic', 'geography':'IP geography'}
 # Only a root-owned packaged capture helper gains two packet capabilities.
 # PKEXEC_UID is supplied by pkexec, never by an HTTP parameter. ACL access is
 # immediate for this user, so a desktop logout/group refresh is unnecessary.
@@ -105,6 +114,32 @@ def valid_target(value):
     return str(network)
 
 
+def capture_tools_available():
+    return all(Path(path).is_file() for path in ('/usr/bin/dumpcap', '/usr/bin/tshark'))
+
+
+def local_qwen_models():
+    """Bounded retries while a freshly restarted daemon binds its local socket."""
+    for attempt in range(20):
+        connection = HTTPConnection('127.0.0.1',11434,timeout=2)
+        try:
+            connection.request('GET','/api/tags')
+            response = connection.getresponse()
+            raw = response.read(32769)
+            if response.status != 200 or len(raw)>32768:
+                raise ValueError('Local model inventory unavailable.')
+            models = json.loads(raw).get('models')
+            if type(models) is not list or len(models)>256:
+                raise ValueError('Invalid local model inventory.')
+            return models
+        except OSError:
+            if attempt==19:
+                raise ValueError('Ollama has not become available on this PC; retry its configuration.') from None
+            time.sleep(.5)
+        finally:
+            connection.close()
+
+
 def validate_action(value):
     if type(value) is not dict or type(value.get('action')) is not str or value['action'] not in ACTION_FIELDS:
         raise ValueError('Choose a supported configuration action.')
@@ -135,13 +170,41 @@ class SupportConfiguration:
         self._settings = dict(interface=next((r['name'] for r in choices if r['default']), ''),
                               nmap_target='127.0.0.1/32', scan_folder='Downloads')
         self._configured = set()
+        self._background_enabled = False
+        self._geography_enabled = False
         self._tools = {}
         self._job = dict(state='idle', action=None, message='Choose an app to configure.', started_at=None, finished_at=None)
-        self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready)
+        self.geography = Geography(self.home)
+        self.connections = LiveConnections(self.geography)
+        self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready, connections=self.connections)
+        self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
+        self.sensors = SupportSensors(self.home)
+        self.qwen_status = dict(state='needs_setup',message='Configure local Qwen to enable bounded background advice.',updated_at=None,metrics=[])
         try:
             self._load()
         except (OSError, ValueError):
             self._job.update(state='failed', message='Saved setup could not be validated. Review the private support configuration file.')
+        self._load_qwen()
+
+    def _load_qwen(self):
+        from .config import AISettings
+        if not os.path.lexists(self.home/'.config/megalodon/qwen-profile.json'):
+            return
+        try:
+            raw = _regular_owned_file(self.home/'.config/megalodon/qwen-profile.json',maximum=1024)
+            value = json.loads(raw)
+            if (set(value) != {'model','model_digest'} or value['model_digest'] != AISettings.model_digest
+                    or type(value['model']) is not str or not re.fullmatch(r'qwen[A-Za-z0-9._:-]{1,91}',value['model'])):
+                raise ValueError('Unrecognized Qwen profile')
+            ai = replace(self.settings.ai,enabled=True,**value)
+            self.settings = replace(self.settings,ai=ai)
+            if self.companions:
+                self.companions.ai = ai
+            self.qwen_status.update(state='ready',message='Pinned local model configured; a completed response is required to confirm advice.',updated_at=now())
+        except FileNotFoundError:
+            pass
+        except (OSError,ValueError,TypeError):
+            self.qwen_status.update(state='needs_setup',message='Saved Qwen profile could not be validated; configure local Qwen again.')
 
     def _paths(self):
         _owned_directory(self.root, private=True)
@@ -153,8 +216,15 @@ class SupportConfiguration:
             return
         from .ai_provider import _strict_pairs
         value = json.loads(_regular_owned_file(self.profile, maximum=2048), object_pairs_hook=_strict_pairs)
-        if type(value) is not dict or set(value) != {'schema','settings','configured'} or value['schema'] != SCHEMA:
+        if (type(value) is not dict or not {'schema','settings','configured'} <= set(value)
+                or set(value)-{'schema','settings','configured','background_enabled','geography_enabled'} or value['schema'] != SCHEMA):
             raise ValueError('saved profile')
+        enabled = value.get('background_enabled',False)
+        if type(enabled) is not bool:
+            raise ValueError('saved background mode')
+        geography_enabled = value.get('geography_enabled',False)
+        if type(geography_enabled) is not bool:
+            raise ValueError('saved geography mode')
         settings = value['settings']
         if type(settings) is not dict or set(settings) != set(self._settings):
             raise ValueError('saved settings')
@@ -166,6 +236,8 @@ class SupportConfiguration:
             raise ValueError('saved collectors')
         self._settings = dict(settings)
         self._configured = set(configured)
+        self._background_enabled = enabled
+        self._geography_enabled = geography_enabled
         if self.companions:
             updates = self._collector_updates()
             self.companions.configure(updates)
@@ -188,13 +260,15 @@ class SupportConfiguration:
         if os.path.lexists(self.profile):
             _regular_owned_file(self.profile, maximum=2048)
         value = dict(schema=SCHEMA, settings=self._settings if settings is None else settings,
-                     configured=sorted(self._configured if configured is None else configured))
+                     configured=sorted(self._configured if configured is None else configured),
+                     background_enabled=self._background_enabled, geography_enabled=self._geography_enabled)
         _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
 
     def snapshot(self, include_token=False):
         with self._lock:
             value = dict(schema=SCHEMA, interfaces=interfaces(), settings=dict(self._settings),
-                         job=dict(self._job), capture=self.capture.snapshot(),
+                         job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
+                         geography_enabled=self._geography_enabled,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -202,17 +276,25 @@ class SupportConfiguration:
 
     def start(self, request):
         request = validate_action(request)
-        if request['action'] == 'capture_stop':
+        if request['action'] in {'capture_stop','background_stop'}:
             with self._lock:
                 self._cancel_capture_start = True
-            self.capture.stop()
+                was_enabled = self._background_enabled
+                self._background_enabled = False
+            self.background.stop()
+            self.sensors.stop()
+            if was_enabled:
+                self._save()
             self._tool('capture', 'ready', 'HUD capture stopped; stored metadata remains available.')
+            with self._lock:
+                if self._job['state'] != 'running':
+                    self._job.update(state='finished',action=request['action'],message='Background and HUD traffic capture stopped; stored metadata remains available.',started_at=now(),finished_at=now())
             return self.snapshot()
         with self._lock:
             if self._job['state'] == 'running' or (self.startup and self.startup.snapshot()['state'] == 'running'):
                 raise ConfigBusy('Another support action is running.')
             self._job.update(state='running', action=request['action'], message='Applying the selected configuration…', started_at=now(), finished_at=None)
-            if request['action'] == 'capture_start':
+            if request['action'] in {'capture_start','background_start'}:
                 self._cancel_capture_start = False
             self._thread = Thread(target=self._work, args=(request,), daemon=True, name='megalodon-support-config')
             self._thread.start()
@@ -256,7 +338,7 @@ class SupportConfiguration:
         tool = {'signature':'clamav','wireshark':'wireshark'}.get(tool, tool)
         failed = False
         try:
-            if action in {'capture_permissions','capture_start','wireshark_open'}:
+            if action in {'capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'}:
                 valid_interface(request['interface'])
                 with self._lock:
                     self._settings['interface'] = request['interface']
@@ -267,13 +349,39 @@ class SupportConfiguration:
                 message = 'Capture permissions configured for this user and interface access verified. Wireshark and the HUD run as your normal user.'
                 tool = 'wireshark'
             elif action == 'capture_start':
+                if self.background.snapshot()['enabled']:
+                    raise ValueError('Background monitoring already owns traffic collection. Stop monitoring before starting a manual session.')
                 with self._lock:
                     if self._cancel_capture_start:
                         raise ValueError('Capture start was cancelled.')
-                    if not all(Path(path).is_file() for path in ('/usr/bin/dumpcap','/usr/bin/tshark')):
+                    if not capture_tools_available():
                         raise ValueError('Install Wireshark / TShark before starting HUD capture.')
                     self.capture.start(request['interface'])
                 message = 'HUD capture requested. Watch accepted metadata counts to confirm the data connection.'
+            elif action == 'background_start':
+                if not capture_tools_available():
+                    raise ValueError('Install Wireshark / TShark before starting background traffic.')
+                self.background.stop()
+                self.sensors.stop()
+                with self._lock:
+                    if self._cancel_capture_start:
+                        raise ValueError('Background start was cancelled.')
+                    self._background_enabled = True
+                    self.background.start(request['interface'])
+                    self.sensors.start(request['interface'])
+                self._save()
+                if self.companions:
+                    self.companions.request_collection()
+                message = 'Background traffic enabled and configured inventory collectors queued. Monitoring resumes automatically with the local HUD.'
+            elif action == 'geography_refresh':
+                self._geography_enabled = True
+                self._save()
+                self.background.refresh_geography()
+                message = 'Location refresh requested. Peer addresses stay on this PC; the public internet address lookup identifies this connection only.'
+            elif action == 'geography_disable':
+                self._geography_enabled = False
+                self._save()
+                message = 'Automatic location updates disabled. Saved local location data remains available.'
             elif action == 'capture_stop':
                 self.capture.stop()
                 message = 'HUD capture stopped; stored metadata remains available.'
@@ -306,6 +414,31 @@ class SupportConfiguration:
                 self._execute(['pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
                 message = 'ClamAV signature updater is active. Updated signatures are available to the next file scan.'
+            elif action == 'qwen_configure':
+                from .config import AISettings
+                from .ai_provider import status
+                self._execute(['/usr/bin/pkexec','/bin/sh','-c',QWEN_LOCAL_SCRIPT],90)
+                models = local_qwen_models()
+                matches = [r for r in models if type(r) is dict and r.get('digest')==AISettings.model_digest
+                           and type(r.get('name')) is str and re.fullmatch(r'qwen[A-Za-z0-9._:-]{1,91}',r['name'])]
+                if not matches:
+                    raise ValueError('The supported pinned Qwen model is not installed. Existing models were preserved.')
+                chosen = sorted(matches,key=lambda r:r['name'] != AISettings.model)[0]
+                value = dict(model=chosen['name'],model_digest=AISettings.model_digest)
+                self._paths()
+                path = self.home/'.config/megalodon/qwen-profile.json'
+                if os.path.lexists(path):
+                    _regular_owned_file(path,maximum=1024)
+                _atomic_write(path,json.dumps(value).encode(),0o600)
+                self._load_qwen()
+                result = status(self.settings.ai,probe=True)
+                verified = result['inference_verified']
+                message = ('Local Qwen generated a verified response; completed collector summaries can receive bounded advice.' if verified
+                           else 'Local-only Qwen configured; model response is not verified yet ('+result['state']+'). Collectors will retry advice after completion.')
+                self.qwen_status.update(state='connected' if verified else 'ready',message=message,updated_at=now())
+            elif action == 'suricata_configure':
+                self._execute(['/usr/bin/pkexec','/bin/sh','-c',SURICATA_SCRIPT,'megalodon-suricata',request['interface']],90)
+                message = 'Passive Suricata service configured for the selected interface; the HUD reads bounded recent EVE summaries while monitoring runs.'
             elif action == 'qwen_check':
                 connection = HTTPConnection('127.0.0.1',11434,timeout=3)
                 try:
@@ -321,14 +454,13 @@ class SupportConfiguration:
                 finally:
                     connection.close()
             elif action == 'zeek_check':
-                candidates = [shutil.which('zeek'), str(self.home / '.local/zeek-8.0.10/bin/zeek')]
-                binary = next((path for path in candidates if path and Path(path).is_file()), None)
+                binary = zeek_binary(self.home)
                 if binary is None:
                     raise ValueError('Zeek was not found on PATH or in the verified local installation location.')
                 self._execute([binary,'--version'])
                 self._paths()
                 _owned_directory(self.root / 'zeek', private=True)
-                message = 'Zeek executable checked and private workspace prepared. Its existing offline import still requires a completed, qualified conn.log.'
+                message = 'Zeek CLI checked. Background monitoring automatically samples bounded traffic and presents separate flow summaries in Apps.'
             elif action == 'suricata_check':
                 self._paths()
                 logs = self.root / 'suricata-check'
@@ -351,7 +483,38 @@ class SupportConfiguration:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
-        self.capture.stop()
+        self.sensors.stop()
+        self.background.stop()
+        self.geography.close()
+
+    def resume(self):
+        if self._background_enabled:
+            try:
+                self._paths()
+                self.background.start(valid_interface(self._settings['interface']))
+                self.sensors.start(self._settings['interface'])
+            except (OSError,ValueError):
+                self._tool('background','needs_setup','Saved monitoring could not resume; review interface and private paths.')
+
+    def live_snapshot(self):
+        return self.connections.snapshot(self.capture.snapshot(),self.background.snapshot())
+
+    def start_background_tools(self):
+        """Shared startup action, with no desktop processes or caller commands."""
+        with self._lock:
+            if self._job['state']=='running':
+                raise ConfigBusy('Configuration is already running.')
+            if self.background.snapshot()['enabled'] and self.background.snapshot()['state']!='failed':
+                if self.sensors.snapshot().get('zeek',{}).get('state')=='error':
+                    self.sensors.stop()
+                    self.sensors.start(self._settings['interface'])
+                return self.capture.snapshot()
+            self._cancel_capture_start = False
+            self._job.update(state='running',action='background_start',started_at=now(),finished_at=None)
+        self._work(dict(action='background_start',interface=self._settings['interface']))
+        if self._job['state']=='failed':
+            raise ValueError(self._job['message'])
+        return self.capture.snapshot()
 
 
 def main(argv=None):

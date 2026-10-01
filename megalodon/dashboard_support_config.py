@@ -11,20 +11,20 @@ SUPPORT_CONFIG_HTML = r'''
       <div><h6><span class="support-step">2</span> Allow capture for this user</h6><button type="button" id="support-config-permissions" disabled>Configure capture access</button><p class="support-config-note">An operating-system prompt grants packet-capture access to your user. Wireshark stays a normal-user app.</p></div>
     </div>
     <div class="support-capture-destinations">
-      <section aria-labelledby="support-hud-capture-title"><h6 id="support-hud-capture-title"><span class="support-step">3</span> Send traffic to HUD charts</h6><p>Collect packet metadata for the traffic and detection charts below.</p><div class="support-config-actions"><button type="button" id="support-config-capture-start" class="support-config-primary" disabled>Start HUD traffic</button><button type="button" id="support-config-capture-stop" disabled>Stop HUD capture</button></div><p class="support-config-note">Stops after 15 minutes or 50,000 packets. No raw packet files are retained by the HUD.</p></section>
-      <section aria-labelledby="support-wireshark-title"><h6 id="support-wireshark-title">Inspect in live Wireshark</h6><p>Open the selected interface in a managed Wireshark window.</p><div class="support-config-actions"><button type="button" id="support-config-wireshark-open" disabled>Open live Wireshark</button><button type="button" id="support-config-wireshark-stop" disabled>Close managed Wireshark</button></div><p class="support-config-note">Separate from HUD collection. Its capture stops after 15 minutes or 50,000 packets. Wireshark holds its own buffer; you choose whether to save it. Save any capture you want to keep before closing. This closes only the window opened here.</p><p id="support-wireshark-result" class="support-config-note">No saved Wireshark action result. Current window state is not monitored here.</p></section>
+      <section aria-labelledby="support-hud-capture-title"><h6 id="support-hud-capture-title"><span class="support-step">3</span> Send traffic to HUD charts</h6><p>Collect packet metadata for the HUD traffic charts.</p><div class="support-config-actions"><button type="button" id="support-config-capture-start" class="support-config-primary" disabled>Start HUD traffic</button><button type="button" id="support-config-capture-stop" disabled>Stop HUD capture</button></div><p class="support-config-note">Stops after 15 minutes or 50,000 packets. No raw packet files are retained by the HUD.</p></section>
+      <details class="support-desktop-options"><summary id="support-wireshark-title">Optional desktop inspection</summary><h6>Inspect in live Wireshark</h6><p>Open the selected interface in a managed Wireshark window.</p><div class="support-config-actions"><button type="button" id="support-config-wireshark-open" disabled>Open live Wireshark</button><button type="button" id="support-config-wireshark-stop" disabled>Close managed Wireshark</button></div><p class="support-config-note">Separate from HUD collection. Its capture stops after 15 minutes or 50,000 packets. Wireshark holds its own buffer; you choose whether to save it. Save any capture you want to keep before closing. This closes only the window opened here.</p><p id="support-wireshark-result" class="support-config-note">No saved Wireshark action result. Current window state is not monitored here.</p></details>
     </div>
     <div class="support-capture-reading"><p id="support-capture-message">No capture status loaded.</p><dl><div><dt>Received packets</dt><dd id="support-capture-received">—</dd></div><div><dt>Accepted records</dt><dd id="support-capture-accepted">—</dd></div><div><dt>Skipped packets</dt><dd id="support-capture-skipped">—</dd></div></dl><p id="support-capture-time" class="support-config-note">Capture time unavailable.</p></div>
   </section>
   <details class="support-collector-settings"><summary>Inventory and file-scan settings</summary><div class="support-tool-settings">
-    <section aria-labelledby="support-config-nmap-title"><h5 id="support-config-nmap-title">Nmap / Zenmap</h5><p>Choose a private IPv4 address or network you manage, up to 256 addresses.</p><label for="support-config-nmap-target">Inventory target</label><input id="support-config-nmap-target" type="text" value="127.0.0.1/32" maxlength="18" spellcheck="false" disabled aria-describedby="support-nmap-help"><p id="support-nmap-help" class="support-config-note">Use /24–/32, such as 192.168.1.0/24. A single address uses /32.</p><button type="button" id="support-config-nmap-save" disabled>Save and collect inventory</button></section>
-    <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title">ClamAV / ClamTk</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
+    <section aria-labelledby="support-config-nmap-title"><h5 id="support-config-nmap-title">Nmap</h5><p>Choose a private IPv4 address or network you manage, up to 256 addresses.</p><label for="support-config-nmap-target">Inventory target</label><input id="support-config-nmap-target" type="text" value="127.0.0.1/32" maxlength="18" spellcheck="false" disabled aria-describedby="support-nmap-help"><p id="support-nmap-help" class="support-config-note">Use /24–/32, such as 192.168.1.0/24. A single address uses /32.</p><button type="button" id="support-config-nmap-save" disabled>Save and collect inventory</button></section>
+    <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title">ClamAV</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
     <section aria-labelledby="support-config-osquery-title"><h5 id="support-config-osquery-title">osquery</h5><p>Enable the fixed package inventory and send its count to the HUD.</p><button type="button" id="support-config-osquery" disabled>Enable package inventory</button></section>
   </div></details>
-  <details class="support-service-settings"><summary>Qwen and sensor checks</summary><div class="support-tool-settings">
-    <section><h5>Ollama / Qwen</h5><p>Check the local service and model availability.</p><button type="button" id="support-config-qwen" disabled>Check local Qwen</button><p class="support-config-note">No model downloads or Qwen-generated commands run here.</p></section>
-    <section><h5>Zeek</h5><p>Verify its installed version and prepare a private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek workspace</button><p class="support-config-note">A capture input still needs to be selected for offline analysis.</p></section>
-    <section><h5>Suricata</h5><p>Validate the installed sensor configuration.</p><button type="button" id="support-config-suricata" disabled>Check Suricata configuration</button><p class="support-config-note">This check does not change rules or start a new sensor.</p></section>
+  <details class="support-service-settings"><summary>Qwen and background sensors</summary><div class="support-tool-settings">
+    <section><h5>Ollama / Qwen</h5><p>Enable the pinned local model for contextual advice in MEGALODON.</p><div class="support-config-actions"><button type="button" id="support-config-qwen-setup" disabled>Configure local Qwen</button><button type="button" id="support-config-qwen" disabled>Check local Qwen</button></div><p class="support-config-note">A one-time system prompt keeps Ollama on this PC. Qwen advises; generated commands do not run.</p></section>
+    <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
+    <section><h5>Suricata</h5><p>Configure the passive sensor on the selected network interface.</p><div class="support-config-actions"><button type="button" id="support-config-suricata-setup" disabled>Configure background Suricata</button><button type="button" id="support-config-suricata" disabled>Check configuration</button></div><p class="support-config-note">A one-time system prompt configures the service and access to its local logs.</p></section>
   </div></details>
   <details class="support-config-results"><summary>Latest tool results</summary><p class="support-config-note">Each result keeps its own check time. Setup and availability do not prove a tool is feeding the HUD.</p><ul id="support-config-tools"><li>No tool checks returned yet.</li></ul></details>
 </section>
@@ -45,7 +45,8 @@ SUPPORT_CONFIG_CSS = r'''
 .support-config select:disabled,.support-config input:disabled { opacity:.6; } .support-config label { margin:0 0 .65rem; font-size:1rem; font-weight:600; line-height:1.6; }
 .support-capture { border:1px solid #3e6877; padding:1.1rem; background:#0d202c; border-radius:4px; }
 .support-capture-steps,.support-capture-destinations { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.4rem; margin-top:1.2rem; }
-.support-capture-destinations { padding-top:1.2rem; border-top:1px solid #355464; }
+.support-capture-destinations { grid-template-columns:1fr; padding-top:1.2rem; border-top:1px solid #355464; }
+.support-desktop-options { border-top:1px solid #355464; } .support-desktop-options > summary { color:#bfd3df; }
 .support-step { display:inline-grid; place-items:center; width:1.6rem; height:1.6rem; font-size:.875rem; margin-right:.4rem; color:#b8f8ed; background:#234a54; border-radius:3px; }
 .support-config .support-config-note { font-size:.875rem; line-height:1.6; color:#b7ccd8; }
 .support-config-actions { display:flex; flex-wrap:wrap; gap:.65rem; margin:.8rem 0; }
@@ -67,18 +68,19 @@ SUPPORT_CONFIG_JS = r'''
   if(typeof localHudLaunch==='undefined' || !el('support-config') || !el('support-apps-configure'))return;
   // Local HUD catalog copy; the hosted/offline shelf keeps its own boundaries.
   if(typeof softwareCatalog!=='undefined'){
-    const localNotes={tshark:{requirement:'Optional · saved or live packets',note:'The offline TShark adapter reads saved captures. Use Configure apps on the HUD for capture permissions, bounded live HUD traffic or a separate Wireshark window.'},clamav:{purpose:'Scan a configured home folder and review aggregate counts.',note:'The local HUD runs configured scans and watches completed reports. Configure apps selects Downloads or Documents and can start the installed signature updater. No quarantine or uploads occur.'},suricata:{note:'Start support apps can start the installed sensor service. Configure apps can validate its configuration. Its alert-data connection is checked separately.'}};
+    const localNotes={tshark:{requirement:'Optional · saved or live packets',note:'The offline TShark adapter reads saved captures. Use Configure apps on the HUD for capture permissions, bounded live HUD traffic or a separate Wireshark window.'},clamav:{purpose:'Scan a configured home folder and review aggregate counts.',note:'The local HUD runs configured scans and watches completed reports. Configure apps selects Downloads or Documents and can start the installed signature updater. No quarantine or uploads occur.'},suricata:{note:'Start background tools starts the installed sensor service. Configure apps prepares its passive interface and local log access. Actions shows current source summaries separately from admitted findings.'}};
     for(const item of softwareCatalog)if(Object.hasOwn(localNotes,item.id))Object.assign(item,localNotes[item.id]);
   }
-  const state={open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
+  const state={configVisible:false,globeVisible:false,liveAction:false,open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
   const actions={
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
-    'support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check'};
-  const actionNames={capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_check:'Checking local Qwen',zeek_check:'Preparing Zeek workspace',suricata_check:'Checking Suricata configuration'};
+    'support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
+    'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
+  const actionNames={capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring local Qwen',suricata_configure:'Configuring background Suricata',qwen_check:'Checking local Qwen',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder'];
-  const interfaceActions=['capture_permissions','capture_start','wireshark_open'];
+  const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
   const text=(v,max=512)=>typeof v==='string' && v.length<=max && !/[\x00-\x1f\x7f]/.test(v);
   const stamp=v=>v===null || (text(v,40) && /Z$/.test(v) && Number.isFinite(Date.parse(v)));
@@ -93,20 +95,29 @@ SUPPORT_CONFIG_JS = r'''
       || !object(v.capture) || !['idle','starting','running','stopped','failed'].includes(v.capture.state) || !['received','accepted','skipped'].every(k=>count(v.capture[k]))
       || !stamp(v.capture.started_at) || !stamp(v.capture.finished_at) || !text(v.capture.message) || !(v.capture.interface===undefined || text(v.capture.interface,64))
       || !Array.isArray(v.tools) || v.tools.length>16 || !v.tools.every(t=>object(t)&&text(t.id,64)&&text(t.name,80)&&text(t.state,40)&&text(t.message)&& (t.checked_at===undefined||stamp(t.checked_at)))
+      || (v.background!==undefined&&(!object(v.background)||typeof v.background.enabled!=='boolean'||!['stopped','starting','running','waiting','failed'].includes(v.background.state)||!text(v.background.message)||!count(v.background.session_count)))
+      || typeof v.geography_enabled!=='boolean'
       || !text(v.command,512) || (needToken&&!/^[A-Za-z0-9_-]{32}$/.test(v.token||'')) || (v.token!==undefined&&!/^[A-Za-z0-9_-]{32}$/.test(v.token)))throw Error('Invalid configuration response');
     return v;
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
   const working=()=>state.payload && state.payload.job.state==='running';
-  function feedback(message,kind='ready'){el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
+  const workspace=el('workspace-live'),setupWorkspace=el('workspace-setup');
+  const liveVisible=()=>!document.hidden&&!(workspace&&workspace.hidden);
+  const setupVisible=()=>!!setupWorkspace&&!document.hidden&&!setupWorkspace.hidden;
+  const workspaceVisible=()=>liveVisible()||setupVisible();
+  const viewVisible=()=>workspaceVisible()&&(setupVisible()||typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
+  function feedback(message,kind='ready'){if(state.liveAction && el('live-action-status'))el('live-action-status').textContent=message;el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
   function controls(){
-    const blocked=state.pending || !state.valid || document.hidden;
+    const blocked=state.pending || !state.valid || !workspaceVisible();
     for(const [id,action] of Object.entries(actions)){
-      el(id).disabled=blocked || (working() && action!=='capture_stop') || (interfaceActions.includes(action)&&!el('support-config-interface').value)
-        || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing());
+      if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
+        || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
+        || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
+        || (action==='geography_disable'&&!state.payload?.geography_enabled);
     }
     for(const id of inputIds)el(id).disabled=blocked||!!working();
-    el('support-config-retry').disabled=state.pending;
+    el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
     el('support-config').setAttribute('aria-busy',state.pending?'true':'false');
   }
   function render(v){
@@ -117,7 +128,10 @@ SUPPORT_CONFIG_JS = r'''
     if(!state.dirty.has('nmap_target'))el('support-config-nmap-target').value=v.settings.nmap_target;
     if(!state.dirty.has('scan_folder'))el('support-config-scan-folder').value=v.settings.scan_folder;
     const chosen=v.interfaces.find(i=>i.name===el('support-config-interface').value);
-    el('support-config-interface-note').textContent=chosen ? `${chosen.name}${chosen.up?' is up.':' is down; capture may fail.'} Capture starts only with the buttons below.` : 'Choose an available interface before configuring or starting capture.';
+    if(el('live-background-start'))el('live-background-start').textContent=v.background?.state==='failed'?'Retry monitoring':'Enable background monitoring';
+    if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent=v.geography_enabled?'Automatic location updates enabled':'Automatic location updates off';
+    if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface · '+(v.settings.interface||'not selected');
+    el('support-config-interface-note').textContent=chosen ? `${chosen.name}${chosen.up?' is up.':' is down; capture may fail.'} Used by HUD capture, background sensors and optional desktop inspection.` : 'Choose an available interface before configuring or starting capture.';
     const names={idle:'Not capturing',starting:'Starting',running:'HUD capture running',stopped:'Capture stopped',failed:'Capture failed'};
     el('support-capture-state').textContent=names[v.capture.state];el('support-capture-state').dataset.state=v.capture.state;
     el('support-capture-message').textContent=v.capture.message+(v.capture.state==='running'&&v.capture.accepted===0?' Awaiting usable metadata; no records have reached the HUD yet.':'');
@@ -131,10 +145,10 @@ SUPPORT_CONFIG_JS = r'''
     if(v.job.state==='running')feedback(`${actionNames[v.job.action]||'Working'}… ${v.job.message}`,'working');
     else if(v.job.state==='finished'||v.job.state==='failed')feedback(`Last action ${v.job.state==='failed'?'failed':'finished'}${v.job.finished_at?' at '+time(v.job.finished_at):''}. ${v.job.message}`,v.job.state==='failed'?'failed':'ready');
     else feedback('Choose an interface or tool setting. Each action runs only when you select its button.');
-    if(document.hidden)feedback('Status updates paused while this tab is hidden. Local actions and capture continue.','stale');
+    if(!viewVisible())feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');
   }
   function cancel(){if(state.timer!==null)clearTimeout(state.timer);state.timer=null;}
-  function schedule(){cancel();if(document.hidden||!state.valid)return;const active=working()||capturing();if(active||state.open)state.timer=setTimeout(read,active?2000:10000);}
+  function schedule(){cancel();if(!viewVisible()||!state.valid)return;const active=working()||capturing()||state.payload?.background?.enabled;if(active||state.open)state.timer=setTimeout(read,active?2000:10000);}
   async function body(response){
     if(Number(response.headers.get('content-length'))>65536)throw Error('Response too large');
     if(response.body&&response.body.getReader){const reader=response.body.getReader(),parts=[];let size=0;try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>65536)throw Error('Response too large');parts.push(part.value);}}catch(error){await reader.cancel();throw error;}
@@ -150,9 +164,9 @@ SUPPORT_CONFIG_JS = r'''
       return checked(await body(response),!payload);
     }finally{clearTimeout(timer);}
   }
-  function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;render(v);}
-  function fail(error){state.valid=false;state.token=null;el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;}
-  async function read(){if(state.pending||document.hidden)return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
+  function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
+  function fail(error){state.valid=false;state.token=null;el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
+  async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
   function payloadFor(action){
     const value={action};
     if(interfaceActions.includes(action)){value.interface=el('support-config-interface').value;if(!state.payload.interfaces.some(i=>i.name===value.interface))throw Error('Select an available capture interface.');}
@@ -167,19 +181,27 @@ SUPPORT_CONFIG_JS = r'''
   }
   async function act(action){
     const button=Object.entries(actions).find(([,value])=>value===action);
-    if(!button||el(button[0]).disabled||state.pending||!state.valid||!state.token||document.hidden)return;
+    if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible())return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
-    cancel();state.pending=true;feedback(`${actionNames[action]}… A system authorization prompt may appear.`,'working');controls();
+    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]}… A system authorization prompt may appear.`,'working');controls();
     try{const value=await request(payload);if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
     catch(error){fail(error);}finally{state.pending=false;controls();schedule();}
   }
-  function open(value){state.open=value;el('support-config').hidden=!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
-    if(value){el('support-config-title').focus();read();}else{el('support-apps-configure').focus();schedule();}}
-  el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',read);
-  for(const [id,action] of Object.entries(actions))el(id).addEventListener('click',()=>act(action));
+  function open(value){state.open=value;el('support-config').hidden=setupWorkspace?false:!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
+    if(setupWorkspace&&typeof navigateWorkspace==='function')navigateWorkspace(value?'setup':'live');
+    if(value){el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
+  el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',()=>read(true));if(el('live-action-retry'))el('live-action-retry').addEventListener('click',()=>read(true));
+  for(const [id,action] of Object.entries(actions))if(el(id))el(id).addEventListener('click',()=>act(action));
   for(const [id,key] of [['support-config-interface','interface'],['support-config-nmap-target','nmap_target'],['support-config-scan-folder','scan_folder']])el(id).addEventListener('change',()=>{state.dirty.add(key);controls();});
   el('support-config-nmap-target').addEventListener('input',()=>state.dirty.add('nmap_target'));
-  document.addEventListener('visibilitychange',()=>{cancel();if(document.hidden){if(state.hydrated)feedback('Status updates paused while this tab is hidden. Local actions and capture continue.','stale');controls();}else if(state.open||working()||capturing())read();});
+  if(typeof window!=='undefined')window.megalodonSupportConfiguration={refresh:read,open:()=>{open(true);el('support-config-interface').focus();}};
+  function syncView(){cancel();if(!viewVisible()){if(state.hydrated)feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');controls();}else read();}
+  document.addEventListener('visibilitychange',syncView);
+  if(typeof MutationObserver!=='undefined')for(const panel of [workspace,setupWorkspace])if(panel)new MutationObserver(syncView).observe(panel,{attributes:true,attributeFilter:['hidden']});
+  if(typeof IntersectionObserver!=='undefined'){
+    const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.target===el('support-config'))state.configVisible=entry.isIntersecting;if(entry.target===el('live-globe'))state.globeVisible=entry.isIntersecting;}syncView();},{root:el('workspace-content'),rootMargin:'80px'});
+    observer.observe(el('support-config'));if(el('live-globe'))observer.observe(el('live-globe'));
+  }
 })();
 '''
 

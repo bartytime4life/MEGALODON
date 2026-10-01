@@ -47,7 +47,8 @@ def test_host_telemetry_behavior():
 
 
 def test_local_composition_and_hosted_source_parity():
-    assert HOST_TELEMETRY_HTML in INDEX_HTML
+    assert 'id="pc-live"' in INDEX_HTML
+    assert 'class="ops-resource-detail"' in INDEX_HTML
     assert HOST_TELEMETRY_CSS in DASHBOARD_CSS
     assert HOST_TELEMETRY_JS in DASHBOARD_JS
     assert INDEX_HTML.index('id="pc-live-title"') < INDEX_HTML.index('id="room-traffic-grid"')

@@ -7,6 +7,8 @@ if (typeof localHudLaunch !== 'undefined' && typeof document !== 'undefined') {
   const display = {nmap: 'Nmap', clamav: 'ClamAV', osquery: 'osquery'};
   const seen = {};
   let inFlight = false;
+  const workspace=document.getElementById('workspace-live'),history=document.getElementById('operations-history');
+  const visible=()=>!document.hidden&&!(workspace&&workspace.hidden)&&!(history&&history.open===false);
   for (const id of ids) {
     const state = document.getElementById(prefix[id] + '-status');
     if (state) {
@@ -15,7 +17,7 @@ if (typeof localHudLaunch !== 'undefined' && typeof document !== 'undefined') {
     }
   }
   async function refreshCompanions() {
-    if (document.hidden || inFlight) return;
+    if (!visible() || inFlight) return;
     inFlight = true;
     try {
       const response = await fetch('/api/companions', {cache: 'no-store'});
@@ -77,6 +79,8 @@ if (typeof localHudLaunch !== 'undefined' && typeof document !== 'undefined') {
     setTimeout(pollCompanions, 15000);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshCompanions(); });
+  if(history&&typeof history.addEventListener==='function')history.addEventListener('toggle',()=>{if(visible())refreshCompanions();});
+  if(typeof MutationObserver!=='undefined'&&workspace)new MutationObserver(()=>{if(visible())refreshCompanions();}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
   pollCompanions();
 }
 '''

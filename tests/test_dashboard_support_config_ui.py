@@ -10,7 +10,8 @@ from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS
 
 
-def test_support_config_behavior():
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs"])
+def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node unavailable")
@@ -20,20 +21,22 @@ def test_support_config_behavior():
                    job=dict(state="idle", action=None, message="Ready.", started_at=None, finished_at=None),
                    capture=dict(state="idle", interface="", received=0, accepted=0, skipped=0,
                                 started_at=None, finished_at=None, message="Not capturing."), tools=[],
+                   background=dict(enabled=False, state="stopped", message="Background off.", session_count=0),
+                   geography_enabled=False,
                    command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config")
-    result = subprocess.run([node, str(Path(__file__).with_name("support_config_browser.cjs"))],
+    result = subprocess.run([node, str(Path(__file__).with_name(script))],
                             input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture)),
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 
 
 def test_support_config_composition():
-    assert SUPPORT_CONFIG_HTML in INDEX_HTML
+    assert 'id="support-config" aria-labelledby="support-config-title">' in INDEX_HTML
     assert SUPPORT_CONFIG_CSS in DASHBOARD_CSS
     assert SUPPORT_CONFIG_JS in DASHBOARD_JS
     assert INDEX_HTML.index('id="support-apps-configure"') < INDEX_HTML.index('id="pc-live-title"')
     assert 'aria-expanded="false" aria-controls="support-config"' in INDEX_HTML
-    assert 'id="support-config" aria-labelledby="support-config-title" hidden' in INDEX_HTML
+    assert 'id="workspace-setup"' in INDEX_HTML
     assert 'id="support-config-capture-stop"' in INDEX_HTML
     assert '>Close managed Wireshark</button>' in INDEX_HTML
     assert 'Save any capture you want to keep before closing.' in INDEX_HTML

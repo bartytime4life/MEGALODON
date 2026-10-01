@@ -470,6 +470,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     host_telemetry: HostTelemetry | None = None
     support_startup: SupportApps | None = None
     support_config: SupportConfiguration | None = None
+    operations = None
+    defense = None
     automation_preview_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -515,6 +517,38 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/heartbeat", "/api/install", "/api/support-apps", "/api/support-start", "/api/companions",
         } and route.query:
             self._send_json({"error": "unsupported query parameter"}, status=400)
+            return
+        if route.path in {"/api/operations", "/api/defense"}:
+            provider = self.operations if route.path == "/api/operations" else self.defense
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"] or provider is None or not _tool_management_user():
+                self._send_json({"error": "explicit local operations check required"}, status=403)
+            else:
+                try:
+                    value = provider.snapshot() if route.path == "/api/operations" else provider.snapshot(include_token=True)
+                    self._send_json(value)
+                except (OSError, ValueError):
+                    self._send_json({"error": "local operations unavailable"}, status=503)
+            return
+        if route.path == "/api/support-workflows":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"] or self.support_config is None or not _tool_management_user():
+                self._send_json({"error": "explicit local workflow check required"}, status=403)
+            else:
+                from .support_workflows import snapshot
+                self._send_json(snapshot(self.support_config, self.companion_automation))
+            return
+        if route.path == "/api/live-connections":
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif self.headers.get_all("X-Megalodon-Check", []) != ["1"]:
+                self._send_json({"error": "explicit local check required"}, status=403)
+            elif self.support_config is None or not _tool_management_user():
+                self._send_json({"error": "live connections require a local Linux HUD"}, status=403)
+            else:
+                self._send_json(self.support_config.live_snapshot())
             return
         if route.path == "/api/support-config":
             if route.query:
@@ -902,6 +936,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/ai/ask":
             self._ai_ask()
             return
+        if self.path == "/api/defense":
+            self._defense_action()
+            return
         if self.path == "/api/install":
             self._install()
             return
@@ -921,6 +958,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._automation_preview()
             return
         self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
+
+    def _defense_action(self) -> None:
+        from .defense import validate_request, DefenseBusy
+        tokens = self.headers.get_all("X-Megalodon-Defense-Token", [])
+        if (self.defense is None or not _tool_management_user()
+                or len(tokens) != 1 or len(tokens[0]) != 32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0], self.defense.token)
+                or self.headers.get_all("Origin", []) != [f"http://{self.headers.get('Host')}"]
+                or self.headers.get_all("Content-Type", []) != ["application/json"]
+                or self.headers.get_all("Transfer-Encoding", []) or self.headers.get_all("Content-Encoding", [])):
+            self._send_json({"error": "same-origin local defense action required"}, status=403)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or len(lengths[0]) > 3 or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 2 <= int(lengths[0]) <= 512):
+            self._send_json({"error": "invalid defense request length"}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"),object_pairs_hook=_strict_pairs)
+            validate_request(body)
+        except (ValueError, OSError):
+            self._send_json({"error": "unsupported defense request"}, status=400)
+            return
+        try:
+            value = self.defense.start(body)
+        except DefenseBusy:
+            self._send_json({"error": "defense action already running"}, status=409)
+            return
+        except ValueError:
+            self._send_json({"error": "defense action unavailable; check audit status"}, status=422)
+            return
+        self._send_json(value,status=202)
 
     def _offline_locations(self) -> None:
         # An Origin and custom header are required even for this read-only local
@@ -1546,6 +1617,12 @@ def serve(
             handler.local_checks = LocalChecks(store, source_available=True)
         handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                        support_startup, capture_store_ready)
+        from .operations import Operations
+        from .defense import Defense
+        handler.operations = Operations(handler.support_config)
+        handler.defense = Defense(handler.operations, handler.support_config)
+        if support_startup is not None:
+            support_startup.configuration = handler.support_config
     server = ThreadingHTTPServer((host, port), handler)
     previous_sigterm = None
     if current_thread() is main_thread():
@@ -1554,6 +1631,8 @@ def serve(
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
+        if handler.support_config is not None:
+            handler.support_config.resume()
         if host_telemetry is not None:
             host_telemetry.start()
         if companion_automation is not None:
@@ -1589,6 +1668,8 @@ def serve(
                 handler.support_config.close()
             except ValueError:
                 print("Capture shutdown needs review; check ingestion receipts before restarting capture.", flush=True)
+        if handler.defense is not None:
+            handler.defense.close()
         if host_telemetry is not None:
             host_telemetry.stop()
         if companion_automation is not None:

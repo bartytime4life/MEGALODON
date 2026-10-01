@@ -173,14 +173,9 @@ def test_fixed_start_plan_skips_running_and_missing_tools(monkeypatch):
     assert value['state'] == 'finished' and completed == [True]
     items = {item['id']: item for item in value['items']}
     assert items['nmap']['state'] == 'queued'
-    assert items['wireshark']['state'] == 'running'
-    assert items['clamtk']['state'] == 'missing'
-    assert items['zenmap']['state'] == 'launched'
-    assert items['suricata']['state'] == items['qwen']['state'] == 'running'
-    starts = [argv for argv in calls if 'is-active' not in argv]
-    assert starts == [
-        ['/bin/systemd-run','--user','--collect','--unit=megalodon-support-zenmap','--property=Type=exec','--','/bin/zenmap'],
-        ['/bin/pkexec','/bin/systemctl','start','suricata.service']]
+    assert {'wireshark','clamtk','zenmap'}.isdisjoint(items)
+    assert items['qwen']['state']=='running'
+    assert not any('systemd-run' in argv[0] for argv in calls)
     assert all(item['state'] in {'queued','running','missing','launched','needs_setup','not_needed'} for item in value['items'])
     assert len(json.dumps(manager.snapshot(include_token=True))) < 32768
     assert len(value['items']) <= 16
@@ -198,7 +193,7 @@ def test_privileged_start_rejects_untrusted_system_binary(monkeypatch):
         which=lambda name: '/tmp/user-bin/' + name)
     manager._services()
     assert not any('start' in argv for argv in calls)
-    assert {item['state'] for item in manager.snapshot()['items']} == {'missing'}
+    assert {item['state'] for item in manager.snapshot()['items']} <= {'missing','needs_setup'}
 
 
 @pytest.mark.parametrize('mode,owner,expected', [
@@ -216,6 +211,7 @@ def test_privileged_binary_requires_trusted_file(monkeypatch,mode,owner,expected
 
 
 def test_denied_service_authorization_preserves_other_results(monkeypatch):
+    monkeypatch.setattr(support_startup.Path,'is_file',lambda path:True)
     monkeypatch.setattr(support_startup, 'service_unit', lambda tool: tool)
     monkeypatch.setattr(support_startup, '_trusted_system_executable', lambda name: '/bin/'+name)
     manager = support_startup.SupportApps(which=lambda name: '/bin/'+name if name in {'systemctl','pkexec'} else None,
@@ -225,7 +221,7 @@ def test_denied_service_authorization_preserves_other_results(monkeypatch):
     items = {item['id']: item['state'] for item in manager.snapshot()['items']}
     assert items['core'] == 'running'
     assert items['suricata'] == items['qwen'] == 'failed'
-    assert items['wireshark'] == 'missing'
+    assert 'wireshark' not in items
 
 
 def test_overlapping_jobs_rejected(monkeypatch):

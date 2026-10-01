@@ -1,0 +1,6 @@
+# Native Linux installer rehearsal: reviewed build tools plus the geography reader.
+# Profile: Linux x86_64 / CPython 3.12; source archives are excluded.
+-r build-linux-cp312.txt
+# maxminddb-3.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+# https://pypi.org/project/maxminddb/3.2.0/#files
+maxminddb==3.2.0 --hash=sha256:8e8ff70716a4f565ba9c7e91d86e3e60e4baac9794b944e5c35b772e7aedb21e

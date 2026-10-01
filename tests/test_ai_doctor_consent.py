@@ -111,7 +111,7 @@ def test_enabled_doctor_preserves_explicit_probe_and_failure_semantics(
 
     def generate(observed, prompt, *, max_tokens):
         assert observed == settings
-        assert prompt == "Reply with the single word READY."
+        assert prompt == "Reply with exactly READY and nothing else. Do not add punctuation."
         assert max_tokens == 32
         calls.append("probe")
         if error:

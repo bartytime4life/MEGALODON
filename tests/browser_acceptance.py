@@ -258,11 +258,13 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await expect(page.locator("#workspace-analysis")).to_be_hidden()
         await page.locator("#workspace-tab-help").click()
         await expect(page).to_have_url(origin + "/#workspace-help")
-        await page.locator("#workspace-tab-traffic").click()
+        await page.locator("#workspace-tab-setup").click()
         await page.go_back()
         await expect(page.locator("#workspace-help")).to_be_visible()
         await page.go_forward()
-        await expect(page.locator("#workspace-traffic")).to_be_visible()
+        await expect(page.locator("#workspace-setup")).to_be_visible()
+        await expect(page.locator("#workspace-setup #support-config")).to_be_visible()
+        await expect(page.locator("#workspace-live #support-config")).to_have_count(0)
         await page.locator("#workspace-tab-live").click()
         passed("workspace links survive Back and Forward")
         await expect(page.locator("#workspace-interfaces")).to_be_hidden()
@@ -284,9 +286,14 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         passed("pause stops scheduled polling " + str(nonempty), counts == stable)
         await expect(page.locator("#room-updated")).not_to_have_text("Not fetched")
         await page.locator("#workspace-tab-live").click()
+        await expect(page.locator("#operations-title")).to_be_visible()
+        await expect(page.locator("#ops-pulse-title")).to_be_visible()
+        await expect(page.locator("#workspace-live #room-traffic-grid")).to_be_hidden()
+        await page.locator("#operations-history > summary").click()
         await expect(page.locator("#workspace-live #room-traffic-grid")).to_be_visible()
         await expect(page.locator("#workspace-live #room-findings-visual .room-visual")).to_have_count(2)
-        await expect(page.locator("#workspace-traffic")).to_be_hidden()
+        await expect(page.locator("#workspace-tab-traffic")).to_have_count(0)
+        await expect(page.locator("#workspace-live #room-activity-table")).to_be_visible()
         traffic_views = page.locator("#workspace-live #room-traffic-grid .room-visual")
         await expect(traffic_views).to_have_count(8)
         await expect(page.locator("#room-traffic-grid .room-visual-state")).to_have_count(8)
@@ -334,6 +341,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await expect(page.locator("#hud-export-download")).to_be_disabled()
             await page.locator("#workspace-tab-findings").click()
             passed("qualified linked finding rows", await page.locator("#room-findings-table tbody tr").count() == 2)
+            await page.locator(".ops-range > summary").click()
             await page.locator("#room-range").select_option("hour")
             await page.locator("#room-apply").click()
             await expect(page.locator("#room-refresh")).to_be_enabled()
@@ -344,6 +352,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await page.locator("#room-apply").click()
             await expect(page.locator("#room-refresh")).to_be_enabled()
             await expect(page.locator("#room-home-summary")).to_contain_text("2 stored metadata events")
+            await page.locator(".ops-range > summary").click()
         else:
             await expect(page.locator("#room-traffic-grid")).to_contain_text("This chart has no qualified values")
             await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_have_count(6)
@@ -392,9 +401,9 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await expect(page.locator("#room-report-status")).to_contain_text("No qualified data")
             await expect(page.locator("#room-report-download")).to_be_disabled()
             passed("empty report flow refuses to invent zero evidence")
-        await page.locator(".room-back").click()
+        await page.locator("#workspace-tab-live").click()
         await expect(page.locator("#workspace-live")).to_be_visible()
-        passed("persistent return control reaches Home")
+        passed("persistent HUD tab returns to the visual workspace")
         await page.locator("#workspace-tab-analysis").click()
         await page.locator('details[aria-labelledby="offline-title"] > summary').click()
         if not nonempty:
@@ -443,23 +452,29 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         async def fail(route):
             await route.abort("failed")
 
+        # The read-only dashboard fixture deliberately has no local runtime
+        # workflow feed. Static capability profiles still load under Setup.
         await page.route("**/api/integrations?*", fail)
         await page.locator("#workspace-tab-interfaces").click()
         await expect(page.locator("#workspace-analysis")).to_be_hidden()
         await expect(page.locator("#workspace-interfaces")).to_be_visible()
-        await expect(page.locator("#integrations-status")).to_contain_text("unavailable")
+        await expect(page.locator("#integrations-status")).to_contain_text("Unable to read local workflow status")
         await page.locator("#integrations-query").fill("no-synthetic-match")
-        await expect(page.locator("#integrations-status")).to_contain_text("unavailable")
-        passed("initial integration failure survives filtering")
-        await page.unroute("**/api/integrations?*", fail)
+        await expect(page.locator("#integrations-status")).to_contain_text("Unable to read local workflow status")
+        await expect(page.locator("#integrations-cards .workflow-card")).to_have_count(0)
+        passed("unavailable live Sensors state survives filtering without invented tool observations")
         await page.locator("#integrations-clear").click()
-        await page.locator("#integrations-load").click()
-        await expect(page.locator("#integrations-profile")).to_contain_text("Loaded profile: linux")
-        passed("real static Integration Map recovery")
-        passed("four separate capability rows per supported app",
-               await page.locator("#integrations-cards .app-status-grid").count() == 10 and
-               await page.locator("#integrations-cards .app-status-row").count() == 40)
-        legend = await page.locator(".app-state-legend").inner_text()
+        await page.locator("#workspace-tab-setup").click()
+        await page.locator("#ops-advanced-setup > summary").click()
+        await expect(page.locator("#workflow-reference-status")).to_contain_text("Integration map unavailable")
+        await page.unroute("**/api/integrations?*", fail)
+        async with page.expect_response("**/api/integrations?platform=linux") as map_response:
+            await page.locator("#integrations-load").click()
+        profile = await (await map_response.value).json()
+        await expect(page.locator("#workflow-reference-status")).to_contain_text("loaded linux documentation profile")
+        passed("real static capability profile recovers independently in Setup",
+               profile["selected_platform"] == "linux" and len(profile["workflows"]) == 10)
+        legend = await page.locator("#ops-advanced-setup .app-state-legend").inner_text()
         passed("presence legend explains bounded green red and gray states",
                all(label in legend for label in ("Found candidate", "Not found", "Not checked")))
 
@@ -469,13 +484,18 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
 
         await page.route("**/api/integrations?*", slow)
         await page.locator("#integrations-platform").select_option("windows")
+        await expect(page.locator("#workflow-reference-status")).to_contain_text("Selected profile windows is not loaded")
         await page.locator("#integrations-load").click()
-        await page.locator("#integrations-query").fill("no-synthetic-match")
-        await expect(page.locator("#integrations-status")).to_contain_text("Loading the static windows")
-        await expect(page.locator("#integrations-profile")).to_contain_text("Loaded profile: linux")
-        await expect(page.locator("#integrations-profile")).to_contain_text("Loaded profile: windows")
+        await expect(page.locator("#integrations-load")).to_be_disabled()
+        await expect(page.locator("#integrations-platform")).to_be_disabled()
+        # Presence filtering remains in Setup; the query field belongs to Sensors.
+        await page.locator("#integrations-presence-filter").select_option("unknown")
+        await expect(page.locator("#workflow-reference-status")).to_contain_text("Loading the static windows")
+        await expect(page.locator("#workflow-reference-status")).to_contain_text("loaded linux documentation profile")
+        await expect(page.locator("#workflow-reference-status")).to_contain_text("loaded windows documentation profile")
+        await expect(page.locator("#integrations-load")).to_be_enabled()
         await page.unroute("**/api/integrations?*", slow)
-        passed("pending integration profile survives real request delay")
+        passed("pending Setup capability profile preserves its prior snapshot during real request delay")
 
         await page.locator("#workspace-tab-analysis").click()
         await expect(page.locator("#workspace-analysis")).to_be_visible()
@@ -577,7 +597,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
                 && document.querySelector('.topbar').getBoundingClientRect().bottom < 0;
         }"""))
         await page.set_viewport_size({"width": 1440, "height": 1000})
-        await page.locator("#workspace-tab-traffic").click()
+        await page.locator("#workspace-tab-live").click()
         REPORT["zoom_equivalent_viewports"] = {}
         for level, width, height in ((200, 720, 500), (400, 360, 250)):
             await page.set_viewport_size({"width": width, "height": height})
@@ -588,8 +608,9 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
                 page_scroll: getComputedStyle(document.documentElement).overflowY
             })""")
             REPORT["zoom_equivalent_viewports"][str(level)] = metrics
-            passed(f"{level} percent zoom-equivalent viewport preserves return and page scroll",
-                   await page.locator(".room-back").is_visible() and
+            passed(f"{level} percent zoom-equivalent viewport preserves HUD navigation and page scroll",
+                   await page.locator("#workspace-tab-live").is_visible() and
+                   await page.locator("#workspace-tab-live").get_attribute("aria-selected") == "true" and
                    metrics["width"] == width and metrics["height"] == height and
                    metrics["root_scroll_width"] <= metrics["width"] + 1 and
                    metrics["workspace_scroll"] == "visible" and metrics["page_scroll"] == "auto")

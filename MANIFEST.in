@@ -4,6 +4,7 @@ include .github/dependabot.yml
 include .github/scripts/sync-wiki.sh
 include constraints/ci.txt
 include constraints/build-linux-cp312.txt
+include constraints/installer-linux-cp312.txt
 include constraints/test-linux-cp312.txt
 include constraints/test-linux-cp311.txt
 include constraints/browser-linux-cp311.txt
@@ -23,3 +24,4 @@ include scripts/start-hud-data.sh
 include scripts/start-local.sh
 include scripts/start-support-apps.sh
 include scripts/configure-support-apps.sh
+include scripts/defense.sh

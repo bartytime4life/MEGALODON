@@ -22,7 +22,9 @@ from megalodon.offline.tshark import FIELDS
 @pytest.fixture
 def manager(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'interfaces', lambda:[dict(name='eth0',default=True,up=True)])
+    monkeypatch.setattr(config, 'capture_tools_available', lambda:True)
     monkeypatch.setattr(dashboard, '_tool_management_user', lambda:True)
+    monkeypatch.setattr(config, 'SupportSensors', lambda home: SimpleNamespace(start=lambda interface:None,stop=lambda:None,snapshot=lambda:{}))
     home=tmp_path/'home'
     home.mkdir(mode=0o700)
     worker=CompanionAutomation(local_default_config(home),AISettings())
@@ -38,6 +40,7 @@ def manager(tmp_path, monkeypatch):
     {'action':'nmap_configure','nmap_target':'8.8.8.8'}, {'action':'nmap_configure','nmap_target':'10.0.0.0/8'},
     {'action':'nmap_configure','nmap_target':'::1'}, {'action':'clamav_configure','scan_folder':'/'},
     {'action':'clamav_configure','scan_folder':'../Downloads'}, {'action':'qwen_check','url':'http://remote'},
+    {'action':'geography_disable','url':'http://remote'},
 ])
 def test_only_fixed_actions_and_bounded_scopes(manager,body):
     with pytest.raises(ValueError):
@@ -45,16 +48,57 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     assert manager.snapshot()['job']['state']=='idle'
 
 
+def test_qwen_configuration_pins_existing_model_and_restores_background_advice(manager,monkeypatch):
+    monkeypatch.setattr(config,'local_qwen_models',lambda:[dict(name='qwen2.5:trusted',digest=AISettings.model_digest)])
+    monkeypatch.setattr('megalodon.ai_provider.status',lambda *a,**k:dict(inference_verified=True,state='model_ready'))
+    commands=[]
+    manager.run=lambda argv,*a:commands.append(argv) or (b'',0)
+    manager.start({'action':'qwen_configure'});manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='finished'
+    assert manager.companions.ai.enabled and manager.companions.ai.model=='qwen2.5:trusted'
+    assert commands[0][:3]==['/usr/bin/pkexec','/bin/sh','-c']
+    assert 'OLLAMA_HOST=127.0.0.1:11434' in commands[0][3]
+    other=config.SupportConfiguration(manager.settings,home=manager.home)
+    assert other.settings.ai.enabled and other.settings.ai.model_digest==AISettings.model_digest
+
+
+def test_qwen_retry_waits_for_newly_restarted_local_socket(monkeypatch):
+    calls=[]
+    class Connection:
+        def __init__(self,host,port,timeout): assert host=='127.0.0.1' and port==11434
+        def request(self,*a):
+            calls.append(True)
+            if len(calls)==1: raise ConnectionRefusedError()
+        def getresponse(self): return SimpleNamespace(status=200,read=lambda size:b'{"models":[]}')
+        def close(self): pass
+    monkeypatch.setattr(config,'HTTPConnection',Connection)
+    monkeypatch.setattr(config.time,'sleep',lambda seconds:None)
+    assert config.local_qwen_models()==[] and len(calls)==2
+
+
+def test_suricata_configuration_is_fixed_passive_cli_and_bounded_interface(manager):
+    commands=[]
+    manager.run=lambda argv,*a:commands.append(argv) or (b'',0)
+    manager.start({'action':'suricata_configure','interface':'eth0'});manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='finished'
+    assert commands[0][-2:]==['megalodon-suricata','eth0']
+    assert '--runmode single' in commands[0][3] and '--af-packet=$1' in commands[0][3]
+    assert 'ExecStart=/usr/bin/suricata' in commands[0][3]
+    with pytest.raises(ValueError):
+        manager.start({'action':'suricata_configure','interface':'eth0;id'})
+
+
 def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager,monkeypatch):
-    monkeypatch.setattr('megalodon.companion_automation.shutil.which',
-                        lambda name: '/usr/bin/nmap' if name == 'nmap' else None)
+    requested=[]
+    monkeypatch.setattr(manager.companions,'request_collection',
+                        lambda selected:requested.append(selected) or {'nmap':'queued'})
     before=manager.companions.config.watch_nmap_xml
     manager.start({'action':'nmap_configure','nmap_target':'192.168.2.22'})
     manager._thread.join(2)
     assert manager.snapshot()['job']['state']=='finished'
     assert manager.companions.config.nmap_target=='192.168.2.22/32'
     assert manager.companions.config.watch_nmap_xml==before
-    assert set(manager.companions._requested)=={'nmap'}
+    assert requested==[{'nmap'}]
     assert os.stat(manager.profile).st_mode & 0o777 == 0o600
     other=config.SupportConfiguration(manager.settings, CompanionAutomation(local_default_config(manager.home),AISettings()),home=manager.home)
     assert other.companions.config.nmap_target=='192.168.2.22/32'
@@ -250,6 +294,37 @@ def test_failed_capture_marks_receipt_and_cleans_up(manager):
     assert reader.ingestion_runs()[0]['failure_code']=='CAPTURE_ERROR'
 
 
+def test_capture_storage_limit_is_actionable_and_preserves_failure_receipt(manager,monkeypatch):
+    from megalodon import managed_capture
+    from megalodon.storage import StorageCapacityError
+    def full(*args,**kwargs):
+        raise StorageCapacityError('STORAGE_CAPACITY:HIGH_WATER')
+    monkeypatch.setattr(managed_capture.MegalodonService,'process',full)
+    def spawn(argv,**kwargs):
+        code='pass' if argv[0].endswith('dumpcap') else 'print('+repr(field_row())+')'
+        return subprocess.Popen([sys.executable,'-c',code],**kwargs)
+    capture=ManagedCapture(manager.settings,manager.home,popen=spawn)
+    capture.start('eth0');capture._thread.join(5)
+    assert capture.snapshot()['state']=='failed'
+    assert capture.snapshot()['message'].startswith('Packet storage limit reached.')
+    reader=dashboard.UnconfiguredDashboardReader(manager.settings.db_path)
+    assert reader.ingestion_runs()[0]['failure_code']=='CAPTURE_ERROR'
+
+
+def test_reordered_capture_row_is_rejected_without_stopping_live_feed(manager):
+    rows=[field_row(),field_row().replace('1788710400.123456','1788710399.123456'),field_row().replace('1788710400.123456','1788710401.123456')]
+    def spawn(argv,**kwargs):
+        code='pass' if argv[0].endswith('dumpcap') else '\n'.join('print('+repr(row)+')' for row in rows)
+        return subprocess.Popen([sys.executable,'-c',code],**kwargs)
+    capture=ManagedCapture(manager.settings,manager.home,popen=spawn)
+    capture.start('eth0');capture._thread.join(5)
+    value=capture.snapshot()
+    assert value['state']=='stopped'
+    assert (value['accepted'],value['skipped'],value['timestamp_rejected'])==(2,1,1)
+    reader=dashboard.UnconfiguredDashboardReader(manager.settings.db_path)
+    assert reader.ingestion_runs()[0]['processed_count']==2
+
+
 def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     from threading import Event
     waiting,release=Event(),Event()
@@ -264,6 +339,81 @@ def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     release.set();manager._thread.join(2)
     assert started==[]
     assert 'cancelled' in manager.snapshot()['job']['message']
+
+
+def test_background_setting_persists_but_does_not_enable_external_geography(manager,monkeypatch):
+    starts=[]
+    monkeypatch.setattr(manager.background,'start',lambda interface:starts.append(interface))
+    manager.start({'action':'background_start','interface':'eth0'})
+    manager._thread.join(3)
+    assert starts==['eth0']
+    assert manager._background_enabled and not manager._geography_enabled
+    saved=json.loads(manager.profile.read_text())
+    assert saved['background_enabled'] and not saved['geography_enabled']
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    monkeypatch.setattr(restored.background,'start',lambda interface:starts.append(interface))
+    restored.resume()
+    assert starts==['eth0','eth0']
+    restored.start({'action':'background_stop'})
+    assert json.loads(manager.profile.read_text())['background_enabled'] is False
+
+
+def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,monkeypatch):
+    calls=[]
+    starts=[]
+    monkeypatch.setattr(manager.background,'start',lambda interface:starts.append(interface))
+    monkeypatch.setattr(manager.background,'refresh_geography',lambda:calls.append(True))
+    manager.start({'action':'background_start','interface':'eth0'})
+    manager._thread.join(3)
+    manager.start({'action':'geography_refresh'})
+    manager._thread.join(3)
+    assert calls==[True]
+    assert json.loads(manager.profile.read_text())['geography_enabled'] is True
+
+    manager.start({'action':'geography_disable'})
+    manager._thread.join(3)
+    assert manager.snapshot()['geography_enabled'] is False
+    assert json.loads(manager.profile.read_text())['geography_enabled'] is False
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    monkeypatch.setattr(restored.background,'start',lambda interface:starts.append(interface))
+    restored.resume()
+    assert starts==['eth0','eth0']
+    assert restored._background_enabled is True
+    assert restored._geography_enabled is False
+    assert restored.background.geography_enabled() is False
+
+
+def test_missing_capture_tools_fail_closed(manager,monkeypatch):
+    monkeypatch.setattr(config,'capture_tools_available',lambda:False)
+    started=[]
+    monkeypatch.setattr(manager.capture,'start',lambda interface:started.append(interface))
+    monkeypatch.setattr(manager.background,'start',lambda interface:started.append(interface))
+    for action in ('capture_start','background_start'):
+        manager.start({'action':action,'interface':'eth0'})
+        manager._thread.join(3)
+        assert manager.snapshot()['job']['state']=='failed'
+    assert started==[]
+    assert not manager._background_enabled
+
+
+def test_live_endpoint_is_read_only_bounded_and_uses_existing_local_gates(endpoint,monkeypatch):
+    code,value=request(endpoint,method='GET',body=b'',path='/api/live-connections')
+    assert code==200 and value['schema']=='megalodon-live-connections-v1'
+    assert value['connections']==[] and endpoint[2]==[]
+    assert request(endpoint,method='GET',body=b'',path='/api/live-connections?limit=9999')[0]==400
+    assert request(endpoint,method='GET',body=b'',path='/api/live-connections',omit=('X-Megalodon-Check',))[0]==403
+    monkeypatch.setattr(dashboard,'_tool_management_user',lambda:False)
+    assert request(endpoint,method='GET',body=b'',path='/api/live-connections')[0]==403
+
+
+def test_workflow_endpoint_observes_without_model_or_service_execution(endpoint,monkeypatch):
+    idle=dict(state='stopped',message='Not started',updated_at=None,metrics=[])
+    monkeypatch.setattr(endpoint[1].sensors,'snapshot',lambda:dict(zeek=idle,suricata=idle))
+    code,value=request(endpoint,method='GET',body=b'',path='/api/support-workflows')
+    assert code==200 and value['schema']=='megalodon-support-workflows-v1'
+    assert len(value['tools'])==10 and endpoint[2]==[]
+    assert request(endpoint,method='GET',body=b'',path='/api/support-workflows?start=true')[0]==400
+    assert request(endpoint,method='GET',body=b'',path='/api/support-workflows',omit=('X-Megalodon-Check',))[0]==403
 
 
 @pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])

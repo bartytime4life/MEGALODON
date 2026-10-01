@@ -59,9 +59,8 @@ def test_critical_boundaries_are_explicit():
     assert items["scapy"]["selected_status"] == "unsupported"
     assert items["nftables"]["selected_status"] == "unsupported"
     assert items["nftables"]["integration"] == "plan_only_time_limited_response"
-    assert items["nftables"]["boundary"] == (
-        "Plans are inert review evidence; live application is unsupported and refused."
-    )
+    assert "Legacy firewall CLI plans remain inert" in items["nftables"]["boundary"]
+    assert "Models cannot apply blocks" in items["nftables"]["boundary"]
     assert items["qwen-ollama"]["selected_status"] == "contract_only"
     assert "no CLI or tool authority for that policy" in items["qwen-ollama"]["boundary"]
     assert "installed-provider acceptance remains unproved" in items["qwen-ollama"]["boundary"]
@@ -96,11 +95,11 @@ def test_suricata_runtime_status_matches_reader_and_explicit_consumer():
 def test_planned_interface_slots_never_claim_runtime_authority():
     items = {item["id"]: item for item in catalog("linux")["components"]}
     assert {"ossec", "zabbix"}.isdisjoint(items)
-    assert items["qwen-ollama"]["selected_status"] == "manual_only"
+    assert items["qwen-ollama"]["selected_status"] == "optional"
     assert "original run-count advisory" in items["qwen-ollama"]["boundary"]
     assert "Separate opt-in anomaly/AI CLI and token-gated HUD paths exist" in items["qwen-ollama"]["boundary"]
-    assert "firewall application is unsupported" in items["qwen-ollama"]["boundary"]
-    assert "No scan launcher" in items["nmap"]["boundary"]
+    assert "Model requests cannot apply firewall changes" in items["qwen-ollama"]["boundary"]
+    assert "No arbitrary NSE or commands" in items["nmap"]["boundary"]
 
 
 @pytest.mark.parametrize(

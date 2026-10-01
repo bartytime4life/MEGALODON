@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Pin source and download only hash-locked build wheels
+      - name: Pin source and download hash-locked installer wheels
         id: source
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
@@ -32,7 +32,7 @@ jobs:
           echo "tree=$(git rev-parse --verify 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
           mkdir -m 700 "$RUNNER_TEMP/installer-wheels" "$RUNNER_TEMP/installer-receipts"
           python -I -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
-            -r constraints/build-linux-cp312.txt --dest "$RUNNER_TEMP/installer-wheels"
+            -r constraints/installer-linux-cp312.txt --dest "$RUNNER_TEMP/installer-wheels"
       - name: Rehearse real installation, replacement, repair, rollback and uninstall
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}

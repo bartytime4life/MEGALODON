@@ -47,7 +47,7 @@ def test_committed_inventory_exactly_matches_current_source(capsys):
     assert document["schema"] == inventory_tool.SCHEMA
     assert document["scope"] == "committed-source-build-inputs"
     assert "not a release artifact SBOM" in document["limitations"][0]
-    assert len(document["profiles"]) == 4
+    assert len(document["profiles"]) == 5
 
 
 def test_default_check_refuses_a_stale_or_missing_artifact(tmp_path, capsys):

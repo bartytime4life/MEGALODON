@@ -80,6 +80,9 @@ HOST_TELEMETRY_JS = r'''
 (() => {
   if (typeof localHudLaunch === 'undefined' || !document.getElementById('pc-live')) return;
   const el = id => document.getElementById(id);
+  const workspace=el('workspace-live');
+  const visible=()=>!document.hidden&&!(workspace&&workspace.hidden);
+  const strip=()=>{for(const [target,source]of [['ops-cpu','pc-suite-cpu'],['ops-memory','pc-suite-memory'],['ops-pc-cpu','pc-system-cpu'],['ops-pc-memory','pc-system-memory']])if(el(target)){const value=el(source).textContent;el(target).textContent=value;const meter=el(target+'-meter');if(meter){const numeric=parseFloat(value);meter.value=Number.isFinite(numeric)?Math.min(100,Math.max(0,numeric)):0;meter.setAttribute('aria-valuetext',value==='—'?'Unavailable':value);}}};
   const state = {paused:false, pending:false, payload:null, selected:'', timer:null, controller:null, revision:0, failed:false};
   const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   const metric = value => value === null || number(value);
@@ -129,7 +132,7 @@ HOST_TELEMETRY_JS = r'''
     el('pc-process-coverage').textContent='Current process coverage unavailable.';
     el('pc-apps-body').replaceChildren(); const row=node('tr',''), cell=node('td','Current app readings unavailable.'); cell.setAttribute('colspan','6'); row.append(cell); el('pc-apps-body').append(row);
     el('pc-peers').replaceChildren(node('li','Current socket readings unavailable.'));
-    el('pc-network-detail').textContent='Current interface readings unavailable.';
+    el('pc-network-detail').textContent='Current interface readings unavailable.';strip();
   }
   function emptyChart(message) { el('pc-network-chart').replaceChildren(node('p',message,'pc-empty')); }
   function plot(payload) {
@@ -200,7 +203,7 @@ HOST_TELEMETRY_JS = r'''
     for(const [id,key] of [['tcp','tcp'],['udp','udp'],['established','established'],['listening','listening'],['time-wait','time_wait']]) el('pc-'+id).textContent=fmt(payload.sockets[key]);
     el('pc-peers').replaceChildren(...(payload.sockets.remote_peers.length?payload.sockets.remote_peers.map(peer=>node('li',`${peer.address} · ${fmt(peer.connections)} connections`)):[node('li',payload.sockets.status==='ready'?'No remote peer addresses observed.':'Remote peer addresses unavailable.')]));
     el('pc-notes').replaceChildren(...payload.notes.map(note=>node('li',note)));
-    interfaces(payload);cpuPlot(payload);
+    interfaces(payload);cpuPlot(payload);strip();
   }
   function age(payload) { return payload.observed_at===null?Infinity:Date.now()-Date.parse(payload.observed_at); }
   function freshness(payload) {
@@ -210,7 +213,7 @@ HOST_TELEMETRY_JS = r'''
     status(warming?'Warming up':payload.status==='ready'?'Live':'Partial readings',warming?'waiting':payload.status==='ready'?'live':'waiting');
     el('pc-freshness').textContent=`Observed ${time(payload.observed_at)} · refreshes every 2 seconds · trend holds up to 10 minutes${warming?' · rate measurements need another sample':''}.`;
   }
-  function schedule() { clearTimeout(state.timer); if(!state.paused && !document.hidden)state.timer=setTimeout(refresh,2000); }
+  function schedule() { clearTimeout(state.timer); if(!state.paused && visible())state.timer=setTimeout(refresh,2000); }
   async function readBounded(response) {
     if(Number(response.headers?.get('content-length'))>2097152)throw Error('Reading too large');
     if(response.body?.getReader) {const reader=response.body.getReader(), decoder=new TextDecoder();let size=0,body='';
@@ -220,16 +223,16 @@ HOST_TELEMETRY_JS = r'''
     const body=await response.text(); if(new TextEncoder().encode(body).byteLength>2097152)throw Error('Reading too large');return JSON.parse(body);
   }
   async function refresh() {
-    if(state.paused || document.hidden || state.pending)return;
+    if(state.paused || !visible() || state.pending)return;
     state.pending=true;const revision=state.revision;state.controller=new AbortController();const timeout=setTimeout(()=>state.controller?.abort(),5000);
     try {
       const response=await fetch('/api/host-telemetry',{cache:'no-store',headers:{'X-Megalodon-Check':'1'},signal:state.controller.signal});
       if(!response.ok)throw Error('Local reading unavailable');
       const payload=checked(await readBounded(response));
-      if(revision!==state.revision || state.paused || document.hidden)return;
+      if(revision!==state.revision || state.paused || !visible())return;
       state.failed=false;state.payload=payload;render(payload);freshness(payload);
     } catch(_) {
-      if(revision!==state.revision || state.paused || document.hidden)return;
+      if(revision!==state.revision || state.paused || !visible())return;
       state.failed=true;status('Unavailable','unavailable');clearCurrent();el('pc-freshness').textContent='Local readings could not refresh. Any trend is retained history; retrying automatically.';
       if(!state.payload)emptyChart('The local resource collector is unavailable. The HUD must run with local tool inspection enabled.');
     } finally { clearTimeout(timeout);state.pending=false;state.controller=null;schedule(); }
@@ -241,11 +244,13 @@ HOST_TELEMETRY_JS = r'''
     else {status('Connecting','waiting');clearCurrent();refresh();}
   });
   el('pc-interface').addEventListener('change',()=>{state.selected=el('pc-interface').value;if(state.payload){interfaces(state.payload);if(!state.paused)freshness(state.payload);else if(state.failed)clearCurrent();}});
-  document.addEventListener('visibilitychange',()=>{
+  const syncVisibility=()=>{
     state.revision++;clearTimeout(state.timer);state.controller?.abort();
-    if(document.hidden) {status(state.paused?'Paused':'Hidden tab','paused');el('pc-freshness').textContent='Refresh suspended while this tab is hidden. Displayed values are retained observations.';}
+    if(!visible()) {status(state.paused?'Paused':'Hidden tab','paused');el('pc-freshness').textContent='Refresh suspended while this tab is hidden. Displayed values are retained observations.';}
     else if(!state.paused) {status('Connecting','waiting');clearCurrent();refresh();}
-  });
+  };
+  document.addEventListener('visibilitychange',syncVisibility);
+  if(typeof MutationObserver!=='undefined'&&workspace)new MutationObserver(syncVisibility).observe(workspace,{attributes:true,attributeFilter:['hidden']});
   refresh();
 })();
 '''

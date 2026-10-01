@@ -19,7 +19,8 @@ from .capture import _jsonl_event
 from .config import BlockingSettings
 from .offline.tshark import FIELDS, parse_fields
 from .service import MegalodonService
-from .storage import Store
+from .storage import Store, StorageCapacityError
+from .validation import ValidationError
 
 MAX_PACKETS = 50000
 MAX_SECONDS = 900
@@ -41,12 +42,13 @@ def capture_commands(interface):
 
 
 class ManagedCapture:
-    def __init__(self, settings, home, on_ready=None, *, popen=subprocess.Popen):
+    def __init__(self, settings, home, on_ready=None, *, popen=subprocess.Popen, connections=None):
         self.settings, self.home, self.on_ready, self.popen = settings, home, on_ready, popen
+        self.connections = connections
         self._lock, self._stop = Lock(), Event()
         self._thread = None
         self._state = dict(state='idle', interface='', received=0, accepted=0, skipped=0,
-                           started_at=None, finished_at=None, message='No HUD capture started.')
+                           timestamp_rejected=0,started_at=None, finished_at=None, message='No HUD capture started.')
 
     def snapshot(self):
         with self._lock:
@@ -59,7 +61,7 @@ class ManagedCapture:
             if self._thread and self._thread.is_alive():
                 raise ConfigBusy('A HUD capture is already running.')
             self._stop.clear()
-            self._state.update(state='starting', interface=interface, received=0, accepted=0, skipped=0,
+            self._state.update(state='starting', interface=interface, received=0, accepted=0, skipped=0,timestamp_rejected=0,
                                started_at=now(), finished_at=None, message='Opening the selected interface…')
             self._thread = Thread(target=self._run, args=(interface,), daemon=True, name='megalodon-managed-capture')
             self._thread.start()
@@ -78,6 +80,8 @@ class ManagedCapture:
         store = None
         reason, failure = 'source_exhausted', None
         try:
+            if self.connections is not None:
+                self.connections.begin(interface)
             # A separate analyzer HOME prevents personal scripts/configuration
             # from changing this fixed parser. No raw capture path is created.
             env = {'PATH':'/usr/bin:/bin', 'HOME':str(self.home), 'LC_ALL':'C',
@@ -127,7 +131,20 @@ class ManagedCapture:
                                 with self._lock:
                                     self._state['skipped'] += 1
                                 continue
-                            service.process(event, run_id=run_id)
+                            try:
+                                service.process(event, run_id=run_id)
+                            except ValidationError as exc:
+                                if str(exc) not in {'event timestamp precedes source high watermark','event timestamp exceeds allowed future skew'}:
+                                    raise
+                                # NIC queues can deliver timestamps out of order.
+                                # Keep detector ordering strict; reject this row,
+                                # account for the gap and continue finite intake.
+                                with self._lock:
+                                    self._state['skipped'] += 1
+                                    self._state['timestamp_rejected'] += 1
+                                continue
+                            if self.connections is not None:
+                                self.connections.observe(event)
                             with self._lock:
                                 self._state['accepted'] += 1
                                 self._state['message'] = 'Accepted metadata is feeding the HUD traffic and finding charts. Capture drops are unknown.'
@@ -139,6 +156,13 @@ class ManagedCapture:
                 raise ValueError('capture tool failed')
             elif self._state['received'] >= MAX_PACKETS:
                 reason = 'event_limit_reached'
+        except StorageCapacityError as exc:
+            reason, failure = 'failed', 'CAPTURE_ERROR'
+            message = ('Packet storage limit reached. Existing records are preserved; increase the configured storage budget or review retention before restarting.'
+                       if str(exc) == 'STORAGE_CAPACITY:HIGH_WATER' else
+                       'Packet storage could not be validated. Existing records are preserved; review private storage access before restarting.')
+            with self._lock:
+                self._state.update(state='failed', message=message)
         except Exception:
             reason, failure = 'failed', 'CAPTURE_ERROR'
             with self._lock:
