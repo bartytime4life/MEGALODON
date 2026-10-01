@@ -116,7 +116,9 @@ process.stdin.on('end', async () => {
     assert.equal(byId('setup-software-list').children.length, 11);
     context.fetch = async (path, options) => {calls.push({path, options}); return response(report);};
     context.document.activeElement = byId('setup-check');
-    await run('runLocalChecks()');
+    const successfulCheck = await run('runLocalChecks()');
+    assert.equal(successfulCheck.ok, true);
+    assert.match(successfulCheck.message, /Check complete/);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].path, '/api/local-checks');
     assert.equal(calls[0].options.headers['X-Megalodon-Check'], '1');
@@ -171,7 +173,9 @@ process.stdin.on('end', async () => {
       assert.throws(() => run('{const p=JSON.parse(JSON.stringify(report));'+change+';validateLocalCheckReport(p)}'), change);
     }
     context.fetch = async () => {throw Error('PRIVATE_PATH');};
-    await run('runLocalChecks()');
+    const failedCheck = await run('runLocalChecks()');
+    assert.equal(failedCheck.ok, false);
+    assert.match(failedCheck.message, /could not be completed/);
     assert.match(byId('setup-check-status').textContent, /Previous results are stale/);
     assert.doesNotMatch(byId('setup-check-status').textContent, /PRIVATE_PATH/);
     assert.equal(byId('setup-download-report').disabled, true);

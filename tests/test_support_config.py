@@ -299,7 +299,7 @@ def test_capture_storage_limit_is_actionable_and_preserves_failure_receipt(manag
     from megalodon.storage import StorageCapacityError
     def full(*args,**kwargs):
         raise StorageCapacityError('STORAGE_CAPACITY:HIGH_WATER')
-    monkeypatch.setattr(managed_capture.MegalodonService,'process',full)
+    monkeypatch.setattr(managed_capture.BufferedRecording,'process',full)
     def spawn(argv,**kwargs):
         code='pass' if argv[0].endswith('dumpcap') else 'print('+repr(field_row())+')'
         return subprocess.Popen([sys.executable,'-c',code],**kwargs)

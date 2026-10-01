@@ -137,8 +137,8 @@ test('the HTML declares unique evidence controls and loads its local validator f
   for (const id of ['event-search', 'event-disposition', 'event-feed', 'event-inspector', 'run-list', 'run-inspector', 'readiness-file', 'clear-readiness', 'readiness-feedback']) assert.ok(ids.includes(id));
   assert.ok(html.indexOf('src="./readiness.js"') < html.indexOf('src="./app.js"'));
   for (const match of html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)) assert.ok(fs.existsSync(path.join(path.dirname(require.resolve('../dist/index.html')), match[1])));
-  assert.match(html, /local readiness guide<\/a>/);
-  assert.match(html, /MEGALODON\/blob\/main\/docs\/tool-readiness\.md/);
+  assert.match(html, /Setup guide ↗<\/a>/);
+  assert.match(html, /MEGALODON\/blob\/[^/]+\/docs\/local-pc-setup\.md/);
   assert.match(html, /Reports from earlier revisions are rejected/);
   assert.doesNotMatch(html, /main@5583ac1/);
   assert.doesNotMatch(html, /pending merge/);
@@ -228,7 +228,7 @@ test('whole application initializes and navigates without a feed or browser netw
   const context={document, URL, window:{location:{hash:""},scrollY:0,history:{pushState(a,b,hash){context.window.location.hash=hash;}},addEventListener(){},matchMedia(){return {matches:true};},scrollTo({top}){this.scrollY=top;}}, localStorage:{getItem(){return null;},setItem(){}}, Date, console};
   vm.createContext(context);
   for(const path of ['../dist/lifecycle.js','../dist/controls.js','../dist/app.js']) vm.runInContext(fs.readFileSync(require.resolve(path),'utf8'),context);
-  for(const view of ['hud','evidence','integrations','boundaries']) {
+  for(const view of ['hud','evidence','integrations','setup','boundaries']) {
     vm.runInContext(`switchView('${view}')`,context);
     assert.equal(document.activeElement,nodes.get(`[data-view-panel="${view}"] h1`));
   }
@@ -260,7 +260,7 @@ test('whole application initializes and navigates without a feed or browser netw
   all(nodes.get('#shared-tool-controls').children.at(-1)).find(node=>node.textContent==='Remove link').listeners.click();
   assert.equal(nodes.get('#tool-result-count').textContent,'0 of 10 tools shown');
   assert.equal(nodes.get('#tool-inspector').hidden,true);
-  assert.equal(document.activeElement,nodes.get('#tool-quick-filter'));
+  assert.equal(document.activeElement.type,'url');
   const reset=all(nodes.get('#integration-grid')).find(node=>node.textContent==='Clear filters');
   assert.ok(reset, 'empty results offer a recovery control');
   reset.listeners.click();
@@ -284,5 +284,5 @@ test('whole application initializes and navigates without a feed or browser netw
   assert.doesNotMatch(nodes.get('#tool-inspector').innerHTML,/data-source-jump/);
   for(const id of Object.keys(lifecycleCommands)) vm.runInContext(`state.selectedTool='${id}'; renderToolInspector()`,context);
   assert.match(nodes.get('#feed-count').textContent, /No network records/);
-  assert.match(nodes.get('#tool-inspector').innerHTML, /Manual presence note/);
+  assert.match(nodes.get('#tool-inspector').innerHTML, /recent manual note/);
 });

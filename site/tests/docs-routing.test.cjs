@@ -10,16 +10,16 @@ const app = fs.readFileSync(path.join(siteRoot, 'dist/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(siteRoot, 'dist/styles.css'), 'utf8');
 const guide = fs.readFileSync(path.join(repositoryRoot, 'docs/operator-workflows.md'), 'utf8');
 
-test('the hosted console exposes exactly four application views', () => {
+test('the hosted console exposes five application views with separate Setup', () => {
   assert.deepEqual(
     [...html.matchAll(/data-view="([^"]+)"/g)].map(([, view]) => view),
-    ['hud', 'evidence', 'integrations', 'boundaries']
+    ['hud', 'evidence', 'integrations', 'setup', 'boundaries']
   );
   assert.deepEqual(
     [...html.matchAll(/data-view-panel="([^"]+)"/g)].map(([, view]) => view),
-    ['hud', 'evidence', 'integrations', 'boundaries']
+    ['hud', 'evidence', 'integrations', 'setup', 'boundaries']
   );
-  assert.match(app, /\['hud', 'evidence', 'integrations', 'boundaries'\]\.includes\(name\)/);
+  assert.match(app, /\['hud', 'evidence', 'integrations', 'setup', 'boundaries'\]\.includes\(name\)/);
 });
 
 test('the hosted surface is named as a console rather than the local HUD', () => {

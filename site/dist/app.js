@@ -199,7 +199,7 @@ async function importReadinessFile(file) {
 }
 
 function switchView(name, updateHistory = true) {
-  if (!['hud', 'evidence', 'integrations', 'boundaries'].includes(name)) return;
+  if (!['hud', 'evidence', 'integrations', 'setup', 'boundaries'].includes(name)) return;
   if (!$( `[data-view-panel="${name}"]`)) return;
   if (!state.viewScroll) state.viewScroll = Object.create(null);
   state.viewScroll[state.activeView] = window.scrollY || 0;
@@ -323,6 +323,22 @@ function renderToolInspector() {
     <div class="inspector-section"><span>Local or planned review surfaces</span><div class="hud-slots">${item.ui.map((slot) => `<span>${slot}</span>`).join("")}</div></div>
     ${item.evidence ? `<div class="inspector-section"><span>Implementation reference</span><p><a class="evidence-link" href="${item.evidence.url}" target="_blank" rel="noopener noreferrer">${item.evidence.label} <span aria-hidden="true">↗</span></a></p></div>` : ""}
     </details>
+    <button type="button" class="control-button" id="tool-open-setup">Configure ${item.name} →</button>
+    <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
+    <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
+    <div class="inspector-warning">${evidenceTarget ? "A local MEGALODON evidence view exists for this tool. It may be empty or unavailable; this hosted Site has no connection to it. Use the setup guide at the top of this view for the documented local entry point." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
+  `;
+  $('#tool-open-setup').addEventListener('click',()=>{state.setupTool=item.id;renderToolSetup();switchView('setup');});
+  renderToolSetup();
+
+}
+
+function renderToolSetup() {
+  const item=integrations.find(candidate=>candidate.id===(state.setupTool||state.selectedTool))||integrations[0];
+  const acquire=toolAcquisition[item.id],lifecycle=resolveLifecycle(item.id),presence=presenceFor(item.id);
+  $('#setup-tool-choice').replaceChildren(...integrations.map(entry=>{const option=document.createElement('option');option.value=entry.id;option.textContent=entry.name;return option;}));
+  $('#setup-tool-choice').value=item.id;
+  $('#setup-tool-inspector').innerHTML=`<h2>${item.name}</h2>
     <div class="inspector-section acquire-section">
       <div class="acquire-heading"><span>Setup source</span><em>Operator managed</em></div>
       <p class="acquire-source">Official source · <strong>${acquire.source}</strong></p>
@@ -343,10 +359,7 @@ function renderToolInspector() {
       <p class="acquire-boundary"><strong>Operator action:</strong> this hosted console opens setup guidance and copies lifecycle text. It never probes the host or executes an installer, uninstaller, service command, or package manager.</p>
     </div>
     <div id="shared-tool-controls"></div>
-    <div class="inspector-section"><span>Authority boundary</span><p>${item.boundary}</p></div>
-    <div class="inspector-section"><span>Next evidence gate</span><p>${item.nextGate}</p></div>
-    <div class="inspector-warning">${evidenceTarget ? "A local MEGALODON evidence view exists for this tool. It may be empty or unavailable; this hosted Site has no connection to it. Use the setup guide at the top of this view for the documented local entry point." : "This interface is reserved only. MEGALODON does not currently ingest this tool's output."}</div>
-  `;
+`;
   const copyInstall = $("[data-copy-install]");
   if (copyInstall) copyInstall.addEventListener("click", async () => {
     await copyText(acquire.command, copyInstall, "Copied");
@@ -358,18 +371,7 @@ function renderToolInspector() {
   $$('[data-set-presence]').forEach((button) => button.addEventListener('click', () => {
     setToolPresence(item.id, button.dataset.setPresence);
   }));
-  MegalodonControls.mount($('#shared-tool-controls'), item.id, item.name, {
-    changed() {
-      renderIntegrationGrid();
-      if ($('#tool-inspector').hidden) {
-        $('#tool-quick-filter').focus();
-      } else if (state.selectedTool !== item.id) {
-        renderToolInspector();
-        $('#tool-inspector h2').setAttribute('tabindex', '-1');
-        $('#tool-inspector h2').focus();
-      }
-    }
-  });
+  MegalodonControls.mount($('#shared-tool-controls'),item.id,item.name,{changed(){renderIntegrationGrid();}});
 }
 
 async function copyText(value, button, successLabel = "Copied") {
@@ -404,13 +406,14 @@ renderTelemetryUnavailable();
 renderCategoryFilters();
 renderIntegrationGrid();
 renderToolInspector();
+$('#setup-tool-choice').addEventListener('change',()=>{state.setupTool=$('#setup-tool-choice').value;renderToolSetup();});
 $('#tool-search').addEventListener('input', () => { state.toolQuery = $('#tool-search').value.slice(0, 120).trim().toLowerCase(); renderIntegrationGrid(); renderToolInspector(); });
 $('#tool-quick-filter').addEventListener('change', () => { state.toolFilter = $('#tool-quick-filter').value; renderIntegrationGrid(); renderToolInspector(); });
 
 function restoreViewFromHash() {
   const hash = window.location.hash;
   if (hash === '') switchView('hud', false);
-  else if (/^#view=(hud|evidence|integrations|boundaries)$/.test(hash)) switchView(hash.slice(6), false);
+  else if (/^#view=(hud|evidence|integrations|setup|boundaries)$/.test(hash)) switchView(hash.slice(6), false);
 }
 window.addEventListener('popstate', restoreViewFromHash);
 window.addEventListener('hashchange', restoreViewFromHash);

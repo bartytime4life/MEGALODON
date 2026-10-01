@@ -119,15 +119,17 @@ def test_apt_removal_plan_rejects_oversized_output(monkeypatch):
     assert not tool_setup.preview_apt_removal('nmap',['sudo','apt-get','remove','nmap'])
 
 
-def test_example_model_removal_is_pinned_to_loopback(monkeypatch):
+@pytest.mark.parametrize('action,verb', [('install','pull'),('uninstall','rm')])
+def test_example_model_actions_are_pinned_to_loopback(monkeypatch, action, verb):
     seen=[]
     monkeypatch.setattr(tool_setup,'uninstall_command',lambda tool:['ollama','rm','qwen2.5:7b'])
+    monkeypatch.setattr(tool_setup,'install_command',lambda tool:['ollama','pull','qwen2.5:7b'])
     monkeypatch.setattr(tool_setup.sys,'stdin',SimpleNamespace(isatty=lambda:True))
     monkeypatch.setattr('builtins.input',lambda prompt:'qwen')
     monkeypatch.setenv('OLLAMA_HOST','remote.example:11434')
     monkeypatch.setattr(tool_setup.subprocess,'run',lambda command,**kw: seen.append((command,kw)) or SimpleNamespace(returncode=0))
-    assert tool_setup.main(['qwen','uninstall','--apply'])==0
-    assert seen[0][0]==['ollama','rm','qwen2.5:7b']
+    assert tool_setup.main(['qwen',action,'--apply'])==0
+    assert seen[0][0]==['ollama',verb,'qwen2.5:7b']
     assert seen[0][1]['env']['OLLAMA_HOST']=='127.0.0.1:11434'
 
 

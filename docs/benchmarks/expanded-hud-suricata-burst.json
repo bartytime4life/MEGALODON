@@ -1,0 +1,253 @@
+{
+  "benchmark_sha256": "c2ff43b19a07a0aaab9690d44173d35a211c79bc4e64e9115ea9d77b133d0002",
+  "code_sha256": {
+    "evidence_storage.py": "f9f5771b5db049b21fef086cdac8a180b7bb625eadcc1ff681c73a228d1a5a9d",
+    "flow_ingestion.py": "8f101c0eb22e90beefdb07766056f3a1577a7b10a2730c750f628aa09fd678b3",
+    "live_connections.py": "48997cade28790722a86eb420338abd11fea6a1ab35930ec82a73de84e879ed3"
+  },
+  "limitations": [
+    "Local-file summary admission throughput; not packet capture throughput, simultaneous operating-system sockets, or network-wire capacity.",
+    "One priming record is outside the measured interval. Burst mode prewrites the backlog; sustained mode appends paced batches while the production importer worker runs.",
+    "Sustained arrival throughput includes source generation, configured production polling delays and final backlog drain; finite duration does not establish a 24/7 capacity guarantee.",
+    "Backlog peaks are sampled at 20 ms in sustained mode and before each direct burst poll; a transient peak between samples can be missed.",
+    "Live visuals deliberately retain a bounded subset; live projection evictions are reported separately from persisted evidence loss.",
+    "No external network traffic or geolocation lookup is generated. Inputs and managed stores are private temporary files removed after each case.",
+    "Measured on the current workstation with concurrent background activity; results are not a sustained server capacity guarantee."
+  ],
+  "machine": "x86_64",
+  "measured_at": "2026-10-01T01:19:40.395916Z",
+  "platform": "Linux",
+  "python": "3.12.3",
+  "results": [
+    {
+      "arrival": {
+        "actual_records_per_second": null,
+        "batch_lateness": {
+          "max_ms": null,
+          "p50_ms": null,
+          "p95_ms": null,
+          "samples": 0
+        },
+        "batch_records": 9999,
+        "errors": [],
+        "records_produced": 10000,
+        "target_records_per_second": null,
+        "wall_seconds": 0.0
+      },
+      "backlog": {
+        "drain_after_arrival_seconds": 1.937952,
+        "final_bytes": 0,
+        "final_records": 0,
+        "peak_at_seconds": 0.0,
+        "sample_interval_seconds": null,
+        "sampled_peak_bytes": 3601663,
+        "sampled_peak_records": 9999,
+        "samples": 15
+      },
+      "code_sha256": {
+        "evidence_storage.py": "f9f5771b5db049b21fef086cdac8a180b7bb625eadcc1ff681c73a228d1a5a9d",
+        "flow_ingestion.py": "8f101c0eb22e90beefdb07766056f3a1577a7b10a2730c750f628aa09fd678b3",
+        "live_connections.py": "48997cade28790722a86eb420338abd11fea6a1ab35930ec82a73de84e879ed3"
+      },
+      "collector": {
+        "accepted": 10000,
+        "backlog_bytes": 0,
+        "gaps": 0,
+        "imported_findings": 0,
+        "imported_flows": 10000,
+        "message": "Source-qualified metadata is retained; input rotations and skipped intervals are reported as gaps.",
+        "rejected": 0,
+        "rotations": 0,
+        "samples": 0,
+        "sampling_gaps": 0,
+        "source": "suricata",
+        "source_detail": "file",
+        "state": "connected",
+        "updated_at": "2026-10-01T01:19:19.411030Z"
+      },
+      "concurrent_connection_identities": 10000,
+      "concurrent_query_latency": {
+        "max_ms": 33.786,
+        "p50_ms": 22.332,
+        "p95_ms": 28.63,
+        "samples": 41
+      },
+      "correctness": {
+        "all_callbacks": true,
+        "all_records_persisted": true,
+        "all_source_identities_persisted": true,
+        "no_final_backlog": true,
+        "no_input_admission_gaps": true,
+        "no_producer_errors": true,
+        "no_query_errors": true,
+        "no_record_rejections": true,
+        "no_storage_evictions": true,
+        "source_completed": true
+      },
+      "importer_schedule": "direct poll: drain pre-existing backlog without worker sleeps",
+      "ingest_cpu_seconds": 1.392043,
+      "ingest_wall_seconds": 1.937952,
+      "input_file_bytes_excluded_from_managed_storage": 3602018,
+      "input_summary_records": 10000,
+      "live_callback_records": 10000,
+      "live_projection": {
+        "evicted": 9488,
+        "max_returned": 128,
+        "max_tracked": 512,
+        "returned": 128,
+        "truncated": true
+      },
+      "managed_disk_allocated_bytes": 5025792,
+      "managed_disk_logical_bytes": 5018408,
+      "measured_records": 9999,
+      "mode": "burst",
+      "persisted_records": 10000,
+      "polls": 14,
+      "post_ingest_query_latency": {
+        "max_ms": 0.528,
+        "p50_ms": 0.346,
+        "p95_ms": 0.524,
+        "samples": 25
+      },
+      "priming_records": 1,
+      "process_peak_rss_bytes": 29437952,
+      "provenance": {
+        "suricata-eve": 10000
+      },
+      "query_errors": [],
+      "rss_baseline_bytes": 25296896,
+      "rss_sampled_peak_bytes": 28672000,
+      "segment_count": 1,
+      "segment_target_bytes": 16777216,
+      "source": "suricata",
+      "source_identity_sequence_mismatches": 0,
+      "source_input_bytes": 3602018,
+      "source_megabytes_per_second": 1.773,
+      "sqlite": {
+        "journal_mode": "wal",
+        "synchronous": 2
+      },
+      "storage_evicted_records": 0,
+      "storage_reported_bytes": 4985640,
+      "summary_records_per_second": 5159.57,
+      "temporary_files_removed": true,
+      "unique_source_ids_within_segments": 10000
+    },
+    {
+      "arrival": {
+        "actual_records_per_second": null,
+        "batch_lateness": {
+          "max_ms": null,
+          "p50_ms": null,
+          "p95_ms": null,
+          "samples": 0
+        },
+        "batch_records": 99999,
+        "errors": [],
+        "records_produced": 100000,
+        "target_records_per_second": null,
+        "wall_seconds": 0.0
+      },
+      "backlog": {
+        "drain_after_arrival_seconds": 20.153584,
+        "final_bytes": 0,
+        "final_records": 0,
+        "peak_at_seconds": 0.0,
+        "sample_interval_seconds": null,
+        "sampled_peak_bytes": 36189210,
+        "sampled_peak_records": 99999,
+        "samples": 140
+      },
+      "code_sha256": {
+        "evidence_storage.py": "f9f5771b5db049b21fef086cdac8a180b7bb625eadcc1ff681c73a228d1a5a9d",
+        "flow_ingestion.py": "8f101c0eb22e90beefdb07766056f3a1577a7b10a2730c750f628aa09fd678b3",
+        "live_connections.py": "48997cade28790722a86eb420338abd11fea6a1ab35930ec82a73de84e879ed3"
+      },
+      "collector": {
+        "accepted": 100000,
+        "backlog_bytes": 0,
+        "gaps": 0,
+        "imported_findings": 0,
+        "imported_flows": 100000,
+        "message": "Source-qualified metadata is retained; input rotations and skipped intervals are reported as gaps.",
+        "rejected": 0,
+        "rotations": 0,
+        "samples": 0,
+        "sampling_gaps": 0,
+        "source": "suricata",
+        "source_detail": "file",
+        "state": "connected",
+        "updated_at": "2026-10-01T01:19:40.210579Z"
+      },
+      "concurrent_connection_identities": 100000,
+      "concurrent_query_latency": {
+        "max_ms": 65.456,
+        "p50_ms": 23.2,
+        "p95_ms": 29.148,
+        "samples": 414
+      },
+      "correctness": {
+        "all_callbacks": true,
+        "all_records_persisted": true,
+        "all_source_identities_persisted": true,
+        "no_final_backlog": true,
+        "no_input_admission_gaps": true,
+        "no_producer_errors": true,
+        "no_query_errors": true,
+        "no_record_rejections": true,
+        "no_storage_evictions": true,
+        "source_completed": true
+      },
+      "importer_schedule": "direct poll: drain pre-existing backlog without worker sleeps",
+      "ingest_cpu_seconds": 14.657149,
+      "ingest_wall_seconds": 20.153584,
+      "input_file_bytes_excluded_from_managed_storage": 36189565,
+      "input_summary_records": 100000,
+      "live_callback_records": 100000,
+      "live_projection": {
+        "evicted": 99488,
+        "max_returned": 128,
+        "max_tracked": 512,
+        "returned": 128,
+        "truncated": true
+      },
+      "managed_disk_allocated_bytes": 52858880,
+      "managed_disk_logical_bytes": 52844269,
+      "measured_records": 99999,
+      "mode": "burst",
+      "persisted_records": 100000,
+      "polls": 139,
+      "post_ingest_query_latency": {
+        "max_ms": 0.637,
+        "p50_ms": 0.425,
+        "p95_ms": 0.568,
+        "samples": 25
+      },
+      "priming_records": 1,
+      "process_peak_rss_bytes": 30171136,
+      "provenance": {
+        "suricata-eve": 100000
+      },
+      "query_errors": [],
+      "rss_baseline_bytes": 25255936,
+      "rss_sampled_peak_bytes": 28934144,
+      "segment_count": 4,
+      "segment_target_bytes": 16777216,
+      "source": "suricata",
+      "source_identity_sequence_mismatches": 0,
+      "source_input_bytes": 36189565,
+      "source_megabytes_per_second": 1.713,
+      "sqlite": {
+        "journal_mode": "wal",
+        "synchronous": 2
+      },
+      "storage_evicted_records": 0,
+      "storage_reported_bytes": 52745965,
+      "summary_records_per_second": 4961.85,
+      "temporary_files_removed": true,
+      "unique_source_ids_within_segments": 100000
+    }
+  ],
+  "schema": "megalodon-synthetic-flow-benchmark-v2",
+  "workload": "Unique synthetic connection summaries with overlapping observation intervals, local JSONL source, one writer plus concurrent bounded 50-row history reader."
+}

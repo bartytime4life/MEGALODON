@@ -23,6 +23,8 @@ def installed_launcher(tmp_path):
     # Observe exact argv without starting a HUD, a tool, or a real service.
     python.write_text(
         f"#!{sys.executable}\nimport json, os, sys\n"
+        "if 'megalodon.hud_autostart' in sys.argv:\n"
+        "    sys.exit(int(os.environ.get('HUD_TEST_START_EXIT', '0')))\n"
         "print(json.dumps(sys.argv[1:]))\n"
         "sys.exit(int(os.environ.get('HUD_TEST_EXIT', '0')))\n"
     )
@@ -54,13 +56,13 @@ def installed_launcher(tmp_path):
     ["--config", "/private/other $(touch NEVER_EXECUTE).toml", "--port", "8798"],
     ["--unsupported-option"],
 ])
-def test_installed_launcher_only_reopens_service_without_options(installed_launcher, active, options):
+def test_installed_launcher_starts_or_reopens_service_without_options(installed_launcher, active, options):
     paths, env, service_log = installed_launcher
     env["HUD_TEST_SERVICE_EXIT"] = "0" if active else "3"
     result = subprocess.run([str(paths.hud_launcher), *options], env=env,
                             capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stderr
-    if active and not options:
+    if not options:
         expected = ["-I", "-m", "megalodon.hud_reopen", str(paths.settings)]
     else:
         expected = ["-I", "-m", "megalodon", "hud", "--config", str(paths.settings),
@@ -71,6 +73,14 @@ def test_installed_launcher_only_reopens_service_without_options(installed_launc
     else:
         assert service_log.read_text().splitlines() == ["--user is-active --quiet megalodon-hud.service"]
     assert not Path(env["HUD_TEST_INJECTION_MARKER"]).exists()
+
+
+def test_installed_launcher_falls_back_when_user_service_cannot_start(installed_launcher):
+    paths, env, _ = installed_launcher
+    env.update(HUD_TEST_SERVICE_EXIT="3", HUD_TEST_START_EXIT="2")
+    result = subprocess.run([str(paths.hud_launcher)], env=env, capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == ["-I", "-m", "megalodon", "hud", "--config", str(paths.settings), "--open-browser"]
 
 
 @pytest.mark.parametrize("exit_code", [2, 19])
@@ -134,6 +144,9 @@ def test_user_service_is_reversible_and_uses_the_selected_release(tmp_path, monk
     assert 'megalodon hud --config' in raw
     assert '%% sign' in raw
     assert calls == [("daemon-reload",), ("enable", "megalodon-hud.service")]
+    calls.clear()
+    hud_autostart.start()
+    assert calls == [("daemon-reload",), ("start", "megalodon-hud.service")]
     hud_autostart.enable()
     assert unit.is_file()
     unit.write_text(raw + "# local change\n")
@@ -159,6 +172,7 @@ def test_autostart_refuses_non_loopback_settings(tmp_path, monkeypatch):
 
 def test_application_menu_reopens_running_service_in_browser(monkeypatch):
     opened = []
+    monkeypatch.setattr(hud_reopen, "_wait_until_listening", lambda host, port: True)
     monkeypatch.setattr(hud_reopen, "load_settings", lambda _:
                         SimpleNamespace(dashboard=SimpleNamespace(host="127.0.0.1", port=8787)))
     monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda url: opened.append(url) or True)
@@ -168,3 +182,24 @@ def test_application_menu_reopens_running_service_in_browser(monkeypatch):
                         SimpleNamespace(dashboard=SimpleNamespace(host="0.0.0.0", port=8787)))
     assert hud_reopen.main(["/private/settings.toml"]) == 2
     assert opened == ["http://127.0.0.1:8787/"]
+
+
+def test_reopen_waits_for_socket_and_reports_failed_start(monkeypatch, capsys):
+    from contextlib import nullcontext
+    connections = []
+    def connect(address, timeout):
+        connections.append(address)
+        if len(connections) == 1:
+            raise ConnectionRefusedError()
+        return nullcontext()
+    monkeypatch.setattr(hud_reopen.socket, "create_connection", connect)
+    monkeypatch.setattr(hud_reopen.time, "sleep", lambda _: None)
+    assert hud_reopen._wait_until_listening("::1", 8787)
+    assert connections == [("::1", 8787)] * 2
+    monkeypatch.setattr(hud_reopen.socket, "create_connection", lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError()))
+    assert not hud_reopen._wait_until_listening("127.0.0.1", 8787, timeout=0)
+    monkeypatch.setattr(hud_reopen, "_wait_until_listening", lambda *a: False)
+    monkeypatch.setattr(hud_reopen, "load_settings", lambda _: SimpleNamespace(dashboard=SimpleNamespace(host="127.0.0.1", port=8787)))
+    monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda _: pytest.fail("Do not open a failed service"))
+    assert hud_reopen.main(["/private/settings.toml"]) == 2
+    assert "not finished starting" in capsys.readouterr().err

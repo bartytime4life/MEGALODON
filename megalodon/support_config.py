@@ -180,6 +180,8 @@ class SupportConfiguration:
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
         self.qwen_status = dict(state='needs_setup',message='Configure local Qwen to enable bounded background advice.',updated_at=None,metrics=[])
+        self.evidence = None
+        self.flow_ingestor = None
         try:
             self._load()
         except (OSError, ValueError):
@@ -497,7 +499,9 @@ class SupportConfiguration:
                 self._tool('background','needs_setup','Saved monitoring could not resume; review interface and private paths.')
 
     def live_snapshot(self):
-        return self.connections.snapshot(self.capture.snapshot(),self.background.snapshot())
+        result=self.connections.snapshot(self.capture.snapshot(),self.background.snapshot())
+        result['recording_mode']=self.evidence.recording_mode if self.evidence is not None else 'packet_metadata'
+        return result
 
     def start_background_tools(self):
         """Shared startup action, with no desktop processes or caller commands."""

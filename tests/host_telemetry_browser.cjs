@@ -17,7 +17,7 @@ process.stdin.on('end',async()=>{
   const poll=async()=>{const next=[...timers.entries()].find(([,v])=>v.ms===2000);assert.ok(next,'poll scheduled');timers.delete(next[0]);await next[1].fn();await settled();};
   const status=()=>get('pc-status').textContent;
   vm.runInNewContext(code,context);await settled();
-  assert.equal(status(),'Live');assert.equal(requests[0].path,'/api/host-telemetry');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');
+  assert.equal(status(),'Live');assert.equal(requests[0].path,'/api/host-telemetry');assert.equal(get('ops-download').textContent,'10.13 Mbps');assert.equal(get('ops-upload').textContent,'0.46 Mbps');assert.match(get('ops-interface-label').textContent,/enp11s0.*includes LAN/);get('ops-speed-unit').value='bytes';get('ops-speed-unit').events.change();assert.equal(get('ops-download').textContent,'1.2 MiB/s');assert.equal(requests.length,1,'unit changes reuse the same measured sample');get('ops-speed-unit').value='mbps';get('ops-speed-unit').events.change();assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');
   assert.match(get('pc-network-detail').textContent,/since the previous observation:/);
   assert.doesNotMatch(get('pc-network-detail').textContent,/cumulative/);
   assert.equal(get('pc-interface').value,'enp11s0','first non-loopback selected');assert.equal(get('pc-suite-cpu').textContent,'0%','measured zero remains zero');
@@ -39,11 +39,11 @@ process.stdin.on('end',async()=>{
   }
   get('pc-interface').value='lo';get('pc-interface').events.change();assert.match(get('pc-network-chart').children.find(n=>n.tag==='svg').attributes['aria-label'],/^lo receive/);
   // Pausing prevents polls and labels retained values, then resumes without a second poll chain.
-  get('pc-pause').events.click();assert.equal(status(),'Paused');assert.equal(get('pc-pause').attributes['aria-pressed'],'true');assert.equal([...timers.values()].filter(t=>t.ms===2000).length,0);
+  get('pc-pause').events.click();assert.equal(status(),'Paused');assert.match(get('ops-interface-label').textContent,/paused snapshot/);assert.equal(get('pc-pause').attributes['aria-pressed'],'true');assert.equal([...timers.values()].filter(t=>t.ms===2000).length,0);
   get('pc-pause').events.click();await settled();assert.equal(status(),'Live');assert.equal([...timers.values()].filter(t=>t.ms===2000).length,1);
   document.hidden=true;listeners.visibilitychange();assert.equal(status(),'Hidden tab');assert.equal([...timers.values()].filter(t=>t.ms===2000).length,0);
   document.hidden=false;listeners.visibilitychange();await settled();assert.equal(status(),'Live');
-  failure=true;await poll();assert.equal(status(),'Unavailable');assert.equal(get('pc-suite-cpu').textContent,'—');assert.equal(get('pc-cpu-arc').attributes['stroke-dasharray'],'0 100');
+  failure=true;await poll();assert.equal(status(),'Unavailable');assert.equal(get('pc-suite-cpu').textContent,'—');assert.equal(get('ops-download').textContent,'—');assert.equal(get('ops-upload').textContent,'—');assert.equal(get('pc-cpu-arc').attributes['stroke-dasharray'],'0 100');
   get('pc-interface').value='enp11s0';get('pc-interface').events.change();assert.equal(status(),'Unavailable','changing interface cannot revive failed readings');assert.equal(get('pc-rx').textContent,'—');
   failure=false;oversized=true;await poll();assert.equal(status(),'Unavailable');oversized=false;
   payload={...payload,status:'partial',coverage:{processes:'partial'}};await poll();assert.equal(status(),'Partial readings');assert.match(get('pc-process-coverage').textContent,/Partial process visibility/);

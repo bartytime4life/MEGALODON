@@ -101,6 +101,7 @@ function installDisabledReason(mine, running) {
   if (mine && running) return null;
   if (running) return 'Another install or service start is already running on this computer; wait for it to finish.';
   if (heartbeatStale()) return 'Tool observations are stale; wait for the next check.';
+  if (!heartbeatState.managementEnabled) return 'Authorize local installation before using this button.';
   if (!toolManagementToken()) return 'Enter the operator token above to use Install, Start and Open.';
   return null;
 }
@@ -155,14 +156,13 @@ function paintInstallControl(wrap) {
     const command = starting ? entry.start_terminal : needsModel || !tool || tool.installed !== 'yes' ? entry.terminal : null;
     if (model && !entry.one_click && (!tool || tool.installed !== 'yes')) wrap.append(textNode('p', 'Install Ollama from its download page first.', 'hb-detail'));
     else if (command) wrap.append(textNode('p', `Observation mode. Run separately in a terminal: ${command}`, 'hb-detail'));
-    appendRemovalPlan(wrap, entry, tool, name);
-    return;
+    if (command) { const authorize = textNode('a', 'Authorize installation and service starts →', 'hb-detail'); authorize.href = '#tool-management-controls'; wrap.append(authorize); }
   }
   if (entry.one_click && (needsModel || (!model && (!tool || tool.installed !== 'yes')) || installing)) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
     const running = job && job.state === 'running';
     button.textContent = mine && running ? 'Installing…' : model ? 'Download Qwen model' : `Install ${name}`;
-    button.disabled = Boolean(running || heartbeatStale() || !toolManagementToken());
+    button.disabled = Boolean(running || heartbeatStale() || !heartbeatState.managementEnabled || !toolManagementToken());
     const reason = installDisabledReason(mine, running);
     button.title = reason || entry.summary;
     button.addEventListener('click', () => startInstall(toolId, name, entry));
@@ -175,7 +175,7 @@ function paintInstallControl(wrap) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
       const running = job && job.state === 'running';
       button.textContent = mine && running ? 'Starting…' : 'Start service';
-      button.disabled = Boolean(running || heartbeatStale() || !toolManagementToken());
+      button.disabled = Boolean(running || heartbeatStale() || !heartbeatState.managementEnabled || !toolManagementToken());
       const reason = installDisabledReason(mine, running);
       button.title = reason || `Starts the ${name} system service. A process observation does not establish health or integration.`;
       button.addEventListener('click', () => startInstall(toolId, name, entry, 'start'));
@@ -186,6 +186,8 @@ function paintInstallControl(wrap) {
     }
   } else if (!entry.one_click && entry.method === 'ollama' && (!tool || tool.installed !== 'yes')) {
     wrap.append(textNode('p', 'Install Ollama from its download page first; an Install button for the Qwen model then appears here.', 'hb-detail'));
+  } else if (entry.method === 'guided' && (!tool || tool.installed !== 'yes')) {
+    wrap.append(textNode('p', `Guided installation: ${entry.summary} Use the publisher or setup link below.`, 'hb-detail'));
   } else if (!entry.one_click && entry.method !== 'guided' && entry.terminal && (!tool || tool.installed !== 'yes')) {
     wrap.append(textNode('p', `One-click install needs a system password prompt (pkexec), which this computer lacks. Run in a terminal: ${entry.terminal}`, 'hb-detail'));
   }

@@ -110,10 +110,11 @@ function validateReadinessReport(text, now = Date.now()) {
 if (typeof module !== "undefined") module.exports = { validateReadinessReport, readinessToolIds, readinessBoundaries };
 """
 
-CONTROLS_JS = r"""const toolAcquisition = {
+CONTROLS_JS = r"""const localCompanionCommand = null;
+const toolAcquisition = {
   core: {
     source: "MEGALODON repository",
-    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup",
+    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-companion-tool-setup",
     linkLabel: "Open bounded Ubuntu setup",
     platforms: ["Ubuntu 24.04 reference", "Windows evaluation"],
     commandLabel: null,
@@ -123,13 +124,13 @@ CONTROLS_JS = r"""const toolAcquisition = {
   },
   tshark: {
     source: "MEGALODON repository",
-    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup",
+    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-companion-tool-setup",
     linkLabel: "Open guarded TShark setup",
     platforms: ["Linux adapter", "Windows desktop separate"],
     commandLabel: null,
     command: null,
     verificationLabel: "MEGALODON Linux path check",
-    note: "Keep Wireshark capture permission disabled. The adapter expects /usr/bin/tshark and analyzes saved captures only."
+    note: "Install TShark first, then use Setup to choose the capture interface and grant capture access. Saved captures can also be reviewed through the offline adapter."
   },
   zeek: {
     source: "MEGALODON repository + Zeek Project",
@@ -139,7 +140,7 @@ CONTROLS_JS = r"""const toolAcquisition = {
     commandLabel: null,
     command: null,
     verificationLabel: "Native Linux verification",
-    note: "The reviewed path requires a pinned release digest and a private non-service prefix. MEGALODON never starts Zeek."
+    note: "The reviewed path requires a pinned release digest and a private non-service prefix. Use Setup to prepare the background Zeek sampler and inspect its source status."
   },
   suricata: {
     source: "Open Information Security Foundation",
@@ -163,13 +164,13 @@ CONTROLS_JS = r"""const toolAcquisition = {
   },
   nftables: {
     source: "MEGALODON repository",
-    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-local-evaluation-setup",
+    url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-companion-tool-setup",
     linkLabel: "Open guarded Ubuntu setup",
     platforms: ["Linux only"],
     commandLabel: null,
     command: null,
     verificationLabel: "Linux verification",
-    note: "The repository setup suppresses service starts. MEGALODON renders inert plans and refuses live rule application."
+    note: "Installation changes no rules. Local containment requires a separate preview and operator approval and expires after five minutes."
   },
   clamav: {
     source: "Cisco Talos / ClamAV",
@@ -193,7 +194,7 @@ CONTROLS_JS = r"""const toolAcquisition = {
   },
   qwen: {
     source: "Ollama",
-    url: "https://ollama.com/download",
+    url: "https://ollama.com/download/linux",
     linkLabel: "Download Ollama",
     platforms: ["Windows", "macOS", "Linux"],
     commandLabel: null,
@@ -373,15 +374,15 @@ const MegalodonControls = (() => {
     }
     root.append(node('p', 'Opens the publisher or project page in a new tab. In the local HUD, use Install where a one-click package exists.', 'companion-help'));
     if (typeof runLocalChecks === 'function') {
-      const check = node('a', 'Check availability in Home →', 'companion-button'); check.href = '#setup-title';
-      check.addEventListener('click', () => runLocalChecks(id)); root.append(check);
+      const check = node('button', 'Check availability', 'companion-button'); check.type = 'button';
+      check.addEventListener('click', async () => { check.disabled=true; feedback.textContent='Checking this computer…'; try { const result=await runLocalChecks(id); feedback.textContent=result?.message || 'Availability could not be checked. Retry from Setup → Data and tools.'; } catch (_) { feedback.textContent='Availability could not be checked. Retry from Setup → Data and tools.'; } finally { check.disabled=false; } }); root.append(check);
     }
 
     const unified = node('details', '', 'companion-unified-setup');
     unified.append(node('summary', 'Install, configure, verify and uninstall'));
-    unified.append(node('p', 'From the reviewed checkout, this single script previews fixed install/removal recipes. Add --apply only in your terminal after review; uninstall needs typed confirmation. Configure prints tool-specific steps; verify checks executable presence only.', 'companion-help'));
+    unified.append(node('p', localCompanionCommand ? 'These commands use this MEGALODON installation and work from any terminal folder. Install previews a fixed recipe; add --apply to run it. Uninstall requires typed confirmation. Configure prints guidance; verify checks local presence.' : 'From the MEGALODON checkout, preview a fixed recipe with these commands. Add --apply to install after review; uninstall requires typed confirmation. Configure prints guidance; verify checks local presence.', 'companion-help'));
     ['plan', 'install', 'configure', 'verify', 'uninstall'].forEach(action => {
-      const command = `./scripts/manage-companion.sh ${id} ${action}`;
+      const command = `${localCompanionCommand || './scripts/manage-companion.sh'} ${id} ${action}`;
       const row = node('div', '', 'companion-command');
       const copy = node('button', `Copy ${action}`); copy.type = 'button';
       copy.addEventListener('click', async () => {

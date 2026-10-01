@@ -29,16 +29,20 @@ malicious activity.
 
 ## Install on this Linux PC
 
-From an existing reviewed checkout, install MEGALODON for your current Linux
-user:
+Open the repository folder and double-click **Start-MEGALODON.sh**. Choose
+**Run in Terminal** if your file manager asks. The first run installs MEGALODON
+for your Linux user; subsequent runs open the same local workspace. From a terminal:
 
 ```bash
-./scripts/install-local.sh
+./Start-MEGALODON.sh
 ```
 
-Then open **MEGALODON** from the application menu. The desktop launcher starts
-the loopback HUD in a terminal and opens your browser only after the server has
-bound successfully. Keep that terminal open; **Ctrl+C** stops the HUD.
+You can also open **MEGALODON** from the application menu after installation.
+Normal launches start or reuse the local background service, then open the HUD
+in your browser. The launch terminal can close once the workspace opens. If
+your Linux session has no user service manager, the launcher uses a foreground
+HUD and explains that its terminal must remain open. To install a newer checkout,
+use `./Start-MEGALODON.sh --update`; `--check` only checks the installation.
 
 The installer creates a private application environment, stable launchers, an
 application-menu entry, and an owner-private settings file. It refuses root and
@@ -208,13 +212,10 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
-The private [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site)
-is a hosted reference surface with no network feed connected. It shows unavailable
-telemetry until a separately reviewed real-data connection exists; it does not
-substitute generated traffic or zeros for missing observations. Its deployable source and
-alignment record are versioned under [`site/`](site/README.md) and
-[`docs/site-source-alignment.md`](docs/site-source-alignment.md); the repository
-contracts remain authoritative.
+The local HUD at **http://127.0.0.1:8787/** is MEGALODON's application.
+The former hosted reference dashboard is retired. Its historical source and
+publication record remain under [`site/`](site/README.md) and
+[`docs/site-source-alignment.md`](docs/site-source-alignment.md).
 
 ## Documentation map
 
@@ -747,8 +748,7 @@ Sign-in is off by default. To require it for a launch, add `--require-sign-in`;
 the terminal will show a random password. The installed HUD can instead use a
 reusable password you choose with `~/.local/bin/megalodon-manage password set`.
 This creates no account. The
-[local PC guide](docs/local-pc-setup.md) is the account-free route; the
-owner-private hosted Site is optional. If
+[local PC guide](docs/local-pc-setup.md) covers the local workspace. If
 that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.

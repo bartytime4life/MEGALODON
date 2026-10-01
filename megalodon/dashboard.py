@@ -21,6 +21,8 @@ from ipaddress import AddressValueError, IPv4Address
 import hmac
 import json
 import os
+import re
+import sqlite3
 import signal
 from pathlib import Path
 import sys
@@ -34,7 +36,7 @@ import time
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .dashboard_signin import SIGNIN_HTML, SIGNIN_CSS, SIGNIN_JS
 from .dashboard_action_plane import ACTION_PRESETS
-from .dashboard_commands import local_hud_launch, local_python_lifecycle
+from .dashboard_commands import local_companion_command, local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
 from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
@@ -472,7 +474,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
     support_config: SupportConfiguration | None = None
     operations = None
     defense = None
+    evidence = None
+    network_topology = None
+    flow_ingestor = None
+    reports = None
     automation_preview_lock = Lock()
+    maintenance_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -509,6 +516,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path == "/assets/dashboard.js":
             self._send(200, "text/javascript; charset=utf-8", self.javascript)
+            return
+        if route.path == '/assets/report.css':
+            from .reporting import REPORT_CSS
+            self._send(200, 'text/css; charset=utf-8', REPORT_CSS.encode())
+            return
+        if route.path == '/api/reports' or route.path.startswith('/api/reports/'):
+            self._reports_read(route)
+            return
+        if route.path in {'/api/storage','/api/storage/history','/api/network'}:
+            provider=self.network_topology if route.path=='/api/network' else self.evidence
+            if self.headers.get_all('X-Megalodon-Check',[])!=['1'] or provider is None or not _tool_management_user():
+                self._send_json({'error':'explicit local evidence check required'},status=403)
+                return
+            try:
+                if len(route.query)>1024:raise ValueError('Query too long')
+                query=parse_qs(route.query,keep_blank_values=True,strict_parsing=True) if route.query else {}
+                allowed={'offset','limit','query','group'} if route.path=='/api/network' else {'offset','limit','category','cursor','order'} if route.path.endswith('/history') else set()
+                if set(query)-allowed or any(len(v)!=1 for v in query.values()):raise ValueError('Unsupported query')
+                values={k:v[0] for k,v in query.items()}
+                for key in ('offset','limit'):
+                    if key in values:
+                        if not re.fullmatch(r'[0-9]{1,6}',values[key]):raise ValueError('Invalid page')
+                        values[key]=int(values[key])
+                if route.path=='/api/storage':value=provider.snapshot(include_token=True)
+                elif route.path.endswith('/history'):value=provider.history(**values)
+                else:value=provider.snapshot(include_token=True,**values)
+                self._send_json(value)
+            except (ValueError,OSError,sqlite3.Error):self._send_json({'error':'evidence view unavailable or invalid query'},status=422)
             return
         if route.path in {
             "/api/config", "/api/setup", "/api/local-checks", "/api/summary",
@@ -925,6 +960,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self.maintenance_lock.acquire(blocking=False):
+            self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
+            return
+        try:self._dispatch_POST()
+        finally:self.maintenance_lock.release()
+
+    def _dispatch_POST(self) -> None:
         if not self._has_expected_host():
             self._send_json({"error": "invalid request host"}, status=400)
             return
@@ -933,11 +975,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if not self._has_operator_http_auth():
             return
+        if self.path in {'/api/reports/create', '/api/reports/cancel', '/api/reports/schedule'}:
+            self._reports_action()
+            return
         if self.path == "/api/ai/ask":
             self._ai_ask()
             return
         if self.path == "/api/defense":
             self._defense_action()
+            return
+        if self.path in {'/api/storage','/api/network'}:
+            self._evidence_action()
             return
         if self.path == "/api/install":
             self._install()
@@ -958,6 +1006,111 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._automation_preview()
             return
         self._send_json({"error": "method not allowed"}, status=405, extra_headers={"Allow": "GET"})
+
+    def _reports_read(self, route):
+        provider = self.reports
+        if (provider is None or not _tool_management_user()
+                or self.headers.get_all('X-Megalodon-Check', []) != ['1']):
+            self._send_json({'error': 'explicit local report check required'}, status=403)
+            return
+        try:
+            if route.path == '/api/reports' and not route.query:
+                self._send_json(provider.snapshot())
+                return
+            match = re.fullmatch(r'/api/reports/([a-f0-9]{32})/(html|json|csv|findings)', route.path)
+            if not match or len(route.query) > 256:
+                raise ValueError('Invalid report identity')
+            identifier, kind = match.groups()
+            if kind == 'findings':
+                query = parse_qs(route.query, keep_blank_values=True, strict_parsing=True) if route.query else {}
+                if set(query)-{'offset','limit'} or any(len(v)!=1 or not re.fullmatch(r'[0-9]{1,5}',v[0]) for v in query.values()):
+                    raise ValueError('Invalid finding page')
+                self._send_json(provider.findings(identifier, **{k:int(v[0]) for k,v in query.items()}))
+            else:
+                if route.query:
+                    raise ValueError('Unsupported download query')
+                content_type, raw = provider.download(identifier, kind)
+                self._send(200, content_type, raw, extra_headers={
+                    'Content-Disposition': f'attachment; filename="megalodon-report-{identifier}.{kind}"'})
+        except (ValueError, OSError, sqlite3.Error):
+            self._send_json({'error': 'Saved report is unavailable, expired or incomplete. Make a new report.'}, status=422)
+
+    def _reports_action(self):
+        provider = self.reports
+        tokens = self.headers.get_all('X-Megalodon-Reports-Token', [])
+        if (provider is None or not _tool_management_user() or len(tokens)!=1 or len(tokens[0])!=32
+                or not tokens[0].isascii() or not hmac.compare_digest(tokens[0],provider.token)
+                or self.headers.get_all('Origin',[])!=[f'http://{self.headers.get("Host")}']
+                or self.headers.get_all('Content-Type',[])!=['application/json']
+                or self.headers.get_all('Transfer-Encoding',[]) or self.headers.get_all('Content-Encoding',[])):
+            self._send_json({'error':'same-origin local report action required'},status=403)
+            return
+        lengths=self.headers.get_all('Content-Length',[])
+        if len(lengths)!=1 or not re.fullmatch(r'[0-9]{1,4}',lengths[0]) or not 2<=int(lengths[0])<=8192:
+            self._send_json({'error':'invalid request length'},status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            raw=self.rfile.read(int(lengths[0]))
+            if len(raw)!=int(lengths[0]):raise ValueError('Incomplete body')
+            body=json.loads(raw.decode(),object_pairs_hook=_strict_pairs,
+                parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Non-finite JSON is invalid')))
+            if type(body) is not dict:raise ValueError('Expected object')
+            if self.path.endswith('/create'):value=provider.create(body)
+            elif self.path.endswith('/schedule'):value=provider.configure(body)
+            elif body=={}:value=provider.cancel()
+            else:raise ValueError('Invalid cancellation')
+            self._send_json(value)
+        except (ValueError,OSError,sqlite3.Error):
+            self._send_json({'error':'Report request could not be applied. Check the dates, current job and managed storage.'},status=422)
+
+    def _evidence_action(self):
+        network=self.path=='/api/network'
+        provider=self.network_topology if network else self.evidence
+        header='X-Megalodon-Network-Token' if network else 'X-Megalodon-Storage-Token'
+        tokens=self.headers.get_all(header,[])
+        if (provider is None or not _tool_management_user() or len(tokens)!=1 or len(tokens[0])!=32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0],provider.token)
+                or self.headers.get_all('Origin',[])!=[f'http://{self.headers.get("Host")}']
+                or self.headers.get_all('Content-Type',[])!=['application/json']
+                or self.headers.get_all('Transfer-Encoding',[]) or self.headers.get_all('Content-Encoding',[])):
+            self._send_json({'error':'same-origin local configuration required'},status=403);return
+        lengths=self.headers.get_all('Content-Length',[])
+        if len(lengths)!=1 or not re.fullmatch(r'[0-9]{1,4}',lengths[0]) or not 2<=int(lengths[0])<=8192:
+            self._send_json({'error':'invalid request length'},status=400);return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            body=json.loads(self.rfile.read(int(lengths[0])).decode(),object_pairs_hook=_strict_pairs,
+                parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Non-finite JSON is invalid')))
+            if type(body) is not dict:raise ValueError('Expected action object')
+            if network:value=provider.configure(body)
+            elif set(body)=={'action','policy'} and body['action']=='preview':value=provider.preview(body['policy'])
+            elif set(body)=={'action','preview_id'} and body['action']=='apply':
+                # Finish existing legacy/managed runs before enrolling old data
+                # or changing the recording mode. Never delete an active writer.
+                provider.validate_preview(body['preview_id'])
+                if self.defense is not None and self.defense.snapshot()['job']['state']=='running':
+                    raise ValueError('Wait for the current defense action before changing evidence policy.')
+                if self.support_config.snapshot()['job']['state']=='running':
+                    raise ValueError('Wait for the current setup action before changing evidence policy.')
+                running=self.support_config.background.snapshot()['enabled']
+                if self.reports:self.reports.close()
+                interface=self.support_config._settings['interface']
+                try:
+                    self.support_config.background.stop()
+                    if self.flow_ingestor:self.flow_ingestor.close()
+                    value=provider.apply(body['preview_id'])
+                finally:
+                    if self.flow_ingestor:self.flow_ingestor.start()
+                    if running:self.support_config.background.start(interface)
+                    if self.reports:self.reports.start()
+            elif set(body)=={'action','ids'} and body['action']=='save_case':value=provider.save_case(body['ids'])
+            else:raise ValueError('Unsupported managed evidence action')
+            self._send_json(value)
+        except (ValueError,OSError,sqlite3.Error):
+            self._send_json({'error':'settings could not be applied; refresh the preview and review storage status'},status=422)
 
     def _defense_action(self) -> None:
         from .defense import validate_request, DefenseBusy
@@ -1101,7 +1254,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise ValueError("invalid AI question")
             if self.ai_receipt_path is None:
                 raise ValueError("AI audit path unavailable")
-            with ReceiptStore(self.ai_receipt_path) as receipts:
+            from .managed_receipts import ManagedReceipts
+            with (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
                 answer = ask(body["question"], Broker(
                     self.store, receipts, self.ai_settings, self.ai_blocking))
             self._send_json(answer)
@@ -1565,11 +1719,12 @@ def serve(
     # or checkout, execute commands, or trigger filesystem discovery.
     lifecycle = json.dumps(local_python_lifecycle(), ensure_ascii=True, allow_nan=False)
     launch = json.dumps(local_hud_launch(), ensure_ascii=True, allow_nan=False)
+    companion_command = json.dumps(local_companion_command(), ensure_ascii=True, allow_nan=False)
     javascript = (f"const localHudLaunch = {launch};\n" + DASHBOARD_JS.replace(
         "const localPythonLifecycle = null;",
         f"const localPythonLifecycle = {lifecycle};",
         1,
-    )).encode()
+    ).replace("const localCompanionCommand = null;", f"const localCompanionCommand = {companion_command};", 1)).encode()
     heartbeat = Heartbeat() if inspect_tools else None
     installer = Installer(on_finish=heartbeat.invalidate) if heartbeat is not None else None
     support_app_launcher = SupportAppLauncher() if heartbeat is not None else None
@@ -1609,21 +1764,53 @@ def serve(
             "support_startup": support_startup,
         },
     )
-    if inspect_tools and _tool_management_user() and runtime_settings is not None:
-        def capture_store_ready():
-            evidence = json.loads(handler.setup_evidence)
-            evidence["source_status"] = "connected"
-            handler.setup_evidence = json.dumps(evidence).encode()
-            handler.local_checks = LocalChecks(store, source_available=True)
-        handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
-                                                       support_startup, capture_store_ready)
-        from .operations import Operations
-        from .defense import Defense
-        handler.operations = Operations(handler.support_config)
-        handler.defense = Defense(handler.operations, handler.support_config)
-        if support_startup is not None:
-            support_startup.configuration = handler.support_config
-    server = ThreadingHTTPServer((host, port), handler)
+    try:
+        if inspect_tools and _tool_management_user() and runtime_settings is not None:
+            def capture_store_ready():
+                evidence = json.loads(handler.setup_evidence)
+                evidence["source_status"] = "connected"
+                handler.setup_evidence = json.dumps(evidence).encode()
+                handler.local_checks = LocalChecks(handler.store, source_available=True)
+            handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
+                                                           support_startup, capture_store_ready)
+            from .operations import Operations
+            from .defense import Defense
+            handler.operations = Operations(handler.support_config)
+            from .evidence_storage import EvidenceStorage,ManagedDashboardReader
+            from .network_topology import NetworkTopology
+            from .flow_ingestion import FlowIngestor
+            handler.evidence=EvidenceStorage(runtime_settings)
+            from .managed_receipts import ManagedReceipts
+            if handler.evidence.enabled:
+                for channel in ('qwen','defense'):ManagedReceipts(handler.evidence,channel).reconcile_interrupted()
+            handler.evidence.telemetry=host_telemetry
+            from .reporting import ReportService
+            handler.reports=ReportService(handler.evidence)
+            handler.support_config.evidence=handler.evidence
+            handler.defense = Defense(handler.operations, handler.support_config)
+            handler.support_config.capture.evidence=handler.evidence
+            handler.flow_ingestor=FlowIngestor(handler.evidence,on_flow=lambda row:handler.support_config.connections.observe_summary(row)
+                if handler.evidence.recording_mode=='connection_summaries' else None,
+                enabled=lambda:handler.support_config.background.snapshot()['enabled'])
+            handler.support_config.sensors.flow_ingestor=handler.flow_ingestor
+            handler.support_config.sensors.evidence=handler.evidence
+            handler.support_config.flow_ingestor=handler.flow_ingestor
+            handler.support_config.capture.flow_ingestor=handler.flow_ingestor
+            handler.network_topology=NetworkTopology(handler.support_config,handler.operations,evidence=handler.evidence)
+            handler.store=ManagedDashboardReader(handler.evidence)
+            handler.local_checks=LocalChecks(handler.store,source_available=source_available)
+            if hasattr(store,'close'):store.close()
+            if companion_automation is not None:companion_automation.evidence=handler.evidence
+            if support_startup is not None:
+                support_startup.configuration = handler.support_config
+        server = ThreadingHTTPServer((host, port), handler)
+    except BaseException:
+        for component,method in [(handler.support_config,'close'),(handler.defense,'close'),
+                (handler.network_topology,'close'),(handler.flow_ingestor,'close'),(handler.reports,'close'),(handler.evidence,'close')]:
+            if component is not None:
+                try:getattr(component,method)()
+                except Exception:pass
+        raise
     previous_sigterm = None
     if current_thread() is main_thread():
         previous_sigterm = signal.getsignal(signal.SIGTERM)
@@ -1631,6 +1818,11 @@ def serve(
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
+        if handler.evidence is not None:
+            handler.evidence.start()
+            handler.flow_ingestor.start()
+            handler.network_topology.start()
+            handler.reports.start()
         if handler.support_config is not None:
             handler.support_config.resume()
         if host_telemetry is not None:
@@ -1663,6 +1855,7 @@ def serve(
     finally:
         if previous_sigterm is not None:
             signal.signal(signal.SIGTERM, previous_sigterm)
+        if handler.reports is not None:handler.reports.close()
         if handler.support_config is not None:
             try:
                 handler.support_config.close()
@@ -1674,4 +1867,7 @@ def serve(
             host_telemetry.stop()
         if companion_automation is not None:
             companion_automation.stop()
+        if handler.network_topology is not None:handler.network_topology.close()
+        if handler.flow_ingestor is not None:handler.flow_ingestor.close()
+        if handler.evidence is not None:handler.evidence.close()
         server.server_close()

@@ -1,4 +1,19 @@
-# MEGALODON Defense Console source
+# Retired hosted MEGALODON console
+
+**Retired October 1, 2026.** The local telemetry HUD is the sole MEGALODON
+application. Start it with the repository's `Start-MEGALODON.sh` or the installed
+MEGALODON application-menu entry. The hosted Operations overview and parallel
+tool interface are retired. The old URL returns an empty HTTP 410 (Gone),
+without a landing page, local link, or redirect. The installer opens the HUD
+directly.
+
+The files below preserve the historical hosted implementation and its tests.
+They are not an additional application to configure or run. Do not publish
+`site/dist` to restore the retired dashboard. The empty response handler is in
+`site/retired/worker.mjs`, with its publication receipt in
+`docs/site-source-alignment.md`.
+
+## Historical documentation
 
 The existing private [Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site) is a hosted reference console. It is separate from the local Python dashboard. Its project identity is preserved in `.openai/hosting.json`.
 

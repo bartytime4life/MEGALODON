@@ -56,7 +56,7 @@ def _systemctl(*args: str) -> None:
         raise InstallError("user service manager could not update HUD startup") from exc
 
 
-def enable(*, start: bool = False) -> None:
+def _prepare_unit() -> None:
     if status()[0] != 0:
         raise InstallError("install or repair the local HUD before enabling startup")
     if load_settings(install_paths().settings).dashboard.host not in {"127.0.0.1", "::1"}:
@@ -71,6 +71,16 @@ def enable(*, start: bool = False) -> None:
     else:
         _atomic_write(unit, expected, 0o644)
     _systemctl("daemon-reload")
+
+
+def start() -> None:
+    """Start the fixed HUD service without enabling it at login."""
+    _prepare_unit()
+    _systemctl("start", UNIT)
+
+
+def enable(*, start: bool = False) -> None:
+    _prepare_unit()
     _systemctl("enable", UNIT)
     if start:
         _systemctl("start", UNIT)
@@ -91,13 +101,16 @@ def disable(paths: InstallPaths | None = None) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Manage local HUD startup for this Linux user")
-    parser.add_argument("action", choices=("enable", "disable"))
+    parser.add_argument("action", choices=("start", "enable", "disable"))
     parser.add_argument("--start", action="store_true", help="also start the enabled service now")
     args = parser.parse_args(argv)
     if args.start and args.action != "enable":
         parser.error("--start is only valid with enable")
     try:
-        if args.action == "enable":
+        if args.action == "start":
+            start()
+            print("MEGALODON is running in the background for this user.")
+        elif args.action == "enable":
             enable(start=args.start)
             print("MEGALODON will start when this user signs in." + (" It is running now." if args.start else ""))
         else:

@@ -1,6 +1,51 @@
 # Defense Console source alignment
 
-## Current publication — Console v57, automatic local PC graphs
+## Current publication — local HUD only, no hosted page
+
+CONFIRMED 2026-10-01: removed the extra retirement landing page at the owner's
+request. Every path in the deployed handler returns an empty HTTP 410 (Gone)
+with no Location header, HTML, local link, or redirect. The installer directly
+opens the local HUD; a loopback read confirmed HTTP 200 without a redirect.
+No local service changes or restart were needed for this correction.
+
+- Source: `08f5b6676b17e3652a3d95f90729fcf9166a0ea2`.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_3cddffeaa0288191a8528c6fc43db012`.
+- Deployment: `appgdep_6abea7c5bd8c8191afb04038e9fed2ad`, succeeded.
+- Response source: `site/retired/worker.mjs`.
+
+The hosting connector has no unpublish/delete operation. The owner-private
+hosting project therefore remains registered, serving only the empty Gone
+response. Prior notices and dashboards are preserved in source history, outside
+the deployment. Local users only run `Start-MEGALODON.sh` or open MEGALODON from
+the application menu. The deployed handler was checked locally for empty 410
+responses at the root, legacy fragments, assets and API paths; this is not a
+browser-rendered acceptance claim.
+
+## Historical publication — hosted console retirement notice, v59
+
+CONFIRMED 2026-10-01: the owner-only Site now serves a small retirement notice
+linking to the local HUD. It contains no dashboard, Operations overview,
+telemetry uploader, scripts, or data connections. Local MEGALODON is the only
+application interface. The hosted address remains as a notice, not an
+unpublished or deleted Site. Existing owner-only access is preserved.
+
+- Source: `b57c5aa24e2283f01ce72500c0baa79018c06719`.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_51b5d91e812481918c9d83ec53429a69` (59).
+- Deployment: `appgdep_6abea1fd124881918c16ca03246a6b27`, succeeded.
+- URL: <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+- Archive: 3 files, 10,240 bytes, SHA-256 `ca33b618e1eac5dbeb2bb1b7113db0a98c1177d7b29fa41f0e14cd7453dbb193`.
+- Local notice copy: `site/retired/index.html`. The prior Site source remains in
+  its repository history and `archive/reference-console`, outside the served
+  directory. The MEGALODON repository's `site/dist` is a compatibility fixture,
+  not the current published UI.
+
+The repo-root `Start-MEGALODON.sh` installs once, starts or reuses the local user
+service, waits for its listening port and opens the local workspace. Setup owns
+app downloads, authorization, installation and configuration. The legacy
+snapshot API remains compatible; the local Reports page no longer presents a
+second hosted-summary workflow.
+
+## Historical publication — Console v57, automatic local PC graphs
 
 CONFIRMED 2026-09-30: the owner-only Site published version 57 from Sites
 source `73ce4277da3e686e341e4f12cbc4b31cfb8c756a`, saved version

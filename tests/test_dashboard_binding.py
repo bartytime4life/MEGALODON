@@ -34,7 +34,7 @@ def _forbidden(*args, **kwargs):
     raise AssertionError("startup crossed a forbidden boundary")
 
 
-def test_occupied_port_refuses_before_collection_or_browser_open(monkeypatch, capsys):
+def test_occupied_port_refuses_before_collection_or_browser_open(monkeypatch, capsys, tmp_path):
     from megalodon.config import Settings
 
     @contextmanager
@@ -42,6 +42,7 @@ def test_occupied_port_refuses_before_collection_or_browser_open(monkeypatch, ca
         yield dashboard.UnconfiguredDashboardReader()
 
     monkeypatch.setattr(cli, "_load", lambda _: Settings())
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_dashboard_reader", reader)
     monkeypatch.setattr(dashboard, "setup_snapshot", lambda **kwargs: b"{}")
     monkeypatch.setattr(dashboard.CompanionAutomation, "start", _forbidden)

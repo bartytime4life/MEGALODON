@@ -164,6 +164,18 @@ class Operations:
                     notes=['Retained observed connections, up to 60 seconds; capture gaps and drops are unknown.',
                            'The timeline uses five-second bins of accepted packet metadata. Endpoint sent/received is relative to that IP.',
                            'Port names are registry hints, not identified applications. Observed hostnames do not establish ownership or safety.',sensor]))
+            evidence=getattr(self.configuration,'evidence',None)
+            if evidence is not None:
+                result['recording_mode']=evidence.recording_mode
+                managed=evidence.snapshot()
+                result['storage']=dict(storage,status='ready',used_bytes=managed['used_bytes'],limit_bytes=managed['policy']['cap_bytes'],percent=managed['percent'],
+                    actual_days=managed['actual_days'],estimated_days=managed['estimated_days'],retention_days=managed['policy']['retention_days'],warnings=managed['warnings'])
+                result['coverage']['notes'].append('Historical packet charts use the newest retained packet segment. Evidence provides paginated history across every retained segment.')
+                if evidence.recording_mode=='connection_summaries':
+                    result['coverage']['notes'][:2]=['Retained sensor connection summaries; counts are reported by the selected primary sensor.',
+                        'Timeline bins show flow-summary updates, not packet arrival times or wire speed. Use interface speeds for measured throughput.']
+            flow_ingestor=getattr(self.configuration,'flow_ingestor',None)
+            if flow_ingestor is not None:result['sensor_ingestion']=flow_ingestor.snapshot()
             self._cached=result;self._next=time.monotonic()+2
             return deepcopy(result)
 

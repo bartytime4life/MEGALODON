@@ -104,3 +104,7 @@ table preservation. These tests do not establish complete attack prevention,
 universal host compatibility or browser visual acceptance. Browser access was
 administratively blocked during this iteration; source and inert fixtures were
 used for design evaluation.
+
+## Expanded workspace and history
+
+The current local HUD adds the wider globe/LAN workspace, selected-interface speed strip and managed evidence controls. See [Managed evidence and the expanded HUD](managed-evidence.md) for profile defaults, deletion preview, segment recovery, export limits, discovery scope and server-source coverage. Storage configuration lives in Setup; traffic stays in the HUD.

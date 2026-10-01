@@ -201,7 +201,9 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert "height: 100dvh" in DASHBOARD_CSS
     assert "overflow: hidden" in DASHBOARD_CSS
     assert ".workspace-scroll" in DASHBOARD_CSS
-    assert "<iframe" not in INDEX_HTML.lower()
+    assert INDEX_HTML.lower().count("<iframe") == 1
+    assert 'id="reports-document"' in INDEX_HTML
+    assert 'sandbox="allow-same-origin allow-modals"' in INDEX_HTML
     assert 'id="integrations-presence-filter"' in INDEX_HTML
     for label in ("Presence", "MEGALODON support", "Administration", "Health"):
         assert label in DASHBOARD_JS
@@ -341,7 +343,7 @@ process.stdin.on('end', async () => {
     run("setupState.readiness = {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'executable_found' : index === 2 ? 'not_found' : 'not_checked'})), checked_at: '2026-01-01T00:00:00Z'}; renderIntegrationMap()");
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);
-    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer on Home/);
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer in Setup/);
     // Apps intentionally keeps the HUD-launch snapshot even once a fresher,
     // different Check this computer result exists on Home - see
     // appsPresenceFreshnessNote and the matching Help copy. A later local
@@ -349,7 +351,7 @@ process.stdin.on('end', async () => {
     run("localCheckState.snapshot = {readiness: {tools: readinessToolIds.map((id, index) => ({id, status: index === 1 ? 'not_found' : 'not_checked'})), checked_at: '2026-01-02T03:04:05Z'}, runtime: null}; renderIntegrationMap()");
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Installed candidate found/);
     assert.match(textOf(nodeFor('integrations-cards')), /Presence: Not found on checked PATH/);
-    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer on Home/);
+    assert.match(nodeFor('integrations-freshness').textContent, /Presence: Checked at HUD launch, .* This does not change after Check this computer in Setup/);
     assert.doesNotMatch(nodeFor('integrations-freshness').textContent, /03:04:05/, 'must not pick up the fresher local-check timestamp');
     run("localCheckState.snapshot = null");
     // A failed /api/setup fetch and a genuinely absent readiness both leave

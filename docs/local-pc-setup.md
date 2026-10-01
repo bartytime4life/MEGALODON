@@ -14,24 +14,28 @@ loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
 companion-console account is required. The HUD opens without sign-in by default
 on this computer. If you want local sign-in, launch it with `--require-sign-in`.
 That mode prints a random password in its terminal, or uses a reusable password
-you set for the installed HUD. Neither mode creates a user account. The hosted reference Site remains
-owner-private and is not needed for local operation. OSSEC and Zabbix are retired from current
+you set for the installed HUD. Neither mode creates a user account. The hosted reference dashboard is retired.
+OSSEC and Zabbix are retired from current
 support; the optional catalog contains ten tools including the core.
 
 ## Recommended: install for this user
 
-From the repository directory:
+Double-click **Start-MEGALODON.sh** in the repository folder and choose
+**Run in Terminal** when prompted. If your file manager opens it as text, use
+**Run as a Program**, or run this from the repository directory:
 
 ```bash
-./scripts/install-local.sh
+./Start-MEGALODON.sh
 ```
 
-Open **MEGALODON** from the Linux application menu. Normally a terminal window
-owns the local server and stays open while you work. The browser opens only
-after the loopback server binds successfully. Press **Ctrl+C** in that terminal
-to stop. The installer itself adds no background service or login startup.
-If you separately enabled HUD autostart, the menu reopens that background
-session with its existing settings.
+This installs once, starts the local HUD in a user background service, and opens
+your browser. Repeating it reopens that workspace. It does not enable startup
+at login or restart an existing session. The installed **MEGALODON** application
+menu entry follows the same startup behavior. Without a user service manager,
+the foreground fallback keeps the terminal open; **Ctrl+C** stops that session.
+Use `./Start-MEGALODON.sh --check` for status and `--update` to install the current
+checkout again. The lower-level `./scripts/install-local.sh` remains available
+for installation without launching.
 
 ### Open a separate session with explicit options
 
@@ -319,3 +323,42 @@ git diff --check
 The full suite creates isolated synthetic fixtures in temporary directories.
 Run it in the ordinary host environment so ownership checks see real filesystem
 owners. Keep actual local databases, reports and virtual environments untracked.
+
+## Local entry point and Setup verification — 2026-10-01
+
+The repository-root `Start-MEGALODON.sh` installs once and opens the local HUD.
+Normal repeated launches reuse the same user-service process. `--check` is
+read-only and `--update` installs this checkout explicitly.
+
+Setup now retains visible locked Install controls, links them to the launch
+authorization instructions, and shows guided installation when a fixed package
+recipe is unavailable. App cards include current heartbeat observations and
+direct links to the real MEGALODON configuration controls. Copied advanced
+commands use the serving installation and work outside the checkout directory.
+Failed availability requests report failure instead of saying the check finished.
+Qwen model downloads use `127.0.0.1:11434` even when a remote `OLLAMA_HOST` is
+inherited. Zeek and osquery installations remain guided; they are not falsely
+presented as automatic installers.
+
+Publisher destinations were checked, the outdated Ubuntu README fragment was
+corrected, Git now links to its installation page, and Ollama opens its Linux
+download page. Links: [Git](https://git-scm.com/install/),
+[Ollama](https://ollama.com/download/linux),
+[Wireshark](https://www.wireshark.org/download.html),
+[Zeek](https://zeek.org/get-zeek/), [Suricata](https://suricata.io/download/),
+[Scapy](https://scapy.readthedocs.io/en/latest/installation.html),
+[nftables](https://netfilter.org/projects/nftables/index.html),
+[ClamAV](https://www.clamav.net/downloads),
+[osquery](https://github.com/osquery/osquery/releases/latest),
+[Nmap](https://nmap.org/download), [Python](https://www.python.org/downloads/).
+
+Verification: targeted launcher, packaging, HTTP authorization, fixed-recipe,
+Setup, command quoting and DOM behavior tests passed. The running installed HUD
+returned HTTP 200 for its document, script, local checks, install catalog, support
+configuration and storage status. Fifteen changed installed modules matched the
+source. A real repeat launch reused the same service process; the browser opener
+was suppressed for this check. Settings remained byte-for-byte unchanged and the
+active home storage policy remained 14 days / 20 GiB. Capture resumed after the
+service restart. No companion package was installed or removed as part of these
+checks. Browser-rendered acceptance is still unverified following the earlier
+administrative browser denial; no alternate browser was used to bypass it.

@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from threading import Thread
+from threading import Lock, Thread
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
@@ -344,7 +344,7 @@ def test_dashboard_rejects_invalid_programmatic_polling_controls(tmp_path):
 def test_dashboard_ui_has_accessible_read_only_states():
     assert "Offline analysis snapshot" in INDEX_HTML
     assert "Stored findings" in INDEX_HTML
-    assert "Your local defense workspace" in INDEX_HTML
+    assert "Live network" in INDEX_HTML
     assert "Inspect one source at a time" in INDEX_HTML
     assert "Qwen advisory receipt · checking" in INDEX_HTML
     assert "Explicit local requests use the separate control above." in INDEX_HTML
@@ -383,8 +383,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "API status does not prove capture health." in INDEX_HTML
     assert "Capture health unknown" in INDEX_HTML
     assert 'id="traffic-window"' in INDEX_HTML
-    assert 'id="open-report-studio"' in INDEX_HTML
-    assert '<details class="panel report-studio" id="report-studio">' in INDEX_HTML
+    assert 'id="reports-create"' in INDEX_HTML
+    assert 'class="reports-desk"' in INDEX_HTML
     assert 'class="triage-tools" id="triage-tools"' in INDEX_HTML
     assert INDEX_HTML.count('class="panel investigation-panel') == 4
     assert "Sequential count-change signal only" in INDEX_HTML
@@ -432,11 +432,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     from megalodon.dashboard_setup import SETUP_JS
     from megalodon.dashboard_support_apps import SUPPORT_APPS_JS
     dashboard_without_user_exports = DASHBOARD_JS.replace(CONTROLS_JS, "").replace(SETUP_JS, "").replace(SUPPORT_APPS_JS, "")
-    assert dashboard_without_user_exports.count("navigator.clipboard") == 2
-    assert "navigator.clipboard.writeText(reportPlainText(report))" in dashboard_without_user_exports
+    assert dashboard_without_user_exports.count("navigator.clipboard") == 1
     assert "navigator.clipboard.writeText(command)" in dashboard_without_user_exports
-    assert "Source scope: ${report.source_scope}" in dashboard_without_user_exports
-    assert "['source_scope', report.source_scope]" in dashboard_without_user_exports
     assert "reference-library-lookup-v1" in DASHBOARD_JS
     assert "dashboard-advisory-receipt-v1" in DASHBOARD_JS
     assert "dashboard-ingestion-runs-v2" in DASHBOARD_JS
@@ -1408,3 +1405,353 @@ def test_ingestion_runs_api_is_bounded_receipt_only_and_read_only(tmp_path):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+
+@pytest.fixture
+def managed_evidence_http(monkeypatch):
+    """Exercise the real loopback handler with inert provider and collector boundaries."""
+    from types import SimpleNamespace
+    import megalodon.dashboard as dashboard_module
+
+    calls = []
+
+    class Evidence:
+        token = "s" * 32
+        fail_apply = False
+        expired_preview = False
+
+        def validate_preview(self, preview_id):
+            calls.append(("storage.validate_preview", preview_id))
+            if self.expired_preview:
+                raise ValueError("PRIVATE_EXPIRED_PREVIEW")
+
+        def snapshot(self, *, include_token=False):
+            calls.append(("storage.snapshot", include_token))
+            return {"schema": "megalodon-storage-v1", "token": self.token,
+                    "enabled": False, "policy": {"profile": "home", "retention_days": 14,
+                    "cap_bytes": 20 * 1024**3, "recording_mode": "packet_metadata"}}
+
+        def history(self, **query):
+            calls.append(("storage.history", query))
+            if query.get("limit", 50) > 100 or query.get("category", "all") not in {"all", "findings"}:
+                raise ValueError("PRIVATE_STORAGE_PATH")
+            return {"schema": "megalodon-history-v1", "records": [], "total": 0,
+                    "offset": query.get("offset", 0), "limit": query.get("limit", 50),
+                    "truncated": False, "next_cursor": None, "gaps": []}
+
+        def preview(self, policy):
+            calls.append(("storage.preview", policy))
+            return {"schema": "megalodon-storage-preview-v1", "preview_id": "preview-123",
+                    "expires_at": "2026-10-01T01:00:00Z", "policy": policy,
+                    "eligible_bytes": 4096, "eligible_records": 2, "warnings": []}
+
+        def apply(self, preview_id):
+            calls.append(("storage.apply", preview_id))
+            if self.fail_apply:
+                raise ValueError("PRIVATE_EXPIRED_PREVIEW")
+            return {"schema": "megalodon-storage-v1", "token": self.token, "enabled": True}
+
+        def save_case(self, ids):
+            calls.append(("storage.save_case", ids))
+            if not isinstance(ids, list) or not 1 <= len(ids) <= 50:
+                raise ValueError("PRIVATE_INVALID_CASE")
+            return {"schema": "megalodon-case-v1", "saved": len(ids)}
+
+    class Network:
+        token = "n" * 32
+
+        def snapshot(self, *, include_token=False, **query):
+            calls.append(("network.snapshot", include_token, query))
+            return {"schema": "megalodon-network-v1", "token": self.token,
+                    "nodes": [], "edges": [], "settings": {"enabled": False,
+                    "scopes": [], "interval_seconds": 900}}
+
+        def configure(self, body):
+            calls.append(("network.configure", body))
+            if set(body) != {"action", "scopes", "enabled"} or body["action"] != "configure":
+                raise ValueError("PRIVATE_DISCOVERY_CONFIG")
+            return {"schema": "megalodon-network-v1", "token": self.token,
+                    "settings": {"scopes": body["scopes"], "enabled": body["enabled"],
+                                 "interval_seconds": 900}, "nodes": [], "edges": []}
+
+    class Background:
+        enabled = True
+
+        def snapshot(self):
+            calls.append(("background.snapshot",))
+            return {"enabled": self.enabled}
+
+        def stop(self):
+            calls.append(("background.stop",))
+
+        def start(self, interface):
+            calls.append(("background.start", interface))
+
+    class Flows:
+        fail_close = False
+
+        def close(self):
+            calls.append(("flows.close",))
+            if self.fail_close:
+                raise OSError("PRIVATE_STOP_FAILURE")
+
+        def start(self):
+            calls.append(("flows.start",))
+
+    class Support:
+        job_state = "idle"
+
+        def snapshot(self):
+            calls.append(("support.snapshot",))
+            return {"job": {"state": self.job_state}}
+
+    evidence, network, background, flow, support = Evidence(), Network(), Background(), Flows(), Support()
+    support.background = background
+    support._settings = {"interface": "eth-test"}
+    handler = type("ManagedEvidenceHandler", (DashboardHandler,), {
+        "evidence": evidence, "network_topology": network,
+        "support_config": support, "maintenance_lock": Lock(),
+        "flow_ingestor": flow, "http_read_password": None,
+        "http_password_verifier": None,
+    })
+    monkeypatch.setattr(dashboard_module, "_tool_management_user", lambda: True)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def request(method, path, body=None, *, extra=(), omit=()):
+        if body is not None and not isinstance(body, bytes):
+            body = json.dumps(body).encode()
+        host = f"127.0.0.1:{server.server_port}"
+        headers = [("Host", host)]
+        if method == "GET":
+            headers.append(("X-Megalodon-Check", "1"))
+        elif method == "POST":
+            headers.extend([("Origin", f"http://{host}"), ("Content-Type", "application/json"),
+                            ("X-Megalodon-Network-Token" if path == "/api/network" else "X-Megalodon-Storage-Token",
+                             network.token if path == "/api/network" else evidence.token)])
+            if body is not None:
+                headers.append(("Content-Length", str(len(body))))
+        headers = [(key, value) for key, value in headers if key not in omit]
+        headers.extend(extra)
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=4)
+        connection.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
+        for key, value in headers:
+            connection.putheader(key, value)
+        connection.endheaders(body)
+        response = connection.getresponse()
+        raw = response.read()
+        result = (response.status, json.loads(raw), dict(response.getheaders()))
+        connection.close()
+        return result
+
+    try:
+        yield SimpleNamespace(request=request, calls=calls, evidence=evidence, network=network,
+                              background=background, flow=flow, support=support, handler=handler)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_managed_evidence_reads_bind_providers_and_stable_history_parameters(managed_evidence_http):
+    h = managed_evidence_http
+    status, body, headers = h.request("GET", "/api/storage")
+    assert status == 200 and body["schema"] == "megalodon-storage-v1"
+    assert body["token"] == h.evidence.token
+    assert h.calls == [("storage.snapshot", True)]
+    assert headers["Cache-Control"] == "no-store"
+    assert "Access-Control-Allow-Origin" not in headers
+    h.calls.clear()
+    status, body, _ = h.request("GET", "/api/storage/history?limit=50&category=findings&cursor=segment%3A12&order=oldest")
+    assert status == 200 and body["schema"] == "megalodon-history-v1"
+    assert h.calls == [("storage.history", {"limit": 50, "category": "findings", "cursor": "segment:12", "order": "oldest"})]
+    h.calls.clear()
+    status, body, _ = h.request("GET", "/api/network?offset=50&limit=50&query=printer%20room&group=lan-1")
+    assert status == 200 and body["schema"] == "megalodon-network-v1"
+    assert body["token"] == h.network.token
+    assert h.calls == [("network.snapshot", True, {"offset": 50, "limit": 50, "query": "printer room", "group": "lan-1"})]
+
+
+def test_managed_evidence_reads_reject_ambiguous_checks_queries_and_unavailable_providers(managed_evidence_http, monkeypatch):
+    h = managed_evidence_http
+    for path in ("/api/storage", "/api/storage/history", "/api/network"):
+        h.calls.clear()
+        assert h.request("GET", path, omit=("X-Megalodon-Check",))[0] == 403
+        assert h.request("GET", path, extra=(("X-Megalodon-Check", "1"),))[0] == 403
+        assert h.calls == []
+    for path in ("/api/storage?limit=1", "/api/network?offset=-1", "/api/network?limit=1&limit=2",
+                 "/api/storage/history?unknown=1", "/api/storage/history?category=all&category=findings",
+                 "/api/storage/history?limit=1.5", "/api/storage/history?limit=", "/api/network?query=" + "x"*1025):
+        h.calls.clear()
+        assert h.request("GET", path)[0] == 422, path
+        assert h.calls == []
+    status, body, _ = h.request("GET", "/api/storage/history?limit=101")
+    assert status == 422 and "PRIVATE" not in json.dumps(body)
+    monkeypatch.setattr(h.handler, "network_topology", None)
+    assert h.request("GET", "/api/network")[0] == 403
+    monkeypatch.setattr(h.handler, "evidence", None)
+    assert h.request("GET", "/api/storage")[0] == 403
+
+
+def test_managed_evidence_actions_use_exact_preview_and_coordinate_collectors(managed_evidence_http):
+    h = managed_evidence_http
+    policy = {"profile": "home", "retention_days": 14, "cap_bytes": 20 * 1024**3}
+    status, body, _ = h.request("POST", "/api/storage", {"action": "preview", "policy": policy})
+    assert status == 200 and body["preview_id"] == "preview-123"
+    assert h.calls == [("storage.preview", policy)]
+    h.calls.clear()
+    status, body, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})
+    assert status == 200 and body["enabled"] is True
+    assert h.calls == [("storage.validate_preview", "preview-123"), ("support.snapshot",), ("background.snapshot",), ("background.stop",), ("flows.close",),
+                       ("storage.apply", "preview-123"), ("flows.start",), ("background.start", "eth-test")]
+    h.calls.clear()
+    status, body, _ = h.request("POST", "/api/storage", {"action": "save_case", "ids": ["segment:1", "segment:2"]})
+    assert status == 200 and body == {"schema": "megalodon-case-v1", "saved": 2}
+    assert h.calls == [("storage.save_case", ["segment:1", "segment:2"])]
+    h.calls.clear()
+    configured = {"action": "configure", "scopes": ["192.168.50.0/24"], "enabled": True}
+    status, body, _ = h.request("POST", "/api/network", configured)
+    assert status == 200 and body["settings"]["scopes"] == ["192.168.50.0/24"]
+    assert h.calls == [("network.configure", configured)]
+
+
+def test_managed_evidence_apply_failure_restores_prior_collector_intent(managed_evidence_http):
+    h = managed_evidence_http
+    h.evidence.fail_apply = True
+    status, body, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})
+    assert status == 422 and "PRIVATE" not in json.dumps(body)
+    assert h.calls[-2:] == [("flows.start",), ("background.start", "eth-test")]
+    h.calls.clear()
+    h.background.enabled = False
+    status, _, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})
+    assert status == 422
+    assert not any(row[0] == "background.start" for row in h.calls), "a stopped capture stays stopped"
+
+
+@pytest.mark.parametrize("route,token_header", [
+    ("/api/storage", "X-Megalodon-Storage-Token"),
+    ("/api/network", "X-Megalodon-Network-Token"),
+])
+def test_managed_evidence_actions_require_unambiguous_origin_token_and_framing(managed_evidence_http, route, token_header):
+    h = managed_evidence_http
+    body = {"action": "configure", "scopes": [], "enabled": False} if route == "/api/network" else {"action": "preview", "policy": {}}
+    scenarios = [
+        (("Host",), (("Host", "attacker.example"),), 400),
+        ((), (("Host", "localhost"),), 400),
+        (("Origin",), (), 403),
+        (("Origin",), (("Origin", "http://attacker.example"),), 403),
+        ((), (("Origin", "http://attacker.example"),), 403),
+        ((token_header,), (), 403),
+        ((token_header,), ((token_header, "x"*32),), 403),
+        ((), ((token_header, "x"*32),), 403),
+        (("Content-Type",), (("Content-Type", "text/plain"),), 403),
+        ((), (("Content-Type", "application/json"),), 403),
+        ((), (("Content-Encoding", "gzip"),), 403),
+        ((), (("Transfer-Encoding", "chunked"),), 403),
+        ((), (("Content-Length", "2"),), 400),
+        (("Content-Length",), (), 400),
+        (("Content-Length",), (("Content-Length", "8193"),), 400),
+    ]
+    for omitted, extra, expected in scenarios:
+        h.calls.clear()
+        status, _, _ = h.request("POST", route, body, omit=omitted, extra=extra)
+        assert status == expected, (route, omitted, extra)
+        assert h.calls == [], "invalid requests must not touch collectors or providers"
+
+
+@pytest.mark.parametrize("raw", [
+    b"[]", b"null", b'{"action":"preview","action":"apply","policy":{}}',
+    b'{"action":"preview","policy":{},"shell":"arbitrary"}',
+    b'{"action":"apply","preview_id":"x","policy":{}}', b'{"action":',
+    b'{"action":"preview","policy":{"cap_bytes":NaN}}',
+    b'{"action":"preview","policy":{"cap_bytes":Infinity}}',
+    b'{"action":"preview","policy":{"cap_bytes":-Infinity}}',
+    b'{"action":"preview","policy":"\xff"}',
+])
+def test_managed_storage_rejects_malformed_or_extended_action_bodies(managed_evidence_http, raw):
+    h = managed_evidence_http
+    status, body, _ = h.request("POST", "/api/storage", raw)
+    assert status == 422
+    assert h.calls == []
+    assert "PRIVATE" not in json.dumps(body)
+
+
+def test_managed_evidence_controls_keep_local_user_and_optional_sign_in_gates(managed_evidence_http, monkeypatch):
+    import base64
+    import megalodon.dashboard as dashboard_module
+
+    h = managed_evidence_http
+    monkeypatch.setattr(dashboard_module, "_tool_management_user", lambda: False)
+    assert h.request("GET", "/api/storage")[0] == 403
+    assert h.request("GET", "/api/network")[0] == 403
+    assert h.request("POST", "/api/storage", {"action": "preview", "policy": {}})[0] == 403
+    assert h.request("POST", "/api/network", {"action": "configure", "scopes": [], "enabled": False})[0] == 403
+    assert h.calls == []
+    monkeypatch.setattr(dashboard_module, "_tool_management_user", lambda: True)
+    monkeypatch.setattr(h.handler, "http_read_password", "test-only-password")
+    for path in ("/api/storage", "/api/storage/history", "/api/network"):
+        assert h.request("GET", path)[0] == 401
+    assert h.request("POST", "/api/storage", {"action": "preview", "policy": {}})[0] == 401
+    assert h.calls == []
+    authorization = "Basic " + base64.b64encode(b"megalodon:test-only-password").decode()
+    assert h.request("GET", "/api/storage", extra=(("Authorization", authorization),))[0] == 200
+    assert h.calls == [("storage.snapshot", True)]
+
+
+def test_managed_evidence_post_rejects_unsupported_targets_and_network_body_shapes(managed_evidence_http):
+    h = managed_evidence_http
+    assert h.request("POST", "/api/storage?unexpected=1", {"action": "apply", "preview_id": "preview-123"})[0] == 405
+    assert h.request("POST", "/api/storage/history", {"action": "erase"})[0] == 405
+    assert h.calls == []
+    body = {"action": "configure", "scopes": [], "enabled": False, "shell": "not allowed"}
+    status, response, _ = h.request("POST", "/api/network", body)
+    assert status == 422 and "PRIVATE" not in json.dumps(response)
+    assert h.calls == [("network.configure", body)], "the provider validates its closed network configuration schema"
+
+
+def test_expired_storage_preview_never_stops_collectors(managed_evidence_http):
+    h = managed_evidence_http
+    h.evidence.expired_preview = True
+    status, payload, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "expired"})
+    assert status == 422 and "PRIVATE" not in json.dumps(payload)
+    assert h.calls == [("storage.validate_preview", "expired")]
+
+
+def test_storage_apply_waits_for_running_setup_or_defense_and_restores_after_stop_failure(managed_evidence_http, monkeypatch):
+    from types import SimpleNamespace
+
+    h = managed_evidence_http
+    h.support.job_state = "running"
+    assert h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})[0] == 422
+    assert h.calls == [("storage.validate_preview", "preview-123"), ("support.snapshot",)]
+    h.calls.clear()
+    h.support.job_state = "idle"
+    monkeypatch.setattr(h.handler, "defense", SimpleNamespace(snapshot=lambda: {"job": {"state": "running"}}))
+    assert h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})[0] == 422
+    assert h.calls == [("storage.validate_preview", "preview-123")]
+    h.calls.clear()
+    monkeypatch.setattr(h.handler, "defense", None)
+    h.flow.fail_close = True
+    status, payload, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})
+    assert status == 422 and "PRIVATE" not in json.dumps(payload)
+    assert not any(row[0] == "storage.apply" for row in h.calls)
+    assert h.calls[-2:] == [("flows.start",), ("background.start", "eth-test")]
+
+
+def test_maintenance_lock_serializes_mutations_without_blocking_reads(managed_evidence_http):
+    h = managed_evidence_http
+    h.handler.maintenance_lock.acquire()
+    try:
+        for path, payload in [("/api/storage", {"action": "apply", "preview_id": "preview-123"}),
+                              ("/api/network", {"action": "configure", "scopes": [], "enabled": False}),
+                              ("/api/ai/ask", {"question": "inert test"})]:
+            assert h.request("POST", path, payload)[0] == 409
+        assert h.calls == []
+        assert h.request("GET", "/api/storage")[0] == 200
+        assert h.calls == [("storage.snapshot", True)]
+    finally:
+        h.handler.maintenance_lock.release()
+    h.calls.clear()
+    assert h.request("POST", "/api/storage", {"action": "preview", "policy": {}})[0] == 200
+    assert h.calls == [("storage.preview", {})]

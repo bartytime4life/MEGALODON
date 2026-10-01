@@ -31,6 +31,13 @@ def test_commands_preserve_virtualenv_and_ignore_terminal_directory(monkeypatch)
     assert shlex.split(result["scapy"]["reinstall"]) == [
         executable, "-m", "pip", "install", "--force-reinstall", "scapy>=2.5,<3",
     ]
+    assert shlex.split(commands.local_companion_command()) == [
+        "env", f"MEGALODON_PYTHON={executable}", str(checkout / "scripts/manage-companion.sh"),
+    ]
+    monkeypatch.setattr(commands, "_source_checkout", lambda: None)
+    assert shlex.split(commands.local_companion_command()) == [
+        executable, "-I", "-m", "megalodon.tool_setup",
+    ]
 
 
 @pytest.mark.parametrize("executable", ["", "python3", "/tmp/bad\npython", "/tmp/bad\x00python", "/" + "x" * 4096])
@@ -39,6 +46,7 @@ def test_invalid_interpreter_is_not_copied(monkeypatch, executable):
     monkeypatch.setattr(commands.sys, "executable", executable)
     monkeypatch.setattr(commands, "_source_checkout", lambda: pytest.fail("Unexpected discovery"))
     assert commands.local_python_lifecycle() is None
+    assert commands.local_companion_command() is None
 
 
 def test_linux_commands_are_not_offered_on_windows(monkeypatch):

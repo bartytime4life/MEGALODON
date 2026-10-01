@@ -102,3 +102,15 @@ def local_hud_launch() -> dict[str, str]:
         "mode": "source",
         "command": shlex.join([sys.executable, "-m", "megalodon", "hud"]),
     }
+
+
+def local_companion_command() -> str | None:
+    """Use the serving environment for copied companion commands, from any cwd."""
+    if sys.platform != "linux" or not _absolute_command_path(sys.executable):
+        return None
+    # Source checkouts may not be installed as packages, so use their existing
+    # reviewed entry script. Installed releases use isolated module execution.
+    checkout = _source_checkout()
+    if checkout is not None:
+        return shlex.join(["env", f"MEGALODON_PYTHON={sys.executable}", str(checkout / "scripts" / "manage-companion.sh")])
+    return shlex.join([sys.executable, "-I", "-m", "megalodon.tool_setup"])
