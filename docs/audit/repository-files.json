@@ -7011,8 +7011,8 @@
       "path": "megalodon/dashboard_assets.py",
       "classification": "source",
       "purpose": "Same-origin dashboard assets, kept separate from HTTP request handling.",
-      "bytes": 145950,
-      "sha256": "74b04072566b132c4f8ee96c76e1e13cbabf80bf94f691ea52ebb2e330a739f0",
+      "bytes": 146259,
+      "sha256": "289ec2436cb20ff1530e421eeffea7e3559f0129c87bed8bb044e0122b7e3f85",
       "dependencies": [
         ".control_room_assets",
         ".dashboard_action_plane",
@@ -7040,7 +7040,7 @@
         ".dashboard_workflows",
         ".status_glossary"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7277,10 +7277,10 @@
       "path": "megalodon/dashboard_live_globe.py",
       "classification": "source",
       "purpose": "Local-only live geographic connection view and legacy history visibility hooks.",
-      "bytes": 35152,
-      "sha256": "55d956248a14e12bebbde4aa3643ad7df93df93072cffaae1f9e106e9ec5b9dd",
+      "bytes": 35482,
+      "sha256": "b4be0ae6454d0ac8ae8f69cca539217b310f882b321dcf689636016a9bc65854",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7360,10 +7360,10 @@
       "path": "megalodon/dashboard_reports.py",
       "classification": "source",
       "purpose": "Simple local report workspace over cached, managed report jobs.",
-      "bytes": 24072,
-      "sha256": "227c52e8a3d4e4c95ac19cb7907b0e98afc507f4efa1e77e044f1a78bde61f35",
+      "bytes": 24324,
+      "sha256": "a5d3bc1000f947ea2b08436712ba125aac967d085bc27d2958a2436e8e24112b",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7463,8 +7463,8 @@
       "path": "megalodon/dashboard_support_config.py",
       "classification": "source",
       "purpose": "Explicit local support-tool setup and bounded capture controls.",
-      "bytes": 32265,
-      "sha256": "1831fe881469b17df0886925a9644f2e174df55446557f2d896915d69dcf0ba7",
+      "bytes": 32491,
+      "sha256": "da36d46bd4abb5bd760bbd45759e48b882a6fd4cb07028a023cd9c9874f37c83",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -12167,8 +12167,8 @@
       "path": "megalodon/reporting.py",
       "classification": "source",
       "purpose": "Bounded, local visual reports over retained evidence; no external requests.",
-      "bytes": 59592,
-      "sha256": "0875f0f3171bb10ec6926aa1aa951fb0c2cbb1e93eb12458abecc7cbd76355e6",
+      "bytes": 59656,
+      "sha256": "459a640ad9a75236856f52d19bfefd3a94de136b59a0f3b390a6c2a89ae84437",
       "dependencies": [
         ".evidence_storage",
         ".local_install",
@@ -13391,8 +13391,8 @@
       "path": "tests/browser_acceptance.py",
       "classification": "test",
       "purpose": "Opt-in real-browser acceptance; synthetic data, real CLI/SQLite/HTTP, no sensor.",
-      "bytes": 40008,
-      "sha256": "5c6ef4bbd8e76aab9249d2893bba24f5a6bef80def2e529af7d0f58fa570b454",
+      "bytes": 40011,
+      "sha256": "dbeefb5b2da09288084cd391538f692cf5c86efcd4f88fda51b1d5f633c2c313",
       "dependencies": [
         "__future__",
         "asyncio",
@@ -13417,7 +13417,7 @@
         "traceback",
         "urllib.parse"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -13604,10 +13604,10 @@
       "path": "tests/live_globe_browser.cjs",
       "classification": "test",
       "purpose": "live globe browser",
-      "bytes": 10864,
-      "sha256": "53aa7b10f32e37ebde4d310c3ef38dbac79ca7ca8f5c6b23e800bd521f74ab8c",
+      "bytes": 11164,
+      "sha256": "084ff0635c29d20ed63230d2b0c201634490289305825010122a2064a759ebbf",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -13699,10 +13699,10 @@
       "path": "tests/reports_browser.cjs",
       "classification": "test",
       "purpose": "reports browser",
-      "bytes": 7613,
-      "sha256": "5d65dccce3b963bfb705eb6a726850a7228ae31c545407bad84b79e71a271f26",
+      "bytes": 7688,
+      "sha256": "6d14f88052b1378616e2ba0a8b31a7f453dd934dcaa80c99362f9cbb650e89ce",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -13741,10 +13741,10 @@
       "path": "tests/support_config_browser.cjs",
       "classification": "test",
       "purpose": "support config browser",
-      "bytes": 13377,
-      "sha256": "3ffe3f16a2be835aa7c8cf2e31390df5789766cd0f1ce7b9fa91284cbc3d8373",
+      "bytes": 13591,
+      "sha256": "dfd648feb65877cefd094e252c4536aa63496e692f08a15be8952e834a181720",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -14899,8 +14899,8 @@
       "path": "tests/test_dashboard_boundaries.py",
       "classification": "test",
       "purpose": "Read-only HTTP and Integration Map regressions; synthetic inputs only.",
-      "bytes": 32335,
-      "sha256": "59004b0396384ea9c1e60bd9c8f9e0cd136cbd108067b3bb46cb0dcc561b5a90",
+      "bytes": 32404,
+      "sha256": "603908aabdf86df6dcc0bca3a91e194aeb7b19811579cf258f6e570c0713495c",
       "dependencies": [
         "__future__",
         "copy",

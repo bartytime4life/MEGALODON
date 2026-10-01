@@ -39,7 +39,7 @@ INDEX_HTML = """<!doctype html>
   <script src="/assets/dashboard.js" defer></script>
 </head>
 <body>
-<a class="skip-link" id="skip-link" href="#detections-title">Skip to findings</a>
+<a class="skip-link" id="skip-link" href="#room-findings-title">Skip to findings</a>
 <main class="shell">
   <header class="topbar">
     <div class="brand" aria-label="MEGALODON">
@@ -381,6 +381,12 @@ body::before {
 .connection.error::before { background: var(--rose); box-shadow: 0 0 0 5px rgba(255, 117, 143, .1); }
 .connection-state { display: grid; justify-items: end; gap: 3px; }
 .connection-state > span { color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 380px) {
+  .topbar { flex-wrap: wrap; gap: 10px; }
+  .connection-state { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .connection-state .connection { min-width: 0; }
+  .connection-state > span { max-width: 7.5rem; text-align: right; }
+}
 .section-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .68); }
 .section-nav button { min-height: 44px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 800; }
 .section-nav button:hover:not(:disabled) { border-color: rgba(81, 230, 207, .28); color: #c8fff7; background: rgba(81, 230, 207, .06); }

@@ -381,7 +381,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         # Native keyboard activation of the real skip link, not a replacement DOM.
         await page.locator(".skip-link").focus()
         await page.keyboard.press("Enter")
-        passed("skip-link keyboard target", await page.evaluate("document.activeElement.id") == "detections-title")
+        passed("skip-link keyboard target", await page.evaluate("document.activeElement.id") == "room-findings-title")
         await page.locator("#filter-query").fill("no-synthetic-match")
         await expect(page.locator("#events")).to_contain_text("No detections match these filters.")
         await page.locator("#clear-filters").click()

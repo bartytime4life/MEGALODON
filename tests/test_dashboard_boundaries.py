@@ -188,7 +188,8 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert DASHBOARD_JS.rstrip().endswith("bootstrap();")
     assert DASHBOARD_JS.count("\nbootstrap();") == 1
     assert INDEX_HTML.index('id="triage-panel"') < INDEX_HTML.index('id="reference-title"')
-    assert 'id="skip-link" href="#detections-title"' in INDEX_HTML
+    assert 'id="skip-link" href="#room-findings-title"' in INDEX_HTML
+    assert 'id="room-findings-title" tabindex="-1"' in INDEX_HTML
     for workspace in ("live", "analysis", "interfaces"):
         assert f'id="workspace-tab-{workspace}"' in INDEX_HTML
         assert f'aria-controls="workspace-{workspace}"' in INDEX_HTML
