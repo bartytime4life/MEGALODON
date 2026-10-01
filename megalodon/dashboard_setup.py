@@ -6,7 +6,8 @@ SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
     <header class="setup-heading">
       <div><p class="eyebrow">Set up with confidence</p><h2 id="setup-title" tabindex="-1">Data and tools</h2>
-      <p>Use MEGALODON locally without a vendor or companion-console account. Check this computer, then add only the software your workflow needs. By default, the HUD opens without sign-in. Add <code>--require-sign-in</code> to require a password for a launch. When sign-in is enabled, the installed HUD can use a reusable password set with <code>megalodon-manage password set</code>; if none is configured, a random password appears in the launch terminal. Neither creates an account.</p></div>
+      <p>Check this computer, then prepare the tools you need. Everything runs locally; no companion account is required.</p>
+      <p><a href="#apps-connections-title">Install or configure an app →</a> · <a href="#support-config-title">Capture and collector settings →</a></p></div>
       <a class="setup-help-link" href="#room-help-title">How this works <span aria-hidden="true">↗</span></a>
     </header>
     <div class="setup-main">
@@ -28,7 +29,7 @@ SETUP_HTML = """
         </div>
         <p id="setup-readiness" role="status">Reading startup information…</p>
         <details class="tool-status-details"><summary>See every tool observation</summary>
-          <p class="setup-boundary">Found means an executable is on the checked PATH. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
+          <p class="setup-boundary">Found means an executable is in a checked PATH or known installation prefix. A process name is only a point-in-time observation. Neither proves health, installation quality, or a data connection.</p>
           <div id="setup-tool-status" class="tool-status-list"></div>
         </details>
         <p class="setup-check-boundary">Status lights show recent presence observations: green found, amber setup incomplete, red not found, grey unknown or stale. A matching process or model file does not prove health, a data connection, or AI readiness. Checks never scan, capture, or change configuration. Tool management requires an explicitly enabled launch, its operator token, and your confirmation.</p>
@@ -57,10 +58,11 @@ SETUP_HTML = """
         </div>
         <p id="setup-software-count" class="setup-software-count" role="status"></p>
         <div id="setup-software-list" class="setup-software-list"></div>
-        <p class="setup-download-note">After authorization, Install runs a fixed Ubuntu or Python package or downloads the example Qwen model; system packages and service starts use your computer's password prompt. Packages can start services. Official guides and terminal commands remain available in observation mode. <a href="#integrations-title">Review MEGALODON support in Apps →</a></p>
+        <p class="setup-download-note">After authorization, Install runs a fixed Ubuntu or Python package or downloads the example Qwen model; system packages and service starts use your computer's password prompt. Packages can start services. <a href="#apps-connections-title">Open app installation controls →</a></p>
       </section>
     </div>
     <div class="setup-bottom">
+      <details class="setup-launch-help"><summary>Optional local sign-in</summary><p>The HUD opens without sign-in by default. Add <code>--require-sign-in</code> to require a password for a launch. Set a reusable password with <code>megalodon-manage password set</code>; otherwise a random password appears in the launch terminal. This does not create an account.</p></details>
       <details class="setup-launch-help">
         <summary>Reopen or stop MEGALODON</summary>
         <p id="setup-launch-intro">Reading the launch method for this HUD…</p>
@@ -98,20 +100,20 @@ const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata',
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
-  const labels = {executable_found: 'Executable found', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
+  const labels = {executable_found: 'Executable found', not_found: 'Not found in checked locations', not_checked: 'Not checked by executable discovery'};
   return labels[report.tools[index].status];
 }
 // Apps & integrations intentionally keeps the one-shot HUD-launch presence
 // snapshot rather than following a fresher Check this computer result on
-// Home (see the "Read the status with confidence" Help section) so its map
+// Setup (see the "Read the status with confidence" Help section) so its map
 // stays stable regardless of what the operator checks elsewhere. That
 // boundary used to be implicit and untimestamped; this makes it visible
 // instead of pretending the two views share one always-current answer.
 function appsPresenceFreshnessNote() {
-  if (setupState.loadFailed) return 'Startup observations are unavailable; the HUD-launch check could not be retrieved. Choose Check this computer on Home for a fresh read.';
+  if (setupState.loadFailed) return 'Startup observations are unavailable; the HUD-launch check could not be retrieved. Choose Check this computer in Setup for a fresh read.';
   if (!setupState.readiness) return 'Not checked at HUD launch.';
   const when = formatRefreshTime(new Date(setupState.readiness.checked_at));
-  return `Checked at HUD launch, ${when}. This does not change after Check this computer on Home; reopen the HUD for a fresh Apps presence check.`;
+  return `Checked at HUD launch, ${when}. This does not change after Check this computer in Setup; reopen the HUD for a fresh Apps presence check.`;
 }
 const runtimeStatuses = new Set(['running', 'not_running', 'not_applicable', 'not_checked']);
 function validatedRuntimeReport(value) {
@@ -204,16 +206,16 @@ async function loadSetup() {
 const localCheckState = {snapshot: null, busy: false, failed: false, focusTool: null, retryAt: 0};
 const softwareCatalog = [
   {id: 'python', name: 'Python', mark: 'Py', group: 'start', requirement: 'Required · 3.11+', purpose: 'The runtime that powers MEGALODON.', note: 'This HUD already runs in Python. Check its version here before installing another copy.', url: 'https://www.python.org/downloads/', link: 'Python downloads'},
-  {id: 'git', name: 'Git', mark: 'Git', group: 'start', requirement: 'Optional · source checkout', purpose: 'Download and update a copy of the repository.', note: 'Needed for the clone workflow. A packaged installation or downloaded source archive does not require Git. Git presence is not included in these checks.', url: 'https://git-scm.com/downloads/', link: 'Git downloads'},
-  {id: 'tshark', name: 'Wireshark / TShark', mark: 'Ws', group: 'network', requirement: 'Optional · saved packets', purpose: 'Inspect packet captures and extract metadata.', note: 'Use the guarded setup guide for the Linux TShark adapter. The HUD does not open packet captures or start capture.', url: 'https://www.wireshark.org/download.html', link: 'Wireshark downloads'},
-  {id: 'zeek', name: 'Zeek', mark: 'Z', group: 'network', requirement: 'Optional · saved flow metadata', purpose: 'Turn network activity into structured connection logs.', note: 'The reviewed workflow uses a private, pinned producer. MEGALODON does not start Zeek.', url: 'https://zeek.org/get-zeek/', link: 'Zeek downloads'},
-  {id: 'suricata', name: 'Suricata', mark: 'Su', group: 'network', requirement: 'Optional · imported alerts', purpose: 'Produce security alerts for later review.', note: 'Operate the sensor separately. An executable found here does not prove that alert data is connected.'},
+  {id: 'git', name: 'Git', mark: 'Git', group: 'start', requirement: 'Optional · source checkout', purpose: 'Download and update a copy of the repository.', note: 'Needed for the clone workflow. A packaged installation or downloaded source archive does not require Git. Git presence is not included in these checks.', url: 'https://git-scm.com/install/', link: 'Git downloads'},
+  {id: 'tshark', name: 'Wireshark / TShark', mark: 'Ws', group: 'network', requirement: 'Optional · packet metadata', purpose: 'Inspect packet captures and extract metadata.', note: 'Configure capture access and select an interface here. Start background tools runs TShark without opening Wireshark; accepted packet metadata feeds the HUD.', url: 'https://www.wireshark.org/download.html', link: 'Wireshark downloads'},
+  {id: 'zeek', name: 'Zeek', mark: 'Z', group: 'network', requirement: 'Optional · connection metadata', purpose: 'Turn network activity into structured connection logs.', note: 'Background tools can start an installed Zeek sensor on the selected interface after capture access is configured. Review source status to confirm accepted data.', url: 'https://zeek.org/get-zeek/', link: 'Zeek downloads'},
+  {id: 'suricata', name: 'Suricata', mark: 'Su', group: 'network', requirement: 'Optional · sensor observations', purpose: 'Produce security alerts for later review.', note: 'Configure the fixed local service and EVE source here. Background tools can start the configured sensor; accepted source timestamps confirm which observations reached the HUD.'},
   {id: 'scapy', name: 'Scapy', mark: 'Sc', group: 'network', requirement: 'Optional · capture extra', purpose: 'Provide Python packet handling for approved capture workflows.', note: 'Install in the MEGALODON Python environment. These checks do not inspect Python packages or grant capture permissions.', link: 'Scapy install guide'},
-  {id: 'nftables', name: 'nftables', mark: 'nf', group: 'host', requirement: 'Optional · Linux only', purpose: 'Linux firewall tooling for reviewing response plans.', note: 'MEGALODON produces inert plans and refuses live rule application. Installing firewall tools is a separate administrator task.', url: 'https://netfilter.org/projects/nftables/index.html', link: 'nftables install guide'},
-  {id: 'clamav', name: 'ClamAV', mark: 'Cl', group: 'host', requirement: 'Optional · scoped local collection', purpose: 'Scan the local Downloads folder daily and review aggregate counts.', note: 'The local HUD automatically runs fixed scans and watches completed reports when ClamAV and Downloads are available. It does not update signatures, quarantine, or upload files.'},
+  {id: 'nftables', name: 'nftables', mark: 'nf', group: 'host', requirement: 'Optional · Linux only', purpose: 'Linux firewall tooling for reviewing response plans.', note: 'Installing nftables changes no rules. The local defense workflow can preview and, after separate approval, apply a five-minute block for an observed remote address on this PC.', url: 'https://netfilter.org/projects/nftables/index.html', link: 'nftables install guide'},
+  {id: 'clamav', name: 'ClamAV', mark: 'Cl', group: 'host', requirement: 'Optional · scoped local collection', purpose: 'Scan the local Downloads folder daily and review aggregate counts.', note: 'The local HUD automatically runs fixed scans and watches completed reports when ClamAV and Downloads are available. Use the signature update control in Setup when needed. Collection does not quarantine or upload files.'},
   {id: 'osquery', name: 'osquery', mark: 'oq', group: 'host', requirement: 'Optional · local package count', purpose: 'Review a fixed DEB package-count query.', note: 'The local HUD automatically runs the fixed read-only count hourly and watches completed results when osquery is available. It never imports package names.'},
   {id: 'qwen', name: 'Ollama + Qwen', mark: 'AI', group: 'ai', requirement: 'Optional · local advisory', purpose: 'Host an optional local language model for bounded explanations.', note: 'Ollama is the runtime; Qwen is a separate model download. The advisory workflow needs a validated local model registry. Checking observes only the Ollama executable and process.', link: 'Ollama downloads'},
-  {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · scoped local collection', purpose: 'Review a completed authorized network inventory.', note: 'The local HUD automatically scans loopback hourly and watches completed XML reports. An explicit configuration can set one private IPv4 target or range; only aggregate counts reach the HUD.'}
+  {id: 'nmap', name: 'Nmap', mark: 'Nm', group: 'network', requirement: 'Optional · scoped local collection', purpose: 'Review a completed authorized network inventory.', note: 'The local HUD runs hourly inventory and watches completed XML reports. Configure an authorized target here; inventory supplies aggregate counts. Separate bounded host discovery populates the local-network map for a scope selected in Setup.'}
 ];
 // Keep reading context across check updates and filter changes; keys are the fixed catalog.
 const softwareGuidanceOpen = new Map(softwareCatalog.map(item => [item.id, false]));
@@ -277,7 +279,7 @@ function optionalToolSummary(readiness) {
   const counts = `${found} found · ${missing} not found · ${unchecked} not checked`;
   if (eligibleUnchecked === eligible.length) return {
     result: 'Unable to check', state: 'neutral',
-    detail: `${counts}. Executable discovery could not check any eligible tools. This check inspects Linux PATH only; Scapy needs a separate Python-package check.`
+    detail: `${counts}. Executable discovery could not check any eligible tools. This check inspects Linux PATH and known installation prefixes; Scapy needs a separate Python-package check.`
   };
   return {result: counts, state: eligibleUnchecked ? 'neutral' : 'ready', detail: eligibleUnchecked
     ? 'Partial observation: some eligible tools could not be checked. Missing optional software does not block the HUD.'
@@ -291,7 +293,7 @@ function softwarePresence(item) {
   const index = workflowToolIds.indexOf(item.id);
   const evidence = latestToolEvidence();
   if (!evidence.readiness || index < 0) return 'Availability not checked';
-  const labels = {executable_found: 'Executable found', not_found: 'Not found on checked PATH', not_checked: 'Not checked by executable discovery'};
+  const labels = {executable_found: 'Executable found', not_found: 'Not found in checked locations', not_checked: 'Not checked by executable discovery'};
   const stamp = receipt ? 'at last check' : 'at HUD launch';
   return `${stale}${labels[evidence.readiness.tools[index].status]} · ${stamp}`;
 }
@@ -315,14 +317,12 @@ function renderSoftwareShelf() {
     const presence = textNode('p', softwarePresence(item), 'software-presence'); presence.id = `software-status-${item.id}`;
     presence.hidden = heartbeatState.byId.size > 0;
     const actions = textNode('div', '', 'software-actions');
-    if (item.id !== 'git' && item.id !== 'python') actions.append(installControl(item.id, item.name));
-    const link = textNode('a', `${item.link || item.name + ' downloads'} ↗`, 'software-download');
-    link.href = item.url || toolAcquisition[item.id].url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.setAttribute('aria-label', `${item.link || item.name + ' downloads'} — official publisher, opens a new tab`); actions.append(link);
-    if (item.id !== 'git' && item.id !== 'scapy') {
-      const check = textNode('button', localCheckState.busy ? 'Checking…' : item.id === 'python' ? 'Check runtime' : 'Check availability', 'software-check');
-      check.type = 'button'; check.id = `software-check-${item.id}`; check.disabled = localCheckState.busy; check.setAttribute('aria-label', `Check ${item.name} availability`); check.setAttribute('aria-describedby', presence.id);
-      check.hidden = heartbeatState.byId.size > 0 && item.id !== 'python';
-      check.addEventListener('click', () => runLocalChecks(item.id)); actions.append(check);
+    if (item.id !== 'git' && item.id !== 'python') {
+      const configure = textNode('a', 'Configure '+item.name+' →', 'software-download');
+      configure.href='#setup-app-'+item.id;actions.append(configure);
+    } else {
+      const link=textNode('a',`${item.link || item.name+' downloads'} ↗`,'software-download');link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';actions.append(link);
+      if(item.id==='python'){const check=textNode('button',localCheckState.busy?'Checking…':'Check runtime','software-check');check.type='button';check.id='software-check-python';check.disabled=localCheckState.busy;check.addEventListener('click',()=>runLocalChecks('python'));actions.append(check);}
     }
     const more = textNode('details', '', 'software-details'); more.id = `software-guidance-${item.id}`;
     more.open = softwareGuidanceOpen.get(item.id);
@@ -369,8 +369,8 @@ function renderLocalCheckResults() {
   // the HUD-launch snapshot by design (see appsPresenceFreshnessNote).
 }
 async function runLocalChecks(focusTool = null) {
-  if (localCheckState.busy) return;
-  if (Date.now() < localCheckState.retryAt) { byId('setup-check-status').textContent = 'A check is already running. Wait five seconds, then choose Check this computer.'; return; }
+  if (localCheckState.busy) return {ok: false, message: 'A check is already running. Wait for it to finish.'};
+  if (Date.now() < localCheckState.retryAt) { const message = 'A check is already running. Wait five seconds, then choose Check this computer.'; byId('setup-check-status').textContent = message; return {ok: false, message}; }
   const initiatingControl = document.activeElement && document.activeElement.id;
   localCheckState.busy = true; localCheckState.focusTool = focusTool;
   byId('setup-check').disabled = true; byId('setup-check').textContent = 'Checking this computer…';
@@ -382,6 +382,7 @@ async function runLocalChecks(focusTool = null) {
     localCheckState.snapshot = report; localCheckState.failed = false; localCheckState.retryAt = 0;
     const item = softwareCatalog.find(entry => entry.id === focusTool);
     byId('setup-check-status').textContent = item ? `${item.name}: ${softwarePresence(item)}. All local checks updated.` : `Check complete at ${formatRefreshTime(new Date(report.checked_at))}. Review your checklist below.`;
+    return {ok: true, message: byId('setup-check-status').textContent};
   } catch (error) {
     localCheckState.failed = true;
     const message = error.status === 429 ? 'A local check is already running. Wait five seconds, then try again.'
@@ -390,6 +391,7 @@ async function runLocalChecks(focusTool = null) {
       : 'The check could not be completed. Confirm the HUD terminal is still open, then try again.';
     if (error.status === 429) localCheckState.retryAt = Date.now() + 5000;
     byId('setup-check-status').textContent = message + (localCheckState.snapshot ? ' Previous results are stale.' : ' No current result is available.');
+    return {ok: false, message: byId('setup-check-status').textContent};
   } finally {
     localCheckState.busy = false;
     byId('setup-check').disabled = false; byId('setup-check').textContent = localCheckState.failed ? 'Try checking again' : 'Check this computer →';

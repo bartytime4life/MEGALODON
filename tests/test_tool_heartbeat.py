@@ -98,8 +98,9 @@ def test_recipes_are_closed_and_never_interpolate_requests(monkeypatch):
         Installer().start("rm -rf /")
 
 
-def test_installer_runs_one_job_and_reports_output():
+def test_installer_runs_one_job_and_reports_output(monkeypatch):
     finished = threading.Event()
+    monkeypatch.setenv('OLLAMA_HOST', 'remote.example:11434')
 
     class FakeProcess:
         stdout = iter(["line one\n", "line two\n"])
@@ -108,7 +109,11 @@ def test_installer_runs_one_job_and_reports_output():
             return 0
 
     seen = []
-    installer = Installer(on_finish=finished.set, runner=lambda argv, **kw: seen.append(argv) or FakeProcess())
+    def runner(argv, **kw):
+        assert kw['env']['OLLAMA_HOST'] == '127.0.0.1:11434'
+        seen.append(argv)
+        return FakeProcess()
+    installer = Installer(on_finish=finished.set, runner=runner)
     installer.start("scapy")
     assert finished.wait(5)
     status = installer.status()

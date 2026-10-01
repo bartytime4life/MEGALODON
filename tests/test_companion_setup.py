@@ -1,4 +1,4 @@
-"""Copy-only companion setup controls: canonical package and static mirror.
+"""Copy-only companion setup controls: canonical local package.
 
 No companion binary, package manager, scanner, network or Docker daemon is used.
 The DOM harness is behavior coverage, not rendered/host installation acceptance.
@@ -33,7 +33,7 @@ class Element {
   focus() {}
 }
 const all = element => [element, ...element.children.flatMap(all)];
-function mount(id, override=null, clipboardFails=false, local=false) {
+function mount(id, override=null, clipboardFails=false, local=false, command=null) {
   const copied=[], writes=[], checks=[], network=[], views=[];
   const context={
     URL, document:{createElement:tag=>new Element(tag)},
@@ -49,7 +49,7 @@ function mount(id, override=null, clipboardFails=false, local=false) {
     'const localPythonLifecycle = null;',
     'const localPythonLifecycle = '+JSON.stringify(override)+';');
   vm.runInContext(lifecycle,context);
-  vm.runInContext(controlsSource,context);
+  vm.runInContext(controlsSource.replace('const localCompanionCommand = null;', 'const localCompanionCommand = '+JSON.stringify(command)+';'),context);
   const parent=new Element('main');
   context.parent=parent; context.toolId=id;
   vm.runInContext('MegalodonControls.mount(parent, toolId, toolId, local ? {local:true,view(...args){views.push(args)}} : {})',context);
@@ -126,26 +126,33 @@ assert.equal(r.copied.length,5);
 assert.deepEqual([r.writes,r.checks,r.network],[[],[],[]]);
 assert.match(r.feedback.textContent,/not executed or verified/);
 """,
+    r"""
+const r=mount('nmap');
+const check=r.find('Check availability');
+for (const result of [{ok:false,message:'Previous results are stale.'},{ok:true,message:'Nmap: Executable found.'},{ok:false,message:'A check is already running.'}]) {
+  r.context.runLocalChecks=async()=>result;
+  await check.listeners.click();
+  assert.equal(r.feedback.textContent,result.message);
+  assert.equal(check.disabled,false);
+}
+const command="'/private/my env/bin/python' -I -m megalodon.tool_setup";
+const installed=mount('nmap',null,false,true,command);
+await installed.find('Copy install').listeners.click();
+assert.equal(installed.copied[0], command+' nmap install');
+assert.deepEqual(installed.network,[]);
+""",
 ]
 
 
-@pytest.mark.parametrize("surface", ["canonical", "mirror"])
 @pytest.mark.parametrize("case", CASES, ids=[
     "ordered-inert-steps", "scapy-environment", "serving-interpreter",
-    "clipboard-failure", "closed-registry", "no-execution",
+    "clipboard-failure", "closed-registry", "no-execution", "availability-and-installed-commands",
 ])
-def test_setup_controls(surface: str, case: str) -> None:
+def test_setup_controls(case: str) -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node unavailable: companion UI behavior remains unverified")
-    if surface == "mirror":
-        directory = ROOT / "site/dist"
-        if not directory.exists():
-            pytest.skip("Site mirror is not part of the Python distribution")
-        lifecycle = (directory / "lifecycle.js").read_text(encoding="utf-8")
-        controls = (directory / "controls.js").read_text(encoding="utf-8")
-    else:
-        lifecycle, controls = ASSETS["LIFECYCLE_JS"], ASSETS["CONTROLS_JS"]
+    lifecycle, controls = ASSETS["LIFECYCLE_JS"], ASSETS["CONTROLS_JS"]
     source = (
         f"const lifecycleSource={json.dumps(lifecycle)};\n"
         f"const controlsSource={json.dumps(controls)};\n"
@@ -158,17 +165,6 @@ def test_setup_controls(surface: str, case: str) -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-
-
-def test_setup_mirror_matches_canonical() -> None:
-    directory = ROOT / "site/dist"
-    if not directory.exists():
-        pytest.skip("Site mirror is not part of the Python distribution")
-    for key, name in [
-        ("LIFECYCLE_JS", "lifecycle.js"), ("READINESS_JS", "readiness.js"),
-        ("CONTROLS_JS", "controls.js"), ("CONTROLS_CSS", "controls.css"),
-    ]:
-        assert (directory / name).read_text(encoding="utf-8") == ASSETS[key]
 
 
 def test_document_shell_examples_parse_without_execution() -> None:

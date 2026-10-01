@@ -47,13 +47,18 @@ class Defense:
         self._job=dict(state='idle',action=None,message='Choose an observed IP or a fixed defensive workflow.',started_at=None,finished_at=None,result=None)
         self._audit_ready=True
         try:
+            evidence=getattr(configuration,'evidence',None)
             if self.path.exists():
                 with ReceiptStore(self.path) as store:
                     store.verify_chain()
                     rows=store.connection.execute('SELECT receipt_id,timestamp,payload_json FROM ai_receipt_events ORDER BY sequence DESC LIMIT 64').fetchall()
                 for identifier,stamp,raw in reversed(rows):
-                    payload=json.loads(raw)
-                    self._restore(dict(receipt_id=identifier,timestamp=stamp,**payload))
+                    self._restore(dict(receipt_id=identifier,timestamp=stamp,**json.loads(raw)))
+            if evidence is not None and evidence.enabled:
+                from .managed_receipts import ManagedReceipts
+                with ManagedReceipts(evidence,'defense') as store:
+                    store.verify_chain()
+                    for row in store.recent():self._restore(row)
         except (OSError,ValueError,RuntimeError):
             self._audit_ready=False
             self._job.update(state='failed',message='Defense audit could not be validated; actions are unavailable until it is reviewed.')
@@ -106,9 +111,12 @@ class Defense:
         return row
 
     def _append(self,identifier,**payload):
-        with ReceiptStore(self.path) as store:
+        evidence=getattr(self.configuration,'evidence',None)
+        from .managed_receipts import ManagedReceipts
+        managed=evidence is not None and evidence.enabled
+        with (ManagedReceipts(evidence,'defense') if managed else ReceiptStore(self.path)) as store:
             store.verify_chain()
-            if store._occupied_bytes()>MAX_LEDGER_BYTES-32768:raise ValueError('Defense audit storage is full.')
+            if not managed and store._occupied_bytes()>MAX_LEDGER_BYTES-32768:raise ValueError('Defense audit storage is full.')
             row=store.append(identifier,payload)
         with self._lock:self._restore(row)
 

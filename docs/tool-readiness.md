@@ -4,7 +4,7 @@
 > HUD, see [Tool heartbeat and one-click install](tool-heartbeat.md). This page
 > describes the separate executable-only readiness receipt.
 
-For a point-and-click check, start the local HUD and choose **Home → Data and
+For a point-and-click check, start the local HUD and choose **Setup → Data and
 tools → Check this computer**. It refreshes executable presence and process-name
 observations, checks the selected data file and shows the running Python/SQLite
 versions. You can download that combined local-check report from the interface.
@@ -120,3 +120,12 @@ catalog alignment, rejection before probes, unsupported-platform behavior,
 redaction, error currentness, representative file/symlink handling and prohibited
 process/network/store/configuration paths. These tests do not validate actual
 installed companion-tool versions or satisfy those tools' acceptance gates.
+
+## Current HUD discovery
+
+The local Setup check emits `megalodon-tool-readiness-v3` with
+`probe_mode=known_install_presence`. It shares the heartbeat's bounded PATH and
+known-prefix registry, including private Zeek installations. It does not execute
+binaries. CLI v2 PATH-only receipts remain supported for compatibility. Neither
+receipt establishes configuration, running state or accepted telemetry; those
+are displayed separately by the background-tool workflows.

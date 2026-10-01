@@ -322,23 +322,25 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await expect(page.locator("#room-traffic-grid .room-empty-plot")).to_contain_text("No TCP flag observations returned")
             await expect(page.locator("#room-traffic-grid svg[role=img]")).to_have_count(1)
             await expect(page.locator("#room-traffic-grid .room-visual-state.is-data")).to_have_count(7)
-            await page.locator("#hud-export-prepare").click()
-            await expect(page.locator("#hud-export-download")).to_be_enabled()
-            summary_text = await page.locator("#hud-export-preview").inner_text()
+            await page.locator("#workspace-tab-reports").click()
+            await page.locator("#reports-advanced > summary").click()
+            await expect(page.locator("#hud-export-download")).to_have_count(0)
+            await expect(page.locator("#reports-json")).to_be_visible()
+            await expect(page.locator("#reports-csv")).to_be_visible()
+            # Local reports replaced the hosted export UI. Preserve a real
+            # HTTP check of the intentionally retained compatibility endpoint.
+            summary_status, summary_headers, summary_body = request(
+                port, "/api/hud-snapshot", password=password)
+            passed("retained summary HTTP boundary", summary_status == 200 and
+                   summary_headers.get("Cache-Control") == "no-store" and len(summary_body) <= 16384)
+            summary_text = summary_body.decode("utf-8")
             summary = json.loads(summary_text)
-            passed("hosted summary preview uses the real bounded backend",
+            passed("local-only Reports preserves the address-free compatibility endpoint",
                    summary["schema"] == "megalodon-hud-snapshot-v1" and
                    summary["events"] == 2 and summary["findings"] == 2 and
                    summary["reported_bytes"] == "200" and
                    "192.0.2." not in summary_text and "198.51.100." not in summary_text)
-            async with page.expect_download() as summary_download:
-                await page.locator("#hud-export-download").click()
-            downloaded = await summary_download.value
-            passed("hosted summary download preserves the preview bytes",
-                   Path(await downloaded.path()).read_text() == summary_text)
-            await page.locator("#hud-export-clear").click()
-            await expect(page.locator("#hud-export-preview")).to_be_hidden()
-            await expect(page.locator("#hud-export-download")).to_be_disabled()
+            await expect(page.locator("#hud-export-preview")).to_have_count(0)
             await page.locator("#workspace-tab-findings").click()
             passed("qualified linked finding rows", await page.locator("#room-findings-table tbody tr").count() == 2)
             await page.locator(".ops-range > summary").click()
@@ -359,48 +361,14 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
             await expect(page.locator("#room-traffic-grid .room-empty-plot[role=img]").first).to_have_attribute("aria-label", re.compile("no synthetic values", re.I))
             passed("empty traffic visuals contain no synthetic series", True)
         await page.locator("#workspace-tab-reports").click()
-        if nonempty:
-            request_counts = dict(counts)
-            violation_count = len(violations)
-            await expect(page.locator("#room-report-download")).to_be_disabled()
-            await page.locator("#room-report-create").click()
-            await expect(page.locator("#room-report-status")).to_contain_text("Preview ready")
-            await expect(page.locator("#room-report-download")).to_be_enabled()
-            preview_text = await page.locator("#room-report-preview").inner_text()
-            await page.evaluate("() => renderRoom()")
-            await expect(page.locator("#room-report-download")).to_be_enabled()
-            await expect(page.locator("#room-report-context")).to_contain_text("Held preview created")
-            passed("report review survives a HUD repaint without changing bytes",
-                   await page.locator("#room-report-preview").inner_text() == preview_text)
-            report = json.loads(preview_text)
-            passed("local report preview uses the closed metadata-only schema",
-                   list(report) == ["schema", "generated_at", "title", "range", "sources",
-                                    "vantage", "quality", "freshness", "unit", "counts",
-                                    "findings", "limitations", "build"] and
-                   report["schema"] == "megalodon-local-report-v1" and
-                   report["counts"] == {"events": 2, "findings": 2, "reported_bytes": "200"} and
-                   all(token not in preview_text for token in ("192.0.2.", "198.51.100.", "src_ip", "dst_ip", "event_id")))
-            async with page.expect_download() as download_info:
-                await page.locator("#room-report-download").click()
-            download = await download_info.value
-            downloaded = Path(await download.path()).read_text(encoding="utf-8")
-            passed("explicit browser download exactly matches the bounded preview",
-                   downloaded == preview_text + ("\n" if not preview_text.endswith("\n") else "") and
-                   download.suggested_filename.startswith("megalodon-local-report-") and
-                   download.suggested_filename.endswith(".json") and len(downloaded.encode("utf-8")) <= 65536)
-            passed("report preview and download make no page request",
-                   counts == request_counts and len(violations) == violation_count)
-            await page.locator("#room-report-discard").click()
-            await expect(page.locator("#room-report-preview")).to_be_hidden()
-            await expect(page.locator("#room-report-download")).to_be_disabled()
-            await expect(page.locator("#room-report-discard")).to_be_disabled()
-            passed("discard removes the held report and disables download",
-                   await page.locator("#room-report-preview").inner_text() == "")
-        else:
-            await page.locator("#room-report-create").click()
-            await expect(page.locator("#room-report-status")).to_contain_text("No qualified data")
-            await expect(page.locator("#room-report-download")).to_be_disabled()
-            passed("empty report flow refuses to invent zero evidence")
+        # This fixture has no managed recording runtime. A visual report must
+        # not silently fall back to the small dashboard snapshot.
+        await expect(page.locator("#reports-create")).to_be_disabled()
+        await expect(page.locator("#reports-save")).to_be_disabled()
+        await expect(page.locator("#reports-print")).to_be_disabled()
+        await expect(page.locator("#reports-document")).to_be_hidden()
+        await expect(page.locator("#room-report-preview")).to_have_count(0)
+        passed("Reports requires managed history and never invents a browser snapshot report")
         await page.locator("#workspace-tab-live").click()
         await expect(page.locator("#workspace-live")).to_be_visible()
         passed("persistent HUD tab returns to the visual workspace")
@@ -419,7 +387,12 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         # Native keyboard activation of the real skip link, not a replacement DOM.
         await page.locator(".skip-link").focus()
         await page.keyboard.press("Enter")
-        passed("skip-link keyboard target", await page.evaluate("document.activeElement.id") == "detections-title")
+        passed("skip-link keyboard target", await page.evaluate("document.activeElement.id") == "room-findings-title")
+        await expect(page.locator("#workspace-findings")).to_be_visible()
+        # The corrected skip link opens Findings. Historical search belongs to
+        # Evidence, so follow that visible navigation before filling its input.
+        await page.locator("#workspace-tab-analysis").click()
+        await expect(page.locator("#workspace-analysis")).to_be_visible()
         await page.locator("#filter-query").fill("no-synthetic-match")
         await expect(page.locator("#events")).to_contain_text("No detections match these filters.")
         await page.locator("#clear-filters").click()

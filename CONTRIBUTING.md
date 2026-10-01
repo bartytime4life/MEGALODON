@@ -74,11 +74,14 @@ or browser behavior. Preserve that distinction in reports.
 
 ## Contribution boundaries
 
-The browser is loopback-only and read-only. Do not add a command box, arbitrary
-URL connector, upload-to-vendor action, tool installer, acknowledgement write,
-firewall application, scanner launch, scheduler, or hidden notifier. Optional
-capabilities must remain visibly optional; contract-only or proposed software
-must not look installed or connected.
+The local Linux HUD is the sole supported application. Its data views are
+read-only; Setup, reporting, storage policy and reviewed local defense use
+separate fixed, protected action endpoints. Preserve same-origin checks,
+per-service action tokens, bounded bodies and OS authorization. Do not add an
+arbitrary shell, remote administration, model-issued commands or hidden authority.
+Optional capabilities must remain visibly optional. Report installed, configured,
+running and accepted-data states separately. Use the installer for lifecycle
+changes and preserve evidence, settings and rollback during upgrades.
 
 Use versioned, bounded inputs and fixed diagnostic categories. Preserve units,
 source kind, accepted/rejected counts, completeness, redaction, and terminal

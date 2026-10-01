@@ -1,0 +1,15 @@
+{
+  "schema": "megalodon-compaction-benchmark-v1",
+  "records": 50000,
+  "seconds": 0.4100654100184329,
+  "records_per_second": 121931.76692896981,
+  "batches": 54,
+  "source_bytes": 10051584,
+  "compact_bytes": 540672,
+  "peak_extra_bytes": 2035168,
+  "reclaimed_detail_bytes": 10051584,
+  "peak_rss_kib": 28796,
+  "verified_represented_records": 50000,
+  "backlog_sources_after": 0,
+  "limits": "Synthetic sixteen-peer UDP metadata; throughput excludes ingestion; no physical drive wear or live sensor capacity claim."
+}

@@ -1,54 +1,30 @@
 # Visual HUD and companion setup
 
-The local **HUD** brings the activity globe, separate traffic-volume lanes,
-traffic timeline, protocol mix, endpoints, conversations, ports/flags, source
-flows, coverage, finding timeline and detector/severity bars into one workspace.
-**Traffic** and **Findings** retain the detailed evidence tables. Setup follows
-the visual overview. The shared range governs the overview; the globe explicitly
-uses its own rolling hour and selected minute. Existing same-origin read-only
-`/api/traffic` and `/api/traffic-history` supply data at the configured refresh
-interval (five seconds by default). No sensor is started by opening a view.
+The local **HUD** combines interface speeds, resources, storage coverage, the
+traffic globe, local topology and endpoint details. **Findings** and retained
+history provide evidence tables. **Setup** contains installation, permissions
+and configuration; **Start background tools** remains in the HUD.
 
-## Local summary export
+Live packet views are bounded recent observations. Historical dates use
+`/api/traffic-history-v2` across retained segments and verified compact summaries,
+with segment-qualified paging and explicit gaps. The original read interfaces
+remain compatible. The globe uses its own recent observed connections; unknown
+locations remain unmapped. Opening a view does not itself start a sensor.
 
-The local HUD retains a private summary preview and download workflow. Select
-**Prepare summary**, review the aggregate JSON, then **Download summary JSON**
-for private review. Preparation uses the latest bounded database window,
-independently of the displayed time filter. A failed refresh preserves the
-previous preview and its original timestamp. The hosted reference Site cannot
-read localhost or your database and does not accept this activity summary.
+## Visual reports and advanced exports
 
-Alternatively, run this in the Python environment containing this revision:
+Open Reports for the latest saved visual report. **Make report now**, **Save
+report**, and **Print / save PDF** are the primary actions. The default interval
+is the preceding 24 hours; daily generation runs at 9 AM in this PC's time zone
+while the local service is running. Selected dates aggregate retained segments
+and verified compact summaries with explicit coverage limits. Reports remain
+local and downloads reuse completed results. See
+[efficient recording and reports](efficient-recording-reports.md).
 
-```sh
-umask 077
-python -m megalodon.hud_snapshot --database /absolute/path/to/megalodon.db > hud-summary.json
-```
-
-Replace the database path before running the command. The exporter uses the
-existing bounded read-only projection: at most 500 event
-candidates and 200 linked finding candidates. Sample/unlinked events remain
-excluded. No database is created. A missing/unavailable source exits nonzero
-without writing a JSON document; shell redirection may leave an empty file.
-
-`megalodon-hud-snapshot-v1` contains aggregate counts, reported-byte totals as
-an exact decimal string, twelve equal time bins, protocol/source/severity/
-detector counts, three exclusive traffic lanes, timestamps and quality flags.
-It contains no IPs, ports, raw records, messages, credentials or filesystem paths.
-Highest linked finding severity determines each event's lane. No finding is
-not evidence of safety. Counts are metadata records, not link bandwidth.
-
-The local HUD accepts at most 16 KiB from its same-origin summary endpoint, then
-checks strict JSON, closed keys and fixed arrays. It rejects duplicate keys,
-invalid/future dates, excessive nesting, unknown quality, out-of-range counts
-and inconsistent totals. Values are rendered as text. Preview data stays in
-memory until cleared or the page closes; there is no upload or persistent
-storage. Failed refreshes preserve the previous summary and its timestamp. A
-summary is always labeled **saved**, never live, and is an unauthenticated
-self-report. The hosted Console can load a downloaded copy into browser-tab
-memory to draw aggregate history, lane, protocol, source, severity and detector
-charts. It has no live feed. The hosted geographic reference remains
-unpopulated because the export contains no location evidence.
+Advanced exports retain CSV, JSON and the address-free HUD summary. The summary
+is a compatibility export of the newest bounded window, independent of selected
+historical dates. It is not a complete report and has no hosted import workflow.
+The former large raw-JSON preview and hosted console are retired.
 
 ## One setup entry point for every companion
 
@@ -80,7 +56,7 @@ offer the same copyable commands.
 
 The local HUD can prepare the exact command needed to reopen that HUD with its
 existing fixed Install/Start/Open controls enabled. Expand **Authorize Install,
-Start and Open** on Home and copy the displayed command. Copying does not stop or restart
+Start and Open** in Setup and copy the displayed command. Copying does not stop or restart
 the HUD, and it does not install, start or open a companion. After running the command
 in a terminal, the separate per-launch token and confirmation controls remain
 required.
@@ -116,50 +92,43 @@ not prove the rest of a dependency tree was removed.
 
 ## Connection coverage and failure isolation
 
-Both UIs use `megalodon/telemetry_catalog.py` for the same 17-feature and
-10-tool data map. It describes supported sources and update modes, not
-observed runtime health. The local HUD additionally shows accepted traffic,
-heartbeat and installer-job observations with their separate timestamps/states.
-The map names each unimplemented companion data adapter explicitly.
+The local HUD uses `megalodon/telemetry_catalog.py` for its capability reference.
+That reference describes supported sources, not runtime health. Sensors shows
+current workflow observations; Setup checks executable presence, process
+observations and configuration separately. A saved result is timestamped and
+does not prove a collector is running now.
 
-`GET /api/hud-snapshot` is read-only, parameter-free and limited to 16 KiB.
-It uses the same exporter as the CLI and inherits the local server's Host,
-no-store and same-origin boundaries. The packaged local validator checks the
-preview before download. The preview/download controls start no upload or timer.
+`GET /api/hud-snapshot` remains a read-only, parameter-free compatibility export
+limited to 16 KiB. Advanced exports validates the returned summary before
+download. It performs no upload and does not substitute for a date-based report.
 
-Heartbeat and installer-status responses are handled independently. A failed
-installer request disables management and shows its own unavailable state while
-a valid heartbeat continues to show observed tool presence. A failed heartbeat
-continues to mark tool observations stale even when installer status succeeds.
+Heartbeat and installer-status responses fail independently. A failed installer
+request disables management and shows its own unavailable state; a valid
+heartbeat can still show observed tool presence. A failed heartbeat marks that
+observation stale even when installer status succeeds.
 
-ClamAV and Nmap have manual completed-report
-aggregate importers, and osquery has a fixed saved DEB package-count importer;
-none are live connections. Presence/process checks and manual
-console links do not establish these data connections.
-nftables exposes inert response-plan evidence, never live firewall telemetry.
-The local **Check tool presence now** button asks the backend for a fresh
-observation, bypassing its short cache. It does not start services or certify
-health. Installed tool cards show a backend-supplied removal command where an
-exact supported method exists; the page copies that command but never runs it.
+## Automatic endpoint observations
 
-## Completed file scan
+The configured local collectors run ClamAV over the chosen folder, Nmap over
+the explicitly selected inventory target, and a fixed osquery package-count
+query. They also watch their completed-report locations. Their accepted,
+timestamped aggregates appear automatically; manual JSON upload is not needed.
+Scan counts do not change packet rates or detector severity. Separate host
+discovery supplies topology for authorized scopes selected in Setup.
 
-For a separately operated completed ClamAV scan, see
-[Completed scan summary](clamav-summary-v1.md). Export aggregate counts with
-`python -m megalodon.clamav_summary --exit-code 0 < completed-clamscan.txt > scan-summary.json`
-(substitute the recorded exit status 1 when applicable), then load that JSON
-in the Completed file scan panel. It is a saved report, not a live feed.
+The standalone [ClamAV converter](clamav-summary-v1.md) and
+[Nmap converter](nmap-inventory-v1.md) remain useful CLI compatibility tools.
+They convert completed reports without starting a scanner. Their outputs are
+not evidence of present sensor health or full network visibility.
 
-## Completed network inventory
+## Local response and configuration
 
-
-The local HUD and hosted overview share a Network inventory panel. Use
-`python -m megalodon.nmap_inventory < completed-report.xml > inventory-summary.json`
-in the installed MEGALODON environment, then load the aggregate JSON into either
-panel. The [versioned profile](nmap-inventory-v1.md) explains bounds and omissions.
-No scanner is installed or started. Inventory counts never change traffic rates,
-finding severity or globe signals. New observations require another completed
-report, export and explicit load; this is not a live Nmap connection.
+The IP inspector can preview a fixed, time-limited local block. Applying it
+requires the existing reviewed workflow and OS authorization, with a retained
+outcome receipt. Qwen advice cannot invent or execute arbitrary commands.
+Setup owns supported install, configure, verify and uninstall controls.
+Unsupported installation methods provide explicit publisher guidance. Download
+links open publisher pages; they do not install software by themselves.
 
 ## Validate core setup before startup
 

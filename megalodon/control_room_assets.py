@@ -4,7 +4,7 @@ from .dashboard_inventory import INVENTORY_HTML
 from .dashboard_clamav import CLAMAV_HTML
 from .dashboard_osquery import OSQUERY_HTML
 from .dashboard_setup import SETUP_HTML
-from .dashboard_snapshot import SNAPSHOT_LOCAL_HTML
+from .dashboard_reports import REPORTS_HTML
 from .telemetry_catalog import coverage_html, COVERAGE_CSS
 from .status_glossary import STATUS_GLOSSARY_CSS, STATUS_GLOSSARY_HTML
 
@@ -80,7 +80,7 @@ COMPANION_LOCAL_HTML = '''
   <div class="companion-grid">''' + INVENTORY_HTML + CLAMAV_HTML + OSQUERY_HTML + '''</div>
 </section>'''
 
-HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + SNAPSHOT_LOCAL_HTML + COMPANION_LOCAL_HTML)
+HOME_HTML = HOME_HTML.replace('<!-- HUD_DATA_CONNECTIONS -->', '<div class="telemetry-readings" aria-label="Local data observations">\n<article><strong id="telemetry-traffic-state">Not checked</strong><span id="telemetry-traffic-time"></span></article>\n<article><strong id="telemetry-tools-state">Not checked</strong><span id="telemetry-tools-time"></span></article>\n<article><strong id="telemetry-management-state">Not checked</strong><span id="telemetry-management-time"></span></article>\n</div>' + coverage_html() + COMPANION_LOCAL_HTML)
 
 TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-traffic" role="tabpanel" aria-labelledby="workspace-tab-traffic" hidden>
@@ -93,31 +93,13 @@ TRAFFIC_HTML = """
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
   <a class="hud-return" href="#room-home-title">Return to visual HUD →</a><div id="room-findings-table" class="room-table"></div>
 </section>
-<section class="workspace-view" id="workspace-reports" role="tabpanel" aria-labelledby="workspace-tab-reports" hidden>
-  <h2 id="room-reports-title" tabindex="-1">Make a local report</h2>
-  <p>Preview the exact metadata-only JSON before downloading it. Nothing is uploaded, sent, or written by the server.</p>
-  <div id="room-report-flow" class="room-report-flow">
-    <ol class="room-report-steps">
-      <li><strong>1. Confirm range</strong><span>The shared UTC range controls the next preview.</span></li>
-      <li><strong>2. Preview locally</strong><span>Review the complete bounded JSON in this browser tab.</span></li>
-      <li><strong>3. Download explicitly</strong><span>Save only after the preview is ready.</span></li>
-    </ol>
-    <div class="room-report-actions">
-      <button type="button" id="room-report-create">Preview local report</button>
-      <button type="button" id="room-report-download" disabled>Download JSON report</button>
-      <button type="button" id="room-report-discard" disabled>Discard preview</button>
-    </div>
-    <p id="room-report-context" class="room-meta">A preview holds its original range and data until you replace or discard it.</p>
-    <p id="room-report-status" class="room-meta" role="status" aria-live="polite">No preview is ready.</p>
-    <pre id="room-report-preview" class="room-report-preview" tabindex="0" hidden aria-label="Exact local report preview"></pre>
-  </div>
-</section>
+""" + REPORTS_HTML.replace("<!-- REPORT_HOSTED_EXPORT -->", "") + """
 <section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
   <p class="eyebrow">A little guidance</p><h2 id="room-help-title" tabindex="-1">Make yourself at home</h2>
   <p>Start with a check. Add software when you need it. Review evidence when it is available.</p>
   <div class="room-help-grid">
     <section aria-labelledby="help-here"><h3 id="help-here">You can do this here</h3>
-      <ul><li>Start installed support apps and configured collectors from the <a href="#support-apps-title">Support apps control in the HUD</a>.</li><li>Check the local service, runtime versions, data readability, executables, and process names.</li><li>Find official downloads by workflow and check availability again after installing.</li><li>Review saved traffic and findings, filter by time, and export a local report.</li><li>Save a companion console link in Apps and open that app in its own tab.</li></ul>
+      <ul><li>Start installed support apps and configured collectors from the <a href="#support-apps-title">Support apps control in the HUD</a>.</li><li>Check the local service, runtime versions, data readability, executables, and process names.</li><li>Find official downloads by workflow and check availability again after installing.</li><li>Review saved traffic and findings, filter by time, and export a local report.</li><li>Save a companion console link in Setup and open that app in its own tab.</li></ul>
       <div class="room-actions"><a href="#setup-title">Check this computer →</a><a href="#setup-software-title">Find software →</a></div>
     </section>
     <section aria-labelledby="help-terminal"><h3 id="help-terminal">Use a terminal or another app</h3>
@@ -137,7 +119,7 @@ TRAFFIC_HTML = """
       <details><summary>Full status glossary (every page)</summary>
         __STATUS_GLOSSARY__
       </details>
-      <details><summary>What stays on this computer?</summary><p>Traffic, findings, tool checks, and reports stay local. Official download links open external publisher websites. MEGALODON does not send local evidence to the hosted reference console. Qwen is optional and cannot create findings, commands, or reports.</p></details>
+      <details><summary>What stays on this computer?</summary><p>Traffic, findings, tool checks, and reports stay local. Official download links open external publisher websites. Qwen is optional and cannot create findings, commands, or reports.</p></details>
     </section>
   </div>
 </section>
@@ -385,7 +367,7 @@ ROOM_CSS += r"""
 ROOM_CSS += COVERAGE_CSS
 
 ROOM_JS = r"""
-const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, report:null, history:null};
+const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, history:null};
 const roomProtocols = ['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'];
 const roomRules = ['SYN_FLOOD','PORT_SCAN','DNS_TUNNELING'];
 const roomFlags = ['FIN','SYN','RST','PSH','ACK','URG','ECE','CWR'];
@@ -469,6 +451,7 @@ function roomSelection(snapshot, range, custom, now=Date.now()) {
 function roomCounts(values) {const counts=new Map();values.forEach(v=>counts.set(v,(counts.get(v)||0)+1));return [...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,10);}
 function roomEndpoint(address,port) {return port===null?address:`${address.includes(':')?`[${address}]`:address}:${port}`;}
 function roomMeta(selection) {
+  if(roomState.history && roomState.managedHistory) return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · retained, source-qualified page · ${roomState.failed?'stale':'read on request'} · packet detail and conversation summaries share one provenance; sensor flow updates stay separate · missing intervals are unknown · top lists omit lower-ranked rows`;
   const value=roomState.snapshot;
   return `${new Date(selection.start).toISOString()} → ${new Date(selection.end).toISOString()} · source: ${[...new Set(selection.events.map(e=>e.source))].join(', ')||'unavailable'} · vantage: unknown · last update: ${value?.generated_at||'unavailable'} · unit: metadata events / reported bytes · quality: ${roomState.failed?'stale':value?.quality||'unavailable'} · bounded candidate window (top lists omit lower-ranked rows)`;
 }
@@ -506,100 +489,8 @@ function roomDirectionUnknown(parent) {
   ['Inbound','Outbound','Internal'].forEach(label=>{const node=textNode('div','','room-direction-node');node.append(textNode('strong',label),textNode('span','—'));graphic.append(node);});
   parent.append(graphic,textNode('p','Unavailable — no qualified local-subnet or sensor-vantage contract. Private addresses alone do not establish direction.','room-empty'));
 }
-const roomReportFields = ['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build'];
-const roomReportLimitations = [
-  'Saved metadata only; no packet bodies, raw logs, messages, model output, addresses, ports, IDs, or commands.',
-  'Source authenticity, sensor health, installed-tool qualification, drops, and whole-network completeness remain unknown.',
-  'Direction, local-subnet scope, connection state, and observed service identities are unavailable.',
-  'Counts cover only the validated events in the selected bounded range.',
-  'A missing finding or empty range does not prove safety or absence of traffic.',
-  'Imported source labels are provenance, not independent authentication.',
-  'This report was created locally in the browser and was not uploaded by MEGALODON.'
-];
-function roomReportDocument(now=Date.now()) {
-  const snapshot=roomState.snapshot,selection=roomState.selection;
-  if(!snapshot || !selection || !selection.events.length) throw new Error('No qualified data is available in the selected range. No report was created.');
-  const findings=new Map();
-  selection.findings.forEach(item=>{
-    const key=item.rule_id+'\n'+item.severity;
-    findings.set(key,(findings.get(key)||0)+1);
-  });
-  const document={
-    schema:'megalodon-local-report-v1',
-    generated_at:new Date(now).toISOString(),
-    title:'MEGALODON local metadata report',
-    range:{start:new Date(selection.start).toISOString(),end:new Date(selection.end).toISOString()},
-    sources:[...new Set(selection.events.map(item=>item.source))].sort(),
-    vantage:'unknown',
-    quality:snapshot.quality,
-    freshness:roomState.failed || now-Date.parse(snapshot.generated_at)>300000 || Date.parse(snapshot.generated_at)>now+60000 ? 'stale' : 'current_by_five_minute_ui_threshold',
-    unit:'metadata events / linked findings / reported bytes',
-    counts:{
-      events:selection.events.length,
-      findings:selection.findings.length,
-      reported_bytes:selection.events.reduce((sum,item)=>sum+BigInt(item.byte_count),0n).toString()
-    },
-    findings:[...findings].sort((a,b)=>a[0].localeCompare(b[0])).map(([key,count])=>{
-      const [rule_id,severity]=key.split('\n');return {rule_id,severity,count};
-    }),
-    limitations:[...roomReportLimitations],
-    build:{
-      package_version:snapshot.build.package_version,
-      base_commit:snapshot.build.base_commit,
-      projection_sha256:snapshot.build.projection_sha256,
-      commit:snapshot.build.commit
-    }
-  };
-  if(!referenceExactKeys(document,roomReportFields)
-      || !referenceExactKeys(document.range,['start','end'])
-      || !referenceExactKeys(document.counts,['events','findings','reported_bytes'])
-      || !referenceExactKeys(document.build,['package_version','base_commit','projection_sha256','commit'])
-      || document.findings.some(item=>!referenceExactKeys(item,['rule_id','severity','count']))) throw new Error('The local report contract could not be satisfied.');
-  const json=JSON.stringify(document,null,2)+'\n';
-  if(new TextEncoder().encode(json).byteLength>65536) throw new Error('The local report exceeded its 64 KiB limit. No report was created.');
-  return {document,json};
-}
-function invalidateRoomReport() {
-  roomState.report=null;
-  byId('room-report-download').disabled=true;
-  byId('room-report-discard').disabled=true;
-  byId('room-report-context').textContent='A preview holds its original range and data until you replace or discard it.';
-  const preview=byId('room-report-preview');preview.replaceChildren();preview.hidden=true;
-  byId('room-report-status').textContent=roomState.selection && roomState.selection.events.length
-    ? 'No preview is ready. Preview the current selected range before downloading.'
-    : 'No qualified data is available in the selected range. No report can be created.';
-}
-function previewRoomReport() {
-  try {
-    const report=roomReportDocument();roomState.report=report;
-    const preview=byId('room-report-preview');preview.replaceChildren(textNode('code',report.json));preview.hidden=false;
-    byId('room-report-download').disabled=false;
-    byId('room-report-discard').disabled=false;
-    byId('room-report-context').textContent=`Held preview created ${report.document.generated_at}. Range: ${report.document.range.start} → ${report.document.range.end}. Freshness at creation: ${report.document.freshness}. Refreshes and range changes do not update this preview; preview again to replace it.`;
-    byId('room-report-status').textContent='Preview ready in this browser. Review it, then download explicitly.';
-    return true;
-  } catch(_) {
-    invalidateRoomReport();
-    byId('room-report-status').textContent='No qualified data is available in the selected range. No report was created.';
-    return false;
-  }
-}
-function downloadRoomReport() {
-  if(!roomState.report) {byId('room-report-status').textContent='Preview the current selected range before downloading.';return false;}
-  let url;
-  try {
-    url=URL.createObjectURL(new Blob([roomState.report.json],{type:'application/json'}));
-    const link=document.createElement('a');
-    link.href=url;link.download='megalodon-local-report-'+roomState.report.document.generated_at.replace(/[:.]/g,'-')+'.json';
-    link.click();
-    byId('room-report-status').textContent='Local JSON download requested for the held preview. MEGALODON did not upload it.';
-    return true;
-  } catch(_) {
-    byId('room-report-status').textContent='The browser could not request the download. Your preview is preserved; retry or copy the JSON shown below.';
-    return false;
-  } finally {if(url)setTimeout(()=>URL.revokeObjectURL(url),0);}
-}
 function renderRoom() {
+  if(roomState.history && roomState.managedHistory){renderManagedHistory();return;}
   let selected;
   try {selected=roomSelection(roomState.snapshot,roomState.history?'custom':roomState.range,roomState.history||roomState.custom);} catch(error) {byId('room-notice').textContent=error.message;return;}
   roomState.selection=selected;
@@ -644,14 +535,13 @@ function renderRoom() {
   const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected,selected.findings.length?`${selected.findings.length} linked findings`:'No linked findings',selected.findings.length?'data':'unavailable');roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected,selected.findings.length?'Recorded labels':'No linked findings',selected.findings.length?'data':'unavailable');roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings','No linked finding labels returned');
   const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
   const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach(value=>row.append(textNode('td',value)));body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
-  if(!roomState.report)invalidateRoomReport();
   if(typeof renderTelemetryConnections==='function')renderTelemetryConnections();
 }
 const roomRequests=new Map();
 function requestRoomSnapshot(path='/api/traffic') {
   if(roomRequests.has(path))return roomRequests.get(path);
   const pending=(async()=>{
-    const response=await fetch(path,{method:'GET',cache:'no-store',credentials:'same-origin',mode:'same-origin',redirect:'error',signal:AbortSignal.timeout(5000)});
+    const response=await fetch(path,{method:'GET',headers:{'X-Megalodon-Check':'1'},cache:'no-store',credentials:'same-origin',mode:'same-origin',redirect:'error',signal:AbortSignal.timeout(5000)});
     const reader=response.body?.getReader();if(!reader)throw new Error('Unavailable');let bytes=0,chunks=[];
     try {
       while(true){const {done,value}=await reader.read();if(done)break;if(!(value instanceof Uint8Array))throw new Error('Invalid response');bytes+=value.byteLength;if(bytes>262144)throw new Error('Oversized');chunks.push(value);}
@@ -693,8 +583,11 @@ async function refreshRoom(request=undefined) {
   const history=request?.history===null?null:request?.history||roomState.history;
   roomState.busy=true;renderRoomControls();
   try {
-    const path=history?`/api/traffic-history?start=${encodeURIComponent(new Date(history.start).toISOString())}&end=${encodeURIComponent(new Date(history.end).toISOString())}`+(history.before?'&before='+history.before:''):'/api/traffic';
-    const payload=await requestRoomSnapshot(path);
+    const path=history?`/api/traffic-history-v2?start=${encodeURIComponent(new Date(history.start).toISOString())}&end=${encodeURIComponent(new Date(history.end).toISOString())}`+(history.before?'&cursor='+encodeURIComponent(history.before):''):'/api/traffic';
+    let payload;
+    try{payload=await requestRoomSnapshot(path);}catch(error){if(!history||error.status!==503)throw error;payload=await requestRoomSnapshot(path.replace('/api/traffic-history-v2','/api/traffic-history').replace('&cursor=','&before='));}
+    roomState.managedHistory=null;
+    if(history && payload.schema==='megalodon-traffic-history-v2'){const page=validateManagedHistory(payload,history);roomState.managedHistory=page;roomState.history={...history,next:page.next_cursor,candidates:page.candidate_count};roomState.failed=false;roomState.connected=true;if(request?.range)roomState.range=request.range;return;}
     if(history){const page=validateHistory(payload,history);roomState.history={...history,next:page.next_before,candidates:page.candidate_count};roomState.snapshot=page.traffic;}
     else {roomState.snapshot=validateTraffic(payload);roomState.history=null;}
     if(request?.range){roomState.range=request.range;roomState.custom=request.custom||null;}
@@ -721,7 +614,7 @@ byId('room-newer').addEventListener('click',()=>{const h=roomState.history;if(h?
 byId('room-latest').addEventListener('click',()=>{byId('room-range').value='recorded';byId('room-start-label').hidden=true;byId('room-end-label').hidden=true;refreshRoom({history:null,range:'recorded'});});
 byId('room-pause').addEventListener('click',()=>{if(typeof togglePause==='function'){togglePause();renderRoomControls();}});
 byId('room-refresh').addEventListener('click',refreshRoom);
-byId('room-report-create').addEventListener('click',previewRoomReport);
-byId('room-report-download').addEventListener('click',downloadRoomReport);
-byId('room-report-discard').addEventListener('click',invalidateRoomReport);
 """
+
+from .dashboard_history import HISTORY_JS
+ROOM_JS += HISTORY_JS

@@ -10,7 +10,7 @@ INTEGRATIONS_HTML = """
       <span class="timestamp" id="integrations-profile">No profile loaded</span>
     </div>
     __ACTION_PLANE__
-    <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found during the bounded startup PATH check. Red means it was not found on that checked PATH. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
+    <p class="reference-warning" id="integrations-boundary">Green means a candidate executable was found in the checked PATH or known installation locations. Red means it was not found in those locations. Neither proves installation method, compatibility, running health, sensor coverage, or trust.</p>
     <p class="reference-status" id="integrations-freshness">Presence: not checked yet.</p>
     <div class="app-state-legend" aria-label="App status legend">
       <span class="state-found"><i class="app-dot" aria-hidden="true"></i>Found candidate</span>
@@ -259,8 +259,8 @@ const integrationIds = [
   'local-ai-advisory', 'network-inventory-import'
 ];
 const integrationPresenceStates = {
-  executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found on the bounded startup PATH; installation method and compatibility remain unverified.'},
-  not_found: {filter: 'missing', className: 'state-missing', label: 'Not found on checked PATH', detail: 'The executable was absent from the checked Linux PATH; it may exist elsewhere.'},
+  executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found in the bounded PATH or known installation locations; installation method and compatibility remain unverified.'},
+  not_found: {filter: 'missing', className: 'state-missing', label: 'Not found in checked locations', detail: 'The executable was absent from the checked Linux locations; it may exist elsewhere.'},
   not_checked: {filter: 'unknown', className: 'state-unknown', label: 'Presence not checked', detail: 'This app was not eligible for the executable-only startup check.'}
 };
 const integrationQualificationStates = {
@@ -333,7 +333,7 @@ function integrationCapabilityState(toolIndex, item) {
     qualification: {...integrationQualificationStates[item.selected_status],
       detail: integrationStatuses[item.selected_status] + '; producer qualification and native acceptance remain separate.'},
     administration: {className: 'state-unknown', label: 'Operator managed',
-      detail: 'Observation is the default. An explicitly enabled Linux HUD and its operator token allow fixed Install/Start actions and GUI-only support-app launches after confirmation. The HUD has no stop, removal, or configuration action.'},
+      detail: 'Setup contains fixed installation, configuration, verification and supported removal workflows. Privileged changes require OS authorization. Startup remains in the HUD; optional desktop launches are separate.'},
     health: {className: 'state-unknown', label: 'See the status light',
       detail: 'The heartbeat observes installation, process uptime and service state. It does not probe endpoints, sensor liveness, data freshness, or coverage.'}
   };
@@ -363,19 +363,18 @@ function integrationCard(item) {
                 integrationStatusRow('MEGALODON support', capability.qualification),
                 integrationStatusRow('Administration', capability.administration),
                 integrationStatusRow('Health', capability.health));
-  body.append(matrix, heartbeatDetail(toolId), installControl(toolId, item.software));
+  body.append(matrix, heartbeatDetail(toolId));
   const reviewTargets = {core: '#detections-title', tshark: '#offline-title', zeek: '#offline-title', suricata: '#suricata-title', qwen: '#analysis-window-title'};
   if (reviewTargets[toolId]) {
     const review = textNode('a', 'Review evidence →', 'companion-button'); review.href = reviewTargets[toolId]; body.append(review);
   }
-  const localControls = Object.assign({local: true}, typeof appConsole === 'undefined' ? {} : appConsole);
-  MegalodonControls.mount(body, toolId, item.software, localControls);
-  body.append(textNode('p', 'View in HUD provides a place for this app. If its console blocks embedding or requires a separate sign-in window, use Open companion console.', 'app-return-note'));
+  const configure = textNode('a', 'Configure '+item.software+' →', 'companion-button');
+  configure.href='#setup-app-'+toolId;body.append(configure);
   const flow = document.createElement('dl'); flow.className = 'integration-flow';
   integrationDefinition('Input', item.input_contract, flow);
   integrationDefinition('Output', item.output_contract, flow);
   const details = document.createElement('details');
-  details.append(textNode('summary', 'Data connection details'), flow, textNode('p', `Next gate: ${item.next_gate}`, 'integration-gate'));
+  details.append(textNode('summary', 'Legacy CLI adapter details'), flow, textNode('p', `Next gate: ${item.next_gate}`, 'integration-gate'));
   const facts = document.createElement('dl');
   [
     ['Workflow', item.id], ['Source kind', item.source_kind], ['Integration owner', item.integration_owner],
@@ -464,3 +463,34 @@ byId('integrations-clear').addEventListener('click', () => {
   byId('integrations-presence-filter').value = 'ALL'; renderIntegrationMap();
 });
 """
+
+APPS_SETUP_HTML = r'''
+<section class="panel apps-setup" id="apps-connections" aria-labelledby="apps-connections-title">
+  <div class="panel-head"><div><p class="eyebrow">SUPPORT APPS / ONE PLACE TO PREPARE</p><h3 id="apps-connections-title" tabindex="-1">Apps &amp; connections</h3><p>Install, configure, and check each app here. Their current activity remains in Sensors and the HUD.</p></div><a href="#support-apps-title">Start background tools →</a></div>
+  <div class="apps-setup-search"><label for="apps-setup-query">Find an app<input id="apps-setup-query" type="search" maxlength="80" placeholder="Name or purpose" autocomplete="off"></label><a href="#setup-title">Check this computer →</a></div>
+  <div id="apps-setup-cards" class="apps-setup-cards"></div><p id="apps-setup-status" role="status" class="apps-setup-status"></p>
+</section>
+'''
+APPS_SETUP_JS = r'''
+(() => {
+ const root=byId('apps-setup-cards');if(!root||typeof window.addEventListener!=='function')return;
+ const names={core:'Python and SQLite',tshark:'Wireshark and TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Qwen via local Ollama',nmap:'Nmap'};
+ const settings={tshark:'support-capture-title',scapy:'support-capture-title',zeek:'support-config-zeek',suricata:'support-config-suricata-setup',clamav:'support-config-clamav-save',osquery:'support-config-osquery',qwen:'support-config-qwen-setup',nmap:'support-config-nmap-save'};
+ const cards=[];
+ for(const id of MegalodonControls.ids){
+  const card=textNode('details','','apps-setup-card');card.id='setup-app-'+id;
+  const summary=textNode('summary',names[id]);card.append(summary);
+  const content=textNode('div','','apps-setup-content');
+  const status=textNode('p');status.append(heartbeatLight(id),heartbeatDetail(id));content.append(status,installControl(id,names[id]));
+  if(settings[id]){const configure=textNode('a','Configure for MEGALODON →','companion-button');configure.href='#'+settings[id];content.append(configure);}
+  const options=Object.assign({local:true},typeof appConsole==='undefined'?{}:appConsole);MegalodonControls.mount(content,id,names[id],options);
+  card.append(content);root.append(card);cards.push({id,card,name:names[id].toLowerCase()});
+ }
+ function filter(){const query=byId('apps-setup-query').value.trim().toLowerCase().slice(0,80);let shown=0;for(const item of cards){item.card.hidden=!item.name.includes(query);if(!item.card.hidden)shown++;}byId('apps-setup-status').textContent=shown+' of '+cards.length+' apps.';}
+ function anchor(){const target=(window.location?.hash||'').slice(1),item=cards.find(item=>'setup-app-'+item.id===target);if(item){byId('apps-setup-query').value='';filter();item.card.open=true;item.card.querySelector('summary').focus({preventScroll:true});}}
+ byId('apps-setup-query').addEventListener('input',filter);window.addEventListener('hashchange',anchor);filter();anchor();
+})();
+'''
+INTEGRATIONS_CSS += r'''
+.apps-setup{margin:0 0 1.5rem}.apps-setup-search{display:flex;align-items:end;gap:1.3rem;padding:0 22px 1rem}.apps-setup-search label{display:grid;gap:.5rem;flex:1;max-width:520px;color:#bdd0d9;font-size:.9rem}.apps-setup-search input{min-height:44px;font:inherit;background:#09212c;color:#edf7f7;border:1px solid #406776;padding:.7rem}.apps-setup-search a,.apps-setup .panel-head a{font-size:.9rem;color:#a7ece5}.apps-setup-cards{padding:0 22px}.apps-setup-card{border-top:1px solid #355561}.apps-setup-card>summary{padding:1rem 0;cursor:pointer;font-size:1rem;font-weight:700;min-height:48px}.apps-setup-content{padding:0 .5rem 1rem}.apps-setup-status{padding:0 22px 1rem;font-size:.875rem;color:#bdd0d9}.apps-setup [hidden]{display:none!important}.apps-setup :focus-visible{outline:3px solid #a6f4df;outline-offset:3px}@media(max-width:600px){.apps-setup-search{display:grid}.apps-setup .panel-head{display:block}.apps-setup .panel-head a{display:inline-block;margin-top:.7rem}}
+'''

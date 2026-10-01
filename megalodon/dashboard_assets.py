@@ -5,6 +5,10 @@ probe a host, or start an integration. The dashboard module re-exports these
 constants to preserve the existing public/test interface.
 """
 
+from .dashboard_network import NETWORK_CSS, NETWORK_JS
+from .dashboard_storage import STORAGE_CSS, STORAGE_JS
+from .dashboard_reports import REPORTS_CSS, REPORTS_JS
+from .dashboard_integrations import APPS_SETUP_HTML, APPS_SETUP_JS
 from .dashboard_operations import OPERATIONS_CSS, OPERATIONS_JS, compose_operations
 from .dashboard_workflows import WORKFLOWS_CSS, WORKFLOWS_JS, compose_workflows, local_workflow_script
 from .dashboard_live_globe import LIVE_GLOBE_CSS, LIVE_GLOBE_JS, compose_live_globe
@@ -15,7 +19,7 @@ from .dashboard_inventory import INVENTORY_JS, INVENTORY_CSS
 from .dashboard_clamav import CLAMAV_JS, CLAMAV_CSS
 from .dashboard_osquery import OSQUERY_JS, OSQUERY_CSS
 from .dashboard_integrations import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
-from .dashboard_snapshot import SNAPSHOT_VALIDATOR_JS, SNAPSHOT_LOCAL_JS
+from .dashboard_snapshot import TELEMETRY_CONNECTIONS_JS
 from .dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
@@ -35,7 +39,7 @@ INDEX_HTML = """<!doctype html>
   <script src="/assets/dashboard.js" defer></script>
 </head>
 <body>
-<a class="skip-link" id="skip-link" href="#detections-title">Skip to findings</a>
+<a class="skip-link" id="skip-link" href="#room-findings-title">Skip to findings</a>
 <main class="shell">
   <header class="topbar">
     <div class="brand" aria-label="MEGALODON">
@@ -110,38 +114,9 @@ INDEX_HTML = """<!doctype html>
 
   <nav class="next-actions" aria-label="Common tasks">
     <a href="#detections-title"><strong>Review findings</strong><span>Open the newest stored findings.</span></a>
-    <button id="open-report-studio" type="button"><strong>Create a report</strong><span>Export an overview, alert review, or ingestion summary.</span></button>
+    <a href="#room-reports-title"><strong>Make a report</strong><span>A visual overview, ready to save or print.</span></a>
     <a href="#integrations-title"><strong>Open tools</strong><span>Review companion apps and their setup instructions.</span></a>
   </nav>
-
-  <details class="panel report-studio" id="report-studio">
-    <summary><span><strong id="report-title">Create a report</strong><small>Choose a purpose, preview the result, then export it locally.</small></span><span class="summary-action" id="report-studio-action">Open report builder</span></summary>
-    <div class="report-layout">
-      <div class="report-controls">
-        <label class="field" for="report-scope"><span>Report purpose</span>
-          <select id="report-scope">
-            <option value="overview">Operations overview</option>
-            <option value="detections">Detection review</option>
-            <option value="ingestion">Ingestion health</option>
-          </select>
-        </label>
-        <label class="field" for="report-title-input"><span>Report title</span><input id="report-title-input" maxlength="80" value="MEGALODON local telemetry report"></label>
-        <div class="report-actions">
-          <button id="report-preview" type="button">Update preview</button>
-          <button id="report-copy" type="button" class="button-secondary">Copy summary</button>
-          <button id="report-json" type="button" class="button-secondary">Download JSON</button>
-          <button id="report-csv" type="button" class="button-secondary">Download CSV</button>
-          <button id="report-print" type="button" class="button-secondary">Print / save PDF</button>
-        </div>
-        <p class="report-feedback" id="report-feedback" role="status" aria-live="polite">Choose a purpose, then update the preview.</p>
-      </div>
-      <article class="report-preview" id="report-preview-card" aria-live="polite">
-        <p class="eyebrow">Preview</p>
-        <h3>MEGALODON local telemetry report</h3>
-        <p>No successful dashboard snapshot is available yet.</p>
-      </article>
-    </div>
-  </details>
 
   <section class="panel" id="triage-panel" aria-labelledby="detections-title" aria-busy="true">
     <div class="panel-head">
@@ -384,7 +359,7 @@ body::before {
 :focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .skip-link { position: fixed; z-index: 10; top: 10px; left: 10px; padding: 9px 12px; transform: translateY(-160%); border-radius: 9px; background: var(--text); color: var(--bg); font-weight: 800; }
 .skip-link:focus { transform: translateY(0); }
-.shell { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr); width: min(1240px, calc(100% - 32px)); height: 100%; margin: 0 auto; padding: 20px 0 16px; }
+.shell { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr); width: min(2200px, calc(100% - 32px)); height: 100%; margin: 0 auto; padding: 20px 0 16px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
 .brand { display: flex; align-items: center; gap: 13px; }
 .mark {
@@ -406,6 +381,12 @@ body::before {
 .connection.error::before { background: var(--rose); box-shadow: 0 0 0 5px rgba(255, 117, 143, .1); }
 .connection-state { display: grid; justify-items: end; gap: 3px; }
 .connection-state > span { color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 380px) {
+  .topbar { flex-wrap: wrap; gap: 10px; }
+  .connection-state { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .connection-state .connection { min-width: 0; }
+  .connection-state > span { max-width: 7.5rem; text-align: right; }
+}
 .section-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: rgba(3, 13, 19, .68); }
 .section-nav button { min-height: 44px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 800; }
 .section-nav button:hover:not(:disabled) { border-color: rgba(81, 230, 207, .28); color: #c8fff7; background: rgba(81, 230, 207, .06); }
@@ -603,7 +584,7 @@ code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; back
   .reference-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .shell { width: min(100% - 20px, 1240px); padding: 12px 0 10px; }
+  .shell { width: min(100% - 20px, 2200px); padding: 12px 0 10px; }
   .topbar { align-items: flex-start; } .brand-subtitle { display: none; } .connection { max-width: 145px; }
   .trust-strip { padding: 14px; } .trust-facts { grid-template-columns: 1fr; }
   .section-nav { gap: 4px; padding: 4px; } .section-nav button { padding: 7px 5px; font-size: .72rem; } .workspace-scroll { padding-top: 6px; } .section-intro { gap: 4px; margin-top: 24px; } .analysis-window { padding: 15px; } .analysis-facts { grid-template-columns: 1fr; }
@@ -753,15 +734,17 @@ const workspaceIds = ['live', 'findings', 'interfaces', 'setup', 'reports', 'ana
 const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
   'live-globe-title': 'live', 'live-globe-history': 'live', 'support-config-title': 'setup', 'support-apps-title': 'live', 'pc-live-title': 'live',
-  'activity-globe-title': 'live', 'hud-export-title': 'live', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
+  'activity-globe-title': 'live', 'hud-export-title': 'reports', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
   'workspace-traffic': 'live', 'workspace-findings': 'findings',
-  'setup-location-title':'setup', 'support-capture-title':'setup', 'support-config-interface':'setup', 'workspace-setup':'setup', 'settings':'setup', 'operations-title':'live', 'operations-history':'live', 'workspace-reports': 'reports', 'workspace-help': 'help',
+  'storage-history-title':'setup', 'network-setup-title':'setup', 'storage-evidence-title':'analysis', 'network-title':'live', 'setup-location-title':'setup', 'support-capture-title':'setup', 'support-config-interface':'setup', 'workspace-setup':'setup', 'settings':'setup', 'operations-title':'live', 'operations-history':'live', 'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
   'room-home-title': 'live', 'setup-title': 'setup', 'tool-management-controls': 'setup', 'room-traffic-title': 'live', 'room-findings-title': 'findings',
-  'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'setup',
+  'apps-connections-title':'setup', 'apps-connections':'setup', 'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'setup',
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'action-plane-title': 'setup', 'app-service-start-title': 'setup', 'app-viewer-title': 'setup', 'analysis-window-title': 'analysis',
+  ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'].map(id=>['setup-app-'+id,'setup'])),
+  ...Object.fromEntries(['zeek','suricata-setup','clamav-save','osquery','qwen-setup','nmap-save'].map(id=>['support-config-'+id,'setup'])),
   'help-language': 'help', 'status-glossary': 'help'
 };
 const state = {
@@ -830,6 +813,7 @@ function activateWorkspace(nextWorkspace, moveFocus = false) {
   });
   scroller.scrollTop = positions[nextWorkspace] || 0;
   workspaceNavigation.active = nextWorkspace;
+  window.MegalodonNetwork?.refresh();
   if (nextWorkspace === 'interfaces' && typeof maybeLoadIntegrationMap === 'function') maybeLoadIntegrationMap();
   if (moveFocus) {
     const tab = byId(`workspace-tab-${nextWorkspace}`);
@@ -1525,88 +1509,6 @@ function renderTrafficUnavailable(preserve = false) {
     byId('protocol-mix').replaceChildren();
   }
 }
-function reportSnapshot() {
-  const scope = byId('report-scope').value;
-  const ingestion = scope === 'ingestion';
-  if (ingestion ? !state.ingestionRunsFetchedAt : !state.summary || !state.traffic || !state.lastSuccessfulRefresh) return null;
-  const title = byId('report-title-input').value.trim() || 'MEGALODON local telemetry report';
-  const generatedAt = new Date().toISOString();
-  const refreshedAt = ingestion ? new Date(state.ingestionRunsFetchedAt) : state.lastSuccessfulRefresh;
-  const refreshedLabel = formatRefreshTime(refreshedAt);
-  const common = {
-    schema: 'megalodon-browser-report-v1', title, scope, generated_at: generatedAt,
-    last_dashboard_refresh: refreshedAt.toISOString(),
-    bounds: ingestion ? 'Newest 8 stored core ingestion receipts maximum, across all recorded sources.'
-      : `Newest ${state.config.event_limit} detections and ${state.traffic.sample_limit} traffic records maximum`,
-    limitation: ingestion
-      ? 'Stored run counts are events, findings, and plan-only action records; adapter identity and accepted/rejected counts are not recorded. No sensor liveness, coverage, or host action is established.'
-      : 'Stored metadata only; not capture completeness, wire speed, service health, or incident state.'
-  };
-  if (scope === 'detections') return {...common,
-    source_scope: `${state.events.length} stored alerts shown from a maximum of ${state.config.event_limit}. Updated ${refreshedLabel}.`,
-    detections: state.events.map(item => ({...item}))};
-  if (scope === 'ingestion') {
-    return {...common,
-      source_scope: `${state.ingestionRuns.length} all-source run receipts loaded ${formatRefreshTime(new Date(state.ingestionRunsFetchedAt))}. Panel source filters do not change this report.`,
-      ingestion_runs: state.ingestionRuns.map(item => ({...item}))};
-  }
-  return {...common,
-    source_scope: `The counts above plus ${state.traffic.sampled_events} traffic records from a maximum of ${state.traffic.sample_limit}. Updated ${refreshedLabel}.`,
-    summary: {...state.summary}, traffic: {
-    sampled_events: state.traffic.sampled_events, total_bytes: state.traffic.total_bytes,
-    first_observed_at: state.traffic.first_observed_at, last_observed_at: state.traffic.last_observed_at,
-    protocols: state.traffic.protocols.map(item => ({...item}))
-  }};
-}
-function reportPlainText(report) {
-  const lines = [report.title, `Generated: ${report.generated_at}`, `Scope: ${report.scope}`, `Source scope: ${report.source_scope}`, report.bounds];
-  if (report.summary) lines.push(`Events: ${report.summary.events}`, `Findings: ${report.summary.detections}`, `High / critical: ${report.summary.high_or_critical}`, `Actions: ${report.summary.actions}`, `Traffic sample: ${report.traffic.sampled_events} events, ${formatBytes(report.traffic.total_bytes)}`);
-  if (report.detections) lines.push(`Returned findings: ${report.detections.length}`);
-  if (report.ingestion_runs) lines.push(`Returned ingestion receipts: ${report.ingestion_runs.length}`);
-  lines.push(`Limitation: ${report.limitation}`); return lines.join('\n');
-}
-function renderReportPreview() {
-  const report = reportSnapshot(), card = byId('report-preview-card');
-  if (!report) {
-    const reason = byId('report-scope').value === 'ingestion' && !state.ingestionRunsFetchedAt
-      ? 'Load the all-source ingestion receipts before creating this report.'
-      : 'Wait for one successful summary and traffic refresh.';
-    card.replaceChildren(textNode('p', 'Preview', 'eyebrow'), textNode('h3', 'Report unavailable'), textNode('p', reason));
-    byId('report-feedback').textContent = reason; return null;
-  }
-  const facts = document.createElement('dl');
-  const entries = report.summary
-    ? [['Stored events', report.summary.events], ['Findings', report.summary.detections], ['Traffic records', `${report.traffic.sampled_events} · ${formatBytes(report.traffic.total_bytes)}`]]
-    : report.detections
-      ? [['Returned rows', report.detections.length], ['Priority rows', report.detections.filter(item => prioritySeverities.has(item.severity)).length], ['Newest bound', state.config.event_limit]]
-      : [['Run receipts', report.ingestion_runs.length], ['Running receipts', report.ingestion_runs.filter(item => item.status === 'running').length], ['Needs review', report.ingestion_runs.filter(item => !['running', 'completed'].includes(item.status)).length]];
-  entries.forEach(([label, value]) => { const item = document.createElement('div'); const shown = typeof value === 'number' ? formatNumber(value) : String(value); item.append(textNode('dt', label), textNode('dd', shown)); facts.append(item); });
-  card.replaceChildren(textNode('p', 'Preview', 'eyebrow'), textNode('h3', report.title), textNode('p', `Generated ${formatRefreshTime(new Date(report.generated_at))} from the last successful local dashboard refresh.`), facts, textNode('p', `Source scope: ${report.source_scope}`), textNode('p', report.limitation));
-  byId('report-feedback').textContent = 'Preview updated. Choose copy, download, or print.'; return report;
-}
-function reportCsv(report) {
-  const quote = value => {
-    const text = String(value ?? '');
-    // CSV quoting contains delimiters, but does not make formulas inert.
-    // Protect every cell, including metadata; never change the source report.
-    const formulaLike = /^[\x00-\x1f]|^[\s\x00-\x1f]*[=+@-]/u.test(text);
-    const exported = formulaLike ? "'" + text : text;
-    return `"${exported.replaceAll('"', '""')}"`;
-  };
-  let rows;
-  if (report.detections) rows = [['detected_at', 'severity', 'rule_id', 'src_ip', 'message'], ...report.detections.map(item => [item.detected_at, item.severity, item.rule_id, item.src_ip, item.message])];
-  else if (report.ingestion_runs) rows = [['run_id', 'source', 'status', 'started_at', 'finished_at', 'processed_count', 'detection_count', 'action_count', 'termination_reason', 'failure_code'], ...report.ingestion_runs.map(item => [item.run_id, item.source, item.status, item.started_at, item.finished_at, item.processed_count, item.detection_count, item.action_count, item.termination_reason, item.failure_code])];
-  else rows = [['metric', 'value'], ['events', report.summary.events], ['detections', report.summary.detections], ['high_or_critical', report.summary.high_or_critical], ['actions', report.summary.actions], ['traffic_sampled_events', report.traffic.sampled_events], ['traffic_total_bytes', report.traffic.total_bytes]];
-  rows = [['report_scope', report.scope], ['source_scope', report.source_scope], ['last_dashboard_refresh', report.last_dashboard_refresh],
-    ['bounds', report.bounds], ['limitation', report.limitation],
-    ['csv_text_policy', 'Formula-like cells are prefixed with an apostrophe for spreadsheet review. Use JSON for original text.'], [], ...rows];
-  return rows.map(row => row.map(quote).join(',')).join('\n') + '\n';
-}
-function downloadReport(contents, extension, type) {
-  const blob = new Blob([contents], {type}); const url = URL.createObjectURL(blob);
-  const link = document.createElement('a'); link.href = url; link.download = `megalodon-report-${new Date().toISOString().slice(0, 10)}.${extension}`;
-  link.click(); URL.revokeObjectURL(url);
-}
 function hasActiveFilters() {
   return Boolean(
     byId('filter-query').value.trim()
@@ -2159,7 +2061,7 @@ async function refresh(announce = true) {
     state.summary = summary;
     state.lastSuccessfulRefresh = new Date();
     state.lastRefreshFailed = false;
-    renderMetrics(summary); renderTraffic(traffic); renderRuleOptions(); renderReturnedSummary(); applyFilters(); renderScope(); renderReportPreview();
+    renderMetrics(summary); renderTraffic(traffic); renderRuleOptions(); renderReturnedSummary(); applyFilters(); renderScope();
     updatePriorityChange(summary);
     setSnapshotStatus(state.paused ? 'paused' : 'current');
     setConnection(state.paused ? 'Dashboard API · reachable, refresh paused' : 'Dashboard API · reachable', 'ok');
@@ -2184,6 +2086,7 @@ async function refresh(announce = true) {
 }
 function togglePause() {
   state.paused = !state.paused;
+  window.MegalodonNetwork?.refresh();
   const button = byId('pause-button'); button.setAttribute('aria-pressed', String(state.paused));
   button.textContent = state.paused ? 'Resume refresh' : 'Pause refresh';
   if (state.paused) {
@@ -2258,39 +2161,8 @@ byId('reference-clear').addEventListener('click', () => {
   clearReferenceResult(); syncReferenceControls();
   setReferenceStatus('Displayed context cleared. Stored records and the server cache were not changed.', referenceState.available ? 'ready' : 'unavailable');
 });
-byId('open-report-studio').addEventListener('click', () => {
-  const studio = byId('report-studio');
-  studio.open = true;
-  byId('report-studio-action').textContent = 'Close report builder';
-  renderReportPreview();
-  if (typeof studio.scrollIntoView === 'function') studio.scrollIntoView({block: 'start'});
-});
-byId('report-studio').addEventListener('toggle', event => {
-  byId('report-studio-action').textContent = event.currentTarget.open ? 'Close report builder' : 'Open report builder';
-});
 byId('triage-tools').addEventListener('toggle', event => {
   byId('triage-tools-action').textContent = event.currentTarget.open ? 'Hide controls' : 'Show controls';
-});
-byId('report-preview').addEventListener('click', renderReportPreview);
-byId('report-scope').addEventListener('change', renderReportPreview);
-byId('report-copy').addEventListener('click', async () => {
-  const report = renderReportPreview(); if (!report) return;
-  try { await navigator.clipboard.writeText(reportPlainText(report)); byId('report-feedback').textContent = 'Plain-language report summary copied.'; }
-  catch (_) { byId('report-feedback').textContent = 'Clipboard unavailable. Select the preview text to copy it.'; }
-});
-byId('report-json').addEventListener('click', () => {
-  const report = renderReportPreview(); if (!report) return;
-  downloadReport(JSON.stringify(report, null, 2) + '\n', 'json', 'application/json');
-  byId('report-feedback').textContent = 'Bounded JSON report downloaded.';
-});
-byId('report-csv').addEventListener('click', () => {
-  const report = renderReportPreview(); if (!report) return;
-  downloadReport(reportCsv(report), 'csv', 'text/csv');
-  byId('report-feedback').textContent = 'Bounded CSV report downloaded.';
-});
-byId('report-print').addEventListener('click', () => {
-  const report = renderReportPreview(); if (!report) return;
-  window.print();
 });
 ['reference-transport', 'reference-port', 'reference-protocol'].forEach(id => {
   byId(id).addEventListener(id === 'reference-transport' ? 'change' : 'input', referenceInputChanged);
@@ -2306,7 +2178,7 @@ from .dashboard_companion import COMPANION_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 
-DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS + SUPPORT_APPS_CSS + SUPPORT_CONFIG_CSS + LIVE_GLOBE_CSS + WORKFLOWS_CSS + OPERATIONS_CSS
+DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS + SUPPORT_APPS_CSS + SUPPORT_CONFIG_CSS + LIVE_GLOBE_CSS + WORKFLOWS_CSS + OPERATIONS_CSS + NETWORK_CSS + STORAGE_CSS + REPORTS_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
 INDEX_HTML = local_support_help(compose_control_room(INDEX_HTML))
 INDEX_HTML = INDEX_HTML.replace('<!-- HUD_SUPPORT_APPS -->', SUPPORT_APPS_HTML)
@@ -2316,7 +2188,8 @@ INDEX_HTML = INDEX_HTML.replace('<!-- HUD_ACTIVITY_GLOBE -->', GLOBE_HTML)
 INDEX_HTML = compose_workflows(compose_live_globe(INDEX_HTML, GLOBE_HTML))
 INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = compose_operations(INDEX_HTML)
+INDEX_HTML = INDEX_HTML.replace('<section class="storage-panel" id="storage-setup"', APPS_SETUP_HTML + '<section class="storage-panel" id="storage-setup"', 1)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + SNAPSHOT_VALIDATOR_JS + SNAPSHOT_LOCAL_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + "\nbootstrap();\n"
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

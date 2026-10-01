@@ -198,8 +198,9 @@ process.stdin.on('end', async () => {
         }, async cancel() {}}; }}};
     }
     const context = {document, AbortController, Intl, Date, Number, String, Math, Set, Promise, Error, Array,
+      setTimeout: () => 1, clearTimeout: () => {},
       TextDecoder, Uint8Array,
-      window: {location: {hash: ''}, addEventListener() {}, setTimeout: setTimeout, clearTimeout: clearTimeout},
+      window: {location: {hash: ''}, addEventListener() {}, setTimeout: () => 1, clearTimeout: () => {}},
       fetch: async path => { calls.push(path); return responseFor(new Uint8Array(Buffer.from(JSON.stringify(value)))); }};
     vm.createContext(context);
     vm.runInContext(input.replace(/\nbootstrap\(\);\s*$/, '\n'), context, {timeout: 1000});
@@ -238,7 +239,7 @@ process.stdin.on('end', async () => {
       assert.throws(() => run('validatedAdvisoryEnvelope(bad)'));
     }
     await run('loadAdvisoryReceipt()');
-    assert.deepEqual(calls, ['/api/advisory-receipt']);
+    assert.deepEqual(calls.filter(path => path === '/api/advisory-receipt'), ['/api/advisory-receipt']);
     assert.equal(nodes.get('analysis-window-title').textContent, 'Qwen advisory receipt · display only');
     context.fetch = async path => { calls.push(path); return responseFor(new Uint8Array(8193)); };
     await run('loadAdvisoryReceipt()');

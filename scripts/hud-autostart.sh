@@ -3,8 +3,8 @@
 set -euo pipefail
 
 case "${1:-}" in
-  enable|disable) ;;
-  *) echo 'Usage: ./scripts/hud-autostart.sh enable [--start] | disable' >&2; exit 2 ;;
+  start|enable|disable) ;;
+  *) echo 'Usage: ./scripts/hud-autostart.sh start | enable [--start] | disable' >&2; exit 2 ;;
 esac
 
 release_python="${XDG_DATA_HOME:-$HOME/.local/share}/megalodon/current/venv/bin/python"

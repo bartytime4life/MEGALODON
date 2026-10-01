@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import selectors
 import shutil
+import sqlite3
 import stat
 import subprocess
 from threading import Event, Lock, Thread
@@ -218,6 +219,7 @@ class CompanionAutomation:
         self._next_collection = {kind: 0.0 for kind in _KINDS}
         self._requested: set[str] = set()
         self._active: set[str] = set()
+        self.evidence = None
 
     def start(self) -> None:
         if self._threads:
@@ -276,7 +278,10 @@ class CompanionAutomation:
                     "results": json.loads(json.dumps(self._results)),
                     "status": dict(self._status), "advisory": dict(self._advisory)}
 
-    def _publish(self, kind: str, value: dict, source: str) -> None:
+    def _publish(self, kind: str, value: dict, source: str, *, checkpoint=None) -> None:
+        if self.evidence is not None and self.evidence.enabled:
+            self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
+                source=source,data=dict(tool=kind,summary=value))],checkpoint=checkpoint)
         with self._lock:
             self._results[kind] = value
             self._status[kind] = f"{source} · completed; saved aggregate"
@@ -292,6 +297,9 @@ class CompanionAutomation:
                 explanation = generate(self.ai, prompt, max_tokens=120)
             except (AIProviderError, ValueError) as exc:
                 explanation = f"Qwen unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
+            if self.evidence is not None and self.evidence.enabled:
+                self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
+                    source='local Qwen advisory',data=dict(tool=kind,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
             with self._lock:
                 self._advisory[kind] = explanation[:1024]
 
@@ -312,7 +320,8 @@ class CompanionAutomation:
                     assert self.config.watch_clamscan_exit is not None
                     parts.append(self.config.watch_clamscan_exit)
                 signature = tuple((part.stat().st_ino, part.stat().st_mtime_ns, part.stat().st_size) for part in parts)
-                if self._seen.get(kind) == signature:
+                saved=self.evidence.checkpoint('companion_'+kind) if self.evidence is not None and self.evidence.enabled else None
+                if self._seen.get(kind) == signature or saved and saved.get('signature')==[list(v) for v in signature]:
                     continue
                 raw = _read_bounded(path, _LIMITS[kind])
                 if kind == "nmap":
@@ -324,13 +333,13 @@ class CompanionAutomation:
                     value = clamav_summary(raw, int(exit_raw.strip()))
                 else:
                     value = osquery_summary(raw)
+                self._publish(kind, value, "Watched report",checkpoint=('companion_'+kind,dict(signature=signature)))
                 self._seen[kind] = signature
-                self._publish(kind, value, "Watched report")
             except FileNotFoundError:
                 # A producer has not written this optional report yet. Local
                 # collection can still provide a current aggregate.
                 continue
-            except (OSError, ValueError, AssertionError):
+            except (OSError, ValueError, AssertionError, sqlite3.Error):
                 self._fail(kind, "Watched report unavailable or rejected; prior aggregate preserved")
 
     def _collect(self, due: set[str]) -> None:
@@ -363,7 +372,7 @@ class CompanionAutomation:
                          "Downloads" if kind == "clamav" and self.config.clamav_paths == (Path.home() / "Downloads",) else
                          "configured folders" if kind == "clamav" else "this PC")
                 self._publish(kind, value, f"Local collector ({scope})")
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, sqlite3.Error) as exc:
                 if str(exc) == "companion tool unavailable":
                     self._fail(kind, f"{argv[0]} is not installed; automatic collection unavailable")
                 else:

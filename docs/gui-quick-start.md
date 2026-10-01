@@ -3,15 +3,30 @@
 Open MEGALODON, check what is available, then choose the task you need. You can
 read saved data and make reports without installing every companion tool.
 
+## App installation and configuration
+
+Open **Setup → Apps & connections**. Each app has its current presence status,
+its publisher link, an installation option where supported, and **Configure for
+MEGALODON** for tools with a built-in configuration workflow. This shortcut opens
+the real settings controls without starting an action.
+
+Supported Install buttons remain visible when locked. **Authorize installation
+and service starts** explains the per-launch token requirement. Zeek and osquery
+use publisher-guided installation. Ollama must be installed before downloading
+the Qwen model. Installed packages are not reinstalled by opening this page.
+The advanced copied commands use the serving MEGALODON environment and can run
+from any terminal folder. Removal still requires explicit terminal confirmation.
+
 ## 1. Install and open the workspace
 
-From your reviewed Linux checkout, run `./scripts/install-local.sh`, then open
-**MEGALODON** from the application menu. The desktop launcher opens the browser
-after the loopback server binds. Keep its terminal open while you work;
-**Ctrl+C** stops the server.
+Double-click **Start-MEGALODON.sh** in your reviewed Linux checkout and choose
+**Run in Terminal** if prompted. It installs once, starts the local background
+HUD, and opens your browser. Later you can use the same script or **MEGALODON**
+in the application menu. The launch terminal closes once the workspace opens.
+If background services are unavailable, keep the foreground fallback terminal
+open; **Ctrl+C** there stops the HUD.
 
-If you separately enabled HUD autostart, the menu instead reopens the existing
-background session. Explicit launcher options start a new foreground session;
+Normal launches reuse the existing background session. Explicit launcher options start a new foreground session;
 they do not update the background HUD. Use **Data and tools → Change data for
 the next launch → Local port** to prepare a command on an unused port, then open
 the address printed by the new session. See [separate-session launch options](local-pc-setup.md#open-a-separate-session-with-explicit-options).
@@ -106,7 +121,6 @@ port if another HUD is running. Typing a path into the form does not open that
 file. Existing sessions retain their settings, including companion collection
 and sign-in choices.
 
-The [hosted reference console](../site/README.md) has no connection to this PC.
-Its download links and local report import are useful, but status lights,
-installs and local machine checks run only in the localhost HUD. Linux is the reference platform; see the
+The local HUD is the sole MEGALODON application. The former hosted reference
+console is retired. Linux is the reference platform; see the
 [platform baseline](platform-baseline.md) for Windows evaluation and other limits.

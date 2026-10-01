@@ -22,7 +22,10 @@ actually loaded into memory.
 `qwen2.5:7b-instruct-fp16`, and observed manifest digest
 `59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c`.
 The request timeout is at most 15 seconds, context at most 4096 tokens, and
-output at most 256 tokens. Model and endpoint cannot come from a model reply or
+output at most 256 tokens. Readiness, ordinary advice and defense requests all
+set the processing batch to 64 tokens to reduce temporary GPU memory demand.
+This is an [Ollama runner option](https://github.com/ollama/ollama/blob/main/api/types.go),
+not a change to the context or output limit. Model and endpoint cannot come from a model reply or
 HTTP request. Changing the TOML pin requires an operator edit and review.
 
 Before every inference, the adapter observes `/proc/net/tcp{,6}` and refuses

@@ -7,6 +7,27 @@ and package installation neither start this browser suite nor require Playwright
 Run results belong to their exact commit and environment; the existence of this
 suite is not acceptance, independent review, or a supported-platform promise.
 
+## Installed local check — October 1, 2026
+
+The [installed-browser receipt](audit/browser-local-acceptance.json) records a
+separate run through the supported Codex in-app browser against the real local
+service. It covers responsive layouts, selected keyboard journeys, report
+creation and downloads, chart tables, and truthful empty/failed-feed states.
+Feed failure and recovery used a disposable CLI dashboard with synthetic
+documentation addresses; the installed capture service continued running.
+
+This run did **not** execute the native-focus driver described below. Native
+hidden-window suspension, OS reduced-motion preference, print pagination and
+live mapped geographic arcs remain unverified in that run. The receipt records
+those limits explicitly. Browserless regression success is separate evidence.
+Raw telemetry and screenshots remain local and are excluded from Git.
+
+The subsequent [native Linux CI receipt](audit/browser-ci-acceptance.json)
+records 83 passing checks on candidate `6f4187c`, including actual window
+minimization/restoration and polling suspension/recovery. Its exact generated
+merge commit, browser/runtime versions and driver-profile digests are recorded.
+It complements the installed check and does not resolve print pagination.
+
 ## Prepared environment and execution
 
 From an installed repository checkout on non-root Linux, with Chrome stable,

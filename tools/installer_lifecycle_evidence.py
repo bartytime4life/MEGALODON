@@ -143,7 +143,14 @@ assert files(installed) == expected
 dist = importlib.metadata.distribution('megalodon-defense')
 assert dist.version == megalodon.__version__
 direct = json.loads(dist.read_text('direct_url.json'))
-assert direct.get('dir_info') == {} and direct.get('url') == source.as_uri()
+assert direct.get('dir_info') == {}
+# Installer builds in a fresh private sibling of this venv, then removes it.
+from urllib.parse import urlparse, unquote
+build_source = pathlib.Path(unquote(urlparse(direct.get('url','')).path))
+assert build_source.parent == prefix.parent and build_source.name.startswith('build-source-')
+assert not build_source.exists()
+release = json.loads((prefix.parent/'release.json').read_text())
+assert release['source_path'] == str(source)
 print(json.dumps({'distribution':'megalodon-defense', 'version':dist.version,
     'source_package_sha256':'sha256:' + hashlib.sha256(json.dumps(expected,
         sort_keys=True, separators=(',', ':')).encode()).hexdigest()}))

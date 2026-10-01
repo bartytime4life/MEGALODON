@@ -19,9 +19,9 @@ def test_seven_workspaces_and_persistent_return():
         assert f'id="workspace-{name}"' in INDEX_HTML
     assert INDEX_HTML.count('class="room-back"') == 1
     assert 'Audit history — may include sample and unlinked rows' in INDEX_HTML
-    assert 'id="room-report-create"' in INDEX_HTML
-    assert 'id="room-report-download" disabled' in INDEX_HTML
-    assert 'id="room-report-preview"' in INDEX_HTML
+    assert 'id="reports-create"' in INDEX_HTML
+    assert 'id="reports-save" disabled' in INDEX_HTML
+    assert 'id="reports-document"' in INDEX_HTML
     assert 'Local report preview is unavailable' not in INDEX_HTML
     assert 'Blank charts contain no synthetic values.' in INDEX_HTML
     assert 'class="room-section-note"' in INDEX_HTML
@@ -136,9 +136,6 @@ assert.equal(run('roomEndpoint("2001:db8::1",null)'),'2001:db8::1');
 assert.match(byId('room-home-summary').textContent,/No qualified data available/);
 assert.equal(byId('room-count').textContent,'Unavailable');assert.equal(calls.length,0);
 assert.equal(byId('room-connection').textContent,'Not checked');
-assert.equal(run('downloadRoomReport()'),false);
-assert.equal(run('previewRoomReport()'),false);assert.equal(byId('room-report-download').disabled,true);
-assert.match(byId('room-report-status').textContent,/No qualified data/);
 context.fetch=async(path,options)=>{calls.push({path,options});return response(unavailable,503)};
 await run('refreshRoom()');assert.equal(calls.length,1);assert.equal(run('roomState.snapshot.status'),'unavailable');
 assert.equal(run('roomState.failed'),false);assert.equal(run('roomState.connected'),true);
@@ -153,56 +150,6 @@ assert.equal(byId('room-traffic-grid').children.length,8);
 assert.match(textOf(byId('room-traffic-grid')),/local-subnet or sensor-vantage/);
 assert.match(textOf(byId('room-traffic-grid')),/12345/);
 assert.match(textOf(byId('room-traffic-grid')),/192\.0\.2\.1:12345/);
-assert.equal(run('previewRoomReport()'),true);assert.equal(byId('room-report-download').disabled,false);
-const reportJson=run('roomState.report.json'),report=JSON.parse(reportJson);
-assert.deepEqual(Object.keys(report),['schema','generated_at','title','range','sources','vantage','quality','freshness','unit','counts','findings','limitations','build']);
-assert.equal(report.schema,'megalodon-local-report-v1');
-assert.deepEqual(report.counts,{events:1,findings:1,reported_bytes:'9223372036854775807'});
-assert.deepEqual(report.sources,['jsonl']);assert.equal(report.vantage,'unknown');
-assert.deepEqual(report.findings,[{rule_id:payload.findings[0].rule_id,severity:payload.findings[0].severity,count:1}]);
-assert.equal(report.limitations.length,7);assert.ok(Buffer.byteLength(reportJson,'utf8')<=65536);
-assert.doesNotMatch(reportJson,/192\.0\.2\.|198\.51\.100\.|PRIVATE_|event_id|src_ip|dst_ip/);
-assert.match(textOf(byId('room-report-preview')),/megalodon-local-report-v1/);
-assert.equal(calls.length,1);
-// A background repaint or later snapshot must not destroy the reviewed bytes.
-run('renderRoom()');assert.equal(run('roomState.report.json'),reportJson);
-assert.equal(byId('room-report-download').disabled,false);
-assert.match(byId('room-report-context').textContent,/Held preview created/);
-assert.match(byId('room-report-context').textContent,/range changes do not update/);
-run('roomState.snapshot=validateTraffic({...payload,generated_at:new Date().toISOString()});renderRoom()');
-assert.equal(run('roomState.report.json'),reportJson);
-const revoked=[],downloaded=[];let captured;
-context.Blob=class {constructor(parts){captured=parts.join('');}};
-context.setTimeout=callback=>callback();
-context.URL={createObjectURL:()=>{throw Error('PRIVATE_DOWNLOAD_FAILURE');},revokeObjectURL:url=>revoked.push(url)};
-assert.equal(run('downloadRoomReport()'),false);
-assert.match(byId('room-report-status').textContent,/preview is preserved/);
-assert.doesNotMatch(byId('room-report-status').textContent,/PRIVATE_/);
-assert.equal(run('roomState.report.json'),reportJson);
-context.URL.createObjectURL=()=> 'blob:local-test';
-// A failed click also releases its object URL without discarding the preview.
-assert.equal(run('downloadRoomReport()'),false);
-assert.deepEqual(revoked,['blob:local-test']);
-context.document.createElement=tag=>Object.assign(element(tag),{click(){downloaded.push(this.download);}});
-assert.equal(run('downloadRoomReport()'),true);
-assert.equal(captured,reportJson);assert.equal(downloaded.length,1);
-assert.deepEqual(revoked,['blob:local-test','blob:local-test']);
-assert.equal(calls.length,1);
-assert.equal(run('roomReportDocument(Date.parse(roomState.snapshot.generated_at)-60001).document.freshness'),'stale');
-assert.equal(run('roomReportDocument(Date.parse(roomState.snapshot.generated_at)).document.freshness'),'current_by_five_minute_ui_threshold');
-assert.equal(run('roomReportDocument(Date.parse(roomState.snapshot.generated_at)+300001).document.freshness'),'stale');
-run('roomState.range="custom";roomState.custom={start:Date.parse("2026-09-16T00:00:00Z"),end:Date.parse("2026-09-16T01:00:00Z")};renderRoom()');
-assert.equal(run('roomState.selection.events.length'),0);
-assert.equal(run('roomState.report.json'),reportJson);
-assert.equal(run('downloadRoomReport()'),true);assert.equal(captured,reportJson);
-assert.equal(run('previewRoomReport()'),false);
-assert.equal(run('roomState.report'),null);assert.equal(byId('room-report-download').disabled,true);
-run('roomState.range="recorded";roomState.custom=null;renderRoom()');
-assert.equal(run('previewRoomReport()'),true);
-byId('room-report-discard').listeners.click();
-assert.equal(run('roomState.report'),null);assert.equal(byId('room-report-download').disabled,true);
-assert.equal(byId('room-report-discard').disabled,true);assert.equal(byId('room-report-preview').hidden,true);
-assert.equal(byId('room-report-preview').children.length,0);
 assert.equal(run('roomSelection(payload,"hour",null,Date.parse("2026-09-18T00:00:00Z")).events.length'),0);
 assert.throws(()=>run('roomSelection(payload,"custom",{start:0,end:Date.now()})'));
 assert.throws(()=>run('roomSelection(payload,"custom",{start:2,end:1})'));

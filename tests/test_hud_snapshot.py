@@ -89,7 +89,7 @@ def test_snapshot_http_route_preserves_readonly_scope_and_refuses_queries(tmp_pa
                 server.shutdown();server.server_close();thread.join(timeout=2)
 
 
-def test_local_export_preview_download_failure_and_overlap():
+def test_local_summary_one_click_download_failure_and_overlap():
     from megalodon.dashboard_snapshot import SNAPSHOT_LOCAL_JS, SNAPSHOT_VALIDATOR_JS
     node=shutil.which('node')
     if not node:pytest.skip('Node needed for browser behavior')
@@ -102,12 +102,9 @@ const vm=require('node:vm'),assert=require('node:assert/strict');let input='';pr
  requestBoundedJSON:async(path,limit)=>{assert.equal(path,'/api/hud-snapshot');assert.equal(limit,16384);requests++;return new Promise(resolve=>release=resolve);}};
  vm.createContext(context);vm.runInContext(input,context);const run=s=>vm.runInContext(s,context);
  const value={schema:'megalodon-hud-snapshot-v1',generated_at:'2026-09-20T12:00:00Z',start:'2026-09-20T11:00:00Z',end:'2026-09-20T12:00:00Z',events:1,findings:0,reported_bytes:'100',lanes:[1,0,0],timeline:[1,0,0,0,0,0,0,0,0,0,0,0],protocols:[1,0,0,0,0,0,0,0],sources:[1,0],severities:[0,0,0,0],detectors:[0,0,0],limited:false,quality:'unknown'};
- const pending=run('prepareHudExport()');await run('prepareHudExport()');assert.equal(requests,1);assert.equal(nodes.get('hud-export-clear').disabled,true);release(value);await pending;
- const held=nodes.get('hud-export-preview').textContent;assert.deepEqual(JSON.parse(held),value);assert.equal(nodes.get('hud-export-download').disabled,false);
- run('downloadHudExport()');assert.equal(clicks[0].download,'megalodon-hud-summary.json');assert.deepEqual(revokes,['blob:local']);
- context.requestBoundedJSON=async()=>{throw Error('PRIVATE error');};await run('prepareHudExport()');assert.equal(nodes.get('hud-export-preview').textContent,held);assert.match(nodes.get('hud-export-status').textContent,/prior held preview/);
- run('clearHudExport()');assert.equal(nodes.get('hud-export-preview').hidden,true);assert.equal(nodes.get('hud-export-download').disabled,true);
- await run('prepareHudExport()');assert.match(nodes.get('hud-export-status').textContent,/unavailable/);assert.doesNotMatch(nodes.get('hud-export-status').textContent,/PRIVATE/);
+ const pending=run('downloadHudExport()');await run('downloadHudExport()');assert.equal(requests,1);assert.equal(nodes.get('hud-export-download').disabled,true);release(value);await pending;
+ assert.equal(clicks[0].download,'megalodon-hud-summary.json');assert.deepEqual(revokes,['blob:local']);assert.equal(nodes.get('hud-export-download').disabled,false);
+ context.requestBoundedJSON=async()=>{throw Error('PRIVATE error');};await run('downloadHudExport()');assert.match(nodes.get('hud-export-status').textContent,/unavailable/);assert.doesNotMatch(nodes.get('hud-export-status').textContent,/PRIVATE/);assert.equal(clicks.length,1);assert.equal(nodes.has('hud-export-preview'),false);
 }).catch(error=>{console.error(error);process.exitCode=1;});
 '''.replace("process.stdin.on('end',async()=>{", "process.stdin.on('end',()=>{(async()=>{").replace("}).catch(error=>{console.error(error);process.exitCode=1;});", "})().catch(error=>{console.error(error);process.exitCode=1;});});")
     subprocess.run([node,'-e',script],input=SNAPSHOT_VALIDATOR_JS+SNAPSHOT_LOCAL_JS,text=True,check=True,timeout=10)

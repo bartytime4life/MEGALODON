@@ -165,7 +165,7 @@ SUPPORT_CONFIG_JS = r'''
     }finally{clearTimeout(timer);}
   }
   function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
-  function fail(error){state.valid=false;state.token=null;el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
+  function fail(error){state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
   async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
   function payloadFor(action){
     const value={action};
@@ -207,7 +207,7 @@ SUPPORT_CONFIG_JS = r'''
 
 
 def local_support_help(html: str) -> str:
-    """Update only composed local HUD help; shared offline/Site copy is unchanged."""
+    """Compose local operational help from the compatibility reference."""
     return html.replace(
         "Saved metadata in the shared time range. No capture starts here.",
         'Saved metadata in the shared time range. Start live collection with Configure apps in the <a href="#support-apps-title">HUD support controls</a>.',
@@ -218,8 +218,5 @@ def local_support_help(html: str) -> str:
 
 
 def local_support_script(script: str) -> str:
-    """Scope legacy launcher copy after local composition, preserving shared assets."""
-    return script.replace(
-        "The HUD has no stop, removal, or configuration action.",
-        "These individual app launchers do not close apps or change their configuration. Configure apps in the HUD provides separate supported setup and managed capture controls.",
-    )
+    """Compatibility hook; canonical local copy now owns administration help."""
+    return script

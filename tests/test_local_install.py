@@ -448,6 +448,8 @@ def test_root_install_is_refused(monkeypatch, source):
 
 def test_release_creation_uses_private_venv_and_installed_import(layout, source, monkeypatch):
     local_install._prepare_directories(layout)
+    stale=source/'build/lib/megalodon/deleted_module.py'
+    stale.parent.mkdir(parents=True);stale.write_text('obsolete build artifact')
     calls = []
 
     def run(command, *, capture=False):
@@ -458,9 +460,14 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
             python.write_text("synthetic")
             return subprocess.CompletedProcess(command, 0, "", "")
         if capture:
+            from megalodon.build_identity import package_digest
             return subprocess.CompletedProcess(
-                command, 0, f'{{"version":"{__version__}","inside":true}}\n', ""
+                command, 0, __import__('json').dumps(dict(version=__version__, inside=True,
+                    package_sha256=package_digest(source/'megalodon'))), ""
             )
+        clean=Path(command[-1].removesuffix('[geo]'))
+        assert clean!=source and not (clean/'build').exists()
+        assert (clean/'megalodon/__init__.py').read_bytes()==(source/'megalodon/__init__.py').read_bytes()
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(local_install, "_run", run)
@@ -473,6 +480,7 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
     assert release_id == receipt["id"]
     assert calls[0][1:4] == ["-I", "-m", "venv"]
     assert calls[1][1:4] == ["-I", "-m", "pip"]
-    assert calls[1][-1] == str(source) + "[geo]"
+    clean=Path(calls[1][-1].removesuffix('[geo]'))
+    assert clean.parent==layout.releases/release_id and not clean.exists()
     assert calls[2][1:3] == ["-I", "-c"]
     assert (layout.releases / release_id / "venv" / "bin" / "python").exists()

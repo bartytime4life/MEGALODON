@@ -44,4 +44,4 @@ def test_bulk_start_and_individual_launch_routes_remain_separate():
     assert "'X-Megalodon-Support-App':'1'" in DASHBOARD_JS
     assert "window_verified !== false" in DASHBOARD_JS
     assert "The HUD has no stop, removal, or configuration action." not in DASHBOARD_JS
-    assert "These individual app launchers do not close apps or change their configuration." in DASHBOARD_JS
+    assert "Setup contains fixed installation, configuration, verification and supported removal workflows." in DASHBOARD_JS

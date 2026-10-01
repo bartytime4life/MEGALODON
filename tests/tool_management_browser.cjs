@@ -63,7 +63,8 @@ process.stdin.on('end', async () => {
     run('heartbeatState.report.checked_at = new Date().toISOString(); renderAppServiceStarts()');
     const wrap = run('installControl("scapy", "Scapy")'); controls.push(wrap);
     assert.equal(byId('tool-management-token').disabled, true);
-    assert.equal(wrap.children.some(node => node.tag === 'button'), false);
+    assert.equal(wrap.children.find(node => node.tag === 'button').disabled, true);
+    assert.equal(wrap.children.find(node => node.tag === 'a').href, '#tool-management-controls');
     assert.match(wrap.children[0].textContent, /Observation mode.*terminal/);
     await run('startInstall("scapy", "Scapy", heartbeatState.catalog[0])');
     assert.equal(posts().length, 0);
@@ -167,7 +168,7 @@ process.stdin.on('end', async () => {
     enabled = false;
     await run('pollHeartbeat()');
     assert.equal(byId('tool-management-token').value, '');
-    assert.equal(wrap.children.some(node => node.tag === 'button'), false);
+    assert.equal(wrap.children.find(node => node.tag === 'button').disabled, true);
     process.stdout.write('tool management browser checks passed\n');
   } catch (error) {process.stderr.write(error.stack + '\n'); process.exitCode = 1;}
 });

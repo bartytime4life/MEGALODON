@@ -1,0 +1,103 @@
+{
+  "checked_at": "2026-10-01T19:54:54.614822+00:00",
+  "source": "https://api.osv.dev/v1/query",
+  "packages": [
+    {
+      "package": "scapy",
+      "version": "2.7.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "maxminddb",
+      "version": "3.2.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "pytest",
+      "version": "9.1.1",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "jsonschema",
+      "version": "4.26.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "attrs",
+      "version": "26.1.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "referencing",
+      "version": "0.37.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "rpds-py",
+      "version": "2026.6.3",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "packaging",
+      "version": "26.3",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "pluggy",
+      "version": "1.6.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "pygments",
+      "version": "2.21.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "typing-extensions",
+      "version": "4.16.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "iniconfig",
+      "version": "2.3.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "jsonschema-specifications",
+      "version": "2025.9.1",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "build",
+      "version": "1.6.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "setuptools",
+      "version": "84.0.0",
+      "status": "queried",
+      "advisories": []
+    },
+    {
+      "package": "pyproject-hooks",
+      "version": "1.3.3",
+      "status": "queried",
+      "advisories": []
+    }
+  ],
+  "note": "Version-specific public advisory lookup, not absence-of-vulnerabilities certification. No dependency upgraded solely for novelty; pinned CI wheels remain separately hashed."
+}

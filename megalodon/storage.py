@@ -1110,6 +1110,7 @@ class Store:
         self._lock = RLock()
         self._closed = False
         self._write_poisoned = False
+        self._event_batch = False
         self._directory_descriptor: int | None = None
         self._database_descriptor: int | None = None
         database_created = False
@@ -1155,6 +1156,7 @@ class Store:
                 self.connection.execute("PRAGMA foreign_keys=ON")
                 self._initialize_schema()
                 self.connection.execute("PRAGMA journal_mode=WAL")
+                self.connection.execute("PRAGMA synchronous=FULL")
             self._assert_path_identity()
             _validate_sqlite_sidecars(
                 self.path,
@@ -1803,9 +1805,11 @@ class Store:
 
         with self._lock:
             self._assert_write_trusted()
-            self._ensure_capacity()
+            if not self._event_batch:
+                self._ensure_capacity()
             try:
-                self.connection.execute("BEGIN IMMEDIATE")
+                if not self._event_batch:
+                    self.connection.execute("BEGIN IMMEDIATE")
                 event_id = self._insert_event(event_values)
                 if safe_run_id is not None:
                     association = self.connection.execute(
@@ -1874,8 +1878,31 @@ class Store:
             except BaseException:
                 self._rollback_run_write()
                 raise
-            self._commit_run_write()
+            if not self._event_batch:
+                self._commit_run_write()
             return event_id
+
+    def record_event_bundles(self, bundles, *, run_id=None):
+        """Commit a bounded ordered batch; every event keeps its linked ledger."""
+        if type(bundles) not in (list, tuple) or not 1 <= len(bundles) <= 256:
+            raise IngestionRunError("INGESTION_RUN:INVALID_BATCH")
+        with self._lock:
+            if self._event_batch:
+                raise IngestionRunError("INGESTION_RUN:BATCH_ACTIVE")
+            self._assert_write_trusted()
+            self._ensure_capacity()
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._event_batch = True
+            try:
+                result = [self.record_event_bundle(event, detections, actions, run_id=run_id)
+                          for event, detections, actions in bundles]
+                self._commit_run_write()
+                return result
+            except BaseException:
+                self._rollback_run_write()
+                raise
+            finally:
+                self._event_batch = False
 
     def record_event(self, event: PacketEvent, *, run_id: int | None = None) -> int:
         if run_id is not None:

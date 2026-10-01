@@ -1,0 +1,44 @@
+{
+  "schema": "megalodon-audit-validation-v1",
+  "source": "3c8b8d9b3101f0fa24030fab669fa54b81bf9a0d",
+  "full_regression": {
+    "passed": 4329,
+    "skipped": 3,
+    "subtests_passed": 203
+  },
+  "installed_tshark": "passed in explicit focused lane",
+  "package_builds": [
+    "wheel",
+    "sdist"
+  ],
+  "logs": [
+    {
+      "name": "focused-final.log",
+      "sha256": "4d2df7a96ce4a667da3ccf295f2d16c728a65ed0e861a3baa919f7bb469b02b5"
+    },
+    {
+      "name": "installer-focused-final.log",
+      "sha256": "9352925e5e271773731e7ca3a390daf15479f6b144d2d059ca8d677d62821619"
+    },
+    {
+      "name": "final-copy.log",
+      "sha256": "1c296f620adc850f9ed88d75c847738d725f60f1de7a89002059c40eff811d9a"
+    },
+    {
+      "name": "regression-accepted.log",
+      "sha256": "01738b0181ca0d3e113d42189e2e601b7e92721921a809004c598817ac6fba63"
+    },
+    {
+      "name": "package-build-final.log",
+      "sha256": "8e89d136ffd84451b0cfbfa2c35bfe77887046cb6d085a769c5ebc78d65a8f8f"
+    },
+    {
+      "name": "qwen-contract-tests.log",
+      "sha256": "f066443b543fd983aad78e0439dd8508e2f1b9b136bc17e8f3373cb455b5528c"
+    }
+  ],
+  "limits": [
+    "No rendered or print acceptance",
+    "Deterministic failure simulations, no physical power-loss test"
+  ]
+}

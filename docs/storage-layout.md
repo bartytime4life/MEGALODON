@@ -16,7 +16,7 @@ respects that split:
 
 1. **Tracked repository storage** — checked into git, read-only at runtime,
    versioned by commit. Schemas, fixtures, pinned reference bundles, and the
-   static Defense Console mirror live here.
+   local HUD assets and historical Site retirement record live here.
 2. **Runtime-only local storage** — created or selected on the operator's
    filesystem by an explicit command or API call. The repository `.gitignore`
    excludes only its named root-relative directories and filename patterns; it
@@ -41,7 +41,7 @@ authorized external producer.
 | `contracts/*/v1/` | Inert schemas, accepted/rejected fixtures, and per-contract `README.md` boundary notes | Maintainers | Contract tests; `tools/build_reference_assets.py` and related build tooling |
 | `megalodon/reference/iana-v1/` (2.7 MiB) | SHA-256-pinned IANA service/port and protocol snapshot | `tools/build_reference_assets.py` | `megalodon/reference/loader.py`; the dashboard's read-only Reference Library panel |
 | `megalodon/reference/corpus-v1/` (1.7 MiB) | Deterministic synthetic detector-evaluation corpus | `tools/build_reference_assets.py` | `megalodon.reference.loader.evaluate_corpus`, exposed by `python -m megalodon.evaluation corpus` |
-| `site/dist/` | Static Defense Console source mirror (HTML/CSS/JS, no build step); equality with the hosted version is separately receipted and may be unverified | Maintainers; current deployment status is recorded in [`docs/site-source-alignment.md`](site-source-alignment.md) | A browser only; no MEGALODON process reads `site/` at runtime |
+| `site/retired/` | HTTP 410 retirement worker; former hosted assets are recoverable in Git | Historical deployment identity only | No runtime dependency |
 | `examples/` | Bounded JSONL replay fixture | Maintainers | `python -m megalodon run` examples in the README |
 
 None of these paths grow at runtime. Updating them is a source change reviewed
@@ -96,7 +96,7 @@ existing installation merely because a later shell changes an XDG variable.
 
 | Managed path | Persisted content and lifecycle |
 | --- | --- |
-| `<XDG_DATA_HOME>/megalodon/releases/<release-id>/venv/`, `current`, `install.json`, `.install.lock` | Private installed environments, active-release symlink, installation manifest and maintenance lock file. Upgrade retains recorded releases, up to the 32-release history limit; it is not an automatic cleanup policy. |
+| `<XDG_DATA_HOME>/megalodon/releases/<release-id>/venv/`, `current`, `install.json`, `.install.lock` | Private installed environments, active selector, manifest and maintenance lock. Upgrade keeps the current, previous and four newest releases. Older manifest-owned releases retire only when no process use is observed; uncertain releases remain. A 32-release bound prevents unlimited installation history. Data and settings are outside retirement. |
 | `<XDG_DATA_HOME>/megalodon/data/` | Private data directory created during installation; newly generated settings place the core audit file here, with CLI-derived AI receipts beside it when used. Installation creates no telemetry database. |
 | `<XDG_CONFIG_HOME>/megalodon/settings.toml` | Generated mode-`0600` settings, created only when absent; existing valid settings are preserved. |
 | `$HOME/.local/bin/megalodon-hud`, `$HOME/.local/bin/megalodon-manage` | Generated launchers for the selected private release; these paths do not follow `XDG_DATA_HOME`. |

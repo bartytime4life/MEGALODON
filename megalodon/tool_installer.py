@@ -149,7 +149,7 @@ def terminal_command(tool_id: str, action: str = "install") -> str | None:
     if recipe.kind == "pip":
         return f"{sys.executable} -m pip install '{recipe.packages[0]}'"
     if recipe.kind == "ollama":
-        return f"ollama pull {recipe.packages[0]}"
+        return f"OLLAMA_HOST=127.0.0.1:11434 ollama pull {recipe.packages[0]}"
     return None
 
 
@@ -253,7 +253,8 @@ class Installer:
         try:
             process = self._runner(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, text=True, errors="replace",
-                                   env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
+                                   env={**os.environ, "DEBIAN_FRONTEND": "noninteractive",
+                                        "OLLAMA_HOST": "127.0.0.1:11434"})
             # Reading stdout blocks until exit, so enforce the deadline separately.
             def expire() -> None:
                 timed_out.set()

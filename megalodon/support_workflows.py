@@ -7,7 +7,7 @@ def snapshot(configuration, companions):
     tools=[]
     def add(identifier,name,state,message,updated_at=None,metrics=None):
         tools.append(dict(id=identifier,name=name,state=state,message=message,updated_at=updated_at,metrics=metrics or []))
-    add('core','Python and SQLite','connected','The local HUD, data store and resource sampler are running.',now())
+    add('core','Python and SQLite','connected','The local HUD is responding. Storage and source health are reported separately.',now())
     capture=configuration.capture.snapshot()
     add('tshark','Wireshark / TShark','connected' if capture['accepted'] and capture['state']=='running' else
         'collecting' if capture['state'] in ('starting','running') else 'error' if capture['state']=='failed' else 'stopped',
@@ -36,6 +36,7 @@ def snapshot(configuration, companions):
     qwen=dict(configuration.qwen_status)
     good=[v for v in data['advisory'].values() if v and not v.startswith('Qwen unavailable')]
     if good:
-        qwen.update(state='connected',message='Local Qwen returned advice for completed collector summaries. Advice cannot run commands.',metrics=[metric('Summaries with advice',len(good))])
+        # A saved answer is evidence of past use, not current provider readiness.
+        qwen['metrics']=[*qwen.get('metrics',[]),metric('Saved summaries with advice',len(good))]
     add('qwen','Qwen via local Ollama',**qwen)
     return dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)

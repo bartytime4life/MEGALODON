@@ -1,0 +1,90 @@
+{
+  "schema": "megalodon-write-benchmark-v1",
+  "measured_at": "2026-10-01",
+  "cases": {
+    "before_packets": {
+      "mode": "before",
+      "kind": "packets",
+      "records": 10000,
+      "retained": 10000,
+      "seconds": 18.63714588699804,
+      "records_per_second": 536.5628439371915,
+      "os_write_bytes": 400125952,
+      "write_syscalls": 172282,
+      "managed_bytes": 1913512,
+      "query_count": 823,
+      "query_errors": [],
+      "query_p95_ms": 4.208452999591827,
+      "max_rss_kib": 26184,
+      "implementation_hashes": {
+        "storage.py": "1bef158b09c9779a4a18ac70278656570d9b01222e9884ac057528afd95dc493",
+        "evidence_storage.py": "f9f5771b5db049b21fef086cdac8a180b7bb625eadcc1ff681c73a228d1a5a9d"
+      },
+      "limits": "Finite synthetic local recording; OS writes are not flash-cell writes or lifetime estimates.",
+      "syscall_summary": "% time     seconds  usecs/call     calls    errors syscall\n------ ----------- ----------- --------- --------- ----------------\n 59.31    0.109779           0    172318           pwrite64\n 40.63    0.075202           7     10266           fdatasync\n  0.04    0.000083           6        13           fsync\n  0.02    0.000032           1        17           write\n------ ----------- ----------- --------- --------- ----------------\n100.00    0.185096           1    182614           total\n"
+    },
+    "after_packets": {
+      "mode": "balanced",
+      "kind": "packets",
+      "records": 10000,
+      "retained": 10000,
+      "seconds": 0.9112826339987805,
+      "records_per_second": 10973.543911529629,
+      "os_write_bytes": 7479296,
+      "write_syscalls": 3085,
+      "managed_bytes": 1913511,
+      "query_count": 23,
+      "query_errors": [],
+      "query_p95_ms": 27.063793007982895,
+      "max_rss_kib": 25592,
+      "implementation_hashes": {
+        "storage.py": "5b774633f54ed96d5ad0618887165db373d49ab3ff226c8a975a8a3f57d018d3",
+        "evidence_storage.py": "19ef381eb64c55795195cd72e9210a67eb5c0d2b870a5a5605aabe5531337934"
+      },
+      "limits": "Finite synthetic local recording; OS writes are not flash-cell writes or lifetime estimates.",
+      "syscall_summary": "% time     seconds  usecs/call     calls    errors syscall\n------ ----------- ----------- --------- --------- ----------------\n 70.91    0.002342           0      3131           pwrite64\n 27.73    0.000916          16        54           fdatasync\n  1.09    0.000036           6         6           fsync\n  0.27    0.000009           1         5           write\n------ ----------- ----------- --------- --------- ----------------\n100.00    0.003303           1      3196           total\n"
+    },
+    "before_summaries": {
+      "mode": "before",
+      "kind": "summaries",
+      "records": 10000,
+      "retained": 10000,
+      "seconds": 0.7095533130050171,
+      "records_per_second": 14093.373699643753,
+      "os_write_bytes": 8306688,
+      "write_syscalls": 2713,
+      "managed_bytes": 1475312,
+      "query_count": 20,
+      "query_errors": [],
+      "query_p95_ms": 27.4477869970724,
+      "max_rss_kib": 22868,
+      "implementation_hashes": {
+        "storage.py": "1bef158b09c9779a4a18ac70278656570d9b01222e9884ac057528afd95dc493",
+        "evidence_storage.py": "f9f5771b5db049b21fef086cdac8a180b7bb625eadcc1ff681c73a228d1a5a9d"
+      },
+      "limits": "Finite synthetic local recording; OS writes are not flash-cell writes or lifetime estimates.",
+      "syscall_summary": "% time     seconds  usecs/call     calls    errors syscall\n------ ----------- ----------- --------- --------- ----------------\n 46.60    0.002035           9       211           fdatasync\n 42.29    0.001847           0      2670           pwrite64\n  8.15    0.000356           8        44           fsync\n  2.95    0.000129           2        46           write\n------ ----------- ----------- --------- --------- ----------------\n100.00    0.004367           1      2971           total\n"
+    },
+    "after_summaries": {
+      "mode": "balanced",
+      "kind": "summaries",
+      "records": 10000,
+      "retained": 10000,
+      "seconds": 0.2503004129976034,
+      "records_per_second": 39951.99160976114,
+      "os_write_bytes": 4681728,
+      "write_syscalls": 1804,
+      "managed_bytes": 1475312,
+      "query_count": 9,
+      "query_errors": [],
+      "query_p95_ms": 22.101295995526016,
+      "max_rss_kib": 25380,
+      "implementation_hashes": {
+        "storage.py": "5b774633f54ed96d5ad0618887165db373d49ab3ff226c8a975a8a3f57d018d3",
+        "evidence_storage.py": "19ef381eb64c55795195cd72e9210a67eb5c0d2b870a5a5605aabe5531337934"
+      },
+      "limits": "Finite synthetic local recording; OS writes are not flash-cell writes or lifetime estimates.",
+      "syscall_summary": "% time     seconds  usecs/call     calls    errors syscall\n------ ----------- ----------- --------- --------- ----------------\n 79.67    0.001152           0      1802           pwrite64\n 19.23    0.000278           5        55           fdatasync\n  0.62    0.000009           1         6           fsync\n  0.48    0.000007           1         5           write\n------ ----------- ----------- --------- --------- ----------------\n100.00    0.001446           0      1868           total\n"
+    }
+  }
+}

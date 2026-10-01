@@ -1,0 +1,20 @@
+{
+  "mode": "balanced",
+  "kind": "packets",
+  "records": 10000,
+  "retained": 10000,
+  "seconds": 0.38325565101695247,
+  "records_per_second": 26092.24410250815,
+  "os_write_bytes": 7450624,
+  "write_syscalls": 3077,
+  "managed_bytes": 1913512,
+  "query_count": 13,
+  "query_errors": [],
+  "query_p95_ms": 9.593169001163915,
+  "max_rss_kib": 26472,
+  "implementation_hashes": {
+    "storage.py": "5b774633f54ed96d5ad0618887165db373d49ab3ff226c8a975a8a3f57d018d3",
+    "evidence_storage.py": "46410c16d1f73a1f2b5335826f70203c9d5dbfdfdb729feeda66d2a3c9de06e5"
+  },
+  "limits": "Finite synthetic local recording; OS writes are not flash-cell writes or lifetime estimates."
+}

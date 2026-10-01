@@ -1,5 +1,6 @@
 include .gitignore
 include LICENSE
+include Start-MEGALODON.sh
 include .github/dependabot.yml
 include .github/scripts/sync-wiki.sh
 include constraints/ci.txt
@@ -14,11 +15,14 @@ recursive-include .github/workflows *.yml
 recursive-include config *.toml *.json
 recursive-include contracts *
 recursive-include docs *.md
+recursive-include docs/benchmarks *.json
+recursive-include docs/audit *.json
 recursive-include examples *
 recursive-include megalodon/assets *.svg
 recursive-include tests *.py *.cjs *.json
 recursive-include tools *.py
 include scripts/install-local.sh
+include scripts/hud-autostart.sh
 include scripts/manage-companion.sh
 include scripts/start-hud-data.sh
 include scripts/start-local.sh

@@ -180,6 +180,8 @@ class SupportConfiguration:
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
         self.qwen_status = dict(state='needs_setup',message='Configure local Qwen to enable bounded background advice.',updated_at=None,metrics=[])
+        self.evidence = None
+        self.flow_ingestor = None
         try:
             self._load()
         except (OSError, ValueError):
@@ -413,7 +415,7 @@ class SupportConfiguration:
             elif action == 'signature_update':
                 self._execute(['pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
-                message = 'ClamAV signature updater is active. Updated signatures are available to the next file scan.'
+                message = 'ClamAV signature updater is active. Signature download completion and database freshness have not been verified.'
             elif action == 'qwen_configure':
                 from .config import AISettings
                 from .ai_provider import status
@@ -497,7 +499,9 @@ class SupportConfiguration:
                 self._tool('background','needs_setup','Saved monitoring could not resume; review interface and private paths.')
 
     def live_snapshot(self):
-        return self.connections.snapshot(self.capture.snapshot(),self.background.snapshot())
+        result=self.connections.snapshot(self.capture.snapshot(),self.background.snapshot())
+        result['recording_mode']=self.evidence.recording_mode if self.evidence is not None else 'packet_metadata'
+        return result
 
     def start_background_tools(self):
         """Shared startup action, with no desktop processes or caller commands."""

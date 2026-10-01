@@ -107,7 +107,7 @@ def main(argv=None):
         return 2
     try:
         run_options = {'check': False, 'timeout': INSTALL_TIMEOUT_SECONDS}
-        if args.action == 'uninstall' and args.tool == 'qwen':
+        if args.tool == 'qwen':
             run_options['env'] = {**os.environ, 'OLLAMA_HOST': '127.0.0.1:11434'}
         return subprocess.run(command, **run_options).returncode
     except (OSError, subprocess.TimeoutExpired):

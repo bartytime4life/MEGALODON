@@ -10,7 +10,8 @@
 MEGALODON is a local-first defensive network telemetry MVP with a Python
 metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
-audit trail, and offers a read-only localhost telemetry projection. Live capture, offline
+audit trail, and offers a local Linux HUD with visual telemetry, managed history,
+automatic local reports and separately authorized Setup actions. Live capture, offline
 analysis, and firewall planning are separate choices, not mandatory parts of
 every configuration. Legacy firewall CLI routes remain plan-only. The separate
 Linux HUD [local defense workflow](docs/visual-operations-defense.md) supports
@@ -27,18 +28,41 @@ threat-intelligence service, packet-forensics suite, or authorization to change
 a host. A detection or offline candidate is evidence for review, not proof of
 malicious activity.
 
+## Current local application
+
+Use the HUD for monitoring, **Setup** for apps and configuration, **Reports** for
+visual reports, and **Evidence** for history and space. Reports default to 9 AM
+local time; storage defaults to 14 days / 20 GiB. Historical chart pages and
+reports span retained segments and verified compact summaries. Packet counts,
+sensor flow observations and interface rates remain separate.
+
+`--update` builds a verified private release, preserves supported selected extras,
+flushes and stops a running managed HUD, activates and checks the new service,
+and restores the previous selection if readiness fails. The four newest releases
+plus the current/previous selection are retained; unused, manifest-owned older
+releases can be retired. See [upgrade behavior](docs/local-pc-setup.md#verified-upgrades).
+
+The advanced CLI chapters below describe separately selected workflows and legacy
+contracts. Current installed-HUD behavior is specified in the
+[HTTP contract](docs/dashboard-http-contract.md), [managed history](docs/managed-evidence.md),
+[reports](docs/efficient-recording-reports.md), and [background tools](docs/background-tools.md).
+
 ## Install on this Linux PC
 
-From an existing reviewed checkout, install MEGALODON for your current Linux
-user:
+Open the repository folder and double-click **Start-MEGALODON.sh**. Choose
+**Run in Terminal** if your file manager asks. The first run installs MEGALODON
+for your Linux user; subsequent runs open the same local workspace. From a terminal:
 
 ```bash
-./scripts/install-local.sh
+./Start-MEGALODON.sh
 ```
 
-Then open **MEGALODON** from the application menu. The desktop launcher starts
-the loopback HUD in a terminal and opens your browser only after the server has
-bound successfully. Keep that terminal open; **Ctrl+C** stops the HUD.
+You can also open **MEGALODON** from the application menu after installation.
+Normal launches start or reuse the local background service, then open the HUD
+in your browser. The launch terminal can close once the workspace opens. If
+your Linux session has no user service manager, the launcher uses a foreground
+HUD and explains that its terminal must remain open. To install a newer checkout,
+use `./Start-MEGALODON.sh --update`; `--check` only checks the installation.
 
 The installer creates a private application environment, stable launchers, an
 application-menu entry, and an owner-private settings file. It refuses root and
@@ -208,13 +232,10 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
-The private [MEGALODON Defense Console](https://megalodon-defense-console.blackbart-55.chatgpt.site)
-is a hosted reference surface with no network feed connected. It shows unavailable
-telemetry until a separately reviewed real-data connection exists; it does not
-substitute generated traffic or zeros for missing observations. Its deployable source and
-alignment record are versioned under [`site/`](site/README.md) and
-[`docs/site-source-alignment.md`](docs/site-source-alignment.md); the repository
-contracts remain authoritative.
+The local HUD at **http://127.0.0.1:8787/** is MEGALODON's application.
+The former hosted reference dashboard is retired. Its historical source and
+publication record remain under [`site/`](site/README.md) and
+[`docs/site-source-alignment.md`](docs/site-source-alignment.md).
 
 ## Documentation map
 
@@ -248,7 +269,7 @@ record delivery state; they do not override the checked-in contracts.
 | Per-event ingestion atomicity and orphan recovery | [`docs/ingestion-integrity.md`](docs/ingestion-integrity.md) |
 | Claim corrections and evidence scope | [`docs/evidence-alignment-review.md`](docs/evidence-alignment-review.md) |
 | Latest repository, Console, and telemetry reconciliation | [`docs/document-alignment-2026-09-21.md`](docs/document-alignment-2026-09-21.md) |
-| Static Defense Console source mirror | [`site/README.md`](site/README.md) and [`site/dist`](site/dist) |
+| Retired hosted console | [`site/README.md`](site/README.md); former assets remain recoverable in Git |
 | Repository hygiene guard (tracked-file/secret-marker scan) | [`docs/repository-hygiene.md`](docs/repository-hygiene.md) |
 | Real-browser Linux dashboard acceptance evidence | [`docs/dashboard-browser-acceptance.md`](docs/dashboard-browser-acceptance.md) |
 | Optional Scapy capture failure reporting | [`docs/capture-failure-policy.md`](docs/capture-failure-policy.md) |
@@ -747,8 +768,7 @@ Sign-in is off by default. To require it for a launch, add `--require-sign-in`;
 the terminal will show a random password. The installed HUD can instead use a
 reusable password you choose with `~/.local/bin/megalodon-manage password set`.
 This creates no account. The
-[local PC guide](docs/local-pc-setup.md) is the account-free route; the
-owner-private hosted Site is optional. If
+[local PC guide](docs/local-pc-setup.md) covers the local workspace. If
 that store does not exist, the HUD opens with **unavailable** measurements and
 working tool controls and reference lookup; it creates no database or demo data.
 Real network evidence still requires a separately operated supported input.
@@ -818,7 +838,7 @@ with the dashboard or hidden tab. The UI distinguishes the last successful
 refresh from the latest returned observation. Failed/old refreshes retain labeled
 previous readings; unavailable input shows no measurement. Historical selection
 changes both meters to that minute. This refreshes stored evidence only; it does
-not start a capture or establish sensor liveness. The separately hosted Console
+not start a capture or establish sensor liveness. The retired hosted Console
 has disconnected meter tracks because it has no local telemetry connection.
 
 To place public source IPs automatically on the globe, install the optional
@@ -1484,13 +1504,15 @@ configured size bounds.
 
 ## Current limits
 
-This is a defensive MVP, not a finished enterprise IDS/IPS. The fixed detections
-are simple heuristics. There is no authenticated remote UI, arbitrary rule
-authoring, threat-feed or SIEM/SOAR integration, distributed sensor management,
-automatic retention job, production rollback orchestration, background model execution,
-active scheduler, Suricata watcher/sensor control or reconciliation CLI/background
-command, alert acknowledgement/resolution/escalation lifecycle, notification
-dispatcher, or continuous capture-health monitor on `main`.
+This remains a defensive MVP. Fixed detections are heuristics, and current test
+results are not a real-world detection-accuracy or drive-lifetime guarantee.
+The supported application is the local Linux HUD. Managed retention, compact
+history, background tool collection, local report scheduling and verified
+installer rollback are implemented. Their live coverage and limitations appear
+in each view. Remote administration, arbitrary model actions, remote counterattack,
+distributed sensor management and automatic threat-feed delivery are unsupported.
+Native Windows/macOS, screen-reader, rendered browser and printed-report
+acceptance remain separate from Linux unit and package checks.
 
 The bundled IANA snapshot is not runtime service discovery or a vulnerability
 feed, and it has no automatic update path. The synthetic corpus tests deterministic
@@ -1499,8 +1521,7 @@ products, an accuracy claim, or evidence that an alert is malicious.
 
 Before operational deployment, use representative authorized replay data to
 measure false positives; validate live capture and TShark separately; define
-retention and data-sharing policies; keep firewall operation plan-only unless
-the restoration gate above is implemented and independently reviewed; and
+retention and data-sharing policies; use only the reviewed local defense workflow and verify its release outcome; and
 obtain independent security/operations review.
 
 ## License

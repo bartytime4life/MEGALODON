@@ -9,7 +9,7 @@ def test_packaged_coverage_map_and_snapshot_validator():
     assert {row[0] for row in TOOLS}==set(RECIPES)
     assert len({row[0] for row in FEATURES})==len(FEATURES)
     assert coverage_html() in INDEX_HTML
-    assert SNAPSHOT_VALIDATOR_JS in DASHBOARD_JS
+    assert SNAPSHOT_VALIDATOR_JS not in DASHBOARD_JS  # local HUD no longer imports hosted snapshots
     assert COVERAGE_CSS in DASHBOARD_CSS
     for _,_,_,_,target in FEATURES:
         assert f'id="{target}"' in INDEX_HTML
@@ -39,11 +39,3 @@ const vm=require('node:vm'),assert=require('node:assert/strict');let code='';pro
     subprocess.run([node,'-e',harness],input=SNAPSHOT_LOCAL_JS,text=True,check=True,timeout=10)
 
 
-def test_repository_site_mirror_matches_packaged_sources():
-    import pytest
-    root=Path(__file__).resolve().parents[1]
-    if not (root/'site/dist').is_dir():
-        pytest.skip('Hosted Site mirror is separate from the Python source distribution')
-    assert coverage_html(hosted=True) in (root/'site/dist/index.html').read_text()
-    assert (root/'site/dist/snapshot.js').read_text() == SNAPSHOT_VALIDATOR_JS + SNAPSHOT_HOSTED_JS
-    assert (root/'site/dist/telemetry.css').read_text()==COVERAGE_CSS

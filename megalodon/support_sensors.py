@@ -1,5 +1,6 @@
 """Bounded CLI sensor summaries. Separate from admitted packet/alert evidence."""
 from collections import Counter
+from contextlib import nullcontext
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
@@ -7,8 +8,10 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import sqlite3
 import subprocess
 import tempfile
+from uuid import uuid4
 from threading import Event, Lock, Thread
 
 from .companion_automation import _run_fixed
@@ -88,6 +91,8 @@ class SupportSensors:
         self._lock, self._stop = Lock(), Event()
         self._threads = []
         self._decoder = None
+        self.flow_ingestor = None
+        self.evidence = None
         self._data = {key:dict(state='stopped',message='Background sensor summaries are stopped.',updated_at=None,metrics=[])
                       for key in ('zeek','suricata')}
 
@@ -120,13 +125,15 @@ class SupportSensors:
         while not self._stop.is_set():
             self._publish('zeek',state='collecting',message='Sampling up to 10 seconds / 2,000 frames; flow counts stay separate from packet totals.')
             try:
+                sample_started=now();sample_id=uuid4().hex
                 raw,code = _run_fixed(['/usr/bin/dumpcap','-i',interface,'-p','-s','256','-q','-P','-w','-',
                                        '-a','duration:10','-c','2000'],2*1024*1024,15,self._stop)
                 if self._stop.is_set():
                     break
                 if code or len(raw)<24:
                     raise ValueError('Capture unavailable')
-                with tempfile.TemporaryDirectory(prefix='zeek-',dir=self.root) as directory:
+                reservation=self.evidence.working_reservation(4*1024**2) if self.evidence is not None and self.evidence.enabled else nullcontext()
+                with reservation, tempfile.TemporaryDirectory(prefix='zeek-',dir=self.root) as directory:
                     env = {'PATH':'/usr/bin:/bin','HOME':directory,'LC_ALL':'C'}
                     # Raw frames remain in bounded memory and anonymous pipes.
                     process = subprocess.Popen([binary,'-r','-','LogAscii::use_json=T','-e',ZEEK_SCRIPT],
@@ -141,10 +148,20 @@ class SupportSensors:
                             raise ValueError('Zeek failed')
                         path = Path(directory)/'conn.log'
                         if path.exists():
-                            with path.open('rb') as stream:
-                                result = summarize_zeek(stream.read(MAX_LOG+1))
+                            fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+                            with os.fdopen(fd,'rb') as stream:
+                                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):raise ValueError('Expected regular Zeek sample')
+                                flow_rows=stream.read(MAX_LOG+1)
                         else:
-                            result = summarize_zeek(b'')
+                            flow_rows=b''
+                        result=summarize_zeek(flow_rows)
+                        if self.flow_ingestor is not None and not self._stop.is_set():
+                            self.flow_ingestor.ingest_zeek_sample(flow_rows,sample_id=sample_id,interface=interface,
+                                started_at=sample_started,finished_at=now())
+                        if self.evidence is not None and self.evidence.enabled and not self._stop.is_set():
+                            self.evidence.append_records('sensor_logs',[dict(observed_at=now(),source='zeek-sample',
+                                data=dict(metrics=result,coverage=dict(kind='bounded_sample',continuous=False,interface=interface,
+                                    started_at=sample_started,finished_at=now(),max_frames=2000,snapshot_bytes=256,nominal_interval_seconds=60)))])
                     finally:
                         if process.poll() is None:
                             process.kill()
@@ -152,7 +169,7 @@ class SupportSensors:
                         with self._lock:
                             self._decoder = None
                 self._publish('zeek',state='connected',message='Latest bounded Zeek sample; 256-byte snapshots and sampling gaps limit protocol coverage. No raw capture saved.',updated_at=now(),metrics=result)
-            except (OSError,ValueError,subprocess.SubprocessError):
+            except (OSError,ValueError,sqlite3.Error,subprocess.SubprocessError):
                 self._publish('zeek',state='error',message='Zeek sampling stopped: check capture access, executable and private workspace. Retry background tools.',metrics=[])
                 return
             if self._stop.wait(50):

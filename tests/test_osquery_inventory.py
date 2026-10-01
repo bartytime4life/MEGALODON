@@ -57,10 +57,6 @@ def test_cli_and_shared_assets():
     from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_JS, DASHBOARD_CSS
     assert OSQUERY_HTML in INDEX_HTML and OSQUERY_JS in DASHBOARD_JS and OSQUERY_CSS in DASHBOARD_CSS
     root = Path(__file__).resolve().parents[1]
-    if (root/'site/dist').is_dir():
-        assert (root/'site/dist/osquery.js').read_text() == OSQUERY_JS
-        assert (root/'site/dist/osquery.css').read_text() == OSQUERY_CSS
-        assert OSQUERY_HTML in (root/'site/dist/index.html').read_text()
     node = shutil.which('node')
     if node:
         result = subprocess.run([node, '-e', OSQUERY_JS + '\nconsole.log(JSON.stringify(validateOsqueryCount(require("node:fs").readFileSync(0,"utf8"))))'],

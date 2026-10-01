@@ -1,0 +1,158 @@
+{
+  "schema": "megalodon-local-browser-acceptance-v1",
+  "checked_at": "2026-10-01T20:50:10.914996+00:00",
+  "application_source_revision": "b8c71b86866ffd0edaa8ab518b1fed106b3c17e9",
+  "method": "Supported Codex in-app browser; real installed local HUD plus disposable real CLI dashboard for feed failures. Read-only DOM measurements, keyboard interactions and screenshots. No browser policy bypass.",
+  "status": "passed_with_explicit_unverified_items",
+  "release": "0.1.0-20261001T204152Z-5d0f0d28",
+  "package_sha256": "f59333df5985cc07c008448fb68e14935919b0bf1c64dd63e3a1b09ca6831129",
+  "source_package_matches": true,
+  "installed_package_files": 239,
+  "managed_listener_verified": true,
+  "preservation": {
+    "settings_unchanged": true,
+    "policy_unchanged": true,
+    "schedule_unchanged": true,
+    "oldest_evidence_preserved": true,
+    "all_existing_reports_preserved": true,
+    "reports_before": 3,
+    "reports_after_update": 3,
+    "reports_after_ui_creation": 4
+  },
+  "policy": {
+    "cap_bytes": 21474836480,
+    "profile": "home",
+    "recording_mode": "packet_metadata",
+    "retention_days": 14
+  },
+  "schedule": {
+    "enabled": true,
+    "frequency": "daily",
+    "time": "09:00",
+    "timezone": "America/Chicago"
+  },
+  "monitoring": {
+    "state": "running",
+    "write_failures": 0,
+    "unconfirmed_records": 0
+  },
+  "responsive_checks": [
+    {
+      "name": "desktop",
+      "actual_viewport": [
+        1920,
+        1032
+      ],
+      "page_overflow": false,
+      "report_columns": "678px 678px"
+    },
+    {
+      "name": "ultrawide",
+      "actual_viewport": [
+        2560,
+        1392
+      ],
+      "page_overflow": false,
+      "workspace_cap_px": 2200
+    },
+    {
+      "name": "laptop",
+      "actual_viewport": [
+        1366,
+        720
+      ],
+      "page_overflow": false,
+      "report_columns": "1234px"
+    },
+    {
+      "name": "mobile",
+      "actual_viewport": [
+        390,
+        796
+      ],
+      "page_client_width": 375,
+      "page_scroll_width": 375
+    },
+    {
+      "name": "narrow_mobile",
+      "actual_viewport": [
+        320,
+        692
+      ],
+      "page_client_width": 305,
+      "page_scroll_width": 305
+    }
+  ],
+  "viewport_note": "Actual page heights exclude application browser chrome. Detailed tables/charts can scroll within their own containers. Temporary viewport overrides were reset; normal final viewport was 614 by 1292.",
+  "passed_journeys": [
+    "Installed page reload adopts the new assets and local API reconnects",
+    "Findings skip link selects Findings and focuses room-findings-title",
+    "Workspace keyboard tab navigation and visible focus",
+    "Globe rotation visually observed; keyboard pause/resume updates control state",
+    "Local topology grouping/filtering and device selection opens endpoint inspector",
+    "Setup software search filters to the observed tool and clears",
+    "Empty CLI dashboard labels unavailable measurements without fabricating live data",
+    "Failed initial live feed reports unavailable monitoring/location rather than perpetual checking",
+    "Stopped disposable dashboard retains its two synthetic findings and marks the feed stale; restart recovers",
+    "Reports show cached entries without generating replacements",
+    "Custom-date Make report now completed a 15-minute local report and added one Ready entry",
+    "Traffic chart table keyboard expansion exposes 48 interval rows plus its header",
+    "Actual Save report HTML download matches cached server bytes",
+    "Print action displays saved-HTML fallback guidance",
+    "No browser warning/error console entries at final inspection"
+  ],
+  "download": {
+    "cached_html_byte_match": true,
+    "bytes": 252577,
+    "svg_charts": 21,
+    "tables": 27,
+    "scripts": 0,
+    "external_asset_dependencies": 0,
+    "contents_published": false
+  },
+  "unverified": [
+    "Print preview, PDF pagination and paper output: print invoked but no native preview exposed by this adapter",
+    "Native OS reduced-motion preference and hidden-window suspension: no supported adapter control; deterministic tests are separate",
+    "Live geographic arc accuracy: location updates disabled in existing settings; unmapped presentation checked",
+    "Every dynamic or privileged app install/remove control: existing fixed-command and isolated installation tests, not destructive live-PC exercises",
+    "Full screen-reader audit and exhaustive contrast audit"
+  ],
+  "regression": {
+    "passed": 4329,
+    "skipped": 3,
+    "subtests_passed": 203,
+    "seconds": 101.72,
+    "final_focused_passed": 111,
+    "wheel_built": true,
+    "source_archive_built": true,
+    "skip_note": "Installed TShark lane is opt-in and passed in the preceding audit; two cases require /tmp to be a compatibility symlink."
+  },
+  "privacy": "Only this sanitized receipt is committed. Screenshots, generated reports, actual endpoints and runtime snapshots remain private local outputs.",
+  "private_screenshots": [
+    {
+      "name": "failed-feed-mobile.png",
+      "sha256": "fa94312bf64a986f05f6f2ebfcd7d761c1dc0a11cd9876a5c47c33d5a79c3e97",
+      "published": false
+    },
+    {
+      "name": "hud-mobile.png",
+      "sha256": "f2fe53041f999bdb8bd5f6a222519aecbbd95eebf5d1a78e159fc317f81d359c",
+      "published": false
+    },
+    {
+      "name": "installed-hud.png",
+      "sha256": "b21d94d7c3a5a973ba4ae8426b765598976c4f599aaa2c900a59afa4d39abea6",
+      "published": false
+    },
+    {
+      "name": "report-charts-desktop.png",
+      "sha256": "49e455ca8ca2077d0440da26f065b2c89567ba5d318ce5b99a50b086a159045c",
+      "published": false
+    },
+    {
+      "name": "reports-desktop.png",
+      "sha256": "be4143fe71b4cc8b56060ec4790c6fa0a790431fad08166a3ee521cceb8c709a",
+      "published": false
+    }
+  ]
+}

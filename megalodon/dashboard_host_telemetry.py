@@ -16,8 +16,8 @@ HOST_TELEMETRY_HTML = r'''
       <div class="pc-machine"><span>Whole PC CPU</span><strong id="pc-system-cpu">—</strong><span>Whole PC RAM</span><strong id="pc-system-memory">—</strong></div>
       <div class="pc-cpu-trend-head"><h5>CPU over time</h5><p><span class="pc-legend-rx">MEGALODON + companions</span> · <span class="pc-legend-tx">Whole PC</span></p></div><div id="pc-cpu-chart" class="pc-chart pc-chart-compact"><p class="pc-empty">Waiting for two CPU observations.</p></div>
     </section>
-    <section class="pc-network" aria-labelledby="pc-network-title"><div class="pc-section-head"><h4 id="pc-network-title">Network activity</h4><label for="pc-interface">Interface <select id="pc-interface" disabled><option value="">Waiting</option></select></label></div>
-      <div class="pc-network-rates"><div><span class="pc-legend-rx">↓ Receive</span><strong id="pc-rx">—</strong></div><div><span class="pc-legend-tx">↑ Send</span><strong id="pc-tx">—</strong></div></div>
+    <section class="pc-network" id="pc-network-panel" aria-labelledby="pc-network-title"><div class="pc-section-head"><h4 id="pc-network-title">Upload &amp; download</h4><label for="pc-interface">Interface <select id="pc-interface" disabled><option value="">Waiting</option></select></label></div>
+      <div class="pc-network-rates"><div><span class="pc-legend-rx">↓ Download</span><strong id="pc-rx">—</strong></div><div><span class="pc-legend-tx">↑ Upload</span><strong id="pc-tx">—</strong></div></div>
       <div id="pc-network-chart" class="pc-chart"><p class="pc-empty">Waiting for two rate observations to draw a trend.</p></div>
       <p class="pc-caption" id="pc-network-detail">Rates are measured for one interface at a time.</p>
     </section>
@@ -83,7 +83,7 @@ HOST_TELEMETRY_JS = r'''
   const workspace=el('workspace-live');
   const visible=()=>!document.hidden&&!(workspace&&workspace.hidden);
   const strip=()=>{for(const [target,source]of [['ops-cpu','pc-suite-cpu'],['ops-memory','pc-suite-memory'],['ops-pc-cpu','pc-system-cpu'],['ops-pc-memory','pc-system-memory']])if(el(target)){const value=el(source).textContent;el(target).textContent=value;const meter=el(target+'-meter');if(meter){const numeric=parseFloat(value);meter.value=Number.isFinite(numeric)?Math.min(100,Math.max(0,numeric)):0;meter.setAttribute('aria-valuetext',value==='—'?'Unavailable':value);}}};
-  const state = {paused:false, pending:false, payload:null, selected:'', timer:null, controller:null, revision:0, failed:false};
+  const state = {paused:false, pending:false, payload:null, selected:'', unit:'mbps', timer:null, controller:null, revision:0, failed:false};
   const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   const metric = value => value === null || number(value);
   const text = value => typeof value === 'string' && value.length <= 512 && !/[\x00-\x1f\x7f]/.test(value);
@@ -125,6 +125,12 @@ HOST_TELEMETRY_JS = r'''
   function node(tag, content, className='') { const item=document.createElement(tag); item.textContent=content; if(className)item.className=className; return item; }
   function status(label, kind) { el('pc-status').textContent=label; el('pc-status').setAttribute('data-state',kind); }
   function gauge(id, value) { el(id).setAttribute('stroke-dasharray',`${number(value)?Math.min(value,100):0} 100`); }
+  function speeds(reading=null) {
+    const rate=value=>number(value)?state.unit==='bytes'?bytes(value,true):(value*8/1000000).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+' Mbps':'—';
+    if(el('ops-download'))el('ops-download').textContent=rate(reading?.rx_bps);
+    if(el('ops-upload'))el('ops-upload').textContent=rate(reading?.tx_bps);
+    if(el('ops-interface-label'))el('ops-interface-label').textContent=reading?state.selected+' · includes LAN':'Interface unavailable';
+  }
   function clearCurrent() {
     for(const id of ['suite-cpu','suite-memory','system-cpu','system-memory','rx','tx','tcp','udp','established','listening','time-wait']) el('pc-'+id).textContent='—';
     gauge('pc-cpu-arc',null); gauge('pc-memory-arc',null);
@@ -132,7 +138,7 @@ HOST_TELEMETRY_JS = r'''
     el('pc-process-coverage').textContent='Current process coverage unavailable.';
     el('pc-apps-body').replaceChildren(); const row=node('tr',''), cell=node('td','Current app readings unavailable.'); cell.setAttribute('colspan','6'); row.append(cell); el('pc-apps-body').append(row);
     el('pc-peers').replaceChildren(node('li','Current socket readings unavailable.'));
-    el('pc-network-detail').textContent='Current interface readings unavailable.';strip();
+    el('pc-network-detail').textContent='Current interface readings unavailable.';strip();speeds();
   }
   function emptyChart(message) { el('pc-network-chart').replaceChildren(node('p',message,'pc-empty')); }
   function plot(payload) {
@@ -189,7 +195,7 @@ HOST_TELEMETRY_JS = r'''
     const current=options.find(item=>item.name===state.selected);
     el('pc-rx').textContent=bytes(current?.rx_bps,true);el('pc-tx').textContent=bytes(current?.tx_bps,true);
     el('pc-network-detail').textContent=current?`${state.selected} · ${fmt(current.rx_pps)} receive / ${fmt(current.tx_pps)} send packets/s · since the previous observation: ${fmt(current.rx_errors)} receive / ${fmt(current.tx_errors)} send errors; ${fmt(current.rx_drops)} receive / ${fmt(current.tx_drops)} send drops.`:'No interface readings available.';
-    plot(payload);
+    speeds(current);plot(payload);
   }
   function render(payload) {
     el('pc-suite-cpu').textContent=pct(payload.suite.cpu_percent);el('pc-suite-memory').textContent=pct(payload.suite.memory_percent);
@@ -240,10 +246,11 @@ HOST_TELEMETRY_JS = r'''
   el('pc-pause').addEventListener('click',()=>{
     state.paused=!state.paused;state.revision++;clearTimeout(state.timer);state.controller?.abort();
     el('pc-pause').textContent=state.paused?'Resume live view':'Pause live view';el('pc-pause').setAttribute('aria-pressed',String(state.paused));
-    if(state.paused){status('Paused','paused');el('pc-freshness').textContent='View paused. Displayed values are retained observations; collection continues locally.';}
+    if(state.paused){if(el('ops-interface-label'))el('ops-interface-label').textContent=state.selected+' · paused snapshot';status('Paused','paused');el('pc-freshness').textContent='View paused. Displayed values are retained observations; collection continues locally.';}
     else {status('Connecting','waiting');clearCurrent();refresh();}
   });
   el('pc-interface').addEventListener('change',()=>{state.selected=el('pc-interface').value;if(state.payload){interfaces(state.payload);if(!state.paused)freshness(state.payload);else if(state.failed)clearCurrent();}});
+  if(el('ops-speed-unit'))el('ops-speed-unit').addEventListener('change',()=>{state.unit=el('ops-speed-unit').value==='bytes'?'bytes':'mbps';if(state.payload){interfaces(state.payload);if(!state.paused)freshness(state.payload);else if(state.failed)clearCurrent();}});
   const syncVisibility=()=>{
     state.revision++;clearTimeout(state.timer);state.controller?.abort();
     if(!visible()) {status(state.paused?'Paused':'Hidden tab','paused');el('pc-freshness').textContent='Refresh suspended while this tab is hidden. Displayed values are retained observations.';}
