@@ -36,7 +36,7 @@ def snapshot(configuration, companions):
     if hasattr(configuration,'model_telemetry'):
         observed=configuration.model_telemetry.snapshot()
         qwen={k:observed[k] for k in ('state','message','updated_at')};qwen['metrics']=[]
-        if observed.get('response_ms') is not None:qwen['metrics'].append(metric('Last request',observed['response_ms'],'ms'))
+        if observed.get('response_ms') is not None:qwen['metrics'].append(metric('Last attempt duration',observed['response_ms'],'ms'))
         if observed.get('memory_bytes') is not None:qwen['metrics'].append(metric('Loaded allocation',observed['memory_bytes']/1024**3,'GiB'))
         if observed.get('vram_bytes') is not None:qwen['metrics'].append(metric('GPU allocation',observed['vram_bytes']/1024**3,'GiB'))
     else:qwen=dict(configuration.qwen_status)

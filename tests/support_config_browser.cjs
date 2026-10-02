@@ -20,9 +20,15 @@ process.stdin.on('end',async()=>{
  assert.equal(get('support-config-interface').value,'wlan0');assert.equal(get('support-config-nmap-target').value,'192.168.1.0/24');assert.equal(get('support-config-scan-folder').value,'Documents');assert.equal(postCount(),0);
 
  // Model selection shares the protected setup request and retains unsaved choices.
- const model={model:'qwen3.6:latest',message:'Configured model available.',compute_mode:'cpu',options:[{name:'qwen3.6:latest',digest:'a'.repeat(64),size_bytes:2**30},{name:'llama3.2:3b',digest:'b'.repeat(64),size_bytes:2**30}],updated_at:null,last_response_at:null,last_attempt_at:null,response_ms:null,loaded:false,memory_bytes:null,vram_bytes:null};
+ const model={model:'qwen3.6:latest',message:'Configured model available.',compute_mode:'cpu',options:[{name:'qwen3.6:latest',digest:'a'.repeat(64),size_bytes:2**30},{name:'llama3.2:3b',digest:'b'.repeat(64),size_bytes:2**30}],updated_at:null,last_response_at:null,last_attempt_at:null,response_ms:null,inference_verified:false,loaded:false,memory_bytes:null,vram_bytes:null};
  payload={...fixture,model};await poll(10000);
  assert.equal(get('support-model-select').value,'qwen3.6:latest');
+ assert.match(get('support-model-metrics').textContent,/No accepted response recorded for this model/);
+ payload={...fixture,model:{...model,last_response_at:'2026-09-30T20:09:30Z',last_attempt_at:'2026-09-30T20:10:00Z',response_ms:1200}};await poll(10000);
+ assert.match(get('support-model-metrics').textContent,/Last accepted response 2026-09-30 20:09:30 UTC · reverify for current readiness/);
+ assert.match(get('support-model-metrics').textContent,/Last attempt 2026-09-30 20:10:00 UTC · Last attempt duration 1.20 s/);
+ payload={...fixture,model:{...model,inference_verified:true,last_response_at:'2026-09-30T20:10:00Z'}};await poll(10000);
+ assert.match(get('support-model-metrics').textContent,/Last accepted response 2026-09-30 20:10:00 UTC · recent/);
  change('support-model-select','llama3.2:3b');change('support-model-compute','auto');await poll(10000);
  assert.equal(get('support-model-select').value,'llama3.2:3b');assert.equal(get('support-model-compute').value,'auto');
  await click('support-model-save');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_select',model:'llama3.2:3b',model_digest:'b'.repeat(64),compute_mode:'auto',timeout_seconds:300});
