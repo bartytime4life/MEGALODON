@@ -89,6 +89,16 @@ def test_model_citations_and_workflows_are_closed():
         with pytest.raises(ValueError):explain(item,[reference],AISettings(),model=lambda *a,**k:json.dumps(output))
 
 
+def test_model_cannot_upgrade_observation_to_containment_workflow():
+    item=candidate('OBSERVED_ACTIVITY',('192.168.1.4','see sources','multiple; separately counted','source-qualified records'),
+                   START,START+3600,{},['a:1'],[SEGMENT])
+    response=json.dumps(dict(explanation='Traffic was observed.',alternative='Routine communication.',
+                             missing='Sensor coverage is incomplete.',citations=['E1'],workflow='contain'))
+    result=explain(item,[],AISettings(),model=lambda *a,**k:response)
+    assert result['workflow']==item['workflow']=='evidence_summary'
+    assert result['action_status']=='not_attempted'
+
+
 @pytest.fixture
 def service(tmp_path):
     stamp=[START+3*3600]
