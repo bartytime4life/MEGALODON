@@ -112,7 +112,15 @@ include its exact CPython 3.11/3.12 Linux wheel hashes from
 [the publisher's PyPI release](https://pypi.org/project/PyYAML/6.0.3/#files).
 The build-input inventory and isolated-environment checks include this reader;
 CI does not depend on a copy incidentally installed on the runner. The existing
-locked installer wheelhouse was checked with hash-required downloads.
+locked installer wheelhouse was checked with hash-required downloads. All 13
+CPython 3.11 test wheels also downloaded with their required hashes.
+
+The real offline installer rehearsal passed on `a4e9b09`: initial installation,
+replacement, launcher repair, refusal to overwrite modified artifacts, injected
+activation failure with rollback, installed imports outside the checkout,
+settings/data preservation, and clean removal of disposable test files. The
+receipt SHA-256 is `4c260ff8d818ec57cd22c38b714a6dee9d8382649f15d4d519ab03e4461ed383`.
+The focused knowledge/packaging tests also passed after the dependency correction.
 
 ## Rollout and practical limits
 
