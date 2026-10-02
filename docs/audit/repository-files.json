@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 109,
     "workflow": 14,
-    "configuration": 35,
+    "configuration": 36,
     "source": 167,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3931,6 +3931,31 @@
       "related_tests": []
     },
     {
+      "path": "docs/audit/source-checkpoint-acceptance.json",
+      "classification": "configuration",
+      "purpose": "source checkpoint acceptance",
+      "bytes": 2968,
+      "sha256": "1fbe00e0f9ed0ad35dc5b66b6600769dc46e695dfe452d1c1e435d118c26a376",
+      "dependencies": [
+        "correction",
+        "excluded_from_checkpoint",
+        "limitations",
+        "local_runtime",
+        "repository",
+        "schema",
+        "scope",
+        "site",
+        "verification",
+        "verified_at"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "docs/audit/validation.json",
       "classification": "configuration",
       "purpose": "validation",
@@ -5429,15 +5454,16 @@
       "path": "docs/site-source-alignment.md",
       "classification": "historical",
       "purpose": "Defense Console source alignment",
-      "bytes": 59227,
-      "sha256": "4665ec52aeedb0437d8df9e488fa924a7e73bfac9739439c58351ea1fd6fb93c",
+      "bytes": 61285,
+      "sha256": "b48d7d49145dd704f1beee4eddfa9001ab2cadba98ae4675b4b947c823515a1a",
       "dependencies": [
+        "audit/source-checkpoint-acceptance.json",
         "clamav-summary-v1.md",
         "document-alignment-2026-09-21.md",
         "nmap-inventory-v1.md",
         "project-gap-review.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"

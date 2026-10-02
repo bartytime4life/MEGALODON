@@ -1,0 +1,58 @@
+{
+  "schema": "megalodon-source-checkpoint-acceptance-v1",
+  "verified_at": "2026-10-02T01:33:45Z",
+  "scope": "Save the current local HUD source to GitHub and a private Site source checkpoint; preserve the retired hosted application.",
+  "repository": {
+    "url": "https://github.com/bartytime4life/MEGALODON",
+    "branch": "codex/globe-origin-pings",
+    "checkpoint_commit": "c32b931ca7713a0125da95e6483743ed3a69fff9",
+    "checkpoint_tree": "dd3878cedc5f1b0c94dd9f711be67bb0a33449bf",
+    "source_archive_sha256": "35193f4e820c3a5a669bcc4502b5d16accaa6ed71f92cb6b69cbbeec2fb9ec1f",
+    "tracked_files": 798,
+    "source_bytes": 11960445,
+    "remote_head_verified": true,
+    "receipt_boundary": "This receipt and its ledger update follow the checkpoint commit and do not change application bytes."
+  },
+  "site": {
+    "project_id": "appgprj_6aaa2be9d9288191a15a9c1d743af0b3",
+    "source_commit": "9701721014c1dad30436c006f5e34832eafaa50f",
+    "version_id": "appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_d948c72d69b48191b7f1151cc27728fb",
+    "version_number": 61,
+    "deployment_id": null,
+    "source_directory": "checkpoints/local-hud/source",
+    "all_source_file_hashes_and_modes_verified": true,
+    "source_files_tracked_in_site_git": 798,
+    "owner_only_access_policy_unchanged": true,
+    "normalized_archive_sha256": "a52499b99cd77a74f3a07767765d6dbbfb4bc99c8cb42d8b3f6b310591d3618d",
+    "normalized_archive_bytes": 10240,
+    "deployment_files": ["dist/.openai/hosting.json", "dist/server/index.js"],
+    "retained_publication": {
+      "version_number": 60,
+      "deployment_id": "appgdep_6abea7c5bd8c8191afb04038e9fed2ad",
+      "status": "succeeded",
+      "handler": "Empty HTTP 410, no UI or redirect"
+    }
+  },
+  "correction": "Removed the obsolete static.directory=dist from the repository Site identity manifest; canonical retirement source and packaged worker remain byte-identical.",
+  "local_runtime": {
+    "release": "0.1.0-20261002T003000Z-5e36aa96",
+    "source_and_installed_package_sha256": "9f99bf109375f242360b62d014b81ae49ed65c804d59fdd4457359840e22e375",
+    "running_release_identity_verified": true,
+    "capture_state": "running",
+    "retention_days": 14,
+    "cap_bytes": 21474836480,
+    "saved_reports": 4,
+    "service_restarted_for_checkpoint": false
+  },
+  "verification": {
+    "focused_tests_passed": 107,
+    "subtests_passed": 32,
+    "retirement_route_method_checks_passed": 15,
+    "static_controls": 173,
+    "duplicate_control_ids": [],
+    "missing_anchors": [],
+    "new_browser_or_print_acceptance": false
+  },
+  "excluded_from_checkpoint": ["Ignored and uncommitted files", "Private runtime captures and evidence", "Local user settings", "Generated reports", "Model files", "Credentials"],
+  "limitations": ["Source backup does not deploy a hosted HUD", "GitHub branch save does not merge protected main", "Earlier visual and full-regression evidence remains in the dated acceptance receipts"]
+}
