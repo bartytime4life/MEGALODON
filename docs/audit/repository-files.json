@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 109,
     "workflow": 14,
-    "configuration": 33,
+    "configuration": 34,
     "source": 167,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3680,6 +3680,31 @@
       "related_tests": []
     },
     {
+      "path": "docs/audit/atlas-workspace-acceptance.json",
+      "classification": "configuration",
+      "purpose": "atlas workspace acceptance",
+      "bytes": 3599,
+      "sha256": "782d6f56ec0e152ea5659dfdab35c40da8cd68bb6047b49d66c81bddc1fc2c88",
+      "dependencies": [
+        "behavior_checks",
+        "browser",
+        "changes",
+        "limits",
+        "observed_date",
+        "regression",
+        "release",
+        "schema",
+        "scope",
+        "source_base"
+      ],
+      "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "docs/audit/browser-ci-acceptance.json",
       "classification": "configuration",
       "purpose": "browser ci acceptance",
@@ -3837,7 +3862,7 @@
         "tests",
         "update_recovery"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -4723,8 +4748,8 @@
       "path": "docs/live-connection-globe.md",
       "classification": "documentation",
       "purpose": "Live connection atlas",
-      "bytes": 5924,
-      "sha256": "556e478bd270419be0292311c6efc525c0695fdac95371ee86f02534d3602c75",
+      "bytes": 6860,
+      "sha256": "7c7ff980a91a11cb20760f01a72d7b079a5750ff6a34a6a32d0fcdfc5a3bb33a",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -5701,12 +5726,12 @@
       "path": "docs/visual-operations-defense.md",
       "classification": "documentation",
       "purpose": "Visual operations and local defense",
-      "bytes": 6388,
-      "sha256": "8a7c1bbd255a4a9c7a18262e071e25c5783d766be334cffc0d9f3be685d48423",
+      "bytes": 7164,
+      "sha256": "73b259ca0120fee3a4d05c6cee1f9e2dd3d1d60d95154f77e9f144b679875669",
       "dependencies": [
         "managed-evidence.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -7436,8 +7461,8 @@
       "path": "megalodon/dashboard_live_globe.py",
       "classification": "source",
       "purpose": "Local-only live geographic connection view and legacy history visibility hooks.",
-      "bytes": 38364,
-      "sha256": "e835bba7633d72573aa6d4f058dd6346c293335ff66e0bcaa6ee88f392619ee0",
+      "bytes": 45897,
+      "sha256": "c3e5409b4d4df2c4698703f4b5a21f59741dbdc93e9e5a0769d8a86cd6219f2d",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7452,8 +7477,8 @@
       "path": "megalodon/dashboard_network.py",
       "classification": "source",
       "purpose": "Local topology view and explicit bounded discovery configuration.",
-      "bytes": 35013,
-      "sha256": "e9d386c03066f6ae8a5f8bb3d132865568b48e6971dcb5d848a873b4de13a322",
+      "bytes": 38984,
+      "sha256": "9c28f36c19f93eb1b0a943bba6eb233aaa79ecb7ea76b6101ccb00367e64ea31",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7468,8 +7493,8 @@
       "path": "megalodon/dashboard_operations.py",
       "classification": "source",
       "purpose": "Visual local operations desk; bounded metadata and reviewed local defense.",
-      "bytes": 58500,
-      "sha256": "416a0d1671c4163426dd204b1447c367bfe1a22acc2dafe132d8d3539843ff47",
+      "bytes": 61033,
+      "sha256": "2cc252d0043fbe36b046ab6e239af4ad3c8eeb876d97ada569eabda1665ff6f8",
       "dependencies": [
         ".dashboard_network",
         ".dashboard_setup",
@@ -13798,8 +13823,8 @@
       "path": "tests/live_globe_browser.cjs",
       "classification": "test",
       "purpose": "live globe browser",
-      "bytes": 14575,
-      "sha256": "2dc020cdcf60327fee8f595b158d27e935924fa02d129b061846ab67a2a91289",
+      "bytes": 18972,
+      "sha256": "48ff1459ca8a70b348b76e7dd6023e96e4f606d80546cc1f032008e3afd23f9f",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -13826,10 +13851,10 @@
       "path": "tests/network_browser.cjs",
       "classification": "test",
       "purpose": "network browser",
-      "bytes": 7109,
-      "sha256": "c9fd5f5f423bf2c8d1fe963538091abc9d8a228b5dc215cbef6d72b828725d51",
+      "bytes": 11155,
+      "sha256": "df8b870a547ed7d9cfaaf98c6589f13eb51e18b2360206aea6984f8480b55a2b",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -15332,8 +15357,8 @@
       "path": "tests/test_dashboard_network_ui.py",
       "classification": "test",
       "purpose": "Shipped topology UI behavior against synthetic local network observations.",
-      "bytes": 2670,
-      "sha256": "b1d4c82dd70bb79a6f565b050523a22c3822861405935f9cc1ba5ce5dd24d1bc",
+      "bytes": 2893,
+      "sha256": "d1829a98b16e36b95dc9aad743c861c40ed78cc28226edd7c7838effcad537f6",
       "dependencies": [
         "json",
         "megalodon.dashboard_network",
@@ -15342,7 +15367,7 @@
         "shutil",
         "subprocess"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -15353,8 +15378,8 @@
       "path": "tests/test_dashboard_operations_ui.py",
       "classification": "test",
       "purpose": "Shipped operations UI exercised with synthetic observations and inert DOM.",
-      "bytes": 4289,
-      "sha256": "18b95ca2209bd456656938aad4bbee327a7abd96d24ce28606a85ce9f33fa3a1",
+      "bytes": 4750,
+      "sha256": "abd40fc3fd9d118cd7b245e6e5f36c0f0051aefd5efea6c1c278c1ab77f9428a",
       "dependencies": [
         "collections",
         "html.parser",
@@ -15366,7 +15391,7 @@
         "shutil",
         "subprocess"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19471,6 +19496,24 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
+      "element": "select",
+      "id": "live-globe-camera",
+      "type": null,
+      "label": null,
+      "disabled": false,
+      "source_references": 4,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "input",
+      "id": "live-globe-zoom",
+      "type": "range",
+      "label": "Globe scale",
+      "disabled": false,
+      "source_references": 5,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
       "element": "button",
       "id": "live-globe-pause",
       "type": "button",
@@ -19531,6 +19574,15 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "select",
+      "id": "network-page-size",
+      "type": null,
+      "label": null,
+      "disabled": false,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20731,7 +20783,7 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
-  "control_count": 166,
+  "control_count": 169,
   "duplicate_ids": [],
   "missing_anchors": [],
   "exclusions": [

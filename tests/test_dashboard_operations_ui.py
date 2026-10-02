@@ -39,6 +39,11 @@ def test_operations_layout_ownership_and_closed_history():
                 if self.parents[i][0]==tag:del self.parents[i:];break
     p=Parse();p.feed(INDEX_HTML)
     assert not [k for k,v in Counter(p.ids).items() if v>1]
+    assert p.ids.index('live-globe') < p.ids.index('network-panel') < p.ids.index('ops-pulse-title')
+    assert any(a.get('class') == 'ops-visual-grid' for _, a in p.owners['network-panel'])
+    assert not any(a.get('class') == 'ops-atlas' for _, a in p.owners['network-panel'])
+    for key in ('live-globe-camera', 'live-globe-zoom', 'network-page-size'):
+        assert [a['id'] for _, a in p.owners[key] if a.get('role') == 'tabpanel'] == ['workspace-live']
     for key in ('operations-title','ops-pulse-title','live-globe','ops-endpoints-title','ops-defense-title','support-apps-start'):
         assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-live']
     for key in ('support-config','setup-title','live-geography-refresh','action-plane-title','app-viewer-title'):

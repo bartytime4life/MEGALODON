@@ -22,6 +22,9 @@ def test_network_behavior_validation_selection_and_explicit_configuration():
 
 
 def test_network_component_has_text_alternative_and_no_unsafe_sinks():
+    assert 'ResizeObserver' in NETWORK_JS
+    assert 'min-width:960px' not in NETWORK_CSS and 'min-width:760px' not in NETWORK_CSS
+    assert NETWORK_HTML.index('id="network-next"') < NETWORK_HTML.index('id="network-map"')
     assert '<table>' in NETWORK_HTML and 'id="network-search"' in NETWORK_HTML
     assert 'id="network-setup-form"' in NETWORK_SETUP_HTML
     assert 'known individual /128 peers' in NETWORK_SETUP_HTML

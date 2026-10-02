@@ -1,0 +1,78 @@
+{
+  "schema": "megalodon-atlas-workspace-acceptance-v1",
+  "observed_date": "2026-10-01",
+  "source_base": "2c72b9a",
+  "scope": "Local HUD globe camera and responsive network workspace",
+  "changes": [
+    "Separate full-width globe and network map sections",
+    "Recent-activity framing with smooth regional tours and modest scale changes",
+    "World rotation, manual rotation and scale controls",
+    "Responsive interface groups with every returned node and relationship rendered",
+    "Shared searchable map/roster pages of 25, 50, 100 or 200 addresses",
+    "Incident relationship emphasis on pointer or keyboard focus"
+  ],
+  "regression": {
+    "passed": 4367,
+    "skipped": 2,
+    "subtests_passed": 204,
+    "duration_seconds": 127.41,
+    "installed_tshark_test_enabled": true,
+    "skip_reason": "Platform-specific /tmp compatibility symlink guards do not apply on this host",
+    "environment_note": "An initial sandboxed run fell back to /tmp and encountered expected private-storage guard failures. The complete successful run used the existing owner-private test directory without weakening guards."
+  },
+  "behavior_checks": [
+    "Date-line and near-antipodal camera framing",
+    "Manual takeover and ordinary-scroll preservation",
+    "Stale, stopped and hidden feed behavior",
+    "Reduced-motion static rendering",
+    "Resize without extra API requests",
+    "Multiple LAN, VPN and container groups",
+    "Wrapped full IPv6 labels and keyboard focus preservation",
+    "All returned nodes and relationships rendered without the old per-group cap"
+  ],
+  "browser": {
+    "synthetic_inventory_addresses": 180,
+    "synthetic_world_regions": 6,
+    "synthetic_data_stored_in_evidence": false,
+    "desktop_no_horizontal_map_overflow": true,
+    "mobile_requested_viewport": [
+      390,
+      844
+    ],
+    "mobile_no_horizontal_map_overflow": true,
+    "independent_review": "PASS; desktop 1440, tablet 768 and mobile 390 widths",
+    "review_provider_note": "No evaluator from a different provider was available; an independent agent used the available model.",
+    "installed_reload_verified": true,
+    "installed_desktop_viewport": [
+      1920,
+      1080
+    ],
+    "installed_mobile_viewport": [
+      390,
+      844
+    ],
+    "search_and_paging_verified": true,
+    "screenshots": "Private ignored build output; no real telemetry committed",
+    "mobile_selector_polish": "Verified on the installed build after independent review"
+  },
+  "release": {
+    "state": "installed and verified",
+    "installed_release": "0.1.0-20261001T235657Z-cba5c610",
+    "source_package_sha256": "cbd6929d3513be45dd2103e192f24f0fe835f11b7b1c801264af7eb2550cfc04",
+    "installed_package_sha256": "cbd6929d3513be45dd2103e192f24f0fe835f11b7b1c801264af7eb2550cfc04",
+    "running_service_identity_verified": true,
+    "settings_preserved": true,
+    "policy_preserved": true,
+    "report_schedule_preserved": true,
+    "saved_reports_preserved": true,
+    "saved_reports": 4,
+    "capture_state": "running"
+  },
+  "limits": [
+    "The far hemisphere remains occluded on a globe; the caption reports visible distinct mapped locations.",
+    "Device pages show the bounded backend inventory, not every possible physical device.",
+    "Edges require both endpoints in the current filtered page; off-page relationships are not drawn.",
+    "Only source-observed traffic receives directional animation. Discovery does not establish complete network traffic visibility.",
+    "Reduced-motion behavior was covered by automated browser-model tests, not a changed native OS preference."
+  ]
+}

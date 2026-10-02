@@ -5,6 +5,20 @@ strip and an IP inspector. Setup contains installation, downloads, interface and
 location configuration. Sensors shows current tool status. Historical records
 and saved computer observations are progressively disclosed inside the HUD.
 
+## Network workspace
+
+The network map is a separate full-width section beneath the globe. Its device
+grid reflows to the available container width, with separate interface groups
+for LAN, VPN and container observations. Every device in the returned page is
+placed on the map and remains available in the text roster. Search, interface
+filters and shared pagination keep larger inventories readable.
+
+Map relationships cover endpoints returned together in the current page.
+Relationships to filtered or off-page endpoints are not drawn. Dashed links
+mean routing or discovery relationships; moving directional overlays require
+recent observed traffic. These lines are a logical view, not physical wiring
+or evidence of visibility into all communication between other devices.
+
 ## What IP details mean
 
 `GET /api/operations` projects up to 128 retained connections into at most 64
