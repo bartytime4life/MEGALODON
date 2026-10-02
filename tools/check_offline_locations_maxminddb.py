@@ -47,9 +47,10 @@ def main() -> None:
         real_os_open = os.open
         opened: list[int] = []
 
-        def tracked_open(*args, **kwargs):
-            descriptor = real_os_open(*args, **kwargs)
-            opened.append(descriptor)
+        def tracked_open(path, *args, **kwargs):
+            descriptor = real_os_open(path, *args, **kwargs)
+            if path == database.name:
+                opened.append(descriptor)
             return descriptor
 
         real_open_database = maxminddb.open_database
