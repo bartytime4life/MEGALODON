@@ -68,6 +68,11 @@ retry and full rerun passed without weakening the lock.
 
 Final regression after the live-history and output-contract fixes:
 **4,417 passed, three skipped, 204 subtests passed**, in 122.96 seconds.
+After aligning the dependency policy assertions with the newly pinned reader,
+the final complete local run passed **4,418 tests, three skips and 204 subtests**
+in 112.47 seconds. The additional negative case rejects an incorrect Python
+wheel variant. The first GitHub run exposed stale dependency-list/count
+assertions; these were corrected while retaining hash and refusal checks.
 
 Focused Codex Security scan:
 `7df2ba33-dcfb-40df-ab6a-85e2257c3768`. Six initial candidates were corrected and
@@ -92,6 +97,9 @@ HUD manual review also completed with `ready` state and `not_attempted` action
 status. Initial failed/busy attempts remained visible, preserved their measured
 patterns, and counted against the automatic budget. Manual review remained
 available after that budget. Cancellation was exercised through the HUD.
+On 2026-10-02 the installed service completed its scheduled reference check at
+08:00:23 local time; a subsequent background explanation was ready and capture
+remained running. No device or connection changes were performed.
 
 Desktop and 390-pixel mobile views were rendered in the in-app browser. Checked
 Setup navigation, compact checkbox rows, update status, local reference search,

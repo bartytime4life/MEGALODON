@@ -5443,8 +5443,8 @@
       "path": "docs/security-knowledge-acceptance.md",
       "classification": "documentation",
       "purpose": "Local knowledge and patterns: acceptance record",
-      "bytes": 7681,
-      "sha256": "b41a7fe006874ff505cbd7a35b87b921ed8290d3d5f898e77e0ca13ee5d50561",
+      "bytes": 8287,
+      "sha256": "42f4d0531e0ac69157b0249669b6ef99b43a82425879d1e9efe71d9e20fbd075",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -14777,7 +14777,7 @@
       "classification": "test",
       "purpose": "Closed browser-input policy and offline pip include/hash refusal controls.",
       "bytes": 8820,
-      "sha256": "8c4af0927c9443a2fd5bdc41dbbb5596ebeadef3b821dec2ed41f4e7961e95c4",
+      "sha256": "2fc944fa06b33a0ce2364347aa845be981c75e1b1b057db3f6aa1cf55179cbe9",
       "dependencies": [
         "hashlib",
         "os",
@@ -14788,7 +14788,7 @@
         "sys",
         "zipfile"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -14881,8 +14881,8 @@
       "path": "tests/test_build_input_lock.py",
       "classification": "test",
       "purpose": "One packaging profile: hashed build/test inputs and offline pip refusals.",
-      "bytes": 10581,
-      "sha256": "e13967c9e970aa03fec760f969a464bd8baf90cb6bcc9ea32cd2d707c7f676b8",
+      "bytes": 10591,
+      "sha256": "23c7afd1953fe991c33123b1944268cee318a3264dad2186499c7d4d35a7daf6",
       "dependencies": [
         "hashlib",
         "os",
@@ -14893,7 +14893,7 @@
         "sys",
         "zipfile"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17441,8 +17441,8 @@
       "path": "tests/test_python311_input_lock.py",
       "classification": "test",
       "purpose": "Closed Python 3.11 CI profile guards; no install, network, or subprocess.",
-      "bytes": 9051,
-      "sha256": "e730a836d45bfd60c80f14eccc7770ae31eaa5e521b075e84aa498bc0a1d8829",
+      "bytes": 9231,
+      "sha256": "4df9a8dcd5a66ea3b4590a386c401f5a78d6f62c6c930992770fff6491c12416",
       "dependencies": [
         "ast",
         "pathlib",
@@ -17450,7 +17450,7 @@
         "re",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17763,8 +17763,8 @@
       "path": "tests/test_repository_hygiene.py",
       "classification": "test",
       "purpose": "Repository-local safeguards for generated evidence and CI credentials.",
-      "bytes": 9025,
-      "sha256": "84e761862d5376ef4f16a4251f3609ff79300393ee7f0e62987be48c7edc138d",
+      "bytes": 9050,
+      "sha256": "d030ae40509fe94ded87ebc521c945ab2ccffcb1a3d0d1685f11d841bc769c21",
       "dependencies": [
         "os",
         "pathlib",
@@ -17772,7 +17772,7 @@
         "re",
         "subprocess"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"

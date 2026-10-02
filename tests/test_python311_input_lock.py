@@ -13,7 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = "constraints/test-linux-cp311.txt"
 NAMES = {"attrs", "iniconfig", "jsonschema", "jsonschema-specifications",
-         "packaging", "pluggy", "pygments", "pytest", "referencing", "rpds-py",
+         "packaging", "pluggy", "pygments", "pytest", "pyyaml", "referencing", "rpds-py",
          "setuptools", "typing-extensions"}
 ENTRY = re.compile(r"([a-z][a-z0-9-]*)==([0-9]+(?:\.[0-9]+)+) --hash=sha256:([0-9a-f]{64})")
 
@@ -40,9 +40,10 @@ def assert_profile(text):
     constraints = dict(re.findall(r"^([a-z][a-z0-9-]*)==([0-9.]+)$",
                                   (ROOT / "constraints/ci.txt").read_text(), re.M))
     assert all(version == constraints[name] for name, (version, _) in pins.items())
-    assert all(pins[name] == test[name] for name in NAMES - {"setuptools", "rpds-py"})
+    assert all(pins[name] == test[name] for name in NAMES - {"setuptools", "rpds-py", "pyyaml"})
     assert pins["setuptools"] == build["setuptools"], "same reviewed backend wheel"
-    assert pins["rpds-py"][1] != test["rpds-py"][1], "CPython artifacts differ"
+    for package in ("rpds-py", "pyyaml"):
+        assert pins[package][1] != test[package][1], "CPython artifacts differ"
     filename = (f"rpds_py-{pins['rpds-py'][0]}-cp311-cp311-"
                 "manylinux_2_17_x86_64.manylinux2014_x86_64.whl")
     assert f"# {filename} — https://pypi.org/project/rpds-py/" in text
@@ -58,7 +59,7 @@ def assert_wiring(text):
         'raise SystemExit("TEST_INPUT_PROFILE:UNSUPPORTED")',
         'mkdir "$RUNNER_TEMP/test-cp311-wheelhouse"',
         f'python -m pip download --require-hashes --only-binary=:all: --no-cache-dir --dest "$RUNNER_TEMP/test-cp311-wheelhouse" -r {LOCK}',
-        '[ "${#test_wheels[@]}" -eq 12 ]',
+        '[ "${#test_wheels[@]}" -eq 13 ]',
         f'sha256sum {LOCK} "${{test_wheels[@]}}"',
         f'python -m pip install -c constraints/ci.txt --no-index --find-links "$RUNNER_TEMP/test-cp311-wheelhouse" --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall -r {LOCK}',
         'PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/test-cp311-wheelhouse" PIP_ONLY_BINARY=:all: python -m pip install -c constraints/ci.txt --no-cache-dir --verbose -e ".[test]"',
@@ -83,14 +84,15 @@ def test_profile_parity_and_source_distribution_inclusion():
 
 
 @pytest.mark.parametrize("mutation", ["missing-backend", "duplicate", "unhashed", "extra",
-                                     "weak-hash", "version", "shared-hash", "wrong-abi"])
+                                     "weak-hash", "version", "shared-hash", "wrong-abi", "wrong-yaml-abi"])
 def test_profile_weakenings_fail(mutation):
     text = (ROOT / LOCK).read_text()
     backend = next(line for line in text.splitlines() if line.startswith("setuptools=="))
-    if mutation == "wrong-abi":
-        old = next(line for line in text.splitlines() if line.startswith("rpds-py=="))
+    if mutation in {"wrong-abi", "wrong-yaml-abi"}:
+        package = "pyyaml" if mutation == "wrong-yaml-abi" else "rpds-py"
+        old = next(line for line in text.splitlines() if line.startswith(package + "=="))
         other = next(line for line in (ROOT / "constraints/test-linux-cp312.txt").read_text().splitlines()
-                     if line.startswith("rpds-py=="))
+                     if line.startswith(package + "=="))
         damaged = text.replace(old, other)
     else:
         replacement = {
@@ -120,7 +122,7 @@ def test_required_job_verifies_before_isolated_editable_install():
     ('--verbose -e ".[test]"', '--verbose --no-build-isolation -e ".[test]"'),
     ("sys.version_info[:2] != (3, 11)", "False"),
     ('platform.libc_ver()[0] != "glibc"', "False"),
-    (' -eq 12 ]', ' -eq 11 ]'),
+    (' -eq 13 ]', ' -eq 12 ]'),
     (f"-r {LOCK}\n", f"-r {LOCK} || true\n"),
     (f"cmp {LOCK}", "echo"),
     ('--no-cache-dir --verbose -e ".[test]"', '--no-cache-dir --verbose -e ".[test]" || true'),

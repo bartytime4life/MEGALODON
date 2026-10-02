@@ -18,7 +18,7 @@ LOCK = "constraints/build-linux-cp312.txt"
 NAMES = {"build", "packaging", "pyproject-hooks", "setuptools"}
 TEST_LOCK = "constraints/test-linux-cp312.txt"
 TEST_NAMES = {"attrs", "iniconfig", "jsonschema", "jsonschema-specifications",
-              "packaging", "pluggy", "pygments", "pytest", "referencing",
+              "packaging", "pluggy", "pygments", "pytest", "pyyaml", "referencing",
               "rpds-py", "typing-extensions"}
 PROFILES = ((LOCK, NAMES), (TEST_LOCK, TEST_NAMES))
 ENTRY = re.compile(r"([a-z][a-z0-9-]*)==([0-9]+(?:\.[0-9]+)+) --hash=sha256:([0-9a-f]{64})")
@@ -47,7 +47,7 @@ def assert_build_wiring(text):
         'raise SystemExit("BUILD_INPUT_PROFILE:UNSUPPORTED")',
         'mkdir "$RUNNER_TEMP/test-wheelhouse"',
         f'python -m pip download --require-hashes --only-binary=:all: --no-cache-dir --dest "$RUNNER_TEMP/test-wheelhouse" -r {TEST_LOCK}',
-        '[ "${#test_wheels[@]}" -eq 11 ]',
+        '[ "${#test_wheels[@]}" -eq 12 ]',
         f'sha256sum {TEST_LOCK} "${{test_wheels[@]}}"',
         f'python -m pip install -c constraints/ci.txt --no-index --find-links "$RUNNER_TEMP/test-wheelhouse" --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall -r {TEST_LOCK}',
         'mkdir "$RUNNER_TEMP/build-wheelhouse"',
@@ -133,7 +133,7 @@ def test_overlapping_locks_have_identical_versions_and_artifacts():
 @pytest.mark.parametrize("before,after", [
     ("--require-hashes", "--no-require-hashes"),
     ("--only-binary=:all:", ""), ("--force-reinstall", ""),
-    ("--no-index", ""), (' -eq 11 ]', ' -eq 10 ]'),
+    ("--no-index", ""), (' -eq 12 ]', ' -eq 11 ]'),
     (' -r ' + TEST_LOCK, ' -r other.txt'),
     ('sha256sum ' + TEST_LOCK, 'echo'),
     (f'-r {TEST_LOCK}\n', f'-r {TEST_LOCK} || true\n'),
