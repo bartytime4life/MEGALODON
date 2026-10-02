@@ -3887,7 +3887,7 @@
         "scope",
         "source_base"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -13348,13 +13348,12 @@
       "path": "site/.openai/hosting.json",
       "classification": "configuration",
       "purpose": "hosting",
-      "bytes": 106,
-      "sha256": "58fb3100ae484a5699d883357d1310dcba291af680a018bc6c801879d89cfd42",
+      "bytes": 63,
+      "sha256": "009c6b52c3782060b7af2af4b9ea204589372aca11db2933b94416c47992f19b",
       "dependencies": [
-        "project_id",
-        "static"
+        "project_id"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -13365,8 +13364,8 @@
       "path": "site/README.md",
       "classification": "documentation",
       "purpose": "Retired hosted console",
-      "bytes": 696,
-      "sha256": "fd1835e78df8d4dd11704dfb9274f78cf61b0a1d6f15022e001f825ed50c6560",
+      "bytes": 1125,
+      "sha256": "e5d5368ddecb68aada4e9ece2be2cf2c7062f682d44961d8dbd4b391f3bdaf60",
       "dependencies": [
         "../Start-MEGALODON.sh",
         "../docs/site-source-alignment.md"

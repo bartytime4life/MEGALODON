@@ -8,6 +8,13 @@ The retirement worker in `retired/worker.mjs` returns HTTP 410. Hosting identity
 metadata is retained to identify the retired deployment; it is not a live-data
 connection. See the dated [retirement receipt](../docs/site-source-alignment.md).
 
+`.openai/hosting.json` records only that existing project's identity; it does
+not point to the removed `dist` dashboard. The separate Site source repository
+keeps its retirement worker at `worker/index.js` and its deployable copy at
+`dist/server/index.js`. A source checkpoint there is a backup of committed
+repository files, outside the deployment artifact. Saving a checkpoint does not
+publish a site or change the local HUD.
+
 The former static UI and its Site-only tests are recoverable from Git commit
 `4b5f8f8`. Shared control and input-validation tests now exercise the canonical
 Python package. No runtime or build step reads a hosted asset mirror.
