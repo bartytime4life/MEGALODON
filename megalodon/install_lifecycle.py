@@ -11,7 +11,7 @@ import urllib.request
 
 def selected_extras(paths):
     """Carry only supported extras forward; never clone an arbitrary environment."""
-    extras = ['geo']
+    extras = ['geo', 'knowledge']
     if paths.current.exists():
         if any((paths.current / 'venv/lib').glob('python*/site-packages/scapy-*.dist-info')):
             extras.append('capture')

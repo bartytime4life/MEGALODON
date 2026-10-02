@@ -302,3 +302,25 @@ def test_operator_cancellation_skips_only_that_scheduled_occurrence(report_servi
     identity=report_service.job['id'];report_service.test_clock[0]+=600
     report_service.tick()
     assert report_service.job['id']==identity and report_service.job['state']=='cancelled'
+
+
+def test_pattern_report_escapes_text_and_expires_with_dependencies(report_service):
+    from types import SimpleNamespace
+    from megalodon.security_patterns import candidate
+    add(report_service,'flows',dict(src_ip='192.0.2.1',dst_ip='198.51.100.1'))
+    segment=next(e['id'] for e in report_service.evidence._catalog['entries'] if e['category']=='flows')
+    review=candidate('REGULAR_INTERVAL',('192.0.2.1','fixture0','zeek','flow'),report_service.clock()-60,report_service.clock()-1,
+                     {'label':'<script>alert(1)</script>'},[segment+':1'],[segment])
+    review['analysis']=dict(explanation='<img src=x onerror=alert(1)>',references=[],alternative='Scheduled backup',missing='Full visibility')
+    report_service.intelligence=SimpleNamespace(report_context=lambda *a:dict(reviews=[review],dependencies=[segment],coverage='Synthetic fixture',truncated=False))
+    value=make(report_service)
+    raw=report_service.download(value['id'],'html')[1].decode()
+    assert '<img src=x' not in raw and '&lt;img' in raw and '&lt;script&gt;' in raw
+    assert 'What happened' in raw and 'What you can do' in raw
+    manifest=next(v for v in report_service.evidence.history(category='reports')['records'] if v['source']=='report-manifest')
+    report_service.evidence.save_case([manifest['id']])
+    with report_service.evidence.lock:
+        next(e for e in report_service.evidence._catalog['entries'] if e['id']==segment)['state']='needs_review'
+    assert report_service.manifests()[0]['state']=='expired'
+    assert not report_service.evidence.history(category='cases')['records']
+    with pytest.raises(ValueError,match='expired'):report_service.report(value['id'])

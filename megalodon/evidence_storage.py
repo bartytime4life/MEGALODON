@@ -40,7 +40,8 @@ CATEGORIES = {'packets':'Packet metadata and linked findings', 'flows':'Connecti
               'findings':'Sensor findings', 'network':'Network inventory',
               'companions':'Inventory and scan results', 'cases':'Saved cases',
               'audit':'Qwen and response receipts', 'sensor_logs':'Managed sensor metadata',
-              'resources':'Resource and speed history', 'reports':'Generated visual reports'}
+              'resources':'Resource and speed history', 'reports':'Generated visual reports',
+              'baselines':'Hourly activity baselines', 'intelligence':'Pattern reviews, AI explanations and feedback'}
 PROFILES = [dict(id='home',label='Home / workstation',retention_days=14,cap_bytes=20*GIB,recording_mode='packet_metadata'),
             dict(id='lab',label='Home lab / small office',retention_days=14,cap_bytes=100*GIB,recording_mode='packet_metadata'),
             dict(id='server',label='Busy server',retention_days=7,cap_bytes=500*GIB,recording_mode='connection_summaries')]
@@ -324,6 +325,8 @@ class EvidenceStorage:
                     entry.update(records=row[0],first_at=row[1],last_at=row[2])
                     for saved in db.execute('SELECT key,value FROM checkpoints'):
                         candidate=json.loads(saved[1]);current=self._catalog['checkpoints'].get(saved[0],{})
+                        if saved[0]=='derived_sources':
+                            entry['derived_sources']=candidate['sources'];continue
                         if saved[0].startswith('audit_'):
                             if candidate.get('sequence',0)>=current.get('sequence',0):self._catalog['checkpoints'][saved[0]]=candidate
                         elif candidate.get('generation',0)>=current.get('generation',0):
@@ -437,14 +440,34 @@ class EvidenceStorage:
     def _used(self):
         size=sum(self._size(e) for e in self._catalog['entries'] if e['state']!='deleted')
         if self.catalog_path.exists(): size+=self.catalog_path.stat().st_size
-        settings = self.root/'report-settings.json'
-        if settings.exists():size+=len(_regular_owned_file(settings,maximum=65536))
+        for name in ('report-settings.json','intelligence-settings.json'):
+            settings=self.root/name
+            if settings.exists():size+=len(_regular_owned_file(settings,maximum=65536))
         return size+self._working_bytes()
 
     def _expired(self,entry,policy):
         # Closed hourly units may expire up to one segment early. The displayed
         # actual interval is authoritative; no record is promised a minimum age.
         return epoch(entry.get('first_at') or entry['created_at'])<=self.clock()-policy['retention_days']*86400
+
+    def available_sources(self, entries=None, *, readable=True):
+        values=self._catalog['entries'] if entries is None else entries
+        live=[e for e in values if e['state'] in ({'open','closed'} if readable else {'open','closed','needs_review','building'})]
+        return {e['id'] for e in live}|{e['source_segment'] for e in live if e['category']=='packet_rollups' and e['state']=='closed' and e.get('source_segment')}
+
+    def derived_available(self, entry):
+        return not entry.get('derived_sources') or set(entry['derived_sources'])<=self.available_sources()
+
+    def _cascade(self, entries, selected):
+        # A whole bounded derived segment expires early when any source retires.
+        # This reclaims pages without VACUUM or rewriting records individually.
+        result=list(selected);removed={e['id'] for e in result}
+        while True:
+            available=self.available_sources([e for e in entries if e['id'] not in removed],readable=False)
+            extra=[e for e in entries if e['id'] not in removed and e['state'] in {'open','closed'}
+                   and e.get('derived_sources') and not set(e['derived_sources'])<=available]
+            if not extra:return result
+            result+=extra;removed.update(e['id'] for e in extra)
 
     def _candidates(self,policy,reserve=WORK_RESERVE):
         used=self._used(); result=[]
@@ -473,7 +496,7 @@ class EvidenceStorage:
         for entry in remaining:
             if used+reserve<=policy['cap_bytes']:break
             result.append(entry);used-=self._size(entry)
-        return result
+        return self._cascade(self._catalog['entries'],result)
 
     def _check_compact_source(self,source):
         target=next((e for e in self._catalog['entries'] if e['id']==source.get('compacted_to')
@@ -528,6 +551,9 @@ class EvidenceStorage:
                 if entry.get('pending_receipts'):continue
                 self._seal(entry);self._generic.pop(key)
         for entry in self._candidates(self._catalog['policy'],reserve):
+            if entry['state']=='open':
+                self._seal(entry)
+                if self._generic.get(entry['category']) is entry:self._generic.pop(entry['category'])
             if entry['category']=='packets' and entry.get('compaction_state')=='complete':
                 self._check_compact_source(entry)
             size=self._size(entry)
@@ -559,11 +585,16 @@ class EvidenceStorage:
             samples.append([self.clock(),used+self._catalog['evicted_bytes']])
             self._catalog['growth_samples']=samples[-1441:]
 
-    def append_records(self,category,records,*,checkpoint=None):
+    def append_records(self,category,records,*,checkpoint=None,dependencies=None):
         if self._lease_fd is None:raise ValueError('Evidence owner lease is closed.')
         if not self.enabled:return 0
         if category not in CATEGORIES or category=='packets' or type(records) is not list or len(records)>256:
             raise ValueError('Invalid bounded evidence batch.')
+        dependencies=set(dependencies or [])
+        if category in {'baselines','intelligence'}:
+            dependencies.update(v for row in records for v in row.get('data',{}).get('source_segments',[]))
+        if len(dependencies)>256 or any(not isinstance(v,str) or not re.fullmatch(r'[a-f0-9]{32}',v) for v in dependencies):
+            raise ValueError('Invalid derived source dependencies')
         prepared=[]
         for row in records:
             if type(row) is not dict or set(row)!={'observed_at','source','data'} or type(row['data']) is not dict:
@@ -585,13 +616,19 @@ class EvidenceStorage:
                 self._catalog['checkpoint_generation']=self._catalog.get('checkpoint_generation',0)+1
                 checkpoint=(checkpoint[0],dict(checkpoint[1],generation=self._catalog['checkpoint_generation']))
             self._ensure_space(max(WORK_RESERVE,sum(len(r[3]) for r in prepared)*4))
+            if not dependencies<=self.available_sources():raise ValueError('Derived source history expired before persistence')
             entry=self._generic.get(category)
+            if entry and len(set(entry.get('derived_sources',[]))|dependencies)>256:
+                self._seal(entry);self._generic.pop(category,None);entry=None
             if entry and not entry.get('pending_receipts') and (self.clock()-epoch(entry['created_at'])>=3600 or self._size(entry)>=self.segment_bytes):
                 self._seal(entry);self._generic.pop(category,None);entry=None
             if entry is None:entry=self._new(category);self._generic[category]=entry
+            if not dependencies<=self.available_sources():raise ValueError('Derived sources retired during admission')
+            combined=sorted(set(entry.get('derived_sources',[]))|dependencies)
             with self._writer_db(entry) as db:
                 self._checkpoint(entry,db)
                 db.executemany('INSERT INTO records(observed_at,recorded_at,source,data) VALUES(?,?,?,?)',prepared)
+                if combined:db.execute("INSERT OR REPLACE INTO checkpoints VALUES('derived_sources',?)",(json.dumps(dict(sources=combined)),))
                 if checkpoint is not None:
                     key,value=checkpoint
                     if not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}',key) or len(json.dumps(value))>2048:
@@ -604,6 +641,7 @@ class EvidenceStorage:
                 if category=='audit':
                     with self._db(entry) as db:
                         entry['pending_receipts']=sum(len(json.loads(r[0]).get('pending',[])) for r in db.execute("SELECT value FROM checkpoints WHERE key LIKE 'audit_%'"))
+            if combined:entry['derived_sources']=combined
             stamps=[r[0] for r in prepared]
             entry['records']+=len(prepared)
             entry['first_at']=min([entry['first_at']] + stamps) if entry['first_at'] else min(stamps)
@@ -696,6 +734,8 @@ class EvidenceStorage:
         for entry in remaining:
             if used+WORK_RESERVE<=policy['cap_bytes']:break
             size=self._size(entry);result.append((entry,size));used-=size
+        selected={e['id'] for e,_ in result}
+        result += [(e,self._size(e)) for e in self._cascade(entries,[e for e,_ in result]) if e['id'] not in selected]
         return result
 
     @staticmethod
@@ -826,6 +866,8 @@ class EvidenceStorage:
                 external_stores=['Source Suricata EVE logs (OS service rotation)', 'User-selected source reports', 'User exports', 'Installed applications and Ollama model files'],
                 audit_boundaries=deepcopy(self._catalog['audit_boundaries']),disk_activity=self.disk_activity())
             result['compaction']=compaction
+            reference_library=getattr(self,'reference_library',None)
+            if reference_library is not None:result['reference_storage']=reference_library.usage()
             if include_token:result['token']=self.token
             return result
 
@@ -834,7 +876,7 @@ class EvidenceStorage:
             raise ValueError('Invalid history page.')
         with self.lock:
             order_index={e['id']:i for i,e in enumerate(self._catalog['entries'])}
-            entries=sorted([e for e in self._catalog['entries'] if e['state'] in {'open','closed'} and (category=='all' or e['category']==category)],key=lambda e:(e.get('first_at') or e['created_at'],order_index[e['id']]),reverse=order=='newest')
+            entries=sorted([e for e in self._catalog['entries'] if e['state'] in {'open','closed'} and (category=='all' or e['category']==category) and self.derived_available(e)],key=lambda e:(e.get('first_at') or e['created_at'],order_index[e['id']]),reverse=order=='newest')
             total=sum(e['records'] for e in entries)
             boundary=2**63-1 if order=='newest' else 0
             comparison='<' if order=='newest' else '>'
@@ -908,15 +950,18 @@ class EvidenceStorage:
         if not self.enabled or type(ids) is not list or not 1<=len(ids)<=50 or any(type(v) is not str or not re.fullmatch(r'[a-f0-9]{32}:[1-9][0-9]{0,18}',v) for v in ids):
             raise ValueError('Select up to 50 retained evidence records.')
         with self.lock:
-            rows=[]
+            rows=[];dependencies=set()
             for identifier in dict.fromkeys(ids):
                 segment,number=identifier.split(':')
+                entry=next((e for e in self._catalog['entries'] if e['id']==segment),{})
+                dependencies.update(entry.get('derived_sources',[]))
                 page=self.history(cursor=segment+':'+str(int(number)+1),limit=1)
                 value=next((r for r in page['records'] if r['id']==identifier),None)
                 if value is None:raise ValueError('A selected record expired; refresh evidence.')
                 if value['category']=='cases':raise ValueError('A saved case cannot recursively include another case.')
                 rows.append(dict(observed_at=value['observed_at'],source='operator-saved-case',data=dict(reference=identifier,category=value['category'],source=value['source'],evidence=value['data'])))
-            saved=self.append_records('cases',rows)
+            dependencies.update(v for row in rows for v in row['data']['evidence'].get('source_segments',[]))
+            saved=self.append_records('cases',rows,dependencies=dependencies)
             return dict(schema='megalodon-case-v1',saved=saved,message='Case evidence uses the same age and space limits; its original observation time is preserved.')
 
     def start(self):

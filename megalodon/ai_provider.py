@@ -27,11 +27,17 @@ _observation_lock = threading.Lock()
 _generation_lock = threading.Lock()
 _active_cancel = threading.Event()
 _request_context = threading.local()
+_priority_lock = threading.Lock()
+_active_priority = None
+_active_owner = None
+_manual_waiters = 0
 
 
-def cancel_current() -> None:
+def cancel_current(owner=None) -> None:
     """Interrupt only this process's active model request; no Ollama service kill."""
-    _active_cancel.set()
+    with _priority_lock:
+        if owner is None or owner == _active_owner:
+            _active_cancel.set()
 
 
 def last_observation(settings: AISettings) -> dict:
@@ -240,7 +246,7 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
         raise AIProviderError("REQUEST_TOO_LARGE")
     if type(max_tokens) is not int or not 1 <= max_tokens <= 256:
         raise AIProviderError("POLICY_REJECTION")
-    if response_format not in ('text','defense'):
+    if response_format not in ('text','defense','intelligence'):
         raise AIProviderError('POLICY_REJECTION')
     payload = {
         "model": settings.model, "prompt": prompt, "stream": False,
@@ -255,6 +261,14 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
             'properties':{'explanation':{'type':'string','minLength':1,'maxLength':240},
                           'proposal':{'type':'string','enum':['observe','refresh_inventory','scan_files','contain']}},
             'required':['explanation','proposal']}
+    if response_format == 'intelligence':
+        payload['format'] = {'type':'object','additionalProperties':False,
+            'properties':{'explanation':{'type':'string','minLength':1,'maxLength':240},
+                          'alternative':{'type':'string','minLength':1,'maxLength':160},
+                          'missing':{'type':'string','minLength':1,'maxLength':160},
+                          'citations':{'type':'array','minItems':1,'maxItems':4,'items':{'type':'string','enum':['E1','K1','K2','K3']}},
+                          'workflow':{'type':'string','enum':['evidence_summary','device_changes','ai_readiness','refresh_inventory','scan_files','contain']}},
+            'required':['explanation','alternative','missing','citations','workflow']}
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
     remaining = deadline - time.monotonic()
     if remaining <= 0:
@@ -271,7 +285,8 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
 
 
 
-def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text') -> str:
+def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
+             priority: str = 'manual', owner=None) -> str:
     """Generate once and retain truthful readiness observations without disk writes."""
     key=(settings.model,settings.model_digest,settings.compute_mode);start=time.monotonic()
     def record(**fields):
@@ -282,9 +297,24 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
             entry.update(fields);_observations.move_to_end(key)
             while len(_observations)>16:_observations.popitem(last=False)
     stamp=lambda:datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
-    if not _generation_lock.acquire(blocking=False):
+    global _active_priority, _active_owner, _manual_waiters
+    if priority not in {'manual','background'}:raise AIProviderError('POLICY_REJECTION')
+    with _priority_lock:
+        wait = priority=='manual' and _active_priority=='background'
+        if priority=='background' and _manual_waiters:
+            raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
+        if wait:
+            _manual_waiters+=1
+            _active_cancel.set()
+    acquired = _generation_lock.acquire(timeout=5) if wait else _generation_lock.acquire(blocking=False)
+    with _priority_lock:
+        if wait:_manual_waiters-=1
+        if acquired:
+            _active_priority=priority;_active_owner=owner
+            _active_cancel.clear()
+    if not acquired:
         raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
-    _active_cancel.clear();_request_context.cancel=_active_cancel
+    _request_context.cancel=_active_cancel
     record(running=True,started_at=stamp(),timeout_seconds=settings.timeout_seconds)
     try:
         result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format)
@@ -296,6 +326,8 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
     finally:
         record(running=False)
         _request_context.cancel=None
+        with _priority_lock:
+            _active_priority=None;_active_owner=None
         _generation_lock.release()
     record(last_attempt_at=stamp(),last_response_at=stamp(),error_code=None,duration_ms=round((time.monotonic()-start)*1000))
     return result

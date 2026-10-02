@@ -49,6 +49,8 @@ TOOLS = {
         Tool("megalodon.integrations.status", 0, 2, "Static integration catalog"),
         Tool("megalodon.model.status", 0, 20, "Explicit local model health"),
         Tool("megalodon.action.status", 0, 2, "One AI action receipt"),
+        Tool("megalodon.knowledge.search", 0, 2, "Local source-qualified security references; context only"),
+        Tool("megalodon.patterns.status", 0, 2, "Measured local patterns and baseline coverage; no actions"),
         Tool("megalodon.report.generate", 1, 2, "Bounded in-ledger report snapshot"),
         Tool("megalodon.firewall.block.plan", 2, 2, "Time-limited firewall proposal only"),
     )
@@ -90,6 +92,11 @@ def _keys(value: object, allowed: set[str], required: set[str] = frozenset()) ->
 
 
 def _arguments(tool: str, value: object) -> dict[str, Any]:
+    if tool == 'megalodon.knowledge.search':
+        args=_keys(value,{'query'},{'query'})
+        return {'query':_text(args['query'],160)}
+    if tool == 'megalodon.patterns.status':
+        return _keys(value,set())
     if tool in {"megalodon.status", "megalodon.integrations.status", "megalodon.model.status"}:
         return _keys(value, set())
     if tool in {"megalodon.telemetry.summary", "megalodon.alerts.query"}:
@@ -359,8 +366,9 @@ def _qualified(reader: AIReader, window_minutes: int, limit: int) -> dict[str, o
 
 class Broker:
     def __init__(self, reader: AIReader, receipts: ReceiptStore, ai: AISettings,
-                 blocking: BlockingSettings):
+                 blocking: BlockingSettings, *, knowledge=None, intelligence=None):
         self.reader, self.receipts, self.ai, self.blocking = reader, receipts, ai, blocking
+        self.knowledge,self.intelligence=knowledge,intelligence
 
     def dispatch(self, request: object, *, authorization_source: str = "model_request") -> dict[str, object]:
         receipt_id = str(uuid4())
@@ -399,6 +407,17 @@ class Broker:
         return self.receipts.append(receipt_id, {**base, "state": state})
 
     def _execute(self, tool: str, args: dict[str, Any]) -> dict[str, object]:
+        if tool=='megalodon.knowledge.search':
+            if self.knowledge is None:raise BrokerError('TOOL_UNAVAILABLE')
+            return {'references':self.knowledge.search(args['query'],3),'context_only':True}
+        if tool=='megalodon.patterns.status':
+            if self.intelligence is None:raise BrokerError('TOOL_UNAVAILABLE')
+            value=self.intelligence.snapshot()
+            # Broker responses enter the action ledger. Keep references here;
+            # source-expiring measurements remain in the managed review store.
+            return {'review_references':[r['id'] for r in value['reviews'][:4]],
+                    'details_location':'Findings: Review activity; select a device for a cited explanation.',
+                    'returned_limit':4,'action_status':'not_attempted'}
         if tool == "megalodon.status":
             summary = self.reader.summary()
             if type(summary) is not dict:

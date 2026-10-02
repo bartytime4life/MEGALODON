@@ -733,6 +733,7 @@ const maxTimelineBins = 12;
 const workspaceIds = ['live', 'findings', 'interfaces', 'setup', 'reports', 'analysis', 'help'];
 const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageScroll: Object.create(null)};
 const workspaceTargets = {
+  'knowledge-setup':'setup','knowledge-title':'setup','pattern-reviews':'findings','pattern-reviews-title':'findings',
   'live-globe-title': 'live', 'live-globe-history': 'live', 'support-config-title': 'setup', 'support-apps-title': 'live', 'pc-live-title': 'live',
   'activity-globe-title': 'live', 'hud-export-title': 'reports', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
   'workspace-traffic': 'live', 'workspace-findings': 'findings',
@@ -2177,6 +2178,7 @@ from .dashboard_app_viewer import APP_VIEWER_HTML, APP_VIEWER_CSS, APP_VIEWER_JS
 from .dashboard_companion import COMPANION_JS
 from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
+from .dashboard_intelligence import compose_intelligence, KNOWLEDGE_CSS, KNOWLEDGE_JS
 
 DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS + SUPPORT_APPS_CSS + SUPPORT_CONFIG_CSS + LIVE_GLOBE_CSS + WORKFLOWS_CSS + OPERATIONS_CSS + NETWORK_CSS + STORAGE_CSS + REPORTS_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
@@ -2190,6 +2192,8 @@ INDEX_HTML = INDEX_HTML.replace('<!-- APP_VIEWER -->', APP_VIEWER_HTML)
 INDEX_HTML = compose_operations(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<section class="storage-panel" id="storage-setup"', APPS_SETUP_HTML + '<section class="storage-panel" id="storage-setup"', 1)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + "\nbootstrap();\n"
+INDEX_HTML = compose_intelligence(INDEX_HTML)
+DASHBOARD_CSS += KNOWLEDGE_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

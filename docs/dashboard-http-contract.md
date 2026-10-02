@@ -1,5 +1,29 @@
 # Dashboard HTTP and presentation contract
 
+## Security knowledge and pattern review
+
+`GET /api/knowledge`, `GET /api/knowledge/search?q=<1–160 characters>` and
+`GET /api/intelligence[?device=<IP>]` require the existing expected Host,
+operator read authentication when enabled, a non-root local management user,
+and exactly one `X-Megalodon-Check: 1`. Search returns at most six references;
+pattern status returns at most 64 reviews and explicitly states truncation.
+
+`POST /api/knowledge` accepts `action: update`, `action: rollback`, or
+`action: configure` with boolean `enabled`. `POST /api/intelligence` accepts
+`action: configure` with boolean `enabled` and `automatic`; `action: analyze`
+with a server-issued `candidate_id`; `action: cancel`; or `action: feedback`
+with `candidate_id` and `choice` (Expected activity, Investigate, Incorrect match).
+These are closed object shapes. All mutations require exact same-origin Origin,
+JSON content type, and one `X-Megalodon-Intelligence-Token` matching that
+provider's per-launch token from its protected status response. Bodies are
+limited to 2,048 bytes; duplicate keys/headers and encoded bodies are refused.
+No request accepts an executable, path, source URL, threshold or permission.
+
+Status/search do not start inference. The service's separately configured daily
+update and background review workers continue when the browser is closed.
+Storage status adds `reference_storage` with a separate 512-MiB budget. See
+[knowledge and patterns](security-knowledge.md) for retention and work limits.
+
 The implementation authority is [dashboard.py](../megalodon/dashboard.py).
 [dashboard_assets.py](../megalodon/dashboard_assets.py) composes same-origin
 presentation; [dashboard_integrations.py](../megalodon/dashboard_integrations.py)

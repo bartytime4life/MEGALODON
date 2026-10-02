@@ -36,6 +36,15 @@ local time; storage defaults to 14 days / 20 GiB. Historical chart pages and
 reports span retained segments and verified compact summaries. Packet counts,
 sensor flow observations and interface rates remain separate.
 
+**Setup → AI knowledge & patterns** controls the local security library and
+review assistance. The offline starter contains attributed ATT&CK, ATLAS,
+D3FEND, OWASP GenAI and CISA KEV references. Approved public sources are checked
+at 8 AM local time; private observations remain on this PC. Hourly baselines
+and bounded local-model explanations appear in Findings, device inspection and
+reports. Device and connection changes still require approval. See
+[security knowledge and patterns](docs/security-knowledge.md) for coverage,
+storage limits, source provenance and interpretation.
+
 `--update` builds a verified private release, preserves supported selected extras,
 flushes and stops a running managed HUD, activates and checks the new service,
 and restores the previous selection if readiness fails. The four newest releases
