@@ -15,7 +15,7 @@ INVENTORY_HTML = r'''
     </div>
     <p class="companion-caveat">A completed Nmap count is not current reachability or full network coverage. Open ports are not confirmed threats. Grouped ports have no protocol breakdown; report origin is unverified.</p>
   </div>
-  <details class="companion-advisory" id="inventory-advisory-wrap" hidden><summary>Qwen note</summary><p id="inventory-advisory"></p></details>
+  <details class="companion-advisory" id="inventory-advisory-wrap" hidden><summary>Local AI note</summary><p id="inventory-advisory"></p></details>
 </section>
 '''
 

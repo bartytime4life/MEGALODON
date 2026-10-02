@@ -73,6 +73,22 @@ reduced motion, hidden workspaces, stale data and stopped capture suppress movin
 traffic. Unmapped traffic remains visible in the connection details and counts.
 The older stored globe/time sweep is available under **History**.
 
+## Camera and workspace
+
+The atlas occupies the full HUD width; the local-network directory has its own
+workspace underneath it. **Follow activity** gently frames recent mapped
+exchanges and visits different regions when activity spans the world.
+**World rotation** provides a geographic overview. Dragging, arrow keys or
+manual zoom gives the user control of the camera; choose Follow activity to
+resume automatic framing. **Pause motion** stops camera and traffic animation.
+Reduced-motion preferences keep the view static, and offscreen animation stops.
+
+Camera position and scale are presentation choices, not measurements. The back
+of a globe cannot be visible at the same time as the front. Connection details
+retain the returned endpoints, including unmapped locations and paths currently
+behind the globe. Automatic framing uses recent measured traffic; it does not
+invent activity when the capture is stopped, unavailable or stale.
+
 ## API and terminal
 
 `GET /api/live-connections` requires the existing local Host/sign-in boundary and
@@ -91,3 +107,13 @@ the new fixed actions on `POST /api/support-config`:
 Use the actual interface selected in the HUD. Geography refresh enables the saved
 online opt-in; geography disable revokes it. Background monitoring by itself does
 not enable location lookups.
+
+
+## Incoming-origin rings
+
+Red animated rings mark mapped remote sources of recently observed incoming
+traffic. Connections at the same approximate coordinate share a ring. Rings use
+the globe's projection and animation clock, disappear with stale or stopped feeds,
+and become static when motion is paused or reduced. They are traffic markers,
+not attack verdicts or active network pings. Unmapped sources do not acquire a
+made-up location. DB-IP locations remain approximate internet locations.

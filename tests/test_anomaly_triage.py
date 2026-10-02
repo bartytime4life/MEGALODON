@@ -80,7 +80,9 @@ def test_default_command_returns_evidence_without_provider_or_other_io(inputs, m
 
 
 @pytest.fixture
-def provider(monkeypatch):
+def provider(monkeypatch, tmp_path):
+    # Synthetic provider calls must not contend with the running local HUD.
+    monkeypatch.setattr(qwen, "_PROCESS_LOCK_DIRECTORY", str(tmp_path))
     FakeConnection.instances = []
     FakeConnection.next_response = FakeResponse(payload={
         'model': 'local:qwen-approved-v1', 'response': structured_answer(), 'done': True})

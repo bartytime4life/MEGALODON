@@ -175,6 +175,8 @@ class _ProtocolBudgetReader:
 class _BoundedHTTPResponse(http.client.HTTPResponse):
     """HTTP response whose parsed protocol framing shares one byte budget."""
 
+    body_limit = MAX_PROVIDER_ENVELOPE_BYTES
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         if self.fp is None:
@@ -204,7 +206,7 @@ class _BoundedHTTPResponse(http.client.HTTPResponse):
         if not line.endswith(b"\r\n") or re.fullmatch(rb"[0-9A-Fa-f]+", size_text) is None:
             raise _ProviderResponseInvalid("provider chunk size is invalid")
         size = int(size_text, 16)
-        if size > MAX_PROVIDER_ENVELOPE_BYTES:
+        if size > self.body_limit:
             raise _ProviderResponseInvalid("provider chunk exceeds envelope limit")
         self.chunk_left = size
         if size == 0:
@@ -472,7 +474,7 @@ def _content_length(response: http.client.HTTPResponse) -> int | None:
     if type(value) is not str or not value.isascii() or not value.isdigit():
         raise _ProviderResponseInvalid("invalid content length")
     length = int(value)
-    if length > MAX_PROVIDER_ENVELOPE_BYTES:
+    if length > getattr(response, 'body_limit', MAX_PROVIDER_ENVELOPE_BYTES):
         raise _ProviderResponseInvalid("provider envelope exceeds limit")
     return length
 
@@ -484,6 +486,7 @@ def _read_provider_body(
     cancel_event: threading.Event | None,
 ) -> bytes:
     expected_length = _content_length(response)
+    body_limit = getattr(response, 'body_limit', MAX_PROVIDER_ENVELOPE_BYTES)
     chunks: list[bytes] = []
     received = 0
     while True:
@@ -491,7 +494,7 @@ def _read_provider_body(
             raise InterruptedError("local advisory invocation cancelled")
         _set_connection_timeout(connection, deadline)
         chunk = response.read1(
-            min(_READ_CHUNK_BYTES, MAX_PROVIDER_ENVELOPE_BYTES + 1 - received)
+            min(_READ_CHUNK_BYTES, body_limit + 1 - received)
         )
         if type(chunk) is not bytes:
             raise _ProviderResponseInvalid("provider returned a non-byte body")
@@ -499,7 +502,7 @@ def _read_provider_body(
             break
         chunks.append(chunk)
         received += len(chunk)
-        if received > MAX_PROVIDER_ENVELOPE_BYTES:
+        if received > body_limit:
             raise _ProviderResponseInvalid("provider envelope exceeds limit")
     if expected_length is not None and received != expected_length:
         raise _ProviderResponseInvalid("provider body was partial")

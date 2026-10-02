@@ -49,11 +49,12 @@ ACTION_FIELDS = {
     'zeek_check': set(), 'suricata_check': set(),
     'background_start': {'interface'}, 'background_stop': set(),
     'geography_refresh': set(), 'geography_disable': set(),
+    'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
 TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
-              'qwen':'Ollama / Qwen', 'zeek':'Zeek', 'suricata':'Suricata',
+              'qwen':'Local AI / Ollama', 'zeek':'Zeek', 'suricata':'Suricata',
               'background':'Background traffic', 'geography':'IP geography'}
 # Only a root-owned packaged capture helper gains two packet capabilities.
 # PKEXEC_UID is supplied by pkexec, never by an HTTP parameter. ACL access is
@@ -144,14 +145,21 @@ def validate_action(value):
     if type(value) is not dict or type(value.get('action')) is not str or value['action'] not in ACTION_FIELDS:
         raise ValueError('Choose a supported configuration action.')
     action = value['action']
-    if set(value) != {'action'} | ACTION_FIELDS[action]:
+    if set(value) not in ({'action'} | ACTION_FIELDS[action], {'action','timeout_seconds'} | ACTION_FIELDS[action]) or ('timeout_seconds' in value and action!='model_select'):
         raise ValueError('Unexpected configuration fields.')
+    if 'timeout_seconds' in value and (type(value['timeout_seconds']) is not int or not 1<=value['timeout_seconds']<=1800):
+        raise ValueError('Choose an AI response limit from 1 to 1800 seconds.')
     if 'interface' in value:
         valid_interface(value['interface'])
     if 'nmap_target' in value:
         valid_target(value['nmap_target'])
     if 'scan_folder' in value and (type(value['scan_folder']) is not str or value['scan_folder'] not in {'Downloads','Documents'}):
         raise ValueError('Choose Downloads or Documents for the file scan.')
+    if action=='model_select':
+        from .config import valid_model_name
+        if (not valid_model_name(value['model']) or type(value['model_digest']) is not str
+                or not re.fullmatch(r'[a-f0-9]{64}',value['model_digest']) or value['compute_mode'] not in ('cpu','auto')):
+            raise ValueError('Choose one installed model and a supported compute mode.')
     return dict(value)
 
 
@@ -179,7 +187,7 @@ class SupportConfiguration:
         self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready, connections=self.connections)
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
-        self.qwen_status = dict(state='needs_setup',message='Configure local Qwen to enable bounded background advice.',updated_at=None,metrics=[])
+        self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
         try:
@@ -187,18 +195,27 @@ class SupportConfiguration:
         except (OSError, ValueError):
             self._job.update(state='failed', message='Saved setup could not be validated. Review the private support configuration file.')
         self._load_qwen()
+        from .model_telemetry import ModelTelemetry
+        self.model_telemetry=ModelTelemetry(lambda:self.settings.ai)
 
     def _load_qwen(self):
-        from .config import AISettings
+        from .config import AISettings, valid_model_name
         if not os.path.lexists(self.home/'.config/megalodon/qwen-profile.json'):
             return
         try:
+            from .ai_provider import _strict_pairs
             raw = _regular_owned_file(self.home/'.config/megalodon/qwen-profile.json',maximum=1024)
-            value = json.loads(raw)
-            if (set(value) != {'model','model_digest'} or value['model_digest'] != AISettings.model_digest
-                    or type(value['model']) is not str or not re.fullmatch(r'qwen[A-Za-z0-9._:-]{1,91}',value['model'])):
-                raise ValueError('Unrecognized Qwen profile')
-            ai = replace(self.settings.ai,enabled=True,**value)
+            value = json.loads(raw, object_pairs_hook=_strict_pairs)
+            if type(value) is not dict:
+                raise ValueError('Invalid local model profile')
+            legacy=set(value)=={'model','model_digest'} and value.get('model_digest')==AISettings.model_digest
+            selected=((set(value)=={'schema','model','model_digest','compute_mode'} and value.get('schema')=='megalodon-local-model-v1' or
+                       set(value)=={'schema','model','model_digest','compute_mode','timeout_seconds'} and value.get('schema')=='megalodon-local-model-v2' and type(value['timeout_seconds']) is int and 1<=value['timeout_seconds']<=1800)
+                      and value.get('compute_mode') in ('cpu','auto'))
+            if (not (legacy or selected) or not valid_model_name(value.get('model')) or type(value.get('model_digest')) is not str
+                    or not re.fullmatch(r'[a-f0-9]{64}',value['model_digest'])):
+                raise ValueError('Unrecognized local model profile')
+            ai = replace(self.settings.ai,enabled=True,**{k:v for k,v in value.items() if k!='schema'})
             self.settings = replace(self.settings,ai=ai)
             if self.companions:
                 self.companions.ai = ai
@@ -206,7 +223,7 @@ class SupportConfiguration:
         except FileNotFoundError:
             pass
         except (OSError,ValueError,TypeError):
-            self.qwen_status.update(state='needs_setup',message='Saved Qwen profile could not be validated; configure local Qwen again.')
+            self.qwen_status.update(state='needs_setup',message='Saved model profile could not be validated; select a local model in Setup again.')
 
     def _paths(self):
         _owned_directory(self.root, private=True)
@@ -270,7 +287,7 @@ class SupportConfiguration:
         with self._lock:
             value = dict(schema=SCHEMA, interfaces=interfaces(), settings=dict(self._settings),
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
-                         geography_enabled=self._geography_enabled,
+                         geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -291,6 +308,10 @@ class SupportConfiguration:
             with self._lock:
                 if self._job['state'] != 'running':
                     self._job.update(state='finished',action=request['action'],message='Background and HUD traffic capture stopped; stored metadata remains available.',started_at=now(),finished_at=now())
+            return self.snapshot()
+        if request['action']=='model_cancel':
+            from .ai_provider import cancel_current
+            cancel_current()
             return self.snapshot()
         with self._lock:
             if self._job['state'] == 'running' or (self.startup and self.startup.snapshot()['state'] == 'running'):
@@ -337,7 +358,7 @@ class SupportConfiguration:
     def _work(self, request):
         action = request['action']
         tool = 'capture' if action.startswith('capture_') else action.split('_')[0]
-        tool = {'signature':'clamav','wireshark':'wireshark'}.get(tool, tool)
+        tool = {'signature':'clamav','wireshark':'wireshark','model':'qwen'}.get(tool, tool)
         failed = False
         try:
             if action in {'capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'}:
@@ -417,16 +438,17 @@ class SupportConfiguration:
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
                 message = 'ClamAV signature updater is active. Signature download completion and database freshness have not been verified.'
             elif action == 'qwen_configure':
-                from .config import AISettings
+                from .config import AISettings, valid_model_name
                 from .ai_provider import status
                 self._execute(['/usr/bin/pkexec','/bin/sh','-c',QWEN_LOCAL_SCRIPT],90)
                 models = local_qwen_models()
-                matches = [r for r in models if type(r) is dict and r.get('digest')==AISettings.model_digest
-                           and type(r.get('name')) is str and re.fullmatch(r'qwen[A-Za-z0-9._:-]{1,91}',r['name'])]
+                configured=self.settings.ai if self.settings.ai.enabled else AISettings()
+                matches = [r for r in models if type(r) is dict and r.get('digest')==configured.model_digest
+                           and valid_model_name(r.get('name'))]
                 if not matches:
-                    raise ValueError('The supported pinned Qwen model is not installed. Existing models were preserved.')
-                chosen = sorted(matches,key=lambda r:r['name'] != AISettings.model)[0]
-                value = dict(model=chosen['name'],model_digest=AISettings.model_digest)
+                    raise ValueError('Ollama access configured. Choose an installed model under Local AI in Setup.')
+                chosen = sorted(matches,key=lambda r:r['name'] != configured.model)[0]
+                value = dict(schema='megalodon-local-model-v2',model=chosen['name'],model_digest=configured.model_digest,compute_mode=configured.compute_mode,timeout_seconds=configured.timeout_seconds)
                 self._paths()
                 path = self.home/'.config/megalodon/qwen-profile.json'
                 if os.path.lexists(path):
@@ -435,26 +457,33 @@ class SupportConfiguration:
                 self._load_qwen()
                 result = status(self.settings.ai,probe=True)
                 verified = result['inference_verified']
-                message = ('Local Qwen generated a verified response; completed collector summaries can receive bounded advice.' if verified
-                           else 'Local-only Qwen configured; model response is not verified yet ('+result['state']+'). Collectors will retry advice after completion.')
+                self.model_telemetry.invalidate()
+                message = ('The selected model generated a verified response; completed collector summaries can receive bounded advice.' if verified
+                           else 'Local Ollama configured; model response is not verified yet ('+result['state']+'). Retry Verify selected model.')
                 self.qwen_status.update(state='connected' if verified else 'ready',message=message,updated_at=now())
             elif action == 'suricata_configure':
                 self._execute(['/usr/bin/pkexec','/bin/sh','-c',SURICATA_SCRIPT,'megalodon-suricata',request['interface']],90)
                 message = 'Passive Suricata service configured for the selected interface; the HUD reads bounded recent EVE summaries while monitoring runs.'
+            elif action == 'model_select':
+                from .ai_provider import _admitted, status
+                candidate=replace(self.settings.ai,enabled=True,model=request['model'],model_digest=request['model_digest'],compute_mode=request['compute_mode'],timeout_seconds=request.get('timeout_seconds',self.settings.ai.timeout_seconds))
+                _admitted(candidate)  # Fresh local capability and digest check before changing the profile.
+                self._paths();path=self.home/'.config/megalodon/qwen-profile.json'
+                if os.path.lexists(path):_regular_owned_file(path,maximum=1024)
+                value=dict(schema='megalodon-local-model-v2',model=candidate.model,model_digest=candidate.model_digest,compute_mode=candidate.compute_mode,timeout_seconds=candidate.timeout_seconds)
+                _atomic_write(path,json.dumps(value).encode(),0o600)
+                self._load_qwen();self.model_telemetry.invalidate()
+                result=status(self.settings.ai,probe=True)
+                message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
+                    'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
+            elif action == 'model_refresh':
+                self.model_telemetry.invalidate()
+                message='Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
             elif action == 'qwen_check':
-                connection = HTTPConnection('127.0.0.1',11434,timeout=3)
-                try:
-                    connection.request('GET','/api/tags')
-                    response = connection.getresponse()
-                    raw = response.read(32769)
-                    if response.status != 200 or len(raw) > 32768:
-                        raise ValueError('Local Ollama model inventory is unavailable.')
-                    data = json.loads(raw)
-                    models = data.get('models',[])
-                    qwen = [row for row in models if type(row) is dict and str(row.get('name','')).startswith('qwen')]
-                    message = f'Local Ollama responded; {len(qwen)} Qwen model(s) installed. HUD advisory still uses its configured model and digest.'
-                finally:
-                    connection.close()
+                from .ai_provider import status
+                result=status(self.settings.ai,probe=True);self.model_telemetry.invalidate()
+                message=self.settings.ai.model+': '+('accepted a bounded verification response.' if result['inference_verified'] else 'response verification failed ('+result['state']+').')
+                if not result['inference_verified']:raise ValueError(message)
             elif action == 'zeek_check':
                 binary = zeek_binary(self.home)
                 if binary is None:
@@ -485,6 +514,9 @@ class SupportConfiguration:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
+        from .ai_provider import cancel_current
+        cancel_current()
+        if self._thread:self._thread.join(3)
         self.sensors.stop()
         self.background.stop()
         self.geography.close()
@@ -527,6 +559,10 @@ def main(argv=None):
     parser.add_argument('--interface')
     parser.add_argument('--nmap-target')
     parser.add_argument('--scan-folder', choices=['Downloads','Documents'])
+    parser.add_argument('--model')
+    parser.add_argument('--model-digest')
+    parser.add_argument('--compute-mode', choices=['cpu','auto'],default='cpu')
+    parser.add_argument('--timeout-seconds',type=int)
     parser.add_argument('--config', type=Path)
     args = parser.parse_args(argv)
     from .config import load_settings
@@ -558,9 +594,11 @@ def main(argv=None):
             body = {'action':args.action}
             for field in ACTION_FIELDS[args.action]:
                 body[field] = getattr(args, field)
+            if args.timeout_seconds is not None:
+                body['timeout_seconds']=args.timeout_seconds
             validate_action(body)
             value = call('POST',body,value['token'])
-            deadline = time.monotonic()+125
+            deadline = time.monotonic()+1925
             print('Applying setup. A system authorization prompt may appear.',flush=True)
             while value['job']['state'] == 'running' and time.monotonic()<deadline:
                 time.sleep(.5)

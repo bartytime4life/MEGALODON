@@ -48,7 +48,10 @@ class OfflineLocations:
             if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 1 <= info.st_size <= MAX_DATABASE_BYTES
                     or (os.name == "posix" and (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o077))):
                 raise ValueError("offline location database must be an owner-private regular file up to 128 MiB")
-            reader = maxminddb.open_database(descriptor, mode=maxminddb.Mode.FD)
+            # MODE_FD expects a binary file object; retain the verified descriptor
+            # rather than reopening a path that could be replaced after validation.
+            with os.fdopen(descriptor, "rb", closefd=False) as source:
+                reader = maxminddb.open_database(source, mode=maxminddb.MODE_FD)
             return cls(reader)
         except Exception as exc:
             raise ValueError("offline location database could not be opened safely") from exc

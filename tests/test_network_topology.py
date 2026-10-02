@@ -101,7 +101,8 @@ def test_discovery_uses_fixed_unprivileged_argv_and_rejects_out_of_scope_xml(top
     rows=[r for r in topology.snapshot()['nodes'] if r['discovered']]
     assert [r['ip'] for r in rows]==['192.168.2.30'] and rows[0]['packets'] is None and not rows[0]['observed']
     assert topology.snapshot()['discovery']['state']=='ready'
-    with pytest.raises(ValueError): parse_discovery(b'<!DOCTYPE nmaprun><nmaprun/>','192.168.2.0/24','eth0',STAMP)
+    assert parse_discovery(b'<!DOCTYPE nmaprun><nmaprun/>','192.168.2.0/24','eth0',STAMP)=={}
+    with pytest.raises(ValueError): parse_discovery(b'<!DOCTYPE nmaprun SYSTEM "file:///etc/passwd"><nmaprun/>','192.168.2.0/24','eth0',STAMP)
 
 
 def test_failed_and_cancelled_discovery_do_not_claim_success(topology):
@@ -153,3 +154,59 @@ def test_background_discovery_does_not_block_passive_sampler(topology,monkeypatc
     before=len(calls);time.sleep(.1)
     assert len(calls)>before
     topology.close();assert not topology._discovery_thread.is_alive()
+
+
+def test_local_devices_are_not_displaced_by_public_peers_or_unspecified_addresses(topology):
+    current=live();public=deepcopy(current['connections'][0]);public['id']='public';public['b']['ip']='8.8.8.8'
+    invalid=deepcopy(public);invalid['id']='unspecified';invalid['b']['ip']='0.0.0.0'
+    current['connections'] += [public,invalid];topology.configuration.live_snapshot=lambda:current
+    assert '8.8.8.8' not in {n['ip'] for n in topology.snapshot()['nodes']}
+    all_nodes=topology.snapshot(view='all')['nodes']
+    assert '8.8.8.8' in {n['ip'] for n in all_nodes} and '0.0.0.0' not in {n['ip'] for n in all_nodes}
+    assert not next(n for n in all_nodes if n['ip']=='8.8.8.8')['on_link']
+
+
+def test_direction_animation_requires_recent_measured_direction(topology):
+    from datetime import datetime,timezone,timedelta
+    current=live();flow=current['connections'][0]
+    flow['a_to_b']['last_seen']=datetime.now(timezone.utc).isoformat()
+    flow['b_to_a']['last_seen']=(datetime.now(timezone.utc)-timedelta(seconds=30)).isoformat()
+    topology.configuration.live_snapshot=lambda:current
+    edge=next(e for e in topology.snapshot()['edges'] if e['kind']=='observed')
+    assert edge['sent_active'] and not edge['received_active']
+
+
+def test_native_nmap_declaration_does_not_enable_dtd_or_entities():
+    raw=b'<?xml version="1.0"?><!DOCTYPE nmaprun><nmaprun><host><status state="up"/><address addr="192.168.2.30" addrtype="ipv4"/></host></nmaprun>'
+    assert len(parse_discovery(raw,'192.168.2.0/24','eth0',STAMP))==1
+    for declaration in (b'<!DOCTYPE nmaprun SYSTEM "http://example.test/dtd">',b'<!DOCTYPE nmaprun [<!ENTITY x "bad">]>',b'<!DOCTYPE nmaprun><!DOCTYPE nmaprun>'):
+        with pytest.raises(ValueError):parse_discovery(declaration+b'<nmaprun/>','192.168.2.0/24','eth0',STAMP)
+
+
+def test_per_device_history_is_bounded_saved_and_survives_a_new_reader(topology,tmp_path):
+    from megalodon.config import Settings
+    from megalodon.evidence_storage import EvidenceStorage,GIB
+    manager=EvidenceStorage(Settings(db_path=tmp_path/'old.db'),home=tmp_path)
+    try:
+        preview=manager.preview(dict(profile='home',retention_days=14,cap_bytes=20*GIB));manager.apply(preview['preview_id'])
+        topology.evidence=manager
+        topology._persist_observations();topology._persist_observations()
+        assert topology.snapshot()['persistence']['state']=='saved'
+        rows=manager.history(category='network',limit=100)['records']
+        assert len(rows)>2 and all(len(json.dumps(r['data']).encode())<32768 for r in rows)
+        assert all('token' not in r['data'] and r['source']=='network-device-observation' for r in rows)
+        first=topology.device_history('192.168.2.20',interface='eth0',limit=1)
+        assert len(first['records'])==1 and first['next_cursor']
+        other=NetworkTopology(topology.configuration,topology.operations,home=topology.home,evidence=manager)
+        second=other.device_history('192.168.2.20',interface='eth0',cursor=first['next_cursor'],limit=1)
+        assert len(second['records'])==1 and second['records'][0]['id']!=first['records'][0]['id']
+        assert first['records'][0]['node']['sent_bytes']==200
+    finally:manager.close()
+
+
+def test_history_failure_does_not_mark_passive_inventory_failed(topology):
+    def fail(*args):raise ValueError('full')
+    topology.evidence=SimpleNamespace(enabled=True,append_records=fail)
+    topology._persist_observations()
+    value=topology.snapshot()
+    assert value['state']=='ready' and value['persistence']['state']=='error'

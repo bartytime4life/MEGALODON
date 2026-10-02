@@ -51,13 +51,19 @@ def recent_context(path=Path('/var/log/suricata/eve.json')):
         key = str(ip_address(value))
         if key not in result and len(result)>=256:
             raise ValueError('Context address bound')
-        return result.setdefault(key,dict(names=[],findings=[]))
+        return result.setdefault(key,dict(names=[],findings=[],services=[]))
     def name(address,value,source,stamp):
         if type(value) is not str or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,252}',value):
             return
         rows = peer(address)['names']
         if len(rows)<5 and not any(r['name']==value.lower() for r in rows):
             rows.append(dict(name=value.lower(),source=source,observed_at=stamp))
+    def service(address,label,role,remote,stamp):
+        if not isinstance(label,str) or not re.fullmatch(r'[A-Za-z0-9_.+-]{1,40}',label):return
+        rows=peer(address)['services']
+        remote=str(ip_address(remote))
+        item=dict(name=label,role=role,peer=remote,source='Suricata application protocol',observed_at=stamp)
+        if len(rows)<8 and not any((r['name'],r['role'],r['peer'])==(label,role,remote) for r in rows):rows.append(item)
     for line in reversed(raw.splitlines()[-1000:]):
         try:
             row = json.loads(line)
@@ -66,6 +72,12 @@ def recent_context(path=Path('/var/log/suricata/eve.json')):
                 continue
             stamp = stamp.astimezone(timezone.utc).isoformat().replace('+00:00','Z')
             kind = row.get('event_type')
+            label=row.get('app_proto') or (kind if kind in {'tls','http','dns','ssh','smb','rdp','quic'} else None)
+            if label and label not in {'failed','unknown'}:
+                try:
+                    service(row.get('src_ip'),label,'originator' if kind=='flow' else 'observed endpoint',row.get('dest_ip'),stamp)
+                    service(row.get('dest_ip'),label,'responder' if kind=='flow' else 'observed endpoint',row.get('src_ip'),stamp)
+                except (ValueError,TypeError):pass
             if kind=='tls':
                 name(row.get('dest_ip'),row.get('tls',{}).get('sni'),'Observed TLS SNI',stamp)
             elif kind=='http':
@@ -129,13 +141,19 @@ class Operations:
                     row = peers.setdefault(key,dict(ip=key,scope=address_scope(key),version=ip_address(key).version,
                         local=endpoint['local'],connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
                         first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],names=context.get(key,{}).get('names',[]),
-                        findings=context.get(key,{}).get('findings',[]),location=endpoint['location'],flags=[]))
+                        findings=context.get(key,{}).get('findings',[]),services=context.get(key,{}).get('services',[]),location=endpoint['location'],flags=[]))
                     row['connections']+=1;row['active_connections']+=int(flow['active'])
                     row['packets']+=packets;row['bytes']+=size
                     # Per-IP sent/received means this endpoint's direction.
                     row['sent_bytes']+=outbound['bytes'];row['received_bytes']+=inbound['bytes']
                     row['first_seen']=min(row['first_seen'],flow['first_seen']);row['last_seen']=max(row['last_seen'],flow['last_seen'])
                     row['flags']=sorted(set(row['flags'])|set(flow.get('flags',[])))[:8]
+                    for label in flow.get('services',[])[:8]:
+                        if not isinstance(label,str) or not re.fullmatch(r'[A-Za-z0-9_.+-]{1,40}',label):continue
+                        other=b if endpoint is a else a
+                        item=dict(name=label,role='observed endpoint',peer=other['ip'],
+                                  source=flow.get('source','Sensor flow summary'),observed_at=flow['last_seen'])
+                        if len(row['services'])<8 and item not in row['services']:row['services'].append(item)
                     port = endpoint['port']
                     item = dict(protocol=flow['protocol'],port=port,hint=PORT_HINTS.get(port))
                     if port is not None and item not in row['ports'] and len(row['ports'])<12:
@@ -159,6 +177,7 @@ class Operations:
             result = dict(schema='megalodon-operations-v1',observed_at=now(),capture=live['capture'],background=live['background'],
                 summary=dict(peers=len(peers),active_connections=sum(r['active'] for r in live['connections']),packets=total_packets,
                              bytes=total_bytes,sent_bytes=sent,received_bytes=received,unattributed_bytes=unattributed),
+                sensor_endpoints=[dict(ip=ip,**value) for ip,value in list(context.items())[:128]],
                 timeline=live.get('timeline',[]),protocols=sorted(protocols.values(),key=lambda r:-r['bytes']),endpoints=endpoints,storage=storage,
                 coverage=dict(window_seconds=60,max_endpoints=64,unmapped=live['totals']['unmapped'],truncated=live['totals']['truncated'] or len(peers)>64,
                     notes=['Retained observed connections, up to 60 seconds; capture gaps and drops are unknown.',

@@ -1,0 +1,63 @@
+{
+  "schema": "megalodon-local-model-acceptance-v1",
+  "observed_date": "2026-10-01",
+  "application_source": "1b0b389",
+  "installed_release": "0.1.0-20261001T215514Z-19f4235f",
+  "package_sha256": "f3aa2e788aae3182816ab2989303af5fb29d6094551689fa9cf534276d2f6f3c",
+  "installed_content_matches_source": true,
+  "local_listener_verified": true,
+  "capture_state": "running",
+  "preservation": {
+    "retention_days": 14,
+    "cap_bytes": 21474836480,
+    "reports": 4,
+    "report_time": "09:00",
+    "report_timezone": "America/Chicago",
+    "existing_model_preserved": true
+  },
+  "models": {
+    "installed_entries": 6,
+    "local_completion_metadata_admission": 6,
+    "real_inference_verified_entries": 1,
+    "verified_response_at": "2026-10-01T21:56:10.418670Z",
+    "verified_response_seconds": 4.11,
+    "subsequent_background_timeout_observed": true,
+    "request_deadline_seconds": 15,
+    "cloud_inference_enabled": false
+  },
+  "tests": {
+    "passed": 4355,
+    "subtests_passed": 204,
+    "skipped": 2,
+    "skip_reason": "Platform-specific /tmp compatibility symlink guards do not apply on this host",
+    "duration_seconds": 103.68,
+    "installed_tshark_test_enabled": true,
+    "synthetic_provider_locks_isolated_from_live_service": true
+  },
+  "browser": {
+    "normal_desktop_checked": true,
+    "additional_viewports": [[3440, 1440], [1366, 768], [390, 844]],
+    "installed_selection_saved_via_keyboard": true,
+    "incoming_origin_rings_visible": true,
+    "screenshots": "Private ignored output; not published",
+    "not_claimed": ["Every control visually accepted", "Printed pagination", "Native OS reduced-motion preference"]
+  },
+  "geography": {
+    "user_authorized": true,
+    "database_ready": true,
+    "approximate_anchor_available": true,
+    "captured_peer_addresses_uploaded": false,
+    "marker_meaning": "Observed recent incoming traffic at approximate origin coordinates"
+  },
+  "security": {
+    "scan_id": "028d1ba6-d6eb-493a-846e-0c45409c1299",
+    "sealed_base": "908ffe018443a02a67a52b415a127bbe369b3d77",
+    "sealed_head": "a31ec38f4a3d2d5752196cb1eb6950627d89404e",
+    "changed_files_covered": 39,
+    "findings": 0,
+    "deferred_candidates": 0,
+    "supplemental_review_commits": ["d73511b", "1b0b389"],
+    "supplemental_new_findings": 0,
+    "scope": "Focused static diff review; supplemental commits are outside the sealed scan"
+  }
+}

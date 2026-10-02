@@ -215,6 +215,8 @@ class CompanionAutomation:
             "osquery": "waiting" if config.osquery_enabled or config.watch_osquery_json else "not configured",
         }
         self._advisory: dict[str, str] = {}
+        self._advice_jobs = {}
+        self._advice_wake = Event()
         self._seen: dict[str, tuple] = {}
         self._next_collection = {kind: 0.0 for kind in _KINDS}
         self._requested: set[str] = set()
@@ -227,6 +229,7 @@ class CompanionAutomation:
         self._threads = [
             Thread(target=self._collection_loop, name="megalodon-companion-collection", daemon=True),
             Thread(target=self._watch_loop, name="megalodon-companion-watch", daemon=True),
+            Thread(target=self._advice_loop, name="megalodon-companion-advice", daemon=True),
         ]
         for thread in self._threads:
             thread.start()
@@ -234,6 +237,9 @@ class CompanionAutomation:
     def stop(self) -> None:
         self._stop.set()
         self._wake.set()
+        self._advice_wake.set()
+        from .ai_provider import cancel_current
+        cancel_current()
         for thread in self._threads:
             thread.join(timeout=20)
 
@@ -287,21 +293,40 @@ class CompanionAutomation:
             self._status[kind] = f"{source} · completed; saved aggregate"
         if self.config.qwen_advisory and not self.ai.enabled:
             with self._lock:
-                self._advisory[kind] = "Qwen unavailable (DISABLED)."
+                self._advisory[kind] = "Local AI unavailable (DISABLED)."
         elif self.config.qwen_advisory:
-            from .ai_provider import AIProviderError, generate
-            try:
-                prompt = ("Explain these completed security inventory counts in at most two sentences. "
-                          "State that counts are not proof of safety or a threat. Do not propose commands, "
-                          "targets or actions. Data: " + json.dumps({"kind": kind, "counts": value}, sort_keys=True))
-                explanation = generate(self.ai, prompt, max_tokens=120)
-            except (AIProviderError, ValueError) as exc:
-                explanation = f"Qwen unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
-            if self.evidence is not None and self.evidence.enabled:
-                self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
-                    source='local Qwen advisory',data=dict(tool=kind,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
-            with self._lock:
-                self._advisory[kind] = explanation[:1024]
+            if self._threads:
+                with self._lock:
+                    self._advice_jobs[kind] = value  # At most one latest summary per collector.
+                    self._advisory[kind] = 'Local AI advice queued; collection is complete.'
+                self._advice_wake.set()
+            else:
+                self._explain(kind,value)
+
+    def _advice_loop(self):
+        while not self._stop.is_set():
+            self._advice_wake.wait(1);self._advice_wake.clear()
+            while not self._stop.is_set():
+                with self._lock:
+                    if not self._advice_jobs:break
+                    kind=next(iter(self._advice_jobs));value=self._advice_jobs.pop(kind)
+                self._explain(kind,value)
+
+    def _explain(self,kind,value):
+        from .ai_provider import AIProviderError, generate
+        model_settings = self.ai
+        try:
+            prompt = ("Explain these completed security inventory counts in at most two sentences. "
+                      "State that counts are not proof of safety or a threat. Do not propose commands, "
+                      "targets or actions. Data: " + json.dumps({"kind": kind, "counts": value}, sort_keys=True))
+            explanation = generate(model_settings, prompt, max_tokens=120)
+        except (AIProviderError, ValueError) as exc:
+            explanation = f"Local AI unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
+        if self.evidence is not None and self.evidence.enabled:
+            self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
+                source='local model advisory',data=dict(tool=kind,model=model_settings.model,model_digest=model_settings.model_digest,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
+        with self._lock:
+            self._advisory[kind] = explanation[:1024]
 
     def _fail(self, kind: str, message: str) -> None:
         with self._lock:

@@ -18,6 +18,18 @@ process.stdin.on('end',async()=>{
  // Polling refreshes backend state without losing settings typed by the user.
  change('support-config-interface','wlan0');change('support-config-nmap-target','192.168.1.0/24');change('support-config-scan-folder','Documents');await poll(10000);
  assert.equal(get('support-config-interface').value,'wlan0');assert.equal(get('support-config-nmap-target').value,'192.168.1.0/24');assert.equal(get('support-config-scan-folder').value,'Documents');assert.equal(postCount(),0);
+
+ // Model selection shares the protected setup request and retains unsaved choices.
+ const model={model:'qwen3.6:latest',message:'Configured model available.',compute_mode:'cpu',options:[{name:'qwen3.6:latest',digest:'a'.repeat(64),size_bytes:2**30},{name:'llama3.2:3b',digest:'b'.repeat(64),size_bytes:2**30}],updated_at:null,last_response_at:null,last_attempt_at:null,response_ms:null,loaded:false,memory_bytes:null,vram_bytes:null};
+ payload={...fixture,model};await poll(10000);
+ assert.equal(get('support-model-select').value,'qwen3.6:latest');
+ change('support-model-select','llama3.2:3b');change('support-model-compute','auto');await poll(10000);
+ assert.equal(get('support-model-select').value,'llama3.2:3b');assert.equal(get('support-model-compute').value,'auto');
+ await click('support-model-save');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_select',model:'llama3.2:3b',model_digest:'b'.repeat(64),compute_mode:'auto',timeout_seconds:300});
+ assert.equal(requests.at(-1).opts.headers['X-Megalodon-Config-Token'],fixture.token);
+ await click('support-model-refresh');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_refresh'});
+ change('support-model-select','');const modelPosts=postCount();await click('support-model-save');assert.equal(postCount(),modelPosts);
+ payload=fixture;
  // Every fixed action sends exactly its declared fields and the separate nonce.
  const scenarios=[['support-config-permissions',{action:'capture_permissions',interface:'wlan0'}],['support-config-capture-start',{action:'capture_start',interface:'wlan0'}],['support-config-wireshark-open',{action:'wireshark_open',interface:'wlan0'}],['support-config-wireshark-stop',{action:'wireshark_stop'}],['support-config-nmap-save',{action:'nmap_configure',nmap_target:'192.168.1.0/24'}],['support-config-clamav-save',{action:'clamav_configure',scan_folder:'Documents'}],['support-config-signatures',{action:'signature_update'}],['support-config-osquery',{action:'osquery_configure'}],['support-config-qwen-setup',{action:'qwen_configure'}],['support-config-suricata-setup',{action:'suricata_configure',interface:'wlan0'}],['support-config-qwen',{action:'qwen_check'}],['support-config-zeek',{action:'zeek_check'}],['support-config-suricata',{action:'suricata_check'}]];
  for(const [id,expected] of scenarios){await click(id);const request=requests.at(-1);assert.equal(request.path,'/api/support-config');assert.equal(request.opts.method,'POST');assert.equal(request.opts.headers['X-Megalodon-Config-Token'],fixture.token);assert.deepEqual(JSON.parse(request.opts.body),expected);assert.equal(request.opts.headers['Content-Type'],'application/json');}

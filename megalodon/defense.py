@@ -1,4 +1,4 @@
-"""Audited fixed local defense workflows. Qwen can propose, never authorize."""
+"""Audited fixed local defense workflows. Local AI can propose, never authorize."""
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -11,7 +11,7 @@ from threading import Lock, Thread
 from uuid import uuid4
 
 from .ai_broker import ReceiptStore, MAX_LEDGER_BYTES
-from .ai_provider import AIProviderError, generate, _strict_pairs
+from .ai_provider import AIProviderError, generate, reject_response, _strict_pairs
 from .companion_automation import _run_fixed
 from .defense_guard import ROOT_PROGRAM
 from .managed_capture import now
@@ -148,15 +148,21 @@ class Defense:
                         'use it only for concrete hostile sensor evidence. You cannot run commands or authorize actions. '
                         'Do not suggest contacting or attacking another system. Data: '+json.dumps(evidence,separators=(',',':')))
                 if len(prompt.encode())>4096:raise ValueError('IP context exceeds the model input bound.')
-                raw=self.model(self.configuration.settings.ai,prompt,max_tokens=128,response_format='defense')
-                answer=json.loads(raw,object_pairs_hook=_strict_pairs)
+                model_settings=self.configuration.settings.ai
+                raw=self.model(model_settings,prompt,max_tokens=128,response_format='defense')
+                try:
+                    answer=json.loads(raw,object_pairs_hook=_strict_pairs)
+                except ValueError:
+                    reject_response(model_settings)
+                    raise AIProviderError('INVALID_RESPONSE') from None
                 if (type(answer) is not dict or set(answer)!={'explanation','proposal'}
                         or type(answer['explanation']) is not str or not 1<=len(answer['explanation'])<=240
                         or any(ord(c)<32 and c not in '\n\t' for c in answer['explanation'])
                         or type(answer['proposal']) is not str or answer['proposal'] not in {'observe','refresh_inventory','scan_files','contain'}):
-                    raise ValueError('Qwen did not return a valid bounded proposal; no action was run.')
+                    reject_response(model_settings)
+                    raise AIProviderError('INVALID_RESPONSE')
                 result=dict(ip=row['ip'],**answer,basis='local_model',evidence=evidence)
-                message='Qwen analysis completed. Review the evidence and choose any action yourself.'
+                message='Local AI analysis completed. Review the evidence and choose any action yourself.'
             elif action in {'scan_files','refresh_inventory'}:
                 worker=self.configuration.companions
                 if worker is None:raise ValueError('Local collectors unavailable.')
@@ -198,16 +204,18 @@ class Defense:
             with self._lock:self._job.update(state='finished',message=message,result=result)
         except Exception as exc:
             provider_message = {
-                'CONCURRENCY_LIMIT_REACHED':'Qwen is working on another local summary. Retry this analysis shortly.',
-                'REQUEST_TIMEOUT':'Qwen did not finish within the local time limit. Retry this analysis.',
-                'OLLAMA_UNAVAILABLE':'Local Ollama is unavailable. Check Qwen in Setup.',
-                'DISABLED':'Configure local Qwen in Setup before requesting IP analysis.',
-                'MODEL_MISSING':'The configured Qwen model is unavailable. Review Qwen in Setup.',
-                'MODEL_MISMATCH':'The installed Qwen model differs from the configured model. Review Qwen in Setup.',
-                'INVALID_RESPONSE':'Qwen returned an invalid or incomplete answer. No proposal was executed; retry analysis.',
-                'POLICY_REJECTION':'Qwen settings did not pass the local provider checks. Review Qwen in Setup.',
+                'CONCURRENCY_LIMIT_REACHED':'Local AI is working on another local summary. Retry this analysis shortly.',
+                'REQUEST_CANCELLED':'Local AI request cancelled; no model proposal was executed.',
+                'REQUEST_TIMEOUT':'Local AI did not finish within the local time limit. Retry this analysis.',
+                'OLLAMA_UNAVAILABLE':'Local Ollama is unavailable. Check Local AI in Setup.',
+                'DISABLED':'Configure local AI in Setup before requesting IP analysis.',
+                'MODEL_MISSING':'The configured Local AI model is unavailable. Review Local AI in Setup.',
+                'MODEL_MISMATCH':'The installed Local AI model differs from the configured model. Review Local AI in Setup.',
+                'INVALID_RESPONSE':'Local AI returned an invalid or incomplete answer. No proposal was executed; retry analysis.',
+                'POLICY_REJECTION':'Local AI settings did not pass the local provider checks. Review Local AI in Setup.',
+                'MODEL_NOT_LOCAL':'The selected model is remote or lacks local text completion. Choose another installed model in Setup.',
                 'PROVIDER_ERROR':'Ollama could not complete model inference. Review its model and available memory in Setup, then retry.',
-            }.get(exc.code, 'Local Qwen is unavailable; review its status in Setup.') if isinstance(exc, AIProviderError) else None
+            }.get(exc.code, 'Local AI is unavailable; review its status in Setup.') if isinstance(exc, AIProviderError) else None
             message=('Host action outcome needs review; the five-minute kernel timeout bounds a successfully added block. Use Release for any recorded block.' if attempted_host else
                      provider_message or (str(exc) if type(exc) is ValueError and len(str(exc))<=240 else 'Local defense workflow unavailable. No model proposal was executed.'))
             try:self._append(identifier,state='failed',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),message=message,host_attempted=attempted_host,result=None)
@@ -219,6 +227,8 @@ class Defense:
             with self._lock:self._job['finished_at']=now()
 
     def close(self):
+        from .ai_provider import cancel_current
+        cancel_current()
         if self._thread:self._thread.join(2)
 
 

@@ -42,6 +42,12 @@ class DashboardSettings:
     event_limit: int = 50
 
 
+def valid_model_name(value):
+    import re
+    return (type(value) is str and 1 <= len(value) <= 96 and '..' not in value
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?", value) is not None)
+
+
 @dataclass(frozen=True)
 class AISettings:
     enabled: bool = False
@@ -49,8 +55,9 @@ class AISettings:
     endpoint: str = "http://127.0.0.1:11434"
     model: str = "qwen2.5:7b-instruct-fp16"
     model_digest: str = "59805ce4a4046be2d8f63231a78daacd2e66f5dccf1a64d0d138ebeeb26ff16c"
-    timeout_seconds: int = 15
+    timeout_seconds: int = 300
     max_context: int = 2048
+    compute_mode: str = "cpu"
 
 
 DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
@@ -148,15 +155,18 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
     dashboard = _table(raw.get("dashboard", {}), "dashboard")
     storage = _table(raw.get("storage", {}), "storage")
     ai = _table(raw.get("ai", {}), "ai")
-    if set(ai) - {"enabled", "provider", "endpoint", "model", "model_digest", "timeout_seconds", "max_context"}:
+    if set(ai) - {"enabled", "provider", "endpoint", "model", "model_digest", "timeout_seconds", "max_context", "compute_mode"}:
         raise ValidationError("ai contains unsupported settings")
     if ai.get("provider", "ollama") != "ollama" or ai.get("endpoint", "http://127.0.0.1:11434") != "http://127.0.0.1:11434":
         raise ValidationError("ai provider must be Ollama at literal loopback")
     import re
     model = _text(ai.get("model", AISettings.model), "ai.model", 96)
     digest = _text(ai.get("model_digest", AISettings.model_digest), "ai.model_digest", 64)
-    if re.fullmatch(r"qwen[A-Za-z0-9._:-]{1,91}", model) is None or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
+    if not valid_model_name(model) or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
         raise ValidationError("ai model or digest is invalid")
+
+    if ai.get("compute_mode", "cpu") not in ("cpu", "auto"):
+        raise ValidationError("ai.compute_mode must be cpu or auto")
 
     allowlist_values = blocking.get("allowlist", list(DEFAULT_ALLOWLIST))
     if not isinstance(allowlist_values, list) or not all(
@@ -292,8 +302,8 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
         ),
         ai=AISettings(
             enabled=_boolean(ai.get("enabled", False), "ai.enabled"),
-            model=model, model_digest=digest,
-            timeout_seconds=_bounded_integer(ai.get("timeout_seconds", 15), "ai.timeout_seconds", 1, 15),
+            model=model, model_digest=digest, compute_mode=ai.get("compute_mode", "cpu"),
+            timeout_seconds=_bounded_integer(ai.get("timeout_seconds", 300), "ai.timeout_seconds", 1, 1800),
             max_context=_bounded_integer(ai.get("max_context", 2048), "ai.max_context", 256, 4096),
         ),
     )

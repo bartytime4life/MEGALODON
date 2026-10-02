@@ -1,0 +1,78 @@
+{
+  "schema": "megalodon-network-comprehension-acceptance-v1",
+  "observed_local_date": "2026-10-01",
+  "source_base": "b9ee503",
+  "scope": "Replace the confusing local network diagram with a device directory and inline explanation",
+  "changes": [
+    "Group this computer\u2019s returned addresses in one context section",
+    "Separate traffic seen from traffic not visible",
+    "Replace overview paths with a selectable directory and per-address sent/received bars",
+    "Keep filters, technical table, source details and history secondary",
+    "Preserve source-qualified names and distinguish names from verified device identity"
+  ],
+  "regression": {
+    "passed": 4367,
+    "skipped": 2,
+    "subtests_passed": 204,
+    "duration_seconds": 103.52,
+    "installed_tshark_enabled": true,
+    "skip_reason": "Platform-specific /tmp compatibility symlink guards do not apply on this host",
+    "after_final_mobile_scroll_fix": "4 focused network and operations tests passed"
+  },
+  "behavior_checks": [
+    "17 PC addresses grouped once",
+    "100-address page and selected-peer exchange pagination",
+    "Ordinary selection makes no additional request and does not open the distant inspector",
+    "Discovery-only selection never shows invented byte measurements",
+    "Service hostnames are not promoted to device identity",
+    "Selection and keyboard focus survive refresh",
+    "Untrusted names remain literal text",
+    "Stale, filtered-away, empty and failed-feed states",
+    "Existing local request protections and unsaved Setup inputs preserved"
+  ],
+  "browser": {
+    "synthetic_inventory_addresses": 180,
+    "synthetic_search_and_paging": "Search returned one matching address; next page returned addresses 51\u2013100",
+    "desktop_viewports": [
+      [
+        1440,
+        1000
+      ],
+      [
+        1894,
+        1292
+      ]
+    ],
+    "mobile_viewport": [
+      390,
+      844
+    ],
+    "horizontal_overflow": false,
+    "mobile_selected_heading_visible": true,
+    "installed_device_selection": "Verified with live observations",
+    "installed_saved_history": "Saved records and earlier-history continuation returned",
+    "independent_visual_review": "PASS from rendered screenshots; reviewer browser unavailable, interactions verified by primary agent",
+    "review_provider_note": "No different-provider reviewer available; independent agent used the available model",
+    "screenshots": "Private ignored build/repository-audit/browser-local/human-network-*; no live telemetry committed"
+  },
+  "release": {
+    "installed_release": "0.1.0-20261002T003000Z-5e36aa96",
+    "source_package_sha256": "9f99bf109375f242360b62d014b81ae49ed65c804d59fdd4457359840e22e375",
+    "installed_package_sha256": "9f99bf109375f242360b62d014b81ae49ed65c804d59fdd4457359840e22e375",
+    "running_identity_verified": true,
+    "settings_preserved": true,
+    "policy_preserved": true,
+    "saved_reports_preserved": true,
+    "saved_reports": 4,
+    "report_schedule_preserved": true,
+    "capture_state": "running"
+  },
+  "limits": [
+    "Address counts do not count unique physical devices.",
+    "Discovery does not provide complete peer traffic visibility.",
+    "Unknown device identities remain unnamed.",
+    "Per-address byte totals cover retained captured observations, not speed or lifetime usage.",
+    "Counterparts require both endpoints in the returned page.",
+    "Reduced-motion preferences remain relevant to the unchanged globe; the new directory has no traffic animation."
+  ]
+}

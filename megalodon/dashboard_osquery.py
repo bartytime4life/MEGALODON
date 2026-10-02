@@ -10,7 +10,7 @@ OSQUERY_HTML = r'''
     <p id="osquery-time" class="osquery-time"></p>
     <p class="companion-caveat">One saved count cannot show a trend. It does not establish package safety, update status or live osquery health.</p>
   </div>
-  <details class="companion-advisory" id="osquery-advisory-wrap" hidden><summary>Qwen note</summary><p id="osquery-advisory"></p></details>
+  <details class="companion-advisory" id="osquery-advisory-wrap" hidden><summary>Local AI note</summary><p id="osquery-advisory"></p></details>
 </section>
 '''
 

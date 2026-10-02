@@ -353,8 +353,9 @@ class HeartbeatBusy(Exception):
 class Heartbeat:
     """Server-owned collector with a short cache so polling stays cheap."""
 
-    def __init__(self, proc_root: Path = Path("/proc")) -> None:
+    def __init__(self, proc_root: Path = Path("/proc"), *, model_observer=None) -> None:
         self._proc_root = proc_root
+        self.model_observer = model_observer
         self._history = HeartbeatHistory()
         self._lock = Lock()
         self._cached: bytes | None = None
@@ -372,6 +373,12 @@ class Heartbeat:
             if not force and self._cached is not None and monotonic() < self._expires:
                 return self._cached
             report = heartbeat_report(self._proc_root)
+            if self.model_observer is not None:
+                observed=self.model_observer()
+                row=next(tool for tool in report['tools'] if tool['id']=='qwen')
+                row['model']='present' if observed['model_present'] else 'unknown'
+                row['selected_model']={k:observed[k] for k in ('model','state','message','updated_at','last_response_at')}
+                row['light']='green' if observed['state']=='connected' else 'grey' if observed['state']=='collecting' else 'amber'
             report["history"] = self._history.observe(report)
             payload = json.dumps(report, sort_keys=True,
                                  separators=(",", ":"), allow_nan=False).encode()

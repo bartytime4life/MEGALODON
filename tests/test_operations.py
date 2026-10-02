@@ -38,11 +38,31 @@ def test_dns_questions_do_not_attribute_names_to_dns_server(tmp_path):
           dict(timestamp=(datetime.now(timezone.utc)-timedelta(minutes=10)).isoformat(),event_type='tls',dest_ip='4.4.4.4',tls={'sni':'old.example'})]
     path.write_text('\n'.join(json.dumps(r) for r in rows)+'\n')
     context=recent_context(path)
-    assert '1.1.1.1' not in context and '4.4.4.4' not in context and '8.8.4.4' not in context
+    assert not context['1.1.1.1']['names'] and context['1.1.1.1']['services'][0]['name']=='dns'
+    assert '4.4.4.4' not in context and '8.8.4.4' not in context
     assert {n['name'] for n in context['8.8.8.8']['names']}=={'site.example','secure.example'}
     assert all(n['observed_at'].endswith('Z') for n in context['8.8.8.8']['names'])
     link=tmp_path/'link';link.symlink_to(path)
     with pytest.raises(OSError):recent_context(link)
+
+
+def test_source_qualified_summary_protocol_reaches_endpoint_without_inventing_app(tmp_path):
+    from megalodon.flow_ingestion import normalize_zeek
+    stamp=datetime.now(timezone.utc).timestamp()-1
+    row={'ts':stamp,'uid':'one','id.orig_h':'10.0.0.2','id.resp_h':'10.0.0.3',
+         'id.orig_p':54321,'id.resp_p':443,'proto':'tcp','service':'ssl','duration':0,
+         'orig_bytes':100,'resp_bytes':250,'orig_pkts':1,'resp_pkts':2}
+    cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda ip:None))
+    cache._local={'10.0.0.3'}
+    cache.observe_summary(normalize_zeek(row)[1])
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:cache.snapshot({'state':'running'},{}))
+    result=Operations(config,context_reader=lambda:{}).snapshot()
+    assert result['summary']['bytes']==350
+    for endpoint in result['endpoints']:
+        assert endpoint['services'][0]['name']=='ssl'
+        assert 'zeek' in endpoint['services'][0]['source']
+        assert endpoint['services'][0]['role']=='observed endpoint'
+        assert not endpoint['names']
 
 
 @pytest.mark.parametrize('ip,scope',[('224.0.0.1','Multicast'),('::1','Loopback'),('fe80::1','Link local'),('0.0.0.0','Unspecified'),('10.0.0.1','Private / reserved'),('1.1.1.1','Public')])

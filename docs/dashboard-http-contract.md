@@ -543,3 +543,39 @@ found executable does not prove configured, running or providing accepted data.
 The retained-history v2 read additionally requires `X-Megalodon-Check: 1`.
 Its chart page opens at most 32 visited source segments; background report jobs
 retain their separate 2,048-segment bound.
+
+
+### Installed local model selection
+
+The protected support-configuration API now exposes shared cached `model`
+telemetry and the closed `model_refresh` / `model_select` actions. See
+[the model-selection contract](local-model-selection.md#persistence-and-interfaces)
+for fields, bounds, persistence and legacy compatibility. Model selection never
+accepts a provider destination or generates a host command. Availability reads
+do not infer; selection and `qwen_check` perform an explicit bounded response test.
+
+### Device observation history and AI response budgets
+
+`GET /api/network` additionally accepts `view=devices|all` (default `devices`).
+Devices are addresses on known local scopes, interfaces, gateways and neighbor
+observations; this is not a physical-device count. `all` includes external peers.
+Nodes add `on_link`, `protocols`, and source/time-qualified `services`; optional
+`last_discovered_at` distinguishes actual discovery replies from refreshed local
+cache observations. Per-direction edge activity expires independently.
+`persistence` reports history-write state independently of live inventory health.
+
+`GET /api/network/history?ip=<IP>&interface=<interface>&limit=20&cursor=<cursor>`
+returns `megalodon-device-history-v1`. It uses the same local read protections as
+network inventory. Limit is 1–50; interface and cursor are optional. Each request
+examines at most 500 network records across retained segments; `next_cursor`,
+`truncated`, and `gaps` describe incomplete coverage. Each returned match has its
+segment-qualified evidence ID, timestamp, source, and saved node. Legacy topology
+records are readable. Saved byte counts describe overlapping recent windows,
+not additive time intervals. Retention can expire a cursor.
+
+`model_select` accepts optional integer `timeout_seconds` (1–1,800); omitted values
+preserve the current setting. New installs default to 300 seconds. `model_cancel`
+is a field-free protected support action that interrupts this process’s active
+inference, including while another support job is running. Provider metadata stays
+bounded to three seconds per request. Model telemetry adds the configured budget,
+`running`, and `started_at`. Cancellation does not grant host-action authority.

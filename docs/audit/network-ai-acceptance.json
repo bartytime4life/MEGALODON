@@ -1,0 +1,111 @@
+{
+  "schema": "megalodon-network-ai-acceptance-v1",
+  "observed_date": "2026-10-01",
+  "source_base": "a482006098d299c274ac0be281f7b8c46fdf7b4c",
+  "source_package_sha256": "6f69ec12020f63f80236e944050eac170ec435828a022617ebf02be1f153cb9f",
+  "installed_release": "0.1.0-20261001T231037Z-4db774c8",
+  "installed_package_sha256": "6f69ec12020f63f80236e944050eac170ec435828a022617ebf02be1f153cb9f",
+  "installed_content_matches_checkout": true,
+  "installed_features": [
+    "Five-minute configurable AI budget",
+    "AI cancellation for background HUD jobs",
+    "Local-device discovery, history and observed service context",
+    "Responsive network visualization",
+    "Protected cancellation during legacy synchronous AI requests"
+  ],
+  "pending_install": [],
+  "install_blocker": null,
+  "tests": {
+    "passed": 4367,
+    "skipped": 2,
+    "subtests_passed": 204,
+    "duration_seconds": 103.98,
+    "installed_tshark_test_enabled": true,
+    "skip_reason": "Platform-specific /tmp compatibility symlink guards do not apply on this host"
+  },
+  "preservation": {
+    "retention_days": 14,
+    "cap_bytes": 21474836480,
+    "reports": 4,
+    "report_time": "09:00",
+    "report_timezone": "America/Chicago",
+    "settings_preserved": true,
+    "policy_preserved": true,
+    "schedule_preserved": true,
+    "existing_model_preserved": true,
+    "capture_running": true
+  },
+  "network": {
+    "gateway_family": "Google Wifi",
+    "private_on_link_scope_verified": true,
+    "discovery_enabled": true,
+    "interval_seconds": 900,
+    "initial_responding_addresses": 17,
+    "subsequent_responding_addresses": 20,
+    "physical_device_count_claimed": false,
+    "device_history_saved_and_read": true,
+    "application_protocol_provenance_preserved": true,
+    "router_device_traffic_feed_connected": false,
+    "captured_peer_addresses_uploaded": false,
+    "discovery_resumed_after_update": true
+  },
+  "ai": {
+    "saved_budget_seconds": 300,
+    "maximum_budget_seconds": 1800,
+    "accepted_response_seconds_beyond_old_limit": 27.48,
+    "real_cancellation_verified": true,
+    "accepted_response_after_cancel_seconds": 3.87,
+    "installed_choices": 6,
+    "models_inference_verified": 1,
+    "cloud_inference_enabled": false
+  },
+  "browser": {
+    "desktop_checked": true,
+    "mobile_viewport_requested": [
+      390,
+      844
+    ],
+    "network_filter_and_device_selection_checked": true,
+    "saved_device_history_visible": true,
+    "five_minute_budget_saved_via_hud": true,
+    "cancel_and_verify_controls_checked": true,
+    "screenshots": "Private ignored build output; no telemetry committed",
+    "not_retested": [
+      "Print preview",
+      "Native OS reduced motion",
+      "Every installed model",
+      "Every privileged app action"
+    ],
+    "final_installed_reload_verified": true
+  },
+  "security": {
+    "scan_id": "f1434f1e-0948-4729-97bc-f27c9da6483a",
+    "frozen_working_tree_digest": "codex-security-snapshot/v1:sha256:5a47e8a0318199809e91cc4a630232eaf29e3b64496412536fef5dfd8c7abe94",
+    "changed_source_files": 15,
+    "reportable_findings": 0,
+    "deferred_candidates": 0,
+    "supplemental_review": "Post-scan cancellation mutex correction: parent reviewed preserved Host, session, Origin, token, encoding and closed-action checks. Only model_cancel bypasses the mutation lock; other actions retain serialization. HTTP regression checks acceptance, forgery rejection and lock ownership. This correction is outside the sealed scan.",
+    "plugin_reported_usage": {
+      "total_tokens": 13311984,
+      "cached_input_tokens": 12842880,
+      "output_tokens": 29308,
+      "source": "codex_rollout",
+      "note": "Tool-reported participating-thread counts include cached context; these are not incremental billing or total project measurements."
+    }
+  },
+  "limitations": [
+    "Discovery responses are addresses and may represent multiple interfaces on one physical device. Silent devices may be missing.",
+    "A switched or Wi-Fi PC cannot observe all traffic between other devices. A suitable router export, mirror or endpoint sensor is still needed.",
+    "Observed protocols and names do not identify installed or running applications conclusively.",
+    "Saved observation byte windows overlap and must not be summed as independent traffic intervals."
+  ],
+  "update_recovery": {
+    "operator_authorized_system_prompt": true,
+    "retired_unused_installed_releases": 28,
+    "recent_releases_retained_before_update": 4,
+    "privileged_phase": "Read-only kernel process-reference inventory",
+    "filesystem_mutation": "Normal owner privileges after irreversible privilege drop; manifest-listed unused release trees only",
+    "current_and_rollback_preserved": true,
+    "updater_completed": true
+  }
+}

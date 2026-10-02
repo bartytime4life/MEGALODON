@@ -44,6 +44,7 @@ function heartbeatAge(iso) {
 function heartbeatText(tool) {
   if (heartbeatStale()) return heartbeatState.report ? 'Previous observation is stale · retrying while this tab is visible' : 'Heartbeat unavailable · retrying while this tab is visible';
   if (!tool) return heartbeatState.failed ? 'Heartbeat unavailable' : 'Checking…';
+  if(tool.selected_model)return tool.selected_model.message+(tool.selected_model.updated_at?' · checked '+new Date(tool.selected_model.updated_at).toLocaleTimeString():'');
   const modelOnly = tool.light === 'amber' && tool.service !== 'stopped' && tool.model === 'missing';
   const parts = [modelOnly ? 'Ollama observed · example model not found'
     : tool.light === 'amber' && tool.service === 'stopped' ? 'Installed · expected process not observed'
@@ -148,6 +149,10 @@ function paintInstallControl(wrap) {
   if (!entry || toolId === 'core') return;
   const mine = job && job.tool === toolId;
   const model = entry.method === 'ollama';
+  if(model && tool?.selected_model){
+    const selected=textNode('p','Selected model: '+tool.selected_model.model+'. Choose or verify installed models in Setup.','hb-detail');wrap.append(selected);
+    const link=textNode('a','Choose local AI model →','hb-detail');link.href='#support-model-title';wrap.append(link);return;
+  }
   // `ollama pull` needs the server, so Qwen offers Start first when it is stopped.
   const needsModel = model && (!tool || (tool.model !== 'present' && tool.service !== 'stopped'));
   const installing = mine && job.state === 'running' && job.action !== 'start';

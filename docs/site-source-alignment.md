@@ -1,5 +1,40 @@
 # Defense Console source alignment
 
+## Latest saved source — version 61
+
+VERIFIED 2026-10-02 UTC (2026-10-01 local): the owner requested a source
+checkpoint while keeping the Site retired. Saved v61 contains a complete copy
+of the 798 committed repository files under `checkpoints/local-hud/source/`.
+Per-file hashes and executable flags were checked against its manifest. The
+source excludes ignored runtime captures, settings, generated reports, model
+files and credentials. GitHub remains the development repository.
+
+- Repository checkpoint: `c32b931ca7713a0125da95e6483743ed3a69fff9`, pushed to
+  `codex/globe-origin-pings`.
+- Repository tree: `dd3878cedc5f1b0c94dd9f711be67bb0a33449bf`.
+- Site source: `9701721014c1dad30436c006f5e34832eafaa50f`.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_d948c72d69b48191b7f1151cc27728fb` (61).
+- Publication: no deployment requested; saved-version readback returned no
+  deployment. The existing v60 retirement deployment below remains unchanged.
+- Packaged output: two files (hosting identity and the retirement worker),
+  normalized archive SHA-256
+  `a52499b99cd77a74f3a07767765d6dbbfb4bc99c8cb42d8b3f6b310591d3618d`.
+- Application package SHA-256:
+  `9f99bf109375f242360b62d014b81ae49ed65c804d59fdd4457359840e22e375`;
+  the installed running release matches this package.
+
+The Site's owner-only access policy was read back unchanged. Its source
+checkpoint is outside the deployable artifact. The obsolete `static.directory`
+entry pointing at the repository's removed hosted dashboard was corrected to
+match the canonical identity-only manifest. Fifteen route/method checks verified
+that the unchanged worker returns an empty 410 without redirects. The focused
+local model, network, HUD and documentation suite passed 107 tests and 32
+subtests. This is source/save verification, not new browser or print acceptance.
+
+This receipt and its audit-ledger update follow the checkpoint commit; they do
+not change its application bytes. See the machine-readable
+[checkpoint verification](audit/source-checkpoint-acceptance.json).
+
 ## Current publication — local HUD only, no hosted page
 
 CONFIRMED 2026-10-01: removed the extra retirement landing page at the owner's

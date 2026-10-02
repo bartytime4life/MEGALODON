@@ -10,7 +10,7 @@ CLAMAV_HTML = r'''
     <div class="clamav-grid"><div id="clamav-files"></div><div id="clamav-detections"></div><div id="clamav-directories"></div></div>
     <p class="companion-caveat">Completed scan counts are separate from network traffic. Zero matches do not prove full coverage or file safety.</p>
   </div>
-  <details class="companion-advisory" id="clamav-advisory-wrap" hidden><summary>Qwen note</summary><p id="clamav-advisory"></p></details>
+  <details class="companion-advisory" id="clamav-advisory-wrap" hidden><summary>Local AI note</summary><p id="clamav-advisory"></p></details>
 </section>
 '''
 

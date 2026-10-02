@@ -152,7 +152,7 @@ class LiveConnections:
             self._flows[identity]=dict(id=hashlib.sha256(repr(identity).encode()).hexdigest()[:20],protocol=value['protocol'],
                 a=endpoints[0],b=endpoints[1],a_to_b=directions[0],b_to_a=directions[1],
                 first_seen=value['first_seen'],last_seen=value['last_seen'],state='closed' if completed else 'recent',
-                flags=[],_seen=self.clock()-age,source=record['source'],observation='flow summary',byte_basis=value.get('byte_basis','unknown'))
+                flags=[],services=[value['app_proto']] if value.get('app_proto') else [],_seen=self.clock()-age,source=record['source'],observation='flow summary',byte_basis=value.get('byte_basis','unknown'))
             self._packets=sum(r['a_to_b']['packets']+r['b_to_a']['packets'] for r in self._flows.values())
             self._bytes=sum(r['a_to_b']['bytes']+r['b_to_a']['bytes'] for r in self._flows.values())
             if delta and any(delta):

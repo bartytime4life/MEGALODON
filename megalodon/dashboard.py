@@ -528,26 +528,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == '/api/reports' or route.path.startswith('/api/reports/'):
             self._reports_read(route)
             return
-        if route.path in {'/api/storage','/api/storage/history','/api/network'}:
-            provider=self.network_topology if route.path=='/api/network' else self.evidence
+        if route.path in {'/api/storage','/api/storage/history','/api/network','/api/network/history'}:
+            provider=self.network_topology if route.path.startswith('/api/network') else self.evidence
             if self.headers.get_all('X-Megalodon-Check',[])!=['1'] or provider is None or not _tool_management_user():
                 self._send_json({'error':'explicit local evidence check required'},status=403)
                 return
             try:
                 if len(route.query)>1024:raise ValueError('Query too long')
                 query=parse_qs(route.query,keep_blank_values=True,strict_parsing=True) if route.query else {}
-                allowed={'offset','limit','query','group'} if route.path=='/api/network' else {'offset','limit','category','cursor','order'} if route.path.endswith('/history') else set()
+                allowed={'ip','interface','cursor','limit'} if route.path=='/api/network/history' else {'offset','limit','query','group','view'} if route.path=='/api/network' else {'offset','limit','category','cursor','order'} if route.path.endswith('/history') else set()
                 if set(query)-allowed or any(len(v)!=1 for v in query.values()):raise ValueError('Unsupported query')
                 values={k:v[0] for k,v in query.items()}
                 for key in ('offset','limit'):
                     if key in values:
                         if not re.fullmatch(r'[0-9]{1,6}',values[key]):raise ValueError('Invalid page')
                         values[key]=int(values[key])
-                if route.path=='/api/storage':value=provider.snapshot(include_token=True)
+                if route.path=='/api/network/history':value=provider.device_history(**values)
+                elif route.path=='/api/storage':value=provider.snapshot(include_token=True)
                 elif route.path.endswith('/history'):value=provider.history(**values)
                 else:value=provider.snapshot(include_token=True,**values)
                 self._send_json(value)
-            except (ValueError,OSError,sqlite3.Error):self._send_json({'error':'evidence view unavailable or invalid query'},status=422)
+            except (ValueError,TypeError,OSError,sqlite3.Error):self._send_json({'error':'evidence view unavailable or invalid query'},status=422)
             return
         if route.path in {
             "/api/config", "/api/setup", "/api/local-checks", "/api/summary",
@@ -629,8 +630,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path == "/api/ai/status":
             from .ai_provider import status
-            if not self.ai_settings.enabled and not route.query:
-                self._send_json(status(self.ai_settings, probe=False))
+            if not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled and not route.query:
+                self._send_json(status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=False))
                 return
             token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
             if (route.query or self.headers.get_all("X-Megalodon-AI-Check", []) != ["1"]
@@ -638,7 +639,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     or not hmac.compare_digest(token_values[0], self.ai_operator_token)):
                 self._send_json({"error": "explicit local AI check required"}, status=403)
                 return
-            self._send_json(status(self.ai_settings, probe=True))
+            self._send_json(status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=True))
             return
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
@@ -982,6 +983,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def do_POST(self) -> None:  # noqa: N802
+        # Validate the support action before choosing its lock policy. Cancellation
+        # must be reachable while a synchronous compatibility AI request owns it.
+        if self.path == '/api/support-config':
+            self._dispatch_POST()
+            return
         if not self.maintenance_lock.acquire(blocking=False):
             self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
             return
@@ -1250,7 +1256,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _ai_ask(self) -> None:
         token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
         expected_origin = f"http://{self.headers.get('Host')}"
-        if (not self.ai_settings.enabled or self.ai_operator_token is None
+        if (not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled or self.ai_operator_token is None
                 or len(token_values) != 1
                 or not hmac.compare_digest(token_values[0], self.ai_operator_token)
                 or self.headers.get_all("Origin", []) != [expected_origin]
@@ -1279,7 +1285,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             from .managed_receipts import ManagedReceipts
             with (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
                 answer = ask(body["question"], Broker(
-                    self.store, receipts, self.ai_settings, self.ai_blocking))
+                    self.store, receipts, self.support_config.settings.ai if self.support_config is not None else self.ai_settings, self.ai_blocking))
             self._send_json(answer)
         except (ValueError, OSError, RuntimeError) as exc:
             self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
@@ -1312,6 +1318,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError, OSError):
             self._send_json({"error": "unsupported configuration request"}, status=400)
             return
+        needs_lock = body['action'] != 'model_cancel'
+        if needs_lock and not self.maintenance_lock.acquire(blocking=False):
+            self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
+            return
         try:
             response = self.support_config.start(body)
         except ConfigBusy:
@@ -1320,6 +1330,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json({"error": "configuration changed or action did not finish; check status"}, status=422)
             return
+        finally:
+            if needs_lock:
+                self.maintenance_lock.release()
         self._send_json(response, status=202)
 
     def _support_apps_start(self) -> None:
@@ -1795,6 +1808,7 @@ def serve(
                 handler.local_checks = LocalChecks(handler.store, source_available=True)
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
+            if heartbeat is not None:heartbeat.model_observer=handler.support_config.model_telemetry.snapshot
             from .operations import Operations
             from .defense import Defense
             handler.operations = Operations(handler.support_config)

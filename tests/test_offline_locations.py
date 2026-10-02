@@ -41,12 +41,12 @@ def test_private_database_open_and_coarse_global_lookup(tmp_path, monkeypatch):
     path.write_bytes(b"synthetic database")
     path.chmod(0o600)
     fake = FakeReader()
-    def open_database(descriptor, mode):
-        assert os.read(descriptor, 9) == b"synthetic"
+    def open_database(source, mode):
+        assert source.read(9) == b"synthetic"
         assert mode == "fd"
         return fake
     monkeypatch.setitem(sys.modules, "maxminddb", SimpleNamespace(
-        Mode=SimpleNamespace(FD="fd"), open_database=open_database))
+        MODE_FD="fd", open_database=open_database))
     regions = OfflineLocations.open(path)
     answer = regions.lookup(["8.8.8.8", "192.168.1.1", "9.9.9.9"])
     assert answer == {"schema": "dashboard-offline-locations-v1", "status": "available",
@@ -69,7 +69,7 @@ def test_private_database_rejects_symlink_or_readable_file(tmp_path, monkeypatch
     path = directory / "regions.mmdb"
     path.write_bytes(b"synthetic database")
     path.chmod(0o644)
-    monkeypatch.setitem(sys.modules, "maxminddb", SimpleNamespace(Mode=SimpleNamespace(FD="fd")))
+    monkeypatch.setitem(sys.modules, "maxminddb", SimpleNamespace(MODE_FD="fd"))
     with pytest.raises(ValueError):
         OfflineLocations.open(path)
     path.chmod(0o600)
@@ -134,3 +134,11 @@ def test_http_configured_lookup_returns_only_coarse_public_regions():
         server.shutdown()
         server.server_close()
         worker.join(timeout=2)
+
+
+def test_real_mmdb_reader_interface_reaches_database_validation(tmp_path):
+    maxminddb = pytest.importorskip('maxminddb')
+    path=tmp_path/'invalid.mmdb';path.write_bytes(b'not a database');path.chmod(0o600)
+    with pytest.raises(ValueError) as error:
+        OfflineLocations.open(path)
+    assert isinstance(error.value.__cause__, maxminddb.InvalidDatabaseError)

@@ -68,7 +68,7 @@ def test_local_defaults_are_host_only_and_missing_reports_do_not_override_collec
     assert result["results"]["osquery"]["package_rows"] == 42
     assert "not installed" in result["status"]["nmap"]
     assert "not installed" in result["status"]["clamav"]
-    assert result["advisory"]["osquery"] == "Qwen unavailable (DISABLED)."
+    assert result["advisory"]["osquery"] == "Local AI unavailable (DISABLED)."
     assert 86000 < worker._next_collection["clamav"] - time.monotonic() <= 86400
 
 
@@ -286,3 +286,23 @@ def test_local_hud_companion_route_is_read_only_and_query_closed(tmp_path):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+
+
+def test_slow_advice_does_not_block_collection_and_queue_coalesces(tmp_path,monkeypatch):
+    from threading import Event,Thread
+    entered,release=Event(),Event();calls=[]
+    config=_config(tmp_path,'[qwen]\nadvisory=true\n')
+    worker=CompanionAutomation(config,AISettings(enabled=True))
+    def slow(*args,**kwargs):
+        calls.append(args[1]);entered.set();assert release.wait(3)
+        return 'Counts are not proof of safety.'
+    monkeypatch.setattr('megalodon.ai_provider.generate',slow)
+    thread=Thread(target=worker._advice_loop,daemon=True);worker._threads=[thread];thread.start()
+    try:
+        worker._publish('nmap',{'count':1},'test');assert entered.wait(1)
+        for n in range(20):worker._publish('osquery',{'count':n},'test')
+        assert worker.snapshot()['results']['osquery']=={'count':19}
+        assert worker._advice_jobs=={'osquery':{'count':19}}
+    finally:
+        worker._stop.set();release.set();worker.stop()
+    assert not thread.is_alive()
