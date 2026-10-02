@@ -47,6 +47,11 @@
           "declared_sha256": "sha256:8e8ff70716a4f565ba9c7e91d86e3e60e4baac9794b944e5c35b772e7aedb21e",
           "name": "maxminddb",
           "version": "3.2.0"
+        },
+        {
+          "declared_sha256": "sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
+          "name": "pyyaml",
+          "version": "6.0.3"
         }
       ],
       "id": "installer-linux-cp312",
@@ -56,8 +61,8 @@
       "path": "constraints/installer-linux-cp312.txt",
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
-      "role": "native installer rehearsal with geography reader",
-      "source_sha256": "571ad3fa18d2b6417d6b43c485d94683d14ba4c0791bfcc11d73cb88199ac8d7"
+      "role": "native installer rehearsal with geography and knowledge readers",
+      "source_sha256": "886143e7ef4b522ad885f5723f48e0cf0fb2c5f76f81e707967166eaf4c7a097"
     },
     {
       "direct_packages": [
@@ -100,6 +105,11 @@
           "declared_sha256": "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c",
           "name": "pytest",
           "version": "9.1.1"
+        },
+        {
+          "declared_sha256": "sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d",
+          "name": "pyyaml",
+          "version": "6.0.3"
         },
         {
           "declared_sha256": "sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231",
@@ -128,7 +138,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "required test job",
-      "source_sha256": "edd20e2529e1ede4d16d6ab6c702f0261714200f54f97454cc6b62c449864811"
+      "source_sha256": "d1b8d84b0bf0d523c03b77cb0d07313055167b63e3d14f6f832a070bbddaeb53"
     },
     {
       "direct_packages": [
@@ -173,6 +183,11 @@
           "version": "9.1.1"
         },
         {
+          "declared_sha256": "sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
+          "name": "pyyaml",
+          "version": "6.0.3"
+        },
+        {
           "declared_sha256": "sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231",
           "name": "referencing",
           "version": "0.37.0"
@@ -194,7 +209,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "wheel-smoke tests",
-      "source_sha256": "8b4fb83421fbbbe9caa14c18239773d840c8ed3cd2ca3661ef26864b9d41add7"
+      "source_sha256": "2cad9abedb2bd641c9d9fc56db85b4e2ddaa031cfd2e49b337f2869f3b55638b"
     },
     {
       "direct_packages": [
@@ -239,7 +254,8 @@
       ],
       "test": [
         "pytest>=9.0.3,<10",
-        "jsonschema>=4.23,<5"
+        "jsonschema>=4.23,<5",
+        "PyYAML>=6.0.3,<7"
       ]
     },
     "requires_python": ">=3.11",

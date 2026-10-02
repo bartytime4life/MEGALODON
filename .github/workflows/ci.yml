@@ -53,7 +53,7 @@ jobs:
           python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
             --dest "$RUNNER_TEMP/test-cp311-wheelhouse" -r constraints/test-linux-cp311.txt
           test_wheels=("$RUNNER_TEMP"/test-cp311-wheelhouse/*.whl)
-          [ "${#test_wheels[@]}" -eq 12 ]
+          [ "${#test_wheels[@]}" -eq 13 ]
           sha256sum constraints/test-linux-cp311.txt "${test_wheels[@]}"
           python -m pip install -c constraints/ci.txt --no-index \
             --find-links "$RUNNER_TEMP/test-cp311-wheelhouse" --require-hashes \
@@ -236,7 +236,7 @@ jobs:
           python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
             --dest "$RUNNER_TEMP/test-wheelhouse" -r constraints/test-linux-cp312.txt
           test_wheels=("$RUNNER_TEMP"/test-wheelhouse/*.whl)
-          [ "${#test_wheels[@]}" -eq 11 ]
+          [ "${#test_wheels[@]}" -eq 12 ]
           sha256sum constraints/test-linux-cp312.txt "${test_wheels[@]}"
           python -m pip install -c constraints/ci.txt --no-index \
             --find-links "$RUNNER_TEMP/test-wheelhouse" --require-hashes \

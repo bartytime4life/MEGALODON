@@ -27,6 +27,7 @@ MAX_RECEIPT = 8192
 LOCK = "constraints/build-linux-cp312.txt"
 INSTALLER_LOCK = "constraints/installer-linux-cp312.txt"
 GEO_WHEEL = "maxminddb-3.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+KNOWLEDGE_WHEEL = "pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
 CHECKS = {
     "initial_install": "real_release_ready",
     "same_source_replacement": "new_real_release_selected_previous_retained",
@@ -63,10 +64,13 @@ def locked_wheels(checkout):
     require(len(result) == 4, "BUILD_LOCK_SET")
     lines = [line for line in installer_raw.decode("utf-8").splitlines()
              if line and not line.startswith("#")]
-    require(len(lines) == 2 and lines[0] == "-r build-linux-cp312.txt", "INSTALLER_LOCK_SET")
+    require(len(lines) == 3 and lines[0] == "-r build-linux-cp312.txt", "INSTALLER_LOCK_SET")
     match = re.fullmatch(r"maxminddb==3\.2\.0 --hash=sha256:([0-9a-f]{64})", lines[1])
     require(match is not None, "INSTALLER_LOCK_FORMAT")
     result[GEO_WHEEL] = "sha256:" + match.group(1)
+    match = re.fullmatch(r"pyyaml==6\.0\.3 --hash=sha256:([0-9a-f]{64})", lines[2])
+    require(match is not None, "INSTALLER_LOCK_FORMAT")
+    result[KNOWLEDGE_WHEEL] = "sha256:" + match.group(1)
     # Bind both exact lock texts in the existing receipt field.
     closure = canonical({"build": digest(raw), "installer": digest(installer_raw)})
     return digest(closure), result

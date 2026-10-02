@@ -91,9 +91,9 @@
       "classification": "workflow",
       "purpose": "browser acceptance",
       "bytes": 3992,
-      "sha256": "c48726b139c9e3066ebfccac0b9568556318a1e15125d4e5a57d03cfe75c53ba",
+      "sha256": "a887fa9af42caf283d5b3a6fc4ecc2b62ed351987f0f5b27fa90229c799a2246",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -105,9 +105,9 @@
       "classification": "workflow",
       "purpose": "ci",
       "bytes": 17610,
-      "sha256": "c0a0bfdae0ac05a73a260211416d95c1840b7c545347bd8d1fb9e5fb6fc6b2b3",
+      "sha256": "2021465d87cd390677897c7dfb4edfa2fd8dfa0ba5a4da4b4038a9bce128e3e7",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -673,10 +673,10 @@
       "path": "constraints/ci.txt",
       "classification": "configuration",
       "purpose": "ci",
-      "bytes": 824,
-      "sha256": "069642076e4aff979a114580197a4f017880f11e3ad01705b90bf23c810a7500",
+      "bytes": 838,
+      "sha256": "9d0b8379f9cd657550a360991ba7c394465e68e42c47f3889f968308e41c6c7b",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -687,10 +687,10 @@
       "path": "constraints/installer-linux-cp312.txt",
       "classification": "configuration",
       "purpose": "installer linux cp312",
-      "bytes": 424,
-      "sha256": "571ad3fa18d2b6417d6b43c485d94683d14ba4c0791bfcc11d73cb88199ac8d7",
+      "bytes": 684,
+      "sha256": "886143e7ef4b522ad885f5723f48e0cf0fb2c5f76f81e707967166eaf4c7a097",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -701,10 +701,10 @@
       "path": "constraints/test-linux-cp311.txt",
       "classification": "configuration",
       "purpose": "test linux cp311",
-      "bytes": 2881,
-      "sha256": "edd20e2529e1ede4d16d6ab6c702f0261714200f54f97454cc6b62c449864811",
+      "bytes": 3143,
+      "sha256": "d1b8d84b0bf0d523c03b77cb0d07313055167b63e3d14f6f832a070bbddaeb53",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -715,10 +715,10 @@
       "path": "constraints/test-linux-cp312.txt",
       "classification": "configuration",
       "purpose": "test linux cp312",
-      "bytes": 2568,
-      "sha256": "8b4fb83421fbbbe9caa14c18239773d840c8ed3cd2ca3661ef26864b9d41add7",
+      "bytes": 2837,
+      "sha256": "2cad9abedb2bd641c9d9fc56db85b4e2ddaa031cfd2e49b337f2869f3b55638b",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -1331,8 +1331,8 @@
       "path": "contracts/build-inputs/v1/inventory.json",
       "classification": "fixture-or-contract",
       "purpose": "inventory",
-      "bytes": 8600,
-      "sha256": "6165c2f4970334da99dfc1720b70b94fbcec6c277baaadbc4464839d544a5e83",
+      "bytes": 9189,
+      "sha256": "79e217526a1a1e2f1f86753e2929b8097155dc8cd6a139cafe0d047410df0ee8",
       "dependencies": [
         "build_system",
         "limitations",
@@ -5443,8 +5443,8 @@
       "path": "docs/security-knowledge-acceptance.md",
       "classification": "documentation",
       "purpose": "Local knowledge and patterns: acceptance record",
-      "bytes": 6359,
-      "sha256": "86bcaae413fd81196bc24dfdcac77c28e2641b922a3fd281cb61ddcf31da124c",
+      "bytes": 7124,
+      "sha256": "0bd355fcee0efba6d7d26a44c3cf1b701f8c14779754744360a2c776ce4c1020",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -13499,8 +13499,8 @@
       "path": "pyproject.toml",
       "classification": "configuration",
       "purpose": "pyproject",
-      "bytes": 1091,
-      "sha256": "2bd435053881f7e2651b433acda3fd63c7c31b880bda55fe9f7282d77c80a938",
+      "bytes": 1111,
+      "sha256": "d8ff8b5a3ce5e5052630250a7a8ab4880b3fc913d11a876b207fa19f71d0ee89",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -16603,8 +16603,8 @@
       "path": "tests/test_installer_lifecycle_evidence.py",
       "classification": "test",
       "purpose": "Fail-closed boundaries for the separate real installer qualification.",
-      "bytes": 5459,
-      "sha256": "d65196bd5dd624611a82d687266c6edeb3449c532f1de13c7ae13e459e4f80dd",
+      "bytes": 5494,
+      "sha256": "6d81452fbd705db79984fdfbe19cfa54da7b4f2b75986fcddd8d64632d46572c",
       "dependencies": [
         "copy",
         "importlib.util",
@@ -16614,7 +16614,7 @@
         "subprocess",
         "sys"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17873,7 +17873,7 @@
       "classification": "test",
       "purpose": "Closed workflow checks and synthetic venv probes; no package acquisition.",
       "bytes": 9217,
-      "sha256": "7793505d5e7b8d662478fd3c820175a7cf19a346716c90945dbfb7df196bcdd3",
+      "sha256": "48bc1371cf58ea213cba27e75d1270e8d82ded9160c2b92be64533b4c583a212",
       "dependencies": [
         "importlib.util",
         "json",
@@ -17885,7 +17885,7 @@
         "types",
         "venv"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19118,8 +19118,8 @@
       "path": "tools/build_input_inventory.py",
       "classification": "source",
       "purpose": "Build and verify the bounded MEGALODON source build-input inventory.",
-      "bytes": 10714,
-      "sha256": "7075c29a859ae85fb9d07fd9d5dd3df35c1138f4c3b56f8f1c5ca17627fac539",
+      "bytes": 10791,
+      "sha256": "e5c195a4435702b6d9ac6ed76bd07ae7906e605ea742fe908b3290851626b5bb",
       "dependencies": [
         "__future__",
         "argparse",
@@ -19130,7 +19130,7 @@
         "sys",
         "tomllib"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19244,8 +19244,8 @@
       "path": "tools/check_sdist_environment.py",
       "classification": "source",
       "purpose": "Read-only origin check for the prepared CI sdist-test virtual environment.",
-      "bytes": 2667,
-      "sha256": "d48ddff983413373b5df6cf01e18410e685150d68e5468f89779aa243262a4d0",
+      "bytes": 2677,
+      "sha256": "bdf1a2a10eeea4b73783095ddf6ba46827d17e8777d7f1c078f0bf248cd2a215",
       "dependencies": [
         "importlib.metadata",
         "json",
@@ -19253,7 +19253,7 @@
         "site",
         "sys"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19299,8 +19299,8 @@
       "path": "tools/installer_lifecycle_evidence.py",
       "classification": "source",
       "purpose": "Real Linux installer rehearsal in disposable paths, never host acceptance.",
-      "bytes": 18824,
-      "sha256": "20035089e8b65c24b49942e9f6a5c7764e5d0e54e11ff8dbebf08270975fef6b",
+      "bytes": 19135,
+      "sha256": "1ab1432e79cc294ba67c437ef9d3ad68222f622a616711f9b7bed8ed017dd715",
       "dependencies": [
         "__future__",
         "argparse",

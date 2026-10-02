@@ -11,7 +11,7 @@ import sys
 
 DEPENDENCIES = (
     "attrs", "build", "iniconfig", "jsonschema", "jsonschema-specifications",
-    "packaging", "pluggy", "pygments", "pyproject-hooks", "pytest",
+    "packaging", "pluggy", "pygments", "pyproject-hooks", "pytest", "pyyaml",
     "referencing", "rpds-py", "setuptools", "typing-extensions",
 )
 

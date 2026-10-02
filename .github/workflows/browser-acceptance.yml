@@ -62,7 +62,7 @@ jobs:
           python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
             --dest "$RUNNER_TEMP/browser-cp311-wheelhouse" -r constraints/browser-linux-cp311.txt
           browser_wheels=("$RUNNER_TEMP"/browser-cp311-wheelhouse/*.whl)
-          [ "${#browser_wheels[@]}" -eq 15 ]
+          [ "${#browser_wheels[@]}" -eq 16 ]
           sha256sum constraints/browser-linux-cp311.txt constraints/test-linux-cp311.txt "${browser_wheels[@]}"
           python -m pip install -c constraints/ci.txt --no-index \
             --find-links "$RUNNER_TEMP/browser-cp311-wheelhouse" --require-hashes \
