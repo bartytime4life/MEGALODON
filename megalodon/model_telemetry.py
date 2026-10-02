@@ -24,6 +24,18 @@ ERROR_STATES = {'REQUEST_CANCELLED':'cancelled','PROVIDER_ERROR':'provider_error
                 'INVALID_RESPONSE':'invalid_response','OLLAMA_UNAVAILABLE':'ollama_unavailable',
                 'MODEL_MISSING':'model_missing','MODEL_MISMATCH':'policy_rejection','POLICY_REJECTION':'policy_rejection','MODEL_NOT_LOCAL':'model_not_local',
                 'CONCURRENCY_LIMIT_REACHED':'model_loading','CONCURRENCY_CONTROL_UNAVAILABLE':'concurrency_unavailable'}
+RECENT_RESPONSE_SECONDS = 300
+
+
+def _recent_response(value):
+    if not isinstance(value, str) or not value.endswith('Z'):
+        return False
+    try:
+        observed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        age = (datetime.now(timezone.utc) - observed).total_seconds()
+    except ValueError:
+        return False
+    return 0 <= age <= RECENT_RESPONSE_SECONDS
 
 
 class ModelTelemetry:
@@ -72,11 +84,12 @@ class ModelTelemetry:
         if state=='model_available' and error:state=ERROR_STATES.get(error,'invalid_response')
         if stale:state='stale'
         if observation.get('running'):state='generating'
-        verified=state=='model_available' and bool(accepted) and not error
+        verified=state=='model_available' and _recent_response(accepted) and not error
         message=MESSAGES.get(state,'Checking the configured local model.' if state=='checking' else
             'Model observation is stale; checking again.' if state=='stale' else
             'Configured model is present; verify its response in Setup.' if not accepted else
-            'Configured model is present. Last accepted response '+accepted+'.')
+            'Configured model is present. Last accepted response '+accepted+
+            ('.' if verified else ' does not confirm current readiness; verify again.'))
         workflow='connected' if verified else 'ready' if state=='model_available' else 'collecting' if state in ('checking','model_loading','generating') else 'needs_setup' if state=='disabled' else 'error'
         return dict(timeout_seconds=settings.timeout_seconds,running=bool(observation.get('running')),started_at=observation.get('started_at'),options=value.get('options',[]),truncated=value.get('truncated',False),compute_mode=settings.compute_mode,selected_digest=settings.model_digest,state=workflow,model=settings.model,model_state=state,model_present=value.get('state')=='model_available',
             message=(settings.model+' · '+('CPU' if settings.compute_mode=='cpu' else 'Ollama automatic compute')+' advice. '+message)[:512],updated_at=value.get('checked_at'),

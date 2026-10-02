@@ -34,6 +34,10 @@ that an address is hostile or execute their generated commands.
   memory reported by Ollama; it is not MEGALODON process RSS or GPU utilization.
   Metadata refreshes are shared and cached for 30 seconds, without model inference;
   a busy provider lock is retried after two seconds.
+  Actions labels a model as having a recent AI response only for five minutes
+  after an accepted response while the current artifact remains available.
+  After that, it shows the model as available and asks for a new verification.
+  Setup displays the last accepted response and last attempt separately.
   Last-response observations are held in memory and reset on service restart;
   existing evidence and response receipts follow managed retention.
 

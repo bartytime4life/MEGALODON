@@ -17,6 +17,10 @@ process.stdin.on('end',async()=>{
  vm.createContext(context);vm.runInContext(code,context);await settle();assert.equal(requests.length,0,'offscreen tool list does not poll');
  intersection([{isIntersecting:true}]);await settle();assert.equal(requests.length,1);assert.equal(requests[0].path,'/api/support-workflows');assert.equal(requests[0].options.method,'GET');assert.equal(requests[0].options.headers['X-Megalodon-Check'],'1');assert.equal(get('integrations-cards').children.length,10);
  const rows=()=>get('integrations-cards').children;assert.match(full(rows()[0]),/Data connected/);assert.match(full(rows()[1]),/Collecting/);assert.match(full(rows()[3]),/Configured · stopped/);assert.match(full(rows()[4]),/Standby alternative/);assert.match(full(rows()[0]),/2026-09-30 20:09:30 UTC/);assert.match(full(rows()[0]),/Source records  12 records/);
+ assert.match(full(rows()[8]),/Recent AI response/);assert.match(full(rows()[8]),/Model checked 2026-09-30 20:09:30 UTC/);
+ payload={...fixture,tools:fixture.tools.map(row=>row.id==='qwen'?{...row,state:'ready',message:'Past response; reverify for current readiness.'}:row)};await event('workflows-refresh');
+ assert.match(full(rows()[8]),/Model available/);assert.match(full(rows()[8]),/Past response; reverify/);
+ payload=fixture;await event('workflows-refresh');
  // Runtime status remains in the same list when static capability reference arrives.
  vm.runInContext("integrationState.snapshot={selected_platform:'linux',workflows:integrationIds.map((id,index)=>({id,software:workflowToolIds[index],selected_status:'optional',input_contract:'Synthetic input',output_contract:'Synthetic output',next_gate:'Synthetic reference',entry_point:null}))}; renderIntegrationMap();",context);
  assert.match(full(rows()[2]),/Capability reference · Optional/);rows()[2].open=true;for(const fn of rows()[2].events.toggle)fn();await event('workflows-refresh');assert.equal(rows()[2].open,true,'expanded tool survives status refresh');

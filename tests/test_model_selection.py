@@ -79,6 +79,21 @@ def test_names_are_inventory_identifiers_not_commands_or_paths(name):
     assert not valid_model_name(name)
 
 
+def test_past_or_future_response_does_not_claim_current_ai_readiness(model_provider):
+    settings,_,_=model_provider
+    telemetry=ModelTelemetry(lambda:settings)
+    telemetry.snapshot();telemetry._thread.join(2)
+    provider.generate(settings,'READY')
+    assert telemetry.snapshot()['state']=='connected'
+    key=(settings.model,settings.model_digest,settings.compute_mode)
+    for timestamp in ('2020-01-01T00:00:00Z','2999-01-01T00:00:00Z'):
+        provider._observations[key]['last_response_at']=timestamp
+        observed=telemetry.snapshot()
+        assert observed['state']=='ready' and not observed['inference_verified']
+        assert observed['last_response_at']==timestamp
+        assert 'verify again' in observed['message']
+
+
 def test_selector_persists_exact_identity_and_restarts(model_provider,tmp_path,monkeypatch):
     settings,state,requests=model_provider
     monkeypatch.setattr(support_config,'interfaces',lambda:[])

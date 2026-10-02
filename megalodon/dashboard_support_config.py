@@ -137,8 +137,10 @@ SUPPORT_CONFIG_JS = r'''
       if(!state.dirty.has('timeout_seconds'))el('support-model-timeout').value=String(model.timeout_seconds||300);
       if(!state.dirty.has('compute_mode'))el('support-model-compute').value=model.compute_mode;
       el('support-model-status').textContent=model.message+(model.truncated?' First 64 installed artifacts shown.':'');
-      const metrics=[];metrics.push('Response limit '+(model.timeout_seconds||300)+' s');if(model.running&&model.started_at)metrics.push('Working since '+time(model.started_at));if(model.last_response_at)metrics.push('Last accepted response '+time(model.last_response_at));if(model.response_ms!==null)metrics.push('Last request '+(model.response_ms/1000).toFixed(2)+' s');
-      if(model.loaded===false)metrics.push('Selected model is unloaded');else if(model.loaded===true)metrics.push('Loaded allocation '+(model.memory_bytes/1024**3).toFixed(1)+' GiB · GPU '+(model.vram_bytes/1024**3).toFixed(1)+' GiB');
+      const metrics=[];metrics.push('Response limit '+(model.timeout_seconds||300)+' s');if(model.running&&model.started_at)metrics.push('Working since '+time(model.started_at));
+      metrics.push(model.last_response_at?'Last accepted response '+time(model.last_response_at)+(model.inference_verified===true?' · recent':' · reverify for current readiness'):'No accepted response recorded for this model');
+      if(model.last_attempt_at)metrics.push('Last attempt '+time(model.last_attempt_at));if(model.response_ms!==null)metrics.push('Last attempt duration '+(model.response_ms/1000).toFixed(2)+' s');
+      if(model.loaded===false)metrics.push('Selected model is unloaded');else if(model.loaded===true&&model.memory_bytes!==null&&model.vram_bytes!==null)metrics.push('Loaded allocation '+(model.memory_bytes/1024**3).toFixed(1)+' GiB · GPU '+(model.vram_bytes/1024**3).toFixed(1)+' GiB');
       if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=metrics.join(' · ');
     }
     const selected=state.dirty.has('interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');

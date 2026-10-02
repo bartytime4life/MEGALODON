@@ -98,8 +98,9 @@ WORKFLOWS_JS = r'''
   }
   const periodic=new Set(['clamav','osquery','nmap']);
   const displayState=row=>!fresh()?'unavailable':periodic.has(row.id)&&row.state==='connected'?'saved_result':row.state;
-  const displayLabel=row=>fresh()?labels[displayState(row)]:'Status unavailable';
-  const timeLabel=row=>row.id==='tshark'?'Capture started':row.id==='clamav'?'Result saved':periodic.has(row.id)?'Result completed':'Source updated';
+  const aiLabels={connected:'Recent AI response',ready:'Model available',collecting:'Checking or working',needs_setup:'AI setup needed',error:'AI unavailable'};
+  const displayLabel=row=>fresh()?(row.id==='qwen'&&Object.hasOwn(aiLabels,displayState(row))?aiLabels[displayState(row)]:labels[displayState(row)]):'Status unavailable';
+  const timeLabel=row=>row.id==='tshark'?'Capture started':row.id==='clamav'?'Result saved':periodic.has(row.id)?'Result completed':row.id==='qwen'?'Model checked':'Source updated';
   const originalCard=integrationCard;
   function card(row){
     const item=document.createElement('details');item.className='integration-card workflow-card';item.dataset.state=displayState(row);item.open=view.open.has(row.id);
