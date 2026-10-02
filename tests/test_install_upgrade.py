@@ -10,7 +10,7 @@ def test_supported_extra_survives_replacement(layout):
     target=layout.releases/'old/venv/lib/python3.12/site-packages/scapy-2.6.1.dist-info'
     target.mkdir(parents=True)
     layout.current.symlink_to(layout.releases/'old')
-    assert install_lifecycle.selected_extras(layout)==['geo','capture']
+    assert install_lifecycle.selected_extras(layout)==['geo','knowledge','capture']
 
 
 @pytest.mark.parametrize('failed',[False,True])

@@ -246,6 +246,7 @@ class ReportService(RetainedEvidenceReader):
 
     def _aggregate(self, identifier, start, end):
         sources, gaps = self._sources(start, end)
+        sources=[(entry,maximum) for entry,maximum in sources if entry['category'] not in {'baselines','intelligence'}]
         result = dict(schema='megalodon-visual-report-v1', id=identifier, created_at=utc(self.clock()), start=utc(start), end=utc(end),
                       title='Your network report', timezone=str(self.zone), summary=dict(packet_records=0, packet_bytes=0, finding_count=0, resource_samples=0, network_samples=0, response_count=0),
                       packet_protocols=Counter(), endpoints=Counter(), finding_severities=Counter(), findings=[], responses=[], timeline=[0] * 48,
@@ -431,6 +432,13 @@ class ReportService(RetainedEvidenceReader):
                                   compacted_segments=len(compacted_segments))
         status = self.evidence.snapshot()
         result['storage'] = {k: status.get(k) for k in ('policy', 'used_bytes', 'oldest_at', 'newest_at', 'estimated_days', 'warnings')}
+        intelligence=getattr(self,'intelligence',None)
+        if intelligence is not None:
+            result['intelligence']=intelligence.report_context(start,end)
+            if result['intelligence']['truncated']:
+                result['coverage']['gaps'].append('Pattern explanations have bounded or incomplete coverage; see their details.')
+            anchors=[v['source_start'] for v in result['intelligence']['reviews']]
+            if anchors:result['retention_source_at']=min(anchors+[result['coverage']['oldest_at']] if result['coverage']['oldest_at'] else anchors)
         return result
 
     def _run(self, identifier, start, end, scheduled):
@@ -444,7 +452,7 @@ class ReportService(RetainedEvidenceReader):
                 if len(raw) > MAX_BODY:
                     raise ValueError('Report exceeds its bounded output size; choose a shorter interval.')
                 # A report with no source still expires by its selected start.
-                source_at = result['coverage']['oldest_at'] or utc(max(start, self.clock()-self.evidence.retention_days*86400+1))
+                source_at = result.get('retention_source_at') or result['coverage']['oldest_at'] or utc(max(start, self.clock()-self.evidence.retention_days*86400+1))
                 if epoch(source_at) < self.clock()-self.evidence.retention_days*86400+1:
                     raise ValueError('The source interval expired while the report was being made.')
                 chunks = [raw[i:i+CHUNK_BYTES] for i in range(0, len(raw), CHUNK_BYTES)]
@@ -453,15 +461,16 @@ class ReportService(RetainedEvidenceReader):
                     self._check()
                     rows = [dict(observed_at=source_at, source='report-chunk', data=dict(kind='chunk', report_id=identifier, index=index, content=base64.b64encode(chunks[index]).decode())) for index in range(offset, min(offset+128, len(chunks)))]
                     with self.evidence.lock:
-                        self.evidence.append_records('reports', rows)
+                        self.evidence.append_records('reports', rows,dependencies=result.get('intelligence',{}).get('dependencies',[]))
                         entry = self.evidence._generic['reports']
                         with self.evidence._db(entry) as db:
                             last_id = db.execute('SELECT MAX(id) FROM records').fetchone()[0]
                         references.append(dict(segment=entry['id'], first=last_id-len(rows)+1, last=last_id))
                 manifest = dict(id=identifier, kind='manifest', state='incomplete' if not result['coverage']['aggregation_complete'] else 'ready', created_at=result['created_at'], start=result['start'], end=result['end'], title=result['title'], source_at=source_at, coverage=result['coverage'], summary=result['summary'], chunks=len(chunks), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(), references=references)
+                manifest['derived_dependencies']=result.get('intelligence',{}).get('dependencies',[])
                 checkpoint = ('reports_schedule', dict(slot=scheduled['slot'], at=scheduled['at'], report_id=identifier)) if scheduled else ('reports_last_completed', dict(report_id=identifier))
                 self._check()
-                self.evidence.append_records('reports', [dict(observed_at=source_at, source='report-manifest', data=manifest)], checkpoint=checkpoint)
+                self.evidence.append_records('reports', [dict(observed_at=source_at, source='report-manifest', data=manifest)], checkpoint=checkpoint,dependencies=manifest['derived_dependencies'])
             with self.lock:
                 if scheduled:
                     self.settings.update(completed_slot=scheduled['slot'], completed_at=scheduled['at'], pending=None, last_error=None)
@@ -514,11 +523,17 @@ class ReportService(RetainedEvidenceReader):
         result = []
         for raw in self._manifest_values():
             value = {k:v for k,v in raw.items() if k not in {'kind','sha256','chunks','bytes','references'}}
-            if epoch(raw['source_at']) < cutoff or any(ref['segment'] not in entries for ref in raw['references']):
+            if epoch(raw['source_at']) < cutoff or any(ref['segment'] not in entries for ref in raw['references']) or not self._derived_available(raw):
                 value['state'] = 'expired'
             value.update(html_url=f"/api/reports/{value['id']}/html", json_url=f"/api/reports/{value['id']}/json", csv_url=f"/api/reports/{value['id']}/csv")
             result.append(value)
         return result
+
+    def _derived_available(self,manifest):
+        with self.evidence.lock:
+            entries=[e for e in self.evidence._catalog['entries'] if e['state'] in {'open','closed'}]
+        available={e['id'] for e in entries}|{e['source_segment'] for e in entries if e['category']=='packet_rollups' and e['state']=='closed' and e.get('source_segment')}
+        return set(manifest.get('derived_dependencies',[]))<=available
 
     def snapshot(self):
         reports = self.manifests()
@@ -559,7 +574,7 @@ class ReportService(RetainedEvidenceReader):
                     raise ValueError('Saved report exceeds read bounds.')
         if manifest is None or len(chunks)!=manifest['chunks'] or manifest['bytes']>MAX_BODY:
             raise ValueError('Saved report expired or is incomplete; make a new report.')
-        if epoch(manifest['source_at']) < self.clock()-self.evidence.retention_days*86400:
+        if epoch(manifest['source_at']) < self.clock()-self.evidence.retention_days*86400 or not self._derived_available(manifest):
             raise ValueError('Saved report source history has expired.')
         raw = b''.join(base64.b64decode(chunks[index], validate=True) for index in range(manifest['chunks']))
         if len(raw)!=manifest['bytes'] or hashlib.sha256(raw).hexdigest()!=manifest['sha256']:
@@ -767,6 +782,21 @@ def render_html(value):
         parts+=['<h3>Latest retained network map</h3><p>'+e(_friendly(network['observed_at'],zone))+'</p>',_network_chart(data),'<details><summary>Device table and observation source</summary>',_table(['Device / address','Role','Source','Last seen'],[(n.get('name',n.get('ip',n.get('id'))),n.get('role'),n.get('source'),_friendly(n.get('last_seen'),zone)) for n in nodes[:100]]),'<p class="muted">The table includes up to 100 nodes; the map includes the first 16. Discovery does not reveal traffic between other devices.</p></details>']
     else:parts+=['<p class="notice">No retained local-network map was available for this period.</p>']
     parts+=['</section><section><h2>Recorded response outcomes</h2><p class="muted">A proposed action has not run. Failed or unknown outcomes must not be treated as successful protection. Advisory notes are shown as notes, not performed actions.</p>',_table(['Time','Source','Recorded state','Action or note'],[(_friendly(r['observed_at'],zone),r['source'],r['state'],r['detail']) for r in value['responses']],empty='No response actions or advisory receipts were returned.'),'<details><summary>Finding details and evidence references</summary>',_table(['Time','Source','Finding','Severity','Source → destination','Evidence reference'],[(_friendly(r['observed_at'],zone),r['source'],r['title'],r['severity'],str(r.get('src_ip'))+' → '+str(r.get('dst_ip')),r['evidence_reference']) for r in value['findings']],empty='No finding details were retained.'),'</details></section>']
+    intelligence=value.get('intelligence',{})
+    parts+=['<section><h2>Patterns and local AI reviews</h2><p>'+e(intelligence.get('coverage','No pattern reviews were included in this report.'))+'</p>']
+    for review in intelligence.get('reviews',[]):
+        analysis=review.get('analysis',{})
+        parts+=['<article><h3>'+e(review['device'])+' · '+e(review['label'])+'</h3>',
+                '<h4>What happened</h4><p>'+e(review['what_happened'])+'</p><h4>Why it matters</h4><p>'+e(review['why_it_matters'])+'</p>',
+                '<h4>What you can do</h4><p>'+e(review['what_you_can_do'])+' · Approval is required for device or connection changes.</p>',
+                '<p>'+e(analysis.get('explanation',analysis.get('message','AI explanation has not been generated.')))+'</p>',
+                '<details><summary>Measurements, alternatives and references</summary>',
+                _table(['Field','Value'],[(k,json.dumps(v)) for k,v in review['facts'].items()]),
+                '<p>'+e(analysis.get('alternative',''))+'</p><p>'+e(analysis.get('missing',''))+'</p>',
+                _table(['Reference','Source'],[(r['id'],r['url']) for r in analysis.get('references',[])]),
+                _table(['Evidence reference'],[(r,) for r in review['evidence_refs']]),
+                '<p>'+e(' '.join(review['missing_information']))+'</p></details></article>']
+    parts+=['</section>']
     storage=value.get('storage',{});policy=storage.get('policy') or {}
     modes={'packet_metadata':'detailed packet metadata','connection_summaries':'connection summaries'}
     policy_text=(str(policy['retention_days'])+' days · '+_size_label(policy.get('cap_bytes'))+' maximum · '+modes.get(policy.get('recording_mode'),'recording detail unavailable')) if policy.get('retention_days') else 'Storage policy unavailable'

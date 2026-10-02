@@ -16,7 +16,7 @@ COMMIT, TREE = "a" * 40, "b" * 40
 @pytest.fixture
 def receipt():
     lock, wheels = tool.locked_wheels(ROOT)
-    assert len(wheels) == 5 and tool.GEO_WHEEL in wheels
+    assert len(wheels) == 6 and tool.GEO_WHEEL in wheels and tool.KNOWLEDGE_WHEEL in wheels
     return {
         "schema": "native-installer-lifecycle-v1", "status": "same_source_rehearsal_passed",
         "source": {"commit": COMMIT, "tree": TREE, "working_tree_dirty": False},

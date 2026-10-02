@@ -1,6 +1,6 @@
 # Test and editable-backend wheel requirements, NOT constraints. Install with -r.
 # Profile: Linux glibc x86_64 / CPython 3.11 / required test job only.
-# pytest + jsonschema closure plus setuptools; versions match constraints/ci.txt.
+# pytest + jsonschema + knowledge-parser closure plus setuptools; matches ci.txt.
 # Pure-Python wheel hashes retain the existing CPython 3.12 profiles' provenance.
 # The cp311 rpds-py wheel hash was read from its exact PyPI page on 2026-09-12 UTC.
 # One wheel per entry; no source archives, markers, extras, or alternate hashes.
@@ -21,6 +21,9 @@ pluggy==1.6.0 --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d83
 pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
 # pytest-9.1.1-py3-none-any.whl — https://pypi.org/project/pytest/9.1.1/#files
 pytest==9.1.1 --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c
+# pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+# https://pypi.org/project/PyYAML/6.0.3/#files (verified 2026-10-02 UTC)
+pyyaml==6.0.3 --hash=sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d
 # referencing-0.37.0-py3-none-any.whl — https://pypi.org/project/referencing/0.37.0/#files
 referencing==0.37.0 --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
 # rpds_py-2026.6.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl — https://pypi.org/project/rpds-py/2026.6.3/#files

@@ -33,8 +33,8 @@ def assert_composition(text):
     inherited = [ENTRY.fullmatch(line) for line in
                  (ROOT / "constraints/test-linux-cp311.txt").read_text().splitlines()
                  if line and not line.startswith("#")]
-    assert len(inherited) == 12 and all(inherited)
-    assert len({m[1] for m in inherited} | BROWSER_PINS.keys()) == 15
+    assert len(inherited) == 13 and all(inherited)
+    assert len({m[1] for m in inherited} | BROWSER_PINS.keys()) == 16
 
 
 def assert_wiring(text):
@@ -53,7 +53,7 @@ def assert_wiring(text):
         'mkdir "$RUNNER_TEMP/browser-cp311-wheelhouse"\n',
         'python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \\\n'
         '            --dest "$RUNNER_TEMP/browser-cp311-wheelhouse" -r ' + LOCK + '\n',
-        '[ "${#browser_wheels[@]}" -eq 15 ]\n',
+        '[ "${#browser_wheels[@]}" -eq 16 ]\n',
         'sha256sum ' + LOCK + ' constraints/test-linux-cp311.txt "${browser_wheels[@]}"\n',
         'python -m pip install -c constraints/ci.txt --no-index \\\n'
         '            --find-links "$RUNNER_TEMP/browser-cp311-wheelhouse" --require-hashes \\\n'
@@ -114,7 +114,7 @@ def test_composition_weakenings_fail(old, new):
     ('or platform.libc_ver()[0] != "glibc"', ""),
     ("pip download --require-hashes", "pip download"),
     ("--only-binary=:all:", "--prefer-binary"),
-    ('-eq 15 ]', '-eq 3 ]'),
+    ('-eq 16 ]', '-eq 3 ]'),
     ("sha256sum constraints/browser-linux-cp311.txt", "echo constraints/browser-linux-cp311.txt"),
     ("--find-links \"$RUNNER_TEMP/browser-cp311-wheelhouse\" --require-hashes",
      "--find-links \"$RUNNER_TEMP/browser-cp311-wheelhouse\""),

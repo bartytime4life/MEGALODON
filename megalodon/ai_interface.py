@@ -11,8 +11,8 @@ from .ai_provider import AIProviderError, generate, _strict_pairs
 
 QUESTIONS: dict[str, tuple[str, frozenset[str]]] = {
     "seeing": ("What is MEGALODON seeing?", frozenset({"megalodon.status", "megalodon.telemetry.summary", "megalodon.alerts.query"})),
-    "changed": ("What changed during the last hour?", frozenset({"megalodon.telemetry.summary", "megalodon.alerts.query"})),
-    "alerts": ("Why are recent alerts present?", frozenset({"megalodon.alerts.query"})),
+    "changed": ("What changed during the last hour?", frozenset({"megalodon.telemetry.summary", "megalodon.alerts.query", "megalodon.patterns.status"})),
+    "alerts": ("Why are recent alerts present?", frozenset({"megalodon.alerts.query", "megalodon.knowledge.search", "megalodon.patterns.status"})),
     "integrations": ("Which integrations are available?", frozenset({"megalodon.integrations.status"})),
     "model": ("Is Ollama healthy and which Qwen model is active?", frozenset({"megalodon.model.status"})),
     "safe": ("What can be safely fixed automatically?", frozenset({"megalodon.status", "megalodon.alerts.query"})),

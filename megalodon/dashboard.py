@@ -479,6 +479,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     network_topology = None
     flow_ingestor = None
     reports = None
+    knowledge = None
+    intelligence = None
     automation_preview_lock = Lock()
     maintenance_lock = Lock()
 
@@ -527,6 +529,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path == '/api/reports' or route.path.startswith('/api/reports/'):
             self._reports_read(route)
+            return
+        if route.path in {'/api/knowledge','/api/knowledge/search','/api/intelligence'}:
+            from .intelligence_http import read
+            read(self,route)
             return
         if route.path in {'/api/storage','/api/storage/history','/api/network','/api/network/history'}:
             provider=self.network_topology if route.path.startswith('/api/network') else self.evidence
@@ -1006,6 +1012,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path in {'/api/reports/create', '/api/reports/cancel', '/api/reports/schedule'}:
             self._reports_action()
             return
+        if self.path in {'/api/knowledge','/api/intelligence'}:
+            from .intelligence_http import action
+            action(self)
+            return
         if self.path == "/api/ai/ask":
             self._ai_ask()
             return
@@ -1285,7 +1295,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             from .managed_receipts import ManagedReceipts
             with (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
                 answer = ask(body["question"], Broker(
-                    self.store, receipts, self.support_config.settings.ai if self.support_config is not None else self.ai_settings, self.ai_blocking))
+                    self.store, receipts, self.support_config.settings.ai if self.support_config is not None else self.ai_settings, self.ai_blocking,
+                    knowledge=self.knowledge,intelligence=self.intelligence))
             self._send_json(answer)
         except (ValueError, OSError, RuntimeError) as exc:
             self._send_json({"schema": "megalodon-ai-answer-v1", "state": "failed",
@@ -1833,6 +1844,14 @@ def serve(
             handler.support_config.flow_ingestor=handler.flow_ingestor
             handler.support_config.capture.flow_ingestor=handler.flow_ingestor
             handler.network_topology=NetworkTopology(handler.support_config,handler.operations,evidence=handler.evidence)
+            from .knowledge import KnowledgeLibrary
+            from .intelligence import IntelligenceService
+            handler.knowledge=KnowledgeLibrary()
+            handler.intelligence=IntelligenceService(handler.evidence,handler.knowledge,handler.support_config)
+            handler.support_config.knowledge=handler.knowledge
+            handler.support_config.intelligence=handler.intelligence
+            handler.evidence.reference_library=handler.knowledge
+            handler.reports.intelligence=handler.intelligence
             handler.store=ManagedDashboardReader(handler.evidence)
             handler.local_checks=LocalChecks(handler.store,source_available=source_available)
             if hasattr(store,'close'):store.close()
@@ -1841,7 +1860,7 @@ def serve(
                 support_startup.configuration = handler.support_config
         server = ThreadingHTTPServer((host, port), handler)
     except BaseException:
-        for component,method in [(handler.support_config,'close'),(handler.defense,'close'),
+        for component,method in [(handler.intelligence,'close'),(handler.knowledge,'close'),(handler.support_config,'close'),(handler.defense,'close'),
                 (handler.network_topology,'close'),(handler.flow_ingestor,'close'),(handler.reports,'close'),(handler.evidence,'close')]:
             if component is not None:
                 try:getattr(component,method)()
@@ -1859,6 +1878,8 @@ def serve(
             handler.flow_ingestor.start()
             handler.network_topology.start()
             handler.reports.start()
+            handler.knowledge.start()
+            handler.intelligence.start()
         if handler.support_config is not None:
             handler.support_config.resume()
         if host_telemetry is not None:
@@ -1892,6 +1913,8 @@ def serve(
         if previous_sigterm is not None:
             signal.signal(signal.SIGTERM, previous_sigterm)
         if handler.reports is not None:handler.reports.close()
+        if handler.intelligence is not None:handler.intelligence.close()
+        if handler.knowledge is not None:handler.knowledge.close()
         if handler.support_config is not None:
             try:
                 handler.support_config.close()

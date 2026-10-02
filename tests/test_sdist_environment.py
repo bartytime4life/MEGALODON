@@ -107,8 +107,8 @@ def test_expected_dependency_origin_receipt(checker):
     module, _ = checker
     receipt = module.check_environment()
     assert receipt == {"schema": "sdist-environment-v1", "status": "passed",
-                       "dependency_count": 14, "system_site_packages": False, "user_site_enabled": False}
-    assert len(set(module.DEPENDENCIES)) == 14
+                       "dependency_count": 15, "system_site_packages": False, "user_site_enabled": False}
+    assert len(set(module.DEPENDENCIES)) == 15
 
 
 @pytest.mark.parametrize("case,code", [
@@ -172,7 +172,7 @@ def test_actual_venv_origin_check_with_inert_metadata(tmp_path, case):
     if case == "valid":
         assert result.returncode == 0, result.stderr
         receipt = json.loads(result.stdout.split(" ", 1)[1])
-        assert receipt["dependency_count"] == 14 and receipt["status"] == "passed"
+        assert receipt["dependency_count"] == 15 and receipt["status"] == "passed"
     else:
         assert result.returncode == 1
         code = "MISSING_DEPENDENCY" if case == "missing" else "EXTERNAL_DEPENDENCY"

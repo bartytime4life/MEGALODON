@@ -465,7 +465,7 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
                 command, 0, __import__('json').dumps(dict(version=__version__, inside=True,
                     package_sha256=package_digest(source/'megalodon'))), ""
             )
-        clean=Path(command[-1].removesuffix('[geo]'))
+        clean=Path(command[-1].removesuffix('[geo,knowledge]'))
         assert clean!=source and not (clean/'build').exists()
         assert (clean/'megalodon/__init__.py').read_bytes()==(source/'megalodon/__init__.py').read_bytes()
         return subprocess.CompletedProcess(command, 0, "", "")
@@ -480,7 +480,7 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
     assert release_id == receipt["id"]
     assert calls[0][1:4] == ["-I", "-m", "venv"]
     assert calls[1][1:4] == ["-I", "-m", "pip"]
-    clean=Path(calls[1][-1].removesuffix('[geo]'))
+    clean=Path(calls[1][-1].removesuffix('[geo,knowledge]'))
     assert clean.parent==layout.releases/release_id and not clean.exists()
     assert calls[2][1:3] == ["-I", "-c"]
     assert (layout.releases / release_id / "venv" / "bin" / "python").exists()

@@ -137,7 +137,11 @@ class Defense:
             with self._lock: approved_preview=deepcopy(self._plans.get(request.get('plan_id')))
             self._append(identifier,state='not_attempted',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),
                          message='Operator requested a fixed workflow.',request=request,approved_preview=approved_preview,result=None)
-            if action=='analyze':
+            if action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
+                answer=self.configuration.intelligence.explain_device(request['ip'])
+                result=dict(ip=request['ip'],**answer,basis='committed_evidence_and_local_references')
+                message='Local AI review saved with evidence and reference citations. Choose any response yourself.'
+            elif action=='analyze':
                 row=self.operations.endpoint(request['ip'])
                 evidence={k:row[k] for k in ('ip','scope','local','packets','bytes','active_connections','ports','flags')}
                 evidence['names']=row['names'][:3];evidence['findings']=row['findings'][:2]
@@ -200,7 +204,12 @@ class Defense:
                 with self._lock:self._active.pop(request['ip'],None)
                 message='The managed block is absent. Other firewall policies were left in place.'
             state='applied' if changed else 'awaiting_confirmation' if action=='plan_containment' else 'observed'
-            self._append(identifier,state=state,action=action,ip=request.get('ip') or (result or {}).get('ip'),message=message,result=result)
+            audit_result=result
+            if action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
+                # The explanation lives with its source-dependent managed record.
+                # The action ledger keeps a reference, never a longer-lived copy.
+                audit_result=dict(review_id=result['review_id'],action_status='not_attempted')
+            self._append(identifier,state=state,action=action,ip=request.get('ip') or (result or {}).get('ip'),message=message,result=audit_result)
             with self._lock:self._job.update(state='finished',message=message,result=result)
         except Exception as exc:
             provider_message = {

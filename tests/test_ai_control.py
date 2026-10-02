@@ -39,6 +39,38 @@ def request(tool, arguments=None, reason="Operator asked for local context"):
     return {"tool": tool, "arguments": {} if arguments is None else arguments, "reason": reason}
 
 
+def test_pattern_read_audit_keeps_references_not_expiring_measurements(broker):
+    from types import SimpleNamespace
+    broker.intelligence=SimpleNamespace(snapshot=lambda:dict(reviews=[dict(id='a'*24,
+        device='192.168.1.2',what_happened='Expiring facts')]))
+    result=broker.dispatch(request('megalodon.patterns.status'))
+    assert result['result']['review_references']==['a'*24]
+    assert 'Expiring facts' not in json.dumps(broker.receipts.latest(result['receipt_id']))
+
+
+def test_manual_inference_preempts_background_with_one_slot(monkeypatch):
+    import threading
+    from megalodon import ai_provider as provider
+    entered=threading.Event();outcomes=[]
+    def generate(settings,prompt,**kwargs):
+        if prompt=='background':
+            entered.set()
+            assert provider._request_context.cancel.wait(3)
+            raise AIProviderError('REQUEST_CANCELLED')
+        return 'manual answer'
+    monkeypatch.setattr(provider,'_generate',generate)
+    def background():
+        try:provider.generate(AISettings(enabled=True),'background',priority='background',owner='background-id')
+        except AIProviderError as exc:outcomes.append(exc.code)
+    worker=threading.Thread(target=background);worker.start()
+    assert entered.wait(2)
+    provider.cancel_current(owner='some-other-id')
+    assert not provider._active_cancel.is_set()
+    assert provider.generate(AISettings(enabled=True),'manual')=='manual answer'
+    worker.join(2)
+    assert outcomes==['REQUEST_CANCELLED'] and not worker.is_alive()
+
+
 def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     import megalodon.ai_provider as provider
 

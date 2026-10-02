@@ -14,8 +14,9 @@ dependencies = []
 
 [project.optional-dependencies]
 capture = ["scapy>=2.5,<3"]
-test = ["pytest>=9.0.3,<10", "jsonschema>=4.23,<5"]
+test = ["pytest>=9.0.3,<10", "jsonschema>=4.23,<5", "PyYAML>=6.0.3,<7"]
 geo = ["maxminddb>=2,<4"]
+knowledge = ["PyYAML>=6.0.3,<7"]
 
 [project.scripts]
 megalodon = "megalodon.cli:main"
@@ -39,4 +40,6 @@ version = {attr = "megalodon.__version__"}
   "iana-v1/*.jsonl",
   "corpus-v1/*.json",
   "corpus-v1/*.jsonl",
+  "security-v1/*.json",
+  "security-v1/*.sha256",
 ]

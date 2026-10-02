@@ -87,7 +87,7 @@ class RetainedEvidenceReader:
                     range=dict(start=utc(first),end=utc(last)),candidate_count=scanned,
                     truncated=bool(next_cursor or gaps),gaps=list(dict.fromkeys(gaps)),source_segments=visited)
 
-    def _sources(self, start, end, *, watermarks=True):
+    def _sources(self, start, end, *, watermarks=True, categories=None):
         sources, gaps = [], []
         with self.evidence.lock:
             entries = deepcopy(self.evidence._catalog['entries'])
@@ -97,6 +97,8 @@ class RetainedEvidenceReader:
                             and (e['source_segment'] not in packet_by_id or
                                  packet_by_id[e['source_segment']].get('compacted_to')==e['id'])}
         candidates = [e for e in entries if e['category'] not in {'reports', 'cases'} and e['state'] in {'open', 'closed'}
+                      and self.evidence.derived_available(e)
+                      and (categories is None or e['category'] in categories)
                       and not (e['category']=='packets' and e['id'] in verified_rollups)
                       and not (e['category']=='packet_rollups' and verified_rollups.get(e.get('source_segment'))!=e['id'])
                       and (not e.get('last_at') or epoch(e['last_at']) >= start)
@@ -124,6 +126,7 @@ class RetainedEvidenceReader:
         return sources, gaps
 
     def _pages(self, entry, maximum, start, end, *, after=0, page_size=512):
+        if not self.evidence.derived_available(entry):raise ValueError('Derived source history expired')
         if entry['category']=='packet_rollups':
             # Also qualify summaries produced by earlier versions. Receipts
             # and verified totals must cover every represented original event.

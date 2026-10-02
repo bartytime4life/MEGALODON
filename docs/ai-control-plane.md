@@ -1,5 +1,13 @@
 # Local AI control plane (draft, opt-in)
 
+The installed HUD also provides [security knowledge and pattern reviews](security-knowledge.md).
+Its read-only broker tools are `megalodon.knowledge.search` (one bounded query)
+and `megalodon.patterns.status` (baseline coverage and four review summaries).
+They confer no host authority. Automatic pattern explanations use the selected
+local model and the same single-inference gate, with manual requests taking
+priority over background work. Existing operator tokens and response approval
+remain required for the original action routes.
+
 The control path is `selected local model -> bounded literal-loopback adapter -> closed request
 validator -> fixed tool registry -> policy -> application adapter -> private
 SQLite receipt`. The model never receives a shell, executable name, SQL
