@@ -22,14 +22,16 @@ def test_network_behavior_validation_selection_and_explicit_configuration():
 
 
 def test_network_component_has_text_alternative_and_no_unsafe_sinks():
-    assert 'ResizeObserver' in NETWORK_JS
-    assert 'min-width:960px' not in NETWORK_CSS and 'min-width:760px' not in NETWORK_CSS
-    assert NETWORK_HTML.index('id="network-next"') < NETWORK_HTML.index('id="network-map"')
-    assert '<table>' in NETWORK_HTML and 'id="network-search"' in NETWORK_HTML
+    assert 'Your network, explained' in NETWORK_HTML
+    assert 'id="network-directory"' in NETWORK_HTML and 'id="network-selection"' in NETWORK_HTML
+    assert '<svg' not in NETWORK_HTML and "svg('" not in NETWORK_JS
+    assert '<details class="network-roster" id="network-technical">' in NETWORK_HTML
+    assert '<details class="network-filters" id="network-filters">' in NETWORK_HTML
+    assert 'id="network-search"' in NETWORK_HTML and '<table>' in NETWORK_HTML
     assert 'id="network-setup-form"' in NETWORK_SETUP_HTML
     assert 'known individual /128 peers' in NETWORK_SETUP_HTML
     assert 'innerHTML' not in NETWORK_JS and 'localStorage' not in NETWORK_JS
     assert 'prefers-reduced-motion:reduce' in NETWORK_CSS
-    assert '.network-panel.snapshot-stale .net-flow{display:none}' in NETWORK_CSS
     assert 'window.MegalodonOperations?.selectEndpoint' in NETWORK_JS
-    assert "edge.kind==='observed'&&edge.active" in NETWORK_JS
+    assert "edge.kind!=='observed'" in NETWORK_JS
+    assert 'not current speeds or lifetime totals' in NETWORK_HTML

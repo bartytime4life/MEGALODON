@@ -2,7 +2,11 @@
 
 ## Operator workflow
 
-Open the **HUD** for the enlarged globe, local network map, selected-interface upload/download speeds, traffic trends, resource use and storage coverage. **Start background tools** stays in the primary controls. Speeds come from the existing host sampler; they include local-network traffic on that interface. They are not an Internet speed test.
+Open the **HUD** for the enlarged globe, local network directory, selected-interface upload/download speeds, traffic trends, resource use and storage coverage. **Start background tools** stays in the primary controls. Speeds come from the existing host sampler; they include local-network traffic on that interface. They are not an Internet speed test.
+
+The network view groups this computer's addresses and identifies its router, then separates addresses with observed traffic from those whose traffic is not visible. Select a device to read its captured sent/received totals and available connection details in place. These totals describe the returned observation window, not a speed measurement. Address counts are not unique physical-device counts. Unknown device names stay unknown; DNS, TLS and HTTP names are shown as observed service associations. Filters, technical address tables and sources are available under details.
+
+The [network-view acceptance record](audit/network-comprehension-acceptance.json) records the browser checks, regression results and installed release for this presentation change.
 
 Open **Setup → Local network discovery** to select an authorized, currently on-link private scope. Discovery stays off until selected. Passive interfaces, routes and neighbor observations remain visible without scanning. The fixed discovery worker runs every 15 minutes, splits IPv4 scopes into at most 256-address jobs (4,096 addresses total), and accepts IPv6 discovery only for known individual private peers. VPN/container interfaces are separate groups. A discovery result establishes a host observation, not visibility into exchanges between other devices.
 
@@ -73,9 +77,11 @@ The implementation is separated into independently testable surfaces:
 
 ## Device observations — current behavior
 
-The map defaults to local device addresses, with an optional view including
-internet peers. The list is open by default and searches addresses, MACs, observed
-names and service protocols. Local discovery accepts native Nmap XML’s inert
+The directory defaults to local device addresses, with an optional view including
+internet peers. Search covers addresses, MACs, observed names and service protocols.
+The full address table and technical sources are collapsed initially; selection
+opens one device's activity in place instead of drawing every relationship.
+Local discovery accepts native Nmap XML’s inert
 `DOCTYPE nmaprun`; external/internal DTDs and entities remain rejected. Unicast
 addresses are used for device placement. Prior responding devices remain in the
 live inventory for up to 24 hours with their actual last-discovery time; a failed
@@ -84,7 +90,7 @@ probe is not an offline verdict.
 Each minute, the worker saves compact per-device rows in bounded batches. It no
 longer attempts to put a whole large topology into one 32-KiB evidence record.
 These saved observations share the existing retention/cap policy. History errors
-are visible separately from a functioning live feed. Selecting an address shows
+are visible separately from a functioning live feed. A selected address offers
 saved observations and a continuation for earlier evidence. Source-qualified
 Suricata application protocols are context, separate from packet byte totals.
 An observed TLS/HTTP/DNS protocol is not proof of a particular installed app.

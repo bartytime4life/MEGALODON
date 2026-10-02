@@ -5,7 +5,7 @@
   "counts": {
     "documentation": 109,
     "workflow": 14,
-    "configuration": 34,
+    "configuration": 35,
     "source": 167,
     "asset": 2,
     "fixture-or-contract": 247,
@@ -3697,7 +3697,7 @@
         "scope",
         "source_base"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -3863,6 +3863,31 @@
         "update_recovery"
       ],
       "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/audit/network-comprehension-acceptance.json",
+      "classification": "configuration",
+      "purpose": "network comprehension acceptance",
+      "bytes": 3517,
+      "sha256": "45196d0a222b1e4aff150aec1b2881becc27dd73f82a49a52fb37c994f2eb872",
+      "dependencies": [
+        "behavior_checks",
+        "browser",
+        "changes",
+        "limits",
+        "observed_local_date",
+        "regression",
+        "release",
+        "schema",
+        "scope",
+        "source_base"
+      ],
+      "disposition": "retained",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -4748,8 +4773,8 @@
       "path": "docs/live-connection-globe.md",
       "classification": "documentation",
       "purpose": "Live connection atlas",
-      "bytes": 6860,
-      "sha256": "7c7ff980a91a11cb20760f01a72d7b079a5750ff6a34a6a32d0fcdfc5a3bb33a",
+      "bytes": 6866,
+      "sha256": "fc2b5170d2e1c27df5b3031c17be05e3f5935340322c68aecff5d96d94baa2d2",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -4951,9 +4976,10 @@
       "path": "docs/managed-evidence.md",
       "classification": "documentation",
       "purpose": "Expanded local HUD and managed evidence",
-      "bytes": 13433,
-      "sha256": "fb103895a3946d812ac165b4ed4dbf817d1a7304b62e0e3df53dafcd65c43482",
+      "bytes": 14334,
+      "sha256": "5c0a734b6dce8ee5fa31a0057f42bd3f357d3b02474a1c0f5c63b422a4a4ece3",
       "dependencies": [
+        "audit/network-comprehension-acceptance.json",
         "compact-history.md",
         "managed-evidence-capacity.md",
         "repository-audit.md"
@@ -7477,8 +7503,8 @@
       "path": "megalodon/dashboard_network.py",
       "classification": "source",
       "purpose": "Local topology view and explicit bounded discovery configuration.",
-      "bytes": 38984,
-      "sha256": "9c28f36c19f93eb1b0a943bba6eb233aaa79ecb7ea76b6101ccb00367e64ea31",
+      "bytes": 51353,
+      "sha256": "b809d072c54d71fd6a556f3f42dcb1792201d4333f1dafa38223c5368dedc54c",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -8582,8 +8608,8 @@
       "path": "megalodon/network_topology.py",
       "classification": "source",
       "purpose": "Bounded local network observations and explicitly configured host discovery.",
-      "bytes": 32051,
-      "sha256": "52ae78ed29ac6d8dc6bc8fa4fad5346dd3e204672fdac4cecdcd27802efb131d",
+      "bytes": 32117,
+      "sha256": "2c588cc9b6ef970d20eb701afe21e5c9f9e1b485a230e83e4da727d9838558ba",
       "dependencies": [
         ".companion_automation",
         ".local_install",
@@ -13851,8 +13877,8 @@
       "path": "tests/network_browser.cjs",
       "classification": "test",
       "purpose": "network browser",
-      "bytes": 11155,
-      "sha256": "df8b870a547ed7d9cfaaf98c6589f13eb51e18b2360206aea6984f8480b55a2b",
+      "bytes": 14049,
+      "sha256": "e1417f69faae8220a3e1e02daac2c6b3399a4b0f5c968251c4d6e9791a3632ba",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -15357,8 +15383,8 @@
       "path": "tests/test_dashboard_network_ui.py",
       "classification": "test",
       "purpose": "Shipped topology UI behavior against synthetic local network observations.",
-      "bytes": 2893,
-      "sha256": "d1829a98b16e36b95dc9aad743c861c40ed78cc28226edd7c7838effcad537f6",
+      "bytes": 3029,
+      "sha256": "a834f381732b539a00f065ac6a7fd8eec90e09419ec204906f9a7306546889d6",
       "dependencies": [
         "json",
         "megalodon.dashboard_network",
@@ -19541,24 +19567,6 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
-      "element": "select",
-      "id": "network-view",
-      "type": null,
-      "label": null,
-      "disabled": false,
-      "source_references": 2,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
-    },
-    {
-      "element": "select",
-      "id": "network-group",
-      "type": null,
-      "label": null,
-      "disabled": false,
-      "source_references": 5,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
-    },
-    {
       "element": "button",
       "id": "network-refresh",
       "type": "button",
@@ -19574,6 +19582,24 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "select",
+      "id": "network-view",
+      "type": null,
+      "label": null,
+      "disabled": false,
+      "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "select",
+      "id": "network-group",
+      "type": null,
+      "label": null,
+      "disabled": false,
+      "source_references": 5,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -19601,6 +19627,42 @@
       "label": null,
       "disabled": true,
       "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "network-counterpart-previous",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "network-counterpart-next",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "network-open-inspector",
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 1,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "network-open-history",
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 1,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20783,7 +20845,7 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
-  "control_count": 169,
+  "control_count": 173,
   "duplicate_ids": [],
   "missing_anchors": [],
   "exclusions": [

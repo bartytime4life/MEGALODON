@@ -75,7 +75,7 @@ The older stored globe/time sweep is available under **History**.
 
 ## Camera and workspace
 
-The atlas occupies the full HUD width; the local-network map has its own
+The atlas occupies the full HUD width; the local-network directory has its own
 workspace underneath it. **Follow activity** gently frames recent mapped
 exchanges and visits different regions when activity spans the world.
 **World rotation** provides a geographic overview. Dragging, arrow keys or

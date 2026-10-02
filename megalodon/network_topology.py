@@ -479,8 +479,8 @@ class NetworkTopology:
         value=dict(schema=SCHEMA,view=view,persistence=deepcopy(self._persistence),observed_at=stamp,state=state,message=message,settings=settings,available_scopes=available[:MAX_SCOPES],
             groups=list(inventory['groups'].values())[:129],nodes=selected,edges=edges,total=len(filtered),offset=offset,limit=limit,
             truncated=len(rows)>MAX_NODES or len(inventory['edges'])>1024 or offset+len(selected)<len(filtered) or flow_partial,discovery=discovery,
-            coverage=coverage+['Map and list show the returned page. Dashed relationships are logical placement, not measured physical links.',
-                'Traffic edges show sensor-visible packet or flow observations retained for up to 60 seconds. Other devices need router, mirrored-port or endpoint coverage.',
+            coverage=coverage+['The device directory covers the returned page of addresses. Several addresses can belong to one device; routing and discovery do not prove communication.',
+                'Connection details use captured observations retained for up to 60 seconds. To see more traffic from other devices, connect a router feed, mirrored switch port or device sensor.',
                 'Discovery runs every 15 minutes for saved scopes. Previously discovered identities remain for 24 hours; an absent response is not proof that a device is offline.'])
         if include_token: value['token']=self.token
         while selected and len(json.dumps(value,separators=(',',':')).encode())>MAX_RESPONSE_BYTES:
