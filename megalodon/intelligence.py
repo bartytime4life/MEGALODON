@@ -12,7 +12,7 @@ from . import ai_provider
 from .evidence_storage import epoch, utc
 from .local_install import _atomic_write, _regular_owned_file
 from .retained_history import RetainedEvidenceReader
-from .security_patterns import analyze_hour, inventory_hour, candidate, stable, WORKFLOWS, MAX_RECORDS
+from .security_patterns import CONTEXT, analyze_hour, inventory_hour, candidate, stable, WORKFLOWS, MAX_RECORDS
 
 MAX_HISTORY = 24000
 MAX_REVIEWS = 1024
@@ -47,6 +47,9 @@ def explain(item, references, settings, *, model=None, owner=None, automatic=Fal
         raise ValueError('The local model returned an invalid or unsupported explanation') from None
     value['references']=[citations[c] for c in value['citations'] if c in citations]
     value['citations']=[item['id'] if c=='E1' else citations[c]['id'] for c in value['citations']]
+    # The reviewed rule, not model output, determines the next workflow. A
+    # general observation must never become a containment recommendation.
+    value['workflow']=CONTEXT[item['rule']][3]
     value.update(state='ready',model=settings.model,model_digest=settings.model_digest,action_status='not_attempted',approval_required=True)
     return value
 
