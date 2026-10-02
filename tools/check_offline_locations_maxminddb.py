@@ -89,7 +89,9 @@ def main() -> None:
             try:
                 OfflineLocations.open(database)
             except ValueError as error:
-                if "owner-private regular file" not in str(error):
+                reason = error.__cause__
+                if (not isinstance(reason, ValueError)
+                        or "owner-private regular file" not in str(reason)):
                     raise
             else:
                 raise AssertionError("readable-by-group MMDB was accepted")
