@@ -33,6 +33,51 @@ jobs:
           mkdir -m 700 "$RUNNER_TEMP/installer-wheels" "$RUNNER_TEMP/installer-receipts"
           python -I -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
             -r constraints/installer-linux-cp312.txt --dest "$RUNNER_TEMP/installer-wheels"
+      - name: Exercise the pinned offline location reader
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/maxminddb-runtime"
+          grep -E '^maxminddb==3\.2\.0 --hash=sha256:[0-9a-f]{64}      - name: Rehearse real installation, replacement, repair, rollback and uninstall
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_TREE: ${{ steps.source.outputs.tree }}
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          receipt="$RUNNER_TEMP/installer-receipts/native-installer-lifecycle.json"
+          python -I tools/installer_lifecycle_evidence.py \
+            --checkout "$GITHUB_WORKSPACE" --expected-commit "$EXPECTED_COMMIT" \
+            --expected-tree "$EXPECTED_TREE" collect \
+            --wheelhouse "$RUNNER_TEMP/installer-wheels" > "$receipt"
+          python -I tools/installer_lifecycle_evidence.py \
+            --checkout "$GITHUB_WORKSPACE" --expected-commit "$EXPECTED_COMMIT" \
+            --expected-tree "$EXPECTED_TREE" verify "$receipt"
+      - name: Retain only the verified bounded receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-installer-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/installer-receipts/native-installer-lifecycle.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: false
+          include-hidden-files: false
+ \
+            constraints/installer-linux-cp312.txt > "$RUNNER_TEMP/maxminddb-requirements.txt"
+          python -I -m pip install --no-index --find-links "$RUNNER_TEMP/installer-wheels" \
+            --require-hashes --only-binary=:all: --no-deps \
+            --target "$RUNNER_TEMP/maxminddb-runtime" \
+            -r "$RUNNER_TEMP/maxminddb-requirements.txt"
+          python -I - "$GITHUB_WORKSPACE" "$RUNNER_TEMP/maxminddb-runtime" <<'PYMAXMIND'
+          import runpy
+          import sys
+
+          checkout, dependencies = sys.argv[1:]
+          sys.path[:0] = [dependencies, checkout]
+          runpy.run_path(
+              checkout + "/tools/check_offline_locations_maxminddb.py",
+              run_name="__main__",
+          )
+          PYMAXMIND
       - name: Rehearse real installation, replacement, repair, rollback and uninstall
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
