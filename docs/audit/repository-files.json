@@ -6,7 +6,7 @@
     "documentation": 111,
     "workflow": 14,
     "configuration": 36,
-    "source": 176,
+    "source": 177,
     "asset": 2,
     "fixture-or-contract": 249,
     "historical": 13,
@@ -160,10 +160,10 @@
       "path": ".github/workflows/installer-lifecycle-evidence.yml",
       "classification": "workflow",
       "purpose": "installer lifecycle evidence",
-      "bytes": 2664,
-      "sha256": "0161b8193cae32bc23dcc21982b96edfaf148a803ec7409a95277cda41da149e",
+      "bytes": 3649,
+      "sha256": "95d2b0d25a685ea3f295501061ea95600ae4e8ac720c747ed7ebb506e4ed7dbf",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -5446,7 +5446,7 @@
       "bytes": 6359,
       "sha256": "86bcaae413fd81196bc24dfdcac77c28e2641b922a3fd281cb61ddcf31da124c",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -5462,7 +5462,7 @@
       "dependencies": [
         "security-knowledge-acceptance.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -7545,7 +7545,7 @@
       "bytes": 15995,
       "sha256": "dc8f3bee3d0cc71449648353d9a982fac3cb6330d99cab1a747f55b12451dff6",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8356,7 +8356,7 @@
         "threading",
         "time"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8384,7 +8384,7 @@
         "sqlite3",
         "urllib.parse"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8420,7 +8420,7 @@
         "uuid",
         "zlib"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -8460,7 +8460,7 @@
         "yaml",
         "yaml.tokens"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -12642,7 +12642,7 @@
         "schema",
         "sources"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
@@ -12658,7 +12658,7 @@
       "bytes": 65,
       "sha256": "4e8d5f15f589c5aa399fdab13e73cd53ba33d9be8fd745da236f932d333da058",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Content read, size and digest recorded; repository hygiene and package checks apply"
@@ -12781,7 +12781,7 @@
         "ipaddress",
         "json"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -16659,7 +16659,7 @@
         "threading",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17909,7 +17909,7 @@
         "threading",
         "unittest.mock"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17935,7 +17935,7 @@
         "types",
         "unittest.mock"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19074,7 +19074,7 @@
         "time",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19183,7 +19183,33 @@
         "re",
         "sys"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tools/check_offline_locations_maxminddb.py",
+      "classification": "source",
+      "purpose": "Exercise the pinned maxminddb file-descriptor integration without pytest.",
+      "bytes": 3974,
+      "sha256": "aeaa6fabe3af14abc270213399f55a091a58504fa6a79c49bcfcd03d731547f1",
+      "dependencies": [
+        "__future__",
+        "errno",
+        "importlib.metadata",
+        "io",
+        "maxminddb",
+        "megalodon",
+        "megalodon.offline_locations",
+        "os",
+        "pathlib",
+        "sys",
+        "tempfile"
+      ],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19549,7 +19575,7 @@
         "pathlib",
         "sys"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
