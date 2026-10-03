@@ -44,7 +44,7 @@ def _package_status() -> dict[str, str]:
         return result
     try:
         probe = subprocess.run(
-            ['dpkg-query', '-W', '-f=${Package}\t${Status}\n', *APT_PACKAGES],
+            ['/usr/bin/dpkg-query', '-W', '-f=${Package}\t${Status}\n', *APT_PACKAGES],
             capture_output=True, text=True, timeout=5, check=False,
         )
         if len(probe.stdout) > 8192:

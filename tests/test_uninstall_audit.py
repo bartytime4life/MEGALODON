@@ -41,7 +41,7 @@ def test_package_probe_uses_fixed_read_only_names(monkeypatch):
     assert result['suricata'] == 'unknown'
     assert set(result) == set(uninstall_audit.APT_PACKAGES)
     argv, options = captured[0]
-    assert argv[:3] == ['dpkg-query', '-W', '-f=${Package}\t${Status}\n']
+    assert argv[:3] == ['/usr/bin/dpkg-query', '-W', '-f=${Package}\t${Status}\n']
     assert tuple(argv[3:]) == uninstall_audit.APT_PACKAGES
     assert options['timeout'] == 5
     assert 'shell' not in options
