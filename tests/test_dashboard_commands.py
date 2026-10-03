@@ -34,6 +34,12 @@ def test_commands_preserve_virtualenv_and_ignore_terminal_directory(monkeypatch)
     assert shlex.split(commands.local_companion_command()) == [
         "env", f"MEGALODON_PYTHON={executable}", str(checkout / "scripts/manage-companion.sh"),
     ]
+    assert commands.local_account_commands() is None
+    monkeypatch.setattr(commands, "local_hud_launch", lambda: {"mode": "desktop", "command": "/private/megalodon-hud"})
+    assert {action: shlex.split(command) for action, command in commands.local_account_commands().items()} == {
+        action: [executable, "-m", "megalodon.local_install", "password", action]
+        for action in ("set", "status")
+    }
     monkeypatch.setattr(commands, "_source_checkout", lambda: None)
     assert shlex.split(commands.local_companion_command()) == [
         executable, "-I", "-m", "megalodon.tool_setup",
@@ -47,12 +53,14 @@ def test_invalid_interpreter_is_not_copied(monkeypatch, executable):
     monkeypatch.setattr(commands, "_source_checkout", lambda: pytest.fail("Unexpected discovery"))
     assert commands.local_python_lifecycle() is None
     assert commands.local_companion_command() is None
+    assert commands.local_account_commands() is None
 
 
 def test_linux_commands_are_not_offered_on_windows(monkeypatch):
     monkeypatch.setattr(commands.sys, "platform", "win32")
     monkeypatch.setattr(commands, "_source_checkout", lambda: pytest.fail("Unexpected discovery"))
     assert commands.local_python_lifecycle() is None
+    assert commands.local_account_commands() is None
 
 
 @pytest.mark.parametrize("content", [

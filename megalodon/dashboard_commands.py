@@ -104,6 +104,15 @@ def local_hud_launch() -> dict[str, str]:
     }
 
 
+def local_account_commands() -> dict[str, str] | None:
+    """Offer reusable password commands only for the installed desktop HUD."""
+    if (sys.platform != "linux" or not _absolute_command_path(sys.executable)
+            or local_hud_launch()["mode"] != "desktop"):
+        return None
+    base = [sys.executable, "-m", "megalodon.local_install", "password"]
+    return {action: shlex.join([*base, action]) for action in ("set", "status")}
+
+
 def local_companion_command() -> str | None:
     """Use the serving environment for copied companion commands, from any cwd."""
     if sys.platform != "linux" or not _absolute_command_path(sys.executable):

@@ -62,7 +62,24 @@ SETUP_HTML = """
       </section>
     </div>
     <div class="setup-bottom">
-      <details class="setup-launch-help"><summary>Optional local sign-in</summary><p>The HUD opens without sign-in by default. Add <code>--require-sign-in</code> to require a password for a launch. Set a reusable password with <code>megalodon-manage password set</code>; otherwise a random password appears in the launch terminal. This does not create an account.</p></details>
+      <section class="setup-account" aria-labelledby="setup-account-title">
+        <h3 id="setup-account-title" tabindex="-1">Local sign-in</h3>
+        <p>The HUD opens without sign-in by default. Reusable password setup is available for the installed desktop HUD. Source launches use a random password shown in their terminal. These buttons prepare commands; they do not change a running HUD or create an online account.</p>
+        <div class="setup-account-actions">
+          <button id="account-password-set-copy" type="button" disabled>Copy password setup command</button>
+          <button id="account-password-status-copy" type="button" disabled>Copy password status command</button>
+        </div>
+        <code id="account-password-command">Password command unavailable</code>
+        <p id="account-password-feedback" role="status" aria-live="polite">Reading this HUD's Python environment…</p>
+        <label class="field" for="account-port">Protected session port (optional)<input id="account-port" inputmode="numeric" placeholder="8788" maxlength="5" autocomplete="off"></label>
+        <p>Choose an unused port if you want to leave this HUD running. A protected launch opens a separate session; it does not add sign-in to this one.</p>
+        <div class="setup-account-actions">
+          <button id="account-launch-build" type="button" disabled>Prepare protected launch</button>
+          <button id="account-launch-copy" type="button" disabled>Copy protected launch</button>
+        </div>
+        <code id="account-launch-command">Protected launch unavailable</code>
+        <p id="account-launch-feedback" role="status" aria-live="polite">A new session will require your saved password, or show a random password in its terminal.</p>
+      </section>
       <details class="setup-launch-help">
         <summary>Reopen or stop MEGALODON</summary>
         <p id="setup-launch-intro">Reading the launch method for this HUD…</p>
@@ -445,6 +462,43 @@ function toolManagementLaunchCommand() {
   if (flags.length > 1) throw new Error('Launch guidance is unavailable because tool management is already listed more than once.');
   return flags.length === 1 ? command : `${command} --enable-tool-management`;
 }
+function accountPasswordCommand(action) {
+  const commands = typeof localAccountCommands === 'undefined' ? null : localAccountCommands;
+  if (!commands || typeof commands !== 'object' || Array.isArray(commands)
+      || !referenceExactKeys(commands, ['set', 'status']) || !['set', 'status'].includes(action)
+      || !Object.values(commands).every(value => typeof value === 'string' && value.length > 0
+          && value.length <= 4096 && !/[\x00-\x1f\x7f]/.test(value))) {
+    throw new Error('Reusable password commands are available from an installed desktop HUD. Source launches use a random password.');
+  }
+  return commands[action];
+}
+function protectedHudLaunchCommand(port) {
+  const command = hudLaunchCommand({port});
+  const flags = command.match(/(^|\s)--require-sign-in(?=\s|$)/g) || [];
+  if (flags.length > 1) throw new Error('Protected launch guidance is unavailable.');
+  return flags.length ? command : `${command} --require-sign-in`;
+}
+function renderAccountHelp() {
+  try {
+    byId('account-password-command').textContent = accountPasswordCommand('set');
+    ['account-password-set-copy', 'account-password-status-copy'].forEach(id => { byId(id).disabled = false; });
+    byId('account-password-feedback').textContent = 'Commands are ready to copy. Enter a new password only in your terminal.';
+  } catch (error) {
+    byId('account-password-command').textContent = 'Password command unavailable';
+    ['account-password-set-copy', 'account-password-status-copy'].forEach(id => { byId(id).disabled = true; });
+    byId('account-password-feedback').textContent = error.message;
+  }
+  try {
+    validatedHudLaunch(typeof localHudLaunch === 'undefined' ? null : localHudLaunch);
+    byId('account-launch-build').disabled = false;
+    byId('account-launch-feedback').textContent = 'Choose Prepare protected launch. This will not change the running HUD.';
+  } catch (error) {
+    byId('account-launch-build').disabled = true;
+    byId('account-launch-copy').disabled = true;
+    byId('account-launch-command').textContent = 'Protected launch unavailable';
+    byId('account-launch-feedback').textContent = error.message;
+  }
+}
 function renderLaunchHelp() {
   try {
     const launch = validatedHudLaunch(typeof localHudLaunch === 'undefined' ? null : localHudLaunch);
@@ -503,6 +557,45 @@ byId('tool-management-copy').addEventListener('click', async () => {
     byId('tool-management-copy-status').textContent = 'Clipboard unavailable. Select and copy the displayed command. It was not run.';
   }
 });
+for (const action of ['set', 'status']) {
+  byId(`account-password-${action}-copy`).addEventListener('click', async () => {
+    try {
+      const command = accountPasswordCommand(action);
+      byId('account-password-command').textContent = command;
+      await navigator.clipboard.writeText(command);
+      byId('account-password-feedback').textContent = action === 'set'
+        ? 'Password setup command copied. Run it in your terminal; enter the password there.'
+        : 'Password status command copied. Run it in your terminal; no password was changed.';
+    } catch (_) {
+      byId('account-password-feedback').textContent = 'Clipboard unavailable. Select and copy the displayed command; no password was changed.';
+    }
+  });
+}
+byId('account-port').addEventListener('input', () => {
+  byId('account-launch-copy').disabled = true;
+  byId('account-launch-feedback').textContent = 'Choose Prepare protected launch to apply this port.';
+});
+byId('account-launch-build').addEventListener('click', () => {
+  try {
+    byId('account-launch-command').textContent = protectedHudLaunchCommand(byId('account-port').value);
+    byId('account-launch-copy').disabled = false;
+    byId('account-launch-feedback').textContent = 'Protected launch prepared, not run. Choose an unused port or stop the current foreground HUD first.';
+  } catch (error) {
+    byId('account-launch-command').textContent = 'Protected launch unavailable';
+    byId('account-launch-copy').disabled = true;
+    byId('account-launch-feedback').textContent = error.message;
+  }
+});
+byId('account-launch-copy').addEventListener('click', async () => {
+  if (byId('account-launch-copy').disabled) return;
+  try {
+    await navigator.clipboard.writeText(byId('account-launch-command').textContent);
+    byId('account-launch-feedback').textContent = 'Protected launch copied. Run it in your terminal; this HUD remains unchanged.';
+  } catch (_) {
+    byId('account-launch-feedback').textContent = 'Clipboard unavailable. Select and copy the displayed command; this HUD remains unchanged.';
+  }
+});
 renderLaunchHelp();
+renderAccountHelp();
 """
 SETUP_JS += HEARTBEAT_JS
