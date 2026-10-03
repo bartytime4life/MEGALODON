@@ -73,6 +73,13 @@ run `~/.local/bin/megalodon-hud --require-sign-in` in a terminal. If no reusable
 password is configured, that terminal shows a random password for this launch.
 Sign-in is limited to loopback and is not a remote access feature.
 
+In the HUD, **Setup → Local sign-in** provides buttons to copy this installation's
+password setup/status commands and prepare a protected relaunch with an optional
+unused port. The buttons only prepare or copy commands. Password entry stays in
+the terminal, and the running HUD is unchanged. Source launches can prepare a
+protected session with a random terminal password; reusable password buttons
+are available only for the installed desktop HUD.
+
 To choose or change the password used by opt-in installed HUD launches:
 
 From a terminal on this PC, run:

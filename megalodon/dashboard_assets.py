@@ -647,6 +647,9 @@ DASHBOARD_CSS += r"""
 .setup-status-grid span { display: block; color: var(--muted); font-size: .62rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .setup-status-grid b { display: block; margin-top: 4px; font-size: .82rem; }
 .setup-actions-card { margin-top: 10px; border-top: 1px solid var(--line); }
+.setup-account { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3, 13, 19, .28); }
+.setup-account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.setup-account code { display: block; overflow-wrap: anywhere; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(2, 10, 16, .7); }
 .setup-form { display: grid; gap: 10px; padding-top: 10px; }
 .tool-status-details { border-top: 1px solid var(--line); }
 .setup-boundary { margin-bottom: 10px !important; }

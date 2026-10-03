@@ -37,7 +37,7 @@ from .build_identity import PACKAGE_DIGEST
 from .dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from .dashboard_signin import SIGNIN_HTML, SIGNIN_CSS, SIGNIN_JS
 from .dashboard_action_plane import ACTION_PRESETS
-from .dashboard_commands import local_companion_command, local_hud_launch, local_python_lifecycle
+from .dashboard_commands import local_account_commands, local_companion_command, local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
 from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
@@ -1765,8 +1765,9 @@ def serve(
     # or checkout, execute commands, or trigger filesystem discovery.
     lifecycle = json.dumps(local_python_lifecycle(), ensure_ascii=True, allow_nan=False)
     launch = json.dumps(local_hud_launch(), ensure_ascii=True, allow_nan=False)
+    account_commands = json.dumps(local_account_commands(), ensure_ascii=True, allow_nan=False)
     companion_command = json.dumps(local_companion_command(), ensure_ascii=True, allow_nan=False)
-    javascript = (f"const localHudLaunch = {launch};\n" + DASHBOARD_JS.replace(
+    javascript = (f"const localHudLaunch = {launch};\nconst localAccountCommands = {account_commands};\n" + DASHBOARD_JS.replace(
         "const localPythonLifecycle = null;",
         f"const localPythonLifecycle = {lifecycle};",
         1,

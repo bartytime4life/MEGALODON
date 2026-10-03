@@ -21,6 +21,7 @@ process.stdin.on('end', async () => {
     const context = {
       byId, document: {createElement: element}, Date, Uint8Array, TextDecoder, TextEncoder, AbortController, Blob,
       localHudLaunch: {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"},
+      localAccountCommands: null,
       URL: {createObjectURL(blob) {artifacts.push(blob); return 'blob:local-check-test';}, revokeObjectURL(url) {revoked.push(url);}},
       textNode: (tag, text = '', className = '') => Object.assign(element(tag), {textContent: text, className}),
       referenceExactKeys: (v, keys) => v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v, k)),
@@ -45,6 +46,31 @@ process.stdin.on('end', async () => {
     assert.equal(byId('help-source-launch').hidden, false);
     assert.equal(byId('setup-command').textContent, context.localHudLaunch.command);
     assert.equal(byId('setup-copy').disabled, false);
+    assert.equal(byId('account-password-set-copy').disabled, true);
+    assert.equal(byId('account-launch-build').disabled, false);
+    byId('account-port').value = '8798';
+    byId('account-launch-build').listeners.click();
+    assert.equal(byId('account-launch-command').textContent, context.localHudLaunch.command + ' --port 8798 --require-sign-in');
+    await byId('account-launch-copy').listeners.click();
+    assert.equal(copied.pop(), context.localHudLaunch.command + ' --port 8798 --require-sign-in');
+    byId('account-port').value = '0';
+    byId('account-port').listeners.input();
+    assert.equal(byId('account-launch-copy').disabled, true);
+    byId('account-launch-build').listeners.click();
+    assert.match(byId('account-launch-feedback').textContent, /port from 1 to 65535/);
+    byId('account-port').value = '';
+    context.localAccountCommands = {set: 'unsafe\ncommand', status: 'status'};
+    run('renderAccountHelp()');
+    assert.equal(byId('account-password-set-copy').disabled, true);
+    assert.doesNotMatch(byId('account-password-command').textContent, /unsafe/);
+    context.localAccountCommands = {set: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon.local_install password set",
+      status: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon.local_install password status"};
+    run('renderAccountHelp()');
+    assert.equal(byId('account-password-set-copy').disabled, false);
+    await byId('account-password-set-copy').listeners.click();
+    assert.equal(copied.pop(), context.localAccountCommands.set);
+    await byId('account-password-status-copy').listeners.click();
+    assert.equal(copied.pop(), context.localAccountCommands.status);
     assert.equal(byId('tool-management-command').textContent, context.localHudLaunch.command + ' --enable-tool-management');
     assert.equal(byId('tool-management-copy').disabled, false);
     assert.match(byId('tool-management-copy-status').textContent, /not been run/);
