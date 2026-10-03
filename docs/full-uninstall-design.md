@@ -13,6 +13,8 @@ configuration, the named Wireshark profile, possible private Zeek prefixes,
 selected companion directories, and fixed Ubuntu package presence. It does
 not inspect evidence contents, search the whole disk, execute package removal,
 stop services, change permissions, or delete files. Presence is not ownership.
+The scan records current `dumpcap` mode and whether capability and ACL
+metadata are present; these observations cannot reconstruct prior values.
 
 ## Proposed full removal sequence
 

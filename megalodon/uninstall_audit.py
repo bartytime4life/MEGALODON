@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import errno
 from itertools import islice
 import json
 import os
@@ -58,6 +59,27 @@ def _package_status() -> dict[str, str]:
     return result
 
 
+def _dumpcap_state(path: Path = Path('/usr/bin/dumpcap')) -> dict[str, object]:
+    """Observe current metadata only; it cannot reconstruct prior settings."""
+    result = _entry(path)
+    result['mode'] = None
+    result['capability_xattr'] = 'unknown'
+    result['acl_xattr'] = 'unknown'
+    if result['state'] != 'file':
+        return result
+    try:
+        result['mode'] = oct(stat.S_IMODE(path.lstat().st_mode))
+        for key, label in (('security.capability', 'capability_xattr'),
+                           ('system.posix_acl_access', 'acl_xattr')):
+            try:
+                result[label] = 'present' if os.getxattr(path, key, follow_symlinks=False) else 'absent'
+            except OSError as exc:
+                result[label] = 'absent' if exc.errno == errno.ENODATA else 'unknown'
+    except OSError:
+        pass
+    return result
+
+
 def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dict[str, object]:
     """Inventory known surfaces without reading evidence or changing the host."""
     selected = paths or install_paths()
@@ -101,6 +123,7 @@ def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dic
         'tool_directory_profile': profile_state,
         'apt_package_presence': _package_status(),
         'other_executables_in_path': {tool: shutil.which(binary) for tool, binary in OTHER_EXECUTABLES.items()},
+        'dumpcap_current': _dumpcap_state(),
         'preserve_packages': ['python3', 'git'],
         'unresolved': [
             'Package presence does not prove MEGALODON installed the package.',
@@ -128,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f'{name}: {state} (ownership unknown)')
         for name, path in result['other_executables_in_path'].items():
             print(f'{name} executable in PATH: {path or "not found"} (ownership unknown)')
+        current = result['dumpcap_current']
+        print('dumpcap now: ' + str(current['mode']) + ', capabilities ' + current['capability_xattr']
+              + ', ACL ' + current['acl_xattr'] + ' (prior state unknown)')
         for entry in result['private_zeek_candidates']:
             print(f"Private Zeek candidate: {entry['state']} — {entry['path']} (ownership unknown)")
         if result['private_zeek_scan_state'] != 'complete':

@@ -55,3 +55,17 @@ def test_symlink_is_reported_without_following_it(tmp_path, monkeypatch):
     paths.config.symlink_to(tmp_path / 'outside')
     monkeypatch.setattr(uninstall_audit, '_package_status', lambda: {})
     assert uninstall_audit.audit(paths, home=home)['artifacts']['config']['state'] == 'symlink'
+
+
+def test_dumpcap_snapshot_cannot_imply_prior_permissions(tmp_path, monkeypatch):
+    binary = tmp_path / 'dumpcap'
+    binary.write_text('inert')
+    binary.chmod(0o750)
+    def xattr(path, key, **kwargs):
+        assert path == binary and kwargs == {'follow_symlinks': False}
+        return b'present' if key == 'security.capability' else b''
+    monkeypatch.setattr(uninstall_audit.os, 'getxattr', xattr)
+    assert uninstall_audit._dumpcap_state(binary) == {
+        'path': str(binary), 'state': 'file', 'owner_current_user': True,
+        'mode': '0o750', 'capability_xattr': 'present', 'acl_xattr': 'absent',
+    }
