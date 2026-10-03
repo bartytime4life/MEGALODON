@@ -124,8 +124,20 @@ installed companion-tool versions or satisfy those tools' acceptance gates.
 ## Current HUD discovery
 
 The local Setup check emits `megalodon-tool-readiness-v3` with
-`probe_mode=known_install_presence`. It shares the heartbeat's bounded PATH and
-known-prefix registry, including private Zeek installations. It does not execute
+`probe_mode=known_install_presence`. It shares the heartbeat's bounded PATH,
+known-prefix registry, and owner-selected tool directories. It does not execute
 binaries. CLI v2 PATH-only receipts remain supported for compatibility. Neither
 receipt establishes configuration, running state or accepted telemetry; those
 are displayed separately by the background-tool workflows.
+
+For a tool installed outside the HUD service's PATH, open **Setup → Configure
+apps → Installed tool directories**. Select the tool, enter the absolute
+directory containing its fixed executable name, and save. Clear the field and
+save to restore automatic discovery. The selection is stored in an owner-only
+local profile; it is used by the HUD presence check and heartbeat. Zeek's
+bounded sampler uses the same selected directory. Other tool workflows may
+still require their packaged executable or system service location, so a
+presence result alone does not make those workflows runnable. After changing a
+location, choose **Check this computer** and, for Zeek with monitoring already
+enabled, **Start background tools** to retry the sampler. No tool is run merely
+by saving a directory.

@@ -32,6 +32,14 @@ SUPPORT_CONFIG_HTML = r'''
     <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
     <section><h5>Suricata</h5><p>Configure the passive sensor on the selected network interface.</p><div class="support-config-actions"><button type="button" id="support-config-suricata-setup" disabled>Configure background Suricata</button><button type="button" id="support-config-suricata" disabled>Check configuration</button></div><p class="support-config-note">A one-time system prompt configures the service and access to its local logs.</p></section>
   </div></details>
+  <details class="support-config-locations"><summary>Installed tool directories</summary>
+    <p>When a tool is outside the HUD service's PATH, select its executable directory here. Only the fixed executable name for that tool is checked. Saving a directory does not start a program. Other service and adapter workflows may still need their packaged location.</p>
+    <label for="support-config-tool-id">Tool</label><select id="support-config-tool-id" disabled><option value="zeek">Zeek</option><option value="tshark">TShark</option><option value="suricata">Suricata</option><option value="nftables">nftables</option><option value="clamav">ClamAV</option><option value="osquery">osquery</option><option value="qwen">Ollama</option><option value="nmap">Nmap</option></select>
+    <label for="support-config-tool-directory">Directory containing the executable</label><input id="support-config-tool-directory" type="text" maxlength="1024" spellcheck="false" autocomplete="off" placeholder="/absolute/path/to/bin" disabled>
+    <button type="button" id="support-config-tool-directory-save" disabled>Save tool directory</button>
+    <p id="support-config-tool-directory-status" role="status" class="support-config-note">Saved tool locations have not been checked.</p>
+    <p class="support-config-note">Clear the field and save to return to automatic search. Check this computer again after saving. Zeek sampling runs only while background monitoring is enabled.</p>
+  </details>
   <details class="support-config-results"><summary>Latest tool results</summary><p class="support-config-note">Each result keeps its own check time. Setup and availability do not prove a tool is feeding the HUD.</p><ul id="support-config-tools"><li>No tool checks returned yet.</li></ul></details>
 </section>
 '''
@@ -62,7 +70,7 @@ SUPPORT_CONFIG_CSS = r'''
 .support-capture-reading { margin-top:1.2rem; border-top:1px solid #355464; padding-top:.75rem; }
 .support-capture-reading dl { display:flex; flex-wrap:wrap; gap:1.5rem; margin:.9rem 0; } .support-capture-reading dt { color:#bdd1dd; font-size:.875rem; } .support-capture-reading dd { color:#edf7fa; font-size:1.3rem; margin:.25rem 0 0; font-variant-numeric:tabular-nums; }
 .support-tool-settings { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.5rem; padding:.5rem 0 1rem; } .support-tool-settings section { min-width:0; } .support-tool-settings p { font-size:.875rem; }
-.support-tool-settings input,.support-tool-settings select { margin-bottom:.8rem; } .support-tool-settings .support-config-actions { margin:0; }
+.support-tool-settings input,.support-tool-settings select { margin-bottom:.8rem; } .support-config-locations input { max-width:40rem; margin-bottom:.8rem; } .support-tool-settings .support-config-actions { margin:0; }
 .support-config-results li { grid-template-columns:minmax(8rem,1fr) minmax(6rem,.7fr) minmax(0,2fr); } .support-config-results time { display:block; color:#aac1d0; font-size:.875rem; }
 @media(max-width:900px) { .support-tool-settings { grid-template-columns:1fr; gap:1.2rem; } .support-tool-settings section+section { border-top:1px solid #355464; padding-top:1.2rem; } }
 @media(max-width:640px) { .support-capture-steps,.support-capture-destinations { grid-template-columns:1fr; gap:1rem; } .support-capture { padding:.9rem; } .support-config-actions button { flex:1 1 12rem; } .support-config select,.support-config input { max-width:none; } .support-config-results li { grid-template-columns:minmax(0,1fr) auto; } }
@@ -77,16 +85,17 @@ SUPPORT_CONFIG_JS = r'''
     const localNotes={tshark:{requirement:'Optional · saved or live packets',note:'The offline TShark adapter reads saved captures. Use Configure apps on the HUD for capture permissions, bounded live HUD traffic or a separate Wireshark window.'},clamav:{purpose:'Scan a configured home folder and review aggregate counts.',note:'The local HUD runs configured scans and watches completed reports. Configure apps selects Downloads or Documents and can start the installed signature updater. No quarantine or uploads occur.'},suricata:{note:'Start background tools starts the installed sensor service. Configure apps prepares its passive interface and local log access. Actions shows current source summaries separately from admitted findings.'}};
     for(const item of softwareCatalog)if(Object.hasOwn(localNotes,item.id))Object.assign(item,localNotes[item.id]);
   }
+  if(!el('support-config-tool-id').value)el('support-config-tool-id').value='zeek';
   const state={configVisible:false,globeVisible:false,liveAction:false,open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
   const actions={
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
-    'support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
+    'support-config-tool-directory-save':'tool_directory_set','support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
-  const actionNames={model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
-  const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout'];
+  const actionNames={tool_directory_set:'Saving tool directory',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
+  const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
   const text=(v,max=512)=>typeof v==='string' && v.length<=max && !/[\x00-\x1f\x7f]/.test(v);
@@ -97,6 +106,8 @@ SUPPORT_CONFIG_JS = r'''
     if(!object(v) || v.schema!=='megalodon-support-config-v1' || !Array.isArray(v.interfaces) || v.interfaces.length>32
       || !v.interfaces.every(i=>object(i)&&text(i.name,64)&&i.name.length>0&&typeof i.default==='boolean'&&typeof i.up==='boolean')
       || !object(v.settings) || !text(v.settings.interface,64) || !text(v.settings.nmap_target,64) || !['Downloads','Documents'].includes(v.settings.scan_folder)
+      || !object(v.tool_directories) || Object.keys(v.tool_directories).length>8 || !['ready','unavailable'].includes(v.tool_directories_status)
+      || !Object.entries(v.tool_directories).every(([id,directory])=>['tshark','zeek','suricata','nftables','clamav','osquery','qwen','nmap'].includes(id)&&text(directory,1024)&&directory.startsWith('/'))
       || !object(v.job) || !['idle','running','finished','failed'].includes(v.job.state) || !(v.job.action===null || Object.hasOwn(actionNames,v.job.action))
       || !text(v.job.message) || !stamp(v.job.started_at) || !stamp(v.job.finished_at)
       || !object(v.capture) || !['idle','starting','running','stopped','failed'].includes(v.capture.state) || !['received','accepted','skipped'].every(k=>count(v.capture[k]))
@@ -122,7 +133,7 @@ SUPPORT_CONFIG_JS = r'''
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
         || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
-        || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
+        || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
         || (action==='geography_disable'&&!state.payload?.geography_enabled);
     }
     for(const id of inputIds)el(id).disabled=blocked||!!working();
@@ -149,6 +160,8 @@ SUPPORT_CONFIG_JS = r'''
     el('support-config-interface').replaceChildren(placeholder,...options);el('support-config-interface').value=v.interfaces.some(i=>i.name===selected)?selected:'';
     if(!state.dirty.has('nmap_target'))el('support-config-nmap-target').value=v.settings.nmap_target;
     if(!state.dirty.has('scan_folder'))el('support-config-scan-folder').value=v.settings.scan_folder;
+    if(!state.dirty.has('tool_directory'))el('support-config-tool-directory').value=v.tool_directories[el('support-config-tool-id').value]||'';
+    el('support-config-tool-directory-status').textContent=v.tool_directories_status==='ready'?'Saved directories available. Presence and live sample status still need separate checks.':'Saved tool directories could not be validated. Review the private tool directory profile before using this control.';
     const chosen=v.interfaces.find(i=>i.name===el('support-config-interface').value);
     if(el('live-background-start'))el('live-background-start').textContent=v.background?.state==='failed'?'Retry monitoring':'Enable background monitoring';
     if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent=v.geography_enabled?'Automatic location updates enabled':'Automatic location updates off';
@@ -186,7 +199,7 @@ SUPPORT_CONFIG_JS = r'''
       return checked(await body(response),!payload);
     }finally{clearTimeout(timer);}
   }
-  function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
+  function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
   function fail(error){state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
   async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
   function payloadFor(action){
@@ -200,6 +213,10 @@ SUPPORT_CONFIG_JS = r'''
     }
     if(action==='model_select'){const row=state.payload.model?.options.find(row=>row.name===el('support-model-select').value);if(!row)throw Error('Refresh and choose an installed model.');Object.assign(value,{model:row.name,model_digest:row.digest,compute_mode:el('support-model-compute').value,timeout_seconds:Number(el('support-model-timeout').value)});}
     if(action==='clamav_configure'){value.scan_folder=el('support-config-scan-folder').value;if(!['Downloads','Documents'].includes(value.scan_folder))throw Error('Choose Downloads or Documents.');}
+    if(action==='tool_directory_set'){
+      value.tool_id=el('support-config-tool-id').value;value.directory=el('support-config-tool-directory').value;
+      if(!['tshark','zeek','suricata','nftables','clamav','osquery','qwen','nmap'].includes(value.tool_id)||value.directory.length>1024||(value.directory&&!value.directory.startsWith('/')))throw Error('Choose a tool and an absolute executable directory.');
+    }
     return value;
   }
   async function act(action){
@@ -217,6 +234,8 @@ SUPPORT_CONFIG_JS = r'''
   for(const [id,action] of Object.entries(actions))if(el(id))el(id).addEventListener('click',()=>act(action));
   for(const [id,key] of [['support-model-timeout','timeout_seconds'],['support-model-select','model'],['support-model-compute','compute_mode'],['support-config-interface','interface'],['support-config-nmap-target','nmap_target'],['support-config-scan-folder','scan_folder']])el(id).addEventListener('change',()=>{state.dirty.add(key);controls();});
   el('support-config-nmap-target').addEventListener('input',()=>state.dirty.add('nmap_target'));
+  el('support-config-tool-id').addEventListener('change',()=>{state.dirty.delete('tool_directory');el('support-config-tool-directory').value=state.payload?.tool_directories?.[el('support-config-tool-id').value]||'';controls();});
+  for(const event of ['input','change'])el('support-config-tool-directory').addEventListener(event,()=>state.dirty.add('tool_directory'));
   if(typeof window!=='undefined')window.megalodonSupportConfiguration={refresh:read,open:()=>{open(true);el('support-config-interface').focus();}};
   function syncView(){cancel();if(!viewVisible()){if(state.hydrated)feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');controls();}else read();}
   document.addEventListener('visibilitychange',syncView);

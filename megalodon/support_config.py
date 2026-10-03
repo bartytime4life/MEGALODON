@@ -23,6 +23,7 @@ from .live_connections import LiveConnections
 from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
+from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
 def _owned_directory(path, *, private):
@@ -47,12 +48,13 @@ ACTION_FIELDS = {
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
     'signature_update': set(), 'osquery_configure': set(), 'qwen_check': set(),
     'zeek_check': set(), 'suricata_check': set(),
+    'tool_directory_set': {'tool_id', 'directory'},
     'background_start': {'interface'}, 'background_stop': set(),
     'geography_refresh': set(), 'geography_disable': set(),
     'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
-TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'capture':'HUD packet metadata',
+TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
               'qwen':'Local AI / Ollama', 'zeek':'Zeek', 'suricata':'Suricata',
               'background':'Background traffic', 'geography':'IP geography'}
@@ -155,6 +157,11 @@ def validate_action(value):
         valid_target(value['nmap_target'])
     if 'scan_folder' in value and (type(value['scan_folder']) is not str or value['scan_folder'] not in {'Downloads','Documents'}):
         raise ValueError('Choose Downloads or Documents for the file scan.')
+    if action=='tool_directory_set':
+        if type(value['tool_id']) is not str or value['tool_id'] not in EXECUTABLES or type(value['directory']) is not str:
+            raise ValueError('Choose a supported tool and installation directory.')
+        if value['directory']:
+            valid_directory(value['directory'])
     if action=='model_select':
         from .config import valid_model_name
         if (not valid_model_name(value['model']) or type(value['model_digest']) is not str
@@ -284,8 +291,15 @@ class SupportConfiguration:
         _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
 
     def snapshot(self, include_token=False):
+        try:
+            tool_directories = load_directories(self.home)
+            tool_directories_status = 'ready'
+        except ValueError:
+            tool_directories = {}
+            tool_directories_status = 'unavailable'
         with self._lock:
             value = dict(schema=SCHEMA, interfaces=interfaces(), settings=dict(self._settings),
+                         tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
@@ -359,6 +373,8 @@ class SupportConfiguration:
         action = request['action']
         tool = 'capture' if action.startswith('capture_') else action.split('_')[0]
         tool = {'signature':'clamav','wireshark':'wireshark','model':'qwen'}.get(tool, tool)
+        if action == 'tool_directory_set':
+            tool = request['tool_id']
         failed = False
         try:
             if action in {'capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'}:
@@ -484,10 +500,15 @@ class SupportConfiguration:
                 result=status(self.settings.ai,probe=True);self.model_telemetry.invalidate()
                 message=self.settings.ai.model+': '+('accepted a bounded verification response.' if result['inference_verified'] else 'response verification failed ('+result['state']+').')
                 if not result['inference_verified']:raise ValueError(message)
+            elif action == 'tool_directory_set':
+                saved = save_directory(self.home, request['tool_id'], request['directory'])
+                message = ('Installation directory saved. Check this computer again; if background monitoring is enabled, retry background tools to use the new location.'
+                           if request['tool_id'] in saved else
+                           'Custom directory cleared. Automatic discovery will be used on the next check or tool start.')
             elif action == 'zeek_check':
                 binary = zeek_binary(self.home)
                 if binary is None:
-                    raise ValueError('Zeek was not found on PATH or in the verified local installation location.')
+                    raise ValueError('Zeek was not found in the selected directory, PATH or known install locations.')
                 self._execute([binary,'--version'])
                 self._paths()
                 _owned_directory(self.root / 'zeek', private=True)
@@ -541,7 +562,7 @@ class SupportConfiguration:
             if self._job['state']=='running':
                 raise ConfigBusy('Configuration is already running.')
             if self.background.snapshot()['enabled'] and self.background.snapshot()['state']!='failed':
-                if self.sensors.snapshot().get('zeek',{}).get('state')=='error':
+                if self.sensors.snapshot().get('zeek',{}).get('state') in {'error', 'needs_setup', 'stopped'}:
                     self.sensors.stop()
                     self.sensors.start(self._settings['interface'])
                 return self.capture.snapshot()
@@ -557,6 +578,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Configure local MEGALODON support apps through the running HUD')
     parser.add_argument('action', nargs='?', choices=['status',*ACTION_FIELDS], default='status')
     parser.add_argument('--interface')
+    parser.add_argument('--tool-id', choices=sorted(EXECUTABLES))
+    parser.add_argument('--directory')
     parser.add_argument('--nmap-target')
     parser.add_argument('--scan-folder', choices=['Downloads','Documents'])
     parser.add_argument('--model')

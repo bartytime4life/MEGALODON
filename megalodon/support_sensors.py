@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import shutil
 import stat
 import sqlite3
 import subprocess
@@ -27,10 +26,18 @@ ZEEK_SCRIPT = '''event zeek_init() &priority=-100 {
 
 
 def zeek_binary(home):
-    candidates = [shutil.which('zeek'), str(Path(home)/'.local/zeek-8.0.10/bin/zeek')]
-    for value in candidates:
-        if value and Path(value).is_file() and os.access(value, os.X_OK):
-            return value
+    """Resolve the fixed Zeek name through the same locations as Setup."""
+    from .tool_heartbeat import PROBES, _candidate_paths, _executable_ctime, _path_directories
+    from .tool_locations import load_directories, trusted_executable
+    try:
+        configured = load_directories(Path(home))
+    except ValueError:
+        return None
+    if 'zeek' in configured:
+        return str(Path(configured['zeek']) / 'zeek') if trusted_executable(configured['zeek'], 'zeek') else None
+    for candidate in _candidate_paths(PROBES['zeek'], _path_directories(), Path(home)):
+        if _executable_ctime(candidate)[0] == 'yes':
+            return candidate
     return None
 
 
@@ -120,7 +127,7 @@ class SupportSensors:
     def _zeek(self,interface):
         binary = zeek_binary(self.home)
         if not binary:
-            self._publish('zeek',state='needs_setup',message='Zeek is unavailable on PATH or at the supported private prefix.')
+            self._publish('zeek',state='needs_setup',message='Zeek is unavailable in the selected directory, PATH or known install locations.')
             return
         while not self._stop.is_set():
             self._publish('zeek',state='collecting',message='Sampling up to 10 seconds / 2,000 frames; flow counts stay separate from packet totals.')

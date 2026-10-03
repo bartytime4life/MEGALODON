@@ -18,6 +18,7 @@ def test_support_config_behavior(script):
     fixture = dict(schema="megalodon-support-config-v1", token="b" * 32,
                    interfaces=[dict(name="eth0", default=True, up=True), dict(name="wlan0", default=False, up=False)],
                    settings=dict(interface="eth0", nmap_target="127.0.0.1/32", scan_folder="Downloads"),
+                   tool_directories={}, tool_directories_status="ready",
                    job=dict(state="idle", action=None, message="Ready.", started_at=None, finished_at=None),
                    capture=dict(state="idle", interface="", received=0, accepted=0, skipped=0,
                                 started_at=None, finished_at=None, message="Not capturing."), tools=[],
@@ -38,6 +39,7 @@ def test_support_config_composition():
     assert 'aria-expanded="false" aria-controls="support-config"' in INDEX_HTML
     assert 'id="workspace-setup"' in INDEX_HTML
     assert 'id="support-config-capture-stop"' in INDEX_HTML
+    assert 'id="support-config-tool-directory"' in INDEX_HTML
     assert '>Close managed Wireshark</button>' in INDEX_HTML
     assert 'Save any capture you want to keep before closing.' in INDEX_HTML
     assert 'Configure local tools' in INDEX_HTML

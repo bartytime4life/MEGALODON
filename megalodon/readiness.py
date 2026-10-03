@@ -133,16 +133,22 @@ def local_readiness_report():
     """
     from pathlib import Path
     from .tool_heartbeat import PROBES, _installed
+    from .tool_locations import load_directories
     result = readiness_report()
     result['schema'] = 'megalodon-tool-readiness-v3'
     result['probe_mode'] = 'known_install_presence'
-    result['boundaries'][-1] = 'Linux PATH and bounded known installation prefixes are checked; presence does not establish accepted telemetry.'
+    result['boundaries'][-1] = 'Linux PATH, bounded known prefixes and owner-selected directories are checked; presence does not establish accepted telemetry.'
     directories = _path_directories(os.environ.get('PATH'))
+    try:
+        configured = load_directories(Path.home()) if result['platform'] == 'linux' else {}
+    except ValueError:
+        configured = {}
     names = {'wireshark-tshark':'tshark', 'qwen-ollama':'qwen'}
-    if result['platform'] == 'linux' and directories is not None:
+    if result['platform'] == 'linux':
         for row in result['tools']:
             if row['id'] in {'python-sqlite', 'scapy'}:
                 continue
-            presence, _ = _installed(PROBES[names.get(row['id'],row['id'])], directories, Path.home())
+            tool_id = names.get(row['id'], row['id'])
+            presence, _ = _installed(PROBES[tool_id], directories or (), Path.home(), configured.get(tool_id))
             row['status'] = {'yes':'executable_found','no':'not_found','unknown':'not_checked'}[presence]
     return result

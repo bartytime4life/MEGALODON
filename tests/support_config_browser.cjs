@@ -19,6 +19,15 @@ process.stdin.on('end',async()=>{
  change('support-config-interface','wlan0');change('support-config-nmap-target','192.168.1.0/24');change('support-config-scan-folder','Documents');await poll(10000);
  assert.equal(get('support-config-interface').value,'wlan0');assert.equal(get('support-config-nmap-target').value,'192.168.1.0/24');assert.equal(get('support-config-scan-folder').value,'Documents');assert.equal(postCount(),0);
 
+ // A selected install directory stays a bounded, fixed-tool setup action.
+ change('support-config-tool-directory','/home/operator/apps/zeek/bin');
+ await click('support-config-tool-directory-save');
+ assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'tool_directory_set',tool_id:'zeek',directory:'/home/operator/apps/zeek/bin'});
+ payload={...fixture,tool_directories:{zeek:'/home/operator/apps/zeek/bin'}};await poll(10000);
+ assert.equal(get('support-config-tool-directory').value,'/home/operator/apps/zeek/bin');
+ change('support-config-tool-directory','');await click('support-config-tool-directory-save');
+ assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'tool_directory_set',tool_id:'zeek',directory:''});
+ payload=fixture;
  // Model selection shares the protected setup request and retains unsaved choices.
  const model={model:'qwen3.6:latest',message:'Configured model available.',compute_mode:'cpu',options:[{name:'qwen3.6:latest',digest:'a'.repeat(64),size_bytes:2**30},{name:'llama3.2:3b',digest:'b'.repeat(64),size_bytes:2**30}],updated_at:null,last_response_at:null,last_attempt_at:null,response_ms:null,inference_verified:false,loaded:false,memory_bytes:null,vram_bytes:null};
  payload={...fixture,model};await poll(10000);
