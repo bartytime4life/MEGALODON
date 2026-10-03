@@ -165,10 +165,10 @@ class UnconfiguredDashboardReader:
 
 def setup_snapshot(*, inspect_tools: bool = False, source_available: bool = True) -> bytes:
     """One startup check, never a request-triggered probe or tool execution."""
-    from .readiness import readiness_report, MAX_REPORT_BYTES
+    from .readiness import local_readiness_report, MAX_REPORT_BYTES
     from .runtime_status import runtime_report
 
-    report = readiness_report() if inspect_tools else None
+    report = local_readiness_report() if inspect_tools else None
     runtime = runtime_report() if inspect_tools else None
     payload = json.dumps({
         "schema": "dashboard-setup-v2",

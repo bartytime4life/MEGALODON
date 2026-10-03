@@ -63,12 +63,34 @@ def test_first_launch_does_not_suppress_store_refusals(monkeypatch, reason):
             pytest.fail("Unsafe source accepted")
 
 
+def test_hud_startup_finds_private_zeek_prefix_without_running_it(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    binary = home / ".local/zeek-8.0.10/bin/zeek"
+    binary.parent.mkdir(parents=True)
+    marker = tmp_path / "unexpected-execution"
+    binary.write_text(f"#!/bin/sh\ntouch '{marker}'\n", encoding="utf-8")
+    binary.chmod(0o700)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", str(tmp_path / "empty-path"))
+    monkeypatch.setattr(readiness, "runtime_platform", lambda: "linux")
+    monkeypatch.setattr(runtime_status, "runtime_report", lambda: {"runtime": "checked"})
+
+    path_only = readiness.readiness_report()
+    assert next(tool for tool in path_only["tools"] if tool["id"] == "zeek")["status"] == "not_found"
+    receipt = json.loads(dashboard.setup_snapshot(inspect_tools=True))
+    assert receipt["readiness"]["schema"] == "megalodon-tool-readiness-v3"
+    assert receipt["readiness"]["probe_mode"] == "known_install_presence"
+    assert next(tool for tool in receipt["readiness"]["tools"] if tool["id"] == "zeek")["status"] == "executable_found"
+    assert receipt["runtime"] == {"runtime": "checked"}
+    assert not marker.exists()
+
+
 def test_setup_receipt_is_cached_and_http_cannot_trigger_probes(monkeypatch):
     calls = []
     def check():
         calls.append(1)
         return {"test": "startup only"}
-    monkeypatch.setattr(readiness, "readiness_report", check)
+    monkeypatch.setattr(readiness, "local_readiness_report", check)
     monkeypatch.setattr(runtime_status, "runtime_report", lambda: calls.append(2) or {"runtime": "startup only"})
     snapshot = dashboard.setup_snapshot(inspect_tools=True, source_available=False)
     handler = type("HudTestHandler", (dashboard.DashboardHandler,), {
@@ -97,7 +119,7 @@ def test_setup_receipt_is_cached_and_http_cannot_trigger_probes(monkeypatch):
 
 
 def test_ordinary_dashboard_setup_performs_no_readiness_check(monkeypatch):
-    monkeypatch.setattr(readiness, "readiness_report", lambda: pytest.fail("Unexpected tool inspection"))
+    monkeypatch.setattr(readiness, "local_readiness_report", lambda: pytest.fail("Unexpected tool inspection"))
     monkeypatch.setattr(runtime_status, "runtime_report", lambda: pytest.fail("Unexpected runtime inspection"))
     receipt = json.loads(dashboard.setup_snapshot())
     assert receipt["schema"] == "dashboard-setup-v2"
