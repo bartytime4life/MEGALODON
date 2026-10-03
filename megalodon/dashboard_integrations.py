@@ -503,7 +503,7 @@ APPS_SETUP_JS = r'''
   filter();
  });
  window.megalodonAppsRefilter=filter;
- function anchor(){const target=(window.location?.hash||'').slice(1),item=cards.find(item=>'setup-app-'+item.id===target);if(item){byId('apps-setup-query').value='';status='all';if(filters&&typeof filters.querySelectorAll==='function')filters.querySelectorAll('[data-apps-filter]').forEach(node=>node.setAttribute('aria-pressed',node.getAttribute('data-apps-filter')==='all'?'true':'false'));filter();item.card.open=true;item.card.querySelector('summary').focus({preventScroll:true});}}
+ function anchor(){const target=(window.location?.hash||'').slice(1),item=cards.find(item=>'setup-app-'+item.id===target);if(item){byId('apps-setup-query').value='';status='all';if(filters&&typeof filters.querySelectorAll==='function')filters.querySelectorAll('[data-apps-filter]').forEach(node=>node.setAttribute('aria-pressed',node.getAttribute('data-apps-filter')==='all'?'true':'false'));filter();item.card.open=true;item.card.querySelector('summary').focus({preventScroll:true});if(typeof item.card.scrollIntoView==='function')item.card.scrollIntoView({block:'start'});}}
  byId('apps-setup-query').addEventListener('input',filter);window.addEventListener('hashchange',anchor);filter();anchor();
 })();
 '''
