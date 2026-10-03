@@ -48,8 +48,8 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     assert manager.snapshot()['job']['state']=='idle'
 
 
-def test_selected_tool_directory_is_saved_without_running_tool(manager,tmp_path):
-    directory = tmp_path / 'custom/bin'
+def test_selected_tool_directory_is_saved_without_running_tool(manager,private_tmp_path):
+    directory = private_tmp_path / 'custom/bin'
     directory.mkdir(parents=True)
     executable = directory / 'zeek'
     executable.write_text('inert')

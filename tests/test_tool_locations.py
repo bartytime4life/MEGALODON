@@ -7,7 +7,8 @@ import pytest
 from megalodon import readiness, support_sensors, tool_heartbeat, tool_locations
 
 
-def test_selected_zeek_directory_is_used_by_setup_heartbeat_and_sampler(tmp_path, monkeypatch):
+def test_selected_zeek_directory_is_used_by_setup_heartbeat_and_sampler(private_tmp_path, monkeypatch):
+    tmp_path = private_tmp_path
     home = tmp_path / 'home'
     home.mkdir(mode=0o700)
     directory = tmp_path / 'custom apps' / 'bin'
