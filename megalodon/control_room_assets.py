@@ -93,7 +93,7 @@ TRAFFIC_HTML = """
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
   <a class="hud-return" href="#room-home-title">Return to visual HUD →</a><div id="room-findings-table" class="room-table"></div>
 </section>
-""" + REPORTS_HTML.replace("<!-- REPORT_HOSTED_EXPORT -->", "") + """
+""" + REPORTS_HTML + """
 <section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
   <p class="eyebrow">A little guidance</p><h2 id="room-help-title" tabindex="-1">Make yourself at home</h2>
   <p>Start with a check. Add software when you need it. Review evidence when it is available.</p>

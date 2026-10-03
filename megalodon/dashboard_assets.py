@@ -72,7 +72,7 @@ INDEX_HTML = """<!doctype html>
       <p class="eyebrow" id="trust-title">Data status</p>
       <p class="trust-message" id="snapshot-status" role="status" aria-live="polite" aria-atomic="true">Waiting for the first dashboard update. API status does not prove capture health.</p>
     </div>
-    <p class="snapshot-scope"><span id="scope-status">Newest 50 detections maximum</span><span>No changes made</span></p>
+    <p class="snapshot-scope"><span id="scope-status">Newest 50 detections maximum</span></p>
   </section>
 
   <section class="metrics" id="live-metrics" aria-label="Stored telemetry summary">

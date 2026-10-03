@@ -9,7 +9,6 @@ import pytest
 from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_host_telemetry import (
     HOST_TELEMETRY_HTML, HOST_TELEMETRY_CSS, HOST_TELEMETRY_JS,
-    HOST_TELEMETRY_HOSTED_HTML,
 )
 
 
@@ -53,4 +52,3 @@ def test_local_composition():
     assert HOST_TELEMETRY_JS in DASHBOARD_JS
     assert INDEX_HTML.index('id="pc-live-title"') < INDEX_HTML.index('id="room-traffic-grid"')
     assert 'prefers-reduced-motion:reduce' in HOST_TELEMETRY_CSS
-
