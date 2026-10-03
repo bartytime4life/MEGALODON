@@ -214,6 +214,7 @@ function repaintHeartbeat() {
   document.querySelectorAll('[data-heartbeat-install]').forEach(paintInstallControl);
   if (typeof renderAppServiceStarts === 'function') renderAppServiceStarts();
   if (typeof renderSupportApps === 'function') renderSupportApps();
+  if (typeof renderAppStatusRail === 'function') renderAppStatusRail();
   // The live light supersedes the launch-time PATH line and per-tool check buttons.
   const live = heartbeatState.byId.size > 0;
   document.querySelectorAll('.software-presence, .software-check').forEach(node => { if (!node.id || node.id !== 'software-check-python') node.hidden = live; });

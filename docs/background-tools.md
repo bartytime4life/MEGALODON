@@ -25,6 +25,27 @@ workflow status; a saved inventory result is distinct from an active feed.
 | Scapy | Alternative capture engine; not started alongside the TShark feed |
 | nftables | Operator-reviewed local containment from the IP inspector; startup does not change firewall rules |
 
+## Status dots
+
+A slim **Apps** rail under the HUD title bar and the **Supporting apps on this
+PC** tiles inside Background tools show one dot per tool above. They repaint from
+the same local tool heartbeat as Setup (once a minute while the page is visible,
+or immediately with the ↻ button) and never start, stop or query a tool
+themselves.
+
+| Dot | Meaning |
+| --- | --- |
+| Green, pulsing | Running — the expected process was observed |
+| Soft green | Installed — a standalone tool (Scapy, nftables, Nmap) that runs on demand |
+| Amber | Stopped — installed, but its expected process was not observed, or the Ollama example model is missing |
+| Red | Not installed in the checked locations |
+| Grey | Unknown, or the last observation is stale |
+
+A dot reports presence, not health or accepted data; Sensors shows which
+sources actually reached the HUD. Select a dot or tile to open that tool's card
+in **Setup → Apps & connections**, where the same dots appear beside each name
+and filter buttons narrow the list to running, stopped, or missing tools.
+
 ## First-time service configuration
 
 Configure apps offers **Configure local Qwen**, **Configure Suricata**, capture
