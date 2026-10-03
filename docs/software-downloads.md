@@ -63,8 +63,9 @@ follow the guide for the exact product and role you choose.
 | osquery | Host inventory and SQL-based endpoint queries | [Download osquery](https://github.com/osquery/osquery/releases/latest) |
 | Nmap | Authorized network discovery; the HUD does not run scans | [Download Nmap](https://nmap.org/download) |
 
-After installing something, return to **Check this computer**. Presence checks
-use the running server's PATH. If your installation changes PATH, restart the
-HUD from the updated environment. Container/private-prefix installs may remain
-outside executable discovery. A detected program still needs its own documented
-configuration and data handoff.
+After installing something, return to **Check this computer**. Local Setup
+checks the running server's PATH, bounded known locations, and directories you
+select under **Configure apps → Installed tool directories**. If an installation
+changes only PATH, restart the HUD from the updated environment or select its
+executable directory in Setup. A detected program still needs its own documented
+configuration and data handoff; selecting a directory does not start it.

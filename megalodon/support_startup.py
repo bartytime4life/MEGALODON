@@ -149,7 +149,15 @@ class SupportApps:
                 except (ValueError, RuntimeError):
                     self._item("tshark", "Wireshark / TShark", "needs_setup", "Choose an interface and configure capture access in Configure apps.")
             self._services()
-            self._item("zeek", "Zeek", "queued" if self.configuration and self.configuration.background.snapshot()["enabled"] else "needs_setup", "Background monitoring owns bounded CLI samples; current flow counts appear in Apps.")
+            enabled = bool(self.configuration and self.configuration.background.snapshot()["enabled"])
+            zeek_state = self.configuration.sensors.snapshot()["zeek"]["state"] if enabled else "stopped"
+            state = ("failed" if zeek_state == "error" else "needs_setup" if zeek_state == "needs_setup" or not enabled else "queued")
+            message = ("Zeek sampling failed; review capture access and its executable directory, then retry background tools."
+                       if state == "failed" else
+                       "Zeek needs an executable directory and active background monitoring."
+                       if state == "needs_setup" else
+                       "Bounded background samples are scheduled; check Sensors for the latest sample. Zeek is not a continuous service.")
+            self._item("zeek", "Zeek", state, message)
             self._item("scapy", "Scapy / alternate capture", "not_needed", "Standby alternative: the TShark feed supplies live packets, avoiding a redundant Python capture process.")
             self._item("nftables", "nftables", "not_needed", "Command-line tool; no app to open. Firewall rules are not changed by startup.")
         except Exception:

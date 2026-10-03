@@ -48,6 +48,45 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     assert manager.snapshot()['job']['state']=='idle'
 
 
+def test_selected_tool_directory_is_saved_without_running_tool(manager,tmp_path):
+    directory = tmp_path / 'custom/bin'
+    directory.mkdir(parents=True)
+    executable = directory / 'zeek'
+    executable.write_text('inert')
+    executable.chmod(0o700)
+    manager.run = lambda *args: pytest.fail('Saving a directory must not run tools')
+    manager.start({'action':'tool_directory_set','tool_id':'zeek','directory':str(directory)})
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state'] == 'finished'
+    assert manager.snapshot()['tool_directories'] == {'zeek':str(directory)}
+    manager.start({'action':'tool_directory_set','tool_id':'zeek','directory':''})
+    manager._thread.join(2)
+    assert manager.snapshot()['tool_directories'] == {}
+    with pytest.raises(ValueError):
+        manager.start({'action':'tool_directory_set','tool_id':'bash','directory':str(directory)})
+
+
+def test_background_tools_retry_zeek_after_missing_location(manager,monkeypatch):
+    calls = []
+    monkeypatch.setattr(manager.background, 'snapshot', lambda: {'enabled':True,'state':'running'})
+    manager.sensors = SimpleNamespace(snapshot=lambda:{'zeek':{'state':'needs_setup'}},
+                                      stop=lambda:calls.append('stop'),
+                                      start=lambda interface:calls.append(('start',interface)))
+    manager.start_background_tools()
+    assert calls == ['stop', ('start','eth0')]
+
+
+def test_unsafe_tool_directory_profile_is_not_reported_as_ready(manager):
+    from megalodon.tool_locations import profile_path
+    path = profile_path(manager.home)
+    path.parent.mkdir(parents=True)
+    path.write_text('invalid')
+    path.chmod(0o644)
+    snapshot = manager.snapshot()
+    assert snapshot['tool_directories_status'] == 'unavailable'
+    assert snapshot['tool_directories'] == {}
+
+
 def test_qwen_configuration_pins_existing_model_and_restores_background_advice(manager,monkeypatch):
     monkeypatch.setattr(config,'local_qwen_models',lambda:[dict(name='qwen2.5:trusted',digest=AISettings.model_digest)])
     monkeypatch.setattr('megalodon.ai_provider.status',lambda *a,**k:dict(inference_verified=True,state='model_ready'))

@@ -21,7 +21,7 @@ const lifecycleCommands = (() => {
     },
     tshark: apt("tshark", "test -x /usr/bin/tshark && /usr/bin/tshark --version", "Use the repository's guarded setup; do not grant capture permissions."),
     zeek: {
-      verify: "command -v zeek",
+      verify: "Use local Setup → Check this computer, then Prepare Zeek sampler",
       uninstall: null, reinstall: null,
       note: "The repository guide builds a pinned release into a private prefix. A generic apt command would target a different installation. Use the recorded build/prefix and vendor instructions; PATH absence does not establish absence from a private prefix."
     },
@@ -104,7 +104,7 @@ function validateReadinessReport(text, now = Date.now()) {
   const checkedAt = Date.parse(data.checked_at);
   if (!Number.isFinite(checkedAt) || new Date(checkedAt).toISOString().replace(".000Z", "Z") !== data.checked_at || checkedAt > now + 300000) throw new Error("Invalid or future readiness timestamp.");
   if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 10-tool presence-only registry.");
-  const boundaries = known ? [...readinessBoundaries.slice(0,-1), 'Linux PATH and bounded known installation prefixes are checked; presence does not establish accepted telemetry.'] : readinessBoundaries;
+  const boundaries = known ? [...readinessBoundaries.slice(0,-1), 'Linux PATH, bounded known prefixes and owner-selected directories are checked; presence does not establish accepted telemetry.'] : readinessBoundaries;
   if (!Array.isArray(data.boundaries) || data.boundaries.length !== boundaries.length || !data.boundaries.every((value, index) => value === boundaries[index])) throw new Error("Report boundary statements do not match this schema.");
   return data;
 }

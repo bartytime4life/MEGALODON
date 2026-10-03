@@ -32,6 +32,7 @@ from time import monotonic, time
 from typing import Any
 
 from .capabilities import runtime_platform
+from .tool_locations import load_directories, trusted_executable
 
 
 SCHEMA = "megalodon-tool-heartbeat-v1"
@@ -103,14 +104,40 @@ def _executable_ctime(candidate: str) -> tuple[str, float | None]:
     return "no", None
 
 
-def _installed(probe: ToolProbe, directories: tuple[str, ...], home: Path | None) -> tuple[str, float | None]:
-    uncertain = False
+def _candidate_paths(probe: ToolProbe, directories: tuple[str, ...], home: Path | None,
+                     configured_directory: str | None = None) -> list[str]:
+    """A selected directory is authoritative; otherwise use bounded defaults."""
+    if configured_directory is not None:
+        return [os.path.join(configured_directory, name) for name in probe.executables]
     candidates = [os.path.join(d, name) for name in probe.executables for d in directories]
     candidates += list(probe.fixed_paths)
     if home is not None:
         for pattern in probe.home_globs:
             candidates += sorted(glob.glob(str(home / pattern)))[:8]
-    for candidate in candidates:
+    return candidates
+
+
+def _installed(probe: ToolProbe, directories: tuple[str, ...], home: Path | None,
+               configured_directory: str | None = None) -> tuple[str, float | None]:
+    if configured_directory is not None:
+        present = False
+        for name in probe.executables:
+            candidate = os.path.join(configured_directory, name)
+            try:
+                os.lstat(candidate)
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            except OSError:
+                return 'unknown', None
+            present = True
+            if trusted_executable(configured_directory, name):
+                try:
+                    return 'yes', os.stat(candidate).st_ctime
+                except OSError:
+                    return 'unknown', None
+        return ('unknown' if present else 'no'), None
+    uncertain = False
+    for candidate in _candidate_paths(probe, directories, home, configured_directory):
         found, ctime = _executable_ctime(candidate)
         if found == "yes":
             return "yes", ctime
@@ -248,6 +275,10 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
     linux = platform == "linux"
     directories = _path_directories() if linux else ()
     home = Path.home() if linux else None
+    try:
+        configured = load_directories(home) if home is not None else {}
+    except ValueError:
+        configured = {}
     wanted = frozenset().union(*(probe.processes for probe in PROBES.values()))
     starts, complete = _process_starts(proc_root, wanted) if linux else ({}, False)
     own_start = None
@@ -272,7 +303,8 @@ def heartbeat_report(proc_root: Path = Path("/proc"), *, now: float | None = Non
         elif not linux and probe.python_module is None:
             entry = {"installed": "unknown", "installed_since": None, "service": "unknown", "running_since": None}
         else:
-            installed, since = _installed(probe, directories, home) if linux else _installed(probe, (), None)
+            installed, since = (_installed(probe, directories, home, configured.get(tool_id))
+                                if linux else _installed(probe, (), None))
             observed = [starts[name] for name in probe.processes if name in starts]
             if observed:
                 service = "running"

@@ -41,10 +41,23 @@ themselves.
 | Red | Not installed in the checked locations |
 | Grey | Unknown, or the last observation is stale |
 
-A dot reports presence, not health or accepted data; Sensors shows which
-sources actually reached the HUD. Select a dot or tile to open that tool's card
+A dot reports presence, not health or accepted data. Zeek's process can be
+absent between its short samples even while the background sampler is scheduled;
+use Sensors for the latest sample state and time. Select a dot or tile to open
+that tool's card
 in **Setup → Apps & connections**, where the same dots appear beside each name
 and filter buttons narrow the list to running, stopped, or missing tools.
+
+## Tools installed in another directory
+
+In **Setup → Configure apps → Installed tool directories**, choose a fixed tool
+and enter the absolute directory containing its executable. The saved directory
+is checked instead of automatic locations for that tool. Clearing the field
+restores automatic search. This setting verifies presence only; it does not
+install, launch or trust a binary. Zeek's bounded sampler uses the selected
+location at its next start. When monitoring is already enabled, select **Start
+background tools** to retry a stopped Zeek sampler. Other privileged service
+and fixed adapter paths retain their separate setup requirements.
 
 ## First-time service configuration
 
