@@ -11,6 +11,7 @@ import time
 from . import ai_provider
 from .evidence_storage import epoch, utc
 from .local_install import _atomic_write, _regular_owned_file
+from .network_review_context import for_pattern as network_context_for_pattern
 from .retained_history import RetainedEvidenceReader
 from .security_patterns import CONTEXT, analyze_hour, inventory_hour, candidate, stable, WORKFLOWS, MAX_RECORDS
 
@@ -30,6 +31,11 @@ def explain(item, references, settings, *, model=None, owner=None, automatic=Fal
             'Use one short sentence for each text field; state uncertainty explicitly. '
             'Citations MUST include E1, and may also include supplied K identifiers. '
             'A recommendation is never permission. Workflows: '+','.join(WORKFLOWS)+'. DATA '+json.dumps(payload,ensure_ascii=True,separators=(',',':')))
+    context = network_context_for_pattern(item['rule'])
+    if context:
+        candidate_prompt = prompt.replace(' DATA ', ' NETWORK_CONTEXT '+context+' DATA ', 1)
+        if len(candidate_prompt.encode()) <= 4096:
+            prompt = candidate_prompt
     if len(prompt.encode())>4096:raise ValueError('Evidence exceeds bounded explanation context')
     raw=(model or ai_provider.generate)(settings,prompt,max_tokens=256,response_format='intelligence',
                                        priority='background' if automatic else 'manual',owner=owner)
