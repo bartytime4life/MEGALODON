@@ -64,7 +64,7 @@ SETUP_HTML = """
     <div class="setup-bottom">
       <section class="setup-account" aria-labelledby="setup-account-title">
         <h3 id="setup-account-title" tabindex="-1">Local sign-in</h3>
-        <p>The HUD opens without sign-in by default. Reusable password setup is available for the installed desktop HUD. Source launches use a random password shown in their terminal. These buttons prepare commands; they do not change a running HUD or create an online account.</p>
+        <p>The HUD opens without sign-in by default. You can set a reusable password for the installed desktop HUD. Source launches use a random password shown in their terminal. These buttons prepare commands; they do not change a running HUD or create an online account.</p>
         <div class="setup-account-actions">
           <button id="account-password-set-copy" type="button" disabled>Copy password setup command</button>
           <button id="account-password-status-copy" type="button" disabled>Copy password status command</button>
@@ -72,7 +72,7 @@ SETUP_HTML = """
         <code id="account-password-command">Password command unavailable</code>
         <p id="account-password-feedback" role="status" aria-live="polite">Reading this HUD's Python environment…</p>
         <label class="field" for="account-port">Protected session port (optional)<input id="account-port" inputmode="numeric" placeholder="8788" maxlength="5" autocomplete="off"></label>
-        <p>Choose an unused port if you want to leave this HUD running. A protected launch opens a separate session; it does not add sign-in to this one.</p>
+        <p>The prepared command adds <code>--require-sign-in</code>. Choose an unused port if you want to leave this HUD running. A protected launch opens a separate session; it does not add sign-in to this one.</p>
         <div class="setup-account-actions">
           <button id="account-launch-build" type="button" disabled>Prepare protected launch</button>
           <button id="account-launch-copy" type="button" disabled>Copy protected launch</button>
