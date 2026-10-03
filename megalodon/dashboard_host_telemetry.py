@@ -1,4 +1,4 @@
-"""Presentation for the read-only local PC sampler. Hosted markup is inert."""
+"""Presentation for the read-only local PC sampler."""
 
 HOST_TELEMETRY_HTML = r'''
 <section class="pc-live" id="pc-live" aria-labelledby="pc-live-title">
@@ -28,10 +28,6 @@ HOST_TELEMETRY_HTML = r'''
   </div>
   <details class="pc-scope"><summary>What these readings tell you</summary><p>Read-only Linux measurements every 2 seconds, with up to 10 minutes of history held in memory. CPU percentages use whole-PC capacity. RAM is resident memory; shared pages can appear in multiple processes. Companion rows include all recognized instances on this PC.</p><p>Receive and send rates belong to the selected interface. Bridges and VPNs can count the same traffic again. Socket counts describe connections, not the protocol share of captured bytes. Comparing resource and network activity can help investigate load; it does not prove traffic caused it. GPU use and network bytes per app are not measured.</p><p>Pause stops this view’s refresh. Local collection continues while the HUD runs. Traffic metadata and detection charts below use their own saved evidence and selected time range.</p><ul id="pc-notes"></ul></details>
 </section>
-'''
-
-HOST_TELEMETRY_HOSTED_HTML = r'''
-<section class="pc-hosted" aria-labelledby="pc-hosted-title"><p class="panel-kicker">AUTOMATIC ON YOUR LINUX PC</p><h2 id="pc-hosted-title">Live resources. Clearer network activity.</h2><p>The local HUD shows MEGALODON and companion CPU / RAM gauges, per-app disk activity, receive / send trends and connection counts. Its local collector needs no account, API key or uploaded report.</p><p>Open the local HUD using the launch link above. Measurements stay on your computer; this hosted view has no live PC connection.</p></section>
 '''
 
 HOST_TELEMETRY_CSS = r'''
@@ -70,7 +66,6 @@ HOST_TELEMETRY_CSS = r'''
 .pc-state-list { margin:0; font-size:.875rem; } .pc-state-list div { display:flex; justify-content:space-between; gap:1rem; padding:.5rem 0; border-bottom:1px solid #2c4555; } .pc-state-list dd { margin:0; font-variant-numeric:tabular-nums; }
 .pc-sockets summary { font-size:.875rem; } .pc-sockets ol { margin:0; padding-left:1.5rem; font-size:.875rem; overflow-wrap:anywhere; } .pc-sockets li { padding:.35rem 0; }
 .pc-scope { margin-top:1rem; border-top:1px solid #2c4555; } .pc-scope p,.pc-scope li { max-width:105ch; color:#baceDB; font-size:.875rem; line-height:1.6; }
-.pc-hosted { border-left:3px solid #75e6e1; padding:1rem 1.5rem; margin:1.5rem 0; background:#102633; color:#e5f0f6; } .pc-hosted p { max-width:95ch; line-height:1.6; } .pc-hosted h2 { margin:.4rem 0; }
 @media(max-width:980px) { .pc-main-grid,.pc-secondary-grid { grid-template-columns:1fr; } .pc-resources { border-right:0; border-bottom:1px solid #2c4555; padding:0 0 1rem; } .pc-machine { max-width:370px; margin:0 auto; } }
 @media(max-width:480px) { .pc-live { padding:.9rem; } .pc-gauges { gap:.5rem; } .pc-gauge-label { padding:.5rem; } .pc-gauge-label span { font-size:.875rem; } .pc-live-controls { width:100%; } .pc-section-head label { width:100%; } .pc-section-head select { min-width:0; flex:1; } }
 @media(prefers-reduced-motion:reduce) { .pc-gauge-value { transition:none; } }
