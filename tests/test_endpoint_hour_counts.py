@@ -56,6 +56,92 @@ def test_counts_updates_and_both_endpoints_without_writes(evidence):
     assert 'one-connection' not in json.dumps(first)
 
 
+def packet_segment(evidence, count=200):
+    writer=evidence.packet_writer();run=writer.start_ingestion_run('jsonl')
+    for i in range(count):
+        writer.record_event_bundle(PacketEvent(datetime.fromtimestamp(START+30+i/1000,timezone.utc),
+            '192.0.2.8','198.51.100.4','TCP',50000,443,interface='eth0',byte_count=100+i),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    return next(entry for entry in evidence._catalog['entries'] if entry['category']=='packets')
+
+
+def compact(evidence,source):
+    for _ in range(100):
+        assert evidence.compact_step()
+        if source.get('compaction_state')=='complete':return
+    pytest.fail('Synthetic packet source did not compact')
+
+
+@pytest.mark.parametrize('mixed', [False, True])
+@pytest.mark.parametrize('original_removed', [False, True])
+def test_compacted_packet_hours_withhold_all_counts(evidence,mixed,original_removed):
+    source=packet_segment(evidence)
+    if mixed:append(evidence)
+    before=read_hour_counts(evidence,START)
+    assert {(value['kind'],value['count']) for value in for_subject(before)}==(
+        {('packets',200),('flows',5)} if mixed else {('packets',200)})
+    compact(evidence,source)
+    if original_removed:
+        with evidence.lock:
+            source.update(state='deleting',deletion_bytes=evidence._size(source))
+            evidence._recover_deletion(source);evidence._catalog['entries'].remove(source)
+    assert read_hour_counts(evidence,START)==dict(state='unavailable',reason='incompatible_sources',summaries=[])
+
+
+def test_compaction_finishing_during_scan_withholds_counted_prefix(evidence,monkeypatch):
+    source=packet_segment(evidence);append(evidence)
+    original=RetainedEvidenceReader._pages
+    def pages(reader,entry,*args,**kwargs):
+        yield from original(reader,entry,*args,**kwargs)
+        if entry['id']==source['id']:compact(evidence,source)
+    monkeypatch.setattr(RetainedEvidenceReader,'_pages',pages)
+    assert read_hour_counts(evidence,START)==dict(state='unavailable',reason='incompatible_sources',summaries=[])
+
+
+def test_incomplete_compaction_keeps_original_packet_counts(evidence):
+    source=packet_segment(evidence);append(evidence)
+    assert evidence.compact_step() and source['compaction_state']=='building'
+    result=read_hour_counts(evidence,START)
+    assert {(value['kind'],value['count']) for value in for_subject(result)}=={('packets',200),('flows',5)}
+
+
+def test_compacted_hour_processing_records_unavailable_without_count_receipts(evidence):
+    source=packet_segment(evidence);append(evidence);compact(evidence,source)
+    service=service_for(evidence)
+    try:
+        service.process_hour(START)
+        assert service.baselines and evidence.checkpoint('patterns_hour')['end']==START+3600
+        rows=evidence.history(category='baselines',limit=100)['records']
+        assert not [row for row in rows if row['source']==SOURCE]
+        coverage=next(row for row in rows if row['source']=='pattern-hour-coverage-v1')
+        assert coverage['data']['endpoint_counts']==dict(state='unavailable',reason='incompatible_sources')
+    finally:service.close()
+
+
+def test_repaired_receipt_identity_is_distinct_from_v1(evidence):
+    from megalodon import endpoint_hour_counts
+    from hashlib import sha256
+    from megalodon.security_patterns import stable
+    append(evidence)
+    summary=for_subject(read_hour_counts(evidence,START))[0]
+    assert summary['schema']=='megalodon-endpoint-hour-count-v2' and SOURCE=='endpoint-hour-count-v2'
+    # Reconstruct the exact old producer's digest from this real stored input.
+    reader=RetainedEvidenceReader(evidence)
+    sources,_=reader._sources(START,START+3600,categories={'packets','flows'})
+    digests={}
+    for entry,watermark in sources:
+        digest=sha256()
+        for page,_ in reader._pages(entry,watermark,START,START+3600):
+            for row in page:
+                projected=endpoint_hour_counts._project(row)
+                digest.update(json.dumps(projected,sort_keys=True,separators=(',',':')).encode()+b'\n')
+        digests[entry['id']]=digest.hexdigest()
+    legacy_hash=sha256(json.dumps(dict(start=START,end=START+3600,bindings=summary['read_sources'],records=digests),
+        sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    legacy_id=stable([summary['subject'],summary['source'],summary['kind'],summary['scope_id'],START,START+3600,legacy_hash])
+    assert summary['read_sha256']!=legacy_hash and summary['id']!=legacy_id
+
+
 def test_sources_interfaces_segments_and_ipv6_never_combined(evidence):
     append(evidence, count=2)
     append(evidence, count=3, source='suricata-eve')
@@ -241,8 +327,11 @@ def test_count_receipts_do_not_consume_learned_restore_quota(evidence,monkeypatc
     try:
         service.process_hour(START)
         assert len(evidence.history(category='baselines')['records'])==4
+        current=[row for row in evidence.history(category='baselines')['records'] if row['source']==SOURCE]
+        evidence.append_records('baselines',[dict(observed_at=row['observed_at'],source='endpoint-hour-count-v1',
+            data=row['data']|dict(schema='megalodon-endpoint-hour-count-v1')) for row in current])
         # One learned baseline and its existing coverage row fit this quota.
-        # Two new count receipts must be excluded before counting scanned rows.
+        # Both historical v1 and repaired v2 receipts are excluded before counting scanned rows.
         monkeypatch.setattr(intelligence,'MAX_HISTORY',2)
         restarted=service_for(evidence)
         assert set(restarted.baselines)==set(service.baselines)

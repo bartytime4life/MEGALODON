@@ -12,7 +12,7 @@ import time
 from . import ai_provider
 from .evidence_storage import epoch, utc
 from .endpoint_context import retained_context, context_available, facts_text, _library_references, ContextError
-from .endpoint_hour_counts import read_hour_counts, SOURCE as HOUR_COUNT_SOURCE
+from .endpoint_hour_counts import read_hour_counts, SOURCE as HOUR_COUNT_SOURCE, COUNT_SOURCES as HOUR_COUNT_SOURCES
 from .local_install import _atomic_write, _regular_owned_file
 from .network_review_context import for_pattern as network_context_for_pattern
 from .retained_history import RetainedEvidenceReader
@@ -128,7 +128,7 @@ class IntelligenceService(RetainedEvidenceReader):
         now=self.clock()
         try:
             rows,gaps=self._read(now-self.evidence.retention_days*86400,now+1,{'baselines','intelligence'},MAX_HISTORY,
-                                 exclude_sources=(HOUR_COUNT_SOURCE,))
+                                 exclude_sources=HOUR_COUNT_SOURCES)
             ids=self._source_ids()
             for row in rows:
                 data=row['data']

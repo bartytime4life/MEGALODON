@@ -405,8 +405,8 @@ An empty detailed selection can coexist with an explicitly qualified zero
 hourly count; missing summaries cannot be converted to that zero.
 
 The existing completed-hour processor now separately records
-`endpoint-hour-count-v1` rows in managed `baselines` storage. These use schema
-`megalodon-endpoint-hour-count-v1` and count every admitted retained update,
+`endpoint-hour-count-v2` rows in managed `baselines` storage. These use schema
+`megalodon-endpoint-hour-count-v2` and count every admitted retained update,
 including repeated updates of one flow. Each endpoint is counted once per row;
 source, packet/flow kind and the segment/interface scope remain separate. The
 learned baseline dictionary and its deduplication rules do not consume these
@@ -423,6 +423,11 @@ not preempted. Every included original packet must have an admitted capture
 relationship. Source watermarks, qualified packet event IDs, retention expiry and
 source membership are checked again after reading. A changing, retired or
 expired source withholds all summaries; an empty read does not invent zero.
+The initial and final source selections include verified `packet_rollups`
+replacements. Their presence withholds the whole hour as `incompatible_sources`,
+including flow summaries: compacted conversations are not original retained
+records and their counts are not silently substituted or omitted. An incomplete
+compaction build still uses its authoritative original packet unit.
 An unavailable count read preserves the existing pattern result and records a
 finite `endpoint_counts` state in its hour-coverage row. A failed count write
 does not advance the hour checkpoint.
@@ -440,6 +445,13 @@ sources, summary source units, expiry, compatible scopes and exactly two hours;
 receipt shape or a stored `eligible` flag alone is insufficient.
 Segment rotation changes scope identity; cross-segment comparisons remain
 incompatible until a separately reviewed scope-continuity contract exists.
+
+Historical `endpoint-hour-count-v1` receipts remain stored as history. Their
+producer could omit compacted packets while returning eligible flow counts;
+future comparison admission must reject that version. Repaired v2 read digests
+bind the schema and generate distinct logical IDs. Restore excludes both v1
+and v2 count sources from learned/review quotas; neither version is adopted
+into a learned baseline, HUD comparison or provider input by this change.
 
 ### Budgets, binding and lifetime
 
