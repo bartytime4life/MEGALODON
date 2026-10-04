@@ -125,7 +125,7 @@ class RetainedEvidenceReader:
                 gaps.append('A source segment expired or could not be read before aggregation.')
         return sources, gaps
 
-    def _pages(self, entry, maximum, start, end, *, after=0, page_size=512):
+    def _pages(self, entry, maximum, start, end, *, after=0, page_size=512, exclude_sources=()):
         if not self.evidence.derived_available(entry):raise ValueError('Derived source history expired')
         if entry['category']=='packet_rollups':
             # Also qualify summaries produced by earlier versions. Receipts
@@ -143,7 +143,12 @@ class RetainedEvidenceReader:
             self._check()
             with self.evidence.lock, self.evidence._db(entry) as db:
                 table, key = ('events', 'id') if entry['kind'] == 'core' else ('ai_receipt_events', 'sequence') if entry['kind'] == 'receipt' else ('records', 'id')
-                rows = db.execute(f'SELECT * FROM {table} WHERE {key}>? AND {key}<=? ORDER BY {key} LIMIT ?', (last, maximum, page_size)).fetchall()
+                # Internal restore callers can omit unrelated generic records
+                # before they consume the existing row/work budget.
+                excluded = tuple(exclude_sources) if entry['kind']=='generic' else ()
+                clause = ' AND source NOT IN ('+','.join('?' for _ in excluded)+')' if excluded else ''
+                rows = db.execute(f'SELECT * FROM {table} WHERE {key}>? AND {key}<=?{clause} ORDER BY {key} LIMIT ?',
+                                  (last, maximum, *excluded, page_size)).fetchall()
                 if not rows:
                     return
                 linked = {}
