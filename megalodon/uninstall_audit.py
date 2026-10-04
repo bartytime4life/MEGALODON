@@ -52,10 +52,21 @@ def _package_status() -> dict[str, str]:
             return result
     except (OSError, subprocess.TimeoutExpired, UnicodeError):
         return result
+    seen = set()
     for line in probe.stdout.splitlines():
         name, separator, status = line.partition('\t')
         if separator and name in result:
-            result[name] = 'installed' if status == 'install ok installed' else 'not_installed'
+            if name in seen:
+                result[name] = 'unknown'
+                continue
+            seen.add(name)
+            fields = status.split()
+            if (len(fields) == 3 and fields[0] in {'unknown', 'install', 'hold', 'deinstall', 'purge'}
+                    and fields[1] == 'ok'):
+                if fields[2] == 'installed':
+                    result[name] = 'installed'
+                elif fields[2] == 'not-installed':
+                    result[name] = 'not_installed'
     return result
 
 
@@ -90,6 +101,11 @@ def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dic
     )}
     artifacts['hud_user_service'] = _entry(unit_path(selected))
     artifacts['wireshark_profile'] = _entry(home / '.config/wireshark/profiles/MEGALODON')
+    # Support evidence uses a fixed home root even when the installer uses XDG.
+    artifacts['fixed_support_data'] = _entry(home / '.local/share/megalodon/support')
+    fixed_config = home / '.config/megalodon'
+    if fixed_config != selected.config:
+        artifacts['fixed_support_config'] = _entry(fixed_config)
     try:
         selected_tools = load_directories(home)
         profile_state = 'readable'
@@ -107,6 +123,8 @@ def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dic
                 private_zeek.append(_entry(path))
     except (FileNotFoundError, PermissionError, OSError):
         zeek_scan_state = 'unavailable'
+    if len(private_zeek) > 32:
+        zeek_scan_state = 'limited'
     try:
         _, installed_hud = local_status(selected)
     except (InstallError, OSError):

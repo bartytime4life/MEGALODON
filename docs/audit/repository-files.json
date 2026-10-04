@@ -3,15 +3,15 @@
   "baseline": "4b5f8f8",
   "method": "Every file is read and classified; machine checks are not a line-by-line independent audit.",
   "counts": {
-    "documentation": 111,
+    "documentation": 113,
     "workflow": 14,
     "configuration": 36,
-    "source": 177,
+    "source": 181,
     "asset": 2,
     "fixture-or-contract": 249,
     "historical": 13,
     "retired": 32,
-    "test": 213
+    "test": 218
   },
   "files": [
     {
@@ -365,8 +365,8 @@
       "path": "README.md",
       "classification": "documentation",
       "purpose": "MEGALODON Defense MVP",
-      "bytes": 109194,
-      "sha256": "b82aa5b41839b288662db9ae51bbc6e4e2699605b933a000d4ebb1d0115ff559",
+      "bytes": 109343,
+      "sha256": "6cbedd46ea16355eae3de4404378f62c50859166394591158a76077520986545",
       "dependencies": [
         "LICENSE",
         "SECURITY_REVIEW.md",
@@ -4003,10 +4003,10 @@
       "path": "docs/background-tools.md",
       "classification": "documentation",
       "purpose": "Background tools inside MEGALODON",
-      "bytes": 4836,
-      "sha256": "ac6e06adb666998c49881ebd75eaea3b4f62a8043a732e4e05ba6b737c7c46cc",
+      "bytes": 6657,
+      "sha256": "99b626d5d8a059606dff1c9ac95fc67f89c1bf25fc9e1825d533c031c9b94799",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -4417,8 +4417,8 @@
       "path": "docs/dashboard-http-contract.md",
       "classification": "documentation",
       "purpose": "Dashboard HTTP and presentation contract",
-      "bytes": 42540,
-      "sha256": "a2397a21475d756de3aa60e5e240477ccf32e9ede1ea4a0395394a4cc4092295",
+      "bytes": 42567,
+      "sha256": "0bf7ed58d08c9387d23eb1c6dc65233f656de7c6323379ab44ff07f3545d3b19",
       "dependencies": [
         "../megalodon/dashboard.py",
         "../megalodon/dashboard_assets.py",
@@ -4639,6 +4639,20 @@
         "../megalodon/siem_export.py"
       ],
       "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Markdown read and relative links checked"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/full-uninstall-design.md",
+      "classification": "documentation",
+      "purpose": "Full uninstall: inventory and removal gates",
+      "bytes": 3738,
+      "sha256": "a1117d50cf5f2fd2aff082c058742e0d27210af9e584f12bd6ed6d8a31b4a183",
+      "dependencies": [],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -4905,8 +4919,8 @@
       "path": "docs/local-model-selection.md",
       "classification": "documentation",
       "purpose": "Choose a local AI model",
-      "bytes": 5360,
-      "sha256": "7d691fc73401d63abbaef8b5f492d6f26c29e4a8c558b5bd7e9525fe3b3f2110",
+      "bytes": 5665,
+      "sha256": "d3f51e1cfa741309662c890c6078927246849d29c3cdba8d2a148deffe424925",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -4937,8 +4951,8 @@
       "path": "docs/local-pc-setup.md",
       "classification": "documentation",
       "purpose": "Install or run MEGALODON on a local Linux PC",
-      "bytes": 21813,
-      "sha256": "0aa686313709357166b4bc0eaebd9cdc2c7772b0e69c023a8a836f8172e72838",
+      "bytes": 22265,
+      "sha256": "a4d2fc85c5dd8e5a3f52d1606291bf85c6e8597e4eed5c6f7bdaa774aedbbe7b",
       "dependencies": [
         "../README.md",
         "live-connection-globe.md",
@@ -5032,6 +5046,20 @@
         "qwen-provider-hardening.md"
       ],
       "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Markdown read and relative links checked"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "docs/network-review-context.md",
+      "classification": "documentation",
+      "purpose": "Networking context for local AI reviews",
+      "bytes": 2775,
+      "sha256": "f2ffc6671cd525afe5522dbf29eaf5b9ebd2c19080ab39536e8e1527eaf60f0e",
+      "dependencies": [],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -5507,15 +5535,15 @@
       "path": "docs/software-downloads.md",
       "classification": "documentation",
       "purpose": "Software downloads",
-      "bytes": 4867,
-      "sha256": "0bbfc8fa936de05cac9a4fc4509a02e90f2355d1edd98ad4e35530a05076203d",
+      "bytes": 4988,
+      "sha256": "fd9a994d2884f353ca64448d13363b831474d21765603569edd347bd9192b2c8",
       "dependencies": [
         "local-model-advisory-contract.md",
         "local-pc-setup.md#recommended-install-for-this-user",
         "platform-baseline.md",
         "tool-heartbeat.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -5674,8 +5702,8 @@
       "path": "docs/tool-readiness.md",
       "classification": "documentation",
       "purpose": "Local tool readiness receipt",
-      "bytes": 6761,
-      "sha256": "86c19434e4028f0efec5d8e29f7845948e19fc42957f60d54373bc1701c819fd",
+      "bytes": 7552,
+      "sha256": "961d9cf7be07e77661f6a8013d14068648f19bcfe15875e5dd63699cf7f4b59d",
       "dependencies": [
         "dashboard-http-contract.md#first-launch-hud-and-companion-controls",
         "gui-quick-start.md",
@@ -6410,6 +6438,7 @@
         "tests/test_dashboard_live_globe.py",
         "tests/test_dashboard_network_ui.py",
         "tests/test_dashboard_operations_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_query_budget.py",
         "tests/test_dashboard_reference_recovery.py",
         "tests/test_dashboard_report_csv.py",
@@ -6459,6 +6488,7 @@
         "tests/test_model_profile_repair.py",
         "tests/test_model_profile_snapshot.py",
         "tests/test_model_selection.py",
+        "tests/test_network_review_context.py",
         "tests/test_network_topology.py",
         "tests/test_nmap_inventory.py",
         "tests/test_offline.py",
@@ -6516,8 +6546,10 @@
         "tests/test_telemetry_alignment.py",
         "tests/test_threat_context.py",
         "tests/test_tool_heartbeat.py",
+        "tests/test_tool_locations.py",
         "tests/test_tool_management.py",
         "tests/test_tool_setup.py",
+        "tests/test_uninstall_audit.py",
         "tests/test_validation.py",
         "tests/test_wiki_sync.py",
         "tests/test_windows_core_acceptance.py",
@@ -6698,6 +6730,7 @@
         "tests/test_dashboard_live_globe.py",
         "tests/test_dashboard_network_ui.py",
         "tests/test_dashboard_operations_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_reference_recovery.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_storage_ui.py",
@@ -6754,6 +6787,7 @@
         "tests/test_tool_management.py",
         "tests/test_tool_setup.py",
         "tests/test_ubuntu_release_evidence.py",
+        "tests/test_uninstall_audit.py",
         "tests/test_wiki_sync.py",
         "tests/test_windows_core_acceptance.py"
       ]
@@ -6857,6 +6891,7 @@
         "tests/test_dashboard_checks.py",
         "tests/test_dashboard_connection_bounds.py",
         "tests/test_dashboard_history.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_query_budget.py",
         "tests/test_dashboard_reference_recovery.py",
         "tests/test_dashboard_suricata.py",
@@ -7014,6 +7049,7 @@
         "tests/test_local_model_containment_trust_boundary.py",
         "tests/test_local_setup.py",
         "tests/test_model_selection.py",
+        "tests/test_network_review_context.py",
         "tests/test_network_topology.py",
         "tests/test_offline_locations.py",
         "tests/test_operations.py",
@@ -7040,6 +7076,7 @@
         "tests/test_suricata_projection.py",
         "tests/test_tool_management.py",
         "tests/test_tool_setup.py",
+        "tests/test_uninstall_audit.py",
         "tests/test_windows_core_acceptance.py",
         "tests/test_zeek_producer_contract.py"
       ]
@@ -7074,8 +7111,8 @@
       "path": "megalodon/control_room_assets.py",
       "classification": "source",
       "purpose": "Anchored control-room presentation; all traffic comes from the local reader.",
-      "bytes": 64206,
-      "sha256": "2b0f8bf406701544eb799eb1482a3b7ab7d533b4eb25586d35d394bb90199a0d",
+      "bytes": 64161,
+      "sha256": "1591b97f47ce58b771fa66074bf112ad007114b38d5b950c5ab7c96e873839ae",
       "dependencies": [
         ".dashboard_clamav",
         ".dashboard_history",
@@ -7099,8 +7136,8 @@
       "path": "megalodon/dashboard.py",
       "classification": "source",
       "purpose": "Local dashboard. Telemetry routes are read-only.",
-      "bytes": 99425,
-      "sha256": "c13002fcbae903c1c1e540c8bd876d135d19c0d68f826eea051b31a07b06a287",
+      "bytes": 99607,
+      "sha256": "be52a2297f5b4401a12579e529af5937a13b1ca0c848ef6e61313713955a2fd2",
       "dependencies": [
         ".ai_broker",
         ".ai_interface",
@@ -7198,6 +7235,7 @@
         "tests/test_dashboard_live_globe.py",
         "tests/test_dashboard_network_ui.py",
         "tests/test_dashboard_operations_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_query_budget.py",
         "tests/test_dashboard_reference_recovery.py",
         "tests/test_dashboard_reports_ui.py",
@@ -7291,8 +7329,8 @@
       "path": "megalodon/dashboard_assets.py",
       "classification": "source",
       "purpose": "Same-origin dashboard assets, kept separate from HTTP request handling.",
-      "bytes": 146587,
-      "sha256": "8233325709f025a73a3092ebb320e1ee8568cb80ca33e692e1f6a51d5f404683",
+      "bytes": 147055,
+      "sha256": "dbbacffc99ed726c144c5d61647aff9f14a3e24e1fba80ef4818e45f9fc383c5",
       "dependencies": [
         ".control_room_assets",
         ".dashboard_action_plane",
@@ -7310,6 +7348,7 @@
         ".dashboard_network",
         ".dashboard_operations",
         ".dashboard_osquery",
+        ".dashboard_polish",
         ".dashboard_reference_contract",
         ".dashboard_reports",
         ".dashboard_setup",
@@ -7336,6 +7375,7 @@
         "tests/test_dashboard_ingestion_report.py",
         "tests/test_dashboard_live_globe.py",
         "tests/test_dashboard_operations_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_reference_recovery.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_storage_ui.py",
@@ -7397,8 +7437,8 @@
       "path": "megalodon/dashboard_commands.py",
       "classification": "source",
       "purpose": "Display-only Linux package commands captured before dashboard startup.",
-      "bytes": 5001,
-      "sha256": "8e9f98d35c79e4bdf7201942f0f10287e028b5d375a524282f04b6a7259d0b8d",
+      "bytes": 5446,
+      "sha256": "d0bdb2d8f7890587857d7b43196d6fe6eb934b28ebd22ac7b521f475fbe0a4a2",
       "dependencies": [
         "os",
         "pathlib",
@@ -7406,7 +7446,7 @@
         "sys",
         "tomllib"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7471,8 +7511,8 @@
       "path": "megalodon/dashboard_heartbeat.py",
       "classification": "source",
       "purpose": "Status lights and one-click installs for the local HUD.",
-      "bytes": 25493,
-      "sha256": "040b4154830e7fb9c298fd6ad34b378855ab322e81965e336837b65be59572f6",
+      "bytes": 25565,
+      "sha256": "2d75e351918ea2961281357b9864889477410cec91c84a890741b87203b6ece6",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7503,11 +7543,11 @@
     {
       "path": "megalodon/dashboard_host_telemetry.py",
       "classification": "source",
-      "purpose": "Presentation for the read-only local PC sampler. Hosted markup is inert.",
-      "bytes": 31947,
-      "sha256": "c4fc1423df7f76141511aefb7c92c65e6fe850e825dac5ea94f91d59011cf034",
+      "purpose": "Presentation for the read-only local PC sampler.",
+      "bytes": 31148,
+      "sha256": "026ce3e678006bb0b3e982e6c88a334686afabdeeb2c534b903a38945727b694",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -7520,8 +7560,8 @@
       "path": "megalodon/dashboard_integrations.py",
       "classification": "source",
       "purpose": "Presentation for the static integration map; no tool or telemetry access.",
-      "bytes": 36435,
-      "sha256": "437ba83ab623358fe2fef7d92b3264ba9fe3965d776441b2aa0cf8c19056157e",
+      "bytes": 38385,
+      "sha256": "da60f2d6f14e9b67ee1b307fa1ad4f2709c1de3509887cd12261d565abd0a0fe",
       "dependencies": [
         ".dashboard_action_plane",
         ".status_glossary"
@@ -7572,8 +7612,8 @@
       "path": "megalodon/dashboard_live_globe.py",
       "classification": "source",
       "purpose": "Local-only live geographic connection view and legacy history visibility hooks.",
-      "bytes": 45897,
-      "sha256": "c3e5409b4d4df2c4698703f4b5a21f59741dbdc93e9e5a0769d8a86cd6219f2d",
+      "bytes": 46369,
+      "sha256": "01ff4cb5bca303d5f90ed77caf530aa6082ecd4c132264abfef28f6ef0b39499",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7638,6 +7678,22 @@
       ]
     },
     {
+      "path": "megalodon/dashboard_polish.py",
+      "classification": "source",
+      "purpose": "HUD visual polish: supporting-app status dots, motion and one-click choices.",
+      "bytes": 30081,
+      "sha256": "76cfb8e7bae425fb8910a4b079f15e79189fa8d0a4956407e1602af101f1695d",
+      "dependencies": [],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_dashboard_polish.py"
+      ]
+    },
+    {
       "path": "megalodon/dashboard_reference_contract.py",
       "classification": "source",
       "purpose": "Presentation-only Reference Library validation and provenance helpers.",
@@ -7655,8 +7711,8 @@
       "path": "megalodon/dashboard_reports.py",
       "classification": "source",
       "purpose": "Simple local report workspace over cached, managed report jobs.",
-      "bytes": 24324,
-      "sha256": "a5d3bc1000f947ea2b08436712ba125aac967d085bc27d2958a2436e8e24112b",
+      "bytes": 24295,
+      "sha256": "08e1a0a8240432814dfd7d6e5e7cebec2a3f17471c9c33992694912de2cfb2cc",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7672,8 +7728,8 @@
       "path": "megalodon/dashboard_setup.py",
       "classification": "source",
       "purpose": "First-launch presentation and bounded startup receipt rendering.",
-      "bytes": 44089,
-      "sha256": "538d98f0eeea02a090098e25d3d0ad147643231035e97aa4b466e9640a486761",
+      "bytes": 49816,
+      "sha256": "5c11c35095e192e2e4bf4e96a187806631512348bba63a1b0c562bb74fc33b5d",
       "dependencies": [
         ".dashboard_heartbeat"
       ],
@@ -7758,8 +7814,8 @@
       "path": "megalodon/dashboard_support_config.py",
       "classification": "source",
       "purpose": "Explicit local support-tool setup and bounded capture controls.",
-      "bytes": 37742,
-      "sha256": "1f0e380eefcb639868ebb24aec15bae5f1f25ced61ae155be6e006ff51cd7c80",
+      "bytes": 41558,
+      "sha256": "18594735b550b3aac1db5b4b20a1c2e2b2192db74ed2d594eec66c9b83c179db",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7776,8 +7832,8 @@
       "path": "megalodon/dashboard_tool_assets.py",
       "classification": "source",
       "purpose": "Companion reference controls and strict readiness validation for the local HUD.",
-      "bytes": 31875,
-      "sha256": "69c9428ad8a4f07a54750894591fdb3e3f30cadf462a35f08a55c1c10b264fb1",
+      "bytes": 31941,
+      "sha256": "c3d2d6faf144949c8fc023db208a0a7935a70fc19ed5a08dcd8ebf144e685146",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7829,8 +7885,8 @@
       "path": "megalodon/dashboard_workflows.py",
       "classification": "source",
       "purpose": "Local-only background workflow presentation over bounded observed status.",
-      "bytes": 15831,
-      "sha256": "ecc687b7caffeced1e84130934d6a38d5d24237e731cf2d0a9a91fb585e11bc6",
+      "bytes": 16113,
+      "sha256": "5eba685067ae84bab40b5e04e2b6aee431bb4a67aeed05a8ca07499d2337e22f",
       "dependencies": [
         ".dashboard_action_plane",
         ".dashboard_integrations",
@@ -7942,6 +7998,7 @@
         "tests/test_flow_ingestion.py",
         "tests/test_hud_snapshot.py",
         "tests/test_ingestion_runs.py",
+        "tests/test_network_review_context.py",
         "tests/test_service.py",
         "tests/test_service_acceptance.py",
         "tests/test_windows_core_acceptance.py"
@@ -8339,12 +8396,13 @@
       "path": "megalodon/intelligence.py",
       "classification": "source",
       "purpose": "Managed pattern history and one bounded, cancellable local AI review worker.",
-      "bytes": 24512,
-      "sha256": "3c900c49eedcfde1272786b04ab4bd4ccbe8ac5fec0ef60ef1020c2968694c9f",
+      "bytes": 25050,
+      "sha256": "15aa5f03f84dcde91c9a60179efd18921ba373e4058600821aad52e46a0af1a1",
       "dependencies": [
         ".",
         ".evidence_storage",
         ".local_install",
+        ".network_review_context",
         ".retained_history",
         ".security_patterns",
         "collections",
@@ -8365,6 +8423,7 @@
         "tests/test_ai_control.py",
         "tests/test_defense.py",
         "tests/test_intelligence_http.py",
+        "tests/test_network_review_context.py",
         "tests/test_reporting.py",
         "tests/test_security_patterns.py"
       ]
@@ -8572,12 +8631,14 @@
       ],
       "related_tests": [
         "tests/test_dashboard_binding.py",
+        "tests/test_dashboard_commands.py",
         "tests/test_evidence_storage.py",
         "tests/test_hud_autostart.py",
         "tests/test_install_upgrade.py",
         "tests/test_installer_lifecycle_evidence.py",
         "tests/test_local_install.py",
-        "tests/test_start_megalodon.py"
+        "tests/test_start_megalodon.py",
+        "tests/test_uninstall_audit.py"
       ]
     },
     {
@@ -8742,8 +8803,8 @@
       "path": "megalodon/model_telemetry.py",
       "classification": "source",
       "purpose": "Shared cached model observations. Refreshes never load or infer with a model.",
-      "bytes": 6203,
-      "sha256": "1352b70478f72567a5ec264ebfd64907ccfcbbd2c7054c82676733efe39b3f7a",
+      "bytes": 6686,
+      "sha256": "85a4906bacb898b42f730192e6f6597765653c72677990b2cc2483cd8fa2a030",
       "dependencies": [
         ".",
         "datetime",
@@ -8805,6 +8866,7 @@
         "tests/test_local_model_advisory_contract.py",
         "tests/test_model_boundaries.py",
         "tests/test_model_selection.py",
+        "tests/test_network_review_context.py",
         "tests/test_offline.py",
         "tests/test_operations.py",
         "tests/test_packet_compaction.py",
@@ -8822,6 +8884,22 @@
         "tests/test_support_config.py",
         "tests/test_tool_heartbeat.py",
         "tests/test_validation.py"
+      ]
+    },
+    {
+      "path": "megalodon/network_review_context.py",
+      "classification": "source",
+      "purpose": "Reviewed networking interpretation cues for local model explanations.",
+      "bytes": 1887,
+      "sha256": "a4811419f080ff3981a392a63b705b73ac2ea43c293422bad6564bb4024f5957",
+      "dependencies": [],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_network_review_context.py"
       ]
     },
     {
@@ -9203,6 +9281,7 @@
         "tests/test_dashboard.py",
         "tests/test_dashboard_boundaries.py",
         "tests/test_dashboard_ingestion_report.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_report_csv.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_defense.py",
@@ -9261,6 +9340,7 @@
         "tests/test_control_room.py",
         "tests/test_dashboard_boundaries.py",
         "tests/test_dashboard_host_telemetry_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_suricata.py",
         "tests/test_dashboard_workflows_ui.py",
@@ -9288,7 +9368,8 @@
         "tests/test_suricata_reconciliation.py",
         "tests/test_suricata_store.py",
         "tests/test_tool_heartbeat.py",
-        "tests/test_tool_management.py"
+        "tests/test_tool_management.py",
+        "tests/test_uninstall_audit.py"
       ]
     },
     {
@@ -9430,6 +9511,7 @@
         "tests/test_dashboard_checks.py",
         "tests/test_dashboard_commands.py",
         "tests/test_dashboard_host_telemetry_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_documentation_currentness.py",
@@ -9469,12 +9551,14 @@
         "tests/test_community_id.py",
         "tests/test_dashboard.py",
         "tests/test_dashboard_host_telemetry_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_store.py",
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_documentation_currentness.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
+        "tests/test_hud.py",
         "tests/test_offline.py",
         "tests/test_operations.py",
         "tests/test_readiness.py",
@@ -9484,7 +9568,9 @@
         "tests/test_support_config.py",
         "tests/test_support_sensors.py",
         "tests/test_tool_heartbeat.py",
+        "tests/test_tool_locations.py",
         "tests/test_tool_setup.py",
+        "tests/test_uninstall_audit.py",
         "tests/test_zeek_producer_contract.py"
       ]
     },
@@ -9806,11 +9892,12 @@
       "path": "megalodon/readiness.py",
       "classification": "source",
       "purpose": "Bounded, explicit Linux executable discovery; never executes a found tool.",
-      "bytes": 5841,
-      "sha256": "e153d92a5401594c742adfe2c5bf01ffbef372712bfa89b296b6e81653625d41",
+      "bytes": 6087,
+      "sha256": "38e920cc08bfee3a8b68c07a0b83e1b009c8892dba4c87bf88599c7f04369e7c",
       "dependencies": [
         ".capabilities",
         ".tool_heartbeat",
+        ".tool_locations",
         "__future__",
         "datetime",
         "json",
@@ -9831,11 +9918,14 @@
         "tests/test_hud.py",
         "tests/test_install_upgrade.py",
         "tests/test_local_model_readiness.py",
+        "tests/test_model_selection.py",
+        "tests/test_network_review_context.py",
         "tests/test_readiness.py",
         "tests/test_runtime_status.py",
         "tests/test_site_readiness.py",
         "tests/test_status_glossary.py",
         "tests/test_support_sensors.py",
+        "tests/test_tool_locations.py",
         "tests/test_tool_setup.py"
       ]
     },
@@ -12787,6 +12877,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_network_review_context.py",
         "tests/test_reporting.py",
         "tests/test_security_patterns.py"
       ]
@@ -12821,6 +12912,7 @@
         "tests/test_dashboard.py",
         "tests/test_dashboard_action_plane.py",
         "tests/test_dashboard_boundaries.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_defense.py",
         "tests/test_documentation_currentness.py",
         "tests/test_heartbeat_observation.py",
@@ -13009,6 +13101,7 @@
         "tests/test_dashboard_checks.py",
         "tests/test_dashboard_history.py",
         "tests/test_dashboard_operations_ui.py",
+        "tests/test_dashboard_polish.py",
         "tests/test_dashboard_query_budget.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_storage_ui.py",
@@ -13078,8 +13171,8 @@
       "path": "megalodon/support_config.py",
       "classification": "source",
       "purpose": "Fixed local companion configuration actions; no browser-selected commands.",
-      "bytes": 35173,
-      "sha256": "daea388e2a8faaba6236ece9626434c31eb585f2094508e10263f0dca26be5c9",
+      "bytes": 36739,
+      "sha256": "e65500e98affb765ed1c4db6f5e428663ba1ef701f479a67e7738d33aad7771b",
       "dependencies": [
         ".ai_provider",
         ".background_monitor",
@@ -13093,6 +13186,7 @@
         ".model_telemetry",
         ".support_sensors",
         ".support_services",
+        ".tool_locations",
         "__future__",
         "argparse",
         "copy",
@@ -13120,20 +13214,23 @@
         "tests/test_dashboard_support_apps_ui.py",
         "tests/test_dashboard_support_config_ui.py",
         "tests/test_model_selection.py",
-        "tests/test_support_config.py"
+        "tests/test_support_config.py",
+        "tests/test_uninstall_audit.py"
       ]
     },
     {
       "path": "megalodon/support_sensors.py",
       "classification": "source",
       "purpose": "Bounded CLI sensor summaries. Separate from admitted packet/alert evidence.",
-      "bytes": 9914,
-      "sha256": "a5c49d718a87f63e05128d9d7d62773eb554c8f490ba470e5f2cac7a8326c19b",
+      "bytes": 10355,
+      "sha256": "1a8009f194c82f58b9602c9dff0d5bde296d66dffe33cdaaaaf1aefa9816be83",
       "dependencies": [
         ".companion_automation",
         ".local_install",
         ".managed_capture",
         ".support_config",
+        ".tool_heartbeat",
+        ".tool_locations",
         "collections",
         "contextlib",
         "copy",
@@ -13141,7 +13238,6 @@
         "json",
         "os",
         "pathlib",
-        "shutil",
         "sqlite3",
         "stat",
         "subprocess",
@@ -13149,13 +13245,14 @@
         "threading",
         "uuid"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
       ],
       "related_tests": [
-        "tests/test_support_sensors.py"
+        "tests/test_support_sensors.py",
+        "tests/test_tool_locations.py"
       ]
     },
     {
@@ -13176,8 +13273,8 @@
       "path": "megalodon/support_startup.py",
       "classification": "source",
       "purpose": "One explicit local action for fixed companion starts and existing collectors.",
-      "bytes": 12280,
-      "sha256": "3bfba27a10880684661f956eb385c8657ce72bd97fa2182d75ae6e10830e9444",
+      "bytes": 12910,
+      "sha256": "560d25c290f1a2351c1d7547258113debe2e723ff2aeb7cbd54cffcebc0ca53e",
       "dependencies": [
         ".config",
         ".dashboard",
@@ -13199,7 +13296,7 @@
         "threading",
         "time"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -13213,8 +13310,8 @@
       "path": "megalodon/support_workflows.py",
       "classification": "source",
       "purpose": "Current HUD-owned workflow observations; reads never start tools.",
-      "bytes": 3665,
-      "sha256": "72ec64f0f7d5a0b17afdc33271afa735fef2320da7a443baea1c4d551d4456a8",
+      "bytes": 3674,
+      "sha256": "1ba2de2a909fff4169f5b0cd4180226c4fb93b924501b7346be82e7fefc741b1",
       "dependencies": [
         ".managed_capture",
         ".support_sensors"
@@ -13342,10 +13439,11 @@
       "path": "megalodon/tool_heartbeat.py",
       "classification": "source",
       "purpose": "Background tool heartbeat: installed, running and uptime per companion tool.",
-      "bytes": 16673,
-      "sha256": "bf3bba242f547fdc90059420a0494708ee75dfd7ffae83bb8f213f86a141b3fb",
+      "bytes": 18109,
+      "sha256": "ced1044486f598d5ad5ee55f89ac4fde92e4876b35f30e698154d03209c205df",
       "dependencies": [
         ".capabilities",
+        ".tool_locations",
         "__future__",
         "dataclasses",
         "datetime",
@@ -13366,9 +13464,11 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_dashboard_polish.py",
         "tests/test_heartbeat_observation.py",
         "tests/test_status_glossary.py",
-        "tests/test_tool_heartbeat.py"
+        "tests/test_tool_heartbeat.py",
+        "tests/test_tool_locations.py"
       ]
     },
     {
@@ -13403,6 +13503,30 @@
       ]
     },
     {
+      "path": "megalodon/tool_locations.py",
+      "classification": "source",
+      "purpose": "Owner-selected executable directories for fixed local companion tools.",
+      "bytes": 5441,
+      "sha256": "1f7d16a3819a6840b161f36281dbc302c69d0e0ec459f403ee17cac8365587b6",
+      "dependencies": [
+        ".local_install",
+        "__future__",
+        "json",
+        "os",
+        "pathlib",
+        "stat"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_support_config.py",
+        "tests/test_tool_locations.py"
+      ]
+    },
+    {
       "path": "megalodon/tool_setup.py",
       "classification": "source",
       "purpose": "One explicit terminal entry point for companion installation and setup guidance.",
@@ -13428,6 +13552,38 @@
         "tests/test_companion_setup.py",
         "tests/test_dashboard_commands.py",
         "tests/test_tool_setup.py"
+      ]
+    },
+    {
+      "path": "megalodon/uninstall_audit.py",
+      "classification": "source",
+      "purpose": "Read-only inventory for a future full uninstall of this user's local HUD.",
+      "bytes": 8547,
+      "sha256": "da2ec59fc5c97df84ddd09c0ac0efedcd6f6a24eee784943fc0d3b98eebdd60d",
+      "dependencies": [
+        ".hud_autostart",
+        ".local_install",
+        ".tool_locations",
+        "__future__",
+        "argparse",
+        "datetime",
+        "errno",
+        "itertools",
+        "json",
+        "os",
+        "pathlib",
+        "shutil",
+        "stat",
+        "subprocess",
+        "sys"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_uninstall_audit.py"
       ]
     },
     {
@@ -13989,13 +14145,31 @@
       "related_tests": []
     },
     {
+      "path": "tests/conftest.py",
+      "classification": "test",
+      "purpose": "Test fixtures for paths that must pass owner-only ancestry checks.",
+      "bytes": 373,
+      "sha256": "92cfc0dff90289867d0c088bc1c893007f2ed79bc883e5481aa5a2d8d8650159",
+      "dependencies": [
+        "pathlib",
+        "pytest",
+        "tempfile"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "tests/dashboard_checks_behavior.cjs",
       "classification": "test",
       "purpose": "dashboard checks behavior",
-      "bytes": 15130,
-      "sha256": "0cc0eebba791d9d133e5dbeac3321b0d64a367cf9e05538a628550d34f6af040",
+      "bytes": 16848,
+      "sha256": "5d343bf0b6b5325f4e91671bcf059cb473dfcfd0e8512376fcf13b993e7d7371",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -14141,8 +14315,8 @@
       "path": "tests/live_globe_browser.cjs",
       "classification": "test",
       "purpose": "live globe browser",
-      "bytes": 18972,
-      "sha256": "48ff1459ca8a70b348b76e7dd6023e96e4f606d80546cc1f032008e3afd23f9f",
+      "bytes": 20676,
+      "sha256": "d1ff0538257db5d4c2ad42ded72b15100b662a7003cee67ce9b6b018356b31c4",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -14278,8 +14452,8 @@
       "path": "tests/support_config_browser.cjs",
       "classification": "test",
       "purpose": "support config browser",
-      "bytes": 14931,
-      "sha256": "04c3aab77116a51d8bd62928101265f813d6c26145014d57c0b22920b2424228",
+      "bytes": 16479,
+      "sha256": "3ac9d99064d689a65a71fbb72d2e37bcb7e4a50e86f35bbcd20946d32a8ec876",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -15500,8 +15674,8 @@
       "path": "tests/test_dashboard_commands.py",
       "classification": "test",
       "purpose": "Copied package commands keep the dashboard interpreter and quote paths.",
-      "bytes": 7559,
-      "sha256": "a56e828b0496b2e71b9a8769daf29f4549d65c5522b474f64371de8bb3fbc785",
+      "bytes": 8078,
+      "sha256": "21749b36b1f64dcef69ccea14727f476d7b8950e0df2f2dfd30d97823570d524",
       "dependencies": [
         "json",
         "megalodon",
@@ -15513,7 +15687,7 @@
         "subprocess",
         "unittest.mock"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -15613,8 +15787,8 @@
       "path": "tests/test_dashboard_host_telemetry_ui.py",
       "classification": "test",
       "purpose": "Live resource UI contract, failure handling, and shared asset integration.",
-      "bytes": 2982,
-      "sha256": "193d2503c3af0a64a500407014515f8d91aa24384bc14a9e8f380bd7a447cbcb",
+      "bytes": 2949,
+      "sha256": "274b003a1c3ae4f707e9d8652845e826ee3da38d5730519627ce1922d1eddc4c",
       "dependencies": [
         "json",
         "megalodon.dashboard_assets",
@@ -15720,6 +15894,28 @@
       "related_tests": []
     },
     {
+      "path": "tests/test_dashboard_polish.py",
+      "classification": "test",
+      "purpose": "Supporting-app status dots, choice chips and motion stay presentation-only.",
+      "bytes": 5403,
+      "sha256": "3fdca496ca5de17b032d066978f3ab4295a6509b88e05d916f9d1ae19a255628",
+      "dependencies": [
+        "megalodon.dashboard_assets",
+        "megalodon.dashboard_polish",
+        "megalodon.tool_heartbeat",
+        "pytest",
+        "re",
+        "shutil",
+        "subprocess"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "tests/test_dashboard_query_budget.py",
       "classification": "test",
       "purpose": "Bound SQLite work without returning partial or misleading dashboard data.",
@@ -15790,8 +15986,8 @@
       "path": "tests/test_dashboard_reports_ui.py",
       "classification": "test",
       "purpose": "Report interaction and navigation contracts without browser automation.",
-      "bytes": 4778,
-      "sha256": "88b642c05578cdf924c731781687a33f71270a938f0660092aebbbd895f0d51e",
+      "bytes": 4909,
+      "sha256": "882f529e2e4839f1fad57e2248da0dce393efc0ed960d3d508bd600fec9398d1",
       "dependencies": [
         "collections",
         "html.parser",
@@ -15804,7 +16000,7 @@
         "shutil",
         "subprocess"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -15887,8 +16083,8 @@
       "path": "tests/test_dashboard_support_config_ui.py",
       "classification": "test",
       "purpose": "Explicit setup actions, truthful capture state and protected configuration drafts.",
-      "bytes": 2730,
-      "sha256": "2508d5d294fb35f3c0eeda416d71879370b1279ca688aefe852c5e8405f517a3",
+      "bytes": 2865,
+      "sha256": "c3761726923eb37ff794a7b50122e899653dbf842cc9ce0c1360484eea230f62",
       "dependencies": [
         "json",
         "megalodon.dashboard_assets",
@@ -15898,7 +16094,7 @@
         "shutil",
         "subprocess"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -16344,8 +16540,8 @@
       "path": "tests/test_hud.py",
       "classification": "test",
       "purpose": "First-launch HUD acceptance: missing data is unavailable, never fabricated.",
-      "bytes": 8016,
-      "sha256": "8aaec1d66b60cce7f69c30e9a9898aaa71266ad3871319baf82ba27fd9195e2a",
+      "bytes": 9222,
+      "sha256": "2d0b526975c66bb0e3ec8abd530f3eeddc4360ed71b10e7ec2967d008d0c0255",
       "dependencies": [
         "contextlib",
         "http.client",
@@ -17060,8 +17256,8 @@
       "path": "tests/test_model_selection.py",
       "classification": "test",
       "purpose": "Selectable local artifacts retain admission, atomic settings and truthful status.",
-      "bytes": 12503,
-      "sha256": "e5d7953215e72d05bce73567ab521169c07059a55a7006f9eb64bba97aa4da0f",
+      "bytes": 13246,
+      "sha256": "886e658a948c48366014de4af0a465254957937798e84cd81e7ba0aa8e216526",
       "dependencies": [
         "dataclasses",
         "io",
@@ -17076,6 +17272,29 @@
         "types"
       ],
       "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tests/test_network_review_context.py",
+      "classification": "test",
+      "purpose": "Fixed cues preserve detector evidence, prompt bounds and review authority.",
+      "bytes": 5718,
+      "sha256": "9c9f49a932be6e0c955a88728bfec86d197e4869f900da614f9fa22c3f3c3ece",
+      "dependencies": [
+        "datetime",
+        "json",
+        "megalodon",
+        "megalodon.config",
+        "megalodon.detector",
+        "megalodon.models",
+        "megalodon.security_patterns",
+        "pytest"
+      ],
+      "disposition": "retained",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -17920,8 +18139,8 @@
       "path": "tests/test_security_patterns.py",
       "classification": "test",
       "purpose": "test security patterns",
-      "bytes": 13005,
-      "sha256": "e7f72956d5b81538be565ffdaa46618ff68db8ede1c01e104e6b825c5af25034",
+      "bytes": 13781,
+      "sha256": "a00ca7846558f052b3f092b5e5ccbebae0a8fe87995349159bbab5696e8319ec",
       "dependencies": [
         "datetime",
         "json",
@@ -18321,8 +18540,8 @@
       "path": "tests/test_support_config.py",
       "classification": "test",
       "purpose": "Fixed setup permissions, request boundaries, persistence and capture-to-chart flow.",
-      "bytes": 21761,
-      "sha256": "f3ad3bd16f6e67b8df78c34b3663e3b9e09348f3a78335f8e3f2851c8d1d1cf2",
+      "bytes": 23621,
+      "sha256": "90a364c2885113ffb20707a4a428548a4dba8dcb0b0bcc2177632f100b062faa",
       "dependencies": [
         "dataclasses",
         "http.client",
@@ -18334,6 +18553,7 @@
         "megalodon.managed_capture",
         "megalodon.offline.tshark",
         "megalodon.storage",
+        "megalodon.tool_locations",
         "os",
         "pathlib",
         "pytest",
@@ -18342,7 +18562,7 @@
         "threading",
         "types"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -18771,6 +18991,25 @@
       "related_tests": []
     },
     {
+      "path": "tests/test_tool_locations.py",
+      "classification": "test",
+      "purpose": "Owner-selected tool directories must agree across checks and execution.",
+      "bytes": 4146,
+      "sha256": "6f7e32f19fcfd32cbd5310195ccf7ee9f7e326e1dee8aaade5d7a84bda4e8cee",
+      "dependencies": [
+        "json",
+        "megalodon",
+        "pathlib",
+        "pytest"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "tests/test_tool_management.py",
       "classification": "test",
       "purpose": "Only an opted-in ordinary Linux operator can invoke fixed HUD actions.",
@@ -18862,6 +19101,26 @@
         "sys"
       ],
       "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tests/test_uninstall_audit.py",
+      "classification": "test",
+      "purpose": "The full-uninstall scan observes fixed surfaces without changing them.",
+      "bytes": 9454,
+      "sha256": "14d07e67f7c1635e67fdadcff699c22406cb2fca2c0678177a377ae1fed069c9",
+      "dependencies": [
+        "megalodon",
+        "megalodon.local_install",
+        "pathlib",
+        "pytest",
+        "types"
+      ],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -18976,8 +19235,8 @@
       "path": "tests/workflows_browser.cjs",
       "classification": "test",
       "purpose": "workflows browser",
-      "bytes": 9543,
-      "sha256": "58bc45c44a384f8cddf599b50a3a5c9ac4db71f664012bb5e84a4235d2059f27",
+      "bytes": 10009,
+      "sha256": "562ab6c8dca955f4d84b077e5f7ead71666da80fe0bb326c4865a08cc64df4e4",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -19760,12 +20019,21 @@
   ],
   "controls": [
     {
+      "element": "button",
+      "id": "app-rail-recheck",
+      "type": "button",
+      "label": "Check supporting apps now",
+      "disabled": false,
+      "source_references": 1,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
       "element": "select",
       "id": "room-range",
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -19954,7 +20222,7 @@
       "type": null,
       "label": "Upload and download speed units",
       "disabled": false,
-      "source_references": 3,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -19999,7 +20267,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 4,
+      "source_references": 5,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20062,7 +20330,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 2,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20080,7 +20348,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 3,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20359,7 +20627,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 4,
+      "source_references": 5,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20467,7 +20735,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 2,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20494,7 +20762,7 @@
       "type": "text",
       "label": null,
       "disabled": false,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20620,7 +20888,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 3,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20692,7 +20960,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20710,7 +20978,7 @@
       "type": "time",
       "label": null,
       "disabled": false,
-      "source_references": 3,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20747,6 +21015,42 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": null,
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 0,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": null,
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 0,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": null,
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 0,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": null,
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 0,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20809,7 +21113,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 4,
+      "source_references": 5,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20827,7 +21131,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 6,
+      "source_references": 7,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20836,7 +21140,7 @@
       "type": "number",
       "label": null,
       "disabled": false,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20845,7 +21149,7 @@
       "type": "number",
       "label": null,
       "disabled": false,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -20998,7 +21302,7 @@
       "type": null,
       "label": null,
       "disabled": true,
-      "source_references": 4,
+      "source_references": 5,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21043,7 +21347,7 @@
       "type": null,
       "label": null,
       "disabled": true,
-      "source_references": 4,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21052,7 +21356,7 @@
       "type": "number",
       "label": null,
       "disabled": true,
-      "source_references": 4,
+      "source_references": 5,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21125,6 +21429,33 @@
       "label": null,
       "disabled": true,
       "source_references": 3,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "select",
+      "id": "support-config-tool-id",
+      "type": null,
+      "label": null,
+      "disabled": true,
+      "source_references": 7,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "input",
+      "id": "support-config-tool-directory",
+      "type": "text",
+      "label": null,
+      "disabled": true,
+      "source_references": 7,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "support-config-tool-directory-save",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 1,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21205,7 +21536,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 2,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21215,6 +21546,51 @@
       "label": null,
       "disabled": false,
       "source_references": 3,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "account-password-set-copy",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "account-password-status-copy",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "input",
+      "id": "account-port",
+      "type": null,
+      "label": null,
+      "disabled": false,
+      "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "account-launch-build",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 3,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "account-launch-copy",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21259,7 +21635,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 2,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21331,7 +21707,7 @@
       "type": "text",
       "label": null,
       "disabled": false,
-      "source_references": 1,
+      "source_references": 2,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21340,7 +21716,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 1,
+      "source_references": 2,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21358,7 +21734,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21376,7 +21752,7 @@
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 3,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21398,9 +21774,20 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
-  "control_count": 182,
+  "control_count": 195,
   "duplicate_ids": [],
-  "missing_anchors": [],
+  "missing_anchors": [
+    "setup-app-clamav",
+    "setup-app-core",
+    "setup-app-nftables",
+    "setup-app-nmap",
+    "setup-app-osquery",
+    "setup-app-qwen",
+    "setup-app-scapy",
+    "setup-app-suricata",
+    "setup-app-tshark",
+    "setup-app-zeek"
+  ],
   "exclusions": [
     "Ignored private runtime evidence and build environments",
     "Ledger self-digest is intentionally omitted"

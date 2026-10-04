@@ -16,6 +16,18 @@ stop services, change permissions, or delete files. Presence is not ownership.
 The scan records current `dumpcap` mode and whether capability and ACL
 metadata are present; these observations cannot reconstruct prior values.
 
+Fixed home support evidence is inventoried separately from XDG-selected install
+data. Fixed home configuration is also listed when it differs from the selected
+configuration root. A private Zeek scan is marked `limited` if either the
+512-entry discovery bound or the 32-candidate output bound omits entries; an
+unreadable scan is `unavailable`. Neither state establishes absence.
+Package states remain `unknown` for incomplete, malformed, conflicting,
+transitional, residual-configuration or error results. Only explicit healthy
+`installed` or `not-installed` states establish package presence or absence;
+an installed package selected for hold or removal is still present.
+The inventory contains local paths and software presence, so review it before
+sharing it outside this PC.
+
 ## Proposed full removal sequence
 
 1. Choose the exact scope: MEGALODON-owned software versus independently
