@@ -7,7 +7,7 @@ import pytest
 
 from megalodon.ai_provider import AIProviderError
 from megalodon.config import Settings
-from megalodon.endpoint_context import retained_context, context_available, _project
+from megalodon.endpoint_context import retained_context, context_available, _project, ContextError
 from megalodon.evidence_storage import EvidenceStorage, utc, GIB
 from megalodon.intelligence import IntelligenceService
 
@@ -61,6 +61,76 @@ def test_same_qualified_snapshot_is_displayed_and_sent_to_model(service, ip):
     assert service.endpoint_result_valid(result)
     assert not service.endpoint_result_valid(result|{'subject':'192.0.2.99'})
     assert not service.endpoint_result_valid(result|{'snapshot_sha256':'0'*64})
+
+
+def test_read_only_candidate_qualifies_records_and_local_reference(service):
+    append(service)
+    identity='attack@2026-08-05:T1046'
+    service.knowledge=SimpleNamespace(for_pattern=lambda rule:[dict(id=identity,source='attack',edition='2026-08-05',identifier='T1046')])
+    service.model=lambda *a,**kw:pytest.fail('Candidate projection must not invoke a model')
+    before=service.evidence.history(category='intelligence')['total']
+    context=service.context_for_device('192.0.2.8')
+    assert context['groups'][0]['measurement']=='flow_records'
+    assert context['reference_ids']==[identity]
+    assert context['comparison']==dict(state='unavailable',reason='no_baseline')
+    assert service.evidence.history(category='intelligence')['total']==before
+    assert service.reviews=={}
+
+
+def test_read_only_candidate_has_explicit_no_qualified_records(service):
+    context=service.context_for_device('192.0.2.8')
+    assert context['groups']==[] and context['dependencies']==[]
+    assert 'no_qualified_records' in context['coverage']['missing']
+    assert context['comparison']==dict(state='unavailable',reason='no_baseline')
+
+
+def test_read_only_candidate_refuses_expired_source(service):
+    append(service)
+    entry=next(e for e in service.evidence._catalog['entries'] if e['category']=='flows')
+    entry['first_at']=utc(NOW-15*86400)
+    with pytest.raises(ContextError,match='^SOURCE_EXPIRED$'):
+        service.context_for_device('192.0.2.8')
+
+
+def test_read_only_candidate_preserves_partial_and_disagreeing_coverage(service,monkeypatch):
+    from megalodon.retained_history import RetainedEvidenceReader
+    append(service)
+    original=RetainedEvidenceReader._sources
+    def partial(reader,*args,**kwargs):
+        sources,gaps=original(reader,*args,**kwargs)
+        return sources,gaps+['sensor_disagreement']
+    monkeypatch.setattr(RetainedEvidenceReader,'_sources',partial)
+    context=service.context_for_device('192.0.2.8')
+    assert 'sensor_disagreement' in context['coverage']['missing']
+    assert context['comparison']==dict(state='unavailable',reason='incomplete_hours')
+
+
+def test_read_only_candidate_does_not_relabel_learned_baseline_count(service):
+    append(service)
+    entry=next(e for e in service.evidence._catalog['entries'] if e['category']=='flows')
+    service.baselines['synthetic']=dict(key=['192.0.2.8','eth0','zeek-conn','flow'],start=NOW-3600,
+                                        source_segments=[entry['id']],eligible=True,count=50)
+    context=service.context_for_device('192.0.2.8')
+    assert context['comparison']==dict(state='unavailable',reason='incompatible_sources')
+
+
+def test_read_only_candidate_refuses_unknown_reference_identity(service):
+    service.knowledge=SimpleNamespace(for_pattern=lambda rule:[dict(id='attack@2026-08-05:T1046',
+        source='attack',edition='2026-08-05',identifier='T1046')])
+    with pytest.raises(ContextError,match='^UNKNOWN_REFERENCE$'):
+        service.context_for_device('192.0.2.8',reference_ids=('attack@2026-08-05:T9999',))
+
+
+def test_read_only_candidate_refuses_library_change_during_projection(service):
+    append(service)
+    calls=[]
+    def references(rule):
+        calls.append(rule)
+        return ([dict(id='attack@2026-08-05:T1046',source='attack',edition='2026-08-05',identifier='T1046')]
+                if len(calls)==1 else [])
+    service.knowledge=SimpleNamespace(for_pattern=references)
+    with pytest.raises(ContextError,match='^REFERENCE_UNAVAILABLE$'):
+        service.context_for_device('192.0.2.8')
 
 
 @pytest.mark.parametrize('code,state', [('OLLAMA_UNAVAILABLE','unavailable'),('DISABLED','unavailable'),
