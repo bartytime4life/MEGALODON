@@ -11,7 +11,7 @@ import time
 
 from . import ai_provider
 from .evidence_storage import epoch, utc
-from .endpoint_context import retained_context, context_available, facts_text
+from .endpoint_context import retained_context, context_available, facts_text, _library_references, ContextError
 from .local_install import _atomic_write, _regular_owned_file
 from .network_review_context import for_pattern as network_context_for_pattern
 from .retained_history import RetainedEvidenceReader
@@ -345,6 +345,26 @@ class IntelligenceService(RetainedEvidenceReader):
                 and result.get('model_identity')==item.get('analysis',{}).get('settings_identity')
                 and (result.get('analysis_state')!='ready'
                      or item['analysis'].get('settings_identity')==stable(asdict(self.configuration.settings.ai))))
+
+    def context_for_device(self, address, *, reference_ids=None):
+        """Read a candidate context without inference, review writes, or HUD use."""
+        now=self.clock()
+        subject=str(ipaddress.ip_address(address))
+        references=_library_references(self.knowledge,reference_ids)
+        with self.lock:
+            baselines=deepcopy(list(self.baselines.values()))
+        matching=[item for item in baselines if type(item) is dict and type(item.get('key')) in {list,tuple}
+                  and item['key'] and item['key'][0]==subject]
+        if not matching:reason='no_baseline'
+        elif any(not self._valid(item) for item in matching):reason='source_expired'
+        else:reason='incompatible_sources'  # Learned counts lack the v1 retained-record-count basis.
+        context=retained_context(self.evidence,subject,now,comparison_reason=reason,
+                                 references=references,strict_expiry=True)
+        if not context_available(self.evidence,context,now):
+            raise ContextError('SOURCE_EXPIRED')
+        if _library_references(self.knowledge,reference_ids)!=references:
+            raise ContextError('REFERENCE_UNAVAILABLE')
+        return context
 
     def explain_device(self, address):
         """Explain one bounded committed snapshot, preserving facts on AI failure."""

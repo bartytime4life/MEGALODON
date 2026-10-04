@@ -259,6 +259,19 @@ ledger continues to retain only a review ID and `not_attempted` action status.
 Synthetic tests and inert browser checks cover this implementation; they do not
 qualify any model artifact, authorize live inference, or satisfy issue #446.
 
+`IntelligenceService.context_for_device()` is a separate read-only candidate
+projection over the same retained endpoint read. It calls `build_context` with
+exact reference identities returned by the validated local library and refuses
+requested identities absent from that result; source availability and library
+membership are checked again before return. It reports no baseline,
+incompatible learned counts, expired source dependencies, partial coverage or
+truncation as unavailable comparison states. The existing learned flow counts
+deduplicate updates and are never relabeled `retained_record_count`. This method
+does not invoke a provider, persist a review, change a HUD question or retain
+its result. The existing `explain_device()` path still supplies no comparison
+or reference-library claim to inference. Request-generation binding, answer
+rendering, three-mode evaluation, owner binding and acceptance remain separate.
+
 The inventory below was checked against
 `main@b195866bc6f79594a90b7452425e95ace2c2d2e7`, the capability plan's baseline.
 It describes implemented behavior rather than granting authority or replacing
@@ -266,7 +279,8 @@ the separate Airlock policies.
 
 | Entry point | Reads and sends | Retention and effects |
 | --- | --- | --- |
-| `IntelligenceService.explain_device()` | At most 24 address-matching packet/flow records in the preceding hour, under the existing scan bound. Sends source/category counts through `explain()`, plus up to three local reference excerpts and fixed networking context. | Writes a managed review before inference and a source-dependent explanation after source revalidation. Generic `OBSERVED_ACTIVITY` chooses `evidence_summary` in application code. No model-chosen containment workflow. |
+| `IntelligenceService.context_for_device()` | Reads the bounded retained endpoint selection, qualifies local library identities and reports unavailable comparison reasons. Sends nothing to a model. | Returns a candidate packet without a review write or long-lived copy. Later use must revalidate dependencies. |
+| `IntelligenceService.explain_device()` | Reads the bounded retained endpoint selection and sends the same generic context as E1, with no comparison or library references. | Persists a managed review and dependency-aware explanation or fallback; the application fixes the workflow to observation. |
 | `IntelligenceService.analyze()` / `_explain()` | A retained deterministic pattern candidate, facts, missingness, and up to three reference excerpts. Shared one-inference provider gate, manual priority, existing four-attempt automatic hourly budget. | Persists managed explanation or failure state only while dependencies remain valid; cancellation and expired sources prevent a successful retained answer. `report_context()` reads these managed reviews with dependencies. |
 | `Defense._work()` fallback analysis (when intelligence is absent) | Existing endpoint projection: IP/scope/local status, packet/byte/connection counts, ports, flags, up to three names and two findings. Separate two-field answer contract. | Defense receipts retain results. A model proposal is not approval; fixed operator action routes remain separate. This broader fallback is not the new context's admission policy. |
 | `ai_interface.ask()` fixed HUD/CLI questions | One model-selected permitted broker tool, then an explanation of that tool's typed result. `changed` can currently select an alert projection or review references; it does **not** guarantee a before/after comparison. | Broker persists request digest, validated arguments, outcome and result. `patterns.status` deliberately stores review IDs rather than source-expiring facts. The explanation is returned separately. `integrations.status` is explicitly a static catalog. |
@@ -294,12 +308,12 @@ All nested objects are closed; unknown fields are errors, not silently removed.
 | `window`, `as_of` | UTC Unix integer seconds. Window is `{start,end}`, half-open, positive and at most 3,600 seconds; its end cannot exceed `as_of`. A reviewed caller must supply a fresh observation time. The pure builder cannot detect a replayed old clock value. |
 | `sources` | At most 24 `{id,kind,expires_at}` declarations. IDs are 32 lowercase hex digits; kind is `packets`, `flows` or `baselines`. Each referenced source must exist in this input, have the matching kind, and expire strictly after `as_of`. Duplicate and unused declarations fail. This validates a dependency closure, not authenticity or actual on-disk existence. |
 | `records` | At most 24 closed projected records. Required: `{ref,source,scope_id,kind,observed_at,src_ip,dst_ip,missing}`. The reference is an existing `segment:positive_record_id`, never a newly invented evidence ID. Time must be inside the selected window and the selected subject must be an endpoint. Peer addresses are used for qualification but omitted from output. |
-| Source and scope | Packet source is `accepted packet metadata`; flow sources are `suricata-eve`, `zeek-conn` and `zeek-sample`. Kind must match. `scope_id` is a 32-hex opaque application identifier for the already selected sensor/collection/interface scope. It is not a device identity or a payload hash. A future adapter must establish this mapping from admitted metadata; changing interface or collection scope changes the identifier. No raw interface label, path or command is sent. |
+| Source and scope | Packet source is `accepted packet metadata`; flow sources are `suricata-eve`, `zeek-conn` and `zeek-sample`. Kind must match. `scope_id` is a 32-hex opaque application identifier for the selected sensor/collection/interface scope. It is not a device identity or a payload hash. The endpoint adapter binds an admitted segment and interface; changing either changes the identifier. No raw interface label, path or command is sent. |
 | Optional measured fields | `protocol`, `src_port`, `dst_port`, `tcp_flags`, `findings`. Protocols: TCP, UDP, ICMP, ICMPV6, SCTP, DNS, OTHER, UNKNOWN. Ports are integers 0–65535 and require TCP/UDP/SCTP. TCP flags are distinct members of SYN, ACK, FIN, RST, PSH, URG, ECE, CWR and require TCP. V1 excludes bytes, application/service labels, names and arbitrary metadata. |
 | `missing` | Exactly the omitted optional fields, each with `not_collected`, `not_qualified` or (only for ports/flags on a known inapplicable protocol) `not_applicable`. No null or invented zero stands for missing evidence. Present and missing cannot coexist for the same field. |
 | `findings` | Up to three `{id,rule}` objects per packet record, using actual linked positive numeric detection IDs and PORT_SCAN/SYN_FLOOD/DNS_TUNNELING. Output qualifies IDs with the source segment and `finding` namespace; duplicate finding IDs fail. A flow must omit this field and declare its missingness; even `findings: []` is rejected on flows because it would falsely assert a qualified absence. Flow alerts, regenerated detections, severity changes, free-text evidence and inferred incidents are outside v1. An empty qualified packet list and uncollected findings remain different. |
 | `coverage` | Exactly `{truncated,missing}`: a boolean plus unique fixed codes `source_gap`, `incomplete_window`, `sensor_disagreement`, `no_qualified_records`. The last code is required exactly when the detailed record selection is empty. These describe selected evidence, not complete capture. |
-| `references` | At most three `{source,edition,id}` references; source-specific edition and identifier grammar for ATT&CK, ATLAS, D3FEND, OWASP LLM and CISA KEV as listed below. The exact qualified library identity is preserved without aliases or edition rewriting. No titles, excerpts, URLs or user prose. Syntax does not prove membership: a future adapter must resolve the edition and allowlisted identifier against its validated local library. |
+| `references` | At most three `{source,edition,id}` references; source-specific edition and identifier grammar for ATT&CK, ATLAS, D3FEND, OWASP LLM and CISA KEV as listed below. The exact qualified library identity is preserved without aliases or edition rewriting. No titles, excerpts, URLs or user prose. Syntax does not prove membership; the read-only candidate adapter takes identities from the validated local library API. |
 
 The candidate reference grammar follows the bundled library's identities:
 

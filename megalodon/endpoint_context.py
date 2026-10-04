@@ -59,7 +59,32 @@ def _project(row):
     return result
 
 
-def retained_context(evidence, address, now):
+def _library_references(knowledge, requested=None):
+    """Resolve exact identities only from the validated local library API."""
+    try:
+        members = knowledge.for_pattern('OBSERVED_ACTIVITY')
+    except (OSError, ValueError, sqlite3.Error):
+        raise ContextError('REFERENCE_UNAVAILABLE') from None
+    if type(members) is not list or len(members) > 3:
+        raise ContextError('REFERENCE_UNAVAILABLE')
+    allowed = {}
+    for row in members:
+        if type(row) is not dict or any(type(row.get(key)) is not str for key in ('id','source','edition','identifier')):
+            raise ContextError('REFERENCE_UNAVAILABLE')
+        identity = f"{row['source']}@{row['edition']}:{row['identifier']}"
+        if row['id'] != identity or identity in allowed:
+            raise ContextError('REFERENCE_UNAVAILABLE')
+        allowed[identity] = dict(source=row['source'],edition=row['edition'],id=row['identifier'])
+    if requested is None:
+        requested = tuple(allowed)
+    if (type(requested) is not tuple or len(requested) > 3 or
+            any(type(identity) is not str for identity in requested) or len(set(requested)) != len(requested)
+            or any(identity not in allowed for identity in requested)):
+        raise ContextError('UNKNOWN_REFERENCE')
+    return [allowed[identity] for identity in requested]
+
+
+def retained_context(evidence, address, now, *, comparison_reason=None, references=None, strict_expiry=False):
     """Read at most 20,000 candidates and select at most 24 matching records.
 
     Use completed integer seconds, never future observations. A size-limited
@@ -74,11 +99,13 @@ def retained_context(evidence, address, now):
     scanned = 0
     truncated = False
     missing = {'incomplete_window'}  # Selection does not certify full capture coverage.
-    if gaps:
-        missing.add('source_gap')
+    for gap in gaps:
+        missing.add(gap if gap == 'sensor_disagreement' else 'source_gap')
     for entry, watermark in reversed(sources):
         expires = int(epoch(entry.get('first_at') or entry['created_at']) + evidence.retention_days * 86400)
         if expires <= now:
+            if strict_expiry:
+                raise ContextError('SOURCE_EXPIRED')
             missing.add('source_gap')
             continue
         cursor = 0
@@ -122,11 +149,15 @@ def retained_context(evidence, address, now):
     while True:
         used = {r['ref'].split(':')[0] for r in selected}
         reasons = sorted(missing | ({'no_qualified_records'} if not selected else set()))
+        comparison = ('not_requested' if comparison_reason is None else
+                      'truncated' if truncated else
+                      'incomplete_hours' if 'source_gap' in reasons or 'sensor_disagreement' in reasons else
+                      comparison_reason)
         try:
             return build_context(dict(schema=INPUT_SCHEMA, subject=address, window=dict(start=end-3600,end=end), as_of=end,
                 sources=[dependencies[k] for k in sorted(used)], records=selected,
                 coverage=dict(truncated=truncated,missing=reasons),
-                comparison=dict(state='unavailable',reason='not_requested'), references=[]))
+                comparison=dict(state='unavailable',reason=comparison), references=references if references is not None else []))
         except ContextError as exc:
             if exc.code not in {'CONTEXT_TOO_LARGE', 'INPUT_TOO_LARGE'} or not selected:
                 raise
