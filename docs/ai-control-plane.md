@@ -256,9 +256,25 @@ All nested objects are closed; unknown fields are errors, not silently removed.
 | Source and scope | Packet source is `accepted packet metadata`; flow sources are `suricata-eve`, `zeek-conn` and `zeek-sample`. Kind must match. `scope_id` is a 32-hex opaque application identifier for the already selected sensor/collection/interface scope. It is not a device identity or a payload hash. A future adapter must establish this mapping from admitted metadata; changing interface or collection scope changes the identifier. No raw interface label, path or command is sent. |
 | Optional measured fields | `protocol`, `src_port`, `dst_port`, `tcp_flags`, `findings`. Protocols: TCP, UDP, ICMP, ICMPV6, SCTP, DNS, OTHER, UNKNOWN. Ports are integers 0–65535 and require TCP/UDP/SCTP. TCP flags are distinct members of SYN, ACK, FIN, RST, PSH, URG, ECE, CWR and require TCP. V1 excludes bytes, application/service labels, names and arbitrary metadata. |
 | `missing` | Exactly the omitted optional fields, each with `not_collected`, `not_qualified` or (only for ports/flags on a known inapplicable protocol) `not_applicable`. No null or invented zero stands for missing evidence. Present and missing cannot coexist for the same field. |
-| `findings` | Up to three `{id,rule}` objects per packet record, using actual linked positive numeric detection IDs and PORT_SCAN/SYN_FLOOD/DNS_TUNNELING. Output qualifies IDs with the source segment and `finding` namespace; duplicate finding IDs fail. Flow alerts, regenerated detections, severity changes, free-text evidence and inferred incidents are outside v1. An empty qualified list and uncollected findings remain different. |
+| `findings` | Up to three `{id,rule}` objects per packet record, using actual linked positive numeric detection IDs and PORT_SCAN/SYN_FLOOD/DNS_TUNNELING. Output qualifies IDs with the source segment and `finding` namespace; duplicate finding IDs fail. A flow must omit this field and declare its missingness; even `findings: []` is rejected on flows because it would falsely assert a qualified absence. Flow alerts, regenerated detections, severity changes, free-text evidence and inferred incidents are outside v1. An empty qualified packet list and uncollected findings remain different. |
 | `coverage` | Exactly `{truncated,missing}`: a boolean plus unique fixed codes `source_gap`, `incomplete_window`, `sensor_disagreement`, `no_qualified_records`. The last code is required exactly when the detailed record selection is empty. These describe selected evidence, not complete capture. |
-| `references` | At most three `{source,edition,id}` references; source-specific identifier grammar for ATT&CK, ATLAS, D3FEND, OWASP LLM and CISA KEV, with a numeric dated edition. No titles, excerpts, URLs or user prose. Syntax does not prove membership: a future adapter must resolve the edition and allowlisted identifier against its validated local library. |
+| `references` | At most three `{source,edition,id}` references; source-specific edition and identifier grammar for ATT&CK, ATLAS, D3FEND, OWASP LLM and CISA KEV as listed below. The exact qualified library identity is preserved without aliases or edition rewriting. No titles, excerpts, URLs or user prose. Syntax does not prove membership: a future adapter must resolve the edition and allowlisted identifier against its validated local library. |
+
+The candidate reference grammar follows the bundled library's identities:
+
+| Source key | Edition shape and bundled example | Identifier families |
+| --- | --- | --- |
+| `attack` | `YYYY-MM-DD`, e.g. `2026-08-05` | Techniques/subtechniques (`T1046`, `T1071.004`) and mitigations (`M1016`). |
+| `atlas` | `YYYY.MM`, e.g. `2026.09` | Techniques/subtechniques (`AML.T0051`), case studies (`AML.CS0000`) and mitigations (`AML.M0001`). |
+| `d3fend` | Three numeric version components of 1–3 digits each, e.g. `1.6.0` | Alphabetic initial character followed by at most 99 letters/digits/dots/underscores/hyphens, including `NetworkTrafficAnalysis`, `ARMA_Model` and `CWE-1050`. |
+| `owasp` | `YYYY`, e.g. `2026` | Two-digit LLM identifiers, e.g. `LLM01`. |
+| `kev` | `YYYY.MM.DD`, e.g. `2026.10.01` | CVE identifiers, e.g. `CVE-2004-1464`. The library's source key is `kev`, not an invented `cisa-kev` alias. |
+
+Regression tests verify the starter bundle's checked-in digest and exercise
+every bundled reference identity unchanged. Edition shape validation is not a
+calendar, publication, source-membership or authenticity assertion; the future
+library resolver retains that responsibility. New source formats require an
+explicit contract change rather than automatic acceptance of arbitrary text.
 
 Payloads, payload-derived hashes, raw logs, credentials, command lines, paths,
 URLs, arbitrary free text and executable/tool fields are rejected at every
