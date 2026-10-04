@@ -38,11 +38,20 @@ MISSING_REASONS = frozenset({"not_collected", "not_qualified", "not_applicable"}
 COVERAGE_REASONS = frozenset({"source_gap", "incomplete_window", "sensor_disagreement", "no_qualified_records"})
 COMPARISON_REASONS = frozenset({"not_requested", "no_baseline", "incomplete_hours", "incompatible_sources", "source_expired", "truncated"})
 REFERENCE_PATTERNS = {
-    "attack": r"T[0-9]{4}(?:\.[0-9]{3})?",
-    "atlas": r"AML\.T[0-9]{4}(?:\.[0-9]{3})?",
-    "d3fend": r"[A-Z][A-Za-z]{0,63}",
+    "attack": r"(?:T[0-9]{4}(?:\.[0-9]{3})?|M[0-9]{4})",
+    "atlas": r"AML\.(?:T[0-9]{4}(?:\.[0-9]{3})?|(?:CS|M)[0-9]{4})",
+    "d3fend": r"[A-Za-z][A-Za-z0-9_.-]{0,99}",
     "owasp": r"LLM[0-9]{2}",
-    "cisa-kev": r"CVE-[0-9]{4}-[0-9]{4,7}",
+    "kev": r"CVE-[0-9]{4}-[0-9]{4,7}",
+}
+# Preserve the validated library's source-specific identity, without inventing
+# aliases or rewriting editions. These are syntax checks, not membership proof.
+REFERENCE_EDITIONS = {
+    "attack": r"[0-9]{4}-[0-9]{2}-[0-9]{2}",
+    "atlas": r"[0-9]{4}\.[0-9]{2}",
+    "d3fend": r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}",
+    "owasp": r"[0-9]{4}",
+    "kev": r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}",
 }
 
 
@@ -181,10 +190,10 @@ def _record(value: object, subject: str, window: dict, sources: dict, used: set)
     elif missing["tcp_flags"] == "not_applicable":
         _require(protocol in {"UDP", "ICMP", "ICMPV6", "SCTP"}, "INVALID_MISSINGNESS")
     if "findings" in row:
+        _require(kind == "packets", "UNSUPPORTED_FINDING")
         findings = []
         for finding in _list(row["findings"], 3):
             finding = _object(finding, {"id", "rule"})
-            _require(kind == "packets", "UNSUPPORTED_FINDING")
             number = _integer(finding["id"], 1, MAX_COUNT)
             findings.append({"ref": f'{ref.split(":")[0]}:finding:{number}', "rule": _enum(finding["rule"], RULES)})
         result["findings"] = findings
@@ -300,7 +309,7 @@ def build_context(value: object) -> dict:
     for raw in _list(request["references"], 3):
         ref = _object(raw, {"source", "edition", "id"})
         source = _enum(ref["source"], REFERENCE_PATTERNS)
-        edition = _match(ref["edition"], r"[0-9]{4}\.[0-9]{2}(?:\.[0-9]{2})?")
+        edition = _match(ref["edition"], REFERENCE_EDITIONS[source])
         identifier = _match(ref["id"], REFERENCE_PATTERNS[source])
         references.append(f"{source}@{edition}:{identifier}")
     _require(len(set(references)) == len(references), "DUPLICATE_REFERENCE")

@@ -4,6 +4,7 @@ import ast
 import builtins
 from copy import deepcopy
 from hashlib import sha256
+from importlib.resources import files
 import json
 import os
 from pathlib import Path
@@ -31,10 +32,15 @@ def source(identifier=PACKETS, kind="packets"):
 
 
 def record(number=1, *, kind="packets", sensor="accepted packet metadata", segment=PACKETS):
-    return {"ref": f"{segment}:{number}", "source": sensor, "scope_id": SCOPE, "kind": kind,
-            "observed_at": START + number, "src_ip": SUBJECT, "dst_ip": "198.51.100.20",
-            "protocol": "TCP", "src_port": 50000, "dst_port": 443,
-            "tcp_flags": ["SYN"], "findings": [], "missing": {}}
+    row = {"ref": f"{segment}:{number}", "source": sensor, "scope_id": SCOPE, "kind": kind,
+           "observed_at": START + number, "src_ip": SUBJECT, "dst_ip": "198.51.100.20",
+           "protocol": "TCP", "src_port": 50000, "dst_port": 443,
+           "tcp_flags": ["SYN"], "missing": {}}
+    if kind == "packets":
+        row["findings"] = []
+    else:
+        row["missing"]["findings"] = "not_qualified"
+    return row
 
 
 def request():
@@ -43,7 +49,7 @@ def request():
             "sources": [source()], "records": [record()],
             "coverage": {"truncated": False, "missing": []},
             "comparison": {"state": "unavailable", "reason": "no_baseline"},
-            "references": [{"source": "attack", "edition": "2026.09", "id": "T1046"}]}
+            "references": [{"source": "attack", "edition": "2026-08-05", "id": "T1046"}]}
 
 
 def with_comparison(value):
@@ -59,6 +65,73 @@ def with_comparison(value):
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def starter_references():
+    root = files("megalodon.reference").joinpath("security-v1")
+    raw = root.joinpath("starter.json").read_bytes()
+    assert sha256(raw).hexdigest() == root.joinpath("starter.sha256").read_text().strip()
+    return json.loads(raw)["entries"]
+
+
+@pytest.mark.parametrize("reference", starter_references(), ids=lambda row: row["id"])
+def test_bundled_reference_identity_is_preserved_exactly(reference):
+    value = request()
+    value["references"] = [{"source": reference["source"], "edition": reference["edition"],
+                            "id": reference["identifier"]}]
+    assert build_context(value)["reference_ids"] == [reference["id"]]
+
+
+@pytest.mark.parametrize("source,edition,identifier", [
+    ("attack", "2026.08.05", "T1046"),
+    ("atlas", "2026-09-01", "AML.T0051"),
+    ("d3fend", "2026.09", "NetworkTrafficAnalysis"),
+    ("owasp", "2026.09", "LLM01"),
+    ("kev", "2026-10-01", "CVE-2004-1464"),
+    ("attack", "2026-08-05", "LLM01"),
+    ("atlas", "2026.09", "T1046"),
+    ("d3fend", "1.6.0", "../../NetworkTrafficAnalysis"),
+    ("owasp", "2026", "CVE-2004-1464"),
+    ("kev", "2026.10.01", "AML.T0051"),
+])
+def test_source_specific_reference_grammar_stays_closed(source, edition, identifier):
+    value = request()
+    value["references"] = [{"source": source, "edition": edition, "id": identifier}]
+    with pytest.raises(ContextError, match="^INVALID_IDENTIFIER$"):
+        build_context(value)
+
+
+def test_kev_source_identity_is_not_rewritten_to_an_invented_alias():
+    value = request()
+    value["references"] = [{"source": "cisa-kev", "edition": "2026.10.01", "id": "CVE-2004-1464"}]
+    with pytest.raises(ContextError, match="^UNSUPPORTED_VALUE$"):
+        build_context(value)
+
+
+@pytest.mark.parametrize("sensor", ["suricata-eve", "zeek-conn", "zeek-sample"])
+@pytest.mark.parametrize("findings", [[], [{"id": 17, "rule": "SYN_FLOOD"}]])
+def test_flow_findings_field_is_refused_even_when_empty(sensor, findings):
+    value = request()
+    value["references"] = []
+    value["sources"] = [source(FLOWS, "flows")]
+    row = record(kind="flows", sensor=sensor, segment=FLOWS)
+    del row["missing"]["findings"]
+    row["findings"] = findings
+    value["records"] = [row]
+    with pytest.raises(ContextError, match="^UNSUPPORTED_FINDING$"):
+        build_context(value)
+
+
+@pytest.mark.parametrize("sensor", ["suricata-eve", "zeek-conn", "zeek-sample"])
+def test_flow_findings_stay_unqualified_while_packet_absence_can_be_qualified(sensor):
+    value = request()
+    packet_group, = build_context(value)["groups"]
+    value["sources"] = [source(FLOWS, "flows")]
+    value["records"] = [record(kind="flows", sensor=sensor, segment=FLOWS)]
+    flow_group, = build_context(value)["groups"]
+    assert packet_group["findings"] == flow_group["findings"] == []
+    assert "findings" not in packet_group["missing"]
+    assert flow_group["missing"]["findings"] == ["not_qualified"]
 
 
 def test_deterministic_owned_packet_has_inspectable_measurements_and_stable_digest():
@@ -78,7 +151,7 @@ def test_deterministic_owned_packet_has_inspectable_measurements_and_stable_dige
         "dst_port_counts": [{"protocol": "TCP", "port": 443, "count": 2}],
         "tcp_flag_counts": {"SYN": 2}, "findings": [], "missing": {},
     }
-    assert packet["reference_ids"] == ["attack@2026.09:T1046"]
+    assert packet["reference_ids"] == ["attack@2026-08-05:T1046"]
     assert packet["snapshot_sha256"] == sha256(canonical({k: v for k, v in packet.items() if k != "snapshot_sha256"})).hexdigest()
     assert len(canonical(packet)) <= MAX_CONTEXT_BYTES
     value["records"].reverse()
