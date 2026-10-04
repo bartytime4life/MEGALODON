@@ -28,6 +28,56 @@ an installed package selected for hold or removal is still present.
 The inventory contains local paths and software presence, so review it before
 sharing it outside this PC.
 
+## Prepare a removal review
+
+From the same reviewed checkout, prepare a fresh, **read-only** plan:
+
+```bash
+python3.12 -m megalodon.uninstall_plan
+```
+
+The default preserves saved data, companion packages, shared models, external
+backups and firewall settings. It lists manifest-declared releases and known
+paths for review. To include saved-data directories and preview a combined
+removal of specific companion packages:
+
+```bash
+python3.12 -m megalodon.uninstall_plan --include-saved-data \
+  --package tshark --package wireshark --package wireshark-common \
+  --package suricata --package clamav --package nmap --package osquery --json
+```
+
+These options select **preview scope only**. No file is deleted, service stopped,
+package removed, or permission changed. There is no `--apply` option. The report
+always says `review_required` and `execution_available: false`.
+
+The package preview uses a fixed, non-root `apt-get --simulate` command with no
+downloads, purge or autoremove. It checks complete removal records against the
+reported total. Errors, warnings, unexpected install/configuration operations,
+truncation and timeouts produce `unavailable`, never a successful empty plan.
+Python/Git and firewall package removals are flagged; **every unselected
+dependency** blocks the package preview. A reviewable simulation is not proof
+of package ownership or permission to remove it. Simulations are unlocked and
+may see less configuration as a normal user; repeat the review immediately
+before any separately authorized action. See the official
+[APT simulation documentation](https://manpages.debian.org/bookworm/apt/apt-get.8.en.html).
+
+Known saved-data roots use the selected HOME/XDG locations, plus fixed support
+locations. Their contents are not traversed or read. Symlinks, foreign-owned
+paths and unavailable entries stay held for review. The app root itself is
+never a recursive removal candidate: unrecognized children, custom Zeek
+installations, custom tool directories and external backups need their own
+ownership review. The release selector also needs verification against the
+manifest. No report is accepted as execution input, so an old plan cannot
+authorize a later action.
+
+Exit code 0 means the report was produced with no blocked/failed package
+simulation; it does not mean removal is approved or complete. Exit code 2 means
+invalid inputs or a blocked/unavailable package preview. After a separately
+authorized removal, rerun `megalodon.uninstall_audit --json` and review remaining
+known paths, package presence and unknowns. This is a bounded scan, not a
+whole-computer cleanliness claim.
+
 ## Proposed full removal sequence
 
 1. Choose the exact scope: MEGALODON-owned software versus independently
