@@ -859,9 +859,6 @@ def _uninstall_selected(selected: InstallPaths) -> dict[str, object]:
     manifest = _load_manifest(selected)
     if manifest is None:
         return {"schema": "megalodon-local-uninstall-v1", "status": "not_installed", "data": "preserved"}
-    from . import hud_autostart
-    if os.path.lexists(hud_autostart.unit_path(selected)):
-        hud_autostart.disable(selected)
     health = _artifact_health(selected, manifest)
     if any(value not in {"ready", "missing"} for value in health.values()):
         raise InstallError("an installed artifact was modified; preserve and review it before uninstall")
@@ -876,6 +873,10 @@ def _uninstall_selected(selected: InstallPaths) -> dict[str, object]:
             if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
                 raise InstallError("an installed release directory is unsafe")
             existing_releases.append(release)
+    # Complete the existing artifact/selector/release-directory preflight before
+    # stopping the HUD. A refused uninstall must not disable a valid service.
+    from . import hud_autostart
+    hud_autostart.disable(selected)
     for name, path in _artifact_paths(selected).items():
         if health[name] == "ready":
             path.unlink()

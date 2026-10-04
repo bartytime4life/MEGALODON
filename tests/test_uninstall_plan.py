@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from megalodon import local_install, uninstall_audit, uninstall_plan
+from megalodon import hud_autostart, local_install, uninstall_audit, uninstall_plan
 
 
 def simulation(*packages):
@@ -213,3 +213,50 @@ def test_cli_rejects_apply_and_returns_nonzero_for_failed_preview(monkeypatch, c
     monkeypatch.setattr(uninstall_plan, 'plan', lambda **_: {'package_preview': {'state': 'unavailable'}})
     assert uninstall_plan.main(['--json']) == 2
     assert json.loads(capsys.readouterr().out)['package_preview']['state'] == 'unavailable'
+
+
+@pytest.mark.parametrize('kind,disposition', [
+    ('managed', 'candidate'), ('modified', 'preserve_for_review'),
+    ('symlink', 'preserve_for_review'), ('hardlink', 'preserve_for_review'),
+    ('oversized', 'preserve_for_review'), ('unreadable', 'preserve_for_review'),
+    ('absent', 'absent'),
+])
+def test_service_preview_uses_same_identity_check_as_disable(private_tmp_path, monkeypatch, kind, disposition):
+    home = private_tmp_path / 'home'
+    home.mkdir(mode=0o700)
+    paths = local_install.install_paths({'HOME': str(home), 'XDG_CONFIG_HOME': str(home / 'selected-config')})
+    unit = hud_autostart.unit_path(paths)
+    local_install._create_directory_chain(unit.parent, 0o700)
+    expected = hud_autostart.unit_contents(paths)
+    if kind != 'absent':
+        unit.write_bytes(expected)
+    if kind == 'modified':
+        unit.write_bytes(expected + b'# owner change\n')
+    elif kind == 'oversized':
+        unit.write_bytes(b'x' * 8193)
+    elif kind in {'symlink', 'hardlink'}:
+        other = home / 'unrelated-unit'
+        unit.rename(other)
+        if kind == 'symlink':
+            unit.symlink_to(other)
+        else:
+            unit.hardlink_to(other)
+    elif kind == 'unreadable':
+        def denied(*args, **kwargs):
+            raise PermissionError('denied')
+        monkeypatch.setattr(hud_autostart, '_regular_owned_file', denied)
+    monkeypatch.setattr(local_install, '_load_manifest', lambda _: {'releases': [{'id': 'synthetic'}]})
+    monkeypatch.setattr(uninstall_audit, 'local_status', lambda _: (0, {'status': 'ready', 'artifacts': {}}))
+    monkeypatch.setattr(uninstall_audit, '_package_status', lambda: {})
+    monkeypatch.setattr(hud_autostart, '_systemctl', lambda *a: pytest.fail('preview must not change services'))
+    before = unit.read_bytes() if kind != 'absent' else None
+
+    report = uninstall_plan.plan(paths=paths, home=home)
+
+    service = next(item for item in report['files'] if item['name'] == 'hud_user_service')
+    assert service['disposition'] == disposition
+    if kind != 'absent':
+        assert service['installed_artifact_status'] == ('matches_managed_unit' if kind == 'managed' else 'needs_review')
+        assert unit.read_bytes() == before
+    else:
+        assert not unit.exists()

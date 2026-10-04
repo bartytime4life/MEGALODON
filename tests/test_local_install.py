@@ -328,6 +328,66 @@ def test_modified_managed_file_blocks_repair_and_uninstall(layout, source, monke
     assert layout.current.is_symlink()
 
 
+@pytest.mark.parametrize('damage', ['launcher', 'selector', 'release_symlink', 'release_file'])
+def test_failed_uninstall_preflight_never_stops_hud(layout, source, monkeypatch, damage):
+    from megalodon import hud_autostart
+
+    ids = iter(['synthetic-first', 'synthetic-second'])
+    monkeypatch.setattr(local_install, '_create_release', release_factory(layout, ids))
+    first = local_install.install(source, layout)
+    local_install.install(source, layout)
+    unit = hud_autostart.unit_path(layout)
+    local_install._create_directory_chain(unit.parent, 0o700)
+    unit.write_bytes(hud_autostart.unit_contents(layout))
+    unit_before = unit.read_bytes()
+    manifest_before = layout.manifest.read_bytes()
+    previous = layout.releases / first['active_release']
+    if damage == 'launcher':
+        layout.hud_launcher.write_text('operator replacement')
+    elif damage == 'selector':
+        layout.current.unlink()
+        layout.current.symlink_to(previous)
+    else:
+        shutil.rmtree(previous)
+        if damage == 'release_symlink':
+            previous.symlink_to(layout.data)
+        else:
+            previous.write_text('unrelated file')
+    monkeypatch.setattr(hud_autostart, '_systemctl', lambda *args: pytest.fail('Refused uninstall stopped the HUD'))
+
+    with pytest.raises(local_install.InstallError):
+        local_install.uninstall(layout)
+
+    assert unit.read_bytes() == unit_before
+    assert layout.manifest.read_bytes() == manifest_before
+    assert layout.manager_launcher.exists()
+    assert layout.settings.exists()
+
+
+def test_valid_uninstall_stops_managed_service_before_removing_code(layout, source, monkeypatch):
+    from megalodon import hud_autostart
+
+    monkeypatch.setattr(local_install, '_create_release', release_factory(layout, iter(['synthetic-release'])))
+    local_install.install(source, layout)
+    unit = hud_autostart.unit_path(layout)
+    local_install._create_directory_chain(unit.parent, 0o700)
+    unit.write_bytes(hud_autostart.unit_contents(layout))
+    evidence = layout.data / 'keep.db'
+    evidence.write_bytes(b'private fixture')
+    calls = []
+    def systemctl(*args):
+        assert layout.hud_launcher.exists() and layout.manifest.exists()
+        calls.append(args)
+    monkeypatch.setattr(hud_autostart, '_systemctl', systemctl)
+
+    assert local_install.uninstall(layout)['status'] == 'removed'
+
+    assert calls == [('disable', '--now', hud_autostart.UNIT), ('daemon-reload',)]
+    assert not unit.exists() and not layout.hud_launcher.exists()
+    assert evidence.read_bytes() == b'private fixture'
+    assert layout.settings.exists()
+
+
 def test_changed_launcher_mode_is_not_reported_ready_or_silently_repaired(
     layout, source, monkeypatch
 ):
