@@ -272,8 +272,20 @@ The existing learned flow counts
 deduplicate updates and are never relabeled `retained_record_count`. This method
 does not invoke a provider, persist a review, change a HUD question or retain
 its result. The existing `explain_device()` path still supplies no comparison
-or reference-library claim to inference. Request-generation binding, answer
-rendering, three-mode evaluation, owner binding and acceptance remain separate.
+or reference-library claim to inference. Richer model-answer integration,
+three-mode evaluation, owner binding and acceptance remain separate.
+
+The HUD endpoint inspector now exposes this projection through an explicit
+**Read retained facts** control and the protected read-only context route.
+It works independently of the Defense job, audit readiness and selected AI
+provider. The view separates packet records from flow updates and displays
+missing/truncated coverage, source observation age, local reference identities
+and the finite unavailable-comparison reason. Read serials and selection
+generations reject stale responses; visible facts refresh every five seconds
+and hide on failed checks, declared expiry, inactivity or a stale check age.
+No model call, review write, rich-context persistence or inference adoption
+occurs through this route. Dependency revalidation is sequential and polling
+has a finite observation gap; it is not independent provenance/privacy acceptance.
 
 The inventory below was checked against
 `main@b195866bc6f79594a90b7452425e95ace2c2d2e7`, the capability plan's baseline.
@@ -282,7 +294,7 @@ the separate Airlock policies.
 
 | Entry point | Reads and sends | Retention and effects |
 | --- | --- | --- |
-| `IntelligenceService.context_for_device()` | Reads the bounded retained endpoint selection, qualifies local library identities and reports unavailable comparison reasons. Sends nothing to a model. | Returns a candidate packet without a review write or long-lived copy. Later use must revalidate dependencies. |
+| `IntelligenceService.context_for_device()` | Reads the bounded retained endpoint selection, qualifies local library identities and reports unavailable comparison reasons. The HUD facts control uses its protected GET route. Sends nothing to a model. | Returns a packet without a review write or long-lived copy. Visible facts revalidate on each refresh and hide when checks fail; later callers must revalidate dependencies. |
 | `IntelligenceService.explain_device()` | Reads the bounded retained endpoint selection and sends the same generic context as E1, with no comparison or library references. | Persists a managed review and dependency-aware explanation or fallback; the application fixes the workflow to observation. |
 | `IntelligenceService.analyze()` / `_explain()` | A retained deterministic pattern candidate, facts, missingness, and up to three reference excerpts. Shared one-inference provider gate, manual priority, existing four-attempt automatic hourly budget. | Persists managed explanation or failure state only while dependencies remain valid; cancellation and expired sources prevent a successful retained answer. `report_context()` reads these managed reviews with dependencies. |
 | `Defense._work()` fallback analysis (when intelligence is absent) | Existing endpoint projection: IP/scope/local status, packet/byte/connection counts, ports, flags, up to three names and two findings. Separate two-field answer contract. | Defense receipts retain results. A model proposal is not approval; fixed operator action routes remain separate. This broader fallback is not the new context's admission policy. |

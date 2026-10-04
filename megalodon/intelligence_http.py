@@ -1,5 +1,6 @@
 """Local-only routes for reference data and review proposals."""
 import hmac
+from ipaddress import ip_address
 import json
 import re
 import sqlite3
@@ -18,6 +19,16 @@ def read(handler, route):
         if route.path=='/api/knowledge/search' and set(query)=={'q'}:
             value=dict(results=provider.search(query['q'][0]))
         elif route.path=='/api/knowledge' and not query:value=provider.snapshot(include_token=True)
+        elif route.path=='/api/intelligence/context' and set(query)=={'device'}:
+            if len(query['device'][0])>64:raise ValueError('Address exceeds bounds')
+            address=str(ip_address(query['device'][0]))
+            if '%' in address:raise ValueError('Scoped address unsupported')
+            if not handler.context_read_lock.acquire(blocking=False):
+                handler._send_json({'error':'A retained facts read is already running'},status=409);return
+            try:
+                value=provider.context_for_device(address)
+            finally:
+                handler.context_read_lock.release()
         elif route.path=='/api/intelligence' and not set(query)-{'device'}:
             value=provider.snapshot(include_token=True,device=query.get('device',[None])[0])
         else:raise ValueError('Unsupported knowledge query')

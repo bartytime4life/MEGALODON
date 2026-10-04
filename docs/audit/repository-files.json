@@ -6,12 +6,12 @@
     "documentation": 113,
     "workflow": 14,
     "configuration": 36,
-    "source": 181,
+    "source": 184,
     "asset": 2,
     "fixture-or-contract": 249,
     "historical": 13,
     "retired": 32,
-    "test": 218
+    "test": 222
   },
   "files": [
     {
@@ -3530,10 +3530,11 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 13271,
-      "sha256": "14315ba65e6ba359cd5f62aa8b84b94645a75fb8cfcbbe904eff4ff1d421e0ba",
+      "bytes": 36408,
+      "sha256": "fcd487f3ee796ce805c836f05484570887c1555497ae7c0e50f8f8ea773dd9ed",
       "dependencies": [
         "local-model-selection.md",
+        "qwen-446-owner-decision-packet.md",
         "qwen-provider-hardening.md",
         "security-knowledge.md"
       ],
@@ -4417,8 +4418,8 @@
       "path": "docs/dashboard-http-contract.md",
       "classification": "documentation",
       "purpose": "Dashboard HTTP and presentation contract",
-      "bytes": 42567,
-      "sha256": "0bf7ed58d08c9387d23eb1c6dc65233f656de7c6323379ab44ff07f3545d3b19",
+      "bytes": 44194,
+      "sha256": "4ffd370c9232150dfbe7fd414b27c0643e5491977746675d2b679f413e364063",
       "dependencies": [
         "../megalodon/dashboard.py",
         "../megalodon/dashboard_assets.py",
@@ -4649,8 +4650,8 @@
       "path": "docs/full-uninstall-design.md",
       "classification": "documentation",
       "purpose": "Full uninstall: inventory and removal gates",
-      "bytes": 3738,
-      "sha256": "a1117d50cf5f2fd2aff082c058742e0d27210af9e584f12bd6ed6d8a31b4a183",
+      "bytes": 6783,
+      "sha256": "7611d80687ef3fa1056cd40a6f784ddaacb2f0da5709fff4d3443f790250ef0a",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -6201,6 +6202,30 @@
       ]
     },
     {
+      "path": "megalodon/ai_context.py",
+      "classification": "source",
+      "purpose": "Evidence-context v1; pure validation/projection, not runtime admission.",
+      "bytes": 16475,
+      "sha256": "b9fa3af192641b53d21d7cb30fb87643954f935a597184b920d30fa73423bd48",
+      "dependencies": [
+        "__future__",
+        "collections",
+        "hashlib",
+        "ipaddress",
+        "json",
+        "re"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_ai_context.py",
+        "tests/test_dashboard_operations_ui.py"
+      ]
+    },
+    {
       "path": "megalodon/ai_interface.py",
       "classification": "source",
       "purpose": "Operator-selected questions through model selection and the fixed broker.",
@@ -6256,6 +6281,7 @@
         "tests/test_companion_automation.py",
         "tests/test_dashboard_ai_control.py",
         "tests/test_defense.py",
+        "tests/test_endpoint_context.py",
         "tests/test_model_selection.py",
         "tests/test_security_patterns.py",
         "tests/test_support_config.py"
@@ -6390,6 +6416,7 @@
       "related_tests": [
         "tests/test_advisory.py",
         "tests/test_advisory_result_integrity.py",
+        "tests/test_ai_context.py",
         "tests/test_ai_control.py",
         "tests/test_ai_doctor_consent.py",
         "tests/test_alert_lifecycle_contract.py",
@@ -6457,6 +6484,7 @@
         "tests/test_detector_acceptance.py",
         "tests/test_detector_evidence.py",
         "tests/test_documentation_currentness.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_external_exchange_contract.py",
         "tests/test_firewall.py",
@@ -6550,6 +6578,7 @@
         "tests/test_tool_management.py",
         "tests/test_tool_setup.py",
         "tests/test_uninstall_audit.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_validation.py",
         "tests/test_wiki_sync.py",
         "tests/test_windows_core_acceptance.py",
@@ -6699,6 +6728,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_context.py",
         "tests/test_ai_control.py",
         "tests/test_ai_doctor_consent.py",
         "tests/test_anomaly_triage.py",
@@ -6940,6 +6970,7 @@
         "tests/test_tool_heartbeat.py",
         "tests/test_tool_management.py",
         "tests/test_ubuntu_release_evidence.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_windows_core_acceptance.py"
       ]
     },
@@ -7036,6 +7067,7 @@
         "tests/test_detector.py",
         "tests/test_detector_acceptance.py",
         "tests/test_detector_evidence.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_external_exchange_contract.py",
         "tests/test_flow_ingestion.py",
@@ -7043,6 +7075,7 @@
         "tests/test_hud_autostart.py",
         "tests/test_ingestion_runs.py",
         "tests/test_install_upgrade.py",
+        "tests/test_intelligence_http.py",
         "tests/test_local_install.py",
         "tests/test_local_model_binding.py",
         "tests/test_local_model_containment.py",
@@ -7077,6 +7110,7 @@
         "tests/test_tool_management.py",
         "tests/test_tool_setup.py",
         "tests/test_uninstall_audit.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_windows_core_acceptance.py",
         "tests/test_zeek_producer_contract.py"
       ]
@@ -7136,8 +7170,8 @@
       "path": "megalodon/dashboard.py",
       "classification": "source",
       "purpose": "Local dashboard. Telemetry routes are read-only.",
-      "bytes": 99607,
-      "sha256": "be52a2297f5b4401a12579e529af5937a13b1ca0c848ef6e61313713955a2fd2",
+      "bytes": 100329,
+      "sha256": "cf71dd3650719d97f041c6be98eba9d6db7f646bef5a218495c6e23e2f11b107",
       "dependencies": [
         ".ai_broker",
         ".ai_interface",
@@ -7644,8 +7678,8 @@
       "path": "megalodon/dashboard_operations.py",
       "classification": "source",
       "purpose": "Visual local operations desk; bounded metadata and reviewed local defense.",
-      "bytes": 61160,
-      "sha256": "3afec8deca9e9f14a3748046e172bf5df6d02097cfcce6b0333f97f155808841",
+      "bytes": 72050,
+      "sha256": "78dbd457bd4c4a2a5420e5e2df436863002825e0465dd686d26d2062962dc0fe",
       "dependencies": [
         ".dashboard_network",
         ".dashboard_setup",
@@ -7905,8 +7939,8 @@
       "path": "megalodon/defense.py",
       "classification": "source",
       "purpose": "Audited fixed local defense workflows. Local AI can propose, never authorize.",
-      "bytes": 18966,
-      "sha256": "f8cb6f00a92b966c3496d5c9b5ec19e0431cc69f33e85e954464d0f47d4e8976",
+      "bytes": 19582,
+      "sha256": "fb3614382880c28d6fae1914c35b4749a915958485495b908ae7f62410677fbf",
       "dependencies": [
         ".ai_broker",
         ".ai_provider",
@@ -7940,6 +7974,7 @@
         "tests/test_dashboard_operations_ui.py",
         "tests/test_defense.py",
         "tests/test_defense_http.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_installed_recovery_evidence.py",
         "tests/test_local_install.py",
@@ -7995,6 +8030,7 @@
         "tests/test_detector.py",
         "tests/test_detector_acceptance.py",
         "tests/test_detector_evidence.py",
+        "tests/test_endpoint_context.py",
         "tests/test_flow_ingestion.py",
         "tests/test_hud_snapshot.py",
         "tests/test_ingestion_runs.py",
@@ -8024,6 +8060,33 @@
       ],
       "related_tests": [
         "tests/test_detector_evidence.py"
+      ]
+    },
+    {
+      "path": "megalodon/endpoint_context.py",
+      "classification": "source",
+      "purpose": "Bounded admission of committed endpoint metadata into the pure context contract.",
+      "bytes": 9775,
+      "sha256": "de0aa432fa332446b1414a397561b0ef243d01c8b65907b75b5e2bde3bde0d1a",
+      "dependencies": [
+        ".ai_context",
+        ".evidence_storage",
+        ".retained_history",
+        ".security_patterns",
+        "hashlib",
+        "ipaddress",
+        "json",
+        "re",
+        "sqlite3"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_ai_context.py",
+        "tests/test_endpoint_context.py"
       ]
     },
     {
@@ -8102,8 +8165,10 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
+        "tests/test_intelligence_http.py",
         "tests/test_network_topology.py",
         "tests/test_packet_compaction.py",
         "tests/test_recording_storage.py",
@@ -8162,6 +8227,7 @@
         "tests/test_suricata_consumer_runtime.py",
         "tests/test_suricata_raw_eve.py",
         "tests/test_suricata_reconciliation.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_windows_core_acceptance.py"
       ]
     },
@@ -8271,8 +8337,8 @@
       "path": "megalodon/hud_autostart.py",
       "classification": "source",
       "purpose": "Optional user-scoped systemd startup for an installed local HUD.",
-      "bytes": 4767,
-      "sha256": "14e57d6ce5c522fec967cd96c45f0457a5755da839c87d79d9eaae428b94a329",
+      "bytes": 5072,
+      "sha256": "a6d8c7c61c0fd4324b8937992fb9fad2103b5b30e8863929ff52cfaf89145609",
       "dependencies": [
         ".config",
         ".local_install",
@@ -8283,14 +8349,15 @@
         "subprocess",
         "sys"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
       ],
       "related_tests": [
         "tests/test_hud_autostart.py",
-        "tests/test_local_install.py"
+        "tests/test_local_install.py",
+        "tests/test_uninstall_plan.py"
       ]
     },
     {
@@ -8396,10 +8463,11 @@
       "path": "megalodon/intelligence.py",
       "classification": "source",
       "purpose": "Managed pattern history and one bounded, cancellable local AI review worker.",
-      "bytes": 25050,
-      "sha256": "15aa5f03f84dcde91c9a60179efd18921ba373e4058600821aad52e46a0af1a1",
+      "bytes": 29754,
+      "sha256": "fe166e786f15a114f3c4f101d4df6a45fa98c6ee78a93611886c9865086a517b",
       "dependencies": [
         ".",
+        ".endpoint_context",
         ".evidence_storage",
         ".local_install",
         ".network_review_context",
@@ -8407,6 +8475,7 @@
         ".security_patterns",
         "collections",
         "copy",
+        "dataclasses",
         "ipaddress",
         "json",
         "secrets",
@@ -8422,6 +8491,7 @@
       "related_tests": [
         "tests/test_ai_control.py",
         "tests/test_defense.py",
+        "tests/test_endpoint_context.py",
         "tests/test_intelligence_http.py",
         "tests/test_network_review_context.py",
         "tests/test_reporting.py",
@@ -8432,12 +8502,13 @@
       "path": "megalodon/intelligence_http.py",
       "classification": "source",
       "purpose": "Local-only routes for reference data and review proposals.",
-      "bytes": 3235,
-      "sha256": "6dfbc429a103fc3c27d08963e4dd95b007f65858dca072f5402733fb3ad7fc12",
+      "bytes": 3893,
+      "sha256": "1982a815da4b677d381f135ae2ab9f51cb60b40f53455da0bd3059cecd249e6a",
       "dependencies": [
         ".ai_provider",
         ".dashboard",
         "hmac",
+        "ipaddress",
         "json",
         "re",
         "sqlite3",
@@ -8487,6 +8558,7 @@
       "related_tests": [
         "tests/test_alert_lifecycle_contract.py",
         "tests/test_alert_lifecycle_engine.py",
+        "tests/test_endpoint_context.py",
         "tests/test_install_upgrade.py",
         "tests/test_intelligence_http.py",
         "tests/test_local_install.py",
@@ -8591,8 +8663,8 @@
       "path": "megalodon/local_install.py",
       "classification": "source",
       "purpose": "User-scoped Linux desktop installation for the local MEGALODON HUD.",
-      "bytes": 42047,
-      "sha256": "52426a11fd96c56d45fcf3c82b4ea3e3bdde32a74bccd82b4743b1869dcc516a",
+      "bytes": 42143,
+      "sha256": "96832b80376177ea0409bb4aa6f97588100ee1239a3a3e1911860fe856ae655b",
       "dependencies": [
         ".",
         ".build_identity",
@@ -8638,7 +8710,8 @@
         "tests/test_installer_lifecycle_evidence.py",
         "tests/test_local_install.py",
         "tests/test_start_megalodon.py",
-        "tests/test_uninstall_audit.py"
+        "tests/test_uninstall_audit.py",
+        "tests/test_uninstall_plan.py"
       ]
     },
     {
@@ -8746,6 +8819,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py"
       ]
     },
@@ -8858,6 +8932,7 @@
         "tests/test_defense.py",
         "tests/test_detector.py",
         "tests/test_detector_acceptance.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_hud_snapshot.py",
         "tests/test_ingestion_runs.py",
@@ -8883,6 +8958,7 @@
         "tests/test_storage_failures.py",
         "tests/test_support_config.py",
         "tests/test_tool_heartbeat.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_validation.py"
       ]
     },
@@ -9071,6 +9147,7 @@
         "tests/test_dashboard_storage_ui.py",
         "tests/test_defense.py",
         "tests/test_detector.py",
+        "tests/test_endpoint_context.py",
         "tests/test_offline.py",
         "tests/test_reporting.py",
         "tests/test_security_patterns.py",
@@ -9127,6 +9204,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_context.py",
         "tests/test_anomaly.py",
         "tests/test_anomaly_advisory.py",
         "tests/test_anomaly_triage.py",
@@ -9138,7 +9216,9 @@
         "tests/test_ci_pytest_policy.py",
         "tests/test_community_id.py",
         "tests/test_dashboard.py",
+        "tests/test_endpoint_context.py",
         "tests/test_flow_ingestion.py",
+        "tests/test_intelligence_http.py",
         "tests/test_offline.py",
         "tests/test_platform_baseline.py",
         "tests/test_security_patterns.py",
@@ -9302,7 +9382,8 @@
         "tests/test_retention_batches.py",
         "tests/test_sqlite_recovery_engine.py",
         "tests/test_storage.py",
-        "tests/test_tool_heartbeat.py"
+        "tests/test_tool_heartbeat.py",
+        "tests/test_uninstall_plan.py"
       ]
     },
     {
@@ -9335,6 +9416,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_context.py",
         "tests/test_capabilities.py",
         "tests/test_community_id.py",
         "tests/test_control_room.py",
@@ -9345,6 +9427,7 @@
         "tests/test_dashboard_suricata.py",
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_documentation_currentness.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_heartbeat_observation.py",
@@ -9522,6 +9605,7 @@
         "tests/test_support_sensors.py",
         "tests/test_tool_heartbeat.py",
         "tests/test_tool_setup.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_validation.py"
       ]
     },
@@ -9544,6 +9628,7 @@
       ],
       "related_tests": [
         "tests/test_advisory.py",
+        "tests/test_ai_context.py",
         "tests/test_anomaly.py",
         "tests/test_baseline_comparison.py",
         "tests/test_baseline_realizability.py",
@@ -9551,14 +9636,17 @@
         "tests/test_community_id.py",
         "tests/test_dashboard.py",
         "tests/test_dashboard_host_telemetry_ui.py",
+        "tests/test_dashboard_operations_ui.py",
         "tests/test_dashboard_polish.py",
         "tests/test_dashboard_reports_ui.py",
         "tests/test_dashboard_store.py",
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_documentation_currentness.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_hud.py",
+        "tests/test_intelligence_http.py",
         "tests/test_offline.py",
         "tests/test_operations.py",
         "tests/test_readiness.py",
@@ -9571,6 +9659,7 @@
         "tests/test_tool_locations.py",
         "tests/test_tool_setup.py",
         "tests/test_uninstall_audit.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_zeek_producer_contract.py"
       ]
     },
@@ -10145,6 +10234,7 @@
         "tests/test_sqlite_recovery_runtime.py",
         "tests/test_tool_heartbeat.py",
         "tests/test_ubuntu_release_evidence.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_wiki_sync.py"
       ]
     },
@@ -10889,6 +10979,7 @@
         "tests/test_sqlite_recovery_runtime.py",
         "tests/test_tool_heartbeat.py",
         "tests/test_ubuntu_release_evidence.py",
+        "tests/test_uninstall_plan.py",
         "tests/test_wiki_sync.py"
       ]
     },
@@ -12738,6 +12829,7 @@
         "JSON syntax parsed; fixture validity remains intentional and is covered by contract tests"
       ],
       "related_tests": [
+        "tests/test_ai_context.py",
         "tests/test_security_knowledge.py"
       ]
     },
@@ -12754,6 +12846,7 @@
         "Content read, size and digest recorded; repository hygiene and package checks apply"
       ],
       "related_tests": [
+        "tests/test_ai_context.py",
         "tests/test_security_knowledge.py"
       ]
     },
@@ -12823,6 +12916,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_endpoint_context.py",
         "tests/test_retained_history.py"
       ]
     },
@@ -12915,10 +13009,12 @@
         "tests/test_dashboard_polish.py",
         "tests/test_defense.py",
         "tests/test_documentation_currentness.py",
+        "tests/test_endpoint_context.py",
         "tests/test_heartbeat_observation.py",
         "tests/test_hud_autostart.py",
         "tests/test_ingestion_runs.py",
         "tests/test_install_upgrade.py",
+        "tests/test_intelligence_http.py",
         "tests/test_local_install.py",
         "tests/test_nmap_inventory.py",
         "tests/test_offline.py",
@@ -12935,7 +13031,8 @@
         "tests/test_support_config.py",
         "tests/test_support_startup.py",
         "tests/test_tool_heartbeat.py",
-        "tests/test_tool_setup.py"
+        "tests/test_tool_setup.py",
+        "tests/test_uninstall_plan.py"
       ]
     },
     {
@@ -13109,11 +13206,13 @@
         "tests/test_dashboard_suricata.py",
         "tests/test_dashboard_traffic.py",
         "tests/test_documentation_currentness.py",
+        "tests/test_endpoint_context.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_hud.py",
         "tests/test_hud_snapshot.py",
         "tests/test_ingestion_runs.py",
+        "tests/test_intelligence_http.py",
         "tests/test_local_setup.py",
         "tests/test_model_boundaries.py",
         "tests/test_network_topology.py",
@@ -13583,7 +13682,36 @@
         "Python AST parsed"
       ],
       "related_tests": [
-        "tests/test_uninstall_audit.py"
+        "tests/test_uninstall_audit.py",
+        "tests/test_uninstall_plan.py"
+      ]
+    },
+    {
+      "path": "megalodon/uninstall_plan.py",
+      "classification": "source",
+      "purpose": "Prepare a read-only removal review; this module has no applying mode.",
+      "bytes": 13602,
+      "sha256": "2038763055ec79298d8d9178e16245caf6f5dea2aa7a7f3e87bd57dc8524a1ac",
+      "dependencies": [
+        ".",
+        "__future__",
+        "argparse",
+        "json",
+        "os",
+        "pathlib",
+        "re",
+        "selectors",
+        "subprocess",
+        "sys",
+        "time"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_uninstall_plan.py"
       ]
     },
     {
@@ -13622,6 +13750,7 @@
         "tests/test_dashboard_network_ui.py",
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_detector.py",
+        "tests/test_endpoint_context.py",
         "tests/test_identity_artifact_roundtrip.py",
         "tests/test_installed_recovery_evidence.py",
         "tests/test_jsonl_admission.py",
@@ -14084,8 +14213,8 @@
       "path": "tests/browser_acceptance.py",
       "classification": "test",
       "purpose": "Opt-in real-browser acceptance; synthetic data, real CLI/SQLite/HTTP, no sensor.",
-      "bytes": 40861,
-      "sha256": "2fb66b21e0ed8a54f1ece91fabce9dbd2611a57747e3d912f02e1f3fe4b91650",
+      "bytes": 45948,
+      "sha256": "f4ef4225daf1dfb207cb3da1c1fdb0392367de7878432f3ee8e1046332b0d8af",
       "dependencies": [
         "__future__",
         "asyncio",
@@ -14106,6 +14235,7 @@
         "subprocess",
         "sys",
         "tempfile",
+        "test_dashboard_operations_ui",
         "time",
         "traceback",
         "urllib.parse"
@@ -14184,6 +14314,20 @@
       "sha256": "b1e6a57d773ac988f555f33021a2aa7bc3d1ef6dc9ce8cf6c7d1850752406c62",
       "dependencies": [],
       "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "JavaScript syntax checked"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tests/endpoint_facts_browser.cjs",
+      "classification": "test",
+      "purpose": "endpoint facts browser",
+      "bytes": 6961,
+      "sha256": "e056815caaa8112d65b9d879a9f93ead22af9bbe1b8a2b3678818cab5704a951",
+      "dependencies": [],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -14357,10 +14501,10 @@
       "path": "tests/operations_browser.cjs",
       "classification": "test",
       "purpose": "operations browser",
-      "bytes": 9571,
-      "sha256": "fc744b495e52b53a8d9aeb9b417486449790daee96f0509e48efc1bbcd8fa7ec",
+      "bytes": 12154,
+      "sha256": "d4350a55c7bd14f3414141aed531c8a75147e5fc0bd083b961c7113b8e02e88e",
       "dependencies": [],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "JavaScript syntax checked"
@@ -14554,6 +14698,35 @@
         "test_qwen_advisory"
       ],
       "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tests/test_ai_context.py",
+      "classification": "test",
+      "purpose": "Synthetic contract acceptance only; no model benefit or host qualification.",
+      "bytes": 21816,
+      "sha256": "8d2dbde403c1b78e603ac0261969eb7715f18e0c13ea947211ec9f6d07cc2a69",
+      "dependencies": [
+        "ast",
+        "builtins",
+        "copy",
+        "hashlib",
+        "importlib.resources",
+        "json",
+        "megalodon.ai_context",
+        "os",
+        "pathlib",
+        "pytest",
+        "socket",
+        "sqlite3",
+        "subprocess",
+        "threading"
+      ],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -15442,8 +15615,8 @@
       "path": "tests/test_dashboard.py",
       "classification": "test",
       "purpose": "Dashboard projection tests use only synthetic metadata and loopback HTTP.",
-      "bytes": 93073,
-      "sha256": "cdc02eb5cfd23628a77e48f44d1baf83e52b84b59494d626ef54739e8622e385",
+      "bytes": 93501,
+      "sha256": "e396fdb5f720c1dbb665325cfc49a46bb760b261962d294247f74ccf2e80f55b",
       "dependencies": [
         "__future__",
         "base64",
@@ -15873,12 +16046,14 @@
       "path": "tests/test_dashboard_operations_ui.py",
       "classification": "test",
       "purpose": "Shipped operations UI exercised with synthetic observations and inert DOM.",
-      "bytes": 4750,
-      "sha256": "abd40fc3fd9d118cd7b245e6e5f36c0f0051aefd5efea6c1c278c1ab77f9428a",
+      "bytes": 6152,
+      "sha256": "c71ac12e151a9e70d35da52d88899292a9114ddc3f8b799b9a84e6fc31e0a01a",
       "dependencies": [
         "collections",
+        "datetime",
         "html.parser",
         "json",
+        "megalodon.ai_context",
         "megalodon.dashboard_assets",
         "megalodon.dashboard_operations",
         "pathlib",
@@ -16206,8 +16381,8 @@
       "path": "tests/test_defense.py",
       "classification": "test",
       "purpose": "test defense",
-      "bytes": 8576,
-      "sha256": "63aa94459aa6dff18e2eabbb50962064e4f7d404596c998cfdcda526361f3539",
+      "bytes": 8640,
+      "sha256": "1afce0b97f37efc505e3307509628993d3af49696438258599590a7eef0da0a8",
       "dependencies": [
         "copy",
         "ipaddress",
@@ -16343,6 +16518,36 @@
         "sys"
       ],
       "disposition": "retained",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tests/test_endpoint_context.py",
+      "classification": "test",
+      "purpose": "Synthetic committed metadata and mocked inference; no collector or model runs.",
+      "bytes": 18177,
+      "sha256": "58eb2a2896af62451248b3548e012ddf335dc404693a93bb1178c77c895c78de",
+      "dependencies": [
+        "dataclasses",
+        "datetime",
+        "json",
+        "megalodon",
+        "megalodon.ai_provider",
+        "megalodon.config",
+        "megalodon.defense",
+        "megalodon.endpoint_context",
+        "megalodon.evidence_storage",
+        "megalodon.intelligence",
+        "megalodon.managed_receipts",
+        "megalodon.models",
+        "megalodon.retained_history",
+        "pytest",
+        "types"
+      ],
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -16844,13 +17049,16 @@
       "path": "tests/test_intelligence_http.py",
       "classification": "test",
       "purpose": "test intelligence http",
-      "bytes": 3328,
-      "sha256": "333da01e4703bc95cbc69b3bd74b33549eafe043413b424e2ba2aa0c8623dc86",
+      "bytes": 7265,
+      "sha256": "0d59248538378093b324b9d5535e6902cfea6611a1dd444d4dc16f008a9b51e6",
       "dependencies": [
         "http.client",
         "http.server",
         "json",
+        "megalodon.config",
         "megalodon.dashboard",
+        "megalodon.evidence_storage",
+        "megalodon.intelligence",
         "pytest",
         "threading",
         "types"
@@ -16957,8 +17165,8 @@
       "path": "tests/test_local_install.py",
       "classification": "test",
       "purpose": "User installation owns bounded artifacts and preserves local data.",
-      "bytes": 20469,
-      "sha256": "04d58da9e31af6db8032f120aea9d588d25120af89661b1bac6d35f00d7fcc62",
+      "bytes": 23080,
+      "sha256": "f2d5d2336b8d4adb9fea9726711b9569c77bb52e5dc7548e695410acc7c03c70",
       "dependencies": [
         "__future__",
         "megalodon",
@@ -17294,7 +17502,7 @@
         "megalodon.security_patterns",
         "pytest"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -19128,6 +19336,27 @@
       "related_tests": []
     },
     {
+      "path": "tests/test_uninstall_plan.py",
+      "classification": "test",
+      "purpose": "Removal previews fail closed and cannot become removal commands.",
+      "bytes": 13096,
+      "sha256": "f8041395abf3533706986b6639d3fab1cb2c05d1ecc594635c4b900295db07d0",
+      "dependencies": [
+        "json",
+        "megalodon",
+        "pathlib",
+        "pytest",
+        "subprocess",
+        "sys"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "tests/test_validation.py",
       "classification": "test",
       "purpose": "test validation",
@@ -20448,6 +20677,15 @@
       "label": null,
       "disabled": false,
       "source_references": 2,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "ops-facts-read",
+      "type": "button",
+      "label": null,
+      "disabled": true,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21774,7 +22012,7 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
-  "control_count": 195,
+  "control_count": 196,
   "duplicate_ids": [],
   "missing_anchors": [
     "setup-app-clamav",

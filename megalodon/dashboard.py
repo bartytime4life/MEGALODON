@@ -483,6 +483,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     intelligence = None
     automation_preview_lock = Lock()
     maintenance_lock = Lock()
+    context_read_lock = Lock()
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -530,7 +531,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == '/api/reports' or route.path.startswith('/api/reports/'):
             self._reports_read(route)
             return
-        if route.path in {'/api/knowledge','/api/knowledge/search','/api/intelligence'}:
+        if route.path in {'/api/knowledge','/api/knowledge/search','/api/intelligence','/api/intelligence/context'}:
             from .intelligence_http import read
             read(self,route)
             return
