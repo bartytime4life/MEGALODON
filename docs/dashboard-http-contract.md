@@ -8,6 +8,26 @@ operator read authentication when enabled, a non-root local management user,
 and exactly one `X-Megalodon-Check: 1`. Search returns at most six references;
 pattern status returns at most 64 reviews and explicitly states truncation.
 
+`GET /api/intelligence/context?device=<IP>` uses the same read controls and
+accepts exactly one unscoped IPv4/IPv6 address, with no other query fields.
+It returns the existing qualified endpoint packet (at most 3,072 bytes), not
+an intelligence token or a model answer. One projection runs at a time;
+overlapping reads return 409. It invokes no provider, action handler or review
+write and remains available while a response or maintenance job is busy.
+
+The endpoint inspector's **Read retained facts** button explicitly starts this
+read and refreshes it every five seconds while the facts view remains visible.
+It shows the selected hour, packet/flow record basis, observation age, qualified
+findings, missing coverage, truncation, local reference identities and the
+reason comparison is unavailable. Selection generations and a local read serial
+discard late A-to-B-to-A responses. A failed refresh, source expiry, inactive
+view or ten-second check-age limit hides the packet and requires a fresh read.
+Each successful refresh revalidates current source units and library membership;
+compaction and shortened retention are observed on the next successful check.
+The browser checks declared expiry each second, but this polling is not an
+atomic subscription to storage changes. Host-sensitive IP/evidence identifiers
+stay in memory and no export, browser persistence or inference path is added.
+
 `POST /api/knowledge` accepts `action: update`, `action: rollback`, or
 `action: configure` with boolean `enabled`. `POST /api/intelligence` accepts
 `action: configure` with boolean `enabled` and `automatic`; `action: analyze`

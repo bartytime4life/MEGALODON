@@ -21,6 +21,28 @@ def defense_fixture():
     return dict(schema='megalodon-defense-v1',token='b'*32,job=dict(state='idle',action=None,message='Ready for a local workflow.',started_at=None,finished_at=None,result=None),plans=[],recent=[],active=[],audit_ready=True,scope=dict(nmap_target='127.0.0.1/32',scan_folders=['Downloads']))
 
 
+def facts_fixture():
+    from datetime import datetime
+    from megalodon.ai_context import build_context,INPUT_SCHEMA
+    now=int(datetime.fromisoformat(operations_fixture()['observed_at'].replace('Z','+00:00')).timestamp())
+    return build_context(dict(schema=INPUT_SCHEMA,subject='203.0.113.8',window=dict(start=now-3600,end=now),as_of=now,
+        sources=[dict(id='c'*32,kind='flows',expires_at=now+100)],
+        records=[dict(ref='c'*32+':1',source='zeek-conn',scope_id='d'*32,kind='flows',observed_at=now-10,
+            src_ip='203.0.113.8',dst_ip='198.51.100.4',protocol='TCP',src_port=55000,dst_port=443,
+            missing=dict(tcp_flags='not_collected',findings='not_qualified'))],
+        coverage=dict(truncated=True,missing=['incomplete_window','sensor_disagreement']),
+        comparison=dict(state='unavailable',reason='truncated'),
+        references=[dict(source='attack',edition='2026-08-05',id='T1046')]))
+
+
+def test_read_only_facts_without_ai_and_stale_selection_rejection():
+    if not shutil.which('node'):pytest.skip('Node unavailable')
+    result=subprocess.run([shutil.which('node'),str(Path(__file__).with_name('endpoint_facts_browser.cjs'))],
+        input=json.dumps(dict(code=OPERATIONS_JS,fixture=operations_fixture(),defense=defense_fixture(),facts=facts_fixture())),
+        text=True,capture_output=True,timeout=10)
+    assert result.returncode==0,result.stderr
+
+
 def test_operations_selection_fixed_defense_actions_and_visibility():
     if not shutil.which('node'):pytest.skip('Node unavailable')
     result=subprocess.run([shutil.which('node'),str(Path(__file__).with_name('operations_browser.cjs'))],input=json.dumps(dict(code=OPERATIONS_JS,fixture=operations_fixture(),defense=defense_fixture())),text=True,capture_output=True,timeout=10)

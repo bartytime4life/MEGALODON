@@ -593,6 +593,72 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         await context.close()
 
 
+async def exercise_endpoint_facts(browser, port: int, password: str) -> None:
+    """Render shipped facts UI with inert API fixtures; HTTP storage tests are separate."""
+    from playwright.async_api import expect
+    from test_dashboard_operations_ui import operations_fixture, facts_fixture
+
+    origin=f'http://127.0.0.1:{port}'
+    context=await browser.new_context(viewport={'width':1440,'height':1000},reduced_motion='reduce',service_workers='block')
+    mode=['ready'];seen=asyncio.Event();release=asyncio.Event();answered=asyncio.Event();requests=[];errors=[];violations=[]
+    async def local_fixture(route):
+        target=urlsplit(route.request.url);requests.append((target.path,route.request.method))
+        if target.scheme!='http' or target.netloc!=f'127.0.0.1:{port}':
+            violations.append('nonlocal facts journey request');await route.abort();return
+        if target.path=='/api/operations':
+            value=operations_fixture();value['observed_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+        elif target.path=='/api/defense':
+            await route.fulfill(status=503,content_type='application/json',body='{}');return
+        elif target.path=='/api/intelligence/context':
+            if mode[0]=='hold':seen.set();await release.wait()
+            if mode[0]=='unavailable':
+                await route.fulfill(status=422,content_type='application/json',body='{}');return
+            value=facts_fixture();now=int(time.time());value.update(as_of=now,window={'start':now-3600,'end':now})
+            value['dependencies'][0]['expires_at']=now+100
+            value['groups'][0].update(first_observed_at=now-10,last_observed_at=now-10)
+            value.pop('snapshot_sha256');value['snapshot_sha256']=hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        else:
+            await route.continue_();return
+        try:
+            await route.fulfill(status=200,content_type='application/json',body=json.dumps(value))
+        finally:
+            if target.path=='/api/intelligence/context' and seen.is_set():answered.set()
+    await context.route('**/*',local_fixture)
+    page=await context.new_page();page.set_default_timeout(10000);page.on('pageerror',lambda _:errors.append('page error'))
+    try:
+        await page.goto(origin+'/');await page.locator('#password').fill(password);await page.locator('#submit').click()
+        await expect(page.locator('#ops-endpoint-list .ops-endpoint')).to_have_count(2)
+        await page.locator('#ops-endpoint-list .ops-endpoint').nth(1).click()
+        await expect(page.locator('#ops-facts-read')).to_be_enabled()
+        await page.locator('#ops-facts-read').click();await expect(page.locator('#ops-facts')).to_be_visible()
+        await expect(page.locator('#ops-facts')).to_contain_text('updates, not unique connections')
+        await expect(page.locator('#ops-facts')).to_contain_text('Sensors disagree')
+        await expect(page.locator('#ops-facts')).to_contain_text('attack@2026-08-05:T1046')
+        await expect(page.locator('#ops-facts-status')).to_contain_text('No AI request was made')
+        passed('native endpoint facts render while response controls are unavailable')
+        for width in (1440,390):
+            await page.set_viewport_size({'width':width,'height':1000})
+            await page.locator('#ops-facts-read').scroll_into_view_if_needed()
+            fits=await page.locator('.ops-retained-facts').evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
+            passed('native endpoint facts reflow '+str(width),fits)
+        mode[0]='hold';await page.locator('#ops-facts-read').click();await asyncio.wait_for(seen.wait(),timeout=5)
+        await page.locator('#ops-endpoint-list .ops-endpoint').nth(0).click()
+        await page.locator('#ops-endpoint-list .ops-endpoint').nth(1).click()
+        release.set();await asyncio.wait_for(answered.wait(),timeout=5)
+        await expect(page.locator('#ops-facts')).to_be_hidden()
+        await expect(page.locator('#ops-facts-status')).to_contain_text('Select Read retained facts')
+        passed('native A-to-B-to-A selection hides and rejects a late facts request')
+        mode[0]='ready';await page.locator('#ops-facts-read').click();await expect(page.locator('#ops-facts')).to_be_visible()
+        mode[0]='unavailable';await expect(page.locator('#ops-facts')).to_be_hidden(timeout=10000)
+        await expect(page.locator('#ops-facts-status')).to_contain_text('unavailable')
+        passed('native failed source refresh hides retained facts')
+        passed('native facts journey makes no intelligence or defense POST',not any(method=='POST' and path.startswith(('/api/intelligence','/api/defense')) for path,method in requests))
+        passed('native facts journey has no uncaught page error',not errors)
+        passed('native facts journey stays on the fixture origin',not violations)
+    finally:
+        release.set();await context.close()
+
+
 async def run() -> None:
     from playwright.async_api import async_playwright
     from importlib.metadata import version
@@ -658,6 +724,8 @@ async def run() -> None:
                                 passed("Host refusal " + label + " " + str(nonempty),
                                        request(port, "/api/summary", hosts, password=password)[0] == 400)
                             await exercise(browser, port, password, nonempty)
+                            if nonempty:
+                                await exercise_endpoint_facts(browser,port,password)
                         passed("main database bytes unchanged " + str(nonempty),
                                hashlib.sha256(db.read_bytes()).hexdigest() == original)
                 finally:
