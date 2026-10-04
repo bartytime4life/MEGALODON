@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from . import local_install, uninstall_audit
+from . import hud_autostart, local_install, uninstall_audit
 
 SCHEMA = 'megalodon-uninstall-plan-v1'
 # Firewall removal remains a separate host-protection decision.
@@ -170,6 +170,14 @@ def plan(*, packages: tuple[str, ...] = (), include_saved_data: bool = False,
         if health is not None:
             item['installed_artifact_status'] = health
             if health not in {'ready', 'missing'}:
+                item['disposition'] = 'preserve_for_review'
+        if name == 'hud_user_service' and entry['state'] != 'absent':
+            try:
+                matches = hud_autostart.validate_unit(selected)
+            except (local_install.InstallError, OSError):
+                matches = False
+            item['installed_artifact_status'] = 'matches_managed_unit' if matches else 'needs_review'
+            if not matches:
                 item['disposition'] = 'preserve_for_review'
         if name == 'app' and entry['state'] != 'absent':
             item['disposition'] = 'preserve_for_review'

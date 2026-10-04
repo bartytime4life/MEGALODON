@@ -86,14 +86,23 @@ def enable(*, start: bool = False) -> None:
         _systemctl("start", UNIT)
 
 
-def disable(paths: InstallPaths | None = None) -> None:
+def validate_unit(paths: InstallPaths | None = None) -> bool:
+    """Read-only identity check shared by removal preview and application."""
     selected = install_paths() if paths is None else paths
     unit = unit_path(selected)
     if not os.path.lexists(unit):
-        return
+        return False
     existing = _regular_owned_file(unit, maximum=8192)
     if existing != unit_contents(selected):
         raise InstallError("the existing HUD startup unit differs; preserve and review it")
+    return True
+
+
+def disable(paths: InstallPaths | None = None) -> None:
+    selected = install_paths() if paths is None else paths
+    if not validate_unit(selected):
+        return
+    unit = unit_path(selected)
     _systemctl("disable", "--now", UNIT)
     unit.unlink()
     _systemctl("daemon-reload")

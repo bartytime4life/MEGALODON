@@ -68,8 +68,11 @@ paths and unavailable entries stay held for review. The app root itself is
 never a recursive removal candidate: unrecognized children, custom Zeek
 installations, custom tool directories and external backups need their own
 ownership review. The release selector also needs verification against the
-manifest. No report is accepted as execution input, so an old plan cannot
-authorize a later action.
+manifest. A user service is a candidate only when its safe regular-file read
+matches the current manager's exact unit contents; modified, unrelated or
+unreadable units stay held for review. This identity check does not establish
+whether the service is running. No report is accepted as execution input, so an
+old plan cannot authorize a later action.
 
 Exit code 0 means the report was produced with no blocked/failed package
 simulation; it does not mean removal is approved or complete. Exit code 2 means
@@ -106,8 +109,10 @@ whole-computer cleanliness claim.
    remaining work rather than claiming a clean computer.
 
 The existing `megalodon-manage uninstall` removes manifest-verified code and
-launchers but intentionally preserves settings and data. The companion
-terminal removal commands operate one tool at a time and require an exact
+launchers but intentionally preserves settings and data. It checks the managed
+artifacts, release selector and manifest-listed release directories before
+stopping the managed HUD service; a failed preflight leaves that service alone.
+The companion terminal removal commands operate one tool at a time and require an exact
 typed confirmation. Neither command implements the proposed full removal.
 An applying full uninstaller needs the scope and provenance gates above before
 it can be offered safely.
