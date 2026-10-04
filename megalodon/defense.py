@@ -81,6 +81,11 @@ class Defense:
     def snapshot(self,include_token=False):
         with self._lock:
             stamp=now()
+            intelligence=getattr(self.configuration,'intelligence',None)
+            result=self._job.get('result')
+            if (self._job['action']=='analyze' and result and intelligence is not None
+                    and not intelligence.endpoint_result_valid(result)):
+                self._job.update(result=None,message='Review evidence or model selection changed; request a fresh analysis.')
             value=dict(schema='megalodon-defense-v1',job=deepcopy(self._job),
                 plans=[deepcopy(p) for p in self._plans.values() if p['expires_at']>stamp],recent=list(self._recent),
                 active=[dict(v,state='needs_review' if not v['verified'] else 'expiry_elapsed' if v['expires_at']<=stamp else 'applied') for v in self._active.values()],
@@ -95,7 +100,7 @@ class Defense:
         with self._lock:
             if not self._audit_ready:raise ValueError('Defense audit unavailable.')
             if self._job['state']=='running':raise DefenseBusy('A defense action is running.')
-            self._job.update(state='running',action=request['action'],message='Running the fixed local workflow…',started_at=now(),finished_at=None,result=None)
+            self._job.update(request_id=secrets.token_hex(16),state='running',action=request['action'],message='Running the fixed local workflow…',started_at=now(),finished_at=None,result=None)
             self._thread=Thread(target=self._work,args=(request,),daemon=True,name='megalodon-defense')
             self._thread.start()
         return self.snapshot()
@@ -139,8 +144,10 @@ class Defense:
                          message='Operator requested a fixed workflow.',request=request,approved_preview=approved_preview,result=None)
             if action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
                 answer=self.configuration.intelligence.explain_device(request['ip'])
-                result=dict(ip=request['ip'],**answer,basis='committed_evidence_and_local_references')
-                message='Local AI review saved with evidence and reference citations. Choose any response yourself.'
+                result=dict(ip=request['ip'],**answer,basis='committed_evidence')
+                message=('Local AI review saved with evidence citations. Choose any response yourself.'
+                         if answer['analysis_state']=='ready' else
+                         'Local AI explanation '+answer['analysis_state'].replace('_',' ')+'. Retained facts remain available; safety is unknown.')
             elif action=='analyze':
                 row=self.operations.endpoint(request['ip'])
                 evidence={k:row[k] for k in ('ip','scope','local','packets','bytes','active_connections','ports','flags')}

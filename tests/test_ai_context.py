@@ -458,7 +458,7 @@ def test_builder_has_no_io_or_runtime_imports(monkeypatch):
     imports |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
     assert imports <= {"__future__", "collections", "hashlib", "ipaddress", "json", "re"}
     for path in (root / "megalodon").rglob("*.py"):
-        if path.name != "ai_context.py":
+        if path.name not in {"ai_context.py", "endpoint_context.py"}:
             assert "ai_context" not in path.read_text(), f"Unexpected runtime wiring: {path}"
     value = with_comparison(request())
     def forbidden(*args, **kwargs):
