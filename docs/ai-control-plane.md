@@ -263,9 +263,12 @@ qualify any model artifact, authorize live inference, or satisfy issue #446.
 projection over the same retained endpoint read. It calls `build_context` with
 exact reference identities returned by the validated local library and refuses
 requested identities absent from that result; source availability and library
-membership are checked again before return. It reports no baseline,
-incompatible learned counts, expired source dependencies, partial coverage or
-truncation as unavailable comparison states. The existing learned flow counts
+membership are checked again before return. The final source check uses a
+fresh clock after library revalidation; expiry
+during either read fails closed without changing the snapshot's observation time.
+It reports no baseline, incompatible learned counts, expired source
+dependencies, partial coverage or truncation as unavailable comparison states.
+The existing learned flow counts
 deduplicate updates and are never relabeled `retained_record_count`. This method
 does not invoke a provider, persist a review, change a HUD question or retain
 its result. The existing `explain_device()` path still supplies no comparison

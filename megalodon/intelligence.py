@@ -360,10 +360,11 @@ class IntelligenceService(RetainedEvidenceReader):
         else:reason='incompatible_sources'  # Learned counts lack the v1 retained-record-count basis.
         context=retained_context(self.evidence,subject,now,comparison_reason=reason,
                                  references=references,strict_expiry=True)
-        if not context_available(self.evidence,context,now):
-            raise ContextError('SOURCE_EXPIRED')
         if _library_references(self.knowledge,reference_ids)!=references:
             raise ContextError('REFERENCE_UNAVAILABLE')
+        # The scan and library recheck can outlive a dependency's expiry.
+        if not context_available(self.evidence,context,self.clock()):
+            raise ContextError('SOURCE_EXPIRED')
         return context
 
     def explain_device(self, address):
