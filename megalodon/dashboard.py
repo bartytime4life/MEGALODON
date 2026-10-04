@@ -994,6 +994,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == '/api/support-config':
             self._dispatch_POST()
             return
+        if self.path in {'/api/storage', '/api/network'}:
+            if not self._has_expected_host():
+                self._send_json({"error": "invalid request host"}, status=400)
+                return
+            if not self._has_operator_http_auth() or not self._evidence_action_envelope():
+                return
         if not self.maintenance_lock.acquire(blocking=False):
             self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
             return
@@ -1103,7 +1109,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ValueError,OSError,sqlite3.Error):
             self._send_json({'error':'Report request could not be applied. Check the dates, current job and managed storage.'},status=422)
 
-    def _evidence_action(self):
+    def _evidence_action_envelope(self) -> bool:
         network=self.path=='/api/network'
         provider=self.network_topology if network else self.evidence
         header='X-Megalodon-Network-Token' if network else 'X-Megalodon-Storage-Token'
@@ -1113,10 +1119,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 or self.headers.get_all('Origin',[])!=[f'http://{self.headers.get("Host")}']
                 or self.headers.get_all('Content-Type',[])!=['application/json']
                 or self.headers.get_all('Transfer-Encoding',[]) or self.headers.get_all('Content-Encoding',[])):
-            self._send_json({'error':'same-origin local configuration required'},status=403);return
+            self._send_json({'error':'same-origin local configuration required'},status=403)
+            return False
         lengths=self.headers.get_all('Content-Length',[])
         if len(lengths)!=1 or not re.fullmatch(r'[0-9]{1,4}',lengths[0]) or not 2<=int(lengths[0])<=8192:
-            self._send_json({'error':'invalid request length'},status=400);return
+            self._send_json({'error':'invalid request length'},status=400)
+            return False
+        return True
+
+    def _evidence_action(self):
+        if not self._evidence_action_envelope():
+            return
+        network=self.path=='/api/network'
+        provider=self.network_topology if network else self.evidence
+        lengths=self.headers.get_all('Content-Length',[])
         try:
             from .ai_provider import _strict_pairs
             self.connection.settimeout(2)
