@@ -404,6 +404,43 @@ read projection before connecting this candidate comparison to a HUD question.
 An empty detailed selection can coexist with an explicitly qualified zero
 hourly count; missing summaries cannot be converted to that zero.
 
+The existing completed-hour processor now separately records
+`endpoint-hour-count-v1` rows in managed `baselines` storage. These use schema
+`megalodon-endpoint-hour-count-v1` and count every admitted retained update,
+including repeated updates of one flow. Each endpoint is counted once per row;
+source, packet/flow kind and the segment/interface scope remain separate. The
+learned baseline dictionary and its deduplication rules do not consume these
+rows, including after restart. Restore queries exclude count receipts before
+they consume the existing learned/review row and scan quotas. No comparison, HUD question or provider input
+adopts them yet.
+
+Receipt eligibility means one aligned completed UTC hour was read to fixed
+source watermarks, with no read gap, malformed row or bound exceeded. The read
+is limited to 24 source units, 20,000 candidate row positions and 128 endpoint
+groups, within the processor's existing work deadline and a separate eight
+second work deadline. Checks occur between bounded reads; database calls are
+not preempted. Every included original packet must have an admitted capture
+relationship. Source watermarks, qualified packet event IDs, retention expiry and
+source membership are checked again after reading. A changing, retired or
+expired source withholds all summaries; an empty read does not invent zero.
+An unavailable count read preserves the existing pattern result and records a
+finite `endpoint_counts` state in its hour-coverage row. A failed count write
+does not advance the hour checkpoint.
+
+Each count receipt retains its read digest, source watermarks, declared source
+expiry, `as_of` and original source dependencies. `capture_complete` is always
+false: a complete traversal of retained qualified records does not prove
+continuous collection, full traffic visibility or device identity. Stable IDs
+identify a repeated identical snapshot; an interrupted retry may retain more
+than one physical row, so a future consumer must deduplicate IDs and must never
+sum repeated receipts. Changed snapshots have different IDs and require an
+explicit selection rule. Source checks and later persistence are sequential,
+with a finite race interval. Future comparison admission must revalidate raw
+sources, summary source units, expiry, compatible scopes and exactly two hours;
+receipt shape or a stored `eligible` flag alone is insufficient.
+Segment rotation changes scope identity; cross-segment comparisons remain
+incompatible until a separately reviewed scope-continuity contract exists.
+
 ### Budgets, binding and lifetime
 
 Input is capped at 32,768 canonical ASCII JSON bytes, 2,048 visited values,

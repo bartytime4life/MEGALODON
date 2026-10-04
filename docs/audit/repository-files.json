@@ -6,12 +6,12 @@
     "documentation": 113,
     "workflow": 14,
     "configuration": 36,
-    "source": 184,
+    "source": 185,
     "asset": 2,
     "fixture-or-contract": 249,
     "historical": 13,
     "retired": 32,
-    "test": 222
+    "test": 223
   },
   "files": [
     {
@@ -3530,8 +3530,8 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 36408,
-      "sha256": "fcd487f3ee796ce805c836f05484570887c1555497ae7c0e50f8f8ea773dd9ed",
+      "bytes": 38940,
+      "sha256": "6434be5ca637a35a919dddc458299f9a924ba3f0d92d5ae9c4a3e3dae930eff6",
       "dependencies": [
         "local-model-selection.md",
         "qwen-446-owner-decision-packet.md",
@@ -6485,6 +6485,7 @@
         "tests/test_detector_evidence.py",
         "tests/test_documentation_currentness.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_external_exchange_contract.py",
         "tests/test_firewall.py",
@@ -6772,6 +6773,7 @@
         "tests/test_detector_acceptance.py",
         "tests/test_detector_evidence.py",
         "tests/test_documentation_currentness.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_exact_head_evidence.py",
         "tests/test_flow_ingestion.py",
         "tests/test_heartbeat_observation.py",
@@ -7068,6 +7070,7 @@
         "tests/test_detector_acceptance.py",
         "tests/test_detector_evidence.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_external_exchange_contract.py",
         "tests/test_flow_ingestion.py",
@@ -8090,6 +8093,35 @@
       ]
     },
     {
+      "path": "megalodon/endpoint_hour_counts.py",
+      "classification": "source",
+      "purpose": "Retained hourly record-count receipts; no learned counts or comparison adoption.",
+      "bytes": 7858,
+      "sha256": "d252f2b8fe0beeb084a8ed3f3e8c33725928d42726a3bd99e4b16f90a5e9e78e",
+      "dependencies": [
+        ".ai_context",
+        ".endpoint_context",
+        ".evidence_storage",
+        ".packet_qualification",
+        ".retained_history",
+        ".security_patterns",
+        "hashlib",
+        "json",
+        "math",
+        "sqlite3",
+        "time"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": [
+        "tests/test_ai_context.py",
+        "tests/test_endpoint_hour_counts.py"
+      ]
+    },
+    {
       "path": "megalodon/evaluation.py",
       "classification": "source",
       "purpose": "Read-only CLI for reference data, detector checks and hypothetical workload.",
@@ -8166,6 +8198,7 @@
       ],
       "related_tests": [
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_intelligence_http.py",
@@ -8463,11 +8496,12 @@
       "path": "megalodon/intelligence.py",
       "classification": "source",
       "purpose": "Managed pattern history and one bounded, cancellable local AI review worker.",
-      "bytes": 29754,
-      "sha256": "fe166e786f15a114f3c4f101d4df6a45fa98c6ee78a93611886c9865086a517b",
+      "bytes": 30377,
+      "sha256": "3aed2bdb86031d9c72fc7bebba7de64ff66b213e63b397a396120216ad2a14cc",
       "dependencies": [
         ".",
         ".endpoint_context",
+        ".endpoint_hour_counts",
         ".evidence_storage",
         ".local_install",
         ".network_review_context",
@@ -8492,6 +8526,7 @@
         "tests/test_ai_control.py",
         "tests/test_defense.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_intelligence_http.py",
         "tests/test_network_review_context.py",
         "tests/test_reporting.py",
@@ -8933,6 +8968,7 @@
         "tests/test_detector.py",
         "tests/test_detector_acceptance.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_hud_snapshot.py",
         "tests/test_ingestion_runs.py",
@@ -9217,6 +9253,7 @@
         "tests/test_community_id.py",
         "tests/test_dashboard.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_flow_ingestion.py",
         "tests/test_intelligence_http.py",
         "tests/test_offline.py",
@@ -9428,6 +9465,7 @@
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_documentation_currentness.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_heartbeat_observation.py",
@@ -9643,6 +9681,7 @@
         "tests/test_dashboard_workflows_ui.py",
         "tests/test_documentation_currentness.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_hud.py",
@@ -9869,7 +9908,9 @@
       "verification": [
         "Python AST parsed"
       ],
-      "related_tests": []
+      "related_tests": [
+        "tests/test_endpoint_hour_counts.py"
+      ]
     },
     {
       "path": "megalodon/posture.py",
@@ -12898,8 +12939,8 @@
       "path": "megalodon/retained_history.py",
       "classification": "source",
       "purpose": "Shared bounded, source-qualified reads for visual reports and HUD history.",
-      "bytes": 12066,
-      "sha256": "5a48c7450229dd4fa8baeeefcacba64d36f9a56f7dee5db9afc9923ac732675b",
+      "bytes": 12475,
+      "sha256": "474583e7c01bdfca974793388d82078aadf536b3475d2944e2267d56d2aa8be8",
       "dependencies": [
         ".dashboard_traffic",
         ".evidence_storage",
@@ -12917,6 +12958,7 @@
       ],
       "related_tests": [
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_retained_history.py"
       ]
     },
@@ -13010,6 +13052,7 @@
         "tests/test_defense.py",
         "tests/test_documentation_currentness.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_heartbeat_observation.py",
         "tests/test_hud_autostart.py",
         "tests/test_ingestion_runs.py",
@@ -13207,6 +13250,7 @@
         "tests/test_dashboard_traffic.py",
         "tests/test_documentation_currentness.py",
         "tests/test_endpoint_context.py",
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_evidence_storage.py",
         "tests/test_flow_ingestion.py",
         "tests/test_hud.py",
@@ -14708,8 +14752,8 @@
       "path": "tests/test_ai_context.py",
       "classification": "test",
       "purpose": "Synthetic contract acceptance only; no model benefit or host qualification.",
-      "bytes": 21816,
-      "sha256": "8d2dbde403c1b78e603ac0261969eb7715f18e0c13ea947211ec9f6d07cc2a69",
+      "bytes": 21924,
+      "sha256": "509dc91e49ccf920e6beb75b27ea9e98b9d312dacf28afb1371d27453354d7de",
       "dependencies": [
         "ast",
         "builtins",
@@ -16542,6 +16586,32 @@
         "megalodon.evidence_storage",
         "megalodon.intelligence",
         "megalodon.managed_receipts",
+        "megalodon.models",
+        "megalodon.retained_history",
+        "pytest",
+        "types"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Python AST parsed"
+      ],
+      "related_tests": []
+    },
+    {
+      "path": "tests/test_endpoint_hour_counts.py",
+      "classification": "test",
+      "purpose": "Real synthetic storage; retained counts remain separate from learned counts.",
+      "bytes": 14362,
+      "sha256": "db6a91f5fb5c27912346c873acaaf3f0641bd736fbb274062785b103620bc157",
+      "dependencies": [
+        "datetime",
+        "json",
+        "megalodon",
+        "megalodon.config",
+        "megalodon.endpoint_hour_counts",
+        "megalodon.evidence_storage",
+        "megalodon.intelligence",
         "megalodon.models",
         "megalodon.retained_history",
         "pytest",

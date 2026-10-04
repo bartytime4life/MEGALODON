@@ -12,6 +12,7 @@ import time
 from . import ai_provider
 from .evidence_storage import epoch, utc
 from .endpoint_context import retained_context, context_available, facts_text, _library_references, ContextError
+from .endpoint_hour_counts import read_hour_counts, SOURCE as HOUR_COUNT_SOURCE
 from .local_install import _atomic_write, _regular_owned_file
 from .network_review_context import for_pattern as network_context_for_pattern
 from .retained_history import RetainedEvidenceReader
@@ -91,12 +92,13 @@ class IntelligenceService(RetainedEvidenceReader):
         if self.stop_event.is_set() or (self.deadline and time.monotonic()>self.deadline):
             raise ValueError('Pattern read cancelled or bounded work limit reached')
 
-    def _read(self, start, end, categories, maximum=MAX_RECORDS):
+    def _read(self, start, end, categories, maximum=MAX_RECORDS, *, exclude_sources=()):
         sources,gaps=self._sources(start,end,categories=categories)
         rows=[];scanned=0
         for entry,watermark in sources:
             try:
-                for page,count in self._pages(entry,watermark,start,end):
+                options=dict(exclude_sources=exclude_sources) if exclude_sources else {}
+                for page,count in self._pages(entry,watermark,start,end,**options):
                     rows+=page;scanned+=count
                     if len(rows)>maximum or scanned>maximum*4:
                         return rows[:maximum],gaps+['Bounded historical read was truncated.']
@@ -125,7 +127,8 @@ class IntelligenceService(RetainedEvidenceReader):
         self.deadline=time.monotonic()+10
         now=self.clock()
         try:
-            rows,gaps=self._read(now-self.evidence.retention_days*86400,now+1,{'baselines','intelligence'},MAX_HISTORY)
+            rows,gaps=self._read(now-self.evidence.retention_days*86400,now+1,{'baselines','intelligence'},MAX_HISTORY,
+                                 exclude_sources=(HOUR_COUNT_SOURCE,))
             ids=self._source_ids()
             for row in rows:
                 data=row['data']
@@ -193,7 +196,11 @@ class IntelligenceService(RetainedEvidenceReader):
             with self.lock:
                 self.baselines.update({v['id']:v for v in baselines})
                 self._admit(candidates[:64])
-                self.evidence.append_records('baselines',[dict(observed_at=utc(start),source='pattern-hour-coverage-v1',data=dict(start=start,end=end,gaps=gaps or ([] if rows else ['No qualified observations'])))],checkpoint=checkpoint)
+                counts=read_hour_counts(self.evidence,start,clock=self.clock,check=self._check)
+                if counts['state']=='available':
+                    self._persist(HOUR_COUNT_SOURCE,counts['summaries'],'baselines')
+                count_state={key:value for key,value in counts.items() if key!='summaries'}
+                self.evidence.append_records('baselines',[dict(observed_at=utc(start),source='pattern-hour-coverage-v1',data=dict(start=start,end=end,gaps=gaps or ([] if rows else ['No qualified observations']),endpoint_counts=count_state))],checkpoint=checkpoint)
                 self.last_hour=end;self.gaps=gaps
                 self._prune()
         finally:self.deadline=None
