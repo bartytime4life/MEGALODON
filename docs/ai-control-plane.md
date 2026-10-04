@@ -208,15 +208,56 @@ restore live firewall application, deploy, release or merge. Level 2 execution
 requires a separate exact-action operator approval mechanism and the existing
 firewall restoration gate; no model or CLI confirmation can bypass it.
 
-## Candidate evidence context v1 (implementation milestone 1)
+## Evidence context v1 (implementation milestones 1–2)
 
-The capability plan starts with `megalodon/ai_context.py` and synthetic
-`tests/test_ai_context.py`. `build_context(value)` is a pure candidate contract:
-it validates a closed application projection, constructs deterministic facts,
-and returns a bounded packet. **No runtime caller imports it.** Passing these
-tests does not admit new fields to any existing model path, accept a provider,
-or complete the later endpoint, question, answer-rendering, evaluation or pilot
-milestones. Review this exact field contract before runtime integration.
+`megalodon/ai_context.py` validates a closed application projection and builds
+bounded deterministic facts. PRs #492 and #493 introduced and corrected that
+pure contract. The endpoint adapter now admits committed packet/flow metadata
+through it; provider acceptance, fixed-question comparisons, statement-level
+answer grounding, evaluation and the native pilot remain separate milestones.
+
+### Endpoint adapter and fallback
+
+`endpoint_context.retained_context()` reads the preceding hour ending at the
+last completed UTC second. It uses retained-reader watermarks and packet
+qualification, scans at most 20,000 candidate records in pages of at most 512 records, and
+selects at most 24 address-matching records. Only closed protocol/port/TCP-flag
+fields and supported linked detector IDs enter the packet. Unknown fields,
+free text, names, payloads, action details and raw sensor IDs are omitted.
+Packet records and flow update records remain distinct; flow updates are not
+unique connections. Collection groups bind an application-owned segment and
+admitted interface, with no cross-segment/device identity inference. Missing
+interfaces establish no interface coverage guarantee.
+
+The pure builder does not truncate. If a selected projection exceeds its byte
+or node budget, the adapter removes records from the end until it fits and sets
+`coverage.truncated`. Hitting either read/selection bound also sets that flag
+conservatively. Coverage always declares `incomplete_window`; source errors or
+withheld malformed rows add `source_gap`. No comparison or reference-library
+claim is supplied on this generic observation path. A context without qualified
+protocol/detail evidence skips inference and reports `insufficient_context`.
+
+`explain_device()` persists the measured review before its single existing
+256-token inference request. The exact context supplied as E1 is also returned
+to the facts view. Missing evidence avoids inference entirely. Unavailable
+providers, timeout, cancellation and rejected responses preserve deterministic
+facts with distinct states. The application fixes the next step to observation;
+generic model output cannot select containment. The existing 4,096-byte prompt,
+provider gate, manual priority and automatic hourly budget remain unchanged.
+
+Subject, snapshot hash and selected-model settings identity bind the result.
+Source units, earliest segment expiry, shortened retention and compaction are
+checked before save and on later reads; a changed model invalidates its ready
+answer. Re-analysis of retained endpoint reviews uses the same context. The
+Defense job has a random request ID. The browser records that ID and the local
+selection generation at submission, so A→B→A changes invalidate an outstanding
+answer even when its content hash is unchanged. Dependency expiry is also
+checked before browser rendering, and a failed status refresh hides the answer.
+
+Only managed source-dependent review records retain rich context. The action
+ledger continues to retain only a review ID and `not_attempted` action status.
+Synthetic tests and inert browser checks cover this implementation; they do not
+qualify any model artifact, authorize live inference, or satisfy issue #446.
 
 The inventory below was checked against
 `main@b195866bc6f79594a90b7452425e95ace2c2d2e7`, the capability plan's baseline.
@@ -342,8 +383,8 @@ at most `2**53 - 1`. Output including `snapshot_sha256` is capped at **3,072
 bytes**, reserving at least 1,024 bytes for instructions within the existing
 4,096-byte prompt. Twenty-four records are an upper bound, not a guarantee that
 every combination fits. An oversized projection raises `CONTEXT_TOO_LARGE`;
-the builder neither widens a limit nor silently discards measurements. A future
-caller must check the complete composed prompt too.
+the builder neither widens a limit nor silently discards measurements. The endpoint
+caller also checks the complete composed prompt.
 
 Canonical JSON uses sorted object keys, compact separators and ASCII escaping;
 sets of records, groups, references and dependencies have deterministic order.
@@ -385,7 +426,7 @@ contract tests cannot be mistaken for model benefit:
 
 The next review is this contract, its field/privacy choices, scope identity,
 count semantics, dependency validation and synthetic tests. Subsequent draft
-changes can then add endpoint projection/fallback, truthful fixed-question
+changes add endpoint projection/fallback (described above), truthful fixed-question
 comparisons, grounded answer/UI/report integration, and the offline three-mode
 harness in the plan's order. That review must precede model runtime wiring.
 The native pilot, operational inference on private metadata, owner binding,

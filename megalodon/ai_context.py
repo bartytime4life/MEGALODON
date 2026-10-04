@@ -1,8 +1,7 @@
-"""Candidate evidence-context v1; pure validation/projection, not runtime admission.
+"""Evidence-context v1; pure validation/projection, not runtime admission.
 
-Only synthetic callers exercise this contract. A future reviewed adapter must
-authenticate and qualify inputs, then revalidate dependencies at use/retention
-time. Structural validation cannot prove a source exists or a count is true.
+The endpoint adapter qualifies committed inputs and revalidates dependencies
+at use/retention time. Structural validation cannot prove a source exists or a count is true.
 This module must not import stores, providers, collectors, or action handlers.
 """
 

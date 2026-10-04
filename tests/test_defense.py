@@ -74,7 +74,7 @@ def test_provider_busy_reports_retry_without_action(manager):
 def test_managed_explanation_is_referenced_not_copied_to_action_ledger(manager):
     defense,calls,_=manager
     defense.configuration.intelligence=SimpleNamespace(explain_device=lambda ip:dict(
-        review_id='a'*24,explanation='Source-expiring explanation',proposal='observe'))
+        review_id='a'*24,explanation='Source-expiring explanation',proposal='observe',analysis_state='ready'),endpoint_result_valid=lambda result:True)
     result=perform(defense,dict(action='analyze',ip='1.1.1.1'))
     assert result['state']=='finished'
     assert result['result']['explanation']=='Source-expiring explanation'
