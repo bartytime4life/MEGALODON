@@ -1651,7 +1651,10 @@ def test_managed_evidence_apply_failure_restores_prior_collector_intent(managed_
     ("/api/storage", "X-Megalodon-Storage-Token"),
     ("/api/network", "X-Megalodon-Network-Token"),
 ])
-def test_managed_evidence_actions_require_unambiguous_origin_token_and_framing(managed_evidence_http, route, token_header):
+@pytest.mark.parametrize("lock_held", [False, True])
+def test_managed_evidence_actions_require_unambiguous_origin_token_and_framing(
+    managed_evidence_http, route, token_header, lock_held
+):
     h = managed_evidence_http
     body = {"action": "configure", "scopes": [], "enabled": False} if route == "/api/network" else {"action": "preview", "policy": {}}
     scenarios = [
@@ -1671,11 +1674,20 @@ def test_managed_evidence_actions_require_unambiguous_origin_token_and_framing(m
         (("Content-Length",), (), 400),
         (("Content-Length",), (("Content-Length", "8193"),), 400),
     ]
-    for omitted, extra, expected in scenarios:
-        h.calls.clear()
-        status, _, _ = h.request("POST", route, body, omit=omitted, extra=extra)
-        assert status == expected, (route, omitted, extra)
-        assert h.calls == [], "invalid requests must not touch collectors or providers"
+    if lock_held:
+        h.handler.maintenance_lock.acquire()
+    try:
+        for omitted, extra, expected in scenarios:
+            h.calls.clear()
+            status, _, _ = h.request("POST", route, body, omit=omitted, extra=extra)
+            assert status == expected, (route, omitted, extra, lock_held)
+            assert h.calls == [], "invalid requests must not touch collectors or providers"
+        if lock_held:
+            assert h.request("POST", route, body)[0] == 409
+            assert h.calls == [], "busy requests must not touch collectors or providers"
+    finally:
+        if lock_held:
+            h.handler.maintenance_lock.release()
 
 
 @pytest.mark.parametrize("raw", [

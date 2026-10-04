@@ -543,6 +543,10 @@ It contains no telemetry or action token and is used by installer readiness chec
 | `POST /api/reports/cancel` | Empty object | Same report protection; requests cancellation without deleting prior completed reports. |
 | `POST /api/reports/schedule` | `enabled,time,frequency`, optional `weekday` | Same protection; daily/weekly, PC local time, persisted completion identity. |
 
+For both managed storage and network POST actions, invalid host, sign-in,
+authorization, content type, encoding, or length is rejected before the
+maintenance lock is checked. A valid request receives 409 while that lock is busy.
+
 Repeated or unknown parameters and malformed tokens/bodies are refused. GET
 configuration/history errors normally return 422; missing explicit local checks
 return 403. The retained chart route returns 503 when managed storage is absent
