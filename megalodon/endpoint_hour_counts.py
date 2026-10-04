@@ -12,8 +12,15 @@ from .packet_qualification import qualified_event_ids
 from .retained_history import RetainedEvidenceReader
 from .security_patterns import MAX_GROUPS, MAX_RECORDS, stable
 
-SCHEMA = 'megalodon-endpoint-hour-count-v1'
-SOURCE = 'endpoint-hour-count-v1'
+SCHEMA = 'megalodon-endpoint-hour-count-v2'
+SOURCE = 'endpoint-hour-count-v2'
+COUNT_SOURCES = ('endpoint-hour-count-v1', SOURCE)
+
+
+def _has_rollups(sources):
+    # Original packet units are suppressed when this replacement is selected.
+    # A rollup is not an original retained-record count; withhold the whole hour.
+    return any(entry['category']=='packet_rollups' for entry, _ in sources)
 
 
 def _unavailable(reason):
@@ -70,7 +77,9 @@ def read_hour_counts(evidence, start, *, clock=None, check=None):
     reader = RetainedEvidenceReader(evidence)
     reader._check = bounded_check
     try:
-        sources, gaps = reader._sources(start, end, categories={'packets', 'flows'})
+        sources, gaps = reader._sources(start, end, categories={'packets', 'flows', 'packet_rollups'})
+        if _has_rollups(sources):
+            return _unavailable('incompatible_sources')
         if gaps:
             return _unavailable('incomplete_hours')
         if len(sources) > MAX_SOURCES or sum(watermark for _, watermark in sources) > MAX_RECORDS:
@@ -110,7 +119,9 @@ def read_hour_counts(evidence, start, *, clock=None, check=None):
                             groups[key] = 0
                         groups[key] += 1
         bounded_check()
-        final_sources, gaps = reader._sources(start, end, categories={'packets', 'flows'})
+        final_sources, gaps = reader._sources(start, end, categories={'packets', 'flows', 'packet_rollups'})
+        if _has_rollups(final_sources):
+            return _unavailable('incompatible_sources')
         if gaps or len(final_sources) > MAX_SOURCES or sum(w for _, w in final_sources) > MAX_RECORDS:
             return _unavailable('incomplete_hours')
         final_now = clock()
@@ -128,7 +139,7 @@ def read_hour_counts(evidence, start, *, clock=None, check=None):
             return _unavailable('source_expired')
         if not groups:
             return _unavailable('no_baseline')
-        snapshot = sha256(json.dumps(dict(start=start, end=end, bindings=bindings,
+        snapshot = sha256(json.dumps(dict(schema=SCHEMA, start=start, end=end, bindings=bindings,
             records={key: value.hexdigest() for key, value in sorted(digests.items())}),
             sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         summaries = []

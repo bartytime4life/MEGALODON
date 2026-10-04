@@ -3530,8 +3530,8 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 38940,
-      "sha256": "6434be5ca637a35a919dddc458299f9a924ba3f0d92d5ae9c4a3e3dae930eff6",
+      "bytes": 39778,
+      "sha256": "81d43cdfa34e199aece46d52e07d4f6b069723e3e5f384788943703714ec52a6",
       "dependencies": [
         "local-model-selection.md",
         "qwen-446-owner-decision-packet.md",
@@ -8096,8 +8096,8 @@
       "path": "megalodon/endpoint_hour_counts.py",
       "classification": "source",
       "purpose": "Retained hourly record-count receipts; no learned counts or comparison adoption.",
-      "bytes": 7858,
-      "sha256": "d252f2b8fe0beeb084a8ed3f3e8c33725928d42726a3bd99e4b16f90a5e9e78e",
+      "bytes": 8411,
+      "sha256": "89397fda87508eaa32c8010324a5402f2ee2844d9c00d3d4ef7ab1bade3720af",
       "dependencies": [
         ".ai_context",
         ".endpoint_context",
@@ -8496,8 +8496,8 @@
       "path": "megalodon/intelligence.py",
       "classification": "source",
       "purpose": "Managed pattern history and one bounded, cancellable local AI review worker.",
-      "bytes": 30377,
-      "sha256": "3aed2bdb86031d9c72fc7bebba7de64ff66b213e63b397a396120216ad2a14cc",
+      "bytes": 30412,
+      "sha256": "92fb1a473680826ed7c2c51e9a004cf547537eb985064d79db8024aa3836d147",
       "dependencies": [
         ".",
         ".endpoint_context",
@@ -13013,6 +13013,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_endpoint_hour_counts.py",
         "tests/test_network_review_context.py",
         "tests/test_reporting.py",
         "tests/test_security_patterns.py"
@@ -16602,10 +16603,11 @@
       "path": "tests/test_endpoint_hour_counts.py",
       "classification": "test",
       "purpose": "Real synthetic storage; retained counts remain separate from learned counts.",
-      "bytes": 14362,
-      "sha256": "db6a91f5fb5c27912346c873acaaf3f0641bd736fbb274062785b103620bc157",
+      "bytes": 19211,
+      "sha256": "747dc09490674d409f1a64684f33ad228f95a81879f702ea0e939353af38ab10",
       "dependencies": [
         "datetime",
+        "hashlib",
         "json",
         "megalodon",
         "megalodon.config",
@@ -16614,6 +16616,7 @@
         "megalodon.intelligence",
         "megalodon.models",
         "megalodon.retained_history",
+        "megalodon.security_patterns",
         "pytest",
         "types"
       ],
