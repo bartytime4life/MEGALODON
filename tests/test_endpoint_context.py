@@ -92,6 +92,44 @@ def test_read_only_candidate_refuses_expired_source(service):
         service.context_for_device('192.0.2.8')
 
 
+@pytest.mark.parametrize('stage', ['scan', 'library_recheck'])
+@pytest.mark.parametrize('expiry_offset', [-1, 0, 1])
+def test_read_only_candidate_rechecks_current_expiry_before_return(service, monkeypatch, stage, expiry_offset):
+    from megalodon import intelligence
+    from megalodon.evidence_storage import epoch
+
+    append(service)
+    entry=next(e for e in service.evidence._catalog['entries'] if e['category']=='flows')
+    expires=int(epoch(entry['first_at'])+service.evidence.retention_days*86400)
+    before=service.evidence.history(category='intelligence')['total']
+    service.model=lambda *a,**kw:pytest.fail('Candidate projection must not invoke a model')
+    if stage=='scan':
+        original=intelligence.retained_context
+        def scan(*args,**kwargs):
+            context=original(*args,**kwargs)
+            service.test_clock[0]=expires+expiry_offset
+            return context
+        monkeypatch.setattr(intelligence,'retained_context',scan)
+    else:
+        calls=[]
+        def references(rule):
+            calls.append(rule)
+            if len(calls)==2:
+                service.test_clock[0]=expires+expiry_offset
+            return []
+        service.knowledge=SimpleNamespace(for_pattern=references)
+
+    if expiry_offset<0:
+        context=service.context_for_device('192.0.2.8')
+        assert context['as_of']==NOW
+        assert context_available(service.evidence,context,service.clock())
+    else:
+        with pytest.raises(ContextError,match='^SOURCE_EXPIRED$'):
+            service.context_for_device('192.0.2.8')
+    assert service.evidence.history(category='intelligence')['total']==before
+    assert service.reviews=={}
+
+
 def test_read_only_candidate_preserves_partial_and_disagreeing_coverage(service,monkeypatch):
     from megalodon.retained_history import RetainedEvidenceReader
     append(service)
