@@ -115,7 +115,7 @@ aiCancel.addEventListener('click', () => { aiUserCanceled = true; if (aiActiveCo
 async function aiFetch(path, header, body = null) {
   const controller = new AbortController();
   aiActiveController = controller;
-  const timer = setTimeout(() => controller.abort(), 50000);
+  const timer = setTimeout(() => controller.abort(), body === null ? 50000 : 600000);
   const options = {headers: {[header]: '1', 'X-Megalodon-AI-Token': document.getElementById('ai-token').value},
                    cache: 'no-store', credentials: 'same-origin', signal: controller.signal};
   try {
@@ -169,11 +169,15 @@ aiAsk.addEventListener('click', async () => {
   aiBusy = true; aiUserCanceled = false; aiAsk.disabled = true; aiResult.hidden = true;
   aiAsk.textContent = 'Asking…'; aiCancel.hidden = false;
   aiState.classList.remove('ai-integrity-alert');
-  aiState.textContent = 'Requesting one bounded local analysis…';
+  aiState.textContent = 'Waiting for local AI analysis (up to 10 minutes)…';
   try {
     const question = document.getElementById('ai-question').value;
     const {response, value} = await aiFetch('/api/ai/ask', 'X-Megalodon-AI-Ask', {question});
     if (response.status === 403) { aiState.textContent = aiTokenErrorText(value); return; }
+    if (value.error_code === 'REQUEST_TIMEOUT' && !response.ok) {
+      aiState.textContent = 'AI request timed out before a complete answer was returned.';
+      return;
+    }
     if (!response.ok || value.schema !== 'megalodon-ai-answer-v1') throw new Error('AI request unavailable');
     document.getElementById('ai-observed').textContent = JSON.stringify(value.observed, null, 2);
     document.getElementById('ai-inferred').textContent = value.inferred || 'No validated model explanation returned.';
@@ -188,7 +192,7 @@ aiAsk.addEventListener('click', async () => {
     }
   } catch (err) {
     aiState.textContent = err && err.name === 'AbortError'
-      ? (aiUserCanceled ? 'AI request canceled by operator. No partial model output is shown.' : 'AI request timed out client-side. No partial model output is shown.')
+      ? (aiUserCanceled ? 'AI request canceled by operator. No partial model output is shown.' : 'AI did not return a complete answer within 10 minutes. No partial model output is shown.')
       : 'AI request failed. No partial model output is shown.';
   } finally { aiBusy = false; aiAsk.disabled = false; aiAsk.textContent = 'Ask locally'; aiCancel.hidden = true; }
 });

@@ -32,6 +32,9 @@ actually loaded into memory.
 The request timeout defaults to 300 seconds and is bounded at 1,800 seconds, context at most 4096 tokens, and
 output at most 256 tokens. Readiness, ordinary advice and defense requests all
 set the processing batch to 64 tokens to reduce temporary GPU memory demand.
+Fixed AI questions share a separate ten minute limit across tool selection and
+the follow-up explanation. The HUD waits for the answer until that limit and
+then shows a timeout error; the explicit model check retains its shorter client limit.
 This is an [Ollama runner option](https://github.com/ollama/ollama/blob/main/api/types.go),
 not a change to the context or output limit. Model and endpoint cannot come from a model reply. The protected
 [Setup model selector](local-model-selection.md) can pin an installed local
