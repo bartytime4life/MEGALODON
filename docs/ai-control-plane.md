@@ -140,7 +140,14 @@ same-origin `Origin`, exact bound `Host`, JSON content type, and a body no large
 than 256 bytes. The token is held in memory and is not persisted or placed in
 the served JavaScript. A HUD launched with the local Setup workspace always
 mints this token, because Setup can pin a model after launch even when the
-configuration file keeps `[ai] enabled = false`. The HUD separates OBSERVED
+configuration file keeps `[ai] enabled = false`. That HUD usually runs as the
+background `megalodon-hud.service`, whose launch output only reaches the user
+journal, so its Local AI control panel reads the token from
+`GET /api/ai/token` when opened. That route requires `X-Megalodon-Check: 1`, the
+bound `Host`, a non-root local user and the Setup workspace: the same guards
+and channel that already hand the page Setup's configuration nonce, which can
+itself change the selected model. Other dashboard modes refuse the route and
+keep manual entry. The HUD separates OBSERVED
 broker output from INFERRED model text and displays the operation state and
 receipt ID. No browser request can apply firewall changes or choose an
 arbitrary executable, file or URL.

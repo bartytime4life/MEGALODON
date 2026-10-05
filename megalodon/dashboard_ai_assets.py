@@ -17,7 +17,7 @@ AI_PANEL = """
             <input id="ai-token" type="password" autocomplete="off" spellcheck="false" maxlength="64" placeholder="Paste the AI operator token">
             <button id="ai-token-toggle" class="button-secondary" type="button" aria-pressed="false">Show</button>
           </span>
-          <small class="field-hint">Printed once in the HUD terminal at startup. It is not shown again; restart the HUD for a new one. Press Enter to verify.</small>
+          <small class="field-hint" id="ai-token-hint">Filled automatically when this HUD manages your local setup. Otherwise paste the token printed when the HUD started (for the background service: <code>journalctl --user -u megalodon-hud.service | grep "AI operator token"</code>). Press Enter to verify.</small>
         </label>
       </li>
       <li class="ai-step" id="ai-step-check" data-step-state="pending">
@@ -53,6 +53,7 @@ AI_PANEL = """
     <div class="ai-status" id="ai-status" data-tone="idle">
       <span class="ai-spinner" aria-hidden="true"></span>
       <p id="ai-state" role="status" aria-live="polite">AI has not been checked. It is disabled until configured and verified — choose a model in Setup, or run <code>megalodon ai doctor --config config/settings.toml</code>, then see docs/ai-control-plane.md.</p>
+      <a class="ai-setup-link" id="ai-setup-link" href="#support-model-title" hidden>Open Setup → Local AI</a>
       <span class="ai-elapsed" id="ai-elapsed" aria-hidden="true" hidden></span>
       <span class="ai-progress" aria-hidden="true"></span>
     </div>
@@ -133,6 +134,8 @@ AI_CSS = """
 .ai-spinner { display: none; flex: none; width: 16px; height: 16px; margin-top: 2px; border: 2px solid rgba(110, 216, 255, .25); border-top-color: var(--cyan); border-radius: 50%; animation: ai-spin .8s linear infinite; }
 .ai-status[data-tone="busy"] .ai-spinner { display: block; }
 @keyframes ai-spin { to { transform: rotate(360deg); } }
+.ai-setup-link { flex: none; align-self: center; padding: 4px 10px; border: 1px solid rgba(255, 209, 102, .45); border-radius: 999px; color: var(--amber); font-size: .72rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.ai-setup-link:hover { background: rgba(255, 209, 102, .1); }
 .ai-elapsed { flex: none; padding: 2px 8px; border-radius: 999px; background: rgba(110, 216, 255, .1); color: var(--cyan); font-size: .7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .ai-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; opacity: 0; background: linear-gradient(90deg, transparent, var(--cyan), transparent); background-size: 40% 100%; background-repeat: no-repeat; transition: opacity .3s; }
 .ai-status[data-tone="busy"] .ai-progress { opacity: 1; animation: ai-progress 1.4s ease-in-out infinite; }
@@ -191,7 +194,7 @@ let aiPhase = 'idle';
 const AI_STATE_TEXT = {
   disabled: 'Local AI is turned off. Choose a local model in Setup, or run megalodon ai doctor --config config/settings.toml and set [ai] enabled = true (see docs/ai-control-plane.md).',
   ollama_unavailable: 'Ollama is not reachable on loopback. Start Ollama (ollama serve) and verify again.',
-  model_missing: 'The configured local model is not installed in Ollama.',
+  model_missing: 'The selected local model is not installed in Ollama.',
   model_available: 'The model tag is present but has not completed a live inference check.',
   model_loading: 'Another local AI request is already using the one inference slot. Try again in a moment.',
   concurrency_unavailable: "MEGALODON could not establish its own local concurrency lock, so no request to Ollama was attempted. This is a local platform or filesystem issue, not an Ollama or model problem.",
@@ -209,8 +212,8 @@ const AI_STATE_BADGE = {model_ready: 'Model ready', model_available: 'Unverified
 const AI_ERROR_TEXT = {
   CONCURRENCY_LIMIT_REACHED: 'another AI request is already using the one local inference slot',
   CONCURRENCY_CONTROL_UNAVAILABLE: 'the local concurrency lock could not be acquired',
-  MODEL_MISMATCH: 'the installed model digest does not match the pinned configuration',
-  MODEL_MISSING: 'the configured model is not installed in Ollama',
+  MODEL_MISMATCH: 'Ollama now has a different copy of the selected model than MEGALODON pinned; open Setup → Local AI and press Use installed version',
+  MODEL_MISSING: 'the selected model is no longer installed in Ollama; choose an installed model in Setup → Local AI',
   MODEL_NOT_LOCAL: 'the model is not a local completion model',
   OLLAMA_UNAVAILABLE: 'Ollama is not reachable on loopback',
   REQUEST_TIMEOUT: 'the local model did not finish within the configured timeout',
@@ -240,7 +243,42 @@ function aiTokenErrorText(value) {
   const detail = value && typeof value.error === 'string' ? ` (${value.error})` : '';
   return `Operator token missing or incorrect${detail}. Re-copy the token printed in the HUD terminal at startup.`;
 }
+const AI_DRIFT = {
+  MODEL_MISMATCH: {badge: 'Model changed', text: 'Ollama now has a different copy of the selected model than MEGALODON pinned. Open Setup → Local AI and press Use installed version'},
+  MODEL_MISSING: {badge: 'Model missing', text: 'The selected model is no longer installed in Ollama. Open Setup → Local AI and choose an installed model'},
+};
+const AI_SETUP_CODES = new Set(['MODEL_MISMATCH', 'MODEL_MISSING', 'MODEL_NOT_LOCAL', 'DISABLED']);
+function aiShowSetupLink(code) {
+  const link = document.getElementById('ai-setup-link');
+  if (link) link.hidden = !AI_SETUP_CODES.has(code);
+}
+let aiTokenLoad = null;
+function aiLoadToken() {
+  // One shared request: opening the panel and pressing Verify must not race each other.
+  if (aiTokenInput.value.trim()) return Promise.resolve(true);
+  if (!aiTokenLoad) aiTokenLoad = aiFetchToken().finally(() => { aiTokenLoad = null; });
+  return aiTokenLoad;
+}
+async function aiFetchToken() {
+  // The local Setup HUD hands its own page this launch's token; other modes keep manual entry.
+  if (typeof fetch !== 'function') return false;
+  try {
+    const response = await fetch('/api/ai/token', {headers: {'X-Megalodon-Check': '1'}, cache: 'no-store', credentials: 'same-origin'});
+    if (!response.ok) return false;
+    const text = await response.text();
+    if (text.length > 256) return false;
+    const value = JSON.parse(text);
+    if (!value || value.schema !== 'megalodon-ai-token-v1' || typeof value.token !== 'string' || !/^[A-Za-z0-9_-]{32}$/.test(value.token)) return false;
+    if (aiTokenInput.value.trim()) return true;
+    aiTokenInput.value = value.token;
+    const hint = document.getElementById('ai-token-hint');
+    if (hint) hint.textContent = 'Filled automatically for this HUD launch. Press Enter or Verify to check the model.';
+    if (!aiBusy) aiSetPhase(aiPhase);
+    return true;
+  } catch (_) { return false; }
+}
 function aiSetStatus(text, tone = 'idle', badge = null) {
+  aiShowSetupLink(null);
   aiState.textContent = text;
   aiStatusBox.setAttribute('data-tone', tone);
   aiBadge.setAttribute('data-tone', tone);
@@ -321,6 +359,7 @@ aiTokenInput.addEventListener('keydown', event => {
 });
 aiPanel.addEventListener('toggle', event => {
   document.getElementById('ai-control-action').textContent = event.currentTarget.open ? 'Close AI controls' : 'Open AI controls';
+  if (event.currentTarget.open) aiLoadToken();
 });
 async function aiRequestServerCancel() {
   // Frees the one inference slot on the server; aborting the browser fetch alone would not.
@@ -383,8 +422,9 @@ function aiEndBusy() {
 }
 aiCheck.addEventListener('click', async () => {
   if (aiBusy) return;
+  if (!aiTokenInput.value.trim()) await aiLoadToken();
   if (!aiTokenInput.value.trim()) {
-    aiSetStatus('Paste the AI operator token printed in the HUD terminal first.', 'warn', 'Token needed');
+    aiSetStatus('Paste the AI operator token first. The background HUD writes it to its log: journalctl --user -u megalodon-hud.service | grep "AI operator token".', 'warn', 'Token needed');
     aiTokenInput.focus(); return;
   }
   aiBeginBusy(aiCheck, 'Checking…');
@@ -397,11 +437,15 @@ aiCheck.addEventListener('click', async () => {
     if (response.status === 403) { aiVerified = false; aiSetStatus(aiTokenErrorText(value), 'error', 'Token rejected'); return; }
     if (!response.ok || value.schema !== 'megalodon-ai-status-v1') throw new Error('AI status unavailable');
     if (Number.isInteger(value.timeout_seconds)) aiTimeoutSeconds = value.timeout_seconds;
-    const summary = AI_STATE_TEXT[value.state] || `Unrecognized status (${value.state}).`;
     aiVerified = value.state === 'model_ready';
     phase = aiVerified ? 'ready' : 'error';
-    aiSetStatus(`${summary}${aiErrorReason(value.error_code)} Model ${value.model || 'unknown'}. Inference verified: ${value.inference_verified === true ? 'yes' : 'no'}.`,
-      AI_STATE_TONE[value.state] || 'error', AI_STATE_BADGE[value.state] || 'Not ready');
+    const drift = AI_DRIFT[value.error_code];
+    // Model drift is the operator's next step, so lead with it instead of the generic safety-check line.
+    const summary = drift ? `${drift.text} (${value.error_code}).`
+      : `${AI_STATE_TEXT[value.state] || `Unrecognized status (${value.state}).`}${aiErrorReason(value.error_code)}`;
+    aiSetStatus(`${summary} Model ${value.model || 'unknown'}. Inference verified: ${value.inference_verified === true ? 'yes' : 'no'}.`,
+      drift ? 'warn' : AI_STATE_TONE[value.state] || 'error', drift ? drift.badge : AI_STATE_BADGE[value.state] || 'Not ready');
+    aiShowSetupLink(value.error_code);
   } catch (err) {
     aiVerified = false;
     if (err && err.name === 'AbortError') {
@@ -433,6 +477,7 @@ aiAsk.addEventListener('click', async () => {
     if (value.schema === 'megalodon-ai-answer-v1' && value.state === 'failed') {
       phase = 'error';
       aiSetStatus(`AI request failed.${aiErrorReason(value.error_code)}`, value.error_code === 'REQUEST_CANCELLED' ? 'warn' : 'error', 'Failed');
+      aiShowSetupLink(value.error_code);
       return;
     }
     if (!response.ok || value.schema !== 'megalodon-ai-answer-v1') throw new Error('AI request unavailable');
@@ -445,6 +490,7 @@ aiAsk.addEventListener('click', async () => {
     if (value.error_code) {
       phase = 'error';
       aiSetStatus(`AI completed with an error.${aiErrorReason(value.error_code)}`, 'warn', 'Partial');
+      aiShowSetupLink(value.error_code);
       if (value.error_code === 'AUDIT_INTEGRITY') { aiState.classList.add('ai-integrity-alert'); aiStatusBox.setAttribute('data-tone', 'error'); aiBadge.setAttribute('data-tone', 'error'); }
     } else {
       phase = 'done';

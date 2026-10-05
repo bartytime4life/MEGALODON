@@ -27,6 +27,21 @@ ERROR_STATES = {'REQUEST_CANCELLED':'cancelled','PROVIDER_ERROR':'provider_error
 RECENT_RESPONSE_SECONDS = 300
 
 
+def _drift(settings, value):
+    """Compare the pinned selection with Ollama's installed tags; no inference."""
+    options = value.get('options')
+    if not settings.enabled or type(options) is not list or 'state' not in value:
+        return None, None
+    installed = next((row for row in options if row.get('name') == settings.model), None)
+    if installed is None:
+        # The catalog hides remote and non-GGUF tags, so only the provider's
+        # raw tag check can establish that the pinned model is really gone.
+        return ('missing', None) if value.get('state') == 'model_missing' else (None, None)
+    if installed.get('digest') != settings.model_digest:
+        return 'digest_changed', installed.get('digest')
+    return None, None
+
+
 def _recent_response(value):
     if not isinstance(value, str) or not value.endswith('Z'):
         return False
@@ -85,7 +100,16 @@ class ModelTelemetry:
         if stale:state='stale'
         if observation.get('running'):state='generating'
         verified=state=='model_available' and _recent_response(accepted) and not error
-        message=MESSAGES.get(state,'Checking the configured local model.' if state=='checking' else
+        drift,installed_digest=_drift(settings,value)
+        if drift=='digest_changed':
+            message=('Ollama now has a different copy of '+settings.model+' than the one MEGALODON pinned (pinned '
+                     +settings.model_digest[:12]+', installed '+installed_digest[:12]+'). Use the installed version to keep using it.')
+        elif drift=='missing':
+            message=(settings.model+' is no longer installed in Ollama. Choose one of the installed models.'
+                     if value.get('options') else settings.model+' is no longer installed in Ollama, and Ollama lists no other local models.')
+        else:
+            message=None
+        message=message or MESSAGES.get(state,'Checking the configured local model.' if state=='checking' else
             'Model observation is stale; checking again.' if state=='stale' else
             'Configured model is present; verify its response in Setup.' if not accepted else
             'Configured model is present. Last accepted response '+accepted+
@@ -94,4 +118,5 @@ class ModelTelemetry:
         return dict(timeout_seconds=settings.timeout_seconds,running=bool(observation.get('running')),started_at=observation.get('started_at'),options=value.get('options',[]),truncated=value.get('truncated',False),compute_mode=settings.compute_mode,selected_digest=settings.model_digest,state=workflow,model=settings.model,model_state=state,model_present=value.get('state')=='model_available',
             message=(settings.model+' · '+('CPU' if settings.compute_mode=='cpu' else 'Ollama automatic compute')+' advice. '+message)[:512],updated_at=value.get('checked_at'),
             last_response_at=accepted,last_attempt_at=observation.get('last_attempt_at'),error_code=error,
+            drift=drift,installed_digest=installed_digest,
             response_ms=observation.get('duration_ms'),inference_verified=verified,**{k:value.get(k) for k in ('loaded','memory_bytes','vram_bytes')})
