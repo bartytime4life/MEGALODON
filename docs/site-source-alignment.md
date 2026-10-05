@@ -1,6 +1,31 @@
 # Defense Console source alignment
 
-## Latest saved source — version 61
+## Current saved source and publication — version 62
+
+VERIFIED against GitHub `main@d83e8967426abe652ef820a0ed82e8a4b479edd2`:
+the separate Sites source checkpoint contains all 837 committed repository
+files. The manifest binds tree `5a04c9c3b93475e19e3687d14b8bb1046f1e14e7`,
+Git archive SHA-256
+`e43eaab997d9257f56bf384da7e46a6ab38fed88fc75df94fff9cd6f739822a4`,
+per-file hashes, byte counts and executable flags. Verification passed and a
+directory comparison found no differences. Uncommitted primary-checkout work,
+ignored runtime data, settings, reports, models and credentials were excluded.
+
+- Sites source: `8ce520bbaaae0173aae4cdbe4d98452acc09e6fe`.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_67dd1a10d5cc8191ae907cb631fd9d76` (62).
+- Deployment: `appgdep_6ac3cc06c7b081918e67c4483e214ec5`, succeeded at the existing owner-only URL.
+- Deployment archive: two files, normalized SHA-256
+  `a52499b99cd77a74f3a07767765d6dbbfb4bc99c8cb42d8b3f6b310591d3618d`,
+  identical to the prior retirement archive. It contains only hosting identity
+  and the unchanged worker that returns an empty HTTP 410 on every path.
+
+This publication updates the source checkpoint and republishes the retired
+handler. It does not install or run the local HUD, change host services, run a
+real Ollama/Qwen model, or establish independent browser acceptance. The
+primary local checkout remains on its divergent branch with unfinished edits;
+its integration with current `main` is a separate task.
+
+## Historical saved source — version 61
 
 VERIFIED 2026-10-02 UTC (2026-10-01 local): the owner requested a source
 checkpoint while keeping the Site retired. Saved v61 contains a complete copy
@@ -35,7 +60,7 @@ This receipt and its audit-ledger update follow the checkpoint commit; they do
 not change its application bytes. See the machine-readable
 [checkpoint verification](audit/source-checkpoint-acceptance.json).
 
-## Current publication — local HUD only, no hosted page
+## Historical publication — version 60, local HUD only, no hosted page
 
 CONFIRMED 2026-10-01: removed the extra retirement landing page at the owner's
 request. Every path in the deployed handler returns an empty HTTP 410 (Gone)
