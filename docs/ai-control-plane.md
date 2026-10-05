@@ -53,7 +53,19 @@ The status states are `disabled`, `ollama_unavailable`, `model_missing`,
 `model_loading` means another request already holds the one inference slot;
 `concurrency_unavailable` means MEGALODON's own local lock could not be
 established (an unsupported platform or a filesystem fault), so no request
-to Ollama was attempted at all.
+to Ollama was attempted at all. A status also reports `cancelled` when the
+operator stops the check, and carries the configured `timeout_seconds` so the
+HUD can wait for the server's own deadline instead of guessing.
+
+The tool-selection call sends Ollama a JSON schema (`format`) that restricts
+`tool` to the question's permitted names and `arguments` to the documented
+fields, so small local models return one closed request. The broker still
+validates every field; a reply wrapped in a single Markdown code fence is
+accepted, and any other prose is refused and audited. The explanation prompt
+asks for at most four short sentences so it finishes inside the 256-token
+output limit instead of being rejected as a truncated (`done_reason` other
+than `stop`) reply. A tool that finds no qualified evidence store yet (for
+example, nothing captured since install) fails with `EVIDENCE_UNAVAILABLE`.
 
 ## Tool and authority contract
 
@@ -116,9 +128,23 @@ question route is `POST /api/ai/ask` with a body of exactly one fixed question
 ID. It requires the per-launch token printed in the HUD terminal, exact
 same-origin `Origin`, exact bound `Host`, JSON content type, and a body no larger
 than 256 bytes. The token is held in memory and is not persisted or placed in
-the served JavaScript. The HUD separates OBSERVED broker output from INFERRED
-model text and displays the operation state and receipt ID. No browser request
-can apply firewall changes or choose an arbitrary executable, file or URL.
+the served JavaScript. A HUD launched with the local Setup workspace always
+mints this token, because Setup can pin a model after launch even when the
+configuration file keeps `[ai] enabled = false`. The HUD separates OBSERVED
+broker output from INFERRED model text and displays the operation state and
+receipt ID. No browser request can apply firewall changes or choose an
+arbitrary executable, file or URL.
+
+`POST /api/ai/cancel` stops this HUD's own operator check or question: it sets
+the request's cancellation flag and interrupts the in-flight model call only
+when the HUD operator owns it, so background pattern explanations keep their
+own slot rules. It requires the same per-launch token, exact `Origin`, JSON
+content type and an exact `{}` body, and it is served outside the maintenance
+lock that a running `/api/ai/ask` holds. A cancel between the two calls of one
+question is not lost: the next call is refused with `REQUEST_CANCELLED`. The
+browser waits up to the configured timeout per model call (two calls, or three
+for the model-health question) plus a short margin, and asks the server to
+cancel if it stops waiting.
 
 ## Operator setup and checks
 

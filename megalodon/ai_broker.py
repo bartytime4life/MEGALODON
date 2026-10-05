@@ -20,7 +20,7 @@ from .config import AISettings, BlockingSettings
 from .firewall import FirewallError, NftablesFirewall
 from .hub import integration_plan
 from .storage import (
-    _absolute_database_path, _anchored_database_path, _open_private_database,
+    StorageSchemaError, _absolute_database_path, _anchored_database_path, _open_private_database,
     _open_private_directory, _validate_connection_path, _validate_sqlite_sidecars,
 )
 from .validation import parse_timestamp
@@ -400,6 +400,11 @@ class Broker:
                 raise
             state = "failed"
             base["error_code"] = exc.code
+        except StorageSchemaError:
+            # No qualified store yet (for example, nothing captured since
+            # install): the tool works, but there is no evidence to read.
+            state = "failed"
+            base["error_code"] = "EVIDENCE_UNAVAILABLE"
         except (OSError, sqlite3.Error, ValueError, TypeError, KeyError):
             state = "failed"
             base["error_code"] = "TOOL_UNAVAILABLE"

@@ -131,3 +131,32 @@ def test_malformed_model_tool_returns_audited_failure_over_http(monkeypatch, tmp
     with ReceiptStore(ledger) as receipts:
         assert receipts.latest(value["receipt_id"])["state"] == "failed"
         assert receipts.verify_chain()["incomplete_count"] == 0
+
+
+def test_ai_cancel_is_token_gated_and_bypasses_the_maintenance_lock(monkeypatch):
+    calls = []
+    monkeypatch.setattr("megalodon.ai_provider.cancel_operator", lambda: calls.append("cancel") or True)
+    handler = type("AICancelHandler", (DashboardHandler,), {"store": object(), "ai_settings": AISettings(enabled=True),
+                                                            "ai_operator_token": "exact-test-token"})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    handler.maintenance_lock.acquire()
+    try:
+        origin = f"http://127.0.0.1:{server.server_port}"
+        headers = {"X-Megalodon-AI-Token": "exact-test-token", "Origin": origin, "Content-Type": "application/json"}
+        assert _get(server, "/api/ai/cancel", method="POST", body="{}")[0] == 403
+        assert _get(server, "/api/ai/cancel", {**headers, "X-Megalodon-AI-Token": "wrong"}, method="POST", body="{}")[0] == 403
+        assert _get(server, "/api/ai/cancel", {**headers, "Origin": "https://evil.invalid"}, method="POST", body="{}")[0] == 403
+        assert _get(server, "/api/ai/cancel", headers, method="POST", body='{"x":1}')[0] == 400
+        assert _get(server, "/api/ai/cancel", headers, method="POST", body="[]")[0] == 400
+        assert calls == []
+        # A running /api/ai/ask holds the maintenance lock; cancel must still reach it.
+        code, value = _get(server, "/api/ai/cancel", headers, method="POST", body="{}")
+        assert code == 200 and value == {"schema": "megalodon-ai-cancel-v1", "cancelled": True}
+        assert calls == ["cancel"]
+    finally:
+        handler.maintenance_lock.release()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

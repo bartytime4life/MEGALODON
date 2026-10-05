@@ -3,7 +3,7 @@
   "baseline": "4b5f8f8",
   "method": "Every file is read and classified; machine checks are not a line-by-line independent audit.",
   "counts": {
-    "documentation": 113,
+    "documentation": 114,
     "workflow": 14,
     "configuration": 36,
     "source": 185,
@@ -3530,8 +3530,8 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 39778,
-      "sha256": "81d43cdfa34e199aece46d52e07d4f6b069723e3e5f384788943703714ec52a6",
+      "bytes": 41544,
+      "sha256": "f5d1baf55a3cafb66ba2ab1690579e7889ee65e94c7c0d62cebee8f319d2e3ea",
       "dependencies": [
         "local-model-selection.md",
         "qwen-446-owner-decision-packet.md",
@@ -4418,8 +4418,8 @@
       "path": "docs/dashboard-http-contract.md",
       "classification": "documentation",
       "purpose": "Dashboard HTTP and presentation contract",
-      "bytes": 44194,
-      "sha256": "4ffd370c9232150dfbe7fd414b27c0643e5491977746675d2b679f413e364063",
+      "bytes": 44435,
+      "sha256": "7ec0f8c96b644f10a5bc2d6afcc60c0770be019fef6aeea9dc7430937cef4f8e",
       "dependencies": [
         "../megalodon/dashboard.py",
         "../megalodon/dashboard_assets.py",
@@ -6018,6 +6018,25 @@
       "related_tests": []
     },
     {
+      "path": "docs/zeek-producer-selection-packet-2026-10-04.md",
+      "classification": "documentation",
+      "purpose": "Zeek conn.log producer selection packet \u2014 2026-10-04",
+      "bytes": 9156,
+      "sha256": "4baf0eaf9a7f33c5f5e318af962416c1b26b95e350e0e7a240c597aa28204fa2",
+      "dependencies": [
+        "../README.md",
+        "../contracts/zeek-conn-log/v1/producer/README.md",
+        "../contracts/zeek-conn-log/v1/producer/schema.json",
+        "../tests/test_zeek_producer_contract.py"
+      ],
+      "disposition": "corrected",
+      "review_basis": "structured file inspection; see verification record for behavior coverage",
+      "verification": [
+        "Markdown read and relative links checked"
+      ],
+      "related_tests": []
+    },
+    {
       "path": "examples/events.jsonl",
       "classification": "fixture-or-contract",
       "purpose": "events",
@@ -6165,8 +6184,8 @@
       "path": "megalodon/ai_broker.py",
       "classification": "source",
       "purpose": "Fixed MEGALODON AI tools. Model text never becomes OS authority.",
-      "bytes": 23960,
-      "sha256": "898de418c45b3cafb8095d857a1f9f24d25cf11d0de53b4ec5c2e706d6c39d9b",
+      "bytes": 24248,
+      "sha256": "c9f843b6962bd460ecb07139ca81c0ef8e69fdb86a9479d49db9d6871857bac2",
       "dependencies": [
         ".ai_provider",
         ".config",
@@ -6229,13 +6248,14 @@
       "path": "megalodon/ai_interface.py",
       "classification": "source",
       "purpose": "Operator-selected questions through model selection and the fixed broker.",
-      "bytes": 4443,
-      "sha256": "31d573bdcef0e3ea00eb38eb0c944d2c6abaee4a6e0ddd920e8cf150627d2600",
+      "bytes": 4944,
+      "sha256": "60f7c8f81d2db51c9b458a4dd2cb552155d52908df442d330d5d0169304ec1d8",
       "dependencies": [
         ".ai_broker",
         ".ai_provider",
         "__future__",
         "json",
+        "re",
         "typing"
       ],
       "disposition": "corrected",
@@ -6252,14 +6272,15 @@
       "path": "megalodon/ai_provider.py",
       "classification": "source",
       "purpose": "Explicit, bounded Ollama checks and text generation for the AI control plane.",
-      "bytes": 19948,
-      "sha256": "d93a24065cd62cd4b14528389a55f8e89bb8d8178d32bd952b3cbe9b2d7b024b",
+      "bytes": 22670,
+      "sha256": "cfa981ee850b31630fa1c92f219ad5a781bfff7884a52396c9e4c893c6ba8064",
       "dependencies": [
         ".",
         ".config",
         ".provider_containment",
         "__future__",
         "collections",
+        "contextlib",
         "datetime",
         "http.client",
         "json",
@@ -7173,8 +7194,8 @@
       "path": "megalodon/dashboard.py",
       "classification": "source",
       "purpose": "Local dashboard. Telemetry routes are read-only.",
-      "bytes": 100329,
-      "sha256": "cf71dd3650719d97f041c6be98eba9d6db7f646bef5a218495c6e23e2f11b107",
+      "bytes": 101920,
+      "sha256": "2fc4433f14c6a4a976b6df3670a3c71c37693b6f19059da782d76752193087e9",
       "dependencies": [
         ".ai_broker",
         ".ai_interface",
@@ -7334,8 +7355,8 @@
       "path": "megalodon/dashboard_ai_assets.py",
       "classification": "source",
       "purpose": "Explicit, bounded local AI controls for the Investigate workspace.",
-      "bytes": 12887,
-      "sha256": "a5c475499a1be605565eb13f69e3c2464d1071fb48304df3534d3f67d622bd2b",
+      "bytes": 32184,
+      "sha256": "d67644b4d85c76c74582172989836c43548dd58f4a434295b70e9f9385644e8f",
       "dependencies": [
         ".status_glossary"
       ],
@@ -8591,6 +8612,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_control.py",
         "tests/test_alert_lifecycle_contract.py",
         "tests/test_alert_lifecycle_engine.py",
         "tests/test_endpoint_context.py",
@@ -14782,8 +14804,8 @@
       "path": "tests/test_ai_control.py",
       "classification": "test",
       "purpose": "Closed AI control boundary using synthetic metadata and a fake provider.",
-      "bytes": 19633,
-      "sha256": "5c1bd9e87227fa517617e3aa3e22f5d7bcfecc3c409dcf3b39e7f791b2dbc84e",
+      "bytes": 24940,
+      "sha256": "10bc5a22d6d3c5bfb460ac66d87a5f2d138314a77a2393de69afe16e844f66ec",
       "dependencies": [
         "__future__",
         "datetime",
@@ -14795,6 +14817,7 @@
         "megalodon.ai_provider",
         "megalodon.cli",
         "megalodon.config",
+        "megalodon.dashboard",
         "pathlib",
         "pytest",
         "sqlite3",
@@ -15660,8 +15683,8 @@
       "path": "tests/test_dashboard.py",
       "classification": "test",
       "purpose": "Dashboard projection tests use only synthetic metadata and loopback HTTP.",
-      "bytes": 93501,
-      "sha256": "e396fdb5f720c1dbb665325cfc49a46bb760b261962d294247f74ccf2e80f55b",
+      "bytes": 93687,
+      "sha256": "8e0fcee99598bb2fa5ab242be4522d0d104657fe0833953068cfbe5e3335254c",
       "dependencies": [
         "__future__",
         "base64",
@@ -15755,8 +15778,8 @@
       "path": "tests/test_dashboard_ai_control.py",
       "classification": "test",
       "purpose": "Explicit HUD AI routes never open command or firewall authority.",
-      "bytes": 6163,
-      "sha256": "6aa42a3a4ad2a8aa8da5fb79ac9cb6d3c8adf58ca6c59e27597ca4fb302fe570",
+      "bytes": 7956,
+      "sha256": "9ff04acf72c09d33ee477699949006f7b7064c8744d098b40c9353c9e9cf1bc0",
       "dependencies": [
         "__future__",
         "http.client",
@@ -15767,7 +15790,7 @@
         "megalodon.dashboard",
         "threading"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -20987,21 +21010,12 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
-      "element": "button",
-      "id": "ai-check",
-      "type": "button",
-      "label": null,
-      "disabled": false,
-      "source_references": 1,
-      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
-    },
-    {
       "element": "input",
       "id": "ai-token",
       "type": "password",
       "label": null,
       "disabled": false,
-      "source_references": 4,
+      "source_references": 2,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21014,12 +21028,21 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
+      "element": "button",
+      "id": "ai-check",
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 1,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
       "element": "select",
       "id": "ai-question",
       "type": null,
       "label": null,
       "disabled": false,
-      "source_references": 1,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
