@@ -313,7 +313,8 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
                           'arguments':{'type':'object','additionalProperties':False,'properties':{
                               'window_minutes':{'type':'integer','minimum':1,'maximum':1440},
                               'limit':{'type':'integer','minimum':1,'maximum':8},
-                              'report_type':{'type':'string','enum':['security_summary']}}},
+                              'report_type':{'type':'string','enum':['security_summary']},
+                              'query':{'type':'string','minLength':1,'maxLength':160}}},
                           'reason':{'type':'string','minLength':1,'maxLength':200}},
             'required':['tool','arguments','reason']}
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")

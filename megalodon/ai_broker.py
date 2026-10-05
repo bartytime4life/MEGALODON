@@ -29,6 +29,7 @@ from .validation import parse_timestamp
 MAX_REQUEST_BYTES = 2048
 MAX_RESULT_BYTES = 8192
 MAX_LEDGER_BYTES = 16 * 1024 * 1024
+_MISSING_STORE = frozenset({"DASHBOARD_STORE:NO_DIRECTORY", "DASHBOARD_STORE:NO_DATABASE"})
 STATES = frozenset({"not_attempted", "suppressed", "planned", "awaiting_confirmation",
                     "approved", "observed", "applied", "failed", "expired"})
 
@@ -400,11 +401,12 @@ class Broker:
                 raise
             state = "failed"
             base["error_code"] = exc.code
-        except StorageSchemaError:
-            # No qualified store yet (for example, nothing captured since
-            # install): the tool works, but there is no evidence to read.
+        except StorageSchemaError as exc:
+            # Only an absent store means "nothing captured yet"; incompatible,
+            # unsafe or unreadable stores remain tool failures.
             state = "failed"
-            base["error_code"] = "EVIDENCE_UNAVAILABLE"
+            base["error_code"] = ("EVIDENCE_UNAVAILABLE" if str(exc) in _MISSING_STORE
+                                  else "TOOL_UNAVAILABLE")
         except (OSError, sqlite3.Error, ValueError, TypeError, KeyError):
             state = "failed"
             base["error_code"] = "TOOL_UNAVAILABLE"

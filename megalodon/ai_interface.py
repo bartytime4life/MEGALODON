@@ -63,7 +63,8 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
         "MEGALODON tool selection. Return only a JSON object with exactly tool, arguments, reason. "
         "Arguments: status/integrations/model use {}; telemetry uses window_minutes 1..1440; "
         "alerts uses window_minutes 1..1440 and limit 1..8; "
-        "report uses report_type security_summary and window_minutes 1..1440. "
+        "report uses report_type security_summary and window_minutes 1..1440; "
+        "knowledge uses query, a short search phrase of at most 160 characters; patterns uses {}. "
         "Select one listed tool. No commands, paths, URLs, permission changes or additional fields. "
         + json.dumps({"question": question, "tools": catalog}, separators=(",", ":"))
     )

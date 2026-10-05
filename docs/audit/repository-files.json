@@ -6184,8 +6184,8 @@
       "path": "megalodon/ai_broker.py",
       "classification": "source",
       "purpose": "Fixed MEGALODON AI tools. Model text never becomes OS authority.",
-      "bytes": 24248,
-      "sha256": "c9f843b6962bd460ecb07139ca81c0ef8e69fdb86a9479d49db9d6871857bac2",
+      "bytes": 24432,
+      "sha256": "e9e5a95c9d42b08083b09c2e66527f905abd00d62c2a9b1ec29fd44d6a3d9f5c",
       "dependencies": [
         ".ai_provider",
         ".config",
@@ -6248,8 +6248,8 @@
       "path": "megalodon/ai_interface.py",
       "classification": "source",
       "purpose": "Operator-selected questions through model selection and the fixed broker.",
-      "bytes": 5659,
-      "sha256": "c99048548be34f2f51a2b61c18ad2162689a763b226c9ef9a4fe87520df47ac1",
+      "bytes": 5759,
+      "sha256": "3e4ead0e2af9ea32450880e0237719c8dfcf2e2b85f2c940bf97f141887de611",
       "dependencies": [
         ".ai_broker",
         ".ai_provider",
@@ -6275,8 +6275,8 @@
       "path": "megalodon/ai_provider.py",
       "classification": "source",
       "purpose": "Explicit, bounded Ollama checks and text generation for the AI control plane.",
-      "bytes": 22670,
-      "sha256": "cfa981ee850b31630fa1c92f219ad5a781bfff7884a52396c9e4c893c6ba8064",
+      "bytes": 22757,
+      "sha256": "6cd509cc35088b361063d8ed8910479808f8f1d7692a801087ac0c3dd9ebeb21",
       "dependencies": [
         ".",
         ".config",
@@ -13255,6 +13255,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_control.py",
         "tests/test_alert_lifecycle_contract.py",
         "tests/test_alert_workload.py",
         "tests/test_buffered_recording.py",
@@ -14808,8 +14809,8 @@
       "path": "tests/test_ai_control.py",
       "classification": "test",
       "purpose": "Closed AI control boundary using synthetic metadata and a fake provider.",
-      "bytes": 26476,
-      "sha256": "66c2083195c6b5022fc50e96752e263f1c6a15145cf719a5183866ee3e27dfea",
+      "bytes": 27877,
+      "sha256": "9b4b09935bb6daec91dbdc078607fcf0b23a925aa9617eed0776fedd34ffc878",
       "dependencies": [
         "__future__",
         "datetime",
@@ -14822,6 +14823,7 @@
         "megalodon.cli",
         "megalodon.config",
         "megalodon.dashboard",
+        "megalodon.storage",
         "pathlib",
         "pytest",
         "sqlite3",

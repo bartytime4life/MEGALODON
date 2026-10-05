@@ -448,6 +448,9 @@ def test_tool_selection_is_schema_constrained_to_permitted_tools(monkeypatch):
     provider.generate(AISettings(enabled=True), "select", max_tokens=128, response_format="selection", choices=choices)
     schema = sent[0]["format"]
     assert schema["properties"]["tool"]["enum"] == list(choices)
+    # Every argument a permitted tool requires must be expressible.
+    assert schema["properties"]["arguments"]["properties"]["query"] == {
+        "type": "string", "minLength": 1, "maxLength": 160}
     assert schema["required"] == ["tool", "arguments", "reason"]
     assert schema["additionalProperties"] is False
     for bad in ({"response_format": "selection"}, {"response_format": "text", "choices": choices},
@@ -527,3 +530,26 @@ def test_missing_evidence_store_is_reported_as_unavailable_evidence(tmp_path):
         for tool, arguments in (("megalodon.status", {}), ("megalodon.alerts.query", {"window_minutes": 60})):
             receipt = broker.dispatch(request(tool, arguments))
             assert receipt["state"] == "failed" and receipt["error_code"] == "EVIDENCE_UNAVAILABLE"
+
+
+def test_incompatible_evidence_store_is_not_reported_as_missing(tmp_path):
+    from types import SimpleNamespace
+    from megalodon.storage import StorageSchemaError
+
+    def incompatible():
+        raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
+
+    with ReceiptStore(tmp_path / "ai.db") as receipts:
+        broker = Broker(SimpleNamespace(summary=incompatible, traffic=incompatible), receipts,
+                        AISettings(enabled=True), BlockingSettings())
+        receipt = broker.dispatch(request("megalodon.status"))
+        assert receipt["state"] == "failed" and receipt["error_code"] == "TOOL_UNAVAILABLE"
+
+
+def test_constrained_selection_can_request_a_knowledge_search(monkeypatch, broker):
+    from types import SimpleNamespace
+    broker.knowledge = SimpleNamespace(search=lambda query, limit: [{"id": "K1", "query": query}])
+    replies = iter([json.dumps(request("megalodon.knowledge.search", {"query": "port scan"})), "Context only."])
+    monkeypatch.setattr("megalodon.ai_interface.generate", lambda *_a, **_k: next(replies))
+    answer = ask("alerts", broker)
+    assert answer["execution_state"] == "observed" and answer["tool"] == "megalodon.knowledge.search"
