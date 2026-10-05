@@ -646,7 +646,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     or not hmac.compare_digest(token_values[0], self.ai_operator_token)):
                 self._send_json({"error": "explicit local AI check required"}, status=403)
                 return
-            self._send_json(status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=True))
+            from .ai_provider import operator_request
+            with operator_request():
+                value = status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=True)
+            self._send_json(value)
             return
         if route.path == "/api/setup":
             self._send(200, "application/json; charset=utf-8", self.setup_evidence or setup_snapshot())
@@ -992,7 +995,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         # Validate the support action before choosing its lock policy. Cancellation
         # must be reachable while a synchronous compatibility AI request owns it.
-        if self.path == '/api/support-config':
+        if self.path in {'/api/support-config', '/api/ai/cancel'}:
             self._dispatch_POST()
             return
         if self.path in {'/api/storage', '/api/network'}:
@@ -1025,6 +1028,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/ai/ask":
             self._ai_ask()
+            return
+        if self.path == "/api/ai/cancel":
+            self._ai_cancel()
             return
         if self.path == "/api/defense":
             self._defense_action()
@@ -1280,16 +1286,38 @@ class DashboardHandler(BaseHTTPRequestHandler):
         finally:
             self.automation_preview_lock.release()
 
-    def _ai_ask(self) -> None:
+    def _ai_operator_envelope(self) -> bool:
+        """Exact per-launch token and same-origin JSON; no encodings or aliases."""
         token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
-        expected_origin = f"http://{self.headers.get('Host')}"
-        if (not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled or self.ai_operator_token is None
-                or len(token_values) != 1
-                or not hmac.compare_digest(token_values[0], self.ai_operator_token)
-                or self.headers.get_all("Origin", []) != [expected_origin]
-                or self.headers.get_all("Content-Type", []) != ["application/json"]
-                or self.headers.get_all("Transfer-Encoding", [])
-                or self.headers.get_all("Content-Encoding", [])):
+        return (self.ai_operator_token is not None and len(token_values) == 1
+                and hmac.compare_digest(token_values[0], self.ai_operator_token)
+                and self.headers.get_all("Origin", []) == [f"http://{self.headers.get('Host')}"]
+                and self.headers.get_all("Content-Type", []) == ["application/json"]
+                and not self.headers.get_all("Transfer-Encoding", [])
+                and not self.headers.get_all("Content-Encoding", []))
+
+    def _ai_cancel(self) -> None:
+        """Stop this HUD's operator model request; reachable while /api/ai/ask runs."""
+        if not self._ai_operator_envelope():
+            self._send_json({"error": "AI operator authorization required"}, status=403)
+            return
+        if self.headers.get_all("Content-Length", []) != ["2"]:
+            self._send_json({"error": "invalid AI request length"}, status=400)
+            return
+        self.connection.settimeout(2)
+        try:
+            body = self.rfile.read(2)
+        except OSError:
+            body = b""
+        if body != b"{}":
+            self._send_json({"error": "invalid AI cancel request"}, status=400)
+            return
+        from .ai_provider import cancel_operator
+        self._send_json({"schema": "megalodon-ai-cancel-v1", "cancelled": cancel_operator()})
+
+    def _ai_ask(self) -> None:
+        if (not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled
+                or not self._ai_operator_envelope()):
             self._send_json({"error": "AI operator authorization required"}, status=403)
             return
         lengths = self.headers.get_all("Content-Length", [])
@@ -1310,7 +1338,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if self.ai_receipt_path is None:
                 raise ValueError("AI audit path unavailable")
             from .managed_receipts import ManagedReceipts
-            with (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
+            from .ai_provider import operator_request
+            with operator_request(), (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
                 answer = ask(body["question"], Broker(
                     self.store, receipts, self.support_config.settings.ai if self.support_config is not None else self.ai_settings, self.ai_blocking,
                     knowledge=self.knowledge,intelligence=self.intelligence))
@@ -1837,6 +1866,10 @@ def serve(
                 handler.local_checks = LocalChecks(handler.store, source_available=True)
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
+            # Setup can pin a local model after launch; the AI panel needs a
+            # per-launch token even when the configuration file kept AI off.
+            if handler.ai_operator_token is None:
+                handler.ai_operator_token = secrets.token_urlsafe(24)
             if heartbeat is not None:heartbeat.model_observer=handler.support_config.model_telemetry.snapshot
             from .operations import Operations
             from .defense import Defense
@@ -1910,8 +1943,8 @@ def serve(
         print(f"MEGALODON dashboard listening on {url}", flush=True)
         if install_operator_token is not None:
             print(f"MEGALODON tool management operator token (this launch only): {install_operator_token}", flush=True)
-        if ai_operator_token is not None:
-            print(f"MEGALODON AI operator token (this launch only): {ai_operator_token}", flush=True)
+        if handler.ai_operator_token is not None:
+            print(f"MEGALODON AI operator token (this launch only): {handler.ai_operator_token}", flush=True)
         if open_browser:
             def open_bound_dashboard() -> None:
                 try:

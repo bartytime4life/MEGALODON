@@ -82,7 +82,7 @@ retains its same-origin CSP, no-store responses, no-referrer policy, framing
 prohibition, MIME sniffing protection, and restricted browser permissions. There
 is no CORS permission or external script/font fetch.
 
-`POST` is accepted for `/sign-in` only in opt-in mode, the separately token-gated `/api/ai/ask`,
+`POST` is accepted for `/sign-in` only in opt-in mode, the separately token-gated `/api/ai/ask` and `/api/ai/cancel`,
 explicitly enabled HUD `/api/install`, fixed local HUD `/api/support-apps` and
 `/api/support-start`, fixed local `/api/support-config`, bounded read-only `/api/offline-locations`,
 and inert `/api/automation-preview` routes. The latter two do not execute host
@@ -135,6 +135,9 @@ production service.
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate
 private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
+`POST /api/ai/cancel` takes the same token and envelope with an exact `{}`
+body, writes nothing, and only interrupts this HUD operator's own model
+request; it stays reachable while a question holds the maintenance lock.
 
 `POST /api/install` requires a non-root Linux HUD explicitly launched with
 `--enable-tool-management`, exactly one matching per-launch

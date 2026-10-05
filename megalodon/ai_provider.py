@@ -7,6 +7,7 @@ Qwen advisory transport supplies the literal socket, framing budget and lock.
 from __future__ import annotations
 
 from collections import OrderedDict
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import http.client
 import json
@@ -31,6 +32,10 @@ _priority_lock = threading.Lock()
 _active_priority = None
 _active_owner = None
 _manual_waiters = 0
+OPERATOR_OWNER = 'hud-operator'
+_operator_events: set[threading.Event] = set()
+_operator_lock = threading.Lock()
+_TOOL_CHOICE = re.compile(r'megalodon(?:\.[a-z_]{1,32}){1,4}')
 
 
 def cancel_current(owner=None) -> None:
@@ -38,6 +43,33 @@ def cancel_current(owner=None) -> None:
     with _priority_lock:
         if owner is None or owner == _active_owner:
             _active_cancel.set()
+
+
+@contextmanager
+def operator_request():
+    """Mark this thread's model calls as one cancellable HUD operator request."""
+    event = threading.Event()
+    with _operator_lock:
+        _operator_events.add(event)
+    previous = getattr(_request_context, 'operator', None)
+    _request_context.operator = event
+    try:
+        yield event
+    finally:
+        _request_context.operator = previous
+        with _operator_lock:
+            _operator_events.discard(event)
+
+
+def cancel_operator() -> bool:
+    """Stop HUD operator requests only; background explanations keep their slot rules."""
+    with _operator_lock:
+        events = list(_operator_events)
+    for event in events:
+        event.set()
+    if events:
+        cancel_current(owner=OPERATOR_OWNER)
+    return bool(events)
 
 
 def last_observation(settings: AISettings) -> dict:
@@ -236,7 +268,8 @@ def inventory(settings: AISettings) -> dict[str, object]:
         return {"model_present": False, "digest_matches": False, "error_code": exc.code}
 
 
-def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text') -> str:
+def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
+              choices: tuple[str, ...] = ()) -> str:
     """One deterministic request after live listener and manifest admission."""
     if type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 1800:
         raise AIProviderError("POLICY_REJECTION")
@@ -246,7 +279,10 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
         raise AIProviderError("REQUEST_TOO_LARGE")
     if type(max_tokens) is not int or not 1 <= max_tokens <= 256:
         raise AIProviderError("POLICY_REJECTION")
-    if response_format not in ('text','defense','intelligence'):
+    if response_format not in ('text','defense','intelligence','selection'):
+        raise AIProviderError('POLICY_REJECTION')
+    if (type(choices) is not tuple or (response_format == 'selection') != bool(choices) or len(choices) > 16
+            or any(type(c) is not str or _TOOL_CHOICE.fullmatch(c) is None for c in choices)):
         raise AIProviderError('POLICY_REJECTION')
     payload = {
         "model": settings.model, "prompt": prompt, "stream": False,
@@ -269,6 +305,18 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
                           'citations':{'type':'array','minItems':1,'maxItems':4,'items':{'type':'string','enum':['E1','K1','K2','K3']}},
                           'workflow':{'type':'string','enum':['evidence_summary','device_changes','ai_readiness','refresh_inventory','scan_files','contain']}},
             'required':['explanation','alternative','missing','citations','workflow']}
+    if response_format == 'selection':
+        # Constrained decoding keeps small local models to one closed tool
+        # request; the broker still validates every field independently.
+        payload['format'] = {'type':'object','additionalProperties':False,
+            'properties':{'tool':{'type':'string','enum':list(choices)},
+                          'arguments':{'type':'object','additionalProperties':False,'properties':{
+                              'window_minutes':{'type':'integer','minimum':1,'maximum':1440},
+                              'limit':{'type':'integer','minimum':1,'maximum':8},
+                              'report_type':{'type':'string','enum':['security_summary']},
+                              'query':{'type':'string','minLength':1,'maxLength':160}}},
+                          'reason':{'type':'string','minLength':1,'maxLength':200}},
+            'required':['tool','arguments','reason']}
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
     remaining = deadline - time.monotonic()
     if remaining <= 0:
@@ -286,7 +334,7 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
 
 
 def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
-             priority: str = 'manual', owner=None) -> str:
+             priority: str = 'manual', owner=None, choices: tuple[str, ...] = ()) -> str:
     """Generate once and retain truthful readiness observations without disk writes."""
     key=(settings.model,settings.model_digest,settings.compute_mode);start=time.monotonic()
     def record(**fields):
@@ -299,6 +347,9 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
     stamp=lambda:datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
     global _active_priority, _active_owner, _manual_waiters
     if priority not in {'manual','background'}:raise AIProviderError('POLICY_REJECTION')
+    operator = getattr(_request_context, 'operator', None)
+    if operator is not None and owner is None:
+        owner = OPERATOR_OWNER
     with _priority_lock:
         wait = priority=='manual' and _active_priority=='background'
         if priority=='background' and _manual_waiters:
@@ -312,12 +363,18 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
         if acquired:
             _active_priority=priority;_active_owner=owner
             _active_cancel.clear()
+            # Checked under the same lock cancel_operator() uses, so a cancel
+            # between two calls of one operator request cannot be lost.
+            if operator is not None and operator.is_set():
+                _active_cancel.set()
     if not acquired:
         raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
     _request_context.cancel=_active_cancel
     record(running=True,started_at=stamp(),timeout_seconds=settings.timeout_seconds)
     try:
-        result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format)
+        if _active_cancel.is_set():
+            raise AIProviderError('REQUEST_CANCELLED')
+        result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format,choices=choices)
     except AIProviderError as exc:
         # A competing request must not erase the result of an active invocation.
         if exc.code!='CONCURRENCY_LIMIT_REACHED':
@@ -352,7 +409,7 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
     base: dict[str, object] = {"schema": "megalodon-ai-status-v1", "provider": "ollama",
                                "model": settings.model, "state": "disabled",
                                "inference_verified": False, "ollama_available": None,
-                               "loopback_only": None}
+                               "loopback_only": None, "timeout_seconds": settings.timeout_seconds}
     try:
         base["loopback_only"] = qwen_provider_posture()["loopback_only"]
     except (OSError, ValueError):

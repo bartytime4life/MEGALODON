@@ -462,9 +462,12 @@ def test_dashboard_ui_has_accessible_read_only_states():
     # into the configured offline region database.
     # Support-app requests share a GET/POST helper; the behavior test verifies
     # only the Start click sends this fixed action and separate action nonce.
-    assert DASHBOARD_JS.count("method: 'POST'") == 2
+    # The AI panel's Cancel posts an empty body that only frees the operator's
+    # own inference slot.
+    assert DASHBOARD_JS.count("method: 'POST'") == 3
     assert "heartbeatFetch('/api/install', {method: 'POST'" in DASHBOARD_JS
     assert "fetch('/api/offline-locations', {method: 'POST'" in DASHBOARD_JS
+    assert "fetch('/api/ai/cancel', {method: 'POST', body: '{}'" in DASHBOARD_JS
     assert SUPPORT_APPS_JS.count("request('POST')") == 1
     assert "fetch('/api/support-start',options)" in SUPPORT_APPS_JS
     assert "JSON.stringify({action:'start'})" in SUPPORT_APPS_JS

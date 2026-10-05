@@ -15,7 +15,7 @@ from megalodon.ai_broker import Broker, BrokerError, ReceiptStore, validate_requ
 from megalodon.ai_interface import ask
 from megalodon.ai_provider import AIProviderError, status
 from megalodon.cli import _ai_receipt_path, _ai_result_succeeded
-from megalodon.config import AISettings, load_settings
+from megalodon.config import AISettings, BlockingSettings, load_settings
 
 
 class Reader:
@@ -200,9 +200,11 @@ def test_firewall_wildcard_and_allowlist_refuse_without_apply(broker):
 
 def test_model_selects_only_question_allowed_tool_and_payload_stays_out(monkeypatch, broker):
     prompts = []
+    options = []
 
-    def fake_generate(settings, prompt, *, max_tokens):
+    def fake_generate(settings, prompt, *, max_tokens, **kwargs):
         prompts.append(prompt)
+        options.append(kwargs)
         if len(prompts) == 1:
             return json.dumps(request("megalodon.alerts.query", {"window_minutes": 60, "limit": 2}))
         return "One qualified recent alert is recorded; capture coverage is unknown."
@@ -212,6 +214,10 @@ def test_model_selects_only_question_allowed_tool_and_payload_stays_out(monkeypa
     assert answer["execution_state"] == "observed"
     assert answer["evidence_references"] == ["finding:12"]
     assert "NEVER SEND THIS PACKET PAYLOAD" not in " ".join(prompts)
+    # Selection decoding is constrained to exactly this question's tools.
+    assert options[0] == {"response_format": "selection", "choices": (
+        "megalodon.alerts.query", "megalodon.knowledge.search", "megalodon.patterns.status")}
+    assert options[1] == {}
 
     monkeypatch.setattr("megalodon.ai_interface.generate", lambda *_args, **_kwargs: json.dumps(
         request("megalodon.firewall.block.plan", {"target": "8.8.8.8", "duration_seconds": 60})))
@@ -227,7 +233,7 @@ def test_fixed_question_shares_ten_minute_budget_across_model_calls(monkeypatch,
     monkeypatch.setattr("megalodon.ai_interface.time", SimpleNamespace(monotonic=lambda: next(ticks)))
     budgets = []
 
-    def fake_generate(settings, _prompt, *, max_tokens):
+    def fake_generate(settings, _prompt, *, max_tokens, **_kwargs):
         budgets.append((settings.timeout_seconds, max_tokens))
         return json.dumps(request("megalodon.status")) if len(budgets) == 1 else "Bounded advice."
 
@@ -245,7 +251,7 @@ def test_fixed_question_reports_timeout_without_late_second_model_call(monkeypat
     monkeypatch.setattr("megalodon.ai_interface.time", SimpleNamespace(monotonic=lambda: next(ticks)))
     calls = []
 
-    def fake_generate(settings, _prompt, *, max_tokens):
+    def fake_generate(settings, _prompt, *, max_tokens, **_kwargs):
         calls.append((settings.timeout_seconds, max_tokens))
         return json.dumps(request("megalodon.status"))
 
@@ -421,3 +427,129 @@ def test_external_head_is_required_to_detect_a_complete_local_rewrite(broker):
     assert broker.receipts.verify_chain()["head"] != trusted_head
     with pytest.raises(BrokerError, match="AUDIT_INTEGRITY"):
         broker.receipts.verify_chain(expected_head=trusted_head)
+
+
+def test_tool_selection_is_schema_constrained_to_permitted_tools(monkeypatch):
+    import megalodon.ai_provider as provider
+    sent = []
+    monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": True})
+
+    def fake(path, method, body, timeout):
+        if path == '/api/show':
+            return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
+        if path == "/api/tags":
+            return json.dumps({"models": [{"name": AISettings.model, "digest": AISettings.model_digest}]}).encode()
+        sent.append(json.loads(body))
+        return json.dumps({"model": AISettings.model, "done": True, "done_reason": "stop",
+                           "response": '{"tool":"megalodon.status","arguments":{},"reason":"counts"}'}).encode()
+
+    monkeypatch.setattr(provider, "_request", fake)
+    choices = ("megalodon.alerts.query", "megalodon.status")
+    provider.generate(AISettings(enabled=True), "select", max_tokens=128, response_format="selection", choices=choices)
+    schema = sent[0]["format"]
+    assert schema["properties"]["tool"]["enum"] == list(choices)
+    # Every argument a permitted tool requires must be expressible.
+    assert schema["properties"]["arguments"]["properties"]["query"] == {
+        "type": "string", "minLength": 1, "maxLength": 160}
+    assert schema["required"] == ["tool", "arguments", "reason"]
+    assert schema["additionalProperties"] is False
+    for bad in ({"response_format": "selection"}, {"response_format": "text", "choices": choices},
+                {"response_format": "selection", "choices": ("rm -rf /",)},
+                {"response_format": "selection", "choices": ["megalodon.status"]}):
+        with pytest.raises(AIProviderError) as raised:
+            provider.generate(AISettings(enabled=True), "select", max_tokens=128, **bad)
+        assert raised.value.code == "POLICY_REJECTION"
+    assert len(sent) == 1
+
+
+def test_fenced_model_selection_is_accepted_but_prose_is_refused(monkeypatch, broker):
+    replies = iter(['```json\n' + json.dumps(request("megalodon.status")) + '\n```', "Counts are stored."])
+    monkeypatch.setattr("megalodon.ai_interface.generate", lambda *_a, **_k: next(replies))
+    assert ask("seeing", broker)["execution_state"] == "observed"
+    monkeypatch.setattr("megalodon.ai_interface.generate",
+                        lambda *_a, **_k: 'I would use {"tool":"megalodon.status","arguments":{},"reason":"x"}')
+    refused = ask("seeing", broker)
+    assert refused["execution_state"] == "failed" and refused["error_code"] == "UNKNOWN_TOOL"
+
+
+def test_operator_cancel_stops_only_operator_requests(monkeypatch):
+    import threading
+    from megalodon import ai_provider as provider
+    entered = threading.Event(); outcomes = []
+
+    def slow(settings, prompt, **kwargs):
+        entered.set()
+        if provider._request_context.cancel.wait(3):
+            raise AIProviderError('REQUEST_CANCELLED')
+        return 'finished'
+
+    monkeypatch.setattr(provider, '_generate', slow)
+    assert provider.cancel_operator() is False
+
+    def background():
+        try:
+            outcomes.append(provider.generate(AISettings(enabled=True), 'b', priority='background', owner='job-1'))
+        except AIProviderError as exc:
+            outcomes.append(exc.code)
+
+    worker = threading.Thread(target=background); worker.start()
+    assert entered.wait(2)
+    # No operator request is active, so a background explanation keeps running.
+    assert provider.cancel_operator() is False and not provider._active_cancel.is_set()
+    provider.cancel_current(owner='job-1'); worker.join(3)
+    assert outcomes == ['REQUEST_CANCELLED']
+
+    entered.clear()
+
+    def operator():
+        with provider.operator_request():
+            try:
+                outcomes.append(provider.generate(AISettings(enabled=True), 'o'))
+            except AIProviderError as exc:
+                outcomes.append(exc.code)
+            # A cancel during one call also refuses the request's next call.
+            try:
+                outcomes.append(provider.generate(AISettings(enabled=True), 'next'))
+            except AIProviderError as exc:
+                outcomes.append(exc.code)
+
+    worker = threading.Thread(target=operator); worker.start()
+    assert entered.wait(2)
+    assert provider.cancel_operator() is True
+    worker.join(3)
+    assert not worker.is_alive()
+    assert outcomes[1:] == ['REQUEST_CANCELLED', 'REQUEST_CANCELLED']
+    assert provider.cancel_operator() is False
+
+
+def test_missing_evidence_store_is_reported_as_unavailable_evidence(tmp_path):
+    from megalodon.dashboard import UnconfiguredDashboardReader
+    with ReceiptStore(tmp_path / "ai.db") as receipts:
+        broker = Broker(UnconfiguredDashboardReader(tmp_path / "never-created.db"), receipts,
+                        AISettings(enabled=True), BlockingSettings())
+        for tool, arguments in (("megalodon.status", {}), ("megalodon.alerts.query", {"window_minutes": 60})):
+            receipt = broker.dispatch(request(tool, arguments))
+            assert receipt["state"] == "failed" and receipt["error_code"] == "EVIDENCE_UNAVAILABLE"
+
+
+def test_incompatible_evidence_store_is_not_reported_as_missing(tmp_path):
+    from types import SimpleNamespace
+    from megalodon.storage import StorageSchemaError
+
+    def incompatible():
+        raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
+
+    with ReceiptStore(tmp_path / "ai.db") as receipts:
+        broker = Broker(SimpleNamespace(summary=incompatible, traffic=incompatible), receipts,
+                        AISettings(enabled=True), BlockingSettings())
+        receipt = broker.dispatch(request("megalodon.status"))
+        assert receipt["state"] == "failed" and receipt["error_code"] == "TOOL_UNAVAILABLE"
+
+
+def test_constrained_selection_can_request_a_knowledge_search(monkeypatch, broker):
+    from types import SimpleNamespace
+    broker.knowledge = SimpleNamespace(search=lambda query, limit: [{"id": "K1", "query": query}])
+    replies = iter([json.dumps(request("megalodon.knowledge.search", {"query": "port scan"})), "Context only."])
+    monkeypatch.setattr("megalodon.ai_interface.generate", lambda *_a, **_k: next(replies))
+    answer = ask("alerts", broker)
+    assert answer["execution_state"] == "observed" and answer["tool"] == "megalodon.knowledge.search"
