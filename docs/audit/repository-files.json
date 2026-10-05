@@ -3530,8 +3530,8 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 42246,
-      "sha256": "8bceba0b4e53b284370b0dc5ed7d043afd6d4492387dd0ea910d9149aa89c7e0",
+      "bytes": 42745,
+      "sha256": "c6e70b975034df834c1ce23250c604b689bee96940ec0fe77d72f2151e5a571a",
       "dependencies": [
         "local-model-selection.md",
         "qwen-446-owner-decision-packet.md",
@@ -4418,8 +4418,8 @@
       "path": "docs/dashboard-http-contract.md",
       "classification": "documentation",
       "purpose": "Dashboard HTTP and presentation contract",
-      "bytes": 44435,
-      "sha256": "7ec0f8c96b644f10a5bc2d6afcc60c0770be019fef6aeea9dc7430937cef4f8e",
+      "bytes": 44644,
+      "sha256": "47f6d0b35cf6374204069bd75ee3afe68914f6fe3ccfe359f96b68cd80225496",
       "dependencies": [
         "../megalodon/dashboard.py",
         "../megalodon/dashboard_assets.py",
@@ -4920,8 +4920,8 @@
       "path": "docs/local-model-selection.md",
       "classification": "documentation",
       "purpose": "Choose a local AI model",
-      "bytes": 5665,
-      "sha256": "d3f51e1cfa741309662c890c6078927246849d29c3cdba8d2a148deffe424925",
+      "bytes": 6529,
+      "sha256": "bb78ba94fa9fdd22088837365a9a678efebb1a0778c5f6be398d15b2a39432fd",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -7197,8 +7197,8 @@
       "path": "megalodon/dashboard.py",
       "classification": "source",
       "purpose": "Local dashboard. Telemetry routes are read-only.",
-      "bytes": 101920,
-      "sha256": "2fc4433f14c6a4a976b6df3670a3c71c37693b6f19059da782d76752193087e9",
+      "bytes": 102797,
+      "sha256": "ea12b1d4297b3a050c28abd9de03484471a56b32580b1dacbdf1f27672e673b4",
       "dependencies": [
         ".ai_broker",
         ".ai_interface",
@@ -7358,8 +7358,8 @@
       "path": "megalodon/dashboard_ai_assets.py",
       "classification": "source",
       "purpose": "Explicit, bounded local AI controls for the Investigate workspace.",
-      "bytes": 32780,
-      "sha256": "54b60d9362c254bef264ea591a71eb829980c515b506ea5cb713f3ac7c66523c",
+      "bytes": 35637,
+      "sha256": "25e799eabfaa5f5ee39ce320ab33faf490e12c89f39e20afe458a95142be3ab7",
       "dependencies": [
         ".status_glossary"
       ],
@@ -7875,8 +7875,8 @@
       "path": "megalodon/dashboard_support_config.py",
       "classification": "source",
       "purpose": "Explicit local support-tool setup and bounded capture controls.",
-      "bytes": 41558,
-      "sha256": "18594735b550b3aac1db5b4b20a1c2e2b2192db74ed2d594eec66c9b83c179db",
+      "bytes": 42384,
+      "sha256": "dff40a3d9157bb6b69b485389905233b2f390316effb2f2c6a55f75ed12b0f43",
       "dependencies": [],
       "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
@@ -8820,6 +8820,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_dashboard_ai_control.py",
         "tests/test_local_setup.py"
       ]
     },
@@ -8937,8 +8938,8 @@
       "path": "megalodon/model_telemetry.py",
       "classification": "source",
       "purpose": "Shared cached model observations. Refreshes never load or infer with a model.",
-      "bytes": 6686,
-      "sha256": "85a4906bacb898b42f730192e6f6597765653c72677990b2cc2483cd8fa2a030",
+      "bytes": 8029,
+      "sha256": "c7f04456129310d58e857e37865b6d7f0419cfac4b3c2adb65ff68d7cfec29de",
       "dependencies": [
         ".",
         "datetime",
@@ -9433,6 +9434,7 @@
         "tests/test_hud_autostart.py",
         "tests/test_local_model_containment.py",
         "tests/test_local_model_containment_trust_boundary.py",
+        "tests/test_model_selection.py",
         "tests/test_nmap_inventory.py",
         "tests/test_offline.py",
         "tests/test_packet_compaction.py",
@@ -13382,6 +13384,7 @@
       ],
       "related_tests": [
         "tests/test_dashboard.py",
+        "tests/test_dashboard_ai_control.py",
         "tests/test_dashboard_support_apps_ui.py",
         "tests/test_dashboard_support_config_ui.py",
         "tests/test_model_selection.py",
@@ -15784,8 +15787,8 @@
       "path": "tests/test_dashboard_ai_control.py",
       "classification": "test",
       "purpose": "Explicit HUD AI routes never open command or firewall authority.",
-      "bytes": 7956,
-      "sha256": "9ff04acf72c09d33ee477699949006f7b7064c8744d098b40c9353c9e9cf1bc0",
+      "bytes": 9480,
+      "sha256": "22725ff252963a2f6dbaa998a3017ecbed29694c6d2c872c8f2b90df4656ae58",
       "dependencies": [
         "__future__",
         "http.client",
@@ -17566,8 +17569,8 @@
       "path": "tests/test_model_selection.py",
       "classification": "test",
       "purpose": "Selectable local artifacts retain admission, atomic settings and truthful status.",
-      "bytes": 13246,
-      "sha256": "886e658a948c48366014de4af0a465254957937798e84cd81e7ba0aa8e216526",
+      "bytes": 15028,
+      "sha256": "be3721055d74b2de01a59309908159aa309cd8d060dfe3e13457918fd3129dc5",
       "dependencies": [
         "dataclasses",
         "io",
@@ -21021,7 +21024,7 @@
       "type": "password",
       "label": null,
       "disabled": false,
-      "source_references": 2,
+      "source_references": 4,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21678,7 +21681,7 @@
       "type": null,
       "label": null,
       "disabled": true,
-      "source_references": 5,
+      "source_references": 6,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -21697,6 +21700,15 @@
       "label": null,
       "disabled": true,
       "source_references": 5,
+      "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
+    },
+    {
+      "element": "button",
+      "id": "support-model-adopt",
+      "type": "button",
+      "label": null,
+      "disabled": false,
+      "source_references": 3,
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     },
     {
@@ -22114,7 +22126,7 @@
       "verification": "Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification"
     }
   ],
-  "control_count": 196,
+  "control_count": 197,
   "duplicate_ids": [],
   "missing_anchors": [
     "setup-app-clamav",

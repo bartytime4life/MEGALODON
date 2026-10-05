@@ -121,6 +121,7 @@ production service.
 | `/api/reference/protocol` | Exactly `number` | One bounded IP-protocol registration lookup |
 | `/api/integrations` | Optional `platform` | Existing static hub plan for one documentation profile |
 | `/api/ai/status` | None; explicit check header and operator token | One optional local model status check |
+| `/api/ai/token` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD with Setup | This launch's AI operator token for the HUD's own Local AI control panel; refused (403) without the Setup workspace |
 | `/api/heartbeat` | None; requires `X-Megalodon-Check: 1`, HUD mode | Cached per-tool installed/running/uptime light; see [tool heartbeat](tool-heartbeat.md) |
 | `/api/host-telemetry` | None; requires `X-Megalodon-Check: 1`, HUD mode | Automatic two-second CPU, RAM, per-interface rates and socket observations; see [live PC telemetry](live-pc-telemetry.md). Bounded in-memory history; no captures or writes. |
 | `/api/install` | None; requires `X-Megalodon-Check: 1`, HUD mode | Fixed install-recipe catalog and the current job status |

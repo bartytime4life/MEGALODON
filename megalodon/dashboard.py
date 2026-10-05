@@ -635,6 +635,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(self.companion_automation.snapshot())
             return
+        if route.path == "/api/ai/token":
+            # The desktop HUD runs as a background service, so the launch
+            # terminal is not visible. Hand this launch's AI token to the same
+            # local page through the guarded channel Setup already uses for
+            # its own (stronger) configuration nonce.
+            if route.query:
+                self._send_json({"error": "unsupported query parameter"}, status=400)
+            elif (self.headers.get_all("X-Megalodon-Check", []) != ["1"] or self.support_config is None
+                    or not _tool_management_user() or self.ai_operator_token is None):
+                self._send_json({"error": "AI token is available only to the local Setup HUD"}, status=403)
+            else:
+                self._send_json({"schema": "megalodon-ai-token-v1", "token": self.ai_operator_token})
+            return
         if route.path == "/api/ai/status":
             from .ai_provider import status
             if not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled and not route.query:

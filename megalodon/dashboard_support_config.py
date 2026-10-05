@@ -26,7 +26,7 @@ SUPPORT_CONFIG_HTML = r'''
     <label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select>
     <label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select>
     <label for="support-model-timeout">AI response limit (seconds)</label><input id="support-model-timeout" type="number" min="1" max="1800" step="1" value="300" disabled><p class="support-config-note">Default: 5 minutes. Up to 30 minutes for large models. Collection continues while AI works.</p>
-    <div class="support-config-actions"><button type="button" id="support-model-save" disabled>Use selected model</button><button type="button" id="support-model-refresh" disabled>Refresh installed models</button><button type="button" id="support-model-cancel" disabled>Cancel AI request</button></div>
+    <div class="support-config-actions"><button type="button" id="support-model-adopt" hidden>Use installed version</button><button type="button" id="support-model-save" disabled>Use selected model</button><button type="button" id="support-model-refresh" disabled>Refresh installed models</button><button type="button" id="support-model-cancel" disabled>Cancel AI request</button></div>
     <p id="support-model-status" role="status" class="support-config-note">Checking the selected model…</p><p id="support-model-metrics" class="support-config-note"></p>
     <p class="support-config-note">Selection checks local text completion and pins the exact installed version. The saved response limit applies to HUD analysis and background advice. Models are unloaded after MEGALODON replies; another app may keep them loaded. No downloads or cloud inference occur here.</p><div class="support-config-actions"><button type="button" id="support-config-qwen-setup" disabled>Configure Ollama access</button><button type="button" id="support-config-qwen" disabled>Verify selected model</button></div><p class="support-config-note">A one-time system prompt keeps Ollama on this PC. The selected model advises; generated commands do not run.</p></section>
     <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
@@ -116,7 +116,7 @@ SUPPORT_CONFIG_JS = r'''
       || (v.background!==undefined&&(!object(v.background)||typeof v.background.enabled!=='boolean'||!['stopped','starting','running','waiting','failed'].includes(v.background.state)||!text(v.background.message)||!count(v.background.session_count)))
       || typeof v.geography_enabled!=='boolean'
       || !text(v.command,512) || (needToken&&!/^[A-Za-z0-9_-]{32}$/.test(v.token||'')) || (v.token!==undefined&&!/^[A-Za-z0-9_-]{32}$/.test(v.token)))throw Error('Invalid configuration response');
-    if(v.model!==undefined){const m=v.model;if(!object(m)||!text(m.model,96)||!text(m.message,512)||!['cpu','auto'].includes(m.compute_mode)||!Array.isArray(m.options)||m.options.length>64||!m.options.every(row=>object(row)&&text(row.name,96)&&/^[a-f0-9]{64}$/.test(row.digest)&&count(row.size_bytes))||!stamp(m.updated_at)||!stamp(m.last_response_at)||!stamp(m.last_attempt_at)||!(m.response_ms===null||count(m.response_ms))||!['loaded','memory_bytes','vram_bytes'].every(key=>key==='loaded'?(m[key]===null||typeof m[key]==='boolean'):(m[key]===null||count(m[key]))))throw Error('Invalid model telemetry');}
+    if(v.model!==undefined){const m=v.model;if(!object(m)||!text(m.model,96)||!text(m.message,512)||!['cpu','auto'].includes(m.compute_mode)||!Array.isArray(m.options)||m.options.length>64||!m.options.every(row=>object(row)&&text(row.name,96)&&/^[a-f0-9]{64}$/.test(row.digest)&&count(row.size_bytes))||!stamp(m.updated_at)||!stamp(m.last_response_at)||!stamp(m.last_attempt_at)||!(m.response_ms===null||count(m.response_ms))||!(m.drift===undefined||m.drift===null||['digest_changed','missing'].includes(m.drift))||!(m.installed_digest===undefined||m.installed_digest===null||/^[a-f0-9]{64}$/.test(m.installed_digest))||!['loaded','memory_bytes','vram_bytes'].every(key=>key==='loaded'?(m[key]===null||typeof m[key]==='boolean'):(m[key]===null||count(m[key]))))throw Error('Invalid model telemetry');}
     return v;
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
@@ -136,6 +136,7 @@ SUPPORT_CONFIG_JS = r'''
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
         || (action==='geography_disable'&&!state.payload?.geography_enabled);
     }
+    el('support-model-adopt').disabled=blocked||!!working();
     for(const id of inputIds)el(id).disabled=blocked||!!working();
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
     el('support-config').setAttribute('aria-busy',state.pending?'true':'false');
@@ -148,6 +149,8 @@ SUPPORT_CONFIG_JS = r'''
       if(!state.dirty.has('timeout_seconds'))el('support-model-timeout').value=String(model.timeout_seconds||300);
       if(!state.dirty.has('compute_mode'))el('support-model-compute').value=model.compute_mode;
       el('support-model-status').textContent=model.message+(model.truncated?' First 64 installed artifacts shown.':'');
+      // Ollama replaced the pinned model's files: re-pin the same name to the digest Ollama now reports.
+      el('support-model-adopt').hidden=model.drift!=='digest_changed'||!model.options.some(row=>row.name===model.model);
       const metrics=[];metrics.push('Response limit '+(model.timeout_seconds||300)+' s');if(model.running&&model.started_at)metrics.push('Working since '+time(model.started_at));
       metrics.push(model.last_response_at?'Last accepted response '+time(model.last_response_at)+(model.inference_verified===true?' · recent':' · reverify for current readiness'):'No accepted response recorded for this model');
       if(model.last_attempt_at)metrics.push('Last attempt '+time(model.last_attempt_at));if(model.response_ms!==null)metrics.push('Last attempt duration '+(model.response_ms/1000).toFixed(2)+' s');
@@ -232,6 +235,10 @@ SUPPORT_CONFIG_JS = r'''
     if(value){el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
   el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',()=>read(true));if(el('live-action-retry'))el('live-action-retry').addEventListener('click',()=>read(true));
   for(const [id,action] of Object.entries(actions))if(el(id))el(id).addEventListener('click',()=>act(action));
+  el('support-model-adopt').addEventListener('click',()=>{
+    const model=state.payload?.model;if(!model||model.drift!=='digest_changed')return;
+    el('support-model-select').value=model.model;state.dirty.delete('model');controls();act('model_select');
+  });
   for(const [id,key] of [['support-model-timeout','timeout_seconds'],['support-model-select','model'],['support-model-compute','compute_mode'],['support-config-interface','interface'],['support-config-nmap-target','nmap_target'],['support-config-scan-folder','scan_folder']])el(id).addEventListener('change',()=>{state.dirty.add(key);controls();});
   el('support-config-nmap-target').addEventListener('input',()=>state.dirty.add('nmap_target'));
   el('support-config-tool-id').addEventListener('change',()=>{state.dirty.delete('tool_directory');el('support-config-tool-directory').value=state.payload?.tool_directories?.[el('support-config-tool-id').value]||'';controls();});
