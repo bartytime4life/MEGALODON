@@ -276,6 +276,12 @@ function aiDeadlineMs(calls) {
   const perCall = Number.isInteger(aiTimeoutSeconds) && aiTimeoutSeconds > 0 ? aiTimeoutSeconds : 1800;
   return (calls * perCall + 30) * 1000;
 }
+const AI_QUESTION_SECONDS = 600;
+function aiQuestionDeadlineMs(question) {
+  // Both model calls share one 600 s server budget; the model-health tool adds its own live check.
+  const perCall = Number.isInteger(aiTimeoutSeconds) && aiTimeoutSeconds > 0 ? aiTimeoutSeconds : 1800;
+  return (AI_QUESTION_SECONDS + (question === 'model' ? perCall : 0) + 30) * 1000;
+}
 function aiBuildQuestionChips() {
   const options = [...aiQuestion.options];
   aiQuestionChips.replaceChildren(...options.map(option => {
@@ -412,13 +418,18 @@ aiAsk.addEventListener('click', async () => {
   aiBeginBusy(aiAsk, 'Asking…');
   aiResult.hidden = true;
   aiSetPhase('asking');
-  aiSetStatus('Requesting one bounded local analysis: the model picks one permitted tool, then explains its result…', 'busy', 'Thinking');
-  aiStartElapsed('Still working. Each local model call can take a while on CPU; the server stops it at the configured timeout.');
+  aiSetStatus('Waiting for local AI analysis (up to 10 minutes): the model picks one permitted tool, then explains its result…', 'busy', 'Thinking');
+  aiStartElapsed('Still working. Local models can take several minutes on CPU; the server stops the question after 10 minutes.');
   let phase = 'ready';
   try {
-    const {response, value} = await aiFetch('/api/ai/ask', 'X-Megalodon-AI-Ask', {question}, aiDeadlineMs(question === 'model' ? 3 : 2));
+    const {response, value} = await aiFetch('/api/ai/ask', 'X-Megalodon-AI-Ask', {question}, aiQuestionDeadlineMs(question));
     if (response.status === 403) { aiSetStatus(aiTokenErrorText(value), 'error', 'Token rejected'); phase = 'error'; return; }
     if (response.status === 409) { aiSetStatus('Another local operation is in progress. Try again shortly.', 'warn', 'Busy'); return; }
+    if (value.error_code === 'REQUEST_TIMEOUT' && !response.ok) {
+      phase = 'error';
+      aiSetStatus('AI request timed out before a complete answer was returned.', 'warn', 'Timed out');
+      return;
+    }
     if (value.schema === 'megalodon-ai-answer-v1' && value.state === 'failed') {
       phase = 'error';
       aiSetStatus(`AI request failed.${aiErrorReason(value.error_code)}`, value.error_code === 'REQUEST_CANCELLED' ? 'warn' : 'error', 'Failed');
@@ -442,7 +453,7 @@ aiAsk.addEventListener('click', async () => {
   } catch (err) {
     phase = 'error';
     if (err && err.name === 'AbortError') {
-      aiSetStatus(aiUserCanceled ? 'AI request canceled by operator. No partial model output is shown.' : 'AI request timed out client-side. No partial model output is shown.', 'warn', aiUserCanceled ? 'Cancelled' : 'Timed out');
+      aiSetStatus(aiUserCanceled ? 'AI request canceled by operator. No partial model output is shown.' : 'AI did not return a complete answer within 10 minutes. No partial model output is shown.', 'warn', aiUserCanceled ? 'Cancelled' : 'Timed out');
     } else {
       aiSetStatus('AI request failed. No partial model output is shown.', 'error', 'Failed');
     }

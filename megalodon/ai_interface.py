@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import re
+import time
+from dataclasses import replace
 from typing import Any
 
 from .ai_broker import Broker, BrokerError, TOOLS
@@ -21,6 +24,7 @@ QUESTIONS: dict[str, tuple[str, frozenset[str]]] = {
     "report": ("Generate a bounded security summary report.", frozenset({"megalodon.report.generate"})),
 }
 
+QUESTION_TIMEOUT_SECONDS = 600
 _FENCED = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 
@@ -42,6 +46,18 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
     question, permitted = QUESTIONS[question_id]
     if not broker.ai.enabled:
         raise AIProviderError("DISABLED")
+    if type(broker.ai.timeout_seconds) is not int or not 1 <= broker.ai.timeout_seconds <= 1800:
+        raise AIProviderError("POLICY_REJECTION")
+    deadline = time.monotonic() + QUESTION_TIMEOUT_SECONDS
+
+    def question_settings():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AIProviderError("REQUEST_TIMEOUT")
+        # Both model calls share one question budget, regardless of the
+        # configured timeout for readiness and other AI operations.
+        return replace(broker.ai, timeout_seconds=min(QUESTION_TIMEOUT_SECONDS, math.ceil(remaining)))
+
     catalog = [{"name": name, "purpose": TOOLS[name].purpose} for name in sorted(permitted)]
     selection_prompt = (
         "MEGALODON tool selection. Return only a JSON object with exactly tool, arguments, reason. "
@@ -51,7 +67,7 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
         "Select one listed tool. No commands, paths, URLs, permission changes or additional fields. "
         + json.dumps({"question": question, "tools": catalog}, separators=(",", ":"))
     )
-    selection = generate(broker.ai, selection_prompt, max_tokens=128,
+    selection = generate(question_settings(), selection_prompt, max_tokens=128,
                          response_format="selection", choices=tuple(sorted(permitted)))
     try:
         request = _selection(selection)
@@ -83,7 +99,7 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
                      sort_keys=True, separators=(",", ":"))
     )
     try:
-        result["inferred"] = generate(broker.ai, answer_prompt, max_tokens=256)
+        result["inferred"] = generate(question_settings(), answer_prompt, max_tokens=256)
     except AIProviderError as exc:
         result["error_code"] = exc.code
     return result

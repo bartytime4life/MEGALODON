@@ -226,6 +226,42 @@ def test_model_selects_only_question_allowed_tool_and_payload_stays_out(monkeypa
     assert denied["error_code"] == "UNKNOWN_TOOL"
 
 
+def test_fixed_question_shares_ten_minute_budget_across_model_calls(monkeypatch, broker):
+    from types import SimpleNamespace
+
+    ticks = iter((100.0, 100.0, 370.0))
+    monkeypatch.setattr("megalodon.ai_interface.time", SimpleNamespace(monotonic=lambda: next(ticks)))
+    budgets = []
+
+    def fake_generate(settings, _prompt, *, max_tokens, **_kwargs):
+        budgets.append((settings.timeout_seconds, max_tokens))
+        return json.dumps(request("megalodon.status")) if len(budgets) == 1 else "Bounded advice."
+
+    monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
+    answer = ask("seeing", broker)
+    assert budgets == [(600, 128), (330, 256)]
+    assert answer["execution_state"] == "observed"
+    assert answer["inferred"] == "Bounded advice."
+
+
+def test_fixed_question_reports_timeout_without_late_second_model_call(monkeypatch, broker):
+    from types import SimpleNamespace
+
+    ticks = iter((100.0, 100.0, 701.0))
+    monkeypatch.setattr("megalodon.ai_interface.time", SimpleNamespace(monotonic=lambda: next(ticks)))
+    calls = []
+
+    def fake_generate(settings, _prompt, *, max_tokens, **_kwargs):
+        calls.append((settings.timeout_seconds, max_tokens))
+        return json.dumps(request("megalodon.status"))
+
+    monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
+    answer = ask("seeing", broker)
+    assert calls == [(600, 128)]
+    assert answer["execution_state"] == "observed"
+    assert answer["inferred"] is None and answer["error_code"] == "REQUEST_TIMEOUT"
+
+
 def test_ai_outage_does_not_break_core_reader(monkeypatch, broker):
     import megalodon.ai_provider as provider
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "no", "loopback_only": None})

@@ -32,6 +32,10 @@ actually loaded into memory.
 The request timeout defaults to 300 seconds and is bounded at 1,800 seconds, context at most 4096 tokens, and
 output at most 256 tokens. Readiness, ordinary advice and defense requests all
 set the processing batch to 64 tokens to reduce temporary GPU memory demand.
+Fixed AI questions share a separate ten minute limit across tool selection and
+the follow-up explanation. The HUD waits for the answer until that limit and
+then shows a timeout error; the explicit model check waits for the configured
+request timeout reported by `/api/ai/status`.
 This is an [Ollama runner option](https://github.com/ollama/ollama/blob/main/api/types.go),
 not a change to the context or output limit. Model and endpoint cannot come from a model reply. The protected
 [Setup model selector](local-model-selection.md) can pin an installed local
@@ -39,7 +43,13 @@ completion model for the HUD and backend. Provider destination remains fixed.
 CPU compute is the default; automatic compute is an explicit operator choice.
 
 Before every inference, the adapter observes `/proc/net/tcp{,6}` and refuses
-an absent, non-loopback, or inconclusive listener; it then checks the exact tag
+an absent, non-loopback, or inconclusive listener. A missing `/proc/net/tcp6`
+counts as an empty IPv6 table only when `/proc/net/if_inet6` and
+`/proc/sys/net/ipv6` are also missing, which is what a kernel booted with
+`ipv6.disable=1` (or a network namespace with no IPv6 stack) looks like. The
+posture's `tables` field then reports `ipv6_stack_absent`. Any other missing,
+permission-denied, or partially read table stays inconclusive and is refused.
+It then checks the exact tag
 digest using one bounded `GET /api/tags`, then checks `/api/show` for local GGUF
 completion capabilities and rejects cloud model references. Inference uses one non-streaming
 `POST /api/generate` on the existing literal-loopback transport with no proxy,
@@ -142,9 +152,9 @@ own slot rules. It requires the same per-launch token, exact `Origin`, JSON
 content type and an exact `{}` body, and it is served outside the maintenance
 lock that a running `/api/ai/ask` holds. A cancel between the two calls of one
 question is not lost: the next call is refused with `REQUEST_CANCELLED`. The
-browser waits up to the configured timeout per model call (two calls, or three
-for the model-health question) plus a short margin, and asks the server to
-cancel if it stops waiting.
+browser waits for the ten minute question budget (plus one configured request
+timeout for the model-health question's own live check) and a short margin,
+and asks the server to cancel if it stops waiting.
 
 ## Operator setup and checks
 

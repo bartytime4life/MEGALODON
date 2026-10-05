@@ -3530,8 +3530,8 @@
       "path": "docs/ai-control-plane.md",
       "classification": "documentation",
       "purpose": "Local AI control plane (draft, opt-in)",
-      "bytes": 41544,
-      "sha256": "f5d1baf55a3cafb66ba2ab1690579e7889ee65e94c7c0d62cebee8f319d2e3ea",
+      "bytes": 42246,
+      "sha256": "8bceba0b4e53b284370b0dc5ed7d043afd6d4492387dd0ea910d9149aa89c7e0",
       "dependencies": [
         "local-model-selection.md",
         "qwen-446-owner-decision-packet.md",
@@ -5288,13 +5288,13 @@
       "path": "docs/qwen-provider-hardening.md",
       "classification": "documentation",
       "purpose": "Operator hardening recipe for the Qwen/Ollama provider",
-      "bytes": 9676,
-      "sha256": "bbf3b8fb53623be1d04b19e0606564b048371224a50c727bc145c2e35fe674e2",
+      "bytes": 9936,
+      "sha256": "af5dd119b19b867cbf9a96d2fea84d4b63fa2bf78c21c5bfd8c608913db529e4",
       "dependencies": [
         "../megalodon/provider_containment.py",
         "model-containment-review.md"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Markdown read and relative links checked"
@@ -6248,14 +6248,17 @@
       "path": "megalodon/ai_interface.py",
       "classification": "source",
       "purpose": "Operator-selected questions through model selection and the fixed broker.",
-      "bytes": 4944,
-      "sha256": "60f7c8f81d2db51c9b458a4dd2cb552155d52908df442d330d5d0169304ec1d8",
+      "bytes": 5659,
+      "sha256": "c99048548be34f2f51a2b61c18ad2162689a763b226c9ef9a4fe87520df47ac1",
       "dependencies": [
         ".ai_broker",
         ".ai_provider",
         "__future__",
+        "dataclasses",
         "json",
+        "math",
         "re",
+        "time",
         "typing"
       ],
       "disposition": "corrected",
@@ -7355,8 +7358,8 @@
       "path": "megalodon/dashboard_ai_assets.py",
       "classification": "source",
       "purpose": "Explicit, bounded local AI controls for the Investigate workspace.",
-      "bytes": 32184,
-      "sha256": "d67644b4d85c76c74582172989836c43548dd58f4a434295b70e9f9385644e8f",
+      "bytes": 32780,
+      "sha256": "54b60d9362c254bef264ea591a71eb829980c515b506ea5cb713f3ac7c66523c",
       "dependencies": [
         ".status_glossary"
       ],
@@ -9410,6 +9413,7 @@
         "Python AST parsed"
       ],
       "related_tests": [
+        "tests/test_ai_control.py",
         "tests/test_automation_schedule.py",
         "tests/test_baseline_comparison.py",
         "tests/test_candidate_baseline_support.py",
@@ -9969,8 +9973,8 @@
       "path": "megalodon/provider_containment.py",
       "classification": "source",
       "purpose": "Bounded, read-only observation of the Qwen/Ollama loopback provider.",
-      "bytes": 10876,
-      "sha256": "f59eced86944a8ac96956e665243048e393db9e33ef23276fb027f28bca8f23c",
+      "bytes": 12719,
+      "sha256": "7e5022c5dec8dd5977fb19bc447dc2165ddfb0a3c76b53e6a30960ac7f5d4972",
       "dependencies": [
         ".offline.common",
         ".qwen_advisory",
@@ -9984,7 +9988,7 @@
         "types",
         "typing"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
@@ -14804,8 +14808,8 @@
       "path": "tests/test_ai_control.py",
       "classification": "test",
       "purpose": "Closed AI control boundary using synthetic metadata and a fake provider.",
-      "bytes": 24940,
-      "sha256": "10bc5a22d6d3c5bfb460ac66d87a5f2d138314a77a2393de69afe16e844f66ec",
+      "bytes": 26476,
+      "sha256": "66c2083195c6b5022fc50e96752e263f1c6a15145cf719a5183866ee3e27dfea",
       "dependencies": [
         "__future__",
         "datetime",
@@ -17939,8 +17943,8 @@
       "path": "tests/test_provider_containment.py",
       "classification": "test",
       "purpose": "Tests for the read-only Qwen/Ollama provider posture observer.",
-      "bytes": 10689,
-      "sha256": "00735da88bc29b06edf54ab7abeeb56df7604dd71758edbdba5eb25fe12276f6",
+      "bytes": 16819,
+      "sha256": "ffc475db41618c40884fc4562a9885d9e042f4ababb042bdfcb22b9ad9b96b59",
       "dependencies": [
         "__future__",
         "ast",
@@ -17953,7 +17957,7 @@
         "pytest",
         "socket"
       ],
-      "disposition": "retained",
+      "disposition": "corrected",
       "review_basis": "structured file inspection; see verification record for behavior coverage",
       "verification": [
         "Python AST parsed"
