@@ -34,8 +34,9 @@ def _drift(settings, value):
         return None, None
     installed = next((row for row in options if row.get('name') == settings.model), None)
     if installed is None:
-        # The pinned name sorts first, so truncation cannot hide it.
-        return 'missing', None
+        # The catalog hides remote and non-GGUF tags, so only the provider's
+        # raw tag check can establish that the pinned model is really gone.
+        return ('missing', None) if value.get('state') == 'model_missing' else (None, None)
     if installed.get('digest') != settings.model_digest:
         return 'digest_changed', installed.get('digest')
     return None, None

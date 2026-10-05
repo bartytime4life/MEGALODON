@@ -252,9 +252,16 @@ function aiShowSetupLink(code) {
   const link = document.getElementById('ai-setup-link');
   if (link) link.hidden = !AI_SETUP_CODES.has(code);
 }
-async function aiLoadToken() {
+let aiTokenLoad = null;
+function aiLoadToken() {
+  // One shared request: opening the panel and pressing Verify must not race each other.
+  if (aiTokenInput.value.trim()) return Promise.resolve(true);
+  if (!aiTokenLoad) aiTokenLoad = aiFetchToken().finally(() => { aiTokenLoad = null; });
+  return aiTokenLoad;
+}
+async function aiFetchToken() {
   // The local Setup HUD hands its own page this launch's token; other modes keep manual entry.
-  if (aiTokenInput.value.trim() || typeof fetch !== 'function') return false;
+  if (typeof fetch !== 'function') return false;
   try {
     const response = await fetch('/api/ai/token', {headers: {'X-Megalodon-Check': '1'}, cache: 'no-store', credentials: 'same-origin'});
     if (!response.ok) return false;
@@ -262,7 +269,7 @@ async function aiLoadToken() {
     if (text.length > 256) return false;
     const value = JSON.parse(text);
     if (!value || value.schema !== 'megalodon-ai-token-v1' || typeof value.token !== 'string' || !/^[A-Za-z0-9_-]{32}$/.test(value.token)) return false;
-    if (aiTokenInput.value.trim()) return false;
+    if (aiTokenInput.value.trim()) return true;
     aiTokenInput.value = value.token;
     const hint = document.getElementById('ai-token-hint');
     if (hint) hint.textContent = 'Filled automatically for this HUD launch. Press Enter or Verify to check the model.';
@@ -415,7 +422,8 @@ function aiEndBusy() {
 }
 aiCheck.addEventListener('click', async () => {
   if (aiBusy) return;
-  if (!aiTokenInput.value.trim() && !(await aiLoadToken())) {
+  if (!aiTokenInput.value.trim()) await aiLoadToken();
+  if (!aiTokenInput.value.trim()) {
     aiSetStatus('Paste the AI operator token first. The background HUD writes it to its log: journalctl --user -u megalodon-hud.service | grep "AI operator token".', 'warn', 'Token needed');
     aiTokenInput.focus(); return;
   }

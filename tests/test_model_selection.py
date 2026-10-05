@@ -263,3 +263,7 @@ def test_drift_reports_a_removed_model_and_none_when_in_sync():
     assert in_sync['drift'] is None and in_sync['installed_digest'] is None
     disabled = _drift_snapshot(AISettings(), [dict(name='llama3:8b', digest='c' * 64, size_bytes=1)], 'disabled')
     assert disabled['drift'] is None
+    # A pinned tag that still exists but is filtered from the local catalog
+    # (remote-backed or non-GGUF) keeps its real state; it is not "removed".
+    filtered = _drift_snapshot(settings, [dict(name='llama3:8b', digest='c' * 64, size_bytes=1)], 'model_not_local')
+    assert filtered['drift'] is None and 'no longer installed' not in filtered['message']

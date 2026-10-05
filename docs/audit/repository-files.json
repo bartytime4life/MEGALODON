@@ -7358,8 +7358,8 @@
       "path": "megalodon/dashboard_ai_assets.py",
       "classification": "source",
       "purpose": "Explicit, bounded local AI controls for the Investigate workspace.",
-      "bytes": 35637,
-      "sha256": "25e799eabfaa5f5ee39ce320ab33faf490e12c89f39e20afe458a95142be3ab7",
+      "bytes": 35951,
+      "sha256": "9d566fefc305a5f43686c3bf9faf972615edbf27c5fc068e5ff0332eee129f5a",
       "dependencies": [
         ".status_glossary"
       ],
@@ -8938,8 +8938,8 @@
       "path": "megalodon/model_telemetry.py",
       "classification": "source",
       "purpose": "Shared cached model observations. Refreshes never load or infer with a model.",
-      "bytes": 8029,
-      "sha256": "c7f04456129310d58e857e37865b6d7f0419cfac4b3c2adb65ff68d7cfec29de",
+      "bytes": 8174,
+      "sha256": "7afa330688ffa1e576db357fe1bee1856d2aa0d2d3e83c4ddc96bd2892f0d154",
       "dependencies": [
         ".",
         "datetime",
@@ -17569,8 +17569,8 @@
       "path": "tests/test_model_selection.py",
       "classification": "test",
       "purpose": "Selectable local artifacts retain admission, atomic settings and truthful status.",
-      "bytes": 15028,
-      "sha256": "be3721055d74b2de01a59309908159aa309cd8d060dfe3e13457918fd3129dc5",
+      "bytes": 15388,
+      "sha256": "650075e9949d9aa0879842a9e3550a1ca7d21b503c6b61f4d724df722dd4b8f2",
       "dependencies": [
         "dataclasses",
         "io",
