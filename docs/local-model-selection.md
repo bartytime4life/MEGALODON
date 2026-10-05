@@ -41,6 +41,23 @@ that an address is hostile or execute their generated commands.
   Last-response observations are held in memory and reset on service restart;
   existing evidence and response receipts follow managed retention.
 
+## When Ollama's models change
+
+MEGALODON pins the exact digest of the selected model, so it notices when
+Ollama's copy changes underneath it (for example, `ollama pull` updated the
+tag) or when the model is removed. It never follows such a change on its own:
+
+- **Changed copy.** Setup names the pinned and installed digests and shows
+  **Use installed version**. One press re-selects the same model name at the
+  digest Ollama now reports, through the normal `model_select` action, and
+  verifies one response. The AI panel shows **Model changed** and links here.
+- **Removed model.** Setup and the AI panel say the model is no longer
+  installed; choose another installed model.
+
+`GET /api/support-config` reports this as `model.drift` (`digest_changed`,
+`missing` or `null`) and `model.installed_digest`, read from the cached tag
+inventory without inference.
+
 A selection is persisted even if its subsequent response verification fails;
 Setup says so and offers verification again or another model. Existing installed
 models are never removed or downloaded by selection. A fresh installation can

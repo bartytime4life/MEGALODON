@@ -160,3 +160,32 @@ def test_ai_cancel_is_token_gated_and_bypasses_the_maintenance_lock(monkeypatch)
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_ai_token_is_served_only_to_the_local_setup_hud(monkeypatch):
+    import megalodon.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "_tool_management_user", lambda: True)
+    base = {"store": object(), "ai_settings": AISettings(), "ai_operator_token": "t" * 32}
+    servers = []
+
+    def start(extra):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), type("AITokenHandler", (DashboardHandler,), {**base, **extra}))
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start(); servers.append((server, thread))
+        return server
+
+    try:
+        local = start({"support_config": object()})
+        check = {"X-Megalodon-Check": "1"}
+        assert _get(local, "/api/ai/token")[0] == 403
+        assert _get(local, "/api/ai/token?x=1", check)[0] == 400
+        code, value = _get(local, "/api/ai/token", check)
+        assert code == 200 and value == {"schema": "megalodon-ai-token-v1", "token": "t" * 32}
+        # Without the Setup workspace (plain dashboard), the token stays terminal-only.
+        assert _get(start({"support_config": None}), "/api/ai/token", check)[0] == 403
+        assert _get(start({"support_config": object(), "ai_operator_token": None}), "/api/ai/token", check)[0] == 403
+        monkeypatch.setattr(dashboard, "_tool_management_user", lambda: False)
+        assert _get(local, "/api/ai/token", check)[0] == 403
+    finally:
+        for server, thread in servers:
+            server.shutdown(); server.server_close(); thread.join(timeout=2)

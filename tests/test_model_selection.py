@@ -234,3 +234,36 @@ def test_timeout_selection_survives_restart(model_provider,tmp_path,monkeypatch)
     assert restarted.settings.ai.timeout_seconds==900
     for value in (0,1801,True):
         with pytest.raises(ValueError):support_config.validate_action(dict(action='model_select',model=settings.model,model_digest=settings.model_digest,compute_mode='cpu',timeout_seconds=value))
+
+
+def _drift_snapshot(settings, rows, state):
+    telemetry = ModelTelemetry(lambda: settings, inspect=lambda _s: {'state': state},
+                               loaded=lambda _s: {}, catalog=lambda: [dict(row) for row in rows])
+    telemetry.snapshot(); telemetry._thread.join(2)
+    return telemetry.snapshot()
+
+
+def test_drift_reports_an_updated_copy_of_the_pinned_model_without_inference():
+    from megalodon.config import AISettings
+    settings = AISettings(enabled=True, model='qwen2.5:7b', model_digest='a' * 64)
+    rows = [dict(name='qwen2.5:7b', digest='b' * 64, size_bytes=1), dict(name='llama3:8b', digest='c' * 64, size_bytes=1)]
+    observed = _drift_snapshot(settings, rows, 'policy_rejection')
+    assert observed['drift'] == 'digest_changed' and observed['installed_digest'] == 'b' * 64
+    assert 'aaaaaaaaaaaa' in observed['message'] and 'bbbbbbbbbbbb' in observed['message']
+    assert observed['selected_digest'] == 'a' * 64  # Nothing is re-pinned without the operator.
+
+
+def test_drift_reports_a_removed_model_and_none_when_in_sync():
+    from megalodon.config import AISettings
+    settings = AISettings(enabled=True, model='qwen2.5:7b', model_digest='a' * 64)
+    removed = _drift_snapshot(settings, [dict(name='llama3:8b', digest='c' * 64, size_bytes=1)], 'model_missing')
+    assert removed['drift'] == 'missing' and removed['installed_digest'] is None
+    assert 'no longer installed' in removed['message']
+    in_sync = _drift_snapshot(settings, [dict(name='qwen2.5:7b', digest='a' * 64, size_bytes=1)], 'model_available')
+    assert in_sync['drift'] is None and in_sync['installed_digest'] is None
+    disabled = _drift_snapshot(AISettings(), [dict(name='llama3:8b', digest='c' * 64, size_bytes=1)], 'disabled')
+    assert disabled['drift'] is None
+    # A pinned tag that still exists but is filtered from the local catalog
+    # (remote-backed or non-GGUF) keeps its real state; it is not "removed".
+    filtered = _drift_snapshot(settings, [dict(name='llama3:8b', digest='c' * 64, size_bytes=1)], 'model_not_local')
+    assert filtered['drift'] is None and 'no longer installed' not in filtered['message']
