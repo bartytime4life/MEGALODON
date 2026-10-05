@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import http.client
 import json
+import math
 import os
 import re
 import socket
@@ -108,12 +109,18 @@ def _strict_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def _request(path: str, method: str, body: bytes | None, timeout: float) -> bytes:
+def _request(path: str, method: str, body: bytes | None, timeout: float,
+             *, deadline: float | None = None) -> bytes:
     """Exactly one request on the compiled literal-loopback transport."""
     if (path,method) not in {("/api/tags","GET"),("/api/ps","GET"),("/api/show","POST"),("/api/generate","POST")}:
         raise AIProviderError("POLICY_REJECTION")
     if body is not None and len(body) > transport.MAX_PROVIDER_REQUEST_BYTES:
         raise AIProviderError("REQUEST_TOO_LARGE")
+    request_deadline = time.monotonic() + timeout
+    if deadline is not None:
+        request_deadline = min(request_deadline, deadline)
+    if request_deadline <= time.monotonic():
+        raise AIProviderError("REQUEST_TIMEOUT")
     if not transport._INVOCATION_LOCK.acquire(blocking=False):
         raise AIProviderError("CONCURRENCY_LIMIT_REACHED")
     process_lock: int | None = None
@@ -126,13 +133,15 @@ def _request(path: str, method: str, body: bytes | None, timeout: float) -> byte
             raise AIProviderError("CONCURRENCY_LIMIT_REACHED") from None
         except transport._ProviderConcurrencyUnavailable:
             raise AIProviderError("CONCURRENCY_CONTROL_UNAVAILABLE") from None
-        deadline = time.monotonic() + timeout
+        remaining = request_deadline - time.monotonic()
+        if remaining <= 0:
+            raise AIProviderError("REQUEST_TIMEOUT")
         connection = transport._LiteralLoopbackHTTPConnection(
-            transport.LOOPBACK_HOST, transport.LOOPBACK_PORT, timeout=timeout,
+            transport.LOOPBACK_HOST, transport.LOOPBACK_PORT, timeout=remaining,
         )
         if path != '/api/generate':
             connection.response_class = _ModelMetadataResponse
-        guard = transport._InvocationGuard(connection, getattr(_request_context,"cancel",None), deadline)
+        guard = transport._InvocationGuard(connection, getattr(_request_context,"cancel",None), request_deadline)
         guard.start()
         headers = {"Accept": "application/json", "Connection": "close"}
         if body is not None:
@@ -146,7 +155,7 @@ def _request(path: str, method: str, body: bytes | None, timeout: float) -> byte
         content_type = response.getheader("Content-Type", "")
         if not content_type.lower().startswith("application/json"):
             raise AIProviderError("INVALID_RESPONSE")
-        data = transport._read_provider_body(response, connection, deadline, getattr(_request_context,"cancel",None))
+        data = transport._read_provider_body(response, connection, request_deadline, getattr(_request_context,"cancel",None))
         reason = guard.finish()
         if reason is not None:
             raise AIProviderError("REQUEST_CANCELLED" if reason == 'CANCELLED_DURING_RESPONSE' else "REQUEST_TIMEOUT")
@@ -206,7 +215,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
     remaining = 3 if deadline is None else min(3, deadline - time.monotonic())
     if remaining <= 0:
         raise AIProviderError("REQUEST_TIMEOUT")
-    tags = _json(_request("/api/tags", "GET", None, remaining))
+    tags = _json(_request("/api/tags", "GET", None, remaining, deadline=deadline))
     if type(tags) is not dict or type(tags.get("models")) is not list or len(tags["models"]) > 256:
         raise AIProviderError("INVALID_RESPONSE")
     matches = [item for item in tags["models"] if type(item) is dict and item.get("name") == settings.model]
@@ -219,7 +228,8 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
         raise AIProviderError("MODEL_MISMATCH")
     remaining=3 if deadline is None else min(3,deadline-time.monotonic())
     if remaining<=0:raise AIProviderError('REQUEST_TIMEOUT')
-    details=_json(_request('/api/show','POST',json.dumps({'model':settings.model}).encode(),remaining))
+    details=_json(_request('/api/show','POST',json.dumps({'model':settings.model}).encode(),remaining,
+                           deadline=deadline))
     # A loopback daemon may proxy cloud models. Never send evidence to those.
     if (type(details) is not dict or details.get('remote_host') or details.get('remote_model')
             or type(details.get('details')) is not dict or details['details'].get('format')!='gguf'
@@ -269,11 +279,14 @@ def inventory(settings: AISettings) -> dict[str, object]:
 
 
 def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
-              choices: tuple[str, ...] = ()) -> str:
+              choices: tuple[str, ...] = (), deadline: float | None = None) -> str:
     """One deterministic request after live listener and manifest admission."""
     if type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 1800:
         raise AIProviderError("POLICY_REJECTION")
-    deadline = time.monotonic() + settings.timeout_seconds
+    if deadline is None:
+        deadline = time.monotonic() + settings.timeout_seconds
+    if deadline <= time.monotonic():
+        raise AIProviderError("REQUEST_TIMEOUT")
     _admitted(settings, deadline)
     if type(prompt) is not str or not 1 <= len(prompt.encode("utf-8")) <= 4096:
         raise AIProviderError("REQUEST_TOO_LARGE")
@@ -321,12 +334,14 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise AIProviderError("REQUEST_TIMEOUT")
-    data = _request("/api/generate", "POST", body, remaining)
+    data = _request("/api/generate", "POST", body, remaining, deadline=deadline)
     try:
         output, _ = transport._parse_provider_output(data, settings.model)
         summary = transport._plain_summary(output)
         if not summary:
             raise AIProviderError("INVALID_RESPONSE")
+        if time.monotonic() >= deadline:
+            raise AIProviderError("REQUEST_TIMEOUT")
         return summary
     except (ValueError, transport._ProviderResponseInvalid):
         raise AIProviderError("INVALID_RESPONSE") from None
@@ -334,7 +349,8 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
 
 
 def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
-             priority: str = 'manual', owner=None, choices: tuple[str, ...] = ()) -> str:
+             priority: str = 'manual', owner=None, choices: tuple[str, ...] = (),
+             deadline: float | None = None) -> str:
     """Generate once and retain truthful readiness observations without disk writes."""
     key=(settings.model,settings.model_digest,settings.compute_mode);start=time.monotonic()
     def record(**fields):
@@ -347,6 +363,10 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
     stamp=lambda:datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
     global _active_priority, _active_owner, _manual_waiters
     if priority not in {'manual','background'}:raise AIProviderError('POLICY_REJECTION')
+    if deadline is not None and (type(deadline) not in (int, float) or not math.isfinite(deadline)):
+        raise AIProviderError('POLICY_REJECTION')
+    if deadline is not None and time.monotonic() >= deadline:
+        raise AIProviderError('REQUEST_TIMEOUT')
     operator = getattr(_request_context, 'operator', None)
     if operator is not None and owner is None:
         owner = OPERATOR_OWNER
@@ -357,7 +377,8 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
         if wait:
             _manual_waiters+=1
             _active_cancel.set()
-    acquired = _generation_lock.acquire(timeout=5) if wait else _generation_lock.acquire(blocking=False)
+    wait_seconds = 5 if deadline is None else min(5, max(0, deadline - time.monotonic()))
+    acquired = _generation_lock.acquire(timeout=wait_seconds) if wait else _generation_lock.acquire(blocking=False)
     with _priority_lock:
         if wait:_manual_waiters-=1
         if acquired:
@@ -368,13 +389,18 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
             if operator is not None and operator.is_set():
                 _active_cancel.set()
     if not acquired:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise AIProviderError('REQUEST_TIMEOUT')
         raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
     _request_context.cancel=_active_cancel
     record(running=True,started_at=stamp(),timeout_seconds=settings.timeout_seconds)
     try:
         if _active_cancel.is_set():
             raise AIProviderError('REQUEST_CANCELLED')
-        result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format,choices=choices)
+        if deadline is not None and time.monotonic() >= deadline:
+            raise AIProviderError('REQUEST_TIMEOUT')
+        result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format,
+                         choices=choices,deadline=deadline)
     except AIProviderError as exc:
         # A competing request must not erase the result of an active invocation.
         if exc.code!='CONCURRENCY_LIMIT_REACHED':
