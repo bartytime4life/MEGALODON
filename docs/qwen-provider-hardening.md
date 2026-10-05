@@ -185,7 +185,8 @@ print(json.dumps(qwen_provider_posture(), indent=2, default=dict))
 | Field | Expected observation | What it would mean if wrong |
 | --- | --- | --- |
 | `listening` | `"yes"` | Ollama did not start, or is on a different port than MEGALODON expects |
-| `loopback_only` | `true` | The service is reachable beyond loopback — recheck `IPAddressAllow`/`-p` above |
+| `loopback_only` | `true` | `false`: the service is reachable beyond loopback — recheck `IPAddressAllow`/`-p` above. `null`: a table in `tables` was not fully read |
+| `tables[].status` | `"complete"`, or `"ipv6_stack_absent"` for IPv6 on a host with no IPv6 stack | `"missing"`, `"unreadable"`, `"truncated"`, or `"not_examined"` leaves `loopback_only` inconclusive |
 | `bindings[].uid_matches_self` | Recipe A: `false`; Recipe B: may be `true` or unavailable | Recipe A lacks the intended identity separation; Recipe B never claimed it |
 | `owning_process.resolution` | usually `"permission_denied"` | A `"resolved"` result here is expected only if you ran the check as the same user/root as Ollama; it is not itself a finding |
 

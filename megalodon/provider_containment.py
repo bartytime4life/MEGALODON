@@ -11,7 +11,8 @@ It never blocks, gates, delays, or authorizes an advisory request:
 feeds back into whether a request is sent. It launches no process, contacts
 no network destination (including the provider itself), and changes nothing
 on the host. Everything it reports comes from parsing `/proc/net/tcp`,
-`/proc/net/tcp6`, and, best-effort, `/proc/<pid>/fd`, `/proc/<pid>/ns/net`,
+`/proc/net/tcp6`, checking whether `/proc/net/if_inet6` and
+`/proc/sys/net/ipv6` exist, and, best-effort, `/proc/<pid>/fd`, `/proc/<pid>/ns/net`,
 and `/proc/<pid>/cgroup` for whichever process (if any) a non-root caller has
 permission to inspect.
 
@@ -38,18 +39,28 @@ from typing import Any
 from .offline.common import require_unprivileged_linux
 from .qwen_advisory import LOOPBACK_HOST, LOOPBACK_PORT
 
-SCHEMA_VERSION = "megalodon-qwen-provider-posture-v1"
+SCHEMA_VERSION = "megalodon-qwen-provider-posture-v2"
 OBSERVATION_MODE = "read_only_proc_introspection"
 MAX_ELAPSED_SECONDS = 5
 MAX_BINDINGS = 16
 MAX_PID_SCAN = 8_192
 
 _TCP_TABLES = (("ipv4", "/proc/net/tcp", 4), ("ipv6", "/proc/net/tcp6", 16))
+# A kernel booted with `ipv6.disable=1` (and some containers) has no IPv6
+# stack in this network namespace, so none of these procfs entries exist.
+# Only when every one of them is absent, and `/proc/net/tcp6` itself is
+# missing, can an empty IPv6 table be known rather than assumed.
+_IPV6_STACK_MARKERS = ("/proc/net/if_inet6", "/proc/sys/net/ipv6")
 _LISTEN_STATE = "0A"
+# Table statuses that mean every listener in that family was examined.
+_COMPLETE_TABLE_STATUSES = frozenset({"complete", "ipv6_stack_absent"})
 
 CAVEATS = (
     "Read-only /proc introspection only; nothing here blocks, gates, or authorizes an advisory request.",
     "A permission-denied or inconclusive lookup is reported as such, never treated as absence of exposure.",
+    "A missing /proc/net/tcp6 counts as an empty IPv6 table only when /proc/net/if_inet6 and"
+    " /proc/sys/net/ipv6 are also missing (no IPv6 stack in this network namespace); any other"
+    " missing or unreadable table stays inconclusive.",
     "This does not prove the listening process is genuinely Ollama, model provenance, or resource containment.",
     "Only the exact configured host/port is inspected; this is not a general port or process scanner.",
     "PID and namespace resolution require the same UID as the target process or CAP_SYS_PTRACE; a hardened,"
@@ -79,12 +90,23 @@ def _parse_address(hex_addr: str, byte_length: int) -> str | None:
 
 def _read_bindings(
     path: str, family: str, byte_length: int, port: int, limit: int,
-) -> tuple[list[dict[str, Any]], bool]:
-    """Return matching listeners and whether the whole table was examined."""
+) -> tuple[list[dict[str, Any]], str]:
+    """Return matching listeners and how much of the table was examined.
+
+    The status is `"complete"`, `"truncated"` (binding cap reached),
+    `"missing"` (the table does not exist), or `"unreadable"` (any other
+    open or read failure, including a partial read).
+    """
     bindings: list[dict[str, Any]] = []
-    complete = True
+    status = "complete"
     try:
-        with open(path, "r", encoding="ascii", errors="replace") as handle:
+        handle = open(path, "r", encoding="ascii", errors="replace")
+    except FileNotFoundError:
+        return bindings, "missing"
+    except OSError:
+        return bindings, "unreadable"
+    try:
+        with handle:
             next(handle, None)  # header
             for line in handle:
                 fields = line.split()
@@ -120,11 +142,24 @@ def _read_bindings(
                     "_inode": inode,
                 })
                 if len(bindings) >= limit:
-                    complete = False
+                    status = "truncated"
                     break
     except OSError:
-        return bindings, False
-    return bindings, complete
+        return bindings, "unreadable"
+    return bindings, status
+
+
+def _ipv6_stack_absent() -> bool:
+    """True only if every IPv6 procfs marker is affirmatively missing."""
+    for marker in _IPV6_STACK_MARKERS:
+        try:
+            os.stat(marker)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return False
+        return False
+    return True
 
 
 def _find_owning_pid(inode: str, deadline: float) -> tuple[str, int | None]:
@@ -219,16 +254,20 @@ def qwen_provider_posture(
     checked_at = _fmt(datetime.now(timezone.utc))
 
     raw_bindings: list[dict[str, Any]] = []
-    tables_complete = True
+    tables: list[Mapping[str, str]] = []
     for family, path, byte_length in _TCP_TABLES:
         remaining = MAX_BINDINGS - len(raw_bindings)
         if remaining <= 0:
-            break
-        table_bindings, table_readable = _read_bindings(
-            path, family, byte_length, port, remaining,
-        )
-        raw_bindings.extend(table_bindings)
-        tables_complete = tables_complete and table_readable
+            table_status = "not_examined"
+        else:
+            table_bindings, table_status = _read_bindings(
+                path, family, byte_length, port, remaining,
+            )
+            raw_bindings.extend(table_bindings)
+            if table_status == "missing" and family == "ipv6" and _ipv6_stack_absent():
+                table_status = "ipv6_stack_absent"
+        tables.append(MappingProxyType({"family": family, "status": table_status}))
+    tables_complete = all(t["status"] in _COMPLETE_TABLE_STATUSES for t in tables)
 
     if raw_bindings:
         listening = "yes"
@@ -274,6 +313,7 @@ def qwen_provider_posture(
         "observation_mode": OBSERVATION_MODE,
         "target": MappingProxyType({"host": host, "port": port}),
         "listening": listening,
+        "tables": tuple(tables),
         "bindings": bindings,
         "loopback_only": loopback_only,
         "owning_process": owning_process,

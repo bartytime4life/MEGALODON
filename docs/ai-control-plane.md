@@ -42,7 +42,13 @@ completion model for the HUD and backend. Provider destination remains fixed.
 CPU compute is the default; automatic compute is an explicit operator choice.
 
 Before every inference, the adapter observes `/proc/net/tcp{,6}` and refuses
-an absent, non-loopback, or inconclusive listener; it then checks the exact tag
+an absent, non-loopback, or inconclusive listener. A missing `/proc/net/tcp6`
+counts as an empty IPv6 table only when `/proc/net/if_inet6` and
+`/proc/sys/net/ipv6` are also missing, which is what a kernel booted with
+`ipv6.disable=1` (or a network namespace with no IPv6 stack) looks like. The
+posture's `tables` field then reports `ipv6_stack_absent`. Any other missing,
+permission-denied, or partially read table stays inconclusive and is refused.
+It then checks the exact tag
 digest using one bounded `GET /api/tags`, then checks `/api/show` for local GGUF
 completion capabilities and rejects cloud model references. Inference uses one non-streaming
 `POST /api/generate` on the existing literal-loopback transport with no proxy,

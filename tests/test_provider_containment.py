@@ -115,6 +115,10 @@ def test_result_is_a_fully_immutable_snapshot() -> None:
     with pytest.raises(TypeError):
         result["listening"] = "yes"  # type: ignore[index]
     assert isinstance(result["bindings"], tuple)
+    assert isinstance(result["tables"], tuple)
+    for table in result["tables"]:
+        with pytest.raises(TypeError):
+            table["status"] = "complete"  # type: ignore[index]
     for binding in result["bindings"]:
         with pytest.raises(TypeError):
             binding["uid"] = 0  # type: ignore[index]
@@ -128,7 +132,7 @@ def test_result_is_json_serializable_and_closed_shape() -> None:
     decoded = json.loads(encoded)
     assert set(decoded) == {
         "schema_version", "checked_at", "observation_mode", "target",
-        "listening", "bindings", "loopback_only", "owning_process", "caveats",
+        "listening", "tables", "bindings", "loopback_only", "owning_process", "caveats",
     }
     assert decoded["schema_version"] == pc.SCHEMA_VERSION
     assert decoded["listening"] in {"yes", "no", "unknown"}
@@ -175,10 +179,16 @@ def test_partial_tables_never_claim_loopback_only(tmp_path, monkeypatch) -> None
         ("ipv4", str(tcp_table), 4),
         ("ipv6", "/nonexistent/tcp6", 16),
     ))
+    # Keep this independent of whether the test host itself has IPv6.
+    monkeypatch.setattr(pc, "_IPV6_STACK_MARKERS", (str(tcp_table),))
 
     result = pc.qwen_provider_posture(host="127.0.0.1", port=port)
     assert result["listening"] == "yes"
     assert result["loopback_only"] is None
+    assert [dict(t) for t in result["tables"]] == [
+        {"family": "ipv4", "status": "complete"},
+        {"family": "ipv6", "status": "missing"},
+    ]
 
 
 def test_binding_cap_never_claims_complete_loopback_scope(tmp_path, monkeypatch) -> None:
@@ -255,6 +265,147 @@ def test_observed_exposure_survives_incomplete_snapshot(monkeypatch, incomplete)
     assert result['loopback_only'] is False
     assert len(result['bindings']) == 1
     assert result['bindings'][0]['address'] == '0.0.0.0'
+
+
+# --- IPv6 stack absent from this network namespace -------------------------
+
+_IPV6_PORT = 48_768
+
+
+def _ipv4_table(tmp_path, address_hex: str) -> Path:
+    table = tmp_path / "tcp"
+    table.write_text(
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        f"   0: {address_hex}:{_IPV6_PORT:04X} 00000000:0000 0A 00000000:00000000 "
+        f"00:00000000 00000000 {pc.os.geteuid()} 0 12349\n",
+        encoding="ascii",
+    )
+    return table
+
+
+def _ipv6_procfs(monkeypatch, tmp_path, ipv4_table: Path, *, tcp6: Path | None = None,
+                 if_inet6: bool = False, sys_ipv6: bool = False) -> None:
+    """Point the observer at a synthetic procfs whose IPv6 entries may be absent."""
+    markers = (tmp_path / "if_inet6", tmp_path / "sys_net_ipv6")
+    if if_inet6:
+        markers[0].write_text("", encoding="ascii")
+    if sys_ipv6:
+        markers[1].mkdir()
+    monkeypatch.setattr(pc, "_TCP_TABLES", (
+        ("ipv4", str(ipv4_table), 4),
+        ("ipv6", str(tcp6 or tmp_path / "tcp6"), 16),
+    ))
+    monkeypatch.setattr(pc, "_IPV6_STACK_MARKERS", tuple(str(m) for m in markers))
+
+
+def test_absent_ipv6_stack_allows_loopback_only_ipv4_listener(tmp_path, monkeypatch) -> None:
+    _ipv6_procfs(monkeypatch, tmp_path, _ipv4_table(tmp_path, "0100007F"))
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["listening"] == "yes"
+    assert result["loopback_only"] is True
+    assert [dict(t) for t in result["tables"]] == [
+        {"family": "ipv4", "status": "complete"},
+        {"family": "ipv6", "status": "ipv6_stack_absent"},
+    ]
+
+
+def test_absent_ipv6_stack_still_reports_non_loopback_ipv4_exposure(tmp_path, monkeypatch) -> None:
+    _ipv6_procfs(monkeypatch, tmp_path, _ipv4_table(tmp_path, "00000000"))
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["listening"] == "yes"
+    assert result["loopback_only"] is False
+    assert result["bindings"][0]["address"] == "0.0.0.0"
+    assert result["tables"][1]["status"] == "ipv6_stack_absent"
+
+
+def test_absent_ipv6_stack_with_no_listener_is_no(tmp_path, monkeypatch) -> None:
+    table = _ipv4_table(tmp_path, "0100007F")
+    _ipv6_procfs(monkeypatch, tmp_path, table)
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT + 1)
+    assert result["listening"] == "no"
+    assert result["loopback_only"] is None
+
+
+@pytest.mark.parametrize(("if_inet6", "sys_ipv6"), [(True, False), (False, True), (True, True)])
+def test_missing_tcp6_with_any_ipv6_marker_present_stays_inconclusive(
+    tmp_path, monkeypatch, if_inet6, sys_ipv6,
+) -> None:
+    _ipv6_procfs(monkeypatch, tmp_path, _ipv4_table(tmp_path, "0100007F"),
+                 if_inet6=if_inet6, sys_ipv6=sys_ipv6)
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["listening"] == "yes"
+    assert result["loopback_only"] is None
+    assert result["tables"][1]["status"] == "missing"
+
+
+def test_permission_denied_tcp6_stays_inconclusive_even_without_markers(tmp_path, monkeypatch) -> None:
+    ipv4_table = _ipv4_table(tmp_path, "0100007F")
+    tcp6 = tmp_path / "tcp6"
+    _ipv6_procfs(monkeypatch, tmp_path, ipv4_table, tcp6=tcp6)
+    real_open = open
+
+    def open_denying_tcp6(path, *args, **kwargs):
+        if path == str(tcp6):
+            raise PermissionError("simulated proc denial")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", open_denying_tcp6)
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["listening"] == "yes"
+    assert result["loopback_only"] is None
+    assert result["tables"][1]["status"] == "unreadable"
+
+
+def test_permission_denied_ipv6_marker_stays_inconclusive(tmp_path, monkeypatch) -> None:
+    _ipv6_procfs(monkeypatch, tmp_path, _ipv4_table(tmp_path, "0100007F"))
+    denied_marker = pc._IPV6_STACK_MARKERS[1]
+    real_stat = pc.os.stat
+
+    def stat_denying_marker(path, *args, **kwargs):
+        if path == denied_marker:
+            raise PermissionError("simulated proc denial")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(pc.os, "stat", stat_denying_marker)
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["loopback_only"] is None
+    assert result["tables"][1]["status"] == "missing"
+
+
+def test_partially_read_tcp6_stays_inconclusive_even_without_markers(tmp_path, monkeypatch) -> None:
+    import io
+
+    class FailingTable(io.StringIO):
+        def __next__(self):
+            raise OSError("synthetic read failure")
+
+    ipv4_table = _ipv4_table(tmp_path, "0100007F")
+    tcp6 = tmp_path / "tcp6"
+    _ipv6_procfs(monkeypatch, tmp_path, ipv4_table, tcp6=tcp6)
+    real_open = open
+
+    def open_failing_tcp6(path, *args, **kwargs):
+        if path == str(tcp6):
+            return FailingTable("header\n")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", open_failing_tcp6)
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["loopback_only"] is None
+    assert result["tables"][1]["status"] == "unreadable"
+
+
+def test_missing_ipv4_table_is_never_excused_by_absent_ipv6_stack(tmp_path, monkeypatch) -> None:
+    _ipv6_procfs(monkeypatch, tmp_path, tmp_path / "missing_tcp")
+
+    result = pc.qwen_provider_posture(host="127.0.0.1", port=_IPV6_PORT)
+    assert result["listening"] == "unknown"
+    assert result["loopback_only"] is None
+    assert [t["status"] for t in result["tables"]] == ["missing", "ipv6_stack_absent"]
 
 
 @pytest.mark.parametrize(("host", "port"), [
