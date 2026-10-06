@@ -204,10 +204,15 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
             or settings.compute_mode not in ("cpu", "auto")
             or type(settings.max_context) is not int or not 256 <= settings.max_context <= 4096):
         raise AIProviderError("POLICY_REJECTION")
+    if deadline is not None and time.monotonic() >= deadline:
+        raise AIProviderError("REQUEST_TIMEOUT")
     try:
-        posture = qwen_provider_posture()
+        posture = qwen_provider_posture(deadline=deadline)
     except (OSError, ValueError):
         raise AIProviderError("POLICY_REJECTION") from None
+    # A scan cut short by the caller's deadline is a timeout, not a posture finding.
+    if deadline is not None and time.monotonic() >= deadline:
+        raise AIProviderError("REQUEST_TIMEOUT")
     if posture["listening"] == "no":
         raise AIProviderError("OLLAMA_UNAVAILABLE")
     if posture["loopback_only"] is not True:

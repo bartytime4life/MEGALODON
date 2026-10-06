@@ -75,9 +75,9 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     import megalodon.ai_provider as provider
 
     assert status(AISettings(enabled=False), probe=False)["ollama_available"] is None
-    monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "no", "loopback_only": None})
+    monkeypatch.setattr(provider, "qwen_provider_posture", lambda **_: {"listening": "no", "loopback_only": None})
     assert status(AISettings(enabled=True))["state"] == "ollama_unavailable"
-    monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": True})
+    monkeypatch.setattr(provider, "qwen_provider_posture", lambda **_: {"listening": "yes", "loopback_only": True})
     monkeypatch.setattr(provider, "_request", lambda path, *_, **__: json.dumps({"models": []}).encode())
     assert status(AISettings(enabled=True))["state"] == "model_missing"
 
@@ -119,7 +119,7 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     monkeypatch.setattr(provider, "_request",
                          lambda *_, **__: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_CONTROL_UNAVAILABLE")))
     assert status(AISettings(enabled=True))["state"] == "concurrency_unavailable"
-    monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": False})
+    monkeypatch.setattr(provider, "qwen_provider_posture", lambda **_: {"listening": "yes", "loopback_only": False})
     assert status(AISettings(enabled=True))["state"] == "policy_rejection"
 
 
@@ -311,8 +311,13 @@ def test_background_lock_wait_leaves_only_remaining_time_for_admission_and_gener
 
     monkeypatch.setattr(provider, "_generation_lock", ContendedLock())
     monkeypatch.setattr(provider, "_active_priority", "background")
-    monkeypatch.setattr(provider, "qwen_provider_posture",
-                        lambda: {"listening": "yes", "loopback_only": True})
+    postures = []
+
+    def posture(*, deadline):
+        postures.append(deadline)
+        return {"listening": "yes", "loopback_only": True}
+
+    monkeypatch.setattr(provider, "qwen_provider_posture", posture)
     calls = []
 
     def fake_request(path, method, body, timeout, *, deadline):
@@ -333,6 +338,44 @@ def test_background_lock_wait_leaves_only_remaining_time_for_admission_and_gener
     assert [path for path, _, _ in calls] == ["/api/tags", "/api/show", "/api/generate"]
     assert [timeout for _, timeout, _ in calls] == pytest.approx([0.35, 0.25, 0.15])
     assert [deadline for _, _, deadline in calls] == [100.75] * 3
+    assert postures == [100.75]
+
+
+@pytest.mark.parametrize("posture", [
+    {"listening": "yes", "loopback_only": True},
+    {"listening": "unknown", "loopback_only": None},
+])
+def test_posture_scan_that_spends_question_deadline_is_a_timeout(monkeypatch, posture):
+    from types import SimpleNamespace
+    from megalodon import ai_provider as provider
+
+    clock = SimpleNamespace(now=100.0)
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock.now))
+    seen = []
+
+    def slow_posture(*, deadline):
+        seen.append(deadline)
+        clock.now = deadline
+        return posture
+
+    monkeypatch.setattr(provider, "qwen_provider_posture", slow_posture)
+    monkeypatch.setattr(provider, "_request", lambda *_, **__: pytest.fail("expired question reached provider"))
+    with pytest.raises(AIProviderError) as raised:
+        provider._admitted(AISettings(enabled=True), 100.5)
+    assert raised.value.code == "REQUEST_TIMEOUT"
+    assert seen == [100.5]
+
+
+def test_spent_deadline_skips_posture_scan(monkeypatch):
+    from types import SimpleNamespace
+    from megalodon import ai_provider as provider
+
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: 100.0))
+    monkeypatch.setattr(provider, "qwen_provider_posture",
+                        lambda **_: pytest.fail("expired question scanned provider posture"))
+    with pytest.raises(AIProviderError) as raised:
+        provider._admitted(AISettings(enabled=True), 100.0)
+    assert raised.value.code == "REQUEST_TIMEOUT"
 
 
 def test_provider_request_never_connects_after_deadline_spent_on_process_lock(monkeypatch):
@@ -357,7 +400,7 @@ def test_provider_request_never_connects_after_deadline_spent_on_process_lock(mo
 
 def test_ai_outage_does_not_break_core_reader(monkeypatch, broker):
     import megalodon.ai_provider as provider
-    monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "no", "loopback_only": None})
+    monkeypatch.setattr(provider, "qwen_provider_posture", lambda **_: {"listening": "no", "loopback_only": None})
     assert status(AISettings(enabled=True))["state"] == "ollama_unavailable"
     assert broker.reader.summary()["events"] == 4
 
@@ -525,7 +568,7 @@ def test_external_head_is_required_to_detect_a_complete_local_rewrite(broker):
 def test_tool_selection_is_schema_constrained_to_permitted_tools(monkeypatch):
     import megalodon.ai_provider as provider
     sent = []
-    monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": True})
+    monkeypatch.setattr(provider, "qwen_provider_posture", lambda **_: {"listening": "yes", "loopback_only": True})
 
     def fake(path, method, body, timeout, **_kwargs):
         if path == '/api/show':

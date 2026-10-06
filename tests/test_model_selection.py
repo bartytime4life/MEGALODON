@@ -17,7 +17,7 @@ def model_provider(monkeypatch):
     model='llama3.2:3b';digest='b'*64;requests=[]
     settings=AISettings(enabled=True,model=model,model_digest=digest)
     state=dict(details={'details':{'format':'gguf'},'capabilities':['completion']},reply='READY',digest=digest)
-    monkeypatch.setattr(provider,'qwen_provider_posture',lambda:{'listening':'yes','loopback_only':True})
+    monkeypatch.setattr(provider,'qwen_provider_posture',lambda **_:{'listening':'yes','loopback_only':True})
     def request(path,method,body,timeout,*,deadline=None):
         data=json.loads(body) if body else None;requests.append((path,method,data))
         if path=='/api/tags':return json.dumps({'models':[dict(name=model,digest=state['digest'],size=2**30,details={'format':'gguf'})]}).encode()
