@@ -18,7 +18,7 @@ def model_provider(monkeypatch):
     settings=AISettings(enabled=True,model=model,model_digest=digest)
     state=dict(details={'details':{'format':'gguf'},'capabilities':['completion']},reply='READY',digest=digest)
     monkeypatch.setattr(provider,'qwen_provider_posture',lambda:{'listening':'yes','loopback_only':True})
-    def request(path,method,body,timeout):
+    def request(path,method,body,timeout,*,deadline=None):
         data=json.loads(body) if body else None;requests.append((path,method,data))
         if path=='/api/tags':return json.dumps({'models':[dict(name=model,digest=state['digest'],size=2**30,details={'format':'gguf'})]}).encode()
         if path=='/api/show':return json.dumps(state['details']).encode()
@@ -191,8 +191,8 @@ def test_long_budget_keeps_metadata_fast_and_rejects_unbounded_requests(model_pr
     settings,_,_=model_provider
     assert settings.timeout_seconds==300
     seen=[];original=provider._request
-    def request(path,method,body,timeout):
-        seen.append((path,timeout));return original(path,method,body,timeout)
+    def request(path,method,body,timeout,*,deadline=None):
+        seen.append((path,timeout));return original(path,method,body,timeout,deadline=deadline)
     monkeypatch.setattr(provider,'_request',request)
     assert provider.generate(replace(settings,timeout_seconds=1800),'READY')=='READY'
     assert all(seconds<=3 for path,seconds in seen if path!='/api/generate')

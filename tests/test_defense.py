@@ -42,7 +42,7 @@ def test_analysis_uses_real_provider_contract_without_model_authority(manager,mo
     from megalodon import ai_provider
     defense,calls,_=manager
     monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda:{'listening':'yes','loopback_only':True})
-    def transport(path,method,body,timeout):
+    def transport(path,method,body,timeout,*,deadline=None):
         if path == '/api/show':
             return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
         if path=='/api/tags':
