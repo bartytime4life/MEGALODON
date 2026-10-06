@@ -52,8 +52,8 @@ def doctor_environment(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "_load", lambda _: state["settings"])
     monkeypatch.setattr(ai_broker, "ReceiptStore", MemoryReceipts)
-    monkeypatch.setattr(provider_containment, "qwen_provider_posture", lambda: state["posture"])
-    monkeypatch.setattr(ai_provider, "qwen_provider_posture", lambda: state["posture"])
+    monkeypatch.setattr(provider_containment, "qwen_provider_posture", lambda **_: state["posture"])
+    monkeypatch.setattr(ai_provider, "qwen_provider_posture", lambda **_: state["posture"])
     monkeypatch.setattr(subprocess, "run", diagnostic)
     monkeypatch.setattr(shutil, "which", lambda _: None)
     return state

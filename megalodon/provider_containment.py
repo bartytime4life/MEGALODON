@@ -30,6 +30,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime, timezone
 import ipaddress
+import math
 import os
 import socket
 import time
@@ -229,6 +230,7 @@ def _process_details(pid: int) -> Mapping[str, Any]:
 
 def qwen_provider_posture(
     *, host: str = LOOPBACK_HOST, port: int = LOOPBACK_PORT,
+    deadline: float | None = None,
 ) -> Mapping[str, Any]:
     """Observe, without contacting or gating, whatever is bound to `host:port`.
 
@@ -241,6 +243,10 @@ def qwen_provider_posture(
     representative socket's inode, since a dual-stack listener normally
     presents one process across two address families.
 
+    `deadline` is an optional absolute `time.monotonic()` value from the
+    caller; the process scan stops at whichever comes first, it or this
+    module's own `MAX_ELAPSED_SECONDS` budget.
+
     Returns a closed, versioned Mapping; this function does not raise for
     any observational outcome (missing provider, permission denial, an
     unreadable `/proc`) — those are all reported fields, not exceptions.
@@ -248,9 +254,12 @@ def qwen_provider_posture(
     require_unprivileged_linux()
     if type(host) is not str or type(port) is not int or not 1 <= port <= 65_535:
         raise ValueError("PROVIDER_CONTAINMENT:INVALID_TARGET")
+    if deadline is not None and (type(deadline) not in (int, float) or not math.isfinite(deadline)):
+        raise ValueError("PROVIDER_CONTAINMENT:INVALID_DEADLINE")
 
     started = time.monotonic()
-    deadline = started + MAX_ELAPSED_SECONDS
+    budget = started + MAX_ELAPSED_SECONDS
+    deadline = budget if deadline is None else min(budget, deadline)
     checked_at = _fmt(datetime.now(timezone.utc))
 
     raw_bindings: list[dict[str, Any]] = []

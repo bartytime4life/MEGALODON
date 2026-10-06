@@ -408,6 +408,54 @@ def test_missing_ipv4_table_is_never_excused_by_absent_ipv6_stack(tmp_path, monk
     assert [t["status"] for t in result["tables"]] == ["missing", "ipv6_stack_absent"]
 
 
+def test_caller_deadline_bounds_the_pid_scan(monkeypatch) -> None:
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+
+        clock = [100.0]
+        monkeypatch.setattr(pc.time, "monotonic", lambda: clock[0])
+        real_listdir = pc.os.listdir
+
+        def slow_listdir(path, *args, **kwargs):
+            if path != "/proc":
+                clock[0] += 1.0
+                return []
+            return real_listdir(path, *args, **kwargs)
+
+        monkeypatch.setattr(pc.os, "listdir", slow_listdir)
+        result = pc.qwen_provider_posture(host="127.0.0.1", port=port, deadline=101.5)
+        assert result["owning_process"]["resolution"] == "timeout"
+        # The scan stopped at the caller's deadline, well inside the module's own budget.
+        assert clock[0] == 102.0 < 100.0 + pc.MAX_ELAPSED_SECONDS
+        assert result["loopback_only"] is True
+    finally:
+        server.close()
+
+
+def test_spent_caller_deadline_skips_the_pid_scan(monkeypatch) -> None:
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+
+        monkeypatch.setattr(pc.time, "monotonic", lambda: 100.0)
+        result = pc.qwen_provider_posture(host="127.0.0.1", port=port, deadline=100.0)
+        assert result["owning_process"]["resolution"] == "not_attempted"
+        assert result["listening"] == "yes"
+    finally:
+        server.close()
+
+
+@pytest.mark.parametrize("deadline", [True, float("nan"), float("inf"), "100"])
+def test_invalid_deadline_is_rejected(deadline) -> None:
+    with pytest.raises(ValueError):
+        pc.qwen_provider_posture(deadline=deadline)
+
+
 @pytest.mark.parametrize(("host", "port"), [
     (127001, 11434),
     ("127.0.0.1", 0),
