@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 import time
-from dataclasses import replace
 from typing import Any
 
 from .ai_broker import Broker, BrokerError, TOOLS
@@ -51,12 +49,11 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
     deadline = time.monotonic() + QUESTION_TIMEOUT_SECONDS
 
     def question_settings():
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
+        if time.monotonic() >= deadline:
             raise AIProviderError("REQUEST_TIMEOUT")
         # Both model calls share one question budget, regardless of the
         # configured timeout for readiness and other AI operations.
-        return replace(broker.ai, timeout_seconds=min(QUESTION_TIMEOUT_SECONDS, math.ceil(remaining)))
+        return broker.ai
 
     catalog = [{"name": name, "purpose": TOOLS[name].purpose} for name in sorted(permitted)]
     selection_prompt = (
@@ -69,7 +66,8 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
         + json.dumps({"question": question, "tools": catalog}, separators=(",", ":"))
     )
     selection = generate(question_settings(), selection_prompt, max_tokens=128,
-                         response_format="selection", choices=tuple(sorted(permitted)))
+                         response_format="selection", choices=tuple(sorted(permitted)),
+                         deadline=deadline)
     try:
         request = _selection(selection)
     except (ValueError, TypeError, RecursionError):
@@ -100,7 +98,8 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
                      sort_keys=True, separators=(",", ":"))
     )
     try:
-        result["inferred"] = generate(question_settings(), answer_prompt, max_tokens=256)
+        result["inferred"] = generate(question_settings(), answer_prompt, max_tokens=256,
+                                      deadline=deadline)
     except AIProviderError as exc:
         result["error_code"] = exc.code
     return result

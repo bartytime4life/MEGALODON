@@ -78,10 +78,10 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "no", "loopback_only": None})
     assert status(AISettings(enabled=True))["state"] == "ollama_unavailable"
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": True})
-    monkeypatch.setattr(provider, "_request", lambda path, *_: json.dumps({"models": []}).encode())
+    monkeypatch.setattr(provider, "_request", lambda path, *_, **__: json.dumps({"models": []}).encode())
     assert status(AISettings(enabled=True))["state"] == "model_missing"
 
-    def fake(path, method, body, timeout):
+    def fake(path, method, body, timeout, **_kwargs):
         if path == '/api/show':
             return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
         if path == "/api/tags":
@@ -94,7 +94,7 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     monkeypatch.setattr(provider, "_request", fake)
     assert status(AISettings(enabled=True))["state"] == "model_ready"
 
-    def wrong_challenge(path, method, body, timeout):
+    def wrong_challenge(path, method, body, timeout, **_kwargs):
         if path == '/api/show':
             return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
         if path == "/api/tags":
@@ -105,11 +105,11 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     monkeypatch.setattr(provider, "_request", wrong_challenge)
     wrong = status(AISettings(enabled=True))
     assert wrong["state"] == "invalid_response" and wrong["inference_verified"] is False
-    monkeypatch.setattr(provider, "_request", lambda *_: b"not json")
+    monkeypatch.setattr(provider, "_request", lambda *_, **__: b"not json")
     assert status(AISettings(enabled=True))["state"] == "invalid_response"
-    monkeypatch.setattr(provider, "_request", lambda *_: (_ for _ in ()).throw(AIProviderError("REQUEST_TIMEOUT")))
+    monkeypatch.setattr(provider, "_request", lambda *_, **__: (_ for _ in ()).throw(AIProviderError("REQUEST_TIMEOUT")))
     assert status(AISettings(enabled=True))["state"] == "request_timeout"
-    monkeypatch.setattr(provider, "_request", lambda *_: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_LIMIT_REACHED")))
+    monkeypatch.setattr(provider, "_request", lambda *_, **__: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_LIMIT_REACHED")))
     assert status(AISettings(enabled=True))["state"] == "model_loading"
     # A failure to establish the local concurrency lock (unsupported platform,
     # missing fcntl, a non-directory lock path) is a distinct local-platform
@@ -117,7 +117,7 @@ def test_provider_outage_missing_model_ready_and_invalid_response(monkeypatch):
     # requested. Collapsing it into "invalid_response" previously told an
     # operator the wrong story about where to look.
     monkeypatch.setattr(provider, "_request",
-                         lambda *_: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_CONTROL_UNAVAILABLE")))
+                         lambda *_, **__: (_ for _ in ()).throw(AIProviderError("CONCURRENCY_CONTROL_UNAVAILABLE")))
     assert status(AISettings(enabled=True))["state"] == "concurrency_unavailable"
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": False})
     assert status(AISettings(enabled=True))["state"] == "policy_rejection"
@@ -215,6 +215,7 @@ def test_model_selects_only_question_allowed_tool_and_payload_stays_out(monkeypa
     assert answer["evidence_references"] == ["finding:12"]
     assert "NEVER SEND THIS PACKET PAYLOAD" not in " ".join(prompts)
     # Selection decoding is constrained to exactly this question's tools.
+    assert options[0].pop("deadline") == options[1].pop("deadline")
     assert options[0] == {"response_format": "selection", "choices": (
         "megalodon.alerts.query", "megalodon.knowledge.search", "megalodon.patterns.status")}
     assert options[1] == {}
@@ -229,17 +230,17 @@ def test_model_selects_only_question_allowed_tool_and_payload_stays_out(monkeypa
 def test_fixed_question_shares_ten_minute_budget_across_model_calls(monkeypatch, broker):
     from types import SimpleNamespace
 
-    ticks = iter((100.0, 100.0, 370.0))
+    ticks = iter((100.2, 100.2, 370.7))
     monkeypatch.setattr("megalodon.ai_interface.time", SimpleNamespace(monotonic=lambda: next(ticks)))
     budgets = []
 
-    def fake_generate(settings, _prompt, *, max_tokens, **_kwargs):
-        budgets.append((settings.timeout_seconds, max_tokens))
+    def fake_generate(settings, _prompt, *, max_tokens, deadline, **_kwargs):
+        budgets.append((settings.timeout_seconds, max_tokens, deadline))
         return json.dumps(request("megalodon.status")) if len(budgets) == 1 else "Bounded advice."
 
     monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
     answer = ask("seeing", broker)
-    assert budgets == [(600, 128), (330, 256)]
+    assert budgets == [(300, 128, 700.2), (300, 256, 700.2)]
     assert answer["execution_state"] == "observed"
     assert answer["inferred"] == "Bounded advice."
 
@@ -257,9 +258,101 @@ def test_fixed_question_reports_timeout_without_late_second_model_call(monkeypat
 
     monkeypatch.setattr("megalodon.ai_interface.generate", fake_generate)
     answer = ask("seeing", broker)
-    assert calls == [(600, 128)]
+    assert calls == [(300, 128)]
     assert answer["execution_state"] == "observed"
     assert answer["inferred"] is None and answer["error_code"] == "REQUEST_TIMEOUT"
+
+
+def test_background_lock_wait_spends_question_deadline_before_admission(monkeypatch):
+    from types import SimpleNamespace
+    from megalodon import ai_provider as provider
+
+    clock = SimpleNamespace(now=100.0)
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock.now))
+
+    class ContendedLock:
+        releases = 0
+
+        def acquire(self, *, timeout):
+            assert timeout == pytest.approx(0.25)
+            clock.now += timeout
+            return True
+
+        def release(self):
+            self.releases += 1
+
+    lock = ContendedLock()
+    monkeypatch.setattr(provider, "_generation_lock", lock)
+    monkeypatch.setattr(provider, "_active_priority", "background")
+    monkeypatch.setattr(provider, "_admitted", lambda *_: pytest.fail("expired question reached admission"))
+    monkeypatch.setattr(provider, "_request", lambda *_, **__: pytest.fail("expired question reached provider"))
+
+    with pytest.raises(AIProviderError) as raised:
+        provider.generate(AISettings(enabled=True), "question", deadline=100.25)
+    assert raised.value.code == "REQUEST_TIMEOUT"
+    assert lock.releases == 1 and provider._manual_waiters == 0
+
+
+def test_background_lock_wait_leaves_only_remaining_time_for_admission_and_generation(monkeypatch):
+    from types import SimpleNamespace
+    from megalodon import ai_provider as provider
+
+    clock = SimpleNamespace(now=100.0)
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock.now))
+
+    class ContendedLock:
+        def acquire(self, *, timeout):
+            assert timeout == pytest.approx(0.75)
+            clock.now += 0.4
+            return True
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(provider, "_generation_lock", ContendedLock())
+    monkeypatch.setattr(provider, "_active_priority", "background")
+    monkeypatch.setattr(provider, "qwen_provider_posture",
+                        lambda: {"listening": "yes", "loopback_only": True})
+    calls = []
+
+    def fake_request(path, method, body, timeout, *, deadline):
+        calls.append((path, timeout, deadline))
+        if path == "/api/tags":
+            clock.now += 0.1
+            return json.dumps({"models": [{"name": AISettings.model,
+                                            "digest": AISettings.model_digest}]}).encode()
+        if path == "/api/show":
+            clock.now += 0.1
+            return json.dumps({"details": {"format": "gguf"},
+                               "capabilities": ["completion"]}).encode()
+        return json.dumps({"model": AISettings.model, "response": "bounded",
+                           "done": True, "done_reason": "stop"}).encode()
+
+    monkeypatch.setattr(provider, "_request", fake_request)
+    assert provider.generate(AISettings(enabled=True), "question", deadline=100.75) == "bounded"
+    assert [path for path, _, _ in calls] == ["/api/tags", "/api/show", "/api/generate"]
+    assert [timeout for _, timeout, _ in calls] == pytest.approx([0.35, 0.25, 0.15])
+    assert [deadline for _, _, deadline in calls] == [100.75] * 3
+
+
+def test_provider_request_never_connects_after_deadline_spent_on_process_lock(monkeypatch):
+    import os
+    from types import SimpleNamespace
+    from megalodon import ai_provider as provider
+
+    clock = SimpleNamespace(now=100.0)
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock.now))
+
+    def process_lock():
+        clock.now += 0.25
+        return os.open("/dev/null", os.O_RDONLY)
+
+    monkeypatch.setattr(provider.transport, "_acquire_process_invocation_lock", process_lock)
+    monkeypatch.setattr(provider.transport, "_LiteralLoopbackHTTPConnection",
+                        lambda *_, **__: pytest.fail("expired request opened a connection"))
+    with pytest.raises(AIProviderError) as raised:
+        provider._request("/api/generate", "POST", b"{}", 0.25, deadline=100.25)
+    assert raised.value.code == "REQUEST_TIMEOUT"
 
 
 def test_ai_outage_does_not_break_core_reader(monkeypatch, broker):
@@ -434,7 +527,7 @@ def test_tool_selection_is_schema_constrained_to_permitted_tools(monkeypatch):
     sent = []
     monkeypatch.setattr(provider, "qwen_provider_posture", lambda: {"listening": "yes", "loopback_only": True})
 
-    def fake(path, method, body, timeout):
+    def fake(path, method, body, timeout, **_kwargs):
         if path == '/api/show':
             return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
         if path == "/api/tags":
