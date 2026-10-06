@@ -111,6 +111,20 @@ def parse_flow(data: dict) -> FlowRecord:
 
 
 def _tsv_value(value: str, field: str) -> object:
+    # Zeek's ASCII writer escapes non-printable bytes as \xXX and a literal
+    # backslash as \\. Check every cell, including fields discarded by parse_flow.
+    index = 0
+    while index < len(value):
+        if value[index] != '\\':
+            index += 1
+            continue
+        if index + 1 < len(value) and value[index + 1] == '\\':
+            index += 2
+        elif (index + 3 < len(value) and value[index + 1] == 'x' and
+              all(char in '0123456789abcdefABCDEF' for char in value[index + 2:index + 4])):
+            index += 4
+        else:
+            raise OfflineError('INVALID_ZEEK_ESCAPE')
     if value == '-':
         return None
     field_type = TYPES[field]

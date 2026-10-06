@@ -2,6 +2,8 @@
 
 Status: **candidate for owner decision; NOT_SELECTED / NOT_QUALIFIED**. Issue [#445](https://github.com/bartytime4life/MEGALODON/issues/445) remains open. This packet is based on MEGALODON `main@664ee48b2731b38641b68585fb81913ca81285b5`. It changes no importer, schema admission, fixture assertion, service, or host setting.
 
+Post-review correction: the TSV refusal claim below covers malformed **cell escape syntax**. Zeek's ASCII escaping uses `\xXX` for non-printable bytes and `\\` for a literal backslash ([Zeek 8.0.10 `escape_string` reference](https://docs.zeek.org/en/v8.0.10/scripts/base/bif/strings.bif.zeek.html)). The parser now validates those forms in every cell, including discarded optional fields. It does not decode escaped bytes into field values; producer-specific value parity remains part of #445. The synthetic parser fixtures in `tests/fixtures/zeek_tsv_escape/` are not output from an owner-selected producer and do not satisfy the digest-bound fixture inventory below.
+
 ## Candidate comparison
 
 | Decision input | Zeek 8.0.10 | Zeek 9.0.0 |

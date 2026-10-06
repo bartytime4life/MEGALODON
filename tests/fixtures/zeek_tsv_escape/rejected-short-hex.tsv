@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	conn
+#open	2026-10-05-12-00-00
+#fields	ts	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	conn_state	orig_pkts	resp_pkts	orig_ip_bytes	resp_ip_bytes	history
+#types	time	addr	port	addr	port	enum	string	count	count	count	count	string
+1788710400.123456	192.0.2.10	40000	198.51.100.20	443	tcp	SF	3	2	180	120	ShAD
+1788710400.123456	192.0.2.10	40000	198.51.100.20	443	tcp	SF	3	2	180	120	Sh\x0
+#close	2026-10-05-12-00-01
