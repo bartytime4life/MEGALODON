@@ -454,6 +454,32 @@ def test_zeek_tsv_fail_closed(tmp_path, unprivileged, alter):
         zeek.replay(str(tmp_path), 'conn.log', format='tsv', producer_version='8.2.2')
 
 
+_ZEEK_ESCAPE_FIXTURES = Path(__file__).parent / 'fixtures' / 'zeek_tsv_escape'
+
+
+def test_zeek_tsv_accepts_documented_escape_syntax(tmp_path, unprivileged):
+    source = _ZEEK_ESCAPE_FIXTURES / 'accepted.tsv'
+    original = source.read_bytes()
+    (tmp_path / 'conn.log').write_bytes(original)
+    result = zeek.replay(str(tmp_path), 'conn.log', format='tsv', producer_version='8.0.10')
+    assert len(result.records) == result.scanned == 3
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize('name', [
+    'rejected-short-hex.tsv', 'rejected-nonhex.tsv',
+    'rejected-unknown.tsv', 'rejected-trailing-backslash.tsv',
+])
+def test_zeek_tsv_rejects_malformed_escape_after_valid_row(tmp_path, unprivileged, name):
+    source = _ZEEK_ESCAPE_FIXTURES / name
+    original = source.read_bytes()
+    (tmp_path / 'conn.log').write_bytes(original)
+    with pytest.raises(OfflineError, match='^INVALID_ZEEK_ESCAPE$'):
+        zeek.replay(str(tmp_path), 'conn.log', format='tsv', producer_version='8.0.10')
+    assert source.read_bytes() == original
+    assert (tmp_path / 'conn.log').read_bytes() == original
+
+
 def test_line_and_record_limits(tmp_path, unprivileged):
     (tmp_path / 'conn.jsonl').write_text((json.dumps(conn()) + '\n') * 2)
     with pytest.raises(OfflineError, match='RECORD_LIMIT'):
