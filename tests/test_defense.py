@@ -41,7 +41,7 @@ def test_model_cannot_apply_even_when_it_proposes_containment(manager):
 def test_analysis_uses_real_provider_contract_without_model_authority(manager,monkeypatch):
     from megalodon import ai_provider
     defense,calls,_=manager
-    monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda:{'listening':'yes','loopback_only':True})
+    monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda **_:{'listening':'yes','loopback_only':True})
     def transport(path,method,body,timeout,*,deadline=None):
         if path == '/api/show':
             return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
