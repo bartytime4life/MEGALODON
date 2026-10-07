@@ -127,14 +127,17 @@ changes the cached model observer so a disabled snapshot returns a local
 `disabled` state, empty options and no availability timestamp without starting
 its catalog worker. Direct disabled refresh also bypasses the catalog, status
 probe and loaded-model calls. If an enabled refresh was queued and the setting
-became disabled before that worker entered, it skips the catalog. The Setup
-refresh result now says no inventory request was made while disabled. Focused
+became disabled before that worker entered, it skips the catalog. The explicit
+Setup **Refresh installed models** action still performs a bounded local
+inventory request, so initial model selection remains possible; its cached
+options do not cause later passive requests. Focused
 deterministic tests trap network, process, file/database and worker effects;
 enabled telemetry tests still exercise the existing bounded catalog behavior.
 A settings lookup failure also resolves locally and clears the pending worker.
 
 This narrows one explicit gap in the earlier matrix. It does not make the
 combined #446 checkbox complete: a request already in progress when settings
-change is not retroactively canceled, enabled provider paths do not consult
-the canonical UNBOUND binding, and the documented doctor/broker/CLI receipt
-effects remain. No model or provider was run for this correction.
+change is not retroactively canceled, the explicit Setup inventory action is
+a visible provider read, enabled provider paths do not consult the canonical
+UNBOUND binding, and the documented doctor/broker/CLI receipt effects remain.
+No model or provider was run for this correction.

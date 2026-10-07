@@ -319,3 +319,26 @@ def test_telemetry_settings_failure_clears_pending_without_catalog(monkeypatch):
         monitor._refresh(replace(AISettings(), enabled=True), None)
     assert monitor._pending is False
     assert monitor._value["state"] == "disabled"
+
+
+def test_disabled_inventory_requires_explicit_refresh_and_stays_cached(monkeypatch):
+    calls = []
+    row = {"name": "local:1", "digest": "a" * 64, "size_bytes": 1}
+
+    def catalog():
+        calls.append("catalog")
+        return [dict(row)]
+
+    monitor = model_telemetry.ModelTelemetry(AISettings, catalog=catalog)
+    with no_effects(monkeypatch):
+        assert monitor.snapshot()["options"] == []
+        assert calls == []
+        monitor.refresh_installed_models()
+        first = monitor.snapshot()
+        assert monitor.snapshot()["options"] == first["options"]
+    assert calls == ["catalog"]
+    assert first["model_state"] == "disabled"
+    assert first["state"] == "needs_setup"
+    assert first["options"] == [row]
+    assert first["updated_at"] is not None
+    assert monitor._thread is None
