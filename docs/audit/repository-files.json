@@ -5516,8 +5516,8 @@
       "path": "docs/site-source-alignment.md",
       "classification": "historical",
       "purpose": "Defense Console source alignment",
-      "bytes": 61285,
-      "sha256": "b48d7d49145dd704f1beee4eddfa9001ab2cadba98ae4675b4b947c823515a1a",
+      "bytes": 64635,
+      "sha256": "fde81b8fce53ee3db9bd3254b0a6ba8fd4c884f94cd47ca1fe87ebf9ecafbc37",
       "dependencies": [
         "audit/source-checkpoint-acceptance.json",
         "clamav-summary-v1.md",
