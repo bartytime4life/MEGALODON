@@ -49,6 +49,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           import sys
           import tempfile
@@ -57,6 +58,9 @@ jobs:
               PRIVATE_DATABASE_MODE,
               StorageSchemaError,
               Store,
+              _open_private_database,
+              _open_private_directory,
+              _writable_sqlite_connection_path,
           )
 
           if sys.platform != "darwin":
@@ -108,6 +112,67 @@ jobs:
               )
               sidecar.unlink()
 
+              for suffix in ("-journal", "-wal", "-shm"):
+                  target = private / f"hardlink-target{suffix}"
+                  target.write_bytes(b"hardlink-sentinel")
+                  target.chmod(PRIVATE_DATABASE_MODE)
+                  sidecar = private / f"audit.db{suffix}"
+                  os.link(target, sidecar)
+                  try:
+                      expect(
+                          f"sidecar-hardlink{suffix}",
+                          "STORAGE_PATH:UNSAFE_DATABASE",
+                          lambda: Store(database, create=False),
+                      )
+                      if target.read_bytes() != b"hardlink-sentinel":
+                          raise SystemExit("MACOS_STORAGE_NEGATIVES:SIDECAR_MUTATED")
+                  finally:
+                      sidecar.unlink()
+                      target.unlink()
+
+              sidecar = private / "audit.db-wal"
+              sidecar.mkdir()
+              try:
+                  expect(
+                      "sidecar-directory",
+                      "STORAGE_PATH:UNSAFE_SIDECAR",
+                      lambda: Store(database, create=False),
+                  )
+              finally:
+                  sidecar.rmdir()
+
+              directory_fd = _open_private_directory(
+                  private, create=False, prefix="STORAGE_PATH"
+              )
+              database_fd = None
+              moved = private / "preconnect-original.db"
+              replacement = b"preconnect-replacement-sentinel"
+              try:
+                  database_fd, _ = _open_private_database(
+                      database, directory_fd, writable=True, create=False,
+                      prefix="STORAGE_PATH",
+                  )
+                  database.rename(moved)
+                  database.write_bytes(replacement)
+                  database.chmod(PRIVATE_DATABASE_MODE)
+                  expect(
+                      "preconnect-replacement",
+                      "STORAGE_PATH:DATABASE_CHANGED",
+                      lambda: _writable_sqlite_connection_path(
+                          database_fd, database, "STORAGE_PATH"
+                      ),
+                  )
+                  if database.read_bytes() != replacement:
+                      raise SystemExit("MACOS_STORAGE_NEGATIVES:REPLACEMENT_MUTATED")
+              finally:
+                  if database_fd is not None:
+                      os.close(database_fd)
+                  os.close(directory_fd)
+                  if database.exists():
+                      database.unlink()
+                  if moved.exists():
+                      moved.rename(database)
+
               store = Store(database, create=False)
               moved = private / "original.db"
               replacement = b"replacement-sentinel"
@@ -132,7 +197,7 @@ jobs:
                   store.close()
 
           print(json.dumps(results, sort_keys=True))
-          if len(results) != 3:
+          if len(results) != 8:
               raise SystemExit("MACOS_STORAGE_NEGATIVES:INCOMPLETE")
           PY
       - name: Record bounded storage-admission diagnostic
