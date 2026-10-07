@@ -307,3 +307,15 @@ def test_disabling_before_queued_telemetry_refresh_skips_catalog(monkeypatch):
     assert len(queued) == 1
     assert disabled["model_state"] == "disabled"
     assert monitor.snapshot()["model_state"] == "disabled"
+
+
+def test_telemetry_settings_failure_clears_pending_without_catalog(monkeypatch):
+    def unavailable():
+        raise RuntimeError("settings unavailable")
+
+    monitor = model_telemetry.ModelTelemetry(unavailable)
+    monitor._pending = True
+    with no_effects(monkeypatch):
+        monitor._refresh(replace(AISettings(), enabled=True), None)
+    assert monitor._pending is False
+    assert monitor._value["state"] == "disabled"

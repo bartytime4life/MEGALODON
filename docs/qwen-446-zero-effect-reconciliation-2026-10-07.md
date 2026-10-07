@@ -131,6 +131,7 @@ became disabled before that worker entered, it skips the catalog. The Setup
 refresh result now says no inventory request was made while disabled. Focused
 deterministic tests trap network, process, file/database and worker effects;
 enabled telemetry tests still exercise the existing bounded catalog behavior.
+A settings lookup failure also resolves locally and clears the pending worker.
 
 This narrows one explicit gap in the earlier matrix. It does not make the
 combined #446 checkbox complete: a request already in progress when settings

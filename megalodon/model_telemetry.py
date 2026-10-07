@@ -62,10 +62,13 @@ class ModelTelemetry:
         self._lock=Lock();self._thread=None;self._key=None;self._value=None;self._at=0.;self._pending=False
 
     def _refresh(self,settings,key):
-        current_settings=self.settings()
+        try:
+            current_enabled=self.settings().enabled
+        except Exception:
+            current_enabled=False
         with self._lock:
             current_key=self._key
-        if not settings.enabled or not current_settings.enabled or current_key!=key:
+        if not settings.enabled or not current_enabled or current_key!=key:
             result={'state':'disabled','options':[],'truncated':False}
         else:
             try:
