@@ -53,6 +53,13 @@ offline consistency reaches at most `CANDIDATE_PACKET_CONSISTENT`.
 
 ## Disabled / UNBOUND regression boundary
 
+The [October 7 current-main reconciliation](qwen-446-zero-effect-reconciliation-2026-10-07.md)
+adds bounded sentinel evidence and an entry-point/acceptance matrix. It preserves
+the issue-level HOLD: doctor has intentional diagnostic/audit effects, canonical
+UNBOUND is not an enabled runtime gate, and cached dashboard model telemetry can
+schedule and query the catalog while AI is disabled. It records no owner binding
+or acceptance decision.
+
 At this exact head, `settings.toml` defaults AI to disabled. The doctor and
 inventory disabled tests in `tests/test_ai_doctor_consent.py` require no
 provider request; doctor is a separate receipt-writing diagnostic and is not
