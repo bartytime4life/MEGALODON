@@ -1,6 +1,36 @@
 # Defense Console source alignment
 
-## Current saved source and publication — version 62
+## Current saved source and publication — version 63
+
+VERIFIED 2026-10-07 UTC against GitHub
+`main@2d2aa8eee40d0072182f9211b942fe41945e4bd3`: the separate Sites
+source checkpoint contains all 842 committed repository files. Its manifest
+binds tree `bc88e91842dc287b7fc0d5857fd16187901bd64b`, Git archive
+SHA-256 `85df851764364912879b8d8bccf92af6dd351f0cd3507bdbbc16ef1681254178`,
+per-file hashes, byte counts and executable flags. The checkpoint verifier
+passed, and 378 Python source files parsed. Uncommitted local work, ignored
+runtime data, settings, reports, models and credentials remain excluded.
+
+- Sites source: `5d85e5fabb688db70a777e90a578abbf2ea1833d`.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_cbaf62a1df188191ba14e383d3ab0c18` (63).
+- Deployment: `appgdep_6ac5dfcea82c81919b6df737c38935ec`, succeeded at the
+  existing owner-only URL.
+- Deployment archive: two files, normalized SHA-256
+  `a52499b99cd77a74f3a07767765d6dbbfb4bc99c8cb42d8b3f6b310591d3618d`,
+  identical to version 62. It contains only hosting identity and the unchanged
+  worker returning an empty HTTP 410 on every path. Twelve local route/method
+  checks passed. Before the v63 deployment, the production Worker log recorded
+  a successful 410 for `GET /` at 2026-10-07T05:50:08Z.
+
+The Site has no active controls, images, animations, data pipeline, or model
+runtime to exercise. Archived console assets and tests are outside the
+deployment artifact. Browser inspection was blocked by browser security
+policy, so visual acceptance is unverified. GitHub main's wheel-smoke job for
+this checkpoint failed because its source distribution omitted new Zeek TSV
+fixtures; draft PR #514 proposes a packaging-only correction. Publishing this
+checkpoint did not install or run the local HUD or resolve that GitHub check.
+
+## Historical saved source and publication — version 62
 
 VERIFIED against GitHub `main@d83e8967426abe652ef820a0ed82e8a4b479edd2`:
 the separate Sites source checkpoint contains all 837 committed repository
