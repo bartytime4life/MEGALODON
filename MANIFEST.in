@@ -19,7 +19,7 @@ recursive-include docs/benchmarks *.json
 recursive-include docs/audit *.json
 recursive-include examples *
 recursive-include megalodon/assets *.svg
-recursive-include tests *.py *.cjs *.json
+recursive-include tests *.py *.cjs *.json *.tsv
 recursive-include tools *.py
 include scripts/install-local.sh
 include scripts/hud-autostart.sh
