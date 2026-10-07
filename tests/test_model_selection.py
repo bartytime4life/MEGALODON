@@ -239,7 +239,9 @@ def test_timeout_selection_survives_restart(model_provider,tmp_path,monkeypatch)
 def _drift_snapshot(settings, rows, state):
     telemetry = ModelTelemetry(lambda: settings, inspect=lambda _s: {'state': state},
                                loaded=lambda _s: {}, catalog=lambda: [dict(row) for row in rows])
-    telemetry.snapshot(); telemetry._thread.join(2)
+    telemetry.snapshot()
+    if telemetry._thread is not None:
+        telemetry._thread.join(2)
     return telemetry.snapshot()
 
 
@@ -267,3 +269,30 @@ def test_drift_reports_a_removed_model_and_none_when_in_sync():
     # (remote-backed or non-GGUF) keeps its real state; it is not "removed".
     filtered = _drift_snapshot(settings, [dict(name='llama3:8b', digest='c' * 64, size_bytes=1)], 'model_not_local')
     assert filtered['drift'] is None and 'no longer installed' not in filtered['message']
+
+
+def test_disabled_model_inventory_requires_explicit_setup_refresh(tmp_path, monkeypatch):
+    calls = []
+    row = dict(name='llama3.2:3b', digest='b' * 64, size_bytes=2**30)
+
+    def catalog():
+        calls.append('catalog')
+        return [dict(row)]
+
+    monkeypatch.setattr(provider, 'model_catalog', catalog)
+    monkeypatch.setattr(support_config, 'interfaces', lambda: [])
+    manager = support_config.SupportConfiguration(
+        Settings(db_path=tmp_path / 'events.db'), home=tmp_path
+    )
+    assert manager.snapshot()['model']['options'] == []
+    assert calls == []
+
+    manager.start(dict(action='model_refresh'))
+    manager._thread.join(3)
+    observed = manager.snapshot()
+    assert observed['job']['state'] == 'finished'
+    assert observed['model']['options'] == [row]
+    assert not manager.settings.ai.enabled
+    assert calls == ['catalog']
+    manager.snapshot()
+    assert calls == ['catalog']

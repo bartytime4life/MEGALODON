@@ -493,8 +493,9 @@ class SupportConfiguration:
                 message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
                     'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
             elif action == 'model_refresh':
-                self.model_telemetry.invalidate()
-                message='Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
+                self.model_telemetry.refresh_installed_models()
+                message=('Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
+                         if self.settings.ai.enabled else 'Installed local models refreshed by your request. No model was downloaded or loaded.')
             elif action == 'qwen_check':
                 from .ai_provider import status
                 result=status(self.settings.ai,probe=True);self.model_telemetry.invalidate()
