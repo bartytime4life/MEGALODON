@@ -1684,6 +1684,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self, status: int, content_type: str, payload: bytes, *,
         extra_headers: dict[str, str] | None = None,
     ) -> None:
+        # BaseHTTPRequestHandler.send_header does not reject line breaks.
+        # Validate every dynamic header before starting the response.
+        content_type = _single_line_header(content_type)
+        headers = [(_header_name(name), _single_line_header(value))
+                   for name, value in (extra_headers or {}).items()]
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
@@ -1700,13 +1705,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        for name, value in (extra_headers or {}).items():
+        for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(payload)
 
     def log_message(self, *_: object) -> None:
         return
+
+
+def _single_line_header(value: str) -> str:
+    cleaned = value.replace("\r", "").replace("\n", "")
+    if cleaned != value:
+        raise ValueError("HTTP header contains a line break")
+    return cleaned
+
+
+def _header_name(name: str) -> str:
+    if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", name):
+        raise ValueError("Invalid HTTP header name")
+    return name
 
 
 def _dashboard_events(store: DashboardReader, limit: int) -> list[dict[str, Any]]:
