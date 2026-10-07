@@ -244,13 +244,12 @@ def test_disabled_dashboard_status_inherits_read_only_posture_boundary(monkeypat
     assert sent[0][0]["inference_verified"] is False
 
 
-@pytest.mark.parametrize("entry", ["admitted", "inventory", "disabled_telemetry"])
+@pytest.mark.parametrize("entry", ["admitted", "inventory"])
 def test_canonical_unbound_is_not_a_universal_runtime_gate(monkeypatch, entry):
     """Reach a tripwire, never HTTP, to retain the missing-gate evidence."""
     assert UNBOUND["status"] == "UNBOUND"
     assert UNBOUND["operator_decision"]["status"] == "NOT_RECORDED"
-    settings = replace(AISettings(), enabled=entry != "disabled_telemetry")
-    monitor = model_telemetry.ModelTelemetry(lambda: settings)
+    settings = replace(AISettings(), enabled=True)
     calls = []
 
     class RequestReached(BaseException):
@@ -269,28 +268,42 @@ def test_canonical_unbound_is_not_a_universal_runtime_gate(monkeypatch, entry):
             with pytest.raises(RequestReached):
                 if entry == "admitted":
                     ai_provider._admitted(settings)
-                elif entry == "inventory":
-                    ai_provider.inventory(settings)
                 else:
-                    # Direct refresh only: no monitor worker is started.
-                    monitor._refresh(settings, None)
+                    ai_provider.inventory(settings)
     assert calls == [("/api/tags", "GET", None)]
 
 
-def test_disabled_telemetry_still_schedules_a_refresh_without_starting_it(monkeypatch):
+def test_disabled_telemetry_snapshot_and_direct_refresh_have_no_effects(monkeypatch):
     monitor = model_telemetry.ModelTelemetry(AISettings)
-    scheduled = []
-
-    class StartReached(BaseException):
-        pass
-
-    def start_tripwire(thread):
-        scheduled.append(thread.name)
-        raise StartReached
-
     with no_effects(monkeypatch):
-        with monkeypatch.context() as seam:
-            seam.setattr(threading.Thread, "start", start_tripwire)
-            with pytest.raises(StartReached):
-                monitor.snapshot()
-    assert scheduled == ["megalodon-model-status"]
+        first = monitor.snapshot()
+        assert monitor.snapshot() == first
+        monitor._refresh(AISettings(), None)
+    assert first["state"] == "needs_setup"
+    assert first["model_state"] == "disabled"
+    assert first["options"] == []
+    assert first["updated_at"] is None
+    assert monitor._thread is None
+
+
+def test_disabling_before_queued_telemetry_refresh_skips_catalog(monkeypatch):
+    current = [replace(AISettings(), enabled=True)]
+    queued = []
+
+    class DeferredThread:
+        def __init__(self, *, target, args, **_kwargs):
+            self.target, self.args = target, args
+
+        def start(self):
+            queued.append(self)
+
+    monkeypatch.setattr(model_telemetry, "Thread", DeferredThread)
+    monitor = model_telemetry.ModelTelemetry(lambda: current[0])
+    with no_effects(monkeypatch):
+        monitor.snapshot()
+        current[0] = AISettings()
+        disabled = monitor.snapshot()
+        queued[0].target(*queued[0].args)
+    assert len(queued) == 1
+    assert disabled["model_state"] == "disabled"
+    assert monitor.snapshot()["model_state"] == "disabled"

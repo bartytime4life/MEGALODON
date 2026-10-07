@@ -494,7 +494,8 @@ class SupportConfiguration:
                     'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
             elif action == 'model_refresh':
                 self.model_telemetry.invalidate()
-                message='Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
+                message=('Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
+                         if self.settings.ai.enabled else 'Local AI is disabled. No model inventory request was made.')
             elif action == 'qwen_check':
                 from .ai_provider import status
                 result=status(self.settings.ai,probe=True);self.model_telemetry.invalidate()

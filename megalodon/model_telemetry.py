@@ -10,7 +10,7 @@ MESSAGES = {
     'cancelled': 'The local AI request was cancelled. You can retry when ready.',
     'generating': 'Local AI is working. Traffic collection continues in the background.',
     'model_not_local': 'This model is remote or does not support local text completion. Select another installed model.',
-    'disabled': 'Not configured. Select an installed model in Setup.',
+    'disabled': 'Local AI is disabled. No model lookup was made.',
     'ollama_unavailable': 'Ollama is unavailable on this PC. Check its service in Setup.',
     'model_missing': 'The configured model is missing. Existing models are preserved.',
     'policy_rejection': 'The configured model identity or local listener did not pass verification.',
@@ -62,19 +62,25 @@ class ModelTelemetry:
         self._lock=Lock();self._thread=None;self._key=None;self._value=None;self._at=0.;self._pending=False
 
     def _refresh(self,settings,key):
-        try:
-            options=self.catalog()
-            options.sort(key=lambda row:(row['name']!=settings.model,row['name']))
-            result={**self.inspect(settings),'options':options[:64],'truncated':len(options)>64}
-            runtime={}
-            if result['state']=='model_available':
-                try:runtime=self.loaded(settings)
-                except ai_provider.AIProviderError:runtime={'loaded':None,'memory_bytes':None,'vram_bytes':None}
-            result={**result,**runtime,'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')}
-        except ai_provider.AIProviderError as exc:
-            result={'state':ERROR_STATES.get(exc.code,'invalid_response'),'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')}
-        except (OSError, ValueError, TypeError, KeyError):
-            result={'state':'ollama_unavailable','checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')}
+        current_settings=self.settings()
+        with self._lock:
+            current_key=self._key
+        if not settings.enabled or not current_settings.enabled or current_key!=key:
+            result={'state':'disabled','options':[],'truncated':False}
+        else:
+            try:
+                options=self.catalog()
+                options.sort(key=lambda row:(row['name']!=settings.model,row['name']))
+                result={**self.inspect(settings),'options':options[:64],'truncated':len(options)>64}
+                runtime={}
+                if result['state']=='model_available':
+                    try:runtime=self.loaded(settings)
+                    except ai_provider.AIProviderError:runtime={'loaded':None,'memory_bytes':None,'vram_bytes':None}
+                result={**result,**runtime,'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')}
+            except ai_provider.AIProviderError as exc:
+                result={'state':ERROR_STATES.get(exc.code,'invalid_response'),'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')}
+            except (OSError, ValueError, TypeError, KeyError):
+                result={'state':'ollama_unavailable','checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')}
         with self._lock:
             if self._key==key:
                 if result['state']=='model_loading' and self._value:
@@ -90,7 +96,9 @@ class ModelTelemetry:
         with self._lock:
             if key!=self._key:self._key=key;self._value=None;self._at=0
             refresh_after=2 if (self._value or {}).get('state')=='model_loading' else 30
-            if not self._pending and (self._value is None or monotonic()-self._at>=refresh_after):
+            if not settings.enabled:
+                self._value={'state':'disabled','options':[],'truncated':False};self._at=monotonic()
+            elif not self._pending and (self._value is None or monotonic()-self._at>=refresh_after):
                 self._pending=True;self._thread=Thread(target=self._refresh,args=(settings,key),daemon=True,name='megalodon-model-status');self._thread.start()
             value=dict(self._value or {});stale=bool(self._value and monotonic()-self._at>90)
         observation=ai_provider.last_observation(settings)

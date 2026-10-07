@@ -239,7 +239,9 @@ def test_timeout_selection_survives_restart(model_provider,tmp_path,monkeypatch)
 def _drift_snapshot(settings, rows, state):
     telemetry = ModelTelemetry(lambda: settings, inspect=lambda _s: {'state': state},
                                loaded=lambda _s: {}, catalog=lambda: [dict(row) for row in rows])
-    telemetry.snapshot(); telemetry._thread.join(2)
+    telemetry.snapshot()
+    if telemetry._thread is not None:
+        telemetry._thread.join(2)
     return telemetry.snapshot()
 
 

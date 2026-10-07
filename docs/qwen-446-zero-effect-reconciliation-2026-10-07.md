@@ -119,3 +119,21 @@ No model pull/start/query/backgrounding, native diagnostic execution, service or
 firewall operation, host configuration change, release or acceptance occurred
 in this reconciliation. Test-environment setup, repository reads, local test
 fixtures and the reviewable Git change are outside the tested runtime boundary.
+
+## Follow-up: disabled cached telemetry correction
+
+A follow-up based on `main@303ee10528e9e43f77e654a480e0f2a2d7844d66`
+changes the cached model observer so a disabled snapshot returns a local
+`disabled` state, empty options and no availability timestamp without starting
+its catalog worker. Direct disabled refresh also bypasses the catalog, status
+probe and loaded-model calls. If an enabled refresh was queued and the setting
+became disabled before that worker entered, it skips the catalog. The Setup
+refresh result now says no inventory request was made while disabled. Focused
+deterministic tests trap network, process, file/database and worker effects;
+enabled telemetry tests still exercise the existing bounded catalog behavior.
+
+This narrows one explicit gap in the earlier matrix. It does not make the
+combined #446 checkbox complete: a request already in progress when settings
+change is not retroactively canceled, enabled provider paths do not consult
+the canonical UNBOUND binding, and the documented doctor/broker/CLI receipt
+effects remain. No model or provider was run for this correction.
