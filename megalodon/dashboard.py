@@ -29,7 +29,7 @@ import struct
 from pathlib import Path
 import sys
 from threading import BoundedSemaphore, Lock, Thread, current_thread, main_thread
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 import secrets
@@ -1643,23 +1643,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return True
         values = self.headers.get_all("Authorization", [])
         authorized = False
-        if values and self._login_blocked():
-            # Basic credentials share the sign-in throttle; refuse before running the verifier.
-            self._send_json({"error": "try again shortly"}, status=429, extra_headers={"Retry-After": "30"})
-            return False
-        if len(values) == 1 and len(values[0]) <= 128 and values[0][:6].lower() == "basic ":
+
+        def verify() -> bool:
+            if len(values) != 1 or len(values[0]) > 128 or values[0][:6].lower() != "basic ":
+                return False
             try:
                 supplied = base64.b64decode(values[0][6:], validate=True)
             except (ValueError, binascii.Error):
                 supplied = b""
             if verifier is not None:
                 prefix = b"megalodon:"
-                authorized = supplied.startswith(prefix) and verifier.verify(supplied[len(prefix):])
-            else:
-                expected = f"megalodon:{password}".encode("ascii")
-                authorized = hmac.compare_digest(supplied, expected)
+                return supplied.startswith(prefix) and verifier.verify(supplied[len(prefix):])
+            expected = f"megalodon:{password}".encode("ascii")
+            return hmac.compare_digest(supplied, expected)
+
         if values:
-            self._record_login(authorized)
+            result = self._check_login(verify)
+            if result is None:
+                self._send_json({"error": "try again shortly"}, status=429,
+                                extra_headers={"Retry-After": "30"})
+                return False
+            authorized = result
         if not authorized:
             if redirect:
                 self._send(303, "text/plain; charset=utf-8", b"sign in required",
@@ -1670,20 +1674,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _login_blocked(self) -> bool:
         auth_class = type(self)
-        with auth_class.login_lock:
+        if not auth_class.login_lock.acquire(blocking=False):
+            return True
+        try:
             return time.monotonic() < auth_class.login_blocked_until
+        finally:
+            auth_class.login_lock.release()
 
-    def _record_login(self, valid: bool) -> None:
-        """Five consecutive failed password checks, by any route, block checks for 30 seconds."""
+    def _check_login(self, verify: Callable[[], bool]) -> bool | None:
+        """Admit one check; atomically verify and record it, or refuse without waiting."""
         auth_class = type(self)
-        with auth_class.login_lock:
-            if valid:
-                auth_class.login_failures = 0
-                return
-            auth_class.login_failures += 1
-            if auth_class.login_failures >= 5:
-                auth_class.login_failures = 0
-                auth_class.login_blocked_until = time.monotonic() + 30
+        if not auth_class.login_lock.acquire(blocking=False):
+            return None
+        try:
+            if time.monotonic() < auth_class.login_blocked_until:
+                return None
+            valid = False
+            try:
+                valid = verify()
+                return valid
+            finally:
+                # A verifier exception counts as a refusal and cannot strand the slot.
+                if valid:
+                    auth_class.login_failures = 0
+                else:
+                    auth_class.login_failures += 1
+                    if auth_class.login_failures >= 5:
+                        auth_class.login_failures = 0
+                        auth_class.login_blocked_until = time.monotonic() + 30
+        finally:
+            auth_class.login_lock.release()
 
     def _has_session_cookie(self) -> bool:
         token = self.http_session_token
@@ -1722,18 +1742,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "invalid sign-in request"}, status=400)
             return
         supplied = body.get("password") if type(body) is dict and set(body) == {"password"} else None
-        valid = False
-        if type(supplied) is str and len(supplied) <= 64:
-            try:
-                encoded = supplied.encode("ascii")
-            except UnicodeError:
-                encoded = b""
-            if self.http_password_verifier is not None:
-                valid = self.http_password_verifier.verify(encoded)
-            elif self.http_read_password is not None:
-                valid = hmac.compare_digest(encoded, self.http_read_password.encode("ascii"))
-        valid = valid and self.http_session_token is not None
-        self._record_login(valid)
+
+        def verify() -> bool:
+            valid = False
+            if type(supplied) is str and len(supplied) <= 64:
+                try:
+                    encoded = supplied.encode("ascii")
+                except UnicodeError:
+                    encoded = b""
+                if self.http_password_verifier is not None:
+                    valid = self.http_password_verifier.verify(encoded)
+                elif self.http_read_password is not None:
+                    valid = hmac.compare_digest(encoded, self.http_read_password.encode("ascii"))
+            return valid and self.http_session_token is not None
+
+        # Recheck admission after reading the body: the earlier check is only a preflight.
+        valid = self._check_login(verify)
+        if valid is None:
+            self._send_json({"error": "try again shortly"}, status=429,
+                            extra_headers={"Retry-After": "30"})
+            return
         if not valid:
             self._send_json({"error": "invalid HUD password"}, status=401)
             return

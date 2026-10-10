@@ -76,7 +76,14 @@ request. Success issues an HttpOnly, SameSite=Strict, launch-scoped session
 cookie. In that mode, the dashboard page, its assets, private reads, and action
 routes require authentication. API clients may use HTTP Basic with username
 `megalodon`; unauthorized responses do not trigger a browser password prompt.
-No password is embedded in the served assets or URL. Five consecutive failed
+No password is embedded in the served assets or URL. Only one password check
+may run at a time across the sign-in page and HTTP Basic. At the authentication
+gate, competing attempts return 429 with `Retry-After: 30` without waiting for or
+invoking the verifier, and do not count as failed guesses. A form request can
+instead receive the existing 409 refusal from the earlier POST maintenance guard.
+Admission, verification and failure accounting
+share one lock, released even if verification raises. The sign-in page rechecks
+admission after reading its bounded body. Five consecutive failed
 password checks, through the sign-in page or HTTP Basic, cause a 30-second pause
 in which both routes return 429 with `Retry-After: 30` before any password check
 runs. A request without credentials is not counted. Non-ASCII session-cookie or

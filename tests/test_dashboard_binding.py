@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import errno
 from http.client import HTTPConnection
@@ -692,6 +693,153 @@ def test_basic_credentials_share_the_sign_in_throttle_before_verification():
         assert handler.login_failures == 0
     finally:
         _stop(server, thread)
+
+
+@pytest.mark.parametrize("first_route", ("basic", "form"))
+def test_concurrent_password_checks_share_one_slot_and_preserve_lockout(first_route):
+    entered, release = Event(), Event()
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    verifier = Mock()
+
+    def verify(supplied):
+        if not entered.is_set():
+            entered.set()
+            assert release.wait(timeout=5), "test did not release the first verifier"
+        return supplied == b"correct horse battery"
+
+    verifier.verify.side_effect = verify
+    handler = type("ConcurrentLoginHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": None, "http_password_verifier": verifier,
+        "http_session_token": "private-session-token",
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+    })
+    server, thread = _serve(handler)
+    host = f"127.0.0.1:{server.server_port}"
+
+    def request(route, password="wrong guess"):
+        if route == "basic":
+            auth = "Basic " + base64.b64encode(f"megalodon:{password}".encode()).decode("ascii")
+            return _host_request(server, (host,), authorizations=(auth,))
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        try:
+            connection.request("POST", "/sign-in", body=json.dumps({"password": password}), headers={
+                "Host": host, "Origin": f"http://{host}", "Content-Type": "application/json",
+                "X-Megalodon-Sign-In": "1",
+            })
+            response = connection.getresponse()
+            return response.status, json.loads(response.read()), dict(response.getheaders())
+        finally:
+            connection.close()
+
+    try:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            first = pool.submit(request, first_route)
+            try:
+                assert entered.wait(timeout=2)
+                # No credentials still returns 401 without joining the verifier queue.
+                assert _host_request(server, (host,))[0] == 401
+                concurrent = [pool.submit(request, route)
+                              for route in ("basic", "form", "basic", "form")]
+                for route, result in zip(("basic", "form", "basic", "form"), concurrent):
+                    status, body, headers = result.result(timeout=2)
+                    if route == "form" and status == 409:
+                        # The existing POST maintenance guard can refuse the form first.
+                        assert body == {"error": "A local operation is in progress; retry shortly."}
+                    else:
+                        assert (status, body) == (429, {"error": "try again shortly"})
+                        assert headers["Retry-After"] == "30"
+                assert verifier.verify.call_count == 1
+                assert not store.summary.called
+            finally:
+                release.set()
+            assert first.result(timeout=2)[0] == 401
+        assert handler.login_failures == 1, "busy requests must not count as failures"
+        for route in ("basic", "form", "basic", "form"):
+            assert request(route)[0] == 401
+        assert verifier.verify.call_count == 5
+        for route in ("basic", "form"):
+            assert request(route, "correct horse battery")[0] == 429
+        assert verifier.verify.call_count == 5
+        handler.login_blocked_until = 0.0
+        assert request("basic", "correct horse battery")[:2] == (200, {"events": 1})
+        assert handler.login_failures == 0
+        assert request("form", "correct horse battery")[:2] == (200, {"status": "signed_in"})
+    finally:
+        release.set()
+        _stop(server, thread)
+
+
+@pytest.mark.parametrize("refusal", ("busy", "blocked"))
+def test_sign_in_rechecks_admission_after_body_read(refusal):
+    prechecked, entered, release = Event(), Event(), Event()
+    verifier = Mock()
+
+    def verify(_supplied):
+        entered.set()
+        assert release.wait(timeout=5)
+        return False
+
+    def preflight(self):
+        blocked = dashboard.DashboardHandler._login_blocked(self)
+        if not blocked:
+            prechecked.set()
+        return blocked
+
+    verifier.verify.side_effect = verify
+    handler = type("BodyReadLoginHandler", (dashboard.DashboardHandler,), {
+        "store": Mock(), "http_read_password": None, "http_password_verifier": verifier,
+        "http_session_token": "private-session-token", "_login_blocked": preflight,
+        "login_lock": dashboard.Lock(), "login_failures": 4, "login_blocked_until": 0.0,
+    })
+    server, thread = _serve(handler)
+    host = f"127.0.0.1:{server.server_port}"
+    connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+    body = b'{"password":"correct horse battery"}'
+    try:
+        # Let the form pass its preflight, then pause its real socket at the body read.
+        connection.putrequest("POST", "/sign-in")
+        for name, value in {"Origin": f"http://{host}", "Content-Type": "application/json",
+                            "Content-Length": str(len(body)), "X-Megalodon-Sign-In": "1"}.items():
+            connection.putheader(name, value)
+        connection.endheaders()
+        assert prechecked.wait(timeout=2)
+        wrong = "Basic " + base64.b64encode(b"megalodon:wrong guess").decode("ascii")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            first = pool.submit(_host_request, server, (host,), authorizations=(wrong,))
+            try:
+                assert entered.wait(timeout=2)
+                if refusal == "blocked":
+                    release.set()
+                    assert first.result(timeout=2)[0] == 401
+                connection.send(body)
+                response = connection.getresponse()
+                assert response.status == 429
+                assert json.loads(response.read()) == {"error": "try again shortly"}
+                assert response.getheader("Retry-After") == "30"
+                assert verifier.verify.call_count == 1
+                assert not handler.store.summary.called
+            finally:
+                release.set()
+            assert first.result(timeout=2)[0] == 401
+        assert handler.login_blocked_until > 0
+    finally:
+        release.set()
+        connection.close()
+        _stop(server, thread)
+
+
+@pytest.mark.parametrize("failure", (RuntimeError("verifier failed"), KeyboardInterrupt()))
+def test_verifier_exception_releases_admission_and_counts_failure(failure):
+    handler_class = type("FailedVerifierHandler", (dashboard.DashboardHandler,), {
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+    })
+    handler = object.__new__(handler_class)
+    with pytest.raises(type(failure)):
+        handler._check_login(Mock(side_effect=failure))
+    assert handler_class.login_failures == 1
+    assert handler._check_login(lambda: True) is True
+    assert handler_class.login_failures == 0
 
 
 @pytest.mark.parametrize("header", [
