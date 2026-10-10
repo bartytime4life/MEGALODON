@@ -189,6 +189,14 @@ End Date:   2026:09:26 12:00:01
     worker.tick()
     assert worker.snapshot()["results"]["clamav"]["scanned_files"] == 1
     assert "preserved" in worker.snapshot()["status"]["clamav"]
+    # A watched scan that reported matches but cannot be summarized is not
+    # left looking like the prior (clean) aggregate.
+    clamav.write_text("/private/x\n----------- SCAN SUMMARY -----------\n: Example FOUND\n" + clamav.read_text())
+    exit_status.write_text("1\n")
+    worker.tick()
+    assert worker.snapshot()["results"]["clamav"]["infected_files"] == 0
+    status = worker.snapshot()["status"]["clamav"]
+    assert "reported matches" in status and "stale" in status
 
 
 def test_fixed_collector_runs_only_configured_action(tmp_path, monkeypatch):

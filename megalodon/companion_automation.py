@@ -142,6 +142,10 @@ def _read_bounded(path: Path, limit: int) -> bytes:
         os.close(fd)
 
 
+_CLAMAV_STALE = ("ClamAV reported matches, but its report was rejected; the prior aggregate is stale. "
+                 "Review ClamAV directly.")
+
+
 def _run_fixed(argv: list[str], limit: int, timeout: int,
                cancel: Event | None = None) -> tuple[bytes, int]:
     """Run a fixed argv without shell interpretation or unbounded output."""
@@ -344,6 +348,7 @@ class CompanionAutomation:
         for kind, path in sources.items():
             if path is None:
                 continue
+            exit_code = None
             try:
                 parts = [path]
                 if kind == "clamav":
@@ -360,7 +365,8 @@ class CompanionAutomation:
                     exit_raw = _read_bounded(parts[1], 2)
                     if exit_raw not in (b"0", b"1", b"0\n", b"1\n"):
                         raise ValueError("invalid ClamAV exit receipt")
-                    value = clamav_summary(raw, int(exit_raw.strip()))
+                    exit_code = int(exit_raw.strip())
+                    value = clamav_summary(raw, exit_code)
                 else:
                     value = osquery_summary(raw)
                 self._publish(kind, value, "Watched report",checkpoint=('companion_'+kind,dict(signature=signature)))
@@ -370,7 +376,8 @@ class CompanionAutomation:
                 # collection can still provide a current aggregate.
                 continue
             except (OSError, ValueError, AssertionError, sqlite3.Error):
-                self._fail(kind, "Watched report unavailable or rejected; prior aggregate preserved")
+                self._fail(kind, _CLAMAV_STALE if kind == "clamav" and exit_code == 1 else
+                           "Watched report unavailable or rejected; prior aggregate preserved")
 
     def _collect(self, due: set[str]) -> None:
         jobs = []
@@ -407,7 +414,7 @@ class CompanionAutomation:
                 if str(exc) == "companion tool unavailable":
                     self._fail(kind, f"{argv[0]} is not installed; automatic collection unavailable")
                 elif kind == "clamav" and code == 1:
-                    self._fail(kind, "ClamAV reported matches, but its report was rejected; the prior aggregate is stale. Review ClamAV directly.")
+                    self._fail(kind, _CLAMAV_STALE)
                 else:
                     self._fail(kind, "Local collector unavailable or rejected; prior aggregate preserved")
 
