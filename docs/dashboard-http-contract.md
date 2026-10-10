@@ -58,10 +58,15 @@ non-loopback addresses, IPv6 for this IPv4 server, and any attempt to enable the
 legacy remote override. Expected-Host validation happens before routing or store
 access and rejects missing, duplicate, or unexpected Host values. The supported
 `serve()` path opens directly by default without a password or terminal requirement.
-This gives other local programs access to the read-only HUD data while the
-server runs. Loopback TCP does not identify the calling account, so that includes
-programs run by other accounts on the same PC; Origin, Host and custom-header
-checks stop browsers, not local clients. With `--require-sign-in`, it generates a per-launch
+Loopback TCP carries no caller identity, and Origin, Host and custom-header
+checks stop browsers, not local clients. On Linux the server therefore accepts a
+connection only when the IPv4 TCP table of its network namespace
+(`/proc/net/tcp`) shows the client end of that exact connection owned by the
+HUD's own effective UID; any other owner, a missing row, or an unreadable,
+malformed or oversized table closes the connection before any request byte is
+read. Other programs run by the same account still reach the HUD while it runs.
+Platforms without this owner proof (native Windows and macOS evaluation
+targets) keep the same-host boundary: any local account can connect there. With `--require-sign-in`, it generates a per-launch
 password, displays it only on an interactive launching terminal, and refuses
 startup if terminal output is unavailable. The installed HUD can instead load
 a private salted verifier for an operator-chosen password; it prints only a
