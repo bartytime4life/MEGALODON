@@ -13,7 +13,7 @@ import secrets
 import shutil
 import socket
 import subprocess
-from threading import Lock, Thread
+from threading import Lock, RLock, Thread
 import time
 
 from .companion_automation import _run_fixed
@@ -179,6 +179,8 @@ class SupportConfiguration:
         self.profile = self.home / '.config/megalodon/support-config.json'
         self.token = secrets.token_urlsafe(24)
         self._lock = Lock()
+        # Serializes each profile write with the in-memory commit of its values.
+        self._persist_lock = RLock()
         self._thread = None
         self._cancel_capture_start = False
         choices = interfaces()
@@ -199,7 +201,7 @@ class SupportConfiguration:
         self.flow_ingestor = None
         try:
             self._load()
-        except (OSError, ValueError):
+        except (OSError, ValueError, TypeError, RecursionError):
             self._job.update(state='failed', message='Saved setup could not be validated. Review the private support configuration file.')
         self._load_qwen()
         from .model_telemetry import ModelTelemetry
@@ -255,7 +257,8 @@ class SupportConfiguration:
         if type(settings) is not dict or set(settings) != set(self._settings):
             raise ValueError('saved settings')
         valid_target(settings['nmap_target'])
-        if settings['scan_folder'] not in {'Downloads','Documents'} or type(settings['interface']) is not str or not re.fullmatch(r'[A-Za-z0-9_.:@-]{0,15}', settings['interface']):
+        if (type(settings['scan_folder']) is not str or settings['scan_folder'] not in {'Downloads','Documents'}
+                or type(settings['interface']) is not str or not re.fullmatch(r'[A-Za-z0-9_.:@-]{0,15}', settings['interface'])):
             raise ValueError('saved scope')
         configured = value['configured']
         if type(configured) is not list or len(configured) > 3 or any(type(item) is not str or item not in {'nmap','clamav','osquery'} for item in configured):
@@ -281,14 +284,22 @@ class SupportConfiguration:
             updates['osquery_enabled'] = True
         return updates
 
-    def _save(self, settings=None, configured=None):
-        self._paths()
-        if os.path.lexists(self.profile):
-            _regular_owned_file(self.profile, maximum=2048)
-        value = dict(schema=SCHEMA, settings=self._settings if settings is None else settings,
-                     configured=sorted(self._configured if configured is None else configured),
-                     background_enabled=self._background_enabled, geography_enabled=self._geography_enabled)
-        _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
+    def _save(self, **changes):
+        """Persist current state plus changes; memory takes the changes only after the write."""
+        with self._persist_lock:
+            with self._lock:
+                state = dict(settings=dict(self._settings), configured=set(self._configured),
+                             background_enabled=self._background_enabled, geography_enabled=self._geography_enabled)
+            state.update(changes)
+            self._paths()
+            if os.path.lexists(self.profile):
+                _regular_owned_file(self.profile, maximum=2048)
+            value = dict(schema=SCHEMA, settings=state['settings'], configured=sorted(state['configured']),
+                         background_enabled=state['background_enabled'], geography_enabled=state['geography_enabled'])
+            _atomic_write(self.profile, json.dumps(value, sort_keys=True).encode(), 0o600)
+            with self._lock:
+                for name, item in changes.items():
+                    setattr(self, '_' + name, dict(item) if name == 'settings' else set(item) if name == 'configured' else item)
 
     def snapshot(self, include_token=False):
         try:
@@ -310,7 +321,7 @@ class SupportConfiguration:
     def start(self, request):
         request = validate_action(request)
         if request['action'] in {'capture_stop','background_stop'}:
-            with self._lock:
+            with self._persist_lock, self._lock:
                 self._cancel_capture_start = True
                 was_enabled = self._background_enabled
                 self._background_enabled = False
@@ -380,8 +391,8 @@ class SupportConfiguration:
             if action in {'capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'}:
                 valid_interface(request['interface'])
                 with self._lock:
-                    self._settings['interface'] = request['interface']
-                self._save()
+                    settings = dict(self._settings, interface=request['interface'])
+                self._save(settings=settings)
             if action == 'capture_permissions':
                 self._execute(['/usr/bin/pkexec','/bin/sh','-c',PERMISSION_SCRIPT], 90)
                 self._execute(['/usr/bin/dumpcap','-i',request['interface'],'-L'], 10)
@@ -402,19 +413,21 @@ class SupportConfiguration:
                     raise ValueError('Install Wireshark / TShark before starting background traffic.')
                 self.background.stop()
                 self.sensors.stop()
-                with self._lock:
-                    if self._cancel_capture_start:
-                        raise ValueError('Background start was cancelled.')
-                    self._background_enabled = True
-                    self.background.start(request['interface'])
-                    self.sensors.start(request['interface'])
-                self._save()
+                # A stop takes the persistence lock to cancel, so it either
+                # precedes this check or follows the started monitor.
+                with self._persist_lock:
+                    with self._lock:
+                        if self._cancel_capture_start:
+                            raise ValueError('Background start was cancelled.')
+                    self._save(background_enabled=True)
+                    with self._lock:
+                        self.background.start(request['interface'])
+                        self.sensors.start(request['interface'])
                 if self.companions:
                     self.companions.request_collection()
                 message = 'Background traffic enabled and configured inventory collectors queued. Monitoring resumes automatically with the local HUD.'
             elif action == 'geography_refresh':
-                self._geography_enabled = True
-                self._save()
+                self._save(geography_enabled=True)
                 self.background.refresh_geography()
                 message = 'Location refresh requested. Peer addresses stay on this PC; the public internet address lookup identifies this connection only.'
             elif action == 'geography_disable':
@@ -443,10 +456,7 @@ class SupportConfiguration:
                 else:
                     updates = {'osquery_enabled':True}
                 configured = self._configured | {tool}
-                self.companions.configure(updates, before_apply=lambda: self._save(proposed, configured))
-                with self._lock:
-                    self._settings = proposed
-                    self._configured = configured
+                self.companions.configure(updates, before_apply=lambda: self._save(settings=proposed, configured=configured))
                 states = self.companions.request_collection({tool})
                 message = f'Configuration saved. Collector {states[tool]}; results appear in its HUD panel.'
             elif action == 'signature_update':
@@ -525,7 +535,9 @@ class SupportConfiguration:
             self._tool(tool, 'ready', message)
         except (OSError, ValueError, ConfigBusy, subprocess.SubprocessError) as exc:
             failed = True
-            message = str(exc)[:512] if isinstance(exc, (ValueError, ConfigBusy)) else 'This setup action could not complete. Check the installed tool and system authorization.'
+            from .local_install import InstallError
+            message = ('A private MEGALODON file or folder is unsafe; review its ownership and permissions.' if isinstance(exc, InstallError) else
+                       str(exc)[:512] if isinstance(exc, (ValueError, ConfigBusy)) else 'This setup action could not complete. Check the installed tool and system authorization.')
             self._tool(tool, 'needs_setup', message)
         except Exception:
             failed = True

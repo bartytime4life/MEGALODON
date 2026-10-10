@@ -69,7 +69,7 @@ def test_duplicate_and_encoded_action_headers_rejected(report_http,extra):
     assert report_http.calls==[]
 
 
-@pytest.mark.parametrize('body',[b'{"start":"x","start":"y"}', b'{"x":NaN}',b'{"x":Infinity}',b'[]',b'"x"',b'\xff\xfe'])
+@pytest.mark.parametrize('body',[b'{"start":"x","start":"y"}', b'{"x":NaN}',b'{"x":Infinity}',b'[]',b'"x"',b'\xff\xfe',b'['*4000+b']'*4000])
 def test_invalid_json_rejected_without_provider_call(report_http,body):
     assert report_http.request('POST','/api/reports/create',body)[0]==422
     assert report_http.calls==[]
