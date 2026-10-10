@@ -87,6 +87,23 @@ sample commands then completed with `source_exhausted` receipts for exactly 13
 and 114 processed events. PR #377 merged as
 `727382077d7b460ee8e6cf0a99fc50ae01cc8d7e`.
 
+A later review of that repair found a check-to-open gap: the admitted pathname
+was compared with its descriptor before `sqlite3.connect`, but SQLite resolves
+the pathname again, and neither `PRAGMA database_list` nor the admission
+descriptor identifies the file SQLite opened. A same-owner ancestor swap that
+is restored after the connect could therefore admit a schema-compatible
+alternate database. The Darwin writable path now connects through
+`_connect_verified_sqlite`, which requires a descriptor SQLite newly opened to
+share the admitted file's device and inode. When SQLite instead reuses a
+descriptor it deferred closing for an inode still locked in this process, it
+accepts only if no unattributed file was opened and every ancestor directory's
+identity and timestamps are unchanged. In-process opens of admitted databases
+are serialized for that window. The PR-only workflow adds two native
+negatives, a connect-time ancestor swap and the same swap onto a file with a
+reusable SQLite descriptor; both must refuse with `STORAGE_PATH:DATABASE_CHANGED`
+and leave the swapped-in file unchanged. Until a hosted run records them, these
+controls are Linux-observed with the Darwin branch selected, not native receipts.
+
 That exact-head result advances only the hosted arm64 sample portion of M1. It
 does not exercise JSONL replay, a dashboard listener or browser, x86_64, a
 second recent macOS major version, an operator-managed host, privacy review,

@@ -489,7 +489,9 @@ def _writable_sqlite_connection_path(
     reads but cannot create the rollback journal through /dev/fd/N
     (SQLITE_CANTOPEN). There, use only the already-canonicalized, owner-private
     admitted pathname after proving it still names the exact open descriptor.
-    The returned optional anchor tells _validate_connection_path which pathname
+    That proof precedes SQLite's own pathname resolution, so a ``None`` anchor
+    also obliges the caller to connect through _connect_verified_sqlite. The
+    returned optional anchor tells _validate_connection_path which pathname
     SQLite is permitted to report.
     """
 
@@ -499,6 +501,123 @@ def _writable_sqlite_connection_path(
     if not _path_matches_descriptor(expected, descriptor):
         _raise_path_error(prefix, "DATABASE_CHANGED")
     return expected, None
+
+
+# Serializes in-process opens of admitted database files. While held, the only
+# new descriptor to an admitted inode can be the one SQLite itself opened, so
+# _connect_verified_sqlite cannot be satisfied by another thread's open.
+_DATABASE_OPEN_LOCK = RLock()
+
+
+def _open_regular_file_identities() -> dict[int, tuple[int, int]] | None:
+    """Map this process's open regular-file descriptors to (st_dev, st_ino)."""
+
+    try:
+        names = os.listdir("/dev/fd")
+    except OSError:
+        return None
+    identities: dict[int, tuple[int, int]] = {}
+    for name in names:
+        try:
+            descriptor = int(name)
+            info = os.fstat(descriptor)
+        except (ValueError, OSError):
+            continue
+        if stat.S_ISREG(info.st_mode):
+            identities[descriptor] = (info.st_dev, info.st_ino)
+    return identities
+
+
+def _ancestor_generations(directory: Path) -> tuple[tuple[int, ...], ...] | None:
+    generations = []
+    for ancestor in directory.parents:
+        try:
+            info = os.lstat(ancestor)
+        except OSError:
+            return None
+        generations.append(
+            (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns)
+        )
+    return tuple(generations)
+
+
+def _sidecar_identities(
+    path: Path, directory_descriptor: int
+) -> set[tuple[int, int]]:
+    identities = set()
+    for suffix in _SQLITE_SIDECAR_SUFFIXES:
+        try:
+            info = os.stat(
+                path.name + suffix,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError:
+            continue
+        identities.add((info.st_dev, info.st_ino))
+    return identities
+
+
+def _connect_verified_sqlite(
+    uri: str,
+    path: Path,
+    descriptor: int,
+    directory_descriptor: int,
+    prefix: str,
+    **kwargs: Any,
+) -> sqlite3.Connection:
+    """Connect by pathname, then prove SQLite opened the admitted inode.
+
+    A pathname that matched the admitted descriptor before ``sqlite3.connect``
+    can name another file while SQLite resolves it (for example, a same-owner
+    ancestor-directory swap that is restored afterwards). PRAGMA database_list
+    and descriptor checks only see pathnames and our own descriptor, so
+    instead require a descriptor that SQLite newly opened to share the
+    admitted file's identity.
+
+    SQLite reuses a main-database descriptor it deferred closing while another
+    connection in this process held locks on that inode (always the case in
+    WAL mode while one stays open), so no new descriptor appears. A reused
+    descriptor can only name a file this process already holds open, and
+    redirecting the pathname to it needs an entry change in the admitted
+    directory (checked by the caller) or an ancestor, which updates that
+    directory's generation. Only in that case are unchanged ancestor
+    generations accepted. Other threads' concurrent opens of this database's
+    own sidecars are set aside on the same basis; any other unattributed open
+    refuses.
+    """
+
+    with _DATABASE_OPEN_LOCK:
+        before = _open_regular_file_identities()
+        ancestors = _ancestor_generations(path.parent)
+        if before is None:
+            _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
+        if ancestors is None:
+            _raise_path_error(prefix, "DIRECTORY_CHANGED")
+        connection = sqlite3.connect(uri, uri=True, **kwargs)
+        try:
+            after = _open_regular_file_identities()
+            if after is None:
+                _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
+            info = os.fstat(descriptor)
+            admitted = (info.st_dev, info.st_ino)
+            opened = {
+                identity
+                for candidate, identity in after.items()
+                if before.get(candidate) != identity
+            }
+            unattributed = opened - _sidecar_identities(path, directory_descriptor)
+            if admitted not in opened and (
+                unattributed or _ancestor_generations(path.parent) != ancestors
+            ):
+                _raise_path_error(prefix, "DATABASE_CHANGED")
+        except BaseException:
+            try:
+                connection.close()
+            except sqlite3.Error:
+                pass
+            raise
+        return connection
 
 
 def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
@@ -737,18 +856,19 @@ def _open_private_database(
     try:
         if os.name != "posix" and path.is_symlink():
             _raise_path_error(prefix, "SYMLINK_REFUSED")
-        try:
-            descriptor = os.open(target, flags, **kwargs)
-        except FileNotFoundError:
-            if not create:
-                _raise_path_error(prefix, "NO_DATABASE")
-            descriptor = os.open(
-                target,
-                flags | os.O_CREAT | os.O_EXCL,
-                PRIVATE_DATABASE_MODE,
-                **kwargs,
-            )
-            created = True
+        with _DATABASE_OPEN_LOCK:
+            try:
+                descriptor = os.open(target, flags, **kwargs)
+            except FileNotFoundError:
+                if not create:
+                    _raise_path_error(prefix, "NO_DATABASE")
+                descriptor = os.open(
+                    target,
+                    flags | os.O_CREAT | os.O_EXCL,
+                    PRIVATE_DATABASE_MODE,
+                    **kwargs,
+                )
+                created = True
         info = os.fstat(descriptor)
         _validate_private_database_stat(info, writable=writable, prefix=prefix)
         if writable and os.name == "posix":
@@ -1138,12 +1258,21 @@ class Store:
             opening_generation = _directory_generation(
                 self._directory_descriptor
             )
-            connection = sqlite3.connect(
-                f"{sqlite_path.as_uri()}?mode=rw&cache=private",
-                uri=True,
-                timeout=10,
-                check_same_thread=False,
-            )
+            uri = f"{sqlite_path.as_uri()}?mode=rw&cache=private"
+            if sqlite_anchor is None:
+                connection = _connect_verified_sqlite(
+                    uri,
+                    self.path,
+                    self._database_descriptor,
+                    self._directory_descriptor,
+                    "STORAGE_PATH",
+                    timeout=10,
+                    check_same_thread=False,
+                )
+            else:
+                connection = sqlite3.connect(
+                    uri, uri=True, timeout=10, check_same_thread=False
+                )
             _validate_connection_path(
                 connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor
             )
@@ -2450,13 +2579,14 @@ class DashboardStore:
         opening_generation = _directory_generation(self._directory_descriptor)
         connection: sqlite3.Connection | None = None
         try:
-            connection = sqlite3.connect(
-                f"{self._sqlite_path.as_uri()}?{parameters}",
-                uri=True,
-                timeout=DASHBOARD_SQLITE_BUSY_SECONDS,
-                isolation_level=None,
-                check_same_thread=False,
-            )
+            with _DATABASE_OPEN_LOCK:
+                connection = sqlite3.connect(
+                    f"{self._sqlite_path.as_uri()}?{parameters}",
+                    uri=True,
+                    timeout=DASHBOARD_SQLITE_BUSY_SECONDS,
+                    isolation_level=None,
+                    check_same_thread=False,
+                )
             _validate_connection_path(
                 connection, self.path, "DASHBOARD_STORE", anchor=self._sqlite_path
             )
