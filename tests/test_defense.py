@@ -167,3 +167,65 @@ def test_guard_refuses_foreign_rules_and_does_not_flush_other_tables():
     data['nftables'][-1]['rule']['expr']=[{'accept':None}]
     with pytest.raises(ValueError):helper['validate'](data)
     assert 'flush' not in ROOT_PROGRAM
+
+
+def test_failed_reapply_keeps_the_recorded_block_releasable(manager):
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    assert perform(defense,dict(action='apply_containment',plan_id=plan['id']))['state']=='finished'
+    # The still-observed address is previewed again, but that preview expires before
+    # Apply, so the attempt fails without touching the host.
+    second=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    defense._plans[second['id']]['expires_at']='2000-01-01T00:00:00Z'
+    assert perform(defense,dict(action='apply_containment',plan_id=second['id']))['state']=='failed'
+    assert [(a['ip'],a['state']) for a in defense.snapshot()['active']]==[('1.1.1.1','applied')]
+    restored=Defense(defense.operations,defense.configuration,run=defense.run)
+    assert [(a['ip'],a['state']) for a in restored.snapshot()['active']]==[('1.1.1.1','applied')]
+    assert perform(restored,dict(action='release_containment',ip='1.1.1.1'))['state']=='finished'
+    assert calls[-1][-2:]==['release','1.1.1.1'] and restored.snapshot()['active']==[]
+
+
+def test_outcome_row_may_use_the_ledger_reserve_after_a_host_change(manager,monkeypatch):
+    from megalodon import defense as defense_module
+    from megalodon.ai_broker import ReceiptStore
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    guard=defense.run
+
+    def guard_then_reserve_reached(argv,*args):
+        # The pre-execution row was admitted; the ledger now sits inside the reserve.
+        monkeypatch.setattr(defense_module,'MAX_LEDGER_BYTES',0)
+        return guard(argv,*args)
+
+    defense.run=guard_then_reserve_reached
+    applied=perform(defense,dict(action='apply_containment',plan_id=plan['id']))
+    assert applied['state']=='finished' and defense.snapshot()['audit_ready'] is True
+    with ReceiptStore(defense.path) as store:
+        last=json.loads(store.connection.execute(
+            'SELECT payload_json FROM ai_receipt_events ORDER BY sequence DESC LIMIT 1').fetchone()[0])
+    assert (last['action'],last['state'],last['result']['ip'])==('apply_containment','applied','1.1.1.1')
+    # New actions are still refused before they run.
+    refused=perform(defense,dict(action='plan_containment',ip='1.0.0.1'))
+    assert refused['state']=='failed' and 'storage is full' in refused['message']
+
+
+def test_protected_service_survives_port_list_truncation(tmp_path):
+    from megalodon.operations import Operations
+
+    def flow(index,remote_port,local_port):
+        side=dict(packets=1,bytes=100,last_seen='2026-10-10T00:00:00Z')
+        return dict(id=str(index),protocol='TCP',a=dict(ip='192.168.1.10',port=local_port,local=True,location=None),
+                    b=dict(ip='8.8.4.4',port=remote_port,local=False,location=None),
+                    a_to_b=dict(side),b_to_a=dict(side),first_seen='2026-10-10T00:00:00Z',
+                    last_seen='2026-10-10T00:00:00Z',state='recent',flags=[],active=True)
+
+    # Twelve more recent flows fill the bounded port list before the DNS flow.
+    live=dict(connections=[flow(i,40000+i,8443) for i in range(12)]+[flow(99,53,51515)],
+              capture=dict(state='running'),background={},totals=dict(unmapped=0,truncated=False))
+    config=SimpleNamespace(live_snapshot=lambda:live,settings=Settings(),home=tmp_path,companions=None)
+    operations=Operations(config,context_reader=lambda:{})
+    ports=[p['port'] for p in operations.endpoint('8.8.4.4')['ports']]
+    assert len(ports)==12 and 53 in ports
+    defense=Defense(operations,config,run=lambda *a:pytest.fail('no host action expected'))
+    with pytest.raises(ValueError,match='protected'):
+        defense._target('8.8.4.4')
