@@ -426,8 +426,10 @@ class SupportConfiguration:
                             self.sensors.start(request['interface'])
                         self._save(background_enabled=True)
                     except BaseException:
-                        self.sensors.stop()
-                        self.background.stop()
+                        try:
+                            self.sensors.stop()
+                        finally:
+                            self.background.stop()
                         raise
                 if self.companions:
                     self.companions.request_collection()

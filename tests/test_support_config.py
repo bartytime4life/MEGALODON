@@ -490,6 +490,25 @@ def test_failed_sensor_start_does_not_save_or_leave_background_running(manager,m
     assert restored._background_enabled is False
 
 
+def test_failed_sensor_cleanup_still_stops_the_monitor(manager,monkeypatch):
+    stopped,attempted=[],[]
+    monkeypatch.setattr(manager.background,'start',lambda interface:None)
+    monkeypatch.setattr(manager.background,'stop',lambda:stopped.append('background'))
+    def partial_start(interface):
+        attempted.append(interface)
+        raise RuntimeError('can\'t start new thread')
+    def unjoinable_stop():
+        # Only the cleanup after a partial start fails to join.
+        if attempted:
+            raise RuntimeError('cannot join thread before it is started')
+    monkeypatch.setattr(manager.sensors,'start',partial_start,raising=False)
+    monkeypatch.setattr(manager.sensors,'stop',unjoinable_stop,raising=False)
+    manager.start({'action':'background_start','interface':'eth0'});manager._thread.join(3)
+    assert manager.snapshot()['job']['state']=='failed'
+    assert attempted==['eth0'] and stopped==['background','background'] and manager._background_enabled is False
+    assert not manager.profile.exists() or json.loads(manager.profile.read_text())['background_enabled'] is False
+
+
 def test_concurrent_stop_keeps_the_saved_collector_scope(manager,monkeypatch):
     manager._save(background_enabled=True)
     configure=manager.companions.configure
