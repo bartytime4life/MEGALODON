@@ -1192,7 +1192,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             elif body=={}:value=provider.cancel()
             else:raise ValueError('Invalid cancellation')
             self._send_json(value)
-        except (ValueError,OSError,sqlite3.Error):
+        except (ValueError,OSError,sqlite3.Error,RecursionError):
             self._send_json({'error':'Report request could not be applied. Check the dates, current job and managed storage.'},status=422)
 
     def _evidence_action_envelope(self) -> bool:
@@ -1249,7 +1249,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             elif set(body)=={'action','ids'} and body['action']=='save_case':value=provider.save_case(body['ids'])
             else:raise ValueError('Unsupported managed evidence action')
             self._send_json(value)
-        except (ValueError,OSError,sqlite3.Error):
+        except (ValueError,OSError,sqlite3.Error,RecursionError):
             self._send_json({'error':'settings could not be applied; refresh the preview and review storage status'},status=422)
 
     def _defense_action(self) -> None:
@@ -1310,7 +1310,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if type(body) is not dict or set(body) != {"ips"}:
                 raise ValueError("invalid lookup body")
             validate_lookup_ips(body["ips"])
-        except (ValueError, UnicodeError, TypeError, OverflowError):
+        except (ValueError, UnicodeError, TypeError, OverflowError, RecursionError):
             self._send_json({"error": "invalid offline location request"}, status=400)
             return
         try:
@@ -1451,7 +1451,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.connection.settimeout(2)
             body = json.loads(self.rfile.read(int(lengths[0])).decode("utf-8"), object_pairs_hook=_strict_pairs)
             validate_action(body)
-        except (ValueError, OSError):
+        except (ValueError, OSError, RecursionError):
             self._send_json({"error": "unsupported configuration request"}, status=400)
             return
         needs_lock = body['action'] != 'model_cancel'
