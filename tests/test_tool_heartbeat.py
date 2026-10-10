@@ -255,6 +255,87 @@ def test_deadline_reports_an_authorized_process_it_cannot_stop():
     assert "The job timed out and was stopped." not in status["output"]
 
 
+@pytest.mark.parametrize("permission_denied", [True, False])
+def test_job_waits_for_inflight_deadline_before_finishing(monkeypatch, permission_denied):
+    killing, release_kill = threading.Event(), threading.Event()
+    release_process, joining, finished = threading.Event(), threading.Event(), threading.Event()
+    release_next = threading.Event()
+    timers = []
+
+    class ObservedTimer(threading.Timer):
+        def __init__(self, interval, callback):
+            # Start the first callback immediately; leave the next job's timer idle.
+            super().__init__(0 if not timers else 60, callback)
+            timers.append(self)
+
+        def join(self, timeout=None):
+            joining.set()
+            return super().join(timeout)
+
+    class Process:
+        @property
+        def stdout(self):
+            def lines():
+                yield "first job\n"
+                assert release_process.wait(15)
+            return lines()
+
+        def kill(self):
+            killing.set()
+            assert release_kill.wait(15)
+            if permission_denied:
+                raise PermissionError(1, "Operation not permitted")
+
+        def wait(self):
+            return 0
+
+    class NextProcess:
+        @property
+        def stdout(self):
+            def lines():
+                yield "next job\n"
+                assert release_next.wait(15)
+            return lines()
+
+        def wait(self):
+            return 0
+
+    processes = iter([Process(), NextProcess()])
+    monkeypatch.setattr(tool_installer, "Timer", ObservedTimer)
+    installer = Installer(on_finish=finished.set, runner=lambda *args, **kw: next(processes))
+    try:
+        installer.start("scapy")
+        assert killing.wait(5)
+        release_process.set()
+        assert joining.wait(5)
+        assert not finished.is_set()
+        assert installer.status()["state"] == "running"
+        with pytest.raises(tool_installer.InstallBusy):
+            installer.start("scapy")
+        release_kill.set()
+        assert finished.wait(5)
+        status = installer.status()
+        assert status["state"] == ("succeeded" if permission_denied else "failed")
+        assert status["exit_code"] == (0 if permission_denied else None)
+        assert status["output"] == ["first job", (
+            "The authorized process exited after its deadline." if permission_denied
+            else "The job timed out and was stopped.")]
+        assert not timers[0].is_alive()
+        finished.clear()
+        installer.start("scapy")
+        release_next.set()
+        assert finished.wait(5)
+        assert installer.status()["output"] == ["next job"]
+        assert installer.status()["state"] == "succeeded"
+    finally:
+        release_process.set()
+        release_kill.set()
+        release_next.set()
+        for timer in timers:
+            timer.cancel()
+            timer.join(5)
+
+
 def test_qwen_model_manifest_turns_the_light_green(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_heartbeat, "runtime_platform", lambda: "linux")
     monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", ())
