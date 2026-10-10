@@ -97,8 +97,11 @@ alternate database. The Darwin writable path now connects through
 share the admitted file's device and inode. When SQLite instead reuses a
 descriptor it deferred closing for an inode still locked in this process, it
 accepts only if no unattributed file was opened and every ancestor directory's
-identity and timestamps are unchanged. In-process opens of admitted databases
-are serialized for that window. The PR-only workflow adds two native
+identity and timestamps are unchanged; the pathname and its parent directory
+are re-checked against the admitted file and directory descriptors after that
+ancestor baseline is taken, so a swap made before the baseline cannot pass as
+unchanged. In-process opens of admitted databases are serialized for that
+window. The PR-only workflow adds two native
 negatives, a connect-time ancestor swap and the same swap onto a file with a
 reusable SQLite descriptor; both must refuse with `STORAGE_PATH:DATABASE_CHANGED`
 and leave the swapped-in file unchanged. Until a hosted run records them, these
