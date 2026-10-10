@@ -435,6 +435,52 @@ def test_darwin_store_refuses_swap_to_file_with_reusable_sqlite_descriptor(
             holder.close()
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX rename semantics")
+def test_darwin_store_refuses_swap_taken_before_ancestor_baseline(
+    tmp_path, monkeypatch
+):
+    # The swap lands after the pre-connect path check but before the
+    # verifier's ancestor baseline, so both ancestor samples see the same
+    # swapped tree; it is restored only after the second sample.
+    admitted_root = tmp_path / "admitted"
+    other_root = tmp_path / "other"
+    held_root = tmp_path / "held"
+    for root in (admitted_root, other_root):
+        (root / "private").mkdir(parents=True, mode=storage.PRIVATE_DIRECTORY_MODE)
+    database = admitted_root / "private" / "audit.db"
+    other = other_root / "private" / "audit.db"
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    holders = [Store(database), Store(other)]
+    try:
+        _populate(holders[1])
+        Store(other, create=False).close()
+        real_generations = storage._ancestor_generations
+        calls = []
+
+        def swapping_generations(directory):
+            calls.append(directory)
+            if len(calls) == 1:
+                admitted_root.rename(held_root)
+                other_root.rename(admitted_root)
+            generations = real_generations(directory)
+            if len(calls) == 2:
+                admitted_root.rename(other_root)
+                held_root.rename(admitted_root)
+            return generations
+
+        monkeypatch.setattr(storage, "_ancestor_generations", swapping_generations)
+        with pytest.raises(
+            StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"
+        ):
+            Store(database, create=False)
+        if held_root.exists():
+            admitted_root.rename(other_root)
+            held_root.rename(admitted_root)
+    finally:
+        for holder in holders:
+            holder.close()
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
 def test_darwin_store_verification_tolerates_concurrent_admitted_opens(
     tmp_path, monkeypatch

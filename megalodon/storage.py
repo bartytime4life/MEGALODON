@@ -594,6 +594,10 @@ def _connect_verified_sqlite(
             _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
         if ancestors is None:
             _raise_path_error(prefix, "DIRECTORY_CHANGED")
+        # A swap before the baseline would leave both samples equal; prove the
+        # pathname still names the admitted file once the baseline is held.
+        if not _path_matches_descriptor(path, descriptor):
+            _raise_path_error(prefix, "DATABASE_CHANGED")
         connection = sqlite3.connect(uri, uri=True, **kwargs)
         try:
             after = _open_regular_file_identities()
