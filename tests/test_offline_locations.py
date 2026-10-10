@@ -105,6 +105,7 @@ def test_http_lookup_is_same_origin_only_and_unconfigured_is_explicit():
         assert request(headers, '{"ips":[],"ips":[]}')[0] == 400
         assert request(headers, json.dumps({"ips": ["008.8.8.8"]}))[0] == 400
         assert request(headers, "x" * 2049)[0] == 400
+        assert request(headers, "[" * 1024 + "]" * 1024)[0] == 400
     finally:
         server.shutdown()
         server.server_close()

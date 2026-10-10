@@ -145,7 +145,7 @@ def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manag
 
 def test_failed_profile_write_does_not_change_active_collector(manager,monkeypatch):
     original = manager.companions.config
-    def fail_save(*args):
+    def fail_save(*args,**changes):
         raise OSError('test-only write failure')
     monkeypatch.setattr(manager,'_save',fail_save)
     manager.start({'action':'nmap_configure','nmap_target':'192.168.2.22'})
@@ -281,6 +281,11 @@ def test_duplicate_and_unknown_body_rejected(endpoint,body):
     assert request(endpoint,body=body)[0]==400 and endpoint[2]==[]
 
 
+def test_deeply_nested_body_is_refused_with_a_response(endpoint):
+    code,value=request(endpoint,body=b'['*1024+b']'*1024)
+    assert code==400 and value=={'error':'unsupported configuration request'} and endpoint[2]==[]
+
+
 def test_alias_optional_signin_and_non_root_gates(endpoint,monkeypatch):
     assert request(endpoint,path='/api/support-config?x=1')[0]==405
     assert request(endpoint,method='GET',path='/api/support-config?x=1',body=b'')[0]==400
@@ -368,7 +373,7 @@ def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     from threading import Event
     waiting,release=Event(),Event()
     started=[]
-    def save():
+    def save(**changes):
         waiting.set();release.wait(2)
     monkeypatch.setattr(manager,'_save',save)
     monkeypatch.setattr(manager.capture,'start',lambda interface:started.append(interface))
@@ -420,6 +425,67 @@ def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,m
     assert restored._background_enabled is True
     assert restored._geography_enabled is False
     assert restored.background.geography_enabled() is False
+
+
+@pytest.mark.parametrize('raw', [
+    None, '['*1000+']'*1000,
+])
+def test_malformed_saved_profile_fails_closed_without_stopping_startup(manager,raw):
+    if raw is None:
+        raw=json.dumps(dict(schema=config.SCHEMA,configured=[],
+                            settings=dict(interface='eth0',nmap_target='127.0.0.1/32',scan_folder=['Downloads'])))
+    manager._paths()
+    manager.profile.write_text(raw);manager.profile.chmod(0o600)
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    assert restored.snapshot()['job']['state']=='failed'
+    assert restored._configured==set() and restored._background_enabled is False
+
+
+def test_failed_save_does_not_enable_geography_or_background(manager,monkeypatch):
+    refreshed,started=[],[]
+    monkeypatch.setattr(manager.background,'refresh_geography',lambda:refreshed.append(True))
+    monkeypatch.setattr(manager.background,'start',lambda interface:started.append(interface))
+    manager._paths()
+    elsewhere=manager.home/'elsewhere.json';elsewhere.write_text('{}')
+    os.symlink(elsewhere,manager.profile)
+    manager.start({'action':'geography_refresh'});manager._thread.join(3)
+    snapshot=manager.snapshot()
+    assert snapshot['job']['state']=='failed' and snapshot['geography_enabled'] is False
+    assert manager.background.geography_enabled() is False and refreshed==[]
+    # Private paths are not echoed in the setup status.
+    assert str(manager.home) not in json.dumps(snapshot)
+
+    manager.profile.unlink()
+    writes=[]
+    original=config._atomic_write
+    def fail_background_write(path,value,mode):
+        writes.append(json.loads(value))
+        if json.loads(value)['background_enabled']:
+            raise OSError('test-only write failure')
+        return original(path,value,mode)
+    monkeypatch.setattr(config,'_atomic_write',fail_background_write)
+    manager.start({'action':'background_start','interface':'eth0'});manager._thread.join(3)
+    assert manager.snapshot()['job']['state']=='failed' and len(writes)==2
+    assert started==[] and manager._background_enabled is False
+    assert json.loads(manager.profile.read_text())['background_enabled'] is False
+
+
+def test_concurrent_stop_keeps_the_saved_collector_scope(manager,monkeypatch):
+    manager._save(background_enabled=True)
+    configure=manager.companions.configure
+    def stop_after_persist(updates,before_apply=None):
+        def persist_then_stop():
+            before_apply()
+            manager.start({'action':'background_stop'})
+        configure(updates,before_apply=persist_then_stop)
+    monkeypatch.setattr(manager.companions,'configure',stop_after_persist)
+    manager.start({'action':'nmap_configure','nmap_target':'192.168.1.0/24'});manager._thread.join(3)
+    assert manager.snapshot()['job']['state']=='finished'
+    saved=json.loads(manager.profile.read_text())
+    assert saved['settings']['nmap_target']=='192.168.1.0/24' and saved['configured']==['nmap']
+    assert saved['background_enabled'] is False
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    assert restored._settings['nmap_target']=='192.168.1.0/24' and restored._configured=={'nmap'}
 
 
 def test_missing_capture_tools_fail_closed(manager,monkeypatch):
