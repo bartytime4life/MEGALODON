@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import itertools
 import json
+import random
 from pathlib import Path
 import subprocess
 import sys
@@ -13,10 +15,12 @@ import pytest
 
 from megalodon.model_evaluation import (
     CATEGORIES,
+    OUTCOMES,
     ModelEvaluationError,
     canonical_json,
     check_receipt_against_manifest,
     manifest_projection,
+    outcomes_explained_by_failures,
     parse_manifest_bytes,
     validate_corpus_manifest,
     validate_evaluation_receipt,
@@ -361,4 +365,63 @@ def test_each_failed_case_may_move_one_outcome():
     with pytest.raises(ModelEvaluationError, match="^RECEIPT_MANIFEST_OUTCOMES$"):
         check_receipt_against_manifest(
             validate_evaluation_receipt(value), validate(manifest())
+        )
+
+
+def test_failure_cannot_explain_outcome_moved_in_a_passed_category():
+    value = matching_receipt()
+    execution = value["execution"]
+    # Only the injection case (expected DENY) failed, but the passed
+    # exhaustion case's expected ERROR is reported as ANSWER.
+    execution["category_results"][0].update(passed_cases=0, failed_cases=1)
+    execution["outcome_counts"].update(ANSWER=3, ERROR=0)
+    with pytest.raises(ModelEvaluationError, match="^RECEIPT_MANIFEST_OUTCOMES$"):
+        check_receipt_against_manifest(
+            validate_evaluation_receipt(value), validate(manifest())
+        )
+    # Moving the failed category's own expected outcome is explainable.
+    execution["outcome_counts"].update(ERROR=1, DENY=2)
+    check_receipt_against_manifest(
+        validate_evaluation_receipt(value), validate(manifest())
+    )
+
+
+def _reachable_by_enumeration(cases, failed, counts) -> bool:
+    by_category = {c: [e for cc, e in cases if cc == c] for c in CATEGORIES}
+    choices = [
+        itertools.combinations(range(len(by_category[c])), failed[c])
+        for c in CATEGORIES
+    ]
+    for picked in itertools.product(*choices):
+        kept = dict.fromkeys(OUTCOMES, 0)
+        for category, indexes in zip(CATEGORIES, picked):
+            for index, expected in enumerate(by_category[category]):
+                if index not in indexes:
+                    kept[expected] += 1
+        if all(counts[o] >= kept[o] for o in OUTCOMES):
+            return True
+    return False
+
+
+def test_outcome_feasibility_matches_exhaustive_enumeration():
+    rng = random.Random(445)
+    for _ in range(600):
+        cases = [
+            (category, rng.choice(OUTCOMES))
+            for category in CATEGORIES
+            for _ in range(rng.randint(1, 2))
+        ]
+        failed = {
+            c: rng.randint(0, sum(1 for cc, _ in cases if cc == c))
+            for c in CATEGORIES
+        }
+        cuts = sorted(rng.randint(0, len(cases)) for _ in range(3))
+        counts = dict(
+            zip(OUTCOMES, [cuts[0], cuts[1] - cuts[0], cuts[2] - cuts[1], len(cases) - cuts[2]])
+        )
+        expected = {c: dict.fromkeys(OUTCOMES, 0) for c in CATEGORIES}
+        for category, outcome in cases:
+            expected[category][outcome] += 1
+        assert outcomes_explained_by_failures(expected, failed, counts) is (
+            _reachable_by_enumeration(cases, failed, counts)
         )

@@ -531,6 +531,9 @@ def validate_corpus_manifest(value: object) -> dict[str, Any]:
 
     category_totals = dict.fromkeys(CATEGORIES, 0)
     expected_totals = dict.fromkeys(OUTCOMES, 0)
+    expected_by_category = {
+        category: dict.fromkeys(OUTCOMES, 0) for category in CATEGORIES
+    }
     fixtures: set[str] = set()
     previous_case_number = -1
     previous_category = 0
@@ -568,6 +571,7 @@ def validate_corpus_manifest(value: object) -> dict[str, Any]:
             unknown_cases += 1
         category_totals[category] += 1
         expected_totals[expected] += 1
+        expected_by_category[category][expected] += 1
 
     if any(count == 0 for count in category_totals.values()):
         raise ModelEvaluationError("CATEGORY_COVERAGE")
@@ -582,6 +586,7 @@ def validate_corpus_manifest(value: object) -> dict[str, Any]:
         "manifest_sha256": sha256(_canonical(copied)).hexdigest(),
         "category_totals": category_totals,
         "expected_outcome_totals": expected_totals,
+        "expected_outcomes_by_category": expected_by_category,
         "unknown_evidence_id_cases": unknown_cases,
     }
 
@@ -629,6 +634,39 @@ def manifest_projection(validated: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
+def outcomes_explained_by_failures(
+    expected_by_category: Mapping[str, Mapping[str, int]],
+    failed_by_category: Mapping[str, int],
+    outcome_counts: Mapping[str, int],
+) -> bool:
+    """Whether reported outcome totals are reachable from the manifest.
+
+    A passed case produced its expected outcome, so only a category's failed
+    cases can leave that category's expected outcomes. Every outcome reported
+    below its expected total must be explained by such cases: for each set S
+    of outcomes, the shortfall across S cannot exceed what the categories'
+    failed cases could have removed from S (Gale's supply-demand condition).
+    """
+
+    shortfall = {
+        outcome: max(
+            0,
+            sum(expected_by_category[c][outcome] for c in CATEGORIES)
+            - outcome_counts[outcome],
+        )
+        for outcome in OUTCOMES
+    }
+    for mask in range(1, 1 << len(OUTCOMES)):
+        chosen = [o for i, o in enumerate(OUTCOMES) if mask >> i & 1]
+        removable = sum(
+            min(failed_by_category[c], sum(expected_by_category[c][o] for o in chosen))
+            for c in CATEGORIES
+        )
+        if sum(shortfall[o] for o in chosen) > removable:
+            return False
+    return True
+
+
 def check_receipt_against_manifest(
     receipt: Mapping[str, Any], manifest: Mapping[str, Any]
 ) -> None:
@@ -673,16 +711,15 @@ def check_receipt_against_manifest(
     complete = execution["completed_cases"] == execution["total_cases"]
     if executed_unknown > frozen_unknown or (complete and executed_unknown != frozen_unknown):
         raise ModelEvaluationError("RECEIPT_MANIFEST_UNKNOWN_EVIDENCE_ID")
-    # A passed case produced its expected outcome; each failed case can move at
-    # most one count away from it, changing the summed difference by two.
-    if complete:
-        failed = sum(result["failed_cases"] for result in execution["category_results"])
-        drift = sum(
-            abs(execution["outcome_counts"][outcome] - manifest["expected_outcome_totals"][outcome])
-            for outcome in OUTCOMES
-        )
-        if drift > 2 * failed:
-            raise ModelEvaluationError("RECEIPT_MANIFEST_OUTCOMES")
+    if complete and not outcomes_explained_by_failures(
+        manifest["expected_outcomes_by_category"],
+        {
+            result["category"]: result["failed_cases"]
+            for result in execution["category_results"]
+        },
+        execution["outcome_counts"],
+    ):
+        raise ModelEvaluationError("RECEIPT_MANIFEST_OUTCOMES")
 
 
 def canonical_json(value: object) -> str:

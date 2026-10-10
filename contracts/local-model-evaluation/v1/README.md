@@ -54,8 +54,10 @@ total and per-category denominators, and to execute no more unknown-evidence-ID
 cases than it lists (exactly that many once the run is complete). An
 `operator_observed` receipt must cite an `operator_frozen` manifest. Once the
 run is complete, the receipt's outcome counts may differ from the manifest's
-expected-outcome totals only by what its failed cases explain: the summed
-absolute difference is at most twice the failed-case count, so a receipt whose
-cases all passed reports exactly the expected outcomes. The synthetic
+expected-outcome totals only by what its failed cases explain. A passed case
+keeps its expected outcome, so only a category's failed cases can leave that
+category's expected outcomes: every outcome reported below its expected total
+must be coverable by failed cases from categories that expect it. A receipt
+whose cases all passed therefore reports exactly the expected outcomes. The synthetic
 `fixtures/manifest-synthetic.json` matches `fixtures/accepted-synthetic.json`
 apart from that receipt's placeholder `manifest_sha256`.
