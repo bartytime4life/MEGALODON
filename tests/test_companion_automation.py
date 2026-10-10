@@ -270,6 +270,40 @@ def test_child_output_is_bounded_without_shell():
         _run_fixed(["python3", "-c", "print('x'*1000)"], 100, 5)
 
 
+def test_unstoppable_authorized_child_is_reaped_with_the_timeout_error(monkeypatch):
+    from megalodon import companion_automation
+    read_out, write_out = os.pipe()
+    read_err, write_err = os.pipe()
+    processes = []
+
+    class AuthorizedProcess:
+        def __init__(self, argv, **kwargs):
+            self.stdout = os.fdopen(read_out, "rb", buffering=0)
+            self.stderr = os.fdopen(read_err, "rb", buffering=0)
+            self.waited = False
+            processes.append(self)
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            raise PermissionError(1, "Operation not permitted")
+
+        def wait(self, timeout=None):
+            self.waited = True
+            return 0
+
+    monkeypatch.setattr(companion_automation.subprocess, "Popen", AuthorizedProcess)
+    monkeypatch.setattr(companion_automation.shutil, "which", lambda name: "/usr/bin/" + name)
+    try:
+        with pytest.raises(ValueError, match="timed out"):
+            _run_fixed(["pkexec", "/bin/sh", "-c", "true"], 8192, 1)
+    finally:
+        os.close(write_out)
+        os.close(write_err)
+    assert processes[0].waited and processes[0].stdout.closed and processes[0].stderr.closed
+
+
 def test_local_hud_companion_route_is_read_only_and_query_closed(tmp_path):
     from megalodon.dashboard import DashboardHandler
 
