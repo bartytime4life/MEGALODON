@@ -142,3 +142,12 @@ def test_companion_shell_entry_stays_with_fixed_python_module():
     assert 'Preview only.' in result.stdout
     refused=subprocess.run(['bash',str(script),'nmap; echo nope','install'],capture_output=True,text=True,timeout=10)
     assert refused.returncode!=0
+
+
+def test_zeek_guidance_names_an_existing_readme_section():
+    guidance = tool_setup.CONFIGURATION['zeek'][0]
+    heading = guidance.split('"')[1]
+    readme = Path(__file__).resolve().parents[1] / 'README.md'
+    if not readme.exists():
+        pytest.skip('Operator documentation is not included in this distribution')
+    assert f'### {heading}' in readme.read_text(encoding='utf-8')

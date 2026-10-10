@@ -13,7 +13,7 @@ from .tool_heartbeat import heartbeat_report
 CONFIGURATION = {
     'core': ('Run ./scripts/install-local.sh from a reviewed checkout, then open the MEGALODON application.', 'Before startup: python -m megalodon.config_check < config/settings.toml (substitute your actual settings file). Exit 0 validates configuration only; then check your private database and availability in the HUD.'),
     'tshark': ('For offline review: tshark -r /absolute/path/to/capture.pcap -c 100', 'Live capture needs an explicitly selected interface and separately approved permissions. No permissions are granted by this script.'),
-    'zeek': ('Use the pinned private-prefix build guide in docs/companion-setup.md.', 'Run zeek -r /absolute/path/to/capture.pcap inside a new private output directory; it creates logs there.'),
+    'zeek': ('Use the pinned private-prefix build guide in README.md, "3. Build Zeek as a private, non-service producer".', 'Run zeek -r /absolute/path/to/capture.pcap inside a new private output directory; it creates logs there.'),
     'suricata': ('Review /etc/suricata/suricata.yaml: set HOME_NET to your authorized network and choose rules and output paths.', 'Validate before enabling: suricata -T -c /etc/suricata/suricata.yaml (may require read permissions).'),
     'scapy': ('Use the same Python environment as MEGALODON; select an authorized interface in the local capture workflow.', 'Check import only: python -c "import scapy; print(scapy.__version__)". No capture starts here.'),
     'nftables': ('Review /etc/nftables.conf locally and preserve an out-of-band recovery path.', 'Syntax check only: nft --check --file /etc/nftables.conf (requires platform privileges). Applying rules is a separate operator action.'),

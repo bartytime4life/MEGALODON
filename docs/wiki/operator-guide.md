@@ -29,11 +29,11 @@ terminal preflight `./scripts/start-local.sh --check` helps when startup fails.
 
 | Workspace | Use it for | Do not infer |
 | --- | --- | --- |
-| Home | Evidence availability, coverage, shared UTC range, headline counts, and common next actions | Whole-network visibility, sensor continuity, or an incident verdict |
-| Traffic | Qualified stored metadata linked to non-sample ingestion runs | Payload content, wire speed, or complete traffic history |
-| Findings | Fixed detector results linked to the qualified event set | Malware attribution, uniqueness, or authorization to respond |
-| Apps | Static 14-tool guidance, startup executable/process observations, saved console links, and copy-only commands | Installation integrity, supported compatibility, service health, or connected data |
-| Reports | Preview and download one bounded local JSON report for the selected range | Server-side persistence, complete case evidence, or a compliance report |
+| HUD | Live network, background tools, interface and resource rates, qualified traffic visuals, connection roster, shared UTC range, and headline counts | Whole-network visibility, sensor continuity, payload content, or an incident verdict |
+| Findings | Fixed detector results linked to the qualified event set; severity is shown as a coloured, labelled pill | Malware attribution, uniqueness, or authorization to respond |
+| Sensors | What each background tool is doing and which data has reached MEGALODON; **Advanced actions** holds readiness checks and copy-only commands | Installation integrity, supported compatibility, service health, or connected data |
+| Setup | Apps & connections for the 10 supporting apps, capture permissions and interface, discovery scopes, AI knowledge, storage, IP location data, and local sign-in | That saving a configuration started collection |
+| Reports | Make, save, schedule, and print local visual reports for the selected period; CSV and JSON under **Advanced exports** | Server-side persistence, complete case evidence, or a compliance report |
 | Evidence | Separate audit, offline, Suricata, reference, ingestion, and optional Qwen projections | That the sources share one transactional snapshot or live connection |
 | Help | Status vocabulary and safe next steps | Operational acceptance |
 

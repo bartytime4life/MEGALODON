@@ -147,6 +147,13 @@ assert.equal(matching(byId('room-traffic-grid'),'room-direction-unknown').length
 assert.equal(matching(byId('room-traffic-grid'),'is-data').length,7);
 assert.match(textOf(byId('room-traffic-grid')),/9223372036854775807 reported bytes/);
 assert.equal(byId('room-traffic-grid').children.length,8);
+const severityCell=()=>byId('room-findings-table').children[0].children[2].children[0].children[2];
+assert.equal(severityCell().children[0].className,`severity ${payload.findings[0].severity}`,'known levels reuse the shared severity pill');
+assert.equal(severityCell().children[0].textContent,payload.findings[0].severity);
+const knownSeverity=payload.findings[0].severity;run('roomState.snapshot.findings[0].severity="<img src=x>";renderRoom()');
+assert.equal(severityCell().children[0].className,'severity UNKNOWN','unexpected levels never become class names');
+assert.equal(severityCell().children[0].textContent,'<img src=x>');
+run(`roomState.snapshot.findings[0].severity=${JSON.stringify(knownSeverity)};renderRoom()`);
 assert.match(textOf(byId('room-traffic-grid')),/local-subnet or sensor-vantage/);
 assert.match(textOf(byId('room-traffic-grid')),/12345/);
 assert.match(textOf(byId('room-traffic-grid')),/192\.0\.2\.1:12345/);

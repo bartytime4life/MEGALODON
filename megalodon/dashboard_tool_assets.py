@@ -224,7 +224,7 @@ const toolPublisherDownloads = {
 };
 
 // Fixed copy-only setup recipes. These are not installation observations.
-const companionSetupGuide = "https://github.com/bartytime4life/MEGALODON/blob/f6d25ad336623fceee9cd9726092fbe8a7a82cb6/docs/companion-setup.md";
+const companionSetupGuide = "https://github.com/bartytime4life/MEGALODON/blob/708886d5a8aff36f075290e82e9d4b470a176995/docs/companion-setup.md";
 const companionSetupGuides = {
   "scapy": {
     "note": "Optional Python package, not required to open MEGALODON. Linux is supported. The PATH-only check intentionally leaves Scapy not checked. Choose the environment before installing; a standalone environment is not the HUD environment. Commands below run only when you paste them into a terminal.",

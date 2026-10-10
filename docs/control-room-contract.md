@@ -58,13 +58,13 @@ addresses and model output are excluded from that summary contract.
 
 ## Control-room presentation (second draft slice)
 
-HUD, Traffic, Findings, Apps, Reports, Evidence and Help share one anchored,
-keyboard-operable shell. A persistent Back to Home link returns to the Home tab.
+HUD, Findings, Sensors, Setup, Reports, Evidence and Help share one anchored,
+keyboard-operable shell. A persistent **Return to visual HUD** link returns to the HUD tab.
 The old audit inspector is explicitly separate in Evidence because it can
 contain sample/unlinked rows. It is never the source of traffic visuals.
 
-The visual HUD contains the traffic and finding charts; Traffic and Findings
-retain detailed tables. The rolling-hour globe has its own selected minute.
+The visual HUD contains the traffic and finding charts; its activity detail and
+Findings retain detailed tables. The rolling-hour globe has its own selected minute.
 The other traffic panels share a UTC range (maximum 31 days). Recorded window and
 Now use the bounded `/api/traffic` response. Last hour, Today and Custom UTC
 read database history through `/api/traffic-history`. Every panel includes range, source, unknown
