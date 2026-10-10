@@ -153,7 +153,10 @@ artifacts. To upgrade, review a newer checkout and run its
 `./scripts/install-local.sh`; activation happens only after the new installed
 package passes an import and origin check. **Uninstall** removes the managed
 application releases, launchers, desktop entry, and icon. It preserves the data
-directory and settings file.
+directory and settings file. If uninstall is interrupted after it starts
+removing files, run it again to finish; because the launchers may already be
+gone, use `./scripts/install-local.sh uninstall` from a reviewed checkout. An
+install interrupted during its package build removes its partial release.
 
 ## Alternative: check and run this checkout
 

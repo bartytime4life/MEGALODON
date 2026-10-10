@@ -427,7 +427,9 @@ def _create_release(paths: InstallPaths, source: Path) -> tuple[str, dict[str, s
             "version": __version__,
             "installed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-    except Exception:
+    except BaseException:
+        # Includes Ctrl-C during the long package build: an unlisted release
+        # directory would otherwise outlive every repair and uninstall.
         shutil.rmtree(release, ignore_errors=True)
         raise
 
@@ -863,7 +865,9 @@ def _uninstall_selected(selected: InstallPaths) -> dict[str, object]:
     if any(value not in {"ready", "missing"} for value in health.values()):
         raise InstallError("an installed artifact was modified; preserve and review it before uninstall")
     expected = _expected_release(selected, str(manifest["active_release"]))
-    if _current_target(selected) != expected:
+    # A missing selector is an interrupted uninstall: it removes the selector
+    # before the release trees and the manifest, so a retry must finish it.
+    if _current_target(selected) not in {expected, None}:
         raise InstallError("the active-release selector does not match the installed manifest")
     release_paths = [_expected_release(selected, str(item["id"])) for item in manifest["releases"]]
     existing_releases: list[Path] = []
@@ -877,13 +881,20 @@ def _uninstall_selected(selected: InstallPaths) -> dict[str, object]:
     # stopping the HUD. A refused uninstall must not disable a valid service.
     from . import hud_autostart
     hud_autostart.disable(selected)
-    for name, path in _artifact_paths(selected).items():
-        if health[name] == "ready":
-            path.unlink()
-    selected.current.unlink()
-    for release in existing_releases:
-        shutil.rmtree(release)
-    selected.manifest.unlink()
+    try:
+        for name, path in _artifact_paths(selected).items():
+            if health[name] == "ready":
+                path.unlink()
+        if os.path.lexists(selected.current):
+            selected.current.unlink()
+        for release in existing_releases:
+            shutil.rmtree(release)
+        selected.manifest.unlink()
+    except OSError as exc:
+        raise InstallError(
+            "uninstall stopped before it finished; run it again (from a reviewed checkout: "
+            "./scripts/install-local.sh uninstall) to complete removal"
+        ) from exc
     try:
         selected.releases.rmdir()
     except OSError:
