@@ -1700,7 +1700,7 @@ def test_managed_evidence_actions_require_unambiguous_origin_token_and_framing(
     b'{"action":"preview","policy":{"cap_bytes":NaN}}',
     b'{"action":"preview","policy":{"cap_bytes":Infinity}}',
     b'{"action":"preview","policy":{"cap_bytes":-Infinity}}',
-    b'{"action":"preview","policy":"\xff"}',
+    b'{"action":"preview","policy":"\xff"}', b"[" * 4000 + b"]" * 4000,
 ])
 def test_managed_storage_rejects_malformed_or_extended_action_bodies(managed_evidence_http, raw):
     h = managed_evidence_http
