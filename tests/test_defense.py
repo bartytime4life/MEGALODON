@@ -204,9 +204,15 @@ def test_outcome_row_may_use_the_ledger_reserve_after_a_host_change(manager,monk
         last=json.loads(store.connection.execute(
             'SELECT payload_json FROM ai_receipt_events ORDER BY sequence DESC LIMIT 1').fetchone()[0])
     assert (last['action'],last['state'],last['result']['ip'])==('apply_containment','applied','1.1.1.1')
-    # New actions are still refused before they run.
+    # A new action is still refused before it runs, and its refusal never writes
+    # an outcome row without a recorded opening row.
     refused=perform(defense,dict(action='plan_containment',ip='1.0.0.1'))
-    assert refused['state']=='failed' and 'storage is full' in refused['message']
+    assert refused['state']=='failed'
+    with ReceiptStore(defense.path) as store:
+        store.verify_chain()
+        after=json.loads(store.connection.execute(
+            'SELECT payload_json FROM ai_receipt_events ORDER BY sequence DESC LIMIT 1').fetchone()[0])
+    assert after==last
 
 
 def test_protected_service_survives_port_list_truncation(tmp_path):
