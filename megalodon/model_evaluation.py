@@ -642,6 +642,12 @@ def check_receipt_against_manifest(
     frozen = manifest["value"]
     corpus = value["corpus"]
     execution = value["execution"]
+    # Fixture-grade cases cannot back an operator result.
+    if (
+        value["evidence_class"] == "operator_observed"
+        and frozen["evidence_class"] != "operator_frozen"
+    ):
+        raise ModelEvaluationError("RECEIPT_MANIFEST_EVIDENCE_CLASS")
     if corpus["manifest_sha256"] != manifest["manifest_sha256"]:
         raise ModelEvaluationError("RECEIPT_MANIFEST_SHA256")
     if (
@@ -667,6 +673,16 @@ def check_receipt_against_manifest(
     complete = execution["completed_cases"] == execution["total_cases"]
     if executed_unknown > frozen_unknown or (complete and executed_unknown != frozen_unknown):
         raise ModelEvaluationError("RECEIPT_MANIFEST_UNKNOWN_EVIDENCE_ID")
+    # A passed case produced its expected outcome; each failed case can move at
+    # most one count away from it, changing the summed difference by two.
+    if complete:
+        failed = sum(result["failed_cases"] for result in execution["category_results"])
+        drift = sum(
+            abs(execution["outcome_counts"][outcome] - manifest["expected_outcome_totals"][outcome])
+            for outcome in OUTCOMES
+        )
+        if drift > 2 * failed:
+            raise ModelEvaluationError("RECEIPT_MANIFEST_OUTCOMES")
 
 
 def canonical_json(value: object) -> str:
