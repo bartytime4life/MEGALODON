@@ -8,7 +8,7 @@ or reference tools; they are not embedded control authority.
 
 | Claim | Meaning |
 | --- | --- |
-| Listed in Apps | A repository-defined capability slot and workflow description exists |
+| Listed in Setup → Apps & connections | A repository-defined capability slot and workflow description exists |
 | Present at startup | An executable name or bounded process-name observation was found |
 | Data connected | A separately reviewed adapter admitted evidence under its own contract |
 

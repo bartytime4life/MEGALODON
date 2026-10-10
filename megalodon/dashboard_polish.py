@@ -238,6 +238,39 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
   /* The primary action owns a full row so its label never breaks across three lines. */
   .support-apps #support-apps-start { flex:1 1 100%; }
 }
+/* ---- Readability: severity at a glance, whole tokens in tables, calmer wrapping. ---- */
+::selection { background:rgba(81,230,207,.3); color:#f4fffd; }
+.shell :is(h1,h2,h3) { text-wrap:balance; }
+.shell :is(p,li) { text-wrap:pretty; }
+.severity { gap:6px; align-items:center; line-height:1.2; white-space:nowrap; background:color-mix(in srgb, currentColor 10%, transparent); }
+.severity::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.severity.CRITICAL::before { box-shadow:0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+/* Detector names, levels and IDs stay whole; narrow screens scroll sideways instead of splitting CRITICAL into CRITI/CAL. */
+.room-table :is(th,td) { overflow-wrap:normal; word-break:normal; white-space:nowrap; }
+.room-table { scrollbar-color:var(--muted) transparent;
+  background:linear-gradient(90deg, var(--bg) 30%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(270deg, var(--bg) 30%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(81,230,207,.22), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(81,230,207,.22), transparent) right / 12px 100% no-repeat scroll; }
+#room-findings-table td:is(:nth-child(1),:nth-child(4)) { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.78rem; font-variant-numeric:tabular-nums; }
+#room-findings-table td:nth-child(2) { font-weight:700; letter-spacing:.02em; }
+#room-findings-table tbody tr:has(.severity:is(.CRITICAL,.HIGH)) > td:first-child { box-shadow:inset 3px 0 0 var(--rose); }
+#room-findings-table tbody tr:has(.severity.HIGH) > td:first-child { box-shadow:inset 3px 0 0 var(--orange); }
+/* Phones: each finding becomes a compact card so detector and severity lead without sideways scrolling. */
+@media (max-width: 640px) {
+  #room-findings-table table { min-width:0; }
+  #room-findings-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+  #room-findings-table tbody tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; padding:12px 14px; border-bottom:1px solid rgba(148,188,202,.12); }
+  #room-findings-table tbody td { display:block; padding:0; border:0; white-space:normal; overflow-wrap:anywhere; }
+  #room-findings-table tbody td:nth-child(2) { grid-area:1 / 1; align-self:center; }
+  #room-findings-table tbody td:nth-child(3) { grid-area:1 / 2; justify-self:end; }
+  #room-findings-table tbody td:is(:nth-child(1),:nth-child(4),:nth-child(5)) { grid-column:1 / -1; color:var(--muted); font-size:.74rem; }
+  #room-findings-table tbody td:nth-child(4)::before { content:"Finding / event "; font-family:inherit; }
+  #room-findings-table tbody td:nth-child(5)::before { content:"Detector "; }
+  #room-findings-table tbody tr > td:first-child { box-shadow:none !important; }
+  #room-findings-table tbody tr:has(.severity.CRITICAL) { box-shadow:inset 3px 0 0 var(--rose); }
+  #room-findings-table tbody tr:has(.severity.HIGH) { box-shadow:inset 3px 0 0 var(--orange); }
+}
 @media (prefers-reduced-motion: reduce) {
   body::after, .mark, .mark::after, .app-dot, .app-dot::after, .app-rail-recheck span, .workspace-view > *, .ops-desk > *, .support-apps::before, .shell details[open] > * { animation:none !important; }
   .shell button, .app-tile, .app-dot-chip, .polish-chip { transition:none !important; transform:none !important; }
@@ -256,6 +289,7 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
   [data-state="ready"] > .app-dot, .app-dot[data-legend="ready"] { background:linear-gradient(90deg,CanvasText 50%,Canvas 50%); forced-color-adjust:none; }
   [data-state="unknown"] > .app-dot { border-style:dashed; }
   .app-dot-chip, .app-tile { border:1px solid CanvasText; }
+  .severity { background:Canvas; } .severity::before { background:CanvasText; forced-color-adjust:none; }
 }
 @media print { .app-rail, .app-tiles, body::after { display:none !important; } }
 '''

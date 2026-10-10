@@ -11,6 +11,14 @@ with segment-qualified paging and explicit gaps. The original read interfaces
 remain compatible. The globe uses its own recent observed connections; unknown
 locations remain unmapped. Opening a view does not itself start a sensor.
 
+**Findings** shows each severity as a coloured pill that also spells out the
+level, and high or critical rows carry an accent edge, so the level never
+depends on colour alone. Detector names, levels and IDs stay whole. On phones
+each finding becomes a compact card with detector and severity on the first
+line; on wider screens the table scrolls sideways with a shaded edge when
+columns do not fit. A severity outside the fixed four levels is shown as
+**UNKNOWN** styling with its original text.
+
 ## Visual reports and advanced exports
 
 Open Reports for the latest saved visual report. **Make report now**, **Save

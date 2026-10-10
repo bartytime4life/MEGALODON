@@ -40,7 +40,7 @@ interface becomes available after the local server starts.
 
 ## 2. Check this computer
 
-On **Home**, open **Data and tools**. Every optional tool has a status light
+Open **Setup**, then **Data and tools**. Every optional tool has a status light
 next to its name, refreshed in the background while the tab is visible:
 
 | Light | Meaning | Next step |
@@ -60,7 +60,7 @@ button runs. For the environment and data file, select **Check this computer**:
 | Result | What it tells you | Next step |
 | --- | --- | --- |
 | Python and SQLite versions | Which runtime is serving this workspace | Use these versions when troubleshooting an environment mismatch |
-| Data available | The selected audit file passed a bounded read | Open Traffic or Findings to see whether it contains qualified observations |
+| Data available | The selected audit file passed a bounded read | Open the HUD or Findings to see whether it contains qualified observations |
 | Data not configured | There was no data file when this HUD started | Use an existing configuration or authorized import, then restart the HUD |
 | Data unavailable | The selected file could not pass the check | Preserve the file and follow the storage troubleshooting guide |
 | Executable found | A known tool name was found on the server's PATH | Review that tool's workflow; presence alone does not connect its data |
@@ -92,18 +92,19 @@ which workflows are connected to MEGALODON and which are separate companions.
 
 | I want to… | Go here |
 | --- | --- |
-| Understand the current data source | **Home → Data and tools** |
-| Inspect saved traffic and change the time range | **Traffic**; choose a range and apply it |
+| Understand the current data source | **Setup → Data and tools** |
+| Inspect saved traffic and change the time range | **HUD**; choose a range and apply it |
 | Review linked detections | **Findings** |
-| Find downloads or inspect an integration | **Home → Data and tools**, or **Apps** |
-| Open a companion's saved web console | **Apps**; configure its explicit console link |
+| Find downloads or inspect an integration | **Setup → Data and tools**, or **Setup → Apps & connections** |
+| See what each background tool is doing | **Sensors** |
+| Open a companion's saved web console | **Setup → Apps & connections**; configure its explicit console link |
 | Preview and download a local report | **Reports** |
 | Inspect sample/unlinked audit history or offline evidence | **Evidence** |
 | Understand a status or recover from a problem | **Help** |
 
 **No qualified data** is a useful result: the current selection has no admitted
 observations. A sample-only audit file can still be readable. Installing a tool
-does not start collection or fill Traffic and Findings automatically.
+does not start collection or fill the HUD's traffic views and Findings automatically.
 
 ## What you can do here, and what still needs a terminal
 

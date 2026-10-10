@@ -804,7 +804,7 @@ local entry points and authority limits, and
 [visual HUD, summary export and uniform tool setup](docs/hud-workflow.md) for
 the local summary and `python -m megalodon.tool_setup` workflows.
 
-**Apps** shows the startup executable-presence snapshot, official setup links,
+**Setup → Apps & connections** shows the startup executable-presence snapshot, official setup links,
 saved companion-console addresses and copy-only maintenance controls. The local
 Choose
 **View in HUD** on any app card to use its configured web console in the App
@@ -814,8 +814,8 @@ Zenmap require a separately configured web viewer; MEGALODON cannot embed native
 windows. The app's own controls retain that app's permissions. Viewing its UI does
 not connect its telemetry to the HUD.
 
-**HUD** gathers the globe and all traffic/finding visualizations. **Traffic** and
-**Findings** retain the detailed records. The shared metadata feed refreshes the newest 500 stored event candidates every five seconds
+**HUD** gathers the globe and all traffic/finding visualizations. Its activity
+detail and **Findings** retain the detailed records. The shared metadata feed refreshes the newest 500 stored event candidates every five seconds
 by default while the tab is visible. A configured capture or metadata writer must
 be operating separately for new records to appear. Last Fetched and the latest
 observation are separate timestamps; neither establishes whole-network coverage.

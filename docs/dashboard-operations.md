@@ -50,9 +50,9 @@ integration; standalone tools show **Runtime not applicable**. The receipt omits
 process IDs, command lines, paths, users, and host identity. Restart the HUD to
 refresh this snapshot.
 
-Use **Home → Data and tools** to search official publisher downloads and run a
-fresh availability check. Use **Apps** to inspect
-copy-only verification/maintenance commands, or save its existing web-console
+Use **Setup → Data and tools** to search official publisher downloads and run a
+fresh availability check. Use **Setup → Apps & connections** to inspect
+copy-only verification/maintenance commands, or save an app's existing web-console
 address once. Saved console links open the companion app in another tab, where
 that app retains its own authentication and controls. Desktop-only tools still
 use their normal application launcher or the displayed terminal commands.
@@ -91,9 +91,10 @@ and sensor operation remain explicit separate workflows.
 ## Read the interface in evidence order
 
 Seven persistent tabs organize the interface without reloading the page:
-**Home** starts with local checks and workflow-specific downloads; **Traffic**
-and **Findings** show qualified saved evidence; **Apps** explains integrations
-and saved console links; **Reports** previews local exports; **Evidence** holds
+**HUD** shows live network status, background tools and qualified traffic
+visuals; **Findings** shows linked detector results; **Sensors** shows what each
+background tool is doing; **Setup** holds local checks, downloads, integrations
+and saved console links; **Reports** builds local reports; **Evidence** holds
 the reference library, offline snapshot, optional Suricata view, ingestion
 receipts, audit history, and display-only Qwen receipt; **Help** explains states
 and recovery. Narrow and short viewports use natural document scrolling.

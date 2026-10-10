@@ -47,7 +47,7 @@ def compose_workflows(html: str) -> str:
     <p class="workflow-explainer">Sensor counts are bounded source summaries. They are separate from HUD packet totals and admitted detector findings.</p>
     <details class="workflow-advanced"><summary>Advanced actions, desktop apps and capability reference</summary>''' + advanced.rsplit('</section>', 1)[0] + '</details></section>'
     result = html.replace(INTEGRATIONS_HTML, local)
-    result = result.replace('Start installed support apps and configured collectors', 'Start installed background tools and configured collectors').replace('Support apps control in the HUD', 'Background tools control in the HUD').replace('Apps keeps its startup observations until you reopen the HUD.', 'Actions refreshes local workflow status while its view is open; capability references keep their own startup observations.')
+    result = result.replace('Start installed support apps and configured collectors', 'Start installed background tools and configured collectors').replace('Support apps control in the HUD', 'Background tools control in the HUD')
     return result
 
 

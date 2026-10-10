@@ -119,3 +119,23 @@ def test_unstyled_links_use_palette_without_overriding_components():
     # :where() keeps specificity at zero, so every existing component link rule still wins.
     assert ':where(.shell) :where(a:link, a:visited) { color:#8fe9e0;' in POLISH_CSS
     assert 'class="ki-strip"' in INDEX_HTML and '.ki-strip a {' in POLISH_CSS
+
+
+def test_findings_keep_severity_visible_on_phones_and_tokens_whole():
+    assert '.room-table :is(th,td) { overflow-wrap:normal; word-break:normal; white-space:nowrap; }' in POLISH_CSS
+    phone = POLISH_CSS[POLISH_CSS.index('@media (max-width: 640px)'):POLISH_CSS.index('@media (prefers-reduced-motion')]
+    assert '#room-findings-table tbody tr { display:grid;' in phone
+    # Detector and severity share the first row of each card; the header stays available to assistive technology.
+    assert 'td:nth-child(2) { grid-area:1 / 1;' in phone and 'td:nth-child(3) { grid-area:1 / 2;' in phone
+    assert 'thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }' in phone
+    forced = POLISH_CSS[POLISH_CSS.index('@media (forced-colors: active)'):]
+    assert '.severity::before { background:CanvasText;' in forced
+    assert '<meta name="theme-color" content="#061017">' in INDEX_HTML
+
+
+def test_help_names_only_workspaces_that_exist():
+    help_panel = INDEX_HTML[INDEX_HTML.index('id="room-help-title"'):INDEX_HTML.index('Full status glossary')]
+    for stale in ('in Home', 'In Apps', 'Apps keeps', 'Home shows'):
+        assert stale not in help_panel
+    assert '<a href="#integrations-title">Sensors</a>' in help_panel
+    assert 'id="integrations-title"' in INDEX_HTML
