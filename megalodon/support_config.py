@@ -414,15 +414,21 @@ class SupportConfiguration:
                 self.background.stop()
                 self.sensors.stop()
                 # A stop takes the persistence lock to cancel, so it either
-                # precedes this check or follows the started monitor.
+                # precedes this check or follows the started monitor. The
+                # opt-in is saved only once both parts started; any failure
+                # stops them, so the failed action never resumes at launch.
                 with self._persist_lock:
-                    with self._lock:
-                        if self._cancel_capture_start:
-                            raise ValueError('Background start was cancelled.')
-                    self._save(background_enabled=True)
-                    with self._lock:
-                        self.background.start(request['interface'])
-                        self.sensors.start(request['interface'])
+                    try:
+                        with self._lock:
+                            if self._cancel_capture_start:
+                                raise ValueError('Background start was cancelled.')
+                            self.background.start(request['interface'])
+                            self.sensors.start(request['interface'])
+                        self._save(background_enabled=True)
+                    except BaseException:
+                        self.sensors.stop()
+                        self.background.stop()
+                        raise
                 if self.companions:
                     self.companions.request_collection()
                 message = 'Background traffic enabled and configured inventory collectors queued. Monitoring resumes automatically with the local HUD.'

@@ -464,10 +464,30 @@ def test_failed_save_does_not_enable_geography_or_background(manager,monkeypatch
             raise OSError('test-only write failure')
         return original(path,value,mode)
     monkeypatch.setattr(config,'_atomic_write',fail_background_write)
+    stopped=[]
+    monkeypatch.setattr(manager.background,'stop',lambda:stopped.append(True))
     manager.start({'action':'background_start','interface':'eth0'});manager._thread.join(3)
     assert manager.snapshot()['job']['state']=='failed' and len(writes)==2
-    assert started==[] and manager._background_enabled is False
+    # The monitor that started before the failed save is stopped again.
+    assert started==['eth0'] and len(stopped)==2 and manager._background_enabled is False
     assert json.loads(manager.profile.read_text())['background_enabled'] is False
+
+
+def test_failed_sensor_start_does_not_save_or_leave_background_running(manager,monkeypatch):
+    started,stopped=[],[]
+    monkeypatch.setattr(manager.background,'start',lambda interface:started.append(interface))
+    monkeypatch.setattr(manager.background,'stop',lambda:stopped.append('background'))
+    def unsafe_workspace(interface):
+        raise ValueError('sensor workspace is unsafe')
+    monkeypatch.setattr(manager.sensors,'start',unsafe_workspace,raising=False)
+    monkeypatch.setattr(manager.sensors,'stop',lambda:stopped.append('sensors'),raising=False)
+    manager.start({'action':'background_start','interface':'eth0'});manager._thread.join(3)
+    assert manager.snapshot()['job']['state']=='failed'
+    assert started==['eth0'] and stopped[-2:]==['sensors','background']
+    assert manager._background_enabled is False
+    assert json.loads(manager.profile.read_text())['background_enabled'] is False
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    assert restored._background_enabled is False
 
 
 def test_concurrent_stop_keeps_the_saved_collector_scope(manager,monkeypatch):
