@@ -22,7 +22,11 @@ unexpected output, or reports over 1 MiB. Accepted reports use the `clamscan`
 summary format with `Known viruses`, numeric engine version, scanned directory
 and file counts, infected file count, data scanned/read, time, local start/end
 dates. Some optional action fields are refused. `Total errors` is optional when
-zero, as the producer prints it only when nonzero. UTF-8 is required.
+zero, as the producer prints it only when nonzero. Only a whole
+`----------- SCAN SUMMARY -----------` line starts the summary, and the summary
+must be UTF-8. File-result lines before it carry scanned file names, which
+anyone saving a file chooses, so they are neither parsed nor required to be
+UTF-8.
 
 The `megalodon-clamscan-summary-v1` JSON has exactly nine fields:
 
