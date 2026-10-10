@@ -222,6 +222,10 @@ def test_deadline_reports_an_authorized_process_it_cannot_stop():
         def stdout(self):
             def lines():
                 yield "unpacking\n"
+                notified.wait(5)
+                # Later output must not scroll the warning out of the buffer.
+                for index in range(60):
+                    yield f"setting up {index}\n"
                 release.wait(5)
             return lines()
 
@@ -231,17 +235,23 @@ def test_deadline_reports_an_authorized_process_it_cannot_stop():
         def wait(self):
             return 0
 
+    notified = threading.Event()
     installer = Installer(on_finish=finished.set, runner=lambda argv, **kw: AuthorizedProcess(), timeout=0.2)
     installer.start("scapy")
     deadline = time.monotonic() + 3
-    while len(installer.status()["output"]) < 2 and time.monotonic() < deadline:
+    while "cannot be stopped" not in (installer.status()["output"] or [""])[-1] and time.monotonic() < deadline:
+        time.sleep(0.02)
+    notified.set()
+    while "setting up 59" not in installer.status()["output"] and time.monotonic() < deadline + 3:
         time.sleep(0.02)
     status = installer.status()
-    assert status["state"] == "running" and "cannot be stopped" in status["output"][-1]
+    assert status["state"] == "running" and len(status["output"]) == 40
+    assert "setting up 59" in status["output"] and "cannot be stopped" in status["output"][-1]
     release.set()
     assert finished.wait(5)
     status = installer.status()
     assert status["state"] == "succeeded" and status["exit_code"] == 0
+    assert status["output"][-1] == "The authorized process exited after its deadline."
     assert "The job timed out and was stopped." not in status["output"]
 
 

@@ -200,6 +200,9 @@ class _Job:
     finished_at: str | None = None
     exit_code: int | None = None
     output: list[str] = field(default_factory=list)
+    # Shown as the last output line until the job ends, so later output
+    # cannot scroll it out of the bounded buffer.
+    notice: str | None = None
 
 
 class InstallBusy(Exception):
@@ -225,9 +228,10 @@ class Installer:
     def status(self) -> dict[str, Any]:
         with self._lock:
             job = self._job
+            output = job.output[-(MAX_OUTPUT_LINES - 1):] + [job.notice] if job.notice else list(job.output)
             return {"schema": "megalodon-tool-install-v1", "tool": job.tool, "action": job.action, "state": job.state,
                     "started_at": job.started_at, "finished_at": job.finished_at,
-                    "exit_code": job.exit_code, "output": list(job.output)}
+                    "exit_code": job.exit_code, "output": output}
 
     def start(self, tool_id: str, action: str = "install") -> dict[str, Any]:
         if tool_id not in RECIPES or action not in ACTIONS:
@@ -274,7 +278,9 @@ class Installer:
                 except PermissionError:
                     # pkexec runs the authorized command as root; this user cannot
                     # stop it, so the job stays running until it exits.
-                    self._append("The job passed its deadline, but the authorized process cannot be stopped from the HUD; it is still running.")
+                    with self._lock:
+                        self._job.notice = ("The job passed its deadline, but the authorized process cannot be stopped "
+                                            "from the HUD; it is still running.")
                     return
                 timed_out.set()
             deadline = Timer(self._timeout, expire)
@@ -295,6 +301,10 @@ class Installer:
         if code in (126, 127) and command and command[0].endswith("pkexec"):
             self._append("Authorization was cancelled or no password prompt is available. Use the terminal command instead.")
         with self._lock:
+            if self._job.notice:
+                self._job.notice = None
+                self._job.output.append("The authorized process exited after its deadline.")
+                del self._job.output[:-MAX_OUTPUT_LINES]
             self._job.exit_code = code
             self._job.state = "succeeded" if code == 0 else "failed"
             self._job.finished_at = _now()
