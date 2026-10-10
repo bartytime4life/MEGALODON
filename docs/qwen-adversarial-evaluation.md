@@ -25,8 +25,10 @@ signature verification or host change. The receipt projection reports
 `manifest_binding` as `MATCHED` only when `--manifest` was given and the
 receipt cites that manifest's canonical-file digest, corpus, candidate
 profile/comparison boundary, total and per-category denominators, and
-unknown-evidence-ID count; any mismatch refuses with a fixed
-`RECEIPT_MANIFEST_*` code.
+unknown-evidence-ID count, an operator receipt cites an operator-frozen
+manifest, and a complete receipt's outcome counts match the manifest's
+expected outcomes up to what its failed cases explain; any mismatch refuses
+with a fixed `RECEIPT_MANIFEST_*` code.
 
 ## Corpus manifest
 

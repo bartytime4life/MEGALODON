@@ -320,3 +320,45 @@ def test_receipt_cli_binds_to_manifest(tmp_path: Path):
     )
     assert mismatched.returncode == 2
     assert json.loads(mismatched.stdout)["error_code"] == "RECEIPT_MANIFEST_SHA256"
+
+
+def test_operator_receipt_cannot_bind_to_synthetic_manifest():
+    value = matching_receipt()
+    value["evidence_class"] = "operator_observed"
+    value["corpus"]["signature"]["externally_verified"] = True
+    validated = validate_evaluation_receipt(value)
+    assert validated["hard_gate_passed"] is True
+    with pytest.raises(
+        ModelEvaluationError, match="^RECEIPT_MANIFEST_EVIDENCE_CLASS$"
+    ):
+        check_receipt_against_manifest(validated, validate(manifest()))
+    frozen = manifest()
+    frozen["evidence_class"] = "operator_frozen"
+    value["corpus"]["manifest_sha256"] = sha256(encode(frozen)).hexdigest()
+    check_receipt_against_manifest(
+        validate_evaluation_receipt(value), validate(frozen)
+    )
+
+
+def test_all_passed_receipt_outcomes_must_equal_manifest_expectations():
+    value = matching_receipt()
+    value["execution"]["outcome_counts"].update(ANSWER=3, DENY=2)
+    with pytest.raises(ModelEvaluationError, match="^RECEIPT_MANIFEST_OUTCOMES$"):
+        check_receipt_against_manifest(
+            validate_evaluation_receipt(value), validate(manifest())
+        )
+
+
+def test_each_failed_case_may_move_one_outcome():
+    value = matching_receipt()
+    execution = value["execution"]
+    execution["outcome_counts"].update(ANSWER=3, DENY=2)
+    execution["category_results"][0].update(passed_cases=0, failed_cases=1)
+    check_receipt_against_manifest(
+        validate_evaluation_receipt(value), validate(manifest())
+    )
+    execution["outcome_counts"].update(ANSWER=4, DENY=1)
+    with pytest.raises(ModelEvaluationError, match="^RECEIPT_MANIFEST_OUTCOMES$"):
+        check_receipt_against_manifest(
+            validate_evaluation_receipt(value), validate(manifest())
+        )
