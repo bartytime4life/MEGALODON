@@ -203,6 +203,14 @@ def _validate_input(value):
     _utc(event["timestamp"])
 
 
+def _pinned_ip(text):
+    """Contract text: IPv4-mapped IPv6 is dotted on every CPython release."""
+    address = ipaddress.ip_address(text)
+    if address.version == 6 and address.ipv4_mapped is not None:
+        return "::ffff:" + str(address.ipv4_mapped)
+    return str(address)
+
+
 def _normalize(value):
     event = value["event"]
     return {
@@ -210,9 +218,9 @@ def _normalize(value):
         "source": value["source"],
         "source_record_index": value["source_record_index"],
         "observed_at": _utc(event["timestamp"]),
-        "src_ip": str(ipaddress.ip_address(event["src_ip"])),
+        "src_ip": _pinned_ip(event["src_ip"]),
         "src_port": event["src_port"],
-        "dst_ip": str(ipaddress.ip_address(event["dest_ip"])),
+        "dst_ip": _pinned_ip(event["dest_ip"]),
         "dst_port": event["dest_port"],
         "protocol": event["proto"],
         "rule": {

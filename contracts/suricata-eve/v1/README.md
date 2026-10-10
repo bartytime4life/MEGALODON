@@ -196,8 +196,8 @@ not anonymization, report-sharing approval, or permission for external egress.
 
 ## 5. Fixtures, tests, and acceptance boundary
 
-`fixtures/accepted.json` contains three complete input/output pairs, including
-IPv6 normalization, offset/day rollover, boundary integers, loopback observation,
+`fixtures/accepted.json` contains four complete input/output pairs, including
+IPv6 normalization, pinned IPv4-mapped IPv6 text, offset/day rollover, boundary integers, loopback observation,
 and a producer-reported block that does not become a MEGALODON action.
 `fixtures/rejected.json` contains data-only mutations of named positive seeds,
 with explicit expected schema/semantic/pair rejection layers and fixed codes.
