@@ -185,8 +185,23 @@ def _verify_identities(descriptors: list[int], expected: list[tuple[int, ...]]) 
         actual = [_identity(os.fstat(descriptor)) for descriptor in descriptors]
     except OSError:
         _fail("SOURCE_CHANGED")
-    if actual != expected:
+    # The source (last) compares in full. An ancestor directory's size and times
+    # change whenever an unrelated entry is added, so only its device, inode,
+    # owner and mode must hold; reads stay bound to the retained descriptors.
+    if (len(actual) != len(expected) or actual[-1:] != expected[-1:]
+            or [item[:4] for item in actual[:-1]] != [item[:4] for item in expected[:-1]]):
         _fail("SOURCE_CHANGED")
+
+
+def canonical_ip_text(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """Return address text that does not depend on the CPython release.
+
+    CPython releases differ on IPv4-mapped IPv6 text (``::ffff:c000:201`` or
+    ``::ffff:192.0.2.1``); this always writes the dotted form.
+    """
+    if address.version == 6 and address.ipv4_mapped is not None:
+        return "::ffff:" + str(address.ipv4_mapped)
+    return str(address)
 
 
 def _decode(raw: bytes) -> Any:
@@ -370,9 +385,9 @@ def _normalize(value: dict[str, Any]) -> dict[str, Any]:
         "source": deepcopy(value["source"]),
         "source_record_index": value["source_record_index"],
         "observed_at": _utc(event["timestamp"]),
-        "src_ip": str(ipaddress.ip_address(event["src_ip"])),
+        "src_ip": canonical_ip_text(ipaddress.ip_address(event["src_ip"])),
         "src_port": event["src_port"],
-        "dst_ip": str(ipaddress.ip_address(event["dest_ip"])),
+        "dst_ip": canonical_ip_text(ipaddress.ip_address(event["dest_ip"])),
         "dst_port": event["dest_port"],
         "protocol": event["proto"],
         "rule": {key: event["alert"][key] for key in ("gid", "signature_id", "rev", "severity")},

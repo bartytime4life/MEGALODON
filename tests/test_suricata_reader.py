@@ -231,6 +231,37 @@ def test_post_read_change_and_deadline_fail_before_publication(tmp_path, monkeyp
         suricata.read_completed_file(str(path))
 
 
+def test_ancestor_identity_is_checked_without_its_changing_contents(tmp_path, monkeypatch):
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    path = _write(private / "alerts.jsonl", [CASES[0]["input"]])
+    records = suricata._records
+
+    def with_ancestor_change(change):
+        def wrapped(*args):
+            for item in records(*args):
+                change()
+                yield item
+        return wrapped
+
+    # An unrelated entry beside the private directory is not a source change.
+    monkeypatch.setattr(suricata, "_records", with_ancestor_change(
+        lambda: (tmp_path / "unrelated.txt").write_text("x")))
+    batch, _ = suricata.read_completed_file(str(path))
+    assert len(batch) == 1
+    # An ancestor's mode is still part of its identity.
+    monkeypatch.setattr(suricata, "_records", with_ancestor_change(lambda: private.chmod(0o750)))
+    with pytest.raises(suricata.ReaderError, match="SOURCE_CHANGED$"):
+        suricata.read_completed_file(str(path))
+
+
+def test_ipv4_mapped_addresses_normalize_alike_on_every_python(tmp_path):
+    record = json.loads(json.dumps(CASES[0]["input"]))
+    record["event"]["src_ip"], record["event"]["dest_ip"] = "::ffff:c000:201", "2001:db8::2"
+    batch, _ = suricata.read_completed_file(str(_write(tmp_path / "alerts.jsonl", [record])))
+    assert (batch[0]["src_ip"], batch[0]["dst_ip"]) == ("::ffff:192.0.2.1", "2001:db8::2")
+
+
 def test_hard_deadline_interrupts_a_stalled_regular_file_read(tmp_path, monkeypatch):
     path = _write(tmp_path / "alerts.jsonl", [CASES[0]["input"]])
 
