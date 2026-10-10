@@ -127,15 +127,15 @@ class Defense:
             raise ValueError('This address is protected: local/reserved, allowlisted, DNS or remote-access service.')
         return row
 
-    def _append(self,identifier,**payload):
+    def _append(self,identifier,*,opened=False,**payload):
         evidence=getattr(self.configuration,'evidence',None)
         from .managed_receipts import ManagedReceipts
         managed=evidence is not None and evidence.enabled
         with (ManagedReceipts(evidence,'defense') if managed else ReceiptStore(self.path)) as store:
             store.verify_chain()
-            # The reserve stops new actions before they run; an outcome row may use
-            # it, so a host change is never left without its result record.
-            if (not managed and payload.get('state')=='not_attempted'
+            # The reserve stops new actions before they run; the outcome row of a
+            # recorded action may use it, so a host change keeps its result record.
+            if (not managed and not opened
                     and store._occupied_bytes()>MAX_LEDGER_BYTES-32768):raise ValueError('Defense audit storage is full.')
             row=store.append(identifier,payload)
         with self._lock:self._restore(row)
@@ -152,11 +152,12 @@ class Defense:
         return result
 
     def _work(self,request):
-        action=request['action'];identifier=str(uuid4());result=None;changed=False;attempted_host=False
+        action=request['action'];identifier=str(uuid4());result=None;changed=False;attempted_host=False;opened=False
         try:
             with self._lock: approved_preview=deepcopy(self._plans.get(request.get('plan_id')))
             self._append(identifier,state='not_attempted',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),
                          message='Operator requested a fixed workflow.',request=request,approved_preview=approved_preview,result=None)
+            opened=True
             if action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
                 answer=self.configuration.intelligence.explain_device(request['ip'])
                 result=dict(ip=request['ip'],**answer,basis='committed_evidence')
@@ -231,7 +232,7 @@ class Defense:
                 # The explanation lives with its source-dependent managed record.
                 # The action ledger keeps a reference, never a longer-lived copy.
                 audit_result=dict(review_id=result['review_id'],action_status='not_attempted')
-            self._append(identifier,state=state,action=action,ip=request.get('ip') or (result or {}).get('ip'),message=message,result=audit_result)
+            self._append(identifier,opened=True,state=state,action=action,ip=request.get('ip') or (result or {}).get('ip'),message=message,result=audit_result)
             with self._lock:self._job.update(state='finished',message=message,result=result)
         except Exception as exc:
             provider_message = {
@@ -249,7 +250,7 @@ class Defense:
             }.get(exc.code, 'Local AI is unavailable; review its status in Setup.') if isinstance(exc, AIProviderError) else None
             message=('Host action outcome needs review; the five-minute kernel timeout bounds a successfully added block. Use Release for any recorded block.' if attempted_host else
                      provider_message or (str(exc) if type(exc) is ValueError and len(str(exc))<=240 else 'Local defense workflow unavailable. No model proposal was executed.'))
-            try:self._append(identifier,state='failed',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),message=message,host_attempted=attempted_host,result=None)
+            try:self._append(identifier,opened=opened,state='failed',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),message=message,host_attempted=attempted_host,result=None)
             except Exception:
                 self._audit_ready=False
                 message='Defense audit unavailable. Review the last attempted action before continuing.'
