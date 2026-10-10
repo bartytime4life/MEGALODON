@@ -1112,16 +1112,17 @@ def test_http09_simple_request_gets_fixed_refusal_with_security_headers():
     handler = type("SimpleRequestHandler", (dashboard.DashboardHandler,), {"store": Mock()})
     server, thread = _serve(handler)
     try:
-        # Python 3.11 and 3.12 still read a header block after a simple request
-        # line; 3.13 does not. The blank line completes it for every version.
-        response = _raw_request(server, b"GET /\r\n\r\n")
-        head, _, body = response.partition(b"\r\n\r\n")
-        lines = head.split(b"\r\n")
-        assert lines[0].startswith(b"HTTP/1.0 400"), response[:80]
-        headers = {k.lower(): v for k, _, v in (line.partition(b": ") for line in lines[1:])}
-        assert headers[b"x-content-type-options"] == b"nosniff"
-        assert headers[b"server"] == b"MEGALODON"
-        assert json.loads(body) == {"error": "request refused"}
+        # A genuine simple-request client sends no header block and waits; the
+        # refusal must not depend on one arriving (3.11/3.12 would wait for it).
+        for request in (b"GET /\r\n", b"GET /\r\n\r\n", b"POST /api/storage\r\n"):
+            response = _raw_request(server, request)
+            head, _, body = response.partition(b"\r\n\r\n")
+            lines = head.split(b"\r\n")
+            assert lines[0].startswith(b"HTTP/1.0 400"), (request, response[:80])
+            headers = {k.lower(): v for k, _, v in (line.partition(b": ") for line in lines[1:])}
+            assert headers[b"x-content-type-options"] == b"nosniff"
+            assert headers[b"server"] == b"MEGALODON"
+            assert json.loads(body) == {"error": "request refused"}
         assert not handler.store.summary.called
     finally:
         _stop(server, thread)

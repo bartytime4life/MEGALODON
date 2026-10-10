@@ -1829,15 +1829,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return "MEGALODON"
 
     def parse_request(self) -> bool:
-        if not super().parse_request():
-            return False
-        if self.request_version == "HTTP/0.9":
-            # A simple request has no header message for the guards to read.
-            # Reply as HTTP/1.0 so the fixed refusal keeps its security headers.
+        requestline = str(self.raw_requestline, "iso-8859-1").rstrip("\r\n")
+        if len(requestline.split()) == 2:
+            # A two-word line is an HTTP/0.9 simple request. Refuse it before the
+            # stdlib (3.11/3.12) waits for a header block such a client never
+            # sends, and answer as HTTP/1.0 so the fixed security headers apply.
+            self.command = None
+            self.requestline = requestline
             self.request_version = "HTTP/1.0"
+            self.close_connection = True
             self.send_error(400)
             return False
-        return True
+        return super().parse_request()
 
     def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
         """Refuse malformed or unsupported requests through ``_send`` so the fixed security headers apply."""
