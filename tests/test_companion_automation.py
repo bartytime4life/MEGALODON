@@ -101,6 +101,17 @@ def test_clamav_schedule_and_watcher_continue_independently(tmp_path, monkeypatc
         worker.stop()
 
 
+def test_rejected_report_with_matches_is_not_shown_as_current(tmp_path, monkeypatch):
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    config = _config(tmp_path, f'[collection]\ninterval_seconds=300\nclamav_paths=["{downloads}"]\n')
+    monkeypatch.setattr("megalodon.companion_automation._run_fixed", lambda *_: (b"partial output\n", 1))
+    worker = CompanionAutomation(config, AISettings())
+    worker.tick()
+    assert "reported matches" in worker.snapshot()["status"]["clamav"]
+    assert "stale" in worker.snapshot()["status"]["clamav"]
+
+
 def test_scopes_are_explicit_and_conservative(tmp_path):
     empty = _config(tmp_path, "")
     assert empty.nmap_target is None and empty.clamav_paths == () and not empty.osquery_enabled
@@ -178,6 +189,14 @@ End Date:   2026:09:26 12:00:01
     worker.tick()
     assert worker.snapshot()["results"]["clamav"]["scanned_files"] == 1
     assert "preserved" in worker.snapshot()["status"]["clamav"]
+    # A watched scan that reported matches but cannot be summarized is not
+    # left looking like the prior (clean) aggregate.
+    clamav.write_text("/private/x\n----------- SCAN SUMMARY -----------\n: Example FOUND\n" + clamav.read_text())
+    exit_status.write_text("1\n")
+    worker.tick()
+    assert worker.snapshot()["results"]["clamav"]["infected_files"] == 0
+    status = worker.snapshot()["status"]["clamav"]
+    assert "reported matches" in status and "stale" in status
 
 
 def test_fixed_collector_runs_only_configured_action(tmp_path, monkeypatch):

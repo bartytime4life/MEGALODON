@@ -52,7 +52,8 @@ shows **Observation time unknown**, even when the report was just copied or
 modified. Neither the file's modification time nor a later reprocessing time
 becomes a collection time. Old v1 exports also show unknown observation time.
 A rejected or failed replacement preserves the prior count and its times, with
-a separate collector failure status.
+a separate collector failure status. When `clamscan` exited 1 (matches found)
+but its report is rejected, that status says the prior aggregate is stale.
 
 The bounded `python -m megalodon.osquery_inventory < /absolute/report.json`
 exporter emits `megalodon-osquery-package-count-v2`: exactly `schema`,
