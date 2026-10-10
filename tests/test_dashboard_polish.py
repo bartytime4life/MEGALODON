@@ -89,8 +89,14 @@ def test_status_dots_differ_by_shape_not_only_hue():
     assert re.search(r'\[data-state="stopped"\] > \.app-dot[^{]*\{[^}]*rotate\(45deg\)', POLISH_CSS)
     assert re.search(r'\[data-state="missing"\] > \.app-dot[^{]*\{[^}]*background:transparent; border:2px solid', POLISH_CSS)
     assert re.search(r'\[data-state="unknown"\] > \.app-dot \{[^}]*border:2px dashed', POLISH_CSS)
+    # Installed-but-idle is half filled, so it never relies on the running pulse (absent under reduced motion).
+    assert re.search(r'\[data-state="ready"\] > \.app-dot[^{]*\{[^}]*linear-gradient\(90deg,var\(--dot-ready\) 50%,transparent 50%\)', POLISH_CSS)
+    forced = POLISH_CSS[POLISH_CSS.index('@media (forced-colors: active)'):]
+    assert 'linear-gradient(90deg,CanvasText 50%,Canvas 50%)' in forced
+    running_rule = forced[forced.index('[data-state="running"] > .app-dot'):]
+    assert '[data-state="ready"]' not in running_rule[:running_rule.index('}')], 'running and installed never share a shape'
     # The legend draws the same shapes so the key matches the rail.
-    for legend in ('stopped', 'missing'):
+    for legend in ('ready', 'stopped', 'missing'):
         assert f'.app-dot[data-legend="{legend}"]' in POLISH_CSS
 
 
