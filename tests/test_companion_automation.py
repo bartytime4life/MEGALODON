@@ -101,6 +101,17 @@ def test_clamav_schedule_and_watcher_continue_independently(tmp_path, monkeypatc
         worker.stop()
 
 
+def test_rejected_report_with_matches_is_not_shown_as_current(tmp_path, monkeypatch):
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    config = _config(tmp_path, f'[collection]\ninterval_seconds=300\nclamav_paths=["{downloads}"]\n')
+    monkeypatch.setattr("megalodon.companion_automation._run_fixed", lambda *_: (b"partial output\n", 1))
+    worker = CompanionAutomation(config, AISettings())
+    worker.tick()
+    assert "reported matches" in worker.snapshot()["status"]["clamav"]
+    assert "stale" in worker.snapshot()["status"]["clamav"]
+
+
 def test_scopes_are_explicit_and_conservative(tmp_path):
     empty = _config(tmp_path, "")
     assert empty.nmap_target is None and empty.clamav_paths == () and not empty.osquery_enabled

@@ -381,6 +381,7 @@ class CompanionAutomation:
             with self._lock:
                 self._status[kind] = ("Scanning configured files; previous aggregate retained until complete" if kind == "clamav"
                                       else "Collecting local aggregate; previous aggregate retained until complete")
+            code = None
             try:
                 raw, code = _run_fixed(argv, limit, timeout, self._stop)
                 if kind == "nmap" and code == 0:
@@ -400,6 +401,8 @@ class CompanionAutomation:
             except (OSError, ValueError, sqlite3.Error) as exc:
                 if str(exc) == "companion tool unavailable":
                     self._fail(kind, f"{argv[0]} is not installed; automatic collection unavailable")
+                elif kind == "clamav" and code == 1:
+                    self._fail(kind, "ClamAV reported matches, but its report was rejected; the prior aggregate is stale. Review ClamAV directly.")
                 else:
                     self._fail(kind, "Local collector unavailable or rejected; prior aggregate preserved")
 

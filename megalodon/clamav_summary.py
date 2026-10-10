@@ -19,13 +19,16 @@ def summarize_report(raw: bytes, exit_code: int, *, exported_at: datetime | None
     """Return only aggregate fields; caller supplies the recorded clamscan exit status."""
     if not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_BYTES or exit_code not in (0, 1):
         raise ValueError("Unsupported completed clamscan report")
+    # File-result lines carry scanned file names, which any downloader chooses:
+    # only a whole marker line counts, and only the summary after it is decoded.
+    lines = raw.split(b"\n")
+    markers = [index for index, line in enumerate(lines) if line.rstrip(b"\r") == MARKER.encode()]
+    if len(markers) != 1 or b"\x00" in raw:
+        raise ValueError("Unsupported completed clamscan report")
     try:
-        report = raw.decode("utf-8")
+        tail = b"\n".join(lines[markers[0] + 1:]).decode("utf-8").strip().splitlines()
     except UnicodeDecodeError as exc:
         raise ValueError("Unsupported completed clamscan report") from exc
-    if report.count(MARKER) != 1 or "\x00" in report:
-        raise ValueError("Unsupported completed clamscan report")
-    tail = report.split(MARKER, 1)[1].strip().splitlines()
     fields = {}
     allowed = set(COUNT_FIELDS) | OTHER_FIELDS | OPTIONAL_ACTIONS | {"Start Date", "End Date"}
     for line in tail:

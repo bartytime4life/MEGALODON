@@ -54,6 +54,19 @@ def test_refuses_error_partial_or_unsupported_output(raw, code):
         summarize_report(raw, code)
 
 
+@pytest.mark.parametrize("name", [
+    b"/home/you/Downloads/----------- SCAN SUMMARY -----------.exe",
+    b"/home/you/Downloads/----------- SCAN SUMMARY -----------",
+    b"/home/you/Downloads/caf\xe9.exe",
+])
+def test_scanned_file_names_cannot_hide_a_match(name):
+    # File names come from whoever saved the file; only the summary is parsed.
+    raw = report(1).replace(b"/private/secret-file", name, 1)
+    value = summarize_report(raw, 1)
+    assert value["infected_files"] == 1 and value["scanned_files"] == 10
+    assert summarize_report(report(1).replace(b"\n", b"\r\n"), 1)["infected_files"] == 1
+
+
 def test_cli_does_not_echo_private_report_on_failure():
     cmd = [sys.executable, "-m", "megalodon.clamav_summary", "--exit-code", "0"]
     ok = subprocess.run(cmd, input=report(), capture_output=True, timeout=10)
