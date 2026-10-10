@@ -168,7 +168,11 @@ def _verify_identities(descriptors: list[int], expected: list[tuple[int, ...]]) 
         actual = [_identity(os.fstat(descriptor)) for descriptor in descriptors]
     except OSError:
         _fail("SOURCE_CHANGED")
-    if actual != expected:
+    # The source (last) compares in full. An ancestor directory's size and times
+    # change whenever an unrelated entry is added, so only its device, inode,
+    # owner and mode must hold; the read stays bound to the retained descriptor.
+    if (len(actual) != len(expected) or actual[-1:] != expected[-1:]
+            or [item[:4] for item in actual[:-1]] != [item[:4] for item in expected[:-1]]):
         _fail("SOURCE_CHANGED")
 
 
