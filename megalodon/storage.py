@@ -582,9 +582,10 @@ def _connect_verified_sqlite(
     redirecting the pathname to it needs an entry change in the admitted
     directory (checked by the caller) or an ancestor, which updates that
     directory's generation. Only in that case are unchanged ancestor
-    generations accepted. Other threads' concurrent opens of this database's
-    own sidecars are set aside on the same basis; any other unattributed open
-    refuses.
+    generations accepted, after proving, once they are sampled, that the
+    pathname resolves through the admitted directory to the admitted file.
+    Other threads' concurrent opens of this database's own sidecars are set
+    aside on the same basis; any other unattributed open refuses.
     """
 
     with _DATABASE_OPEN_LOCK:
@@ -595,8 +596,12 @@ def _connect_verified_sqlite(
         if ancestors is None:
             _raise_path_error(prefix, "DIRECTORY_CHANGED")
         # A swap before the baseline would leave both samples equal; prove the
-        # pathname still names the admitted file once the baseline is held.
-        if not _path_matches_descriptor(path, descriptor):
+        # pathname still names the admitted file, through the admitted
+        # directory, once the baseline is held.
+        if not (
+            _path_matches_descriptor(path, descriptor)
+            and _path_matches_descriptor(path.parent, directory_descriptor)
+        ):
             _raise_path_error(prefix, "DATABASE_CHANGED")
         connection = sqlite3.connect(uri, uri=True, **kwargs)
         try:
