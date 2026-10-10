@@ -191,7 +191,12 @@ def _run_fixed(argv: list[str], limit: int, timeout: int,
         raise ValueError("companion tool timed out") from None
     finally:
         if process.poll() is None:
-            process.kill()
+            try:
+                process.kill()
+            except PermissionError:
+                # An authorized (pkexec) command runs as root and cannot be
+                # signalled; reap it when it exits rather than leak it.
+                pass
         process.wait()
         if process.stdout is not None:
             process.stdout.close()

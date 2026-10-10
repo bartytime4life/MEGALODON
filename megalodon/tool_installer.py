@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -250,15 +251,32 @@ class Installer:
     def _run(self, command: list[str]) -> None:
         code: int | None = None
         timed_out = Event()
+        # pkexec keeps the caller's session for its authorization prompt; any
+        # other job gets its own session so the deadline can stop all of it.
+        own_session = not (command and command[0].endswith("pkexec"))
         try:
             process = self._runner(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, text=True, errors="replace",
+                                   start_new_session=own_session,
                                    env={**os.environ, "DEBIAN_FRONTEND": "noninteractive",
                                         "OLLAMA_HOST": "127.0.0.1:11434"})
             # Reading stdout blocks until exit, so enforce the deadline separately.
             def expire() -> None:
+                try:
+                    # A shell's children keep the output pipe open after the
+                    # shell itself is killed, so stop the job's whole session.
+                    if own_session and type(getattr(process, "pid", None)) is int and hasattr(os, "killpg"):
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                except ProcessLookupError:
+                    return
+                except PermissionError:
+                    # pkexec runs the authorized command as root; this user cannot
+                    # stop it, so the job stays running until it exits.
+                    self._append("The job passed its deadline, but the authorized process cannot be stopped from the HUD; it is still running.")
+                    return
                 timed_out.set()
-                process.kill()
             deadline = Timer(self._timeout, expire)
             deadline.daemon = True
             deadline.start()
