@@ -631,3 +631,118 @@ def test_dashboard_returns_a_fixed_503_when_a_served_read_fails():
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def _serve(handler):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
+def _stop(server, thread):
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2)
+
+
+def _raw_request(server, request: bytes) -> bytes:
+    with socket.create_connection(("127.0.0.1", server.server_port), timeout=2) as connection:
+        connection.sendall(request)
+        chunks = []
+        while chunk := connection.recv(65536):
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def test_basic_credentials_share_the_sign_in_throttle_before_verification():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    verifier = Mock()
+    verifier.verify.side_effect = lambda supplied: supplied == b"correct horse battery"
+    handler = type("ThrottledBasicHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": None, "http_password_verifier": verifier,
+        "http_session_token": "private-session-token",
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+    })
+    server, thread = _serve(handler)
+    try:
+        host = f"127.0.0.1:{server.server_port}"
+        wrong = "Basic " + base64.b64encode(b"megalodon:wrong guess").decode("ascii")
+        right = "Basic " + base64.b64encode(b"megalodon:correct horse battery").decode("ascii")
+        # A request without credentials is not a failed guess.
+        assert _host_request(server, (host,))[0] == 401
+        for _ in range(5):
+            assert _host_request(server, (host,), authorizations=(wrong,))[0] == 401
+        assert verifier.verify.call_count == 5
+        status, body, headers = _host_request(server, (host,), authorizations=(right,))
+        assert status == 429 and headers["Retry-After"] == "30" and body == {"error": "try again shortly"}
+        assert verifier.verify.call_count == 5, "a blocked guess never reaches the password verifier"
+        assert not store.summary.called
+        # The same block covers the sign-in page, so neither route can bypass the other.
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("POST", "/sign-in", body=b'{"password":"correct horse battery"}', headers={
+            "Host": host, "Origin": f"http://{host}", "Content-Type": "application/json", "X-Megalodon-Sign-In": "1"})
+        assert connection.getresponse().status == 429
+        connection.close()
+        handler.login_blocked_until = 0.0
+        assert _host_request(server, (host,), authorizations=(right,))[:2] == (200, {"events": 1})
+        assert handler.login_failures == 0
+    finally:
+        _stop(server, thread)
+
+
+@pytest.mark.parametrize("header", [
+    b"Cookie: megalodon_session_{port}=\xe9\xe9",
+    b"X-Megalodon-AI-Token: \xe9\xe9",
+])
+def test_non_ascii_secret_headers_are_refused_not_crashed(header):
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    handler = type("NonAsciiHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": "twelve-chars", "http_session_token": "private-session-token",
+        "ai_operator_token": "private-ai-token",
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+    })
+    server, thread = _serve(handler)
+    try:
+        port = server.server_port
+        path = b"/api/summary" if header.startswith(b"Cookie") else b"/api/ai/status"
+        extra = b"" if header.startswith(b"Cookie") else b"X-Megalodon-AI-Check: 1\r\n"
+        if not header.startswith(b"Cookie"):
+            # Reach the AI token comparison: sign in first with the valid session cookie.
+            extra += b"Cookie: megalodon_session_%d=private-session-token\r\n" % port
+        handler.ai_settings = dashboard.AISettings(enabled=True)
+        response = _raw_request(server, b"GET " + path + b" HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n" % port
+                                + header.replace(b"{port}", str(port).encode()) + b"\r\n" + extra
+                                + b"Connection: close\r\n\r\n")
+        status = response.split(b"\r\n", 1)[0]
+        assert status in (b"HTTP/1.0 401 Unauthorized", b"HTTP/1.0 403 Forbidden"), response[:200]
+        assert not store.summary.called
+    finally:
+        _stop(server, thread)
+
+
+def test_stdlib_refusals_keep_security_headers_and_hide_versions():
+    handler = type("RefusalHandler", (dashboard.DashboardHandler,), {"store": Mock()})
+    server, thread = _serve(handler)
+    try:
+        port = server.server_port
+        host = b"Host: 127.0.0.1:%d\r\n" % port
+        for method, has_body in ((b"OPTIONS", True), (b"PUT", True), (b"HEAD", False)):
+            response = _raw_request(server, method + b" / HTTP/1.1\r\n" + host + b"\r\n")
+            head, _, body = response.partition(b"\r\n\r\n")
+            lines = head.split(b"\r\n")
+            assert lines[0].startswith(b"HTTP/1.0 501"), lines[0]
+            headers = {k.lower(): v for k, _, v in (line.partition(b": ") for line in lines[1:])}
+            assert b"frame-ancestors 'none'" in headers[b"content-security-policy"]
+            assert headers[b"x-content-type-options"] == b"nosniff"
+            assert headers[b"cache-control"] == b"no-store"
+            assert headers[b"content-type"] == b"application/json; charset=utf-8"
+            assert headers[b"server"] == b"MEGALODON", "no Python or BaseHTTP version banner"
+            assert (json.loads(body) == {"error": "request refused"}) if has_body else body == b""
+        response = _raw_request(server, b"GET /" + b"x" * 70000 + b" HTTP/1.1\r\n\r\n")
+        assert response.startswith(b"HTTP/1.0 414"), response[:80]
+        assert b"Python" not in response and b"<html" not in response.lower()
+    finally:
+        _stop(server, thread)

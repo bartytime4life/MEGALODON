@@ -82,3 +82,34 @@ def test_choice_chips_only_drive_existing_controls():
     for control in ('reports-range', 'filter-severity', 'storage-profile', 'storage-days', 'storage-cap', 'reference-port'):
         assert f"'{control}'" in POLISH_JS and f'id="{control}"' in INDEX_HTML
     assert 'data-apps-filter="all" aria-pressed="true"' in INDEX_HTML
+
+
+def test_status_dots_differ_by_shape_not_only_hue():
+    # Red/green alone fails common colour-vision deficiencies; each state also has its own outline.
+    assert re.search(r'\[data-state="stopped"\] > \.app-dot[^{]*\{[^}]*rotate\(45deg\)', POLISH_CSS)
+    assert re.search(r'\[data-state="missing"\] > \.app-dot[^{]*\{[^}]*background:transparent; border:2px solid', POLISH_CSS)
+    assert re.search(r'\[data-state="unknown"\] > \.app-dot \{[^}]*border:2px dashed', POLISH_CSS)
+    # The legend draws the same shapes so the key matches the rail.
+    for legend in ('stopped', 'missing'):
+        assert f'.app-dot[data-legend="{legend}"]' in POLISH_CSS
+
+
+def test_small_screens_keep_app_names_visible_and_contained():
+    narrow = POLISH_CSS[POLISH_CSS.index('@media (max-width: 900px)'):POLISH_CSS.index('@media (prefers-reduced-motion')]
+    assert 'app-dot-name' not in narrow, 'app names are never hidden behind colour-only dots'
+    assert 'mask-image:linear-gradient' in narrow and 'scroll-snap-type:x' in narrow
+    # Visually hidden state labels are positioned inside their chip, so they cannot widen the page.
+    assert '.app-dot-chip { position:relative;' in POLISH_CSS
+
+
+def test_contrast_and_forced_colour_modes_are_supported():
+    contrast = POLISH_CSS[POLISH_CSS.index('@media (prefers-contrast: more)'):]
+    assert '--muted:' in contrast and 'body::after { display:none; }' in contrast
+    forced = POLISH_CSS[POLISH_CSS.index('@media (forced-colors: active)'):]
+    assert 'border:2px solid CanvasText' in forced and 'border-style:dashed' in forced
+
+
+def test_unstyled_links_use_palette_without_overriding_components():
+    # :where() keeps specificity at zero, so every existing component link rule still wins.
+    assert ':where(.shell) :where(a:link, a:visited) { color:#8fe9e0;' in POLISH_CSS
+    assert 'class="ki-strip"' in INDEX_HTML and '.ki-strip a {' in POLISH_CSS

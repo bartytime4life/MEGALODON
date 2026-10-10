@@ -656,7 +656,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
             if (route.query or self.headers.get_all("X-Megalodon-AI-Check", []) != ["1"]
                     or self.ai_operator_token is None or len(token_values) != 1
-                    or not hmac.compare_digest(token_values[0], self.ai_operator_token)):
+                    or not _token_matches(token_values[0], self.ai_operator_token)):
                 self._send_json({"error": "explicit local AI check required"}, status=403)
                 return
             from .ai_provider import operator_request
@@ -1303,7 +1303,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         """Exact per-launch token and same-origin JSON; no encodings or aliases."""
         token_values = self.headers.get_all("X-Megalodon-AI-Token", [])
         return (self.ai_operator_token is not None and len(token_values) == 1
-                and hmac.compare_digest(token_values[0], self.ai_operator_token)
+                and _token_matches(token_values[0], self.ai_operator_token)
                 and self.headers.get_all("Origin", []) == [f"http://{self.headers.get('Host')}"]
                 and self.headers.get_all("Content-Type", []) == ["application/json"]
                 and not self.headers.get_all("Transfer-Encoding", [])
@@ -1594,6 +1594,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return True
         values = self.headers.get_all("Authorization", [])
         authorized = False
+        if values and self._login_blocked():
+            # Basic credentials share the sign-in throttle; refuse before running the verifier.
+            self._send_json({"error": "try again shortly"}, status=429, extra_headers={"Retry-After": "30"})
+            return False
         if len(values) == 1 and len(values[0]) <= 128 and values[0][:6].lower() == "basic ":
             try:
                 supplied = base64.b64decode(values[0][6:], validate=True)
@@ -1605,6 +1609,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 expected = f"megalodon:{password}".encode("ascii")
                 authorized = hmac.compare_digest(supplied, expected)
+        if values:
+            self._record_login(authorized)
         if not authorized:
             if redirect:
                 self._send(303, "text/plain; charset=utf-8", b"sign in required",
@@ -1612,6 +1618,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "local dashboard sign-in required"}, status=401)
         return authorized
+
+    def _login_blocked(self) -> bool:
+        auth_class = type(self)
+        with auth_class.login_lock:
+            return time.monotonic() < auth_class.login_blocked_until
+
+    def _record_login(self, valid: bool) -> None:
+        """Five consecutive failed password checks, by any route, block checks for 30 seconds."""
+        auth_class = type(self)
+        with auth_class.login_lock:
+            if valid:
+                auth_class.login_failures = 0
+                return
+            auth_class.login_failures += 1
+            if auth_class.login_failures >= 5:
+                auth_class.login_failures = 0
+                auth_class.login_blocked_until = time.monotonic() + 30
 
     def _has_session_cookie(self) -> bool:
         token = self.http_session_token
@@ -1621,7 +1644,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         name = f"megalodon_session_{self.server.server_port}"
         matches = [part.strip()[len(name) + 1:] for part in values[0].split(";")
                    if part.strip().startswith(name + "=")]
-        return len(matches) == 1 and hmac.compare_digest(matches[0], token)
+        return len(matches) == 1 and _token_matches(matches[0], token)
 
     def _sign_in(self) -> None:
         expected_origin = f"http://{self.headers.get('Host')}"
@@ -1637,12 +1660,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 or len(lengths[0]) > 3 or not 2 <= int(lengths[0]) <= 256):
             self._send_json({"error": "invalid sign-in request"}, status=400)
             return
-        auth_class = type(self)
-        with auth_class.login_lock:
-            if time.monotonic() < auth_class.login_blocked_until:
-                self._send_json({"error": "try again shortly"}, status=429,
-                                extra_headers={"Retry-After": "30"})
-                return
+        if self._login_blocked():
+            self._send_json({"error": "try again shortly"}, status=429,
+                            extra_headers={"Retry-After": "30"})
+            return
         try:
             from .ai_provider import _strict_pairs
             self.connection.settimeout(2)
@@ -1662,16 +1683,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 valid = self.http_password_verifier.verify(encoded)
             elif self.http_read_password is not None:
                 valid = hmac.compare_digest(encoded, self.http_read_password.encode("ascii"))
-        if not valid or self.http_session_token is None:
-            with auth_class.login_lock:
-                auth_class.login_failures += 1
-                if auth_class.login_failures >= 5:
-                    auth_class.login_failures = 0
-                    auth_class.login_blocked_until = time.monotonic() + 30
+        valid = valid and self.http_session_token is not None
+        self._record_login(valid)
+        if not valid:
             self._send_json({"error": "invalid HUD password"}, status=401)
             return
-        with auth_class.login_lock:
-            auth_class.login_failures = 0
         cookie = (f"megalodon_session_{self.server.server_port}={self.http_session_token}; "
                   "HttpOnly; SameSite=Strict; Path=/")
         self._send_json({"status": "signed_in"}, extra_headers={"Set-Cookie": cookie})
@@ -1701,7 +1717,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         )
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
+        self.send_header(
+            "Permissions-Policy",
+            "camera=(), geolocation=(), microphone=(), display-capture=(), usb=(), serial=(), hid=(), "
+            "bluetooth=(), payment=()",
+        )
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
@@ -1710,8 +1730,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def version_string(self) -> str:
+        """Name the service without disclosing the Python or BaseHTTP version."""
+        return "MEGALODON"
+
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        """Refuse malformed or unsupported requests through ``_send`` so the fixed security headers apply."""
+        self.close_connection = True
+        payload = b"" if self.command == "HEAD" or code < 200 or code in (204, 304) else json.dumps(
+            {"error": "request refused"}, separators=(",", ":")).encode()
+        self._send(code, "application/json; charset=utf-8", payload, extra_headers={"Connection": "close"})
+
     def log_message(self, *_: object) -> None:
         return
+
+
+def _token_matches(supplied: str, expected: str) -> bool:
+    """Constant-time compare that refuses, rather than raises on, a non-ASCII header value."""
+    return supplied.isascii() and hmac.compare_digest(supplied, expected)
 
 
 def _single_line_header(value: str) -> str:
