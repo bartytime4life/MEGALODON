@@ -110,13 +110,13 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 .app-dot { position:relative; display:inline-block; flex:none; box-sizing:border-box; width:.62rem; height:.62rem; border-radius:50%; background:var(--dot-unknown); box-shadow:0 0 0 2px rgba(0,0,0,.35); transition: background-color .35s, box-shadow .35s, border-radius .35s, transform .35s var(--ease-out); }
 [data-state="running"] > .app-dot, .app-dot[data-legend="running"] { background:var(--dot-running); box-shadow:0 0 .5rem rgba(61,220,132,.85); }
 [data-state="running"] > .app-dot::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:2px solid rgba(61,220,132,.7); animation: polish-ping 2.2s var(--ease-out) infinite; }
-[data-state="ready"] > .app-dot, .app-dot[data-legend="ready"] { background:var(--dot-ready); box-shadow:0 0 .35rem rgba(127,224,168,.55); }
+[data-state="ready"] > .app-dot, .app-dot[data-legend="ready"] { background:linear-gradient(90deg,var(--dot-ready) 50%,transparent 50%); border:2px solid var(--dot-ready); box-shadow:0 0 .35rem rgba(127,224,168,.55); }
 [data-state="stopped"] > .app-dot, [data-state="attention"] > .app-dot, .app-dot[data-legend="stopped"] { background:var(--dot-stopped); box-shadow:0 0 .45rem rgba(245,182,66,.7); }
 [data-state="missing"] > .app-dot, .app-dot[data-legend="missing"] { background:var(--dot-missing); box-shadow:0 0 .45rem rgba(255,92,92,.7); }
 [data-state="unknown"] > .app-dot { animation: hb-pulse 1.6s ease-in-out infinite; }
 #app-rail[data-stale="true"] .app-dot { animation:none; opacity:.55; }
 /* Shape carries the state as well as hue, so red/green colour vision is never required:
-   filled circle = running or installed, diamond = stopped or needs setup,
+   filled circle = running, half-filled circle = installed (idle), diamond = stopped or needs setup,
    hollow ring = not installed, dashed ring = unknown. */
 [data-state="stopped"] > .app-dot, [data-state="attention"] > .app-dot, .app-dot[data-legend="stopped"] { border-radius:2px; transform:rotate(45deg) scale(.86); }
 [data-state="missing"] > .app-dot, .app-dot[data-legend="missing"] { background:transparent; border:2px solid var(--dot-missing); box-shadow:0 0 .4rem rgba(255,92,92,.55); }
@@ -252,7 +252,8 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 @media (forced-colors: active) {
   /* System colours replace fills, so draw every dot as an outline; its shape still names the state. */
   .app-dot { border:2px solid CanvasText; background:Canvas; box-shadow:none; }
-  [data-state="running"] > .app-dot, [data-state="ready"] > .app-dot, .app-dot[data-legend="running"], .app-dot[data-legend="ready"] { background:CanvasText; forced-color-adjust:none; }
+  [data-state="running"] > .app-dot, .app-dot[data-legend="running"] { background:CanvasText; forced-color-adjust:none; }
+  [data-state="ready"] > .app-dot, .app-dot[data-legend="ready"] { background:linear-gradient(90deg,CanvasText 50%,Canvas 50%); forced-color-adjust:none; }
   [data-state="unknown"] > .app-dot { border-style:dashed; }
   .app-dot-chip, .app-tile { border:1px solid CanvasText; }
 }
