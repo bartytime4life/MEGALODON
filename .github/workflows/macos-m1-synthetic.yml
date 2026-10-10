@@ -196,8 +196,73 @@ jobs:
                       moved.rename(database)
                   store.close()
 
+              # Swap an ancestor only while SQLite resolves the admitted
+              # pathname, then restore it, so every pathname check passes.
+              import megalodon.storage as storage_module
+
+              swap = Path(root) / "swap"
+              admitted_root = swap / "admitted"
+              other_root = swap / "other"
+              held_root = swap / "held"
+              for tree in (admitted_root, other_root):
+                  (tree / "private").mkdir(parents=True, mode=0o700)
+              swapped = admitted_root / "private" / "audit.db"
+              other = other_root / "private" / "audit.db"
+              real_connect = storage_module.sqlite3.connect
+
+              def swapping_connect(*args, **kwargs):
+                  admitted_root.rename(held_root)
+                  other_root.rename(admitted_root)
+                  try:
+                      return real_connect(*args, **kwargs)
+                  finally:
+                      admitted_root.rename(other_root)
+                      held_root.rename(admitted_root)
+
+              def swapped_open():
+                  storage_module.sqlite3.connect = swapping_connect
+                  try:
+                      Store(swapped, create=False)
+                  finally:
+                      storage_module.sqlite3.connect = real_connect
+
+              with Store(swapped):
+                  pass
+              with Store(other):
+                  pass
+              other_bytes = other.read_bytes()
+              expect(
+                  "connect-ancestor-swap",
+                  "STORAGE_PATH:DATABASE_CHANGED",
+                  swapped_open,
+              )
+              if other.read_bytes() != other_bytes:
+                  raise SystemExit("MACOS_STORAGE_NEGATIVES:SWAP_TARGET_MUTATED")
+
+              # Open connections make SQLite defer closing, then reuse, the
+              # swapped-in file's descriptor, so no new descriptor appears.
+              holders = [Store(swapped, create=False), Store(other, create=False)]
+              try:
+                  Store(other, create=False).close()
+                  other_bytes = other.read_bytes()
+                  expect(
+                      "connect-ancestor-swap-reused-descriptor",
+                      "STORAGE_PATH:DATABASE_CHANGED",
+                      swapped_open,
+                  )
+                  if other.read_bytes() != other_bytes:
+                      raise SystemExit(
+                          "MACOS_STORAGE_NEGATIVES:SWAP_TARGET_MUTATED"
+                      )
+              finally:
+                  for holder in holders:
+                      holder.close()
+              with Store(swapped, create=False) as store:
+                  if store.summary()["events"] != 0:
+                      raise SystemExit("MACOS_STORAGE_NEGATIVES:SWAP_ADMITTED_CHANGED")
+
           print(json.dumps(results, sort_keys=True))
-          if len(results) != 8:
+          if len(results) != 10:
               raise SystemExit("MACOS_STORAGE_NEGATIVES:INCOMPLETE")
           PY
       - name: Record bounded storage-admission diagnostic

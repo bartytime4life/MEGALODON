@@ -295,6 +295,170 @@ def test_darwin_store_refuses_symlinked_sqlite_sidecar_before_connect(
         Store(database, create=False)
 
 
+def _swap_ancestor_during_connect(monkeypatch, admitted_root: Path, other_root: Path):
+    held = admitted_root.with_name(admitted_root.name + "-held")
+    real_connect = sqlite3.connect
+
+    def swapping_connect(*args, **kwargs):
+        admitted_root.rename(held)
+        other_root.rename(admitted_root)
+        try:
+            return real_connect(*args, **kwargs)
+        finally:
+            admitted_root.rename(other_root)
+            held.rename(admitted_root)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", swapping_connect)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX rename semantics")
+def test_darwin_store_refuses_ancestor_swap_while_sqlite_resolves_path(
+    tmp_path, monkeypatch
+):
+    admitted_root = tmp_path / "admitted"
+    other_root = tmp_path / "other"
+    for root in (admitted_root, other_root):
+        (root / "private").mkdir(parents=True, mode=storage.PRIVATE_DIRECTORY_MODE)
+    database = admitted_root / "private" / "audit.db"
+    other = other_root / "private" / "audit.db"
+    with Store(database):
+        pass
+    with Store(other) as store:
+        _populate(store)
+    other_bytes = other.read_bytes()
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    _swap_ancestor_during_connect(monkeypatch, admitted_root, other_root)
+
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
+        Store(database, create=False)
+
+    assert other.read_bytes() == other_bytes
+    monkeypatch.undo()
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 0
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_store_refuses_when_open_descriptors_cannot_be_listed(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    with Store(database):
+        pass
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    monkeypatch.setattr(storage, "_open_regular_file_identities", lambda: None)
+    with pytest.raises(
+        StorageSchemaError, match="^STORAGE_PATH:DESCRIPTOR_PATH_UNAVAILABLE$"
+    ):
+        Store(database, create=False)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_store_accepts_reused_descriptor_only_with_unchanged_ancestors(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "nested" / "audit.db"
+    database.parent.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+    with Store(database):
+        pass
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    frozen = storage._open_regular_file_identities()
+    monkeypatch.setattr(storage, "_open_regular_file_identities", lambda: frozen)
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 0
+
+    real_connect = sqlite3.connect
+
+    def touching_connect(*args, **kwargs):
+        (tmp_path / "ancestor-entry").touch()
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", touching_connect)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
+        Store(database, create=False)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_store_refuses_unattributed_open_without_admitted_descriptor(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    with Store(database):
+        pass
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    frozen = storage._open_regular_file_identities()
+    snapshots = iter([frozen, {**frozen, 1_000_000: (0, 0)}])
+    monkeypatch.setattr(
+        storage, "_open_regular_file_identities", lambda: next(snapshots)
+    )
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
+        Store(database, create=False)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX rename semantics")
+def test_darwin_store_refuses_swap_to_file_with_reusable_sqlite_descriptor(
+    tmp_path, monkeypatch
+):
+    # Keep one connection open per file so SQLite defers closing the next
+    # connection's descriptor; a later open of that inode reuses it, so no
+    # new descriptor reveals which file SQLite opened.
+    admitted_root = tmp_path / "admitted"
+    other_root = tmp_path / "other"
+    for root in (admitted_root, other_root):
+        (root / "private").mkdir(parents=True, mode=storage.PRIVATE_DIRECTORY_MODE)
+    database = admitted_root / "private" / "audit.db"
+    other = other_root / "private" / "audit.db"
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    holders = [Store(database), Store(other)]
+    try:
+        _populate(holders[1])
+        Store(other, create=False).close()
+        _swap_ancestor_during_connect(monkeypatch, admitted_root, other_root)
+        snapshots = []
+        real_identities = storage._open_regular_file_identities
+
+        def recording_identities():
+            snapshots.append(real_identities())
+            return snapshots[-1]
+
+        monkeypatch.setattr(
+            storage, "_open_regular_file_identities", recording_identities
+        )
+        with pytest.raises(
+            StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"
+        ):
+            Store(database, create=False)
+        before, after = snapshots
+        assert not {fd for fd, identity in after.items() if before.get(fd) != identity}
+    finally:
+        for holder in holders:
+            holder.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_store_verification_tolerates_concurrent_admitted_opens(
+    tmp_path, monkeypatch
+):
+    from concurrent.futures import ThreadPoolExecutor
+
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    database = tmp_path / "audit.db"
+
+    def open_and_read(index: int) -> int:
+        if index % 2:
+            with DashboardStore(database) as dashboard:
+                return dashboard.summary()["events"]
+        with Store(database, create=False) as store:
+            return store.summary()["events"]
+
+    # A long-lived writer keeps WAL sidecars in place, as the HUD does, and
+    # makes SQLite defer and reuse closed connections' descriptors.
+    with Store(database) as holder:
+        _populate(holder)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            assert set(pool.map(open_and_read, range(96))) == {1}
+
+
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):
     with Store(tmp_path / "audit.db") as store:
         _populate(store)
