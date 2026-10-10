@@ -246,14 +246,19 @@ def _validate_timestamp(value: Any) -> None:
 
 
 def _canonical_ip(value: Any) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
-    if type(value) is not str or not 2 <= len(value) <= 39:
+    # The literal pattern refuses IPv6 zone/scope IDs, which ipaddress accepts.
+    if type(value) is not str or not 2 <= len(value) <= 39 or not suricata._IP_LITERAL.fullmatch(value):
         _fail("INPUT_CONTRACT")
     try:
         parsed = ipaddress.ip_address(value)
     except ValueError:
         _fail("INPUT_CONTRACT")
-    if str(parsed) != value:
-        _fail("INPUT_CONTRACT")
+    if value != suricata.canonical_ip_text(parsed):
+        mapped = parsed.version == 6 and parsed.ipv4_mapped is not None
+        # Evidence committed by a CPython release that wrote IPv4-mapped
+        # addresses in hex stays readable.
+        if not mapped or value != "::ffff:%x:%x" % divmod(int(parsed.ipv4_mapped), 0x10000):
+            _fail("INPUT_CONTRACT")
     return parsed
 
 

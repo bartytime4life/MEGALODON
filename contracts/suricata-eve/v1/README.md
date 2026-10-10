@@ -143,7 +143,10 @@ with seconds 00 through 59 and a known offset no greater than +/-14:00.
 must be representable with a year from 1970 through 9999; overflow is rejection.
 A normalized timestamp is exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`. Endpoint address
 families must agree; normalized addresses use Python `ipaddress` canonical
-string form. Non-global addresses remain valid **observations**, not blocking
+string form, except that an IPv4-mapped IPv6 address is always written as
+`::ffff:` plus dotted IPv4 because CPython releases differ on that form.
+Consumers also accept the hex form (`::ffff:c000:201`) earlier releases wrote,
+and refuse zone/scope IDs. Non-global addresses remain valid **observations**, not blocking
 target approval. Missing data must never be invented to satisfy these rules.
 
 Schemas cannot enforce run-wide uniqueness, file ownership, permissions,
