@@ -60,11 +60,16 @@ access and rejects missing, duplicate, or unexpected Host values. The supported
 `serve()` path opens directly by default without a password or terminal requirement.
 Loopback TCP carries no caller identity, and Origin, Host and custom-header
 checks stop browsers, not local clients. On Linux the server therefore accepts a
-connection only when the IPv4 TCP table of its network namespace
-(`/proc/net/tcp`) shows the client end of that exact connection owned by the
-HUD's own effective UID; any other owner, a missing row, or an unreadable,
-malformed or oversized table closes the connection before any request byte is
-read. Other programs run by the same account still reach the HUD while it runs.
+connection only when the TCP tables of its network namespace show the client
+end of that exact connection owned by the HUD's own effective UID. It first
+checks `/proc/net/tcp`; if no row matches, it checks only the IPv4-mapped form
+of both endpoints in `/proc/net/tcp6`. This supports IPv6 clients reaching the
+existing IPv4 listener through `::ffff:127.0.0.1`; it does not add an IPv6
+listener. Both scans share a 16 MiB read budget, with bounded individual reads.
+An IPv4 match does not require the optional IPv6 table. Any other owner, a
+missing row, or a read, parse or budget failure closes the connection before
+any request byte is read. Other programs run by the same account still reach
+the HUD while it runs.
 Platforms without this owner proof (native Windows and macOS evaluation
 targets) keep the same-host boundary: any local account can connect there. With `--require-sign-in`, it generates a per-launch
 password, displays it only on an interactive launching terminal, and refuses

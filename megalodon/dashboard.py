@@ -87,38 +87,48 @@ REFERENCE_WARNING = (
 
 
 _PROC_NET_TCP = "/proc/net/tcp"
+_PROC_NET_TCP6 = "/proc/net/tcp6"
 _PROC_NET_TCP_MAX_BYTES = 16 * 1024 * 1024
 
 
-def _proc_tcp_address(address: tuple[str, int]) -> str:
-    """Render an IPv4 socket address the way /proc/net/tcp prints it (host-order hex)."""
+def _proc_tcp_address(address: tuple[str, int], *, ipv4_mapped: bool = False) -> str:
+    """Render IPv4 or its IPv6-mapped form as procfs native-endian 32-bit words."""
     host, port = address[0], address[1]
     if type(port) is not int or not 0 <= port <= 0xFFFF:
         raise ValueError("invalid TCP port")
-    return "%08X:%04X" % (struct.unpack("=I", socket.inet_aton(host))[0], port)
+    raw = socket.inet_aton(host)
+    if ipv4_mapped:
+        raw = bytes(10) + b"\xff\xff" + raw
+    words = struct.unpack("=4I" if ipv4_mapped else "=I", raw)
+    return "".join(f"{word:08X}" for word in words) + f":{port:04X}"
 
 
 def loopback_peer_uid(client_address: tuple[str, int], server_address: tuple[str, int],
-                      *, table: str = _PROC_NET_TCP) -> int | None:
+                      *, table: str = _PROC_NET_TCP, table6: str = _PROC_NET_TCP6) -> int | None:
     """Return the account that owns the connecting socket, or None when it cannot be proven.
 
     Loopback TCP carries no caller identity, so read the client end of this exact
-    connection from the network namespace's IPv4 table. Any read, parse or bound
-    failure, or a missing row, yields None.
+    connection from the network namespace's IPv4 table, then its IPv6 table for
+    mapped clients. Both scans share one byte budget; each read is bounded before
+    allocation. Any read, parse or bound failure, or a missing row, yields None.
     """
     try:
-        local = _proc_tcp_address(client_address)
-        remote = _proc_tcp_address(server_address)
         consumed = 0
-        with open(table, "r", encoding="ascii", errors="replace") as handle:
-            for number, line in enumerate(handle):
-                consumed += len(line)
-                if consumed > _PROC_NET_TCP_MAX_BYTES:
-                    return None
-                fields = line.split()
-                if number == 0 or len(fields) < 8 or fields[1] != local or fields[2] != remote:
-                    continue
-                return int(fields[7]) if fields[7].isascii() and fields[7].isdecimal() else None
+        for path, mapped in ((table, False), (table6, True)):
+            local = _proc_tcp_address(client_address, ipv4_mapped=mapped)
+            remote = _proc_tcp_address(server_address, ipv4_mapped=mapped)
+            with open(path, "rb") as handle:
+                number = 0
+                while line := handle.readline(_PROC_NET_TCP_MAX_BYTES - consumed + 1):
+                    consumed += len(line)
+                    if consumed > _PROC_NET_TCP_MAX_BYTES:
+                        return None
+                    fields = line.decode("ascii").split()
+                    is_header = number == 0
+                    number += 1
+                    if is_header or len(fields) < 8 or fields[1] != local or fields[2] != remote:
+                        continue
+                    return int(fields[7]) if fields[7].isdecimal() else None
     except (OSError, ValueError, TypeError, IndexError, struct.error):
         return None
     return None

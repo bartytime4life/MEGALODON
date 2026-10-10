@@ -925,7 +925,9 @@ def test_loopback_peer_uid_reads_only_the_exact_client_row(tmp_path, monkeypatch
     assert dashboard.loopback_peer_uid(client, server, table=str(table)) is None
 
 
-def test_server_refuses_another_accounts_connection_before_reading(monkeypatch):
+@pytest.mark.parametrize("mapped", (False, pytest.param(True, marks=pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux mapped-client admission"))))
+def test_server_refuses_another_accounts_connection_before_reading(monkeypatch, mapped):
     store = Mock()
     store.summary.return_value = {"events": 1}
     seen = []
@@ -942,13 +944,14 @@ def test_server_refuses_another_accounts_connection_before_reading(monkeypatch):
     thread.start()
     try:
         host = f"127.0.0.1:{server.server_port}"
+        request = _mapped_raw_request if mapped else _raw_request
         owner = os.geteuid() + 1
-        response = _raw_request(server, b"GET /api/summary HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n")
+        response = request(server, b"GET /api/summary HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n")
         assert response == b"", "another account's connection is closed without a response"
         assert not store.summary.called
         assert seen and seen[-1][1] == ("127.0.0.1", server.server_port)
         owner = None
-        assert _raw_request(server, b"GET /api/summary HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n") == b""
+        assert request(server, b"GET /api/summary HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n") == b""
         owner = os.geteuid()
         assert _host_request(server, (host,))[:2] == (200, {"events": 1})
     finally:
@@ -981,3 +984,125 @@ def test_platforms_without_owner_proof_keep_the_same_host_boundary(monkeypatch):
         assert _host_request(server, (f"127.0.0.1:{server.server_port}",))[0] == 200
     finally:
         _stop(server, thread)
+
+
+def _mapped_tcp_address(address):
+    # Linux prints each native-endian 32-bit word of an IPv6 address separately.
+    raw = bytes(10) + b"\xff\xff" + socket.inet_aton(address[0])
+    return "".join(f"{int.from_bytes(raw[i:i + 4], sys.byteorder):08X}"
+                   for i in range(0, 16, 4)) + f":{address[1]:04X}"
+
+
+def _mapped_raw_request(server, request):
+    try:
+        connection = socket.socket(socket.AF_INET6)
+    except OSError as error:
+        if error.errno == errno.EAFNOSUPPORT:
+            pytest.skip("IPv6 sockets are unavailable")
+        raise
+    with connection:
+        connection.settimeout(2)
+        try:
+            connection.connect(("::ffff:127.0.0.1", server.server_port))
+        except OSError as error:
+            if error.errno in (errno.EAFNOSUPPORT, errno.ENETUNREACH, errno.EADDRNOTAVAIL):
+                pytest.skip("IPv4-mapped IPv6 loopback is unavailable")
+            raise
+        connection.sendall(request)
+        chunks = []
+        while chunk := connection.recv(4096):
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def test_loopback_peer_uid_reads_only_the_exact_mapped_client_row(tmp_path):
+    client, server = ("127.0.0.1", 40000), ("127.0.0.1", 8787)
+    local, remote = _mapped_tcp_address(client), _mapped_tcp_address(server)
+    table, table6 = tmp_path / "tcp", tmp_path / "tcp6"
+    table.write_text(_TCP_HEADER, encoding="ascii")
+    table6.write_text(_TCP_HEADER
+                      + _tcp_row(remote, local, 0)
+                      + _tcp_row(local, _mapped_tcp_address(("127.0.0.1", 9)), 7)
+                      + _tcp_row("00000000000000000000000001000000:9C40", remote, 8)
+                      + _tcp_row(local, remote, 1234), encoding="ascii")
+    assert dashboard.loopback_peer_uid(client, server, table=str(table), table6=str(table6)) == 1234
+    assert dashboard.loopback_peer_uid(("127.0.0.1", 40001), server,
+                                       table=str(table), table6=str(table6)) is None
+
+
+@pytest.mark.parametrize("failure", ("missing", "bad_uid", "bad_ascii", "oversized",
+                                    "combined_budget", "tcp_failure", "tcp_bad_uid"))
+def test_mapped_peer_lookup_fails_closed(tmp_path, monkeypatch, failure):
+    client, server = ("127.0.0.1", 40000), ("127.0.0.1", 8787)
+    table, table6 = tmp_path / "tcp", tmp_path / "tcp6"
+    table.write_text(_TCP_HEADER, encoding="ascii")
+    mapped_row = _tcp_row(_mapped_tcp_address(client), _mapped_tcp_address(server), 1234)
+    table6.write_text(_TCP_HEADER + mapped_row, encoding="ascii")
+    if failure == "missing":
+        table6.unlink()
+    elif failure == "bad_uid":
+        table6.write_text(_TCP_HEADER + _tcp_row(_mapped_tcp_address(client),
+                          _mapped_tcp_address(server), "12x"), encoding="ascii")
+    elif failure == "bad_ascii":
+        table6.write_bytes(_TCP_HEADER.encode("ascii") + b"\xff\n" + mapped_row.encode("ascii"))
+    elif failure == "oversized":
+        monkeypatch.setattr(dashboard, "_PROC_NET_TCP_MAX_BYTES", len(_TCP_HEADER) + 10)
+    elif failure == "combined_budget":
+        # Each table alone fits, but scanning both exceeds the shared budget.
+        monkeypatch.setattr(dashboard, "_PROC_NET_TCP_MAX_BYTES", len(_TCP_HEADER) + len(mapped_row))
+    elif failure == "tcp_failure":
+        table.unlink()
+    else:
+        # A failed IPv4 proof cannot fall through to an apparently valid mapped row.
+        table.write_text(_TCP_HEADER + _tcp_row(dashboard._proc_tcp_address(client),
+                         dashboard._proc_tcp_address(server), "12x"), encoding="ascii")
+    assert dashboard.loopback_peer_uid(client, server, table=str(table), table6=str(table6)) is None
+
+
+def test_ipv4_owner_lookup_does_not_require_the_optional_tcp6_table(tmp_path):
+    client, server = ("127.0.0.1", 40000), ("127.0.0.1", 8787)
+    table = tmp_path / "tcp"
+    table.write_text(_TCP_HEADER + _tcp_row(dashboard._proc_tcp_address(client),
+                     dashboard._proc_tcp_address(server), 1234), encoding="ascii")
+    assert dashboard.loopback_peer_uid(client, server, table=str(table),
+                                       table6=str(tmp_path / "missing")) == 1234
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux exposes socket owners in procfs")
+def test_real_proc_table_admits_this_accounts_mapped_connection():
+    # An IPv6 client can connect to the existing IPv4 listener through a mapped
+    # address. Its client row lives in tcp6 even though accept() returns IPv4.
+    with socket.socket(socket.AF_INET) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        listener.settimeout(2)
+        try:
+            client = socket.socket(socket.AF_INET6)
+        except OSError as error:
+            if error.errno == errno.EAFNOSUPPORT:
+                pytest.skip("IPv6 sockets are unavailable")
+            raise
+        with client:
+            client.settimeout(2)
+            try:
+                client.connect(("::ffff:127.0.0.1", listener.getsockname()[1]))
+            except OSError as error:
+                if error.errno in (errno.EAFNOSUPPORT, errno.ENETUNREACH, errno.EADDRNOTAVAIL):
+                    pytest.skip("IPv4-mapped IPv6 loopback is unavailable")
+                raise
+            accepted, address = listener.accept()
+            with accepted:
+                assert dashboard.loopback_peer_uid(address, listener.getsockname()) == os.geteuid()
+        handler = type("MappedPeerHandler", (dashboard.DashboardHandler,), {"store": Mock()})
+        handler.store.summary.return_value = {"events": 1}
+        server = dashboard.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            response = _mapped_raw_request(server,
+                f"GET /api/summary HTTP/1.1\r\nHost: 127.0.0.1:{server.server_port}\r\n\r\n".encode("ascii"))
+            head, _, body = response.partition(b"\r\n\r\n")
+            assert head.startswith(b"HTTP/1.0 200")
+            assert json.loads(body) == {"events": 1}
+        finally:
+            _stop(server, thread)
