@@ -88,7 +88,9 @@ checks compare device/inode pairs at the descriptor boundary rather than
 reopening by pathname. Before the first read and after the last validation it
 compares at least device, inode, owner, mode, link count, size, nanosecond mtime,
 and nanosecond ctime. A mismatch, replacement, truncation, growth, or component
-identity change fails with `SOURCE_CHANGED`. The cumulative bytes-read counter
+identity change fails with `SOURCE_CHANGED`. Ancestor directories compare
+device, inode, owner and mode only, because their size and times change
+whenever an unrelated entry is added beside the path. The cumulative bytes-read counter
 still enforces the total limit so metadata is not trusted as the only bound.
 
 These checks reduce path substitution and observable concurrent-change risk.

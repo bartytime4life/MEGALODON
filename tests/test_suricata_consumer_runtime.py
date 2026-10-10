@@ -136,6 +136,36 @@ def test_one_publication_commits_atomically_and_reads_back_exactly(tmp_path):
         connection.close()
 
 
+def _with_addresses(publication, source, destination):
+    batch, receipt = _plain(publication)
+    total = 0
+    for alert in batch:
+        alert["src_ip"], alert["dst_ip"] = source, destination
+        total += len(json.dumps(alert, sort_keys=True, separators=(",", ":")).encode())
+    receipt["normalized_batch_bytes"] = total
+    return tuple(_freeze(item) for item in batch), _freeze(receipt)
+
+
+@pytest.mark.parametrize("source,destination,committed", [
+    ("fe80::1%<img>", "fe80::2", False),
+    ("fe80::1", "fe80::2%eth0", False),
+    ("::ffff:192.0.2.1", "2001:db8::2", True),
+    # Written by CPython releases that print IPv4-mapped addresses in hex.
+    ("::ffff:c000:201", "2001:db8::2", True),
+    ("::ffff:c000:0201", "2001:db8::2", False),
+])
+def test_addresses_must_be_canonical_without_zone_ids(tmp_path, source, destination, committed):
+    path = _store(tmp_path)
+    publication = _with_addresses(_publication(tmp_path), source, destination)
+    if committed:
+        receipt = suricata_consumer.consume_publication(path, publication, consumer_attempt_id="address-attempt")
+        assert receipt["status"] == "committed"
+    else:
+        with pytest.raises(suricata_consumer.ConsumerPreflightError, match="INPUT_CONTRACT$"):
+            suricata_consumer.consume_publication(path, publication, consumer_attempt_id="address-attempt")
+        assert _counts(path) == (0, 0, 0)
+
+
 def test_replay_and_attempt_collision_write_no_new_rows(tmp_path):
     path = _store(tmp_path)
     first = _publication(tmp_path, run_id="fixture-run-a")
