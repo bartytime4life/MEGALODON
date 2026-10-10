@@ -25,3 +25,32 @@ An operator-observed receipt reaches `EVALUATION_RECEIPT_VALIDATED` only when:
 This state is not model acceptance. Provider containment, artifact provenance,
 owner binding, independent security acceptance, and release/deployment remain
 separate HOLDs.
+
+## Corpus manifest
+
+`manifest-schema.json` describes the frozen, privacy-minimized corpus manifest
+that a receipt's `corpus.manifest_sha256` cites. `megalodon.model_evaluation`
+enforces what the schema cannot:
+
+- the file must be exact canonical JSON (sorted keys, no insignificant
+  whitespace, no trailing newline), so `sha256sum` of the file equals the
+  validator's `manifest_sha256`;
+- case IDs are opaque `case-NNNN` values in strictly increasing numeric order,
+  grouped in the closed category order, and each fixture digest appears once;
+- every category has at least one case, at least one case is an
+  unknown-evidence-ID case and none of those expects `ANSWER`, and the corpus
+  expects at least one `ANSWER`, `ABSTAIN` and `ERROR`; and
+- `total_cases` equals the number of listed cases.
+
+A case records only its ID, category, fixture SHA-256, expected outcome and
+unknown-evidence-ID flag. Prompts, evidence, fixture bytes and expected text
+cannot be represented. `operator_frozen` manifests reach `MANIFEST_VALIDATED`;
+that state does not read fixtures, verify the detached signature, run the
+corpus, or prove that a case exercises its category.
+
+With a manifest, the receipt validator also requires the receipt to cite that
+manifest's digest, corpus and candidate profile/comparison boundary, to use its
+total and per-category denominators, and to execute no more unknown-evidence-ID
+cases than it lists (exactly that many once the run is complete). The synthetic
+`fixtures/manifest-synthetic.json` matches `fixtures/accepted-synthetic.json`
+apart from that receipt's placeholder `manifest_sha256`.

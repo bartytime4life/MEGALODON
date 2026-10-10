@@ -96,7 +96,11 @@ and separately hashed external verification receipt. None of those hashes,
 case denominators, signature, verification, or execution results are present
 in this packet. Mark them **NOT_RUN / NOT_RECORDED**, never `0/N` or passed.
 The [evaluation contract](qwen-adversarial-evaluation.md) checks receipt
-consistency only; it neither reads cases nor verifies signatures.
+consistency only; it neither reads cases nor verifies signatures. Its
+[corpus manifest contract](qwen-adversarial-evaluation.md#corpus-manifest)
+defines and validates this manifest's privacy-minimized shape and binds a
+receipt to it; only a synthetic fixture exists, so the frozen manifest remains
+**NOT_RECORDED**.
 
 ## Later holds and decision
 

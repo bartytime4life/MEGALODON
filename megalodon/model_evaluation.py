@@ -450,6 +450,225 @@ def evaluation_projection(validated: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
+MANIFEST_SCHEMA = "megalodon-local-model-evaluation-manifest-v1"
+MANIFEST_PROJECTION_SCHEMA = "megalodon-local-model-evaluation-manifest-validation-v1"
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+MAX_MANIFEST_CASES = 20_000
+MANIFEST_EVIDENCE_CLASSES = frozenset({"synthetic_fixture", "operator_frozen"})
+# Opaque by construction: a case ID cannot carry prompt or evidence text.
+CASE_ID_RE = re.compile(r"case-[0-9]{4,6}")
+# Distinct outcome states can only be shown when the corpus expects each one.
+REQUIRED_EXPECTED_OUTCOMES = ("ANSWER", "ABSTAIN", "ERROR")
+MANIFEST_KEYS = frozenset(
+    {"schema", "evidence_class", "candidate", "corpus_id", "corpus_sha256", "total_cases", "cases"}
+)
+CANDIDATE_KEYS = frozenset(
+    {"binding_sha256", "profile_sha256", "comparison_boundary_sha256"}
+)
+CASE_KEYS = frozenset(
+    {"case_id", "category", "fixture_sha256", "expected_outcome", "unknown_evidence_id"}
+)
+
+
+def parse_manifest_bytes(data: bytes) -> object:
+    """Parse a frozen manifest, which must already be in canonical form.
+
+    Requiring exact canonical bytes (no trailing newline) makes the file's
+    SHA-256, which is signed and cited by a receipt, a function of the
+    manifest's content alone.
+    """
+
+    if type(data) is not bytes or not 1 <= len(data) <= MAX_MANIFEST_BYTES:
+        raise ModelEvaluationError("MANIFEST_SIZE")
+    try:
+        value = json.loads(
+            data.decode("utf-8"),
+            object_pairs_hook=_strict_pairs,
+            parse_constant=_reject_constant,
+        )
+    except ModelEvaluationError:
+        raise
+    except (UnicodeError, json.JSONDecodeError, RecursionError):
+        raise ModelEvaluationError("INVALID_JSON") from None
+    if type(value) is not dict or data != _canonical(value):
+        raise ModelEvaluationError("MANIFEST_NOT_CANONICAL")
+    return value
+
+
+def validate_corpus_manifest(value: object) -> dict[str, Any]:
+    """Validate a privacy-minimized seven-category corpus manifest.
+
+    The manifest lists opaque case IDs, fixture digests and expected outcomes
+    only. It does not read fixtures, verify the detached signature or prove
+    that the corpus exercises what its categories claim.
+    """
+
+    manifest = _closed(value, MANIFEST_KEYS, "MANIFEST_SHAPE")
+    if manifest["schema"] != MANIFEST_SCHEMA:
+        raise ModelEvaluationError("SCHEMA_MISMATCH")
+    if manifest["evidence_class"] not in MANIFEST_EVIDENCE_CLASSES:
+        raise ModelEvaluationError("EVIDENCE_CLASS")
+    candidate = _closed(manifest["candidate"], CANDIDATE_KEYS, "CANDIDATE_SHAPE")
+    for field in sorted(CANDIDATE_KEYS):
+        _sha(candidate[field], field.upper())
+    _text(
+        manifest["corpus_id"],
+        minimum=3,
+        maximum=128,
+        code="CORPUS_ID",
+        pattern=ID_RE,
+    )
+    _sha(manifest["corpus_sha256"], "CORPUS_SHA256")
+    total_cases = _integer(
+        manifest["total_cases"],
+        minimum=len(CATEGORIES),
+        maximum=MAX_MANIFEST_CASES,
+        code="TOTAL_CASES",
+    )
+    cases = manifest["cases"]
+    if type(cases) is not list or len(cases) != total_cases:
+        raise ModelEvaluationError("CASE_COUNT")
+
+    category_totals = dict.fromkeys(CATEGORIES, 0)
+    expected_totals = dict.fromkeys(OUTCOMES, 0)
+    fixtures: set[str] = set()
+    previous_case_number = -1
+    previous_category = 0
+    unknown_cases = 0
+    for item in cases:
+        case = _closed(item, CASE_KEYS, "CASE_SHAPE")
+        case_id = _text(
+            case["case_id"], minimum=9, maximum=11, code="CASE_ID", pattern=CASE_ID_RE
+        )
+        case_number = int(case_id[5:])
+        if case_number == previous_case_number:
+            raise ModelEvaluationError("DUPLICATE_CASE_ID")
+        if case_number < previous_case_number:
+            raise ModelEvaluationError("CASE_ORDER")
+        previous_case_number = case_number
+        category = case["category"]
+        if category not in category_totals:
+            raise ModelEvaluationError("CASE_CATEGORY")
+        position = CATEGORIES.index(category)
+        if position < previous_category:
+            raise ModelEvaluationError("CASE_ORDER")
+        previous_category = position
+        fixture = _sha(case["fixture_sha256"], "FIXTURE_SHA256")
+        if fixture in fixtures:
+            raise ModelEvaluationError("DUPLICATE_FIXTURE")
+        fixtures.add(fixture)
+        expected = case["expected_outcome"]
+        if expected not in expected_totals:
+            raise ModelEvaluationError("EXPECTED_OUTCOME")
+        if type(case["unknown_evidence_id"]) is not bool:
+            raise ModelEvaluationError("UNKNOWN_EVIDENCE_ID")
+        if case["unknown_evidence_id"]:
+            if expected == "ANSWER":
+                raise ModelEvaluationError("UNKNOWN_EVIDENCE_ID_ANSWER")
+            unknown_cases += 1
+        category_totals[category] += 1
+        expected_totals[expected] += 1
+
+    if any(count == 0 for count in category_totals.values()):
+        raise ModelEvaluationError("CATEGORY_COVERAGE")
+    if unknown_cases == 0:
+        raise ModelEvaluationError("UNKNOWN_EVIDENCE_ID_COVERAGE")
+    if any(expected_totals[outcome] == 0 for outcome in REQUIRED_EXPECTED_OUTCOMES):
+        raise ModelEvaluationError("OUTCOME_COVERAGE")
+
+    copied = json.loads(_canonical(manifest).decode("ascii"))
+    return {
+        "value": copied,
+        "manifest_sha256": sha256(_canonical(copied)).hexdigest(),
+        "category_totals": category_totals,
+        "expected_outcome_totals": expected_totals,
+        "unknown_evidence_id_cases": unknown_cases,
+    }
+
+
+def manifest_projection(validated: Mapping[str, Any]) -> dict[str, object]:
+    """Return manifest accounting without case IDs, fixture digests or content."""
+
+    value = validated["value"]
+    return {
+        "schema": MANIFEST_PROJECTION_SCHEMA,
+        "state": (
+            "SYNTHETIC_ONLY"
+            if value["evidence_class"] == "synthetic_fixture"
+            else "MANIFEST_VALIDATED"
+        ),
+        "evidence_class": value["evidence_class"],
+        "manifest_sha256": validated["manifest_sha256"],
+        "candidate": value["candidate"],
+        "corpus_id": value["corpus_id"],
+        "corpus_sha256": value["corpus_sha256"],
+        "total_cases": value["total_cases"],
+        "category_totals": [
+            {"category": category, "total_cases": validated["category_totals"][category]}
+            for category in CATEGORIES
+        ],
+        "expected_outcome_totals": validated["expected_outcome_totals"],
+        "unknown_evidence_id_cases": validated["unknown_evidence_id_cases"],
+        "raw_prompts_retained": False,
+        "remaining_holds": [
+            "DETACHED_SIGNATURE_NOT_VERIFIED_BY_VALIDATOR",
+            "FIXTURE_CONTENT_NOT_READ_BY_VALIDATOR",
+            "EVALUATION_NOT_EXECUTED",
+            "PROVIDER_CONTAINMENT_ACCEPTANCE",
+            "ARTIFACT_PROVENANCE_INDEPENDENT_VERIFICATION",
+            "OWNER_MODEL_BINDING",
+            "INDEPENDENT_SECURITY_ACCEPTANCE",
+            "RELEASE_AND_DEPLOYMENT_AUTHORITY",
+        ],
+        "authority": {
+            "reads_fixtures": False,
+            "verifies_signature_cryptographically": False,
+            "contacts_provider": False,
+            "accepts_model": False,
+        },
+    }
+
+
+def check_receipt_against_manifest(
+    receipt: Mapping[str, Any], manifest: Mapping[str, Any]
+) -> None:
+    """Require a validated receipt to account for exactly the manifest's cases.
+
+    Both arguments are validator outputs. A mismatch refuses with a fixed code;
+    agreement proves only that the two documents are consistent.
+    """
+
+    value = receipt["value"]
+    frozen = manifest["value"]
+    corpus = value["corpus"]
+    execution = value["execution"]
+    if corpus["manifest_sha256"] != manifest["manifest_sha256"]:
+        raise ModelEvaluationError("RECEIPT_MANIFEST_SHA256")
+    if (
+        corpus["corpus_id"] != frozen["corpus_id"]
+        or corpus["corpus_sha256"] != frozen["corpus_sha256"]
+    ):
+        raise ModelEvaluationError("RECEIPT_MANIFEST_CORPUS")
+    candidate = frozen["candidate"]
+    if (
+        value["profile_sha256"] != candidate["profile_sha256"]
+        or value["comparison_boundary_sha256"] != candidate["comparison_boundary_sha256"]
+    ):
+        raise ModelEvaluationError("RECEIPT_MANIFEST_CANDIDATE")
+    if execution["total_cases"] != frozen["total_cases"]:
+        raise ModelEvaluationError("RECEIPT_MANIFEST_TOTAL")
+    for result in execution["category_results"]:
+        if result["total_cases"] != manifest["category_totals"][result["category"]]:
+            raise ModelEvaluationError("RECEIPT_MANIFEST_CATEGORY")
+    # A partial run executes only some unknown-ID cases; the receipt already
+    # names that as EVALUATION_INCOMPLETE rather than a manifest mismatch.
+    executed_unknown = execution["unknown_evidence_id_cases"]
+    frozen_unknown = manifest["unknown_evidence_id_cases"]
+    complete = execution["completed_cases"] == execution["total_cases"]
+    if executed_unknown > frozen_unknown or (complete and executed_unknown != frozen_unknown):
+        raise ModelEvaluationError("RECEIPT_MANIFEST_UNKNOWN_EVIDENCE_ID")
+
+
 def canonical_json(value: object) -> str:
     return json.dumps(
         value,

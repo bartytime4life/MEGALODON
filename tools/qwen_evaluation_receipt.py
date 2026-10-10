@@ -15,8 +15,11 @@ if str(_ROOT) not in sys.path:
 from megalodon.model_evaluation import (
     ModelEvaluationError,
     canonical_json,
+    check_receipt_against_manifest,
     evaluation_projection,
+    parse_manifest_bytes,
     parse_receipt_bytes,
+    validate_corpus_manifest,
     validate_evaluation_receipt,
 )
 
@@ -30,6 +33,11 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("receipt", type=Path)
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="frozen corpus manifest the receipt must account for exactly",
+    )
     return parser
 
 
@@ -40,8 +48,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             raw = args.receipt.read_bytes()
         except OSError as exc:
             raise ModelEvaluationError("RECEIPT_READ") from exc
-        result = evaluation_projection(
-            validate_evaluation_receipt(parse_receipt_bytes(raw))
+        validated = validate_evaluation_receipt(parse_receipt_bytes(raw))
+        if args.manifest is not None:
+            try:
+                manifest_raw = args.manifest.read_bytes()
+            except OSError as exc:
+                raise ModelEvaluationError("MANIFEST_READ") from exc
+            check_receipt_against_manifest(
+                validated,
+                validate_corpus_manifest(parse_manifest_bytes(manifest_raw)),
+            )
+        result = evaluation_projection(validated)
+        result["manifest_binding"] = (
+            "MATCHED" if args.manifest is not None else "NOT_CHECKED"
         )
     except ModelEvaluationError as exc:
         print(
