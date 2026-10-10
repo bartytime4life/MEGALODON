@@ -75,6 +75,15 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 .shell { z-index:1; }
 @keyframes polish-aurora { from { transform:translate3d(-2%,-1%,0) rotate(0deg); } to { transform:translate3d(2%,2%,0) rotate(4deg); } }
 
+/* Links that no component styles fall back to the palette instead of the browser's lavender/purple.
+   Zero specificity: every existing component link rule still wins. */
+:where(.shell) :where(a:link, a:visited) { color:#8fe9e0; text-decoration-thickness:1px; text-underline-offset:3px; }
+:where(.shell) :where(a:hover) { color:#c4fbf3; }
+.ki-strip { align-items:center; }
+.ki-strip a { font-size:.9rem; font-weight:650; text-decoration:none; padding:.35rem .1rem; border-bottom:1px solid rgba(143,233,224,.45); }
+.ki-strip a:hover { border-bottom-color:#c4fbf3; }
+.ki-strip a:focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
+
 /* Brand mark breathes softly; it is decorative. */
 .mark { position:relative; overflow:hidden; animation: polish-breathe 6s ease-in-out infinite; }
 .mark::after { content:""; position:absolute; inset:-40%; background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.22) 50%,transparent 60%); transform:translateX(-120%); animation: polish-sheen 7s ease-in-out infinite; }
@@ -87,7 +96,7 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 .app-rail-label { color:var(--muted); font-size:.62rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
 .app-rail-items { display:flex; flex:1 1 auto; flex-wrap:nowrap; gap:.15rem; margin:0; padding:0; list-style:none; overflow-x:auto; scrollbar-width:none; min-width:0; }
 .app-rail-items::-webkit-scrollbar { display:none; }
-.app-dot-chip { display:inline-flex; align-items:center; gap:.35rem; min-height:30px; padding:.2rem .5rem; border-radius:999px; color:#c9dde5; font-size:.72rem; font-weight:700; text-decoration:none; white-space:nowrap; border:1px solid transparent; transition: background-color .2s, border-color .2s, color .2s, transform .15s var(--ease-out); }
+.app-dot-chip { position:relative; display:inline-flex; align-items:center; gap:.35rem; min-height:30px; padding:.2rem .5rem; border-radius:999px; color:#c9dde5; font-size:.72rem; font-weight:700; text-decoration:none; white-space:nowrap; border:1px solid transparent; transition: background-color .2s, border-color .2s, color .2s, transform .15s var(--ease-out); }
 .app-dot-chip:hover { background:rgba(81,230,207,.08); border-color:rgba(81,230,207,.28); color:#effffb; transform:translateY(-1px); }
 .app-dot-chip:focus-visible { outline:2px solid #a6f4df; outline-offset:2px; }
 .app-rail-summary { color:#b9cdd6; font-size:.7rem; font-weight:700; white-space:nowrap; }
@@ -98,7 +107,7 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 @keyframes polish-spin { to { transform:rotate(360deg); } }
 
 /* Shared dot: green running (pulsing), soft green installed, amber stopped, red missing, grey unknown. */
-.app-dot { position:relative; display:inline-block; flex:none; width:.62rem; height:.62rem; border-radius:50%; background:var(--dot-unknown); box-shadow:0 0 0 2px rgba(0,0,0,.35); transition: background-color .35s, box-shadow .35s; }
+.app-dot { position:relative; display:inline-block; flex:none; box-sizing:border-box; width:.62rem; height:.62rem; border-radius:50%; background:var(--dot-unknown); box-shadow:0 0 0 2px rgba(0,0,0,.35); transition: background-color .35s, box-shadow .35s, border-radius .35s, transform .35s var(--ease-out); }
 [data-state="running"] > .app-dot, .app-dot[data-legend="running"] { background:var(--dot-running); box-shadow:0 0 .5rem rgba(61,220,132,.85); }
 [data-state="running"] > .app-dot::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:2px solid rgba(61,220,132,.7); animation: polish-ping 2.2s var(--ease-out) infinite; }
 [data-state="ready"] > .app-dot, .app-dot[data-legend="ready"] { background:var(--dot-ready); box-shadow:0 0 .35rem rgba(127,224,168,.55); }
@@ -106,6 +115,12 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 [data-state="missing"] > .app-dot, .app-dot[data-legend="missing"] { background:var(--dot-missing); box-shadow:0 0 .45rem rgba(255,92,92,.7); }
 [data-state="unknown"] > .app-dot { animation: hb-pulse 1.6s ease-in-out infinite; }
 #app-rail[data-stale="true"] .app-dot { animation:none; opacity:.55; }
+/* Shape carries the state as well as hue, so red/green colour vision is never required:
+   filled circle = running or installed, diamond = stopped or needs setup,
+   hollow ring = not installed, dashed ring = unknown. */
+[data-state="stopped"] > .app-dot, [data-state="attention"] > .app-dot, .app-dot[data-legend="stopped"] { border-radius:2px; transform:rotate(45deg) scale(.86); }
+[data-state="missing"] > .app-dot, .app-dot[data-legend="missing"] { background:transparent; border:2px solid var(--dot-missing); box-shadow:0 0 .4rem rgba(255,92,92,.55); }
+[data-state="unknown"] > .app-dot { background:transparent; border:2px dashed var(--dot-unknown); box-shadow:none; }
 @keyframes polish-ping { 0% { transform:scale(.6); opacity:.9; } 80%,100% { transform:scale(1.9); opacity:0; } }
 
 /* ---- Supporting-app tiles inside Background tools ---- */
@@ -203,13 +218,43 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 .ops-unit-label .polish-chips, .live-motion-controls .polish-chips { flex-wrap:nowrap; margin:0; gap:.25rem; }
 .shell .ops-unit-label .polish-chip { min-height:28px; padding:.15rem .55rem; font-size:.7rem; }
 
-/* ---- Small screens: names collapse to dots ---- */
-@media (max-width: 900px) { .app-dot-name { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; } .app-dot-chip { padding:.3rem .38rem; } .app-rail-items { justify-content:space-between; } }
-@media (max-width: 560px) { .app-rail { flex-wrap:wrap; border-radius:16px; row-gap:.15rem; } .app-rail-label { display:none; } .app-rail-items { flex:1 1 100%; } .app-dot-chip { min-width:30px; justify-content:center; } .app-rail-summary { flex:1 1 auto; font-size:.66rem; white-space:normal; } }
-@media (max-width: 600px) { .app-tiles-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .app-tiles-legend { display:none; } }
+/* ---- Small screens: names stay visible; the rail scrolls sideways with a fading edge ---- */
+@media (max-width: 900px) {
+  .app-rail-items { scroll-snap-type:x proximity; scroll-padding-inline:.4rem; overscroll-behavior-x:contain;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 2rem),transparent); mask-image:linear-gradient(90deg,#000 calc(100% - 2rem),transparent); padding-right:1.6rem; }
+  .app-dot-chip { scroll-snap-align:start; padding:.2rem .45rem; font-size:.7rem; }
+}
+@media (max-width: 560px) {
+  .app-rail { flex-wrap:wrap; border-radius:16px; row-gap:.15rem; padding:.3rem .35rem .3rem .55rem; }
+  .app-rail-label { display:none; } .app-rail-items { flex:1 1 100%; }
+  .app-dot-chip { min-height:36px; }
+  .app-rail-summary { flex:1 1 auto; font-size:.66rem; white-space:normal; }
+  /* The header pill gets its own row instead of wrapping beside the wordmark. */
+  .topbar > .connection-state { flex:1 1 100%; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 8px; }
+  .topbar > .connection-state .connection { flex:1 1 15rem; min-width:0; }
+}
+@media (max-width: 600px) {
+  .app-tiles-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .app-tiles-legend { display:none; }
+  /* The primary action owns a full row so its label never breaks across three lines. */
+  .support-apps #support-apps-start { flex:1 1 100%; }
+}
 @media (prefers-reduced-motion: reduce) {
   body::after, .mark, .mark::after, .app-dot, .app-dot::after, .app-rail-recheck span, .workspace-view > *, .ops-desk > *, .support-apps::before, .shell details[open] > * { animation:none !important; }
   .shell button, .app-tile, .app-dot-chip, .polish-chip { transition:none !important; transform:none !important; }
+}
+@media (prefers-contrast: more) {
+  :root { --muted:#c6d8de; --line:rgba(170,205,216,.5); }
+  body::after { display:none; }
+  .app-dot { box-shadow:0 0 0 2px #000; }
+  .app-tile, .app-rail, .shell .polish-chip { border-color:#7fa6b3; }
+  .app-tile-state, .app-tiles-legend, .app-rail-summary, .polish-presets-label { color:#d6e6eb; }
+}
+@media (forced-colors: active) {
+  /* System colours replace fills, so draw every dot as an outline; its shape still names the state. */
+  .app-dot { border:2px solid CanvasText; background:Canvas; box-shadow:none; }
+  [data-state="running"] > .app-dot, [data-state="ready"] > .app-dot, .app-dot[data-legend="running"], .app-dot[data-legend="ready"] { background:CanvasText; forced-color-adjust:none; }
+  [data-state="unknown"] > .app-dot { border-style:dashed; }
+  .app-dot-chip, .app-tile { border:1px solid CanvasText; }
 }
 @media print { .app-rail, .app-tiles, body::after { display:none !important; } }
 '''

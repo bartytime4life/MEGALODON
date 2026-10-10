@@ -58,8 +58,10 @@ non-loopback addresses, IPv6 for this IPv4 server, and any attempt to enable the
 legacy remote override. Expected-Host validation happens before routing or store
 access and rejects missing, duplicate, or unexpected Host values. The supported
 `serve()` path opens directly by default without a password or terminal requirement.
-This gives other programs running as the local user access to the read-only HUD
-data while the server runs. With `--require-sign-in`, it generates a per-launch
+This gives other local programs access to the read-only HUD data while the
+server runs. Loopback TCP does not identify the calling account, so that includes
+programs run by other accounts on the same PC; Origin, Host and custom-header
+checks stop browsers, not local clients. With `--require-sign-in`, it generates a per-launch
 password, displays it only on an interactive launching terminal, and refuses
 startup if terminal output is unavailable. The installed HUD can instead load
 a private salted verifier for an operator-chosen password; it prints only a
@@ -69,8 +71,11 @@ request. Success issues an HttpOnly, SameSite=Strict, launch-scoped session
 cookie. In that mode, the dashboard page, its assets, private reads, and action
 routes require authentication. API clients may use HTTP Basic with username
 `megalodon`; unauthorized responses do not trigger a browser password prompt.
-No password is embedded in the served assets or URL. Five failed sign-in page
-attempts cause a 30-second pause. Without sign-in, GET `/sign-in` returns to `/`
+No password is embedded in the served assets or URL. Five consecutive failed
+password checks, through the sign-in page or HTTP Basic, cause a 30-second pause
+in which both routes return 429 with `Retry-After: 30` before any password check
+runs. A request without credentials is not counted. Non-ASCII session-cookie or
+token values are refused like any other mismatch. Without sign-in, GET `/sign-in` returns to `/`
 and its assets and POST route are unavailable.
 The Host check alone is a local exposure guard, not authentication. A private
 launch terminal and ordinary same-host process isolation remain prerequisites;
@@ -89,7 +94,10 @@ and inert `/api/automation-preview` routes. The latter two do not execute host
 actions; their fixed request headers, schemas and size limits remain required.
 Storage, network discovery, defense and report actions are also supported as listed below.
 Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
-methods remain unsupported. Unknown paths return 404. Fixed validation errors
+methods remain unsupported; they, and malformed request lines or oversized
+headers, receive the fixed JSON body `{"error":"request refused"}` (no body for
+HEAD) with the same security headers as every other response. The `Server`
+header names `MEGALODON` without a Python or BaseHTTP version. Unknown paths return 404. Fixed validation errors
 do not echo request values, private paths, or stack traces. None of these HTTP
 guards makes Python's threaded development-style HTTP server an Internet-facing
 production service.
