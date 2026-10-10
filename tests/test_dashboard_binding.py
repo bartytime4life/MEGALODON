@@ -8,7 +8,9 @@ import errno
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
+import os
 import socket
+import sys
 from threading import Event, Thread
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -744,5 +746,90 @@ def test_stdlib_refusals_keep_security_headers_and_hide_versions():
         response = _raw_request(server, b"GET /" + b"x" * 70000 + b" HTTP/1.1\r\n\r\n")
         assert response.startswith(b"HTTP/1.0 414"), response[:80]
         assert b"Python" not in response and b"<html" not in response.lower()
+    finally:
+        _stop(server, thread)
+
+
+_TCP_HEADER = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+
+
+def _tcp_row(local, remote, uid):
+    return f"   0: {local} {remote} 01 00000000:00000000 00:00000000 00000000 {uid:>5}        0 1 1 0000000000000000 20 4 30 10 -1\n"
+
+
+def test_loopback_peer_uid_reads_only_the_exact_client_row(tmp_path, monkeypatch):
+    client, server = ("127.0.0.1", 40000), ("127.0.0.1", 8787)
+    local, remote = dashboard._proc_tcp_address(client), dashboard._proc_tcp_address(server)
+    table = tmp_path / "tcp"
+    table.write_text(_TCP_HEADER
+                     + _tcp_row(remote, local, 0)                                   # the server's accepted socket
+                     + _tcp_row(local, dashboard._proc_tcp_address(("127.0.0.1", 9)), 7)  # same client port, other peer
+                     + _tcp_row(local, remote, 1234), encoding="ascii")
+    assert dashboard.loopback_peer_uid(client, server, table=str(table)) == 1234
+    # No row, an unreadable table, a malformed uid or address, and an oversized table all prove nothing.
+    assert dashboard.loopback_peer_uid(("127.0.0.1", 40001), server, table=str(table)) is None
+    assert dashboard.loopback_peer_uid(client, server, table=str(tmp_path / "missing")) is None
+    (tmp_path / "bad").write_text(_TCP_HEADER + _tcp_row(local, remote, "12x"), encoding="ascii")
+    assert dashboard.loopback_peer_uid(client, server, table=str(tmp_path / "bad")) is None
+    for address in (("not-an-ip", 1), ("127.0.0.1", 70000), ("127.0.0.1", "1"), ()):
+        assert dashboard.loopback_peer_uid(address, server, table=str(table)) is None
+    monkeypatch.setattr(dashboard, "_PROC_NET_TCP_MAX_BYTES", len(_TCP_HEADER) + 10)
+    assert dashboard.loopback_peer_uid(client, server, table=str(table)) is None
+
+
+def test_server_refuses_another_accounts_connection_before_reading(monkeypatch):
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    seen = []
+
+    def peer_uid(client_address, server_address):
+        seen.append((client_address, server_address))
+        return owner
+
+    monkeypatch.setattr(dashboard, "loopback_peer_uid", peer_uid)
+    handler = type("PeerHandler", (dashboard.DashboardHandler,), {"store": store})
+    server = dashboard.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    server.require_same_account_peer = True
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host = f"127.0.0.1:{server.server_port}"
+        owner = os.geteuid() + 1
+        response = _raw_request(server, b"GET /api/summary HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n")
+        assert response == b"", "another account's connection is closed without a response"
+        assert not store.summary.called
+        assert seen and seen[-1][1] == ("127.0.0.1", server.server_port)
+        owner = None
+        assert _raw_request(server, b"GET /api/summary HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n") == b""
+        owner = os.geteuid()
+        assert _host_request(server, (host,))[:2] == (200, {"events": 1})
+    finally:
+        _stop(server, thread)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux exposes socket owners in /proc/net/tcp")
+def test_real_proc_table_admits_this_accounts_own_connection():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    server = dashboard.ThreadingHTTPServer(("127.0.0.1", 0), type("OwnPeerHandler", (dashboard.DashboardHandler,), {"store": store}))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert server.require_same_account_peer is True
+        assert _host_request(server, (f"127.0.0.1:{server.server_port}",))[:2] == (200, {"events": 1})
+    finally:
+        _stop(server, thread)
+
+
+def test_platforms_without_owner_proof_keep_the_same_host_boundary(monkeypatch):
+    monkeypatch.setattr(dashboard, "loopback_peer_uid", lambda *_: None)
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    server = dashboard.ThreadingHTTPServer(("127.0.0.1", 0), type("PortableHandler", (dashboard.DashboardHandler,), {"store": store}))
+    server.require_same_account_peer = False
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert _host_request(server, (f"127.0.0.1:{server.server_port}",))[0] == 200
     finally:
         _stop(server, thread)
