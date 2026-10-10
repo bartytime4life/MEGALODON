@@ -194,6 +194,57 @@ def test_installer_kills_a_hung_install():
     assert status["output"][-1] == "The job timed out and was stopped."
 
 
+def test_deadline_stops_every_process_the_install_started():
+    import subprocess
+    import time
+    finished = threading.Event()
+
+    def runner(argv, **kw):
+        # A shell whose child keeps the output pipe open after the shell dies.
+        return subprocess.Popen(["/bin/sh", "-c", "sleep 20 & echo started; wait"], **kw)
+
+    installer = Installer(on_finish=finished.set, runner=runner, timeout=0.5)
+    started = time.monotonic()
+    installer.start("scapy")
+    assert finished.wait(5)
+    assert time.monotonic() - started < 5
+    status = installer.status()
+    assert status["state"] == "failed" and status["exit_code"] is None
+    assert status["output"] == ["started", "The job timed out and was stopped."]
+
+
+def test_deadline_reports_an_authorized_process_it_cannot_stop():
+    import time
+    finished, release = threading.Event(), threading.Event()
+
+    class AuthorizedProcess:
+        @property
+        def stdout(self):
+            def lines():
+                yield "unpacking\n"
+                release.wait(5)
+            return lines()
+
+        def kill(self):
+            raise PermissionError(1, "Operation not permitted")
+
+        def wait(self):
+            return 0
+
+    installer = Installer(on_finish=finished.set, runner=lambda argv, **kw: AuthorizedProcess(), timeout=0.2)
+    installer.start("scapy")
+    deadline = time.monotonic() + 3
+    while len(installer.status()["output"]) < 2 and time.monotonic() < deadline:
+        time.sleep(0.02)
+    status = installer.status()
+    assert status["state"] == "running" and "cannot be stopped" in status["output"][-1]
+    release.set()
+    assert finished.wait(5)
+    status = installer.status()
+    assert status["state"] == "succeeded" and status["exit_code"] == 0
+    assert "The job timed out and was stopped." not in status["output"]
+
+
 def test_qwen_model_manifest_turns_the_light_green(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_heartbeat, "runtime_platform", lambda: "linux")
     monkeypatch.setattr(tool_heartbeat, "OLLAMA_MODEL_ROOTS", ())
