@@ -89,6 +89,9 @@ REFERENCE_WARNING = (
 _PROC_NET_TCP = "/proc/net/tcp"
 _PROC_NET_TCP6 = "/proc/net/tcp6"
 _PROC_NET_TCP_MAX_BYTES = 16 * 1024 * 1024
+# Cookies are not port-scoped, so other local apps on 127.0.0.1 (for example a
+# notebook server) share this header. Bound it like a common server header limit.
+MAX_COOKIE_HEADER_BYTES = 8 * 1024
 
 
 def _proc_tcp_address(address: tuple[str, int], *, ipv4_mapped: bool = False) -> str:
@@ -543,6 +546,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     automation_preview_lock = Lock()
     maintenance_lock = Lock()
     context_read_lock = Lock()
+    _operator_authenticated = False
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._has_expected_host():
@@ -1076,6 +1080,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             if not self._has_operator_http_auth() or not self._evidence_action_envelope():
                 return
+            # Dispatch must not rerun the password check: that would hold the
+            # shared one-check-at-a-time admission twice for one request.
+            self._operator_authenticated = True
         if not self.maintenance_lock.acquire(blocking=False):
             self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
             return
@@ -1089,7 +1096,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/sign-in" and self._sign_in_enabled():
             self._sign_in()
             return
-        if not self._has_operator_http_auth():
+        if not self._operator_authenticated and not self._has_operator_http_auth():
             return
         if self.path in {'/api/reports/create', '/api/reports/cancel', '/api/reports/schedule'}:
             self._reports_action()
@@ -1718,7 +1725,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _has_session_cookie(self) -> bool:
         token = self.http_session_token
         values = self.headers.get_all("Cookie", [])
-        if token is None or len(values) != 1 or len(values[0]) > 256:
+        if token is None or len(values) != 1 or len(values[0]) > MAX_COOKIE_HEADER_BYTES:
             return False
         name = f"megalodon_session_{self.server.server_port}"
         matches = [part.strip()[len(name) + 1:] for part in values[0].split(";")
@@ -1820,6 +1827,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def version_string(self) -> str:
         """Name the service without disclosing the Python or BaseHTTP version."""
         return "MEGALODON"
+
+    def parse_request(self) -> bool:
+        if not super().parse_request():
+            return False
+        if self.request_version == "HTTP/0.9":
+            # A simple request has no header message for the guards to read.
+            # Reply as HTTP/1.0 so the fixed refusal keeps its security headers.
+            self.request_version = "HTTP/1.0"
+            self.send_error(400)
+            return False
+        return True
 
     def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
         """Refuse malformed or unsupported requests through ``_send`` so the fixed security headers apply."""

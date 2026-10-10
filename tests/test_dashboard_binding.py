@@ -1106,3 +1106,78 @@ def test_real_proc_table_admits_this_accounts_mapped_connection():
             assert json.loads(body) == {"events": 1}
         finally:
             _stop(server, thread)
+
+
+def test_http09_simple_request_gets_fixed_refusal_with_security_headers():
+    handler = type("SimpleRequestHandler", (dashboard.DashboardHandler,), {"store": Mock()})
+    server, thread = _serve(handler)
+    try:
+        # Python 3.11 and 3.12 still read a header block after a simple request
+        # line; 3.13 does not. The blank line completes it for every version.
+        response = _raw_request(server, b"GET /\r\n\r\n")
+        head, _, body = response.partition(b"\r\n\r\n")
+        lines = head.split(b"\r\n")
+        assert lines[0].startswith(b"HTTP/1.0 400"), response[:80]
+        headers = {k.lower(): v for k, _, v in (line.partition(b": ") for line in lines[1:])}
+        assert headers[b"x-content-type-options"] == b"nosniff"
+        assert headers[b"server"] == b"MEGALODON"
+        assert json.loads(body) == {"error": "request refused"}
+        assert not handler.store.summary.called
+    finally:
+        _stop(server, thread)
+
+
+def test_authenticated_storage_post_checks_the_password_once(monkeypatch):
+    monkeypatch.setattr(dashboard, "_tool_management_user", lambda: True)
+    verifier = Mock()
+    verifier.verify.side_effect = lambda supplied: supplied == b"synthetic private phrase 123"
+    token = "t" * 32
+    evidence = SimpleNamespace(token=token, enabled=False, preview=lambda policy: {"ok": "preview"})
+    handler = type("StorageHandler", (dashboard.DashboardHandler,), {
+        "store": Mock(), "http_password_verifier": verifier, "http_session_token": "s" * 43,
+        "evidence": evidence, "login_lock": dashboard.Lock(), "login_failures": 0,
+        "login_blocked_until": 0.0,
+    })
+    server, thread = _serve(handler)
+    try:
+        port = server.server_port
+        auth = base64.b64encode(b"megalodon:synthetic private phrase 123")
+        body = b'{"action":"preview","policy":{}}'
+        response = _raw_request(server, (
+            b"POST /api/storage HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nOrigin: http://127.0.0.1:%d\r\n"
+            b"Authorization: Basic %s\r\nX-Megalodon-Storage-Token: %s\r\n"
+            b"Content-Type: application/json\r\nContent-Length: %d\r\n\r\n"
+        ) % (port, port, auth, token.encode(), len(body)) + body)
+        assert response.startswith(b"HTTP/1.0 200"), response[:80]
+        assert verifier.verify.call_count == 1
+    finally:
+        _stop(server, thread)
+
+
+def test_session_cookie_is_found_beside_other_local_apps_cookies():
+    store = Mock()
+    store.summary.return_value = {"events": 1}
+    handler = type("SharedCookieHandler", (dashboard.DashboardHandler,), {
+        "store": store, "http_read_password": "twelve-chars",
+        "http_session_token": "private-session-token",
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+    })
+    server, thread = _serve(handler)
+    try:
+        port = server.server_port
+        # Browsers send every 127.0.0.1 cookie regardless of port, such as a
+        # notebook server's XSRF and login cookies.
+        neighbours = (b'_xsrf=2|' + b"a" * 120 + b'; username-localhost-8888="2|1:0|'
+                      + b"b" * 400 + b'"')
+        ours = b"megalodon_session_%d=private-session-token" % port
+
+        def summary(cookie: bytes) -> bytes:
+            return _raw_request(server, b"GET /api/summary HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n"
+                                b"Cookie: %s\r\n\r\n" % (port, cookie))
+
+        assert summary(neighbours + b"; " + ours).startswith(b"HTTP/1.0 200")
+        oversized = b"x=" + b"y" * dashboard.MAX_COOKIE_HEADER_BYTES + b"; " + ours
+        assert summary(oversized).startswith(b"HTTP/1.0 401")
+        assert store.summary.call_count == 1
+    finally:
+        _stop(server, thread)

@@ -82,7 +82,10 @@ cookie. In that mode, the dashboard page, its assets, private reads, and action
 routes require authentication. API clients may use HTTP Basic with username
 `megalodon`; unauthorized responses do not trigger a browser password prompt.
 No password is embedded in the served assets or URL. Only one password check
-may run at a time across the sign-in page and HTTP Basic. At the authentication
+may run at a time across the sign-in page and HTTP Basic, and each request runs
+at most one. The session cookie is found among other `Cookie` values, because
+browsers send cookies from every local app on the same host regardless of port;
+the whole header is bounded at 8 KiB. At the authentication
 gate, competing attempts return 429 with `Retry-After: 30` without waiting for or
 invoking the verifier, and do not count as failed guesses. A form request can
 instead receive the existing 409 refusal from the earlier POST maintenance guard.
@@ -111,8 +114,8 @@ and inert `/api/automation-preview` routes. The latter two do not execute host
 actions; their fixed request headers, schemas and size limits remain required.
 Storage, network discovery, defense and report actions are also supported as listed below.
 Other POST requests return 405 and `Allow: GET`. HEAD and other unsupported
-methods remain unsupported; they, and malformed request lines or oversized
-headers, receive the fixed JSON body `{"error":"request refused"}` (no body for
+methods remain unsupported; they, malformed request lines (including header-less
+HTTP/0.9 requests, answered as HTTP/1.0) or oversized headers, receive the fixed JSON body `{"error":"request refused"}` (no body for
 HEAD) with the same security headers as every other response. The `Server`
 header names `MEGALODON` without a Python or BaseHTTP version. Unknown paths return 404. Fixed validation errors
 do not echo request values, private paths, or stack traces. None of these HTTP
