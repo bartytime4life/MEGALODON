@@ -131,8 +131,15 @@ def _validate(value, target, *, semantic=True):
     if left.version != right.version:
         raise ContractError("ADDRESS_FAMILY")
     _utc(record["timestamp"] if target == "input" else record["observed_at"])
-    if target != "input" and (str(left) != record["src_ip"] or str(right) != record[dst]):
+    if target != "input" and (_pinned_ip(left) != record["src_ip"] or _pinned_ip(right) != record[dst]):
         raise ContractError("CANONICAL_IP")
+
+
+def _pinned_ip(address):
+    """Contract text: IPv4-mapped IPv6 is dotted on every CPython release."""
+    if address.version == 6 and address.ipv4_mapped is not None:
+        return "::ffff:" + str(address.ipv4_mapped)
+    return str(address)
 
 
 def _expected(inp):
@@ -142,8 +149,8 @@ def _expected(inp):
         "schema_version": "external-alert-v1", "source": inp["source"],
         "source_record_index": inp["source_record_index"],
         "observed_at": _utc(event["timestamp"]),
-        "src_ip": str(ipaddress.ip_address(event["src_ip"])), "src_port": event["src_port"],
-        "dst_ip": str(ipaddress.ip_address(event["dest_ip"])), "dst_port": event["dest_port"],
+        "src_ip": _pinned_ip(ipaddress.ip_address(event["src_ip"])), "src_port": event["src_port"],
+        "dst_ip": _pinned_ip(ipaddress.ip_address(event["dest_ip"])), "dst_port": event["dest_port"],
         "protocol": event["proto"],
         "rule": {key: event["alert"][key] for key in ("gid", "signature_id", "rev", "severity")},
         "producer_reported_action": event["alert"]["action"],
