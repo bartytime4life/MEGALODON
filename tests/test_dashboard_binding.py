@@ -1112,7 +1112,9 @@ def test_http09_simple_request_gets_fixed_refusal_with_security_headers():
     handler = type("SimpleRequestHandler", (dashboard.DashboardHandler,), {"store": Mock()})
     server, thread = _serve(handler)
     try:
-        response = _raw_request(server, b"GET /\r\n")
+        # Python 3.11 and 3.12 still read a header block after a simple request
+        # line; 3.13 does not. The blank line completes it for every version.
+        response = _raw_request(server, b"GET /\r\n\r\n")
         head, _, body = response.partition(b"\r\n\r\n")
         lines = head.split(b"\r\n")
         assert lines[0].startswith(b"HTTP/1.0 400"), response[:80]
