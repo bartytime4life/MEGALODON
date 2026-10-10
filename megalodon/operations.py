@@ -15,6 +15,8 @@ from .managed_capture import now
 
 PORT_HINTS = {22:'SSH',25:'SMTP',53:'DNS',80:'HTTP',123:'NTP',443:'HTTPS',445:'SMB',
               465:'SMTPS',587:'Submission',853:'DNS over TLS',993:'IMAPS',3389:'RDP',5353:'mDNS'}
+# Endpoints serving DNS, SSH or RDP are never contained (see defense._target).
+PROTECTED_SERVICE_PORTS = frozenset({22, 53, 853, 3389})
 
 
 def address_scope(value):
@@ -156,8 +158,16 @@ class Operations:
                         if len(row['services'])<8 and item not in row['services']:row['services'].append(item)
                     port = endpoint['port']
                     item = dict(protocol=flow['protocol'],port=port,hint=PORT_HINTS.get(port))
-                    if port is not None and item not in row['ports'] and len(row['ports'])<12:
-                        row['ports'].append(item)
+                    if port is not None and item not in row['ports']:
+                        if len(row['ports'])<12:
+                            row['ports'].append(item)
+                        elif port in PROTECTED_SERVICE_PORTS:
+                            # Containment refuses endpoints serving these ports, so the
+                            # bounded list must never drop one in favour of other ports.
+                            for index in range(len(row['ports'])-1,-1,-1):
+                                if row['ports'][index]['port'] not in PROTECTED_SERVICE_PORTS:
+                                    row['ports'][index]=item
+                                    break
             endpoints = sorted(peers.values(),key=lambda r:(not r['local'],-r['bytes']))[:64]
             settings = self.configuration.settings
             storage = dict(status='unavailable',used_bytes=None,limit_bytes=settings.storage.max_database_bytes,percent=None)

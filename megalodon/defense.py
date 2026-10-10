@@ -15,6 +15,7 @@ from .ai_provider import AIProviderError, generate, reject_response, _strict_pai
 from .companion_automation import _run_fixed
 from .defense_guard import ROOT_PROGRAM
 from .managed_capture import now
+from .operations import PROTECTED_SERVICE_PORTS
 
 ACTIONS = {'analyze':{'ip'},'refresh_inventory':set(),'scan_files':set(),
            'plan_containment':{'ip'},'apply_containment':{'plan_id'},'release_containment':{'ip'}}
@@ -43,6 +44,8 @@ class Defense:
         self.token=secrets.token_urlsafe(24)
         self.path=configuration.home/'.local/share/megalodon/defense/receipts.db'
         self._lock=Lock();self._thread=None;self._plans={};self._active={}
+        # IP -> receipt of a pending apply whose placeholder is in _active.
+        self._pending={}
         self._recent=deque(maxlen=20)
         self._job=dict(state='idle',action=None,message='Choose an observed IP or a fixed defensive workflow.',started_at=None,finished_at=None,result=None)
         self._audit_ready=True
@@ -69,14 +72,23 @@ class Defense:
                                  ip=row.get('ip'),message=row.get('message','')))
         if row.get('state')=='applied' and action=='apply_containment':
             self._active[result['ip']]=result
+            self._pending.pop(result['ip'],None)
         elif row.get('state')=='applied' and action=='release_containment':
             self._active.pop(result['ip'],None)
+            self._pending.pop(result['ip'],None)
         elif row.get('state')=='not_attempted' and action=='apply_containment' and row.get('approved_preview'):
             preview=row['approved_preview']
-            expiry=(datetime.fromisoformat(row['timestamp'].replace('Z','+00:00'))+timedelta(seconds=390)).isoformat().replace('+00:00','Z')
-            self._active[preview['ip']]=dict(ip=preview['ip'],present=None,remaining_seconds=None,verified=False,verified_at=None,expires_at=expiry)
+            # A placeholder never replaces a recorded block: a re-apply that
+            # fails before the host must not make that block unreleasable.
+            if preview['ip'] not in self._active:
+                expiry=(datetime.fromisoformat(row['timestamp'].replace('Z','+00:00'))+timedelta(seconds=390)).isoformat().replace('+00:00','Z')
+                self._active[preview['ip']]=dict(ip=preview['ip'],present=None,remaining_seconds=None,verified=False,verified_at=None,expires_at=expiry)
+                self._pending[preview['ip']]=row['receipt_id']
         elif row.get('state')=='failed' and action=='apply_containment' and row.get('host_attempted') is False:
-            self._active.pop(row.get('ip'),None)
+            # Only withdraw this attempt's own placeholder.
+            if self._pending.get(row.get('ip'))==row['receipt_id']:
+                self._active.pop(row.get('ip'),None)
+                self._pending.pop(row.get('ip'),None)
 
     def snapshot(self,include_token=False):
         with self._lock:
@@ -111,7 +123,7 @@ class Defense:
         if (row['local'] or not address.is_global or address.is_multicast
                 or (address.version==6 and address.ipv4_mapped)
                 or any(address in network for network in self.configuration.settings.blocking.allowlist)
-                or any(p['port'] in {22,53,853,3389} for p in row['ports'])):
+                or any(p['port'] in PROTECTED_SERVICE_PORTS for p in row['ports'])):
             raise ValueError('This address is protected: local/reserved, allowlisted, DNS or remote-access service.')
         return row
 
@@ -121,7 +133,10 @@ class Defense:
         managed=evidence is not None and evidence.enabled
         with (ManagedReceipts(evidence,'defense') if managed else ReceiptStore(self.path)) as store:
             store.verify_chain()
-            if not managed and store._occupied_bytes()>MAX_LEDGER_BYTES-32768:raise ValueError('Defense audit storage is full.')
+            # The reserve stops new actions before they run; an outcome row may use
+            # it, so a host change is never left without its result record.
+            if (not managed and payload.get('state')=='not_attempted'
+                    and store._occupied_bytes()>MAX_LEDGER_BYTES-32768):raise ValueError('Defense audit storage is full.')
             row=store.append(identifier,payload)
         with self._lock:self._restore(row)
 
