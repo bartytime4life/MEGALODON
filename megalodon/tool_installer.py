@@ -242,17 +242,18 @@ class Installer:
         with self._lock:
             if self._job.state == "running":
                 raise InstallBusy
-            self._job = _Job(tool=tool_id, action=action, state="running", started_at=_now())
-        Thread(target=self._run, args=(command,), name=f"megalodon-install-{tool_id}", daemon=True).start()
+            job = _Job(tool=tool_id, action=action, state="running", started_at=_now())
+            self._job = job
+        Thread(target=self._run, args=(command, job), name=f"megalodon-install-{tool_id}", daemon=True).start()
         return self.status()
 
-    def _append(self, line: str) -> None:
+    def _append(self, job: _Job, line: str) -> None:
         text = line.rstrip("\r\n").encode("utf-8", errors="replace")[:MAX_LINE_BYTES].decode("utf-8", errors="ignore")
         with self._lock:
-            self._job.output.append(text)
-            del self._job.output[:-MAX_OUTPUT_LINES]
+            job.output.append(text)
+            del job.output[:-MAX_OUTPUT_LINES]
 
-    def _run(self, command: list[str]) -> None:
+    def _run(self, command: list[str], job: _Job) -> None:
         code: int | None = None
         timed_out = Event()
         # pkexec keeps the caller's session for its authorization prompt; any
@@ -279,7 +280,9 @@ class Installer:
                     # pkexec runs the authorized command as root; this user cannot
                     # stop it, so the job stays running until it exits.
                     with self._lock:
-                        self._job.notice = ("The job passed its deadline, but the authorized process cannot be stopped "
+                        if self._job is not job or job.state != "running":
+                            return
+                        job.notice = ("The job passed its deadline, but the authorized process cannot be stopped "
                                             "from the HUD; it is still running.")
                     return
                 timed_out.set()
@@ -289,24 +292,27 @@ class Installer:
             try:
                 assert process.stdout is not None
                 for line in process.stdout:
-                    self._append(line)
+                    self._append(job, line)
                 code = process.wait()
             finally:
                 deadline.cancel()
+                # cancel() cannot stop a callback already running. Join without
+                # the job lock before publishing completion or accepting a new job.
+                deadline.join()
             if timed_out.is_set():
                 code = None
-                self._append("The job timed out and was stopped.")
+                self._append(job, "The job timed out and was stopped.")
         except OSError as exc:
-            self._append(f"Installer could not start: {exc.strerror or type(exc).__name__}")
+            self._append(job, f"Installer could not start: {exc.strerror or type(exc).__name__}")
         if code in (126, 127) and command and command[0].endswith("pkexec"):
-            self._append("Authorization was cancelled or no password prompt is available. Use the terminal command instead.")
+            self._append(job, "Authorization was cancelled or no password prompt is available. Use the terminal command instead.")
         with self._lock:
-            if self._job.notice:
-                self._job.notice = None
-                self._job.output.append("The authorized process exited after its deadline.")
-                del self._job.output[:-MAX_OUTPUT_LINES]
-            self._job.exit_code = code
-            self._job.state = "succeeded" if code == 0 else "failed"
-            self._job.finished_at = _now()
+            if job.notice:
+                job.notice = None
+                job.output.append("The authorized process exited after its deadline.")
+                del job.output[:-MAX_OUTPUT_LINES]
+            job.exit_code = code
+            job.state = "succeeded" if code == 0 else "failed"
+            job.finished_at = _now()
         if self._on_finish is not None:
             self._on_finish()
