@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/local-model-evaluation/v1/manifest-schema.json",
+  "title": "MEGALODON local-model adversarial evaluation corpus manifest v1",
+  "description": "Structural shape only. Canonical bytes, case order, per-category, unknown-evidence-ID and expected-outcome coverage, and fixture uniqueness are enforced by megalodon.model_evaluation.validate_corpus_manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "evidence_class", "candidate", "corpus_id", "corpus_sha256", "total_cases", "cases"],
+  "properties": {
+    "schema": {"const": "megalodon-local-model-evaluation-manifest-v1"},
+    "evidence_class": {"enum": ["synthetic_fixture", "operator_frozen"]},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding_sha256", "profile_sha256", "comparison_boundary_sha256"],
+      "properties": {
+        "binding_sha256": {"$ref": "#/$defs/sha256"},
+        "profile_sha256": {"$ref": "#/$defs/sha256"},
+        "comparison_boundary_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "corpus_id": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{2,127}$"},
+    "corpus_sha256": {"$ref": "#/$defs/sha256"},
+    "total_cases": {"type": "integer", "minimum": 7, "maximum": 20000},
+    "cases": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 20000,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "category", "fixture_sha256", "expected_outcome", "unknown_evidence_id"],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^case-[0-9]{4,6}$"},
+        "category": {
+          "enum": [
+            "injection",
+            "fabricated_evidence_ids",
+            "unicode_control_text",
+            "privacy",
+            "exhaustion",
+            "cancellation",
+            "out_of_distribution"
+          ]
+        },
+        "fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_outcome": {"enum": ["ANSWER", "ABSTAIN", "DENY", "ERROR"]},
+        "unknown_evidence_id": {"type": "boolean"}
+      }
+    }
+  }
+}
