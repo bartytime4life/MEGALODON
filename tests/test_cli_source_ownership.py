@@ -1188,28 +1188,47 @@ class SourceOwnershipTests(unittest.TestCase):
             err, "megalodon: ingestion interrupted after its receipt was recorded\n"
         )
 
-    def test_sigterm_during_unmasked_receipt_write_is_retried_not_fatal(self):
-        # Without masking, SIGTERM during the write must take the retry path
-        # rather than whatever disposition the run restored when it ended.
+    def test_sigterm_during_unmasked_receipt_write_is_deferred_not_fatal(self):
+        # Without masking, SIGTERM during the write must neither take whatever
+        # disposition the run restored when it ended nor escape the helper; it
+        # is recorded, the receipt is kept, and the command exits 143.
         attempts = []
         restored = []
 
-        def terminate_first_attempt(reason):
+        def terminate_during_attempt(reason):
             attempts.append(reason)
             if len(attempts) == 1:
                 os.kill(os.getpid(), signal.SIGTERM)
 
-        previous = signal.signal(signal.SIGTERM, lambda signum, frame: restored.append(signum))
+        handler = lambda signum, frame: restored.append(signum)
+        previous = signal.signal(signal.SIGTERM, handler)
         try:
             with patch.object(cli.signal, "pthread_sigmask", None):
                 code, store, out, err = self.run_source(
-                    Source([]), finish_hook=terminate_first_attempt
+                    Source([]), finish_hook=terminate_during_attempt
                 )
+            self.assertIs(signal.getsignal(signal.SIGTERM), handler)
         finally:
             signal.signal(signal.SIGTERM, previous)
         self.assertEqual(restored, [])
         self.assertEqual((code, out), (143, ""))
-        self.assertEqual(attempts, ["source_exhausted", "interrupted"])
+        self.assertEqual(attempts, ["source_exhausted"])
+        self.assertEqual(
+            err, "megalodon: ingestion interrupted after its receipt was recorded\n"
+        )
+
+    def test_sigterm_ignored_during_unmasked_receipt_write_is_not_reported(self):
+        previous = signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        try:
+            with patch.object(cli.signal, "pthread_sigmask", None):
+                code, store, out, err = self.run_source(
+                    Source([]),
+                    finish_hook=lambda _reason: os.kill(os.getpid(), signal.SIGTERM),
+                )
+            self.assertEqual(signal.getsignal(signal.SIGTERM), signal.SIG_IGN)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+        self.assertEqual((code, err), (0, ""))
 
     def test_interrupt_while_opening_the_store_has_fixed_exit(self):
         out, err = io.StringIO(), io.StringIO()
