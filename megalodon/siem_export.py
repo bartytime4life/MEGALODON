@@ -100,7 +100,7 @@ def _source_kind(value: object) -> str:
 def _utc_timestamp(value: datetime) -> str:
     if not isinstance(value, datetime) or value.tzinfo is None:
         _fail("INVALID_TIMESTAMP")
-    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _epoch_millis(value: datetime) -> int:
@@ -125,6 +125,7 @@ def to_ecs_record(
     run_id = _logical_id(run_id)
     event_id = _logical_id(event_id)
     detection_id = _logical_id(detection_id)
+    rule_id = _logical_id(detection.rule_id)
     source_kind = _source_kind(source_kind)
     completeness = _completeness(completeness)
 
@@ -138,7 +139,7 @@ def to_ecs_record(
         "completeness": completeness,
         "projection_version": "1",
     }
-    if detection.suppressed_reason is not None:
+    if detection.suppressed_reason:
         megalodon["suppressed_reason"] = detection.suppressed_reason
 
     return MappingProxyType({
@@ -159,7 +160,7 @@ def to_ecs_record(
             "bytes": event.byte_count,
         }),
         "message": detection.message,
-        "rule": MappingProxyType({"id": detection.rule_id}),
+        "rule": MappingProxyType({"id": rule_id}),
         "megalodon": MappingProxyType(megalodon),
     })
 
@@ -191,7 +192,7 @@ def to_ocsf_record(
         "projection_version": "1",
         "megalodon_activity": "detection",
     }
-    if detection.suppressed_reason is not None:
+    if detection.suppressed_reason:
         unmapped["suppressed_reason"] = detection.suppressed_reason
 
     return MappingProxyType({
@@ -317,6 +318,8 @@ def write_export(
         payload_buffer.extend(line)
     payload = bytes(payload_buffer)
 
+    if "\x00" in os.fsdecode(destination_path):
+        _fail("DESTINATION_UNSAFE")
     destination = Path(os.fspath(destination_path))
     name = destination.name
     if not name or name in {".", ".."}:

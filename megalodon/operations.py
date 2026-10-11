@@ -140,12 +140,14 @@ class Operations:
                 proto['bytes']+=size;proto['packets']+=packets
                 for endpoint,outbound,inbound in ((a,ab,ba),(b,ba,ab)):
                     key = endpoint['ip']
+                    once = endpoint is a or b['ip']!=a['ip']  # one flow per IP even when both ends share it
                     row = peers.setdefault(key,dict(ip=key,scope=address_scope(key),version=ip_address(key).version,
                         local=endpoint['local'],connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
-                        first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],names=context.get(key,{}).get('names',[]),
-                        findings=context.get(key,{}).get('findings',[]),services=context.get(key,{}).get('services',[]),location=endpoint['location'],flags=[]))
-                    row['connections']+=1;row['active_connections']+=int(flow['active'])
-                    row['packets']+=packets;row['bytes']+=size
+                        first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],names=list(context.get(key,{}).get('names',[])),
+                        findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),location=endpoint['location'],flags=[]))
+                    if once:
+                        row['connections']+=1;row['active_connections']+=int(flow['active'])
+                        row['packets']+=packets;row['bytes']+=size
                     # Per-IP sent/received means this endpoint's direction.
                     row['sent_bytes']+=outbound['bytes'];row['received_bytes']+=inbound['bytes']
                     row['first_seen']=min(row['first_seen'],flow['first_seen']);row['last_seen']=max(row['last_seen'],flow['last_seen'])

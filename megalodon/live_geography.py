@@ -49,11 +49,14 @@ class Geography:
             raise ValueError('Invalid geography receipt.')
         datetime.fromisoformat(receipt['downloaded_at'])
         reader = OfflineLocations.open(self.path)
-        metadata = reader.metadata()
-        if metadata.database_type != 'DBIP-City-Lite':
-            reader.close()
-            raise ValueError('Unexpected geographic database type.')
-        build = datetime.fromtimestamp(metadata.build_epoch, timezone.utc)
+        try:
+            metadata = reader.metadata()
+            if metadata.database_type != 'DBIP-City-Lite':
+                raise ValueError('Unexpected geographic database type.')
+            build = datetime.fromtimestamp(metadata.build_epoch, timezone.utc)
+        except (OverflowError, OSError, TypeError, ValueError) as exc:
+            reader.close()  # A damaged build date leaves geography unavailable, not startup broken.
+            raise ValueError(str(exc) if isinstance(exc, ValueError) else 'Invalid geographic database build date.') from exc
         with self._lock:
             if self._closed.is_set():
                 reader.close()
