@@ -29,7 +29,8 @@ The first observation warms up rate measurements. Missing permissions, new
 processes, restarted processes, counter resets and long sampling gaps produce
 unavailable rates. Process totals are a lower bound when visibility is partial.
 On a computer booted without IPv6 (no `/proc/net/if_inet6` and no
-`/proc/sys/net/ipv6`), the absent IPv6 socket tables count as zero sockets; any
+`/proc/sys/net/ipv6`), the absent IPv6 socket tables count as zero sockets
+only when both are absent; a readable IPv6 table proves the stack exists. Any
 other missing or unreadable table makes socket counts unavailable. Process names
 truncated mid-character are shown with a replacement character, and only the
 first 8 KiB of a Python command line is examined for MEGALODON attribution.
