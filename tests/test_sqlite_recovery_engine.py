@@ -229,6 +229,83 @@ def test_restore_rejects_a_digest_mismatch(tmp_path) -> None:
     _assert_valid(receipt)
 
 
+def test_restore_refuses_an_artifact_with_an_undigested_wal(tmp_path) -> None:
+    import shutil
+    live = tmp_path / "live.sqlite3"
+    connection = sqlite3.connect(str(live))
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA wal_autocheckpoint=0")
+    connection.execute("PRAGMA user_version=3")
+    connection.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+    connection.execute("INSERT INTO events (name) VALUES ('base')")
+    connection.commit()
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    connection.execute("INSERT INTO events (name) VALUES ('only-in-the-wal')")
+    connection.commit()
+    artifact = tmp_path / "a.sqlite3"
+    shutil.copyfile(live, artifact)
+    shutil.copyfile(str(live) + "-wal", str(artifact) + "-wal")
+    connection.close()
+    for path in (artifact, Path(str(artifact) + "-wal")):
+        os.chmod(path, 0o600)
+    digest = "sha256:" + hashlib.sha256(artifact.read_bytes()).hexdigest()
+    destination = tmp_path / "restored.sqlite3"
+    receipt = sr.restore_backup(
+        operation_id="op-wal", artifact_path=artifact, expected_artifact_sha256=digest,
+        destination_path=destination,
+    )
+    # The digest covers the artifact alone; its WAL would add unverified rows.
+    assert (receipt["status"], receipt["reason"]) == ("failed", "SOURCE_UNSAFE")
+    assert receipt["destination_created"] is False and not destination.exists()
+    _assert_valid(receipt)
+
+
+def test_restore_never_reads_a_wal_created_after_the_sidecar_check(tmp_path, monkeypatch) -> None:
+    import shutil
+    live = tmp_path / "live.sqlite3"
+    connection = sqlite3.connect(str(live))
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA wal_autocheckpoint=0")
+    connection.execute("PRAGMA user_version=3")
+    connection.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+    connection.execute("INSERT INTO events (name) VALUES ('base')")
+    connection.commit()
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    connection.execute("INSERT INTO events (name) VALUES ('only-in-the-wal')")
+    connection.commit()
+    artifact = tmp_path / "a.sqlite3"
+    shutil.copyfile(live, artifact)
+    os.chmod(artifact, 0o600)
+    wal = Path(str(artifact) + "-wal")
+    real_open = sr._open_existing
+
+    def open_then_race(path):
+        # A writer drops a valid WAL beside the artifact after the sidecar
+        # check has passed but before SQLite opens it.
+        descriptor = real_open(path)
+        shutil.copyfile(str(live) + "-wal", wal)
+        return descriptor
+
+    monkeypatch.setattr(sr, "_open_existing", open_then_race)
+    digest = "sha256:" + hashlib.sha256(artifact.read_bytes()).hexdigest()
+    destination = tmp_path / "restored.sqlite3"
+    receipt = sr.restore_backup(
+        operation_id="op-wal-race", artifact_path=artifact, expected_artifact_sha256=digest,
+        destination_path=destination,
+    )
+    connection.close()
+    assert (receipt["status"], receipt["reason"]) == ("completed", "COMPLETED")
+    restored = sqlite3.connect(str(destination))
+    try:
+        rows = [row[0] for row in restored.execute("SELECT name FROM events ORDER BY id")]
+    finally:
+        restored.close()
+    # Only the digested bytes are restored; the late WAL is never applied.
+    assert rows == ["base"]
+    assert not Path(str(artifact) + "-shm").exists()
+    _assert_valid(receipt)
+
+
 def test_restore_in_place_is_refused_by_destination_must_not_exist(tmp_path) -> None:
     artifact = tmp_path / "a.sqlite3"
     _make_database(artifact)

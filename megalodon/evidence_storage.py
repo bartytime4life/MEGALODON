@@ -962,6 +962,11 @@ class EvidenceStorage:
                 rows.append(dict(observed_at=value['observed_at'],source='operator-saved-case',data=dict(reference=identifier,category=value['category'],source=value['source'],evidence=value['data'])))
             dependencies.update(v for row in rows for v in row['data']['evidence'].get('source_segments',[]))
             saved=self.append_records('cases',rows,dependencies=dependencies)
+            # Each saved case gets its own unit: a retiring source then removes
+            # only the case copied from it, never an unrelated case saved nearby.
+            entry=self._generic.get('cases')
+            if entry is not None and not entry.get('pending_receipts'):
+                self._seal(entry);self._generic.pop('cases',None)
             return dict(schema='megalodon-case-v1',saved=saved,message='Case evidence uses the same age and space limits; its original observation time is preserved.')
 
     def start(self):

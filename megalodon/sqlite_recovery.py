@@ -172,8 +172,12 @@ def _descriptor_path(descriptor: int) -> str:
     raise _Halt("IO_ERROR")
 
 
-def _verify_database(descriptor: int, *, read_only: bool) -> Mapping[str, Any]:
+def _verify_database(
+    descriptor: int, *, read_only: bool, immutable: bool = False,
+) -> Mapping[str, Any]:
     uri = f"file:{_descriptor_path(descriptor)}?mode={'ro' if read_only else 'rw'}"
+    if immutable:
+        uri += "&immutable=1"
     try:
         connection = sqlite3.connect(uri, uri=True, timeout=5)
     except sqlite3.Error:
@@ -271,8 +275,12 @@ def _create_destination(destination: Path, estimated_bytes: int) -> int:
 
 def _copy_via_backup_api(
     source_descriptor: int, destination_descriptor: int, deadline_monotonic: float,
+    *, immutable_source: bool = False,
 ) -> None:
-    source_conn = sqlite3.connect(f"file:{_descriptor_path(source_descriptor)}?mode=ro", uri=True, timeout=5)
+    source_uri = f"file:{_descriptor_path(source_descriptor)}?mode=ro"
+    if immutable_source:
+        source_uri += "&immutable=1"
+    source_conn = sqlite3.connect(source_uri, uri=True, timeout=5)
     destination_conn = sqlite3.connect(_descriptor_path(destination_descriptor), timeout=5)
 
     def progress(status: int, remaining: int, total: int) -> None:
@@ -352,7 +360,10 @@ def _run(
         if monotonic() > deadline:
             raise _Halt("DEADLINE_EXCEEDED", source_state=source_state)
 
-        _copy_via_backup_api(source_descriptor, destination_descriptor, deadline)
+        _copy_via_backup_api(
+            source_descriptor, destination_descriptor, deadline,
+            immutable_source=operation == "restore",
+        )
         destination_size = os.fstat(destination_descriptor).st_size
         if destination_size > MAX_ARTIFACT_BYTES:
             raise _Halt("ARTIFACT_LIMIT_EXCEEDED", source_state=source_state)
@@ -496,13 +507,19 @@ def restore_backup(
         artifact = Path(os.fspath(artifact_path))
         if _same_file(artifact, destination):
             raise _Halt("SAME_FILE_REFUSED")
+        # The digest covers only the artifact bytes; SQLite would also apply a
+        # WAL or rollback journal beside it, so a sidecar is never accepted.
+        # This check only reports one that is already there: the artifact is
+        # also opened immutable, so a sidecar created later is never read.
+        if any(os.path.lexists(str(artifact) + suffix) for suffix in ("-wal", "-shm", "-journal")):
+            raise _Halt("SOURCE_UNSAFE", source_state="unsafe")
         descriptor = _open_existing(artifact)
         try:
             actual_bytes = _read_all(descriptor, MAX_ARTIFACT_BYTES)
             actual_digest = _sha256_hex_prefixed(hashlib.sha256(actual_bytes).hexdigest())
             if actual_digest != expected_artifact_sha256:
                 raise _Halt("ARTIFACT_CORRUPT")
-            verified = _verify_database(descriptor, read_only=True)
+            verified = _verify_database(descriptor, read_only=True, immutable=True)
         except BaseException:
             os.close(descriptor)
             raise
