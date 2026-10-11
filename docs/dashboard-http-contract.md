@@ -647,7 +647,8 @@ Nodes add `on_link`, `protocols`, and source/time-qualified `services`; optional
 `last_discovered_at` distinguishes actual discovery replies from refreshed local
 cache observations. Per-direction edge activity expires independently.
 Observed flows to the limited broadcast address, or to the network or broadcast
-address of a local IPv4 subnet of /30 or wider, are not devices; such a flow adds
+address of any local IPv4 interface subnet of /30 or wider (public subnets
+included), are not devices; such a flow adds
 no node, edge or counter to either endpoint.
 `persistence` reports history-write state independently of live inventory health.
 

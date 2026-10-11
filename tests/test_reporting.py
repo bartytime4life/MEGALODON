@@ -142,6 +142,31 @@ def test_per_device_topology_rows_form_the_latest_bounded_map(report_service,tmp
     assert not value['coverage']['aggregation_complete']
 
 
+def test_partial_or_unverifiable_device_pass_is_disclosed(report_service):
+    # A pass is written in 200-device batches; an interrupted write or
+    # retention can leave part of it, which must not read as the whole map.
+    def device(n,count,age=120):
+        node=dict(id=f'ip-192.168.2.{n}',ip=f'192.168.2.{n}',name=f'Device {n}',interface='eth0',role='device')
+        data=dict(node=node,window_seconds=60)
+        if count is not None:data['pass_devices']=count
+        add(report_service,'network',data,source='network-device-observation',age=age)
+    for n in (20,21):device(n,3)
+    value=make(report_service)
+    assert [n['ip'] for n in value['network']['data']['nodes']]==['192.168.2.20','192.168.2.21']
+    assert any('partial: 1 of 3 devices could not be found' in g for g in value['coverage']['gaps'])
+    assert not value['coverage']['aggregation_complete']
+    device(22,3)
+    value=make(report_service)
+    assert not any('network observation' in g for g in value['coverage']['gaps'])
+    assert value['coverage']['aggregation_complete']
+    # Rows without a pass count (or with disagreeing counts) cannot be verified.
+    for n,count in ((30,None),(31,None)):device(n,count,age=60)
+    value=make(report_service)
+    assert [n['ip'] for n in value['network']['data']['nodes']]==['192.168.2.30','192.168.2.31']
+    assert any('includes every device could not be verified' in g for g in value['coverage']['gaps'])
+    assert not value['coverage']['aggregation_complete']
+
+
 def test_legacy_topology_snapshot_rows_still_render(report_service):
     add(report_service,'network',dict(nodes=[dict(id='ip-legacy',ip='192.168.5.5',name='Legacy printer',interface='eth0',role='device')],edges=[]),source='network-topology',age=300)
     value=make(report_service)

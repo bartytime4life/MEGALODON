@@ -300,6 +300,22 @@ def test_broadcast_and_non_unicast_flows_never_become_devices_or_count(topology)
     assert {e['id'] for e in value['edges'] if e['kind']=='observed'}=={'flow-f1','flow-host'}
 
 
+def test_public_subnet_broadcast_is_refused_like_a_private_one(topology):
+    # Discovery scopes list only private subnets; broadcast refusal covers
+    # every local IPv4 interface.
+    topology._inventory=parse_inventory([dict(ifname='eth0',addr_info=[dict(local='8.8.8.10',prefixlen=24)])],[],[],STAMP)
+    assert topology._inventory['networks']==[]
+    def flow(identifier,b):
+        return dict(id=identifier,protocol='UDP',a=dict(ip='8.8.8.10',port=138,local=True),b=dict(ip=b,port=138,local=False),first_seen=STAMP,last_seen=STAMP,active=True,a_to_b=dict(bytes=240,packets=1),b_to_a=dict(bytes=0,packets=0))
+    current=live();current['connections']=[flow('bcast','8.8.8.255'),flow('net','8.8.8.0'),flow('peer','8.8.8.20')]
+    topology.configuration.live_snapshot=lambda:current
+    value=topology.snapshot(view='all',limit=200)
+    ips={n['ip'] for n in value['nodes']}
+    assert '8.8.8.255' not in ips and '8.8.8.0' not in ips and '8.8.8.20' in ips
+    assert {e['id'] for e in value['edges'] if e['kind']=='observed'}=={'flow-peer'}
+    assert next(n for n in value['nodes'] if n['ip']=='8.8.8.10')['sent_bytes']==240
+
+
 def test_device_history_reads_fixed_pages_and_cursor_is_exact(tmp_path):
     from datetime import datetime,timezone
     from megalodon.config import Settings

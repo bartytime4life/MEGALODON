@@ -394,10 +394,16 @@ class ReportService(RetainedEvidenceReader):
                                 # Topology persists one row per device; one pass
                                 # shares a stamp. Keep a bounded view of the latest.
                                 if device_map is None or stamp > device_map['stamp']:
+                                    expected = data.get('pass_devices')
                                     device_map = dict(stamp=stamp, observed_at=row['observed_at'], nodes={}, bytes=0, limited=False,
+                                                      expected=expected if type(expected) is int and expected >= 1 else None, seen=set(),
                                                       coverage=data.get('coverage') if type(data.get('coverage')) is str else None)
                                 if stamp == device_map['stamp']:
                                     key = str(node.get('id', node.get('ip')))
+                                    # Every row of one pass carries the pass's device count.
+                                    if data.get('pass_devices') != device_map['expected']:
+                                        device_map['expected'] = None
+                                    device_map['seen'].add(key)
                                     size = len(json.dumps(node, allow_nan=False).encode())
                                     if key not in device_map['nodes']:
                                         if len(device_map['nodes']) >= MAX_NETWORK_NODES or device_map['bytes']+size > MAX_NETWORK_BYTES:
@@ -473,6 +479,14 @@ class ReportService(RetainedEvidenceReader):
             result['network'] = dict(observed_at=device_map['observed_at'], source='network-device-observation', data=view)
             if device_map['limited']:
                 gaps.append(f'The retained network map is limited to {MAX_NETWORK_NODES} devices and {MAX_NETWORK_BYTES//1024} KiB from its latest observation; other devices from that observation are omitted.')
+            # A pass is written in batches; an interrupted write or retention can
+            # leave only part of it, which must not read as the whole map.
+            if device_map['expected'] is None:
+                gaps.append('Whether the latest retained network observation includes every device could not be verified; the map may omit devices.')
+            elif len(device_map['seen']) < device_map['expected']:
+                gaps.append(f"The latest retained network observation is partial: {device_map['expected'] - len(device_map['seen'])} of {device_map['expected']} devices could not be found in retained history and are omitted from the map.")
+            elif len(device_map['seen']) > device_map['expected']:
+                gaps.append('The latest retained network observation holds more devices than it recorded; whether the map is complete could not be verified.')
         if result['network'] is None:
             gaps.append('A retained local-network topology snapshot was unavailable.')
         if not result['resources']:
