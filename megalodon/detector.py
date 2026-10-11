@@ -471,7 +471,9 @@ class Detector:
     ) -> DetectionResult:
         suppressed_reason = None
         source = ipaddress.ip_address(event.src_ip)
-        if any(source in network for network in self.allowlist):
+        # An IPv4-mapped source (::ffff:a.b.c.d) is the same IPv4 host.
+        forms = (source, source.ipv4_mapped) if source.version == 6 and source.ipv4_mapped else (source,)
+        if any(form in network for form in forms for network in self.allowlist):
             suppressed_reason = "source_allowlisted"
         return DetectionResult(
             detected_at=event.observed_at,
