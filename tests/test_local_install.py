@@ -493,6 +493,59 @@ def test_uninstall_completes_when_a_manifest_release_is_already_missing(
     assert not layout.manifest.exists()
 
 
+def test_interrupted_uninstall_can_be_finished_and_reinstalled(layout, source, monkeypatch):
+    from megalodon import hud_autostart
+
+    monkeypatch.setattr(hud_autostart, "_systemctl", lambda *args: None)
+    ids = iter([
+        "1.0-20260920T120000Z-a1b2c3d4",
+        "1.0-20260920T120100Z-e5f6a7b8",
+        "1.0-20260920T120200Z-c9d0e1f2",
+    ])
+    monkeypatch.setattr(local_install, "_create_release", release_factory(layout, ids))
+    local_install.install(source, layout)
+    local_install.install(source, layout)
+    marker = layout.data / "keep.db"
+    marker.write_bytes(b"operator data")
+    remove = shutil.rmtree
+    calls = []
+
+    def interrupted(path, *args, **kwargs):
+        calls.append(path)
+        if len(calls) == 2:
+            # Part of the active release is gone when the removal stops.
+            (Path(path) / "venv" / "bin" / "python").unlink()
+            raise OSError(5, "test-only interruption")
+        return remove(path, *args, **kwargs)
+
+    monkeypatch.setattr(local_install.shutil, "rmtree", interrupted)
+    with pytest.raises(local_install.InstallError, match="run it again"):
+        local_install.uninstall(layout)
+    assert layout.manifest.exists() and not os.path.lexists(layout.current)
+    monkeypatch.setattr(local_install.shutil, "rmtree", remove)
+
+    assert local_install.uninstall(layout)["status"] == "removed"
+    assert not layout.manifest.exists() and marker.read_bytes() == b"operator data"
+    assert local_install.install(source, layout)["active_release"] == "1.0-20260920T120200Z-c9d0e1f2"
+
+
+def test_interrupted_release_build_leaves_no_untracked_release(layout, source, monkeypatch):
+    local_install._prepare_directories(layout)
+
+    def run(command, *, capture=False):
+        if command[1:4] == ["-I", "-m", "venv"]:
+            python = Path(command[-1]) / "bin" / "python"
+            python.parent.mkdir(parents=True)
+            python.write_text("synthetic")
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise KeyboardInterrupt  # Ctrl-C during the long package build
+
+    monkeypatch.setattr(local_install, "_run", run)
+    with pytest.raises(KeyboardInterrupt):
+        local_install.install(source, layout)
+    assert list(layout.releases.iterdir()) == [] and not layout.manifest.exists()
+
+
 def test_mutating_actions_refuse_an_overlapping_maintenance_lock(layout):
     local_install._prepare_directories(layout)
     with local_install._mutation_lock(layout):
