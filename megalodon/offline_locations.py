@@ -71,8 +71,8 @@ class OfflineLocations:
             return None
         try:
             record = self._reader.get(str(address))
-        except ValueError:
-            return None
+        except (ValueError, RuntimeError):
+            return None  # maxminddb.InvalidDatabaseError (a RuntimeError) on damaged data is a miss.
         if not isinstance(record, dict) or not isinstance(record.get('location'), dict):
             return None
         point = record['location']

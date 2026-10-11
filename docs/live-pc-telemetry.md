@@ -16,7 +16,7 @@ optional private hosting sign-in is separate from running MEGALODON on the PC.
 | Receive / send trend | Selected interface's byte counters | Bytes per second on one adapter, without summing VPN/bridge duplicates |
 | Packet rate and errors / drops | Selected interface's counters | Packets per second and counter changes since the preceding observation |
 | TCP / UDP and TCP states | Kernel socket tables | Current socket counts, established TCP sockets, listeners and TIME_WAIT |
-| Remote peers | Remote IPs in socket tables | Up to ten remote addresses ranked by socket count, without reverse DNS |
+| Remote peers | Remote IPs in socket tables | Up to ten non-loopback remote addresses ranked by socket count, without reverse DNS; IPv4-mapped IPv6 peers merge with their IPv4 address |
 | Saved traffic / protocol / conversation charts | Existing qualified metadata adapters | Recorded packet/flow observations and linked detector findings |
 
 Network activity and CPU load appearing together does not prove that one caused
@@ -28,6 +28,11 @@ their own units.
 The first observation warms up rate measurements. Missing permissions, new
 processes, restarted processes, counter resets and long sampling gaps produce
 unavailable rates. Process totals are a lower bound when visibility is partial.
+On a computer booted without IPv6 (no `/proc/net/if_inet6` and no
+`/proc/sys/net/ipv6`), the absent IPv6 socket tables count as zero sockets; any
+other missing or unreadable table makes socket counts unavailable. Process names
+truncated mid-character are shown with a replacement character, and only the
+first 8 KiB of a Python command line is examined for MEGALODON attribution.
 Summed resident memory can count shared pages more than once. Companion totals
 include recognized instances started outside MEGALODON. Browsers opened by the
 HUD are excluded because they can contain unrelated tabs. A process-name match is
@@ -81,5 +86,6 @@ No subprocesses, package imports, DNS lookups, external network calls, packet
 captures, database writes or files are created by the sampler.
 
 Checks: `tests/test_host_telemetry.py` verifies counter arithmetic, reset/gap
-handling, process reuse, attribution, missing access, history limits and HTTP
+handling, process reuse, attribution, missing access, IPv6-disabled hosts,
+remote-peer normalization, truncated process names, history limits and HTTP
 boundaries. UI checks cover the live/paused/stale/unavailable transitions.

@@ -65,6 +65,32 @@ def test_source_qualified_summary_protocol_reaches_endpoint_without_inventing_ap
         assert not endpoint['names']
 
 
+
+def test_sensor_context_lists_are_not_mutated_by_flow_services(tmp_path):
+    from megalodon.flow_ingestion import normalize_zeek
+    row={'ts':datetime.now(timezone.utc).timestamp()-1,'uid':'one','id.orig_h':'10.0.0.2','id.resp_h':'1.1.1.1',
+         'id.orig_p':54321,'id.resp_p':443,'proto':'tcp','service':'ssl','orig_bytes':10,'resp_bytes':20,'orig_pkts':1,'resp_pkts':1}
+    cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda ip:None))
+    cache._local={'10.0.0.2'}
+    cache.observe_summary(normalize_zeek(row)[1])
+    context={'1.1.1.1':dict(names=[],findings=[],services=[])}
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:cache.snapshot({'state':'running'},{}))
+    result=Operations(config,context_reader=lambda:context).snapshot()
+    assert context['1.1.1.1']['services']==[] and result['sensor_endpoints'][0]['services']==[]
+    assert [s['name'] for r in result['endpoints'] if r['ip']=='1.1.1.1' for s in r['services']]==['ssl']
+
+
+def test_flow_between_one_ip_counts_that_endpoint_once(tmp_path):
+    cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda ip:None))
+    cache.observe(PacketEvent(datetime.now(timezone.utc),'10.0.0.9','10.0.0.9','TCP',139,445,byte_count=100,tcp_flags=frozenset({'SYN'})))
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:cache.snapshot({'state':'running'},{}))
+    result=Operations(config,context_reader=lambda:{}).snapshot()
+    endpoint=result['endpoints'][0]
+    assert result['summary']['bytes']==100 and result['summary']['peers']==1
+    assert (endpoint['connections'],endpoint['packets'],endpoint['bytes'])==(1,1,100)
+    assert {p['port'] for p in endpoint['ports']}=={139,445}
+
+
 @pytest.mark.parametrize('ip,scope',[('224.0.0.1','Multicast'),('::1','Loopback'),('fe80::1','Link local'),('0.0.0.0','Unspecified'),('10.0.0.1','Private / reserved'),('1.1.1.1','Public')])
 def test_address_classification_is_not_a_threat_rating(ip,scope):
     assert address_scope(ip)==scope
