@@ -1188,6 +1188,29 @@ class SourceOwnershipTests(unittest.TestCase):
             err, "megalodon: ingestion interrupted after its receipt was recorded\n"
         )
 
+    def test_sigterm_during_unmasked_receipt_write_is_retried_not_fatal(self):
+        # Without masking, SIGTERM during the write must take the retry path
+        # rather than whatever disposition the run restored when it ended.
+        attempts = []
+        restored = []
+
+        def terminate_first_attempt(reason):
+            attempts.append(reason)
+            if len(attempts) == 1:
+                os.kill(os.getpid(), signal.SIGTERM)
+
+        previous = signal.signal(signal.SIGTERM, lambda signum, frame: restored.append(signum))
+        try:
+            with patch.object(cli.signal, "pthread_sigmask", None):
+                code, store, out, err = self.run_source(
+                    Source([]), finish_hook=terminate_first_attempt
+                )
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+        self.assertEqual(restored, [])
+        self.assertEqual((code, out), (143, ""))
+        self.assertEqual(attempts, ["source_exhausted", "interrupted"])
+
     def test_interrupt_while_opening_the_store_has_fixed_exit(self):
         out, err = io.StringIO(), io.StringIO()
         with (
