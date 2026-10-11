@@ -103,6 +103,9 @@ and symlink logs are excluded. Consecutive windows overlap: do not sum them.
 Zero alert records in this window does not establish no threats. This live
 context is separate from the strict completed-file alert admission workflow.
 Stopping HUD monitoring stops its summary reader, not the system Suricata service.
+A stop always disables and persists the background opt-in, even when the
+current capture session reports that its shutdown has not yet completed; that
+error is still shown so the operator can check status again.
 
 Background capture and sensor sampling resume with the HUD's saved monitoring
 preference. Nmap/osquery keep their hourly schedules; ClamAV keeps its daily

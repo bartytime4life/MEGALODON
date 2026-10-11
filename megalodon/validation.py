@@ -16,6 +16,8 @@ class ValidationError(ValueError):
 
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+# Surrogate code points (e.g. a lone JSON "\ud800") cannot be stored as UTF-8.
+_SURROGATES = re.compile("[\ud800-\udfff]")
 _INTEGER_TEXT = re.compile(r"[0-9]+")
 SQLITE_INTEGER_MAX = (1 << 63) - 1
 PACKET_SOURCE_ADAPTERS = frozenset({"tshark-fields-v1"})
@@ -131,6 +133,8 @@ def safe_text(value: Any, field_name: str, max_length: int = 512) -> str:
         raise ValidationError(f"{field_name} contains control characters")
     if len(value) > max_length:
         raise ValidationError(f"{field_name} exceeds {max_length} characters")
+    if _SURROGATES.search(value):
+        raise ValidationError(f"{field_name} is not valid UTF-8 text")
     return value
 
 

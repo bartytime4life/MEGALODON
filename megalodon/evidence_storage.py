@@ -1101,10 +1101,10 @@ class EvidenceStorage:
 class SegmentedPacketWriter:
     """Keep core event/finding/action atomicity and detector state across rotation."""
     def __init__(self,manager):
-        self.manager=manager;self.store=None;self.entry=None;self.run_id=None;self.source='jsonl'
+        self.manager=manager;self.store=None;self.entry=None;self.run_id=None;self.source='jsonl';self.active=False
 
     def start_ingestion_run(self,source):
-        self.source=source
+        self.source=source;self.active=True
         with self.manager.lock:self._open()
         return 1  # session handle; each segment has its own immutable run receipt
 
@@ -1117,6 +1117,8 @@ class SegmentedPacketWriter:
 
     def rotate(self):
         if self.store is None:return
+        # This unit's receipt covers its own share of the session; the session's
+        # final outcome is recorded by finish_ingestion_run, in a fresh unit if needed.
         self.store.finish_ingestion_run(self.run_id,'source_exhausted')
         self.store.close();self.store=None
         self.manager._seal(self.entry)
@@ -1145,6 +1147,10 @@ class SegmentedPacketWriter:
 
     def finish_ingestion_run(self,run_id,reason,*,failure_code=None):
         with self.manager.lock:
+            # Rotation can leave no open unit; the session outcome still gets
+            # its own receipt in a fresh segment instead of being dropped.
+            active,self.active=self.active,False
+            if self.store is None and active:self._open()
             if self.store:
                 self.store.finish_ingestion_run(self.run_id,reason,failure_code=failure_code)
                 self.store.close();self.store=None;self.manager._seal(self.entry)

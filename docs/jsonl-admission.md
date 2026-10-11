@@ -18,6 +18,9 @@ extensions, are rejected. Numeric tokens must be nonnegative integers at most
 constants are not accepted. Field-specific limits can be smaller. The existing
 domain handling of numeric strings is unchanged. The root plus its flat
 metadata object or flags array may be at most two containers deep.
+Text fields escaping a lone or unpaired UTF-16 surrogate (for example
+`"\ud800"`) are valid JSON but cannot be stored as UTF-8; they are refused at
+admission with the rest of the record, not later by SQLite.
 
 The 64 KiB line limit includes the newline and UTF-8 byte count. An API caller
 can lower but cannot raise this cap. Blank lines and comments retain their

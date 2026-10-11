@@ -153,6 +153,11 @@ lifecycle.
 
 - Natural iterator exhaustion records `completed/source_exhausted` after
   owned-source cleanup returns without error.
+- Scapy stamps packets with the wall clock but never lets a run's stamps go
+  backward: after a backward clock step (NTP, resume) the run repeats its last
+  stamp until the clock catches up, so per-source ordering does not fail the
+  run. A step of more than 60 seconds still exceeds the detector's future-skew
+  bound and fails the run with its fixed diagnostic.
 - JSONL/stdin and Scapy sources require an explicit positive `--max-events N`
   ceiling from 1 through 10,000,000 before the audit store or source is opened.
   The finite repository-owned sample generator may omit it.

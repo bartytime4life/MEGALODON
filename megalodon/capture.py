@@ -360,8 +360,12 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
         raise CaptureError("install the optional capture extra: pip install -e '.[capture]'") from None
 
     events = _BoundedCaptureQueue()
+    # Wall-clock stamps can step back (NTP, resume). Keep them non-decreasing
+    # for this run so the detector's per-source ordering does not end it.
+    last_observed = datetime.min.replace(tzinfo=timezone.utc)
 
     def callback(packet: object) -> None:
+        nonlocal last_observed
         try:
             if IP in packet:
                 network = packet[IP]
@@ -391,9 +395,10 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                 query = packet[DNSQR].qname
                 query_length = len(query) if query is not None else None
 
+            last_observed = max(last_observed, datetime.now(timezone.utc))
             events.offer(
                 PacketEvent(
-                    observed_at=datetime.now(timezone.utc),
+                    observed_at=last_observed,
                     src_ip=src_ip,
                     dst_ip=dst_ip,
                     protocol=protocol,
