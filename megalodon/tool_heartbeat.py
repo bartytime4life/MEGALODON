@@ -197,14 +197,26 @@ def _process_starts(proc_root: Path, wanted: frozenset[str]) -> tuple[dict[str, 
     for entry in entries:
         try:
             with (entry / "comm").open("rb") as source:
-                name = source.read(MAX_COMM_BYTES).decode("utf-8", errors="strict").strip()
-            if name not in wanted:
-                continue
+                raw_name = source.read(MAX_COMM_BYTES)
+        except (FileNotFoundError, ProcessLookupError):
+            continue  # The process exited after the listing; it is not running.
+        except OSError:
+            complete = False
+            continue
+        try:
+            name = raw_name.decode("utf-8", errors="strict").strip()
+        except UnicodeError:
+            continue  # Wanted names are ASCII, so an undecodable name never matches.
+        if name not in wanted:
+            continue
+        try:
             with (entry / "stat").open("rb") as source:
                 raw = source.read(MAX_STAT_BYTES).decode("ascii", errors="strict")
             # Field 22 (starttime) follows the parenthesized command name.
             fields = raw[raw.rindex(")") + 2:].split()
             started = boot + int(fields[19]) / ticks if boot is not None else None
+        except (FileNotFoundError, ProcessLookupError):
+            continue
         except (OSError, UnicodeError, ValueError, IndexError):
             complete = False
             continue
