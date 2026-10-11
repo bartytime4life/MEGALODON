@@ -420,3 +420,30 @@ def test_failed_reopen_keeps_the_created_databases_descriptor(tmp_path, monkeypa
     monkeypatch.undo()
     with Store(path) as store:
         assert store.summary()["actions"] == 1
+
+
+def test_unusable_fd_links_fall_back_to_plain_descriptors(tmp_path, monkeypatch):
+    # /proc/self/fd exists but its per-descriptor links do not resolve.
+    path = _private(tmp_path)
+    real_access, real_exists = os.access, os.path.exists
+
+    def unavailable(target):
+        return str(target).startswith("/proc/self/fd/")
+
+    monkeypatch.setattr(
+        os, "access",
+        lambda target, mode, *a, **k: False if unavailable(target) else real_access(target, mode, *a, **k),
+    )
+    monkeypatch.setattr(
+        os.path, "exists",
+        lambda target: False if unavailable(target) else real_exists(target),
+    )
+    monkeypatch.setattr(storage_module, "_proc_fd_available", lambda: True, raising=False)
+    sidecar = path.with_name(path.name + "-journal")
+    with Store(path) as store:
+        _action(store)
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    assert storage_module._validate_sqlite_sidecars(
+        path, None, writable=True, prefix="STORAGE_PATH"
+    ) == frozenset({"-journal"})

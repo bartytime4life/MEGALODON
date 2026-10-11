@@ -826,6 +826,12 @@ def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
     if not _lock_preserving_open():
         return os.open(target, flags, **kwargs)
     descriptor = os.open(target, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, **kwargs)
+    if not os.path.exists(f"/proc/self/fd/{descriptor}"):
+        # The directory is there but its descriptor links are not usable (for
+        # example a sandbox placeholder): the access check below would wrongly
+        # refuse, so use the plain open instead.
+        os.close(descriptor)
+        return os.open(target, flags, **kwargs)
     try:
         mode = os.fstat(descriptor).st_mode
         access = {
