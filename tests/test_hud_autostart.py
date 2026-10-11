@@ -136,6 +136,7 @@ def test_user_service_is_reversible_and_uses_the_selected_release(tmp_path, monk
     monkeypatch.setattr(hud_autostart, "status", lambda: (0, {"status": "ready"}))
     calls = []
     monkeypatch.setattr(hud_autostart, "_systemctl", lambda *args: calls.append(args))
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: None, raising=False)
 
     hud_autostart.enable()
     unit = hud_autostart.unit_path()
@@ -158,29 +159,37 @@ def test_user_service_is_reversible_and_uses_the_selected_release(tmp_path, monk
     assert calls[-2:] == [("disable", "--now", "megalodon-hud.service"), ("daemon-reload",)]
 
 
-def test_autostart_refuses_non_loopback_settings(tmp_path, monkeypatch):
+@pytest.mark.parametrize("host", ["0.0.0.0", "::1"])
+def test_autostart_refuses_non_loopback_settings(tmp_path, monkeypatch, host):
+    # ::1 is refused: the HUD server binds IPv4 and upgrades verify an IPv4 listener.
     home = tmp_path / "home"
     home.mkdir(mode=0o700)
     paths = local_install.install_paths({"HOME": str(home)})
     paths.config.mkdir(parents=True)
-    paths.settings.write_text('[dashboard]\nhost="0.0.0.0"\n')
+    paths.settings.write_text(f'[dashboard]\nhost="{host}"\n')
     monkeypatch.setattr(hud_autostart, "install_paths", lambda: paths)
     monkeypatch.setattr(hud_autostart, "status", lambda: (0, {"status": "ready"}))
+    monkeypatch.setattr(hud_autostart, "_systemctl", lambda *a: pytest.fail("must not change services"))
     with pytest.raises(local_install.InstallError, match="loopback"):
         hud_autostart.enable()
+    assert not hud_autostart.unit_path(paths).exists()
 
 
 def test_application_menu_reopens_running_service_in_browser(monkeypatch):
     opened = []
     monkeypatch.setattr(hud_reopen, "_wait_until_listening", lambda host, port: True)
+    monkeypatch.setattr(hud_reopen, "install_paths", lambda: "synthetic paths", raising=False)
+    monkeypatch.setattr(hud_reopen, "service_running", lambda paths: paths == "synthetic paths", raising=False)
+    monkeypatch.setattr(hud_reopen, "_listener_pid", lambda port, host: 501, raising=False)
     monkeypatch.setattr(hud_reopen, "load_settings", lambda _:
                         SimpleNamespace(dashboard=SimpleNamespace(host="127.0.0.1", port=8787)))
     monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda url: opened.append(url) or True)
     assert hud_reopen.main(["/private/settings.toml"]) == 0
     assert opened == ["http://127.0.0.1:8787/"]
-    monkeypatch.setattr(hud_reopen, "load_settings", lambda _:
-                        SimpleNamespace(dashboard=SimpleNamespace(host="0.0.0.0", port=8787)))
-    assert hud_reopen.main(["/private/settings.toml"]) == 2
+    for host in ("0.0.0.0", "::1"):
+        monkeypatch.setattr(hud_reopen, "load_settings", lambda _, host=host:
+                            SimpleNamespace(dashboard=SimpleNamespace(host=host, port=8787)))
+        assert hud_reopen.main(["/private/settings.toml"]) == 2
     assert opened == ["http://127.0.0.1:8787/"]
 
 
@@ -203,3 +212,208 @@ def test_reopen_waits_for_socket_and_reports_failed_start(monkeypatch, capsys):
     monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda _: pytest.fail("Do not open a failed service"))
     assert hud_reopen.main(["/private/settings.toml"]) == 2
     assert "not finished starting" in capsys.readouterr().err
+
+
+def test_reopen_never_opens_a_listener_the_service_does_not_own(tmp_path, monkeypatch, capsys):
+    import socket
+    from megalodon import install_lifecycle
+    squatter = socket.socket()
+    squatter.bind(("127.0.0.1", 0))
+    squatter.listen()
+    port = squatter.getsockname()[1]
+    settings = tmp_path / "settings.toml"
+    settings.write_text(f'[dashboard]\nhost = "127.0.0.1"\nport = {port}\n')
+    # The managed service is not running (MainPID 0); a same-host program owns the port.
+    monkeypatch.setattr(hud_reopen, "install_paths", lambda: "synthetic paths", raising=False)
+    monkeypatch.setattr(hud_reopen, "service_running", lambda paths: True, raising=False)
+    monkeypatch.setattr(install_lifecycle.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="0\n", returncode=0))
+    monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda _: pytest.fail("Opened another program's page"))
+    try:
+        assert hud_reopen.main([str(settings)]) == 2
+    finally:
+        squatter.close()
+    assert "not ready" in capsys.readouterr().err
+
+
+@pytest.fixture
+def unit_layout(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    paths = local_install.install_paths({"HOME": str(home)})
+    paths.config.mkdir(parents=True)
+    paths.settings.write_text('[dashboard]\nhost="127.0.0.1"\nport=8787\n')
+    monkeypatch.setattr(hud_autostart, "install_paths", lambda: paths)
+    monkeypatch.setattr(hud_autostart, "status", lambda: (0, {"status": "ready"}))
+    calls = []
+    monkeypatch.setattr(hud_autostart, "_systemctl", lambda *args: calls.append(args))
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: None, raising=False)
+    unit = hud_autostart.unit_path(paths)
+    unit.parent.mkdir(parents=True)
+    return paths, unit, calls
+
+
+@pytest.mark.parametrize("unit_present", [True, False])
+def test_drop_in_override_is_never_treated_as_the_managed_unit(unit_layout, unit_present):
+    paths, unit, calls = unit_layout
+    if unit_present:
+        unit.write_bytes(hud_autostart.unit_contents(paths))
+    override = unit.parent / "megalodon-hud.service.d" / "override.conf"
+    override.parent.mkdir()
+    override.write_text("[Service]\nExecStart=\nExecStart=/synthetic/other\n")
+    for action in (hud_autostart.enable, hud_autostart.start):
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            action()
+    if unit_present:
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            hud_autostart.validate_unit(paths)
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            hud_autostart.disable(paths)
+    assert calls == [] and override.exists() and unit.exists() is unit_present
+
+
+@pytest.mark.parametrize("unit_present,state,refused", [
+    (False, {"FragmentPath": "/other/systemd/user/megalodon-hud.service", "DropInPaths": "", "LoadState": "loaded", "ActiveState": "active"}, True),
+    (False, {"FragmentPath": "", "DropInPaths": "", "LoadState": "not-found", "ActiveState": "activating"}, True),
+    (True, {"FragmentPath": "/other/systemd/user/megalodon-hud.service", "DropInPaths": "", "LoadState": "loaded", "ActiveState": "inactive"}, True),
+    (True, {"FragmentPath": "/dev/null", "DropInPaths": "", "LoadState": "masked", "ActiveState": "inactive"}, True),
+    (False, {"FragmentPath": "", "DropInPaths": "", "LoadState": "not-found", "ActiveState": "inactive"}, False),
+    (True, {"FragmentPath": "UNIT", "DropInPaths": "", "LoadState": "loaded", "ActiveState": "active"}, False),
+    (True, None, False),
+])
+def test_disable_asks_systemd_which_unit_file_is_loaded(unit_layout, monkeypatch, unit_present, state, refused):
+    paths, unit, calls = unit_layout
+    if unit_present:
+        unit.write_bytes(hud_autostart.unit_contents(paths))
+    if state is not None and state["FragmentPath"] == "UNIT":
+        state = dict(state, FragmentPath=str(unit))
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: state, raising=False)
+    if refused:
+        with pytest.raises(local_install.InstallError, match="another unit file"):
+            hud_autostart.disable(paths)
+        assert calls == [] and unit.exists() is unit_present
+    else:
+        hud_autostart.disable(paths)
+        assert not unit.exists()
+        assert calls == ([("disable", "--now", hud_autostart.UNIT), ("daemon-reload",)] if unit_present else [])
+
+
+def test_only_root_owned_distribution_wide_drop_ins_are_tolerated(tmp_path, monkeypatch):
+    vendor = tmp_path / "usr/lib/systemd/user"
+    monkeypatch.setattr(hud_autostart, "VENDOR_UNIT_DIRS", (str(vendor),))
+    owners = {}
+    def lstat(path, real=os.lstat):
+        info = real(path)
+        uid = owners.get(str(path))
+        return info if uid is None else SimpleNamespace(st_mode=info.st_mode, st_uid=uid)
+    monkeypatch.setattr(hud_autostart.os, "lstat", lstat)
+    def dropin(relative, uid=0, mode=0o644):
+        path = vendor / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[Service]\nTimeoutStopFailureMode=abort\n")
+        path.chmod(mode)
+        owners[str(path)] = uid
+        return str(path)
+    def state(*paths):
+        return {"FragmentPath": "/u/megalodon-hud.service", "DropInPaths": " ".join(paths),
+                "LoadState": "loaded", "ActiveState": "active"}
+    fedora = dropin("service.d/10-timeout-abort.conf")
+    assert not hud_autostart.loaded_dropins(state(fedora))
+    # Unit-specific, prefix, writable, non-root or non-vendor drop-ins still need review.
+    for path in (dropin("megalodon-hud.service.d/override.conf"), dropin("megalodon-.service.d/p.conf"),
+                 dropin("service.d/writable.conf", mode=0o666), dropin("service.d/user.conf", uid=1000),
+                 "/etc/systemd/user/service.d/admin.conf", str(vendor / "service.d/missing.conf")):
+        assert hud_autostart.loaded_dropins(state(fedora, path)), path
+
+
+def test_service_state_reads_only_fixed_properties(monkeypatch):
+    seen = []
+    def run(argv, **kwargs):
+        seen.append(argv)
+        return SimpleNamespace(returncode=0, stdout="LoadState=loaded\nActiveState=active\nDropInPaths=\n"
+                               "FragmentPath=/u/megalodon-hud.service\n")
+    monkeypatch.setattr(hud_autostart.subprocess, "run", run)
+    state = hud_autostart._service_state()
+    assert state == {"FragmentPath": "/u/megalodon-hud.service", "DropInPaths": "", "LoadState": "loaded", "ActiveState": "active"}
+    assert not hud_autostart.loaded_dropins(state) and not hud_autostart.loaded_dropins(None)
+    assert seen == [["systemctl", "--user", "show", "--property=FragmentPath,DropInPaths,LoadState,ActiveState",
+                     hud_autostart.UNIT]]
+    monkeypatch.setattr(hud_autostart.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=(
+        "FragmentPath=/u/megalodon-hud.service\nLoadState=loaded\nActiveState=active\n"
+        "DropInPaths=/etc/systemd/user/megalodon-hud.service.d/a.conf /usr/lib/systemd/user/service.d/b.conf\n")))
+    assert hud_autostart.loaded_dropins(hud_autostart._service_state())
+    # A manager that omits DropInPaths cannot prove there are none.
+    monkeypatch.setattr(hud_autostart.subprocess, "run", lambda *a, **k: SimpleNamespace(
+        returncode=0, stdout="FragmentPath=/u/megalodon-hud.service\nLoadState=loaded\nActiveState=active\n"))
+    assert hud_autostart._service_state() is None
+    monkeypatch.setattr(hud_autostart.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stdout=""))
+    assert hud_autostart._service_state() is None
+    monkeypatch.setattr(hud_autostart.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="LoadState=loaded\n"))
+    assert hud_autostart._service_state() is None
+    def missing(*a, **k):
+        raise FileNotFoundError("systemctl")
+    monkeypatch.setattr(hud_autostart.subprocess, "run", missing)
+    assert hud_autostart._service_state() is None
+
+
+@pytest.mark.parametrize("unit_present", [True, False])
+def test_drop_ins_systemd_loads_from_other_paths_are_refused_like_local_ones(unit_layout, monkeypatch, unit_present):
+    paths, unit, calls = unit_layout
+    if unit_present:
+        unit.write_bytes(hud_autostart.unit_contents(paths))
+    # Nothing under XDG_CONFIG_HOME; systemd reports drop-ins from /etc and a type-wide service.d/.
+    state = {"FragmentPath": str(unit) if unit_present else "", "LoadState": "loaded" if unit_present else "not-found",
+             "ActiveState": "active" if unit_present else "inactive",
+             "DropInPaths": "/etc/systemd/user/megalodon-hud.service.d/override.conf /etc/systemd/user/service.d/x.conf"}
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: state, raising=False)
+    for action in (hud_autostart.enable, hud_autostart.start):
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            action()
+    if unit_present:
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            hud_autostart.disable(paths)
+    else:
+        hud_autostart.disable(paths)
+    assert calls == [] and unit.exists() is unit_present
+
+
+@pytest.fixture
+def reopen_layout(unit_layout, tmp_path, monkeypatch):
+    paths, unit, _ = unit_layout
+    unit.write_bytes(hud_autostart.unit_contents(paths))
+    settings = tmp_path / "settings.toml"
+    settings.write_text('[dashboard]\nhost = "127.0.0.1"\nport = 8787\n')
+    monkeypatch.setattr(hud_reopen, "install_paths", lambda: paths, raising=False)
+    monkeypatch.setattr(hud_reopen, "_wait_until_listening", lambda host, port: True)
+    # The unit's MainPID owns the listener in every case; only its identity varies.
+    monkeypatch.setattr(hud_reopen, "_listener_pid", lambda port, host: 501)
+    opened = []
+    monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda url: opened.append(url) or True)
+    state = {"FragmentPath": str(unit), "DropInPaths": "", "LoadState": "loaded", "ActiveState": "active"}
+    return paths, unit, settings, state, opened
+
+
+@pytest.mark.parametrize("change", ["other_fragment", "modified", "local_drop_in", "loaded_drop_in", "no_unit", "inactive"])
+def test_reopen_opens_only_the_managed_unmodified_unit(reopen_layout, monkeypatch, capsys, change):
+    paths, unit, settings, state, opened = reopen_layout
+    if change == "other_fragment":
+        state["FragmentPath"] = "/other/config/systemd/user/megalodon-hud.service"
+    elif change == "modified":
+        unit.write_bytes(hud_autostart.unit_contents(paths) + b"ExecStartPre=/synthetic/other\n")
+    elif change == "local_drop_in":
+        (unit.parent / "megalodon-hud.service.d").mkdir()
+    elif change == "loaded_drop_in":
+        state["DropInPaths"] = "/etc/systemd/user/megalodon-hud.service.d/override.conf"
+    elif change == "no_unit":
+        unit.unlink()
+    else:
+        state["ActiveState"] = "inactive"
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: state, raising=False)
+    assert hud_reopen.main([str(settings)]) == 2
+    assert opened == [] and "not ready" in capsys.readouterr().err
+
+
+def test_reopen_opens_the_managed_unit(reopen_layout, monkeypatch):
+    paths, unit, settings, state, opened = reopen_layout
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: state, raising=False)
+    assert hud_reopen.main([str(settings)]) == 0
+    assert opened == ["http://127.0.0.1:8787/"]

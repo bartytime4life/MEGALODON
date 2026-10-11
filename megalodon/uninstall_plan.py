@@ -179,7 +179,7 @@ def plan(*, packages: tuple[str, ...] = (), include_saved_data: bool = False,
             item['installed_artifact_status'] = 'matches_managed_unit' if matches else 'needs_review'
             if not matches:
                 item['disposition'] = 'preserve_for_review'
-        if name == 'app' and entry['state'] != 'absent':
+        if name in {'app', 'hud_user_service_dropins'} and entry['state'] != 'absent':
             item['disposition'] = 'preserve_for_review'
         files.append(item)
     companions = [dict(entry, name='private_zeek', disposition='preserve_for_review')

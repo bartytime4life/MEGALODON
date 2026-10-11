@@ -197,3 +197,21 @@ def test_malformed_tool_profile_requires_review_without_changes(tmp_path, monkey
     assert result['tool_directory_profile'] == 'needs_review'
     assert result['selected_tool_directories'] == {}
     assert file.read_text() == profile
+
+
+def test_nested_manifest_and_service_drop_in_are_reported_for_review(private_tmp_path, monkeypatch):
+    from megalodon import hud_autostart, local_install
+    home = private_tmp_path / 'home'
+    home.mkdir(mode=0o700)
+    paths = install_paths({'HOME': str(home)})
+    monkeypatch.setattr(local_install, '_require_supported_user', lambda: None)
+    monkeypatch.setattr(uninstall_audit, '_package_status', lambda: {})
+    local_install._prepare_directories(paths)
+    paths.manifest.write_text('[' * 60000)
+    paths.manifest.chmod(0o600)
+    dropin = hud_autostart.unit_path(paths).parent / 'megalodon-hud.service.d'
+    dropin.mkdir(parents=True)
+    result = uninstall_audit.audit(paths, home=home)
+    assert result['installed_hud'] == {'status': 'needs_review'}
+    assert result['artifacts']['hud_user_service_dropins'] == {
+        'path': str(dropin), 'state': 'directory', 'owner_current_user': True}
