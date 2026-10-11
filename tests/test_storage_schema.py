@@ -728,6 +728,94 @@ def test_sidecar_removed_by_its_owner_after_the_open_is_absent(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX link-count semantics")
+@pytest.mark.parametrize("replacement", ["hard_linked", "private"])
+def test_sidecar_replaced_after_its_unlink_is_validated_not_skipped(
+    tmp_path, monkeypatch, replacement
+):
+    # An unlinked descriptor describes only the old file; a replacement
+    # already at the name must get the usual validation.
+    path = tmp_path / "audit.db"
+    with Store(path) as store:
+        store.summary()
+    sidecar = path.with_name(path.name + "-journal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    real_open = os.open
+    replaced = []
+
+    def open_then_owner_replaces(target, *args, **kwargs):
+        descriptor = real_open(target, *args, **kwargs)
+        if str(target).endswith("-journal") and not replaced:
+            replaced.append(True)
+            os.unlink(target, dir_fd=kwargs.get("dir_fd"))
+            other = tmp_path / "replacement"
+            other.write_bytes(b"")
+            other.chmod(0o600)
+            os.link(other, sidecar)
+            if replacement == "private":
+                other.unlink()
+        return descriptor
+
+    directory = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        monkeypatch.setattr(os, "open", open_then_owner_replaces)
+        if replacement == "hard_linked":
+            with pytest.raises(
+                StorageSchemaError, match="STORAGE_PATH:UNSAFE_DATABASE"
+            ):
+                storage_module._validate_sqlite_sidecars(
+                    path, directory, writable=True, prefix="STORAGE_PATH"
+                )
+        else:
+            present = storage_module._validate_sqlite_sidecars(
+                path, directory, writable=True, prefix="STORAGE_PATH"
+            )
+            assert "-journal" in present
+    finally:
+        monkeypatch.undo()
+        os.close(directory)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX link-count semantics")
+def test_sidecar_name_that_never_settles_is_refused(tmp_path, monkeypatch):
+    path = tmp_path / "audit.db"
+    with Store(path) as store:
+        store.summary()
+    sidecar = path.with_name(path.name + "-journal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    real_open = os.open
+    opens = []
+
+    def open_then_owner_churns(target, *args, **kwargs):
+        descriptor = real_open(target, *args, **kwargs)
+        if str(target).endswith("-journal"):
+            opens.append(target)
+            os.unlink(target, dir_fd=kwargs.get("dir_fd"))
+            os.close(
+                real_open(
+                    target,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=kwargs.get("dir_fd"),
+                )
+            )
+        return descriptor
+
+    directory = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        monkeypatch.setattr(os, "open", open_then_owner_churns)
+        with pytest.raises(StorageSchemaError, match="STORAGE_PATH:UNSAFE_DATABASE"):
+            storage_module._validate_sqlite_sidecars(
+                path, directory, writable=True, prefix="STORAGE_PATH"
+            )
+    finally:
+        monkeypatch.undo()
+        os.close(directory)
+    assert len(opens) == storage_module._SIDECAR_LOOKUP_ATTEMPTS
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX link-count semantics")
 def test_sidecar_with_a_second_link_is_still_refused(tmp_path):
     path = tmp_path / "audit.db"
     with Store(path) as store:
