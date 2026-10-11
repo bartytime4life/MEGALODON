@@ -93,11 +93,13 @@ def _label(value, maximum=256):
 
 
 def _counter(counter, key, amount=1):
+    """Count one grouped value; return True when it was folded into Other."""
     key = _label(key)
     if key in counter or len(counter) < MAX_KEYS:
         counter[key] += amount
-    else:
-        counter['Other / grouping limit'] += amount
+        return False
+    counter['Other / grouping limit'] += amount
+    return True
 
 
 class Cancelled(Exception):
@@ -262,12 +264,29 @@ class ReportService(RetainedEvidenceReader):
         flows = {}
         resource_bins = {}
         response_ids = set()
+        response_total = 0
+        response_overflow = False
+        grouping_overflow = False
         finding_overflow = False
         flow_overflow = False
         compacted_records = 0
         compacted_segments = set()
         compacted_edge = False
         bounds_reached = False
+
+        def keep_response(key):
+            # Totals count every response; detail keeps 5,000 distinct keys.
+            # Keys past that bound are not remembered, so repeats recount.
+            nonlocal response_total, response_overflow
+            if key in response_ids:
+                return False
+            response_total += 1
+            if len(response_ids) >= MAX_FINDINGS:
+                response_overflow = True
+                return False
+            response_ids.add(key)
+            return True
+
         total_rows = max(1, sum(maximum for _, maximum in sources))
         for index, (entry, maximum) in enumerate(sources):
             try:
@@ -283,25 +302,24 @@ class ReportService(RetainedEvidenceReader):
                         last = stamp if last is None else max(last, stamp)
                         matched += 1
                         data, source, category = row['data'], row['source'], row['category']
-                        _counter(result['source_counts'], source)
+                        grouping_overflow |= _counter(result['source_counts'], source)
                         if category == 'packets':
                             result['summary']['packet_records'] += 1
                             result['summary']['packet_bytes'] += int(_number(data.get('byte_count')) or 0)
                             result['timeline'][min(47, int((stamp-start)/(end-start)*48))] += 1
-                            _counter(result['packet_protocols'], data.get('protocol', 'Unknown'))
+                            grouping_overflow |= _counter(result['packet_protocols'], data.get('protocol', 'Unknown'))
                             for key in ('src_ip', 'dst_ip'):
-                                _counter(result['endpoints'], data.get(key, 'Unknown'))
+                                grouping_overflow |= _counter(result['endpoints'], data.get(key, 'Unknown'))
                             for finding in data.get('findings', []):
                                 result['summary']['finding_count'] += 1
-                                _counter(result['finding_severities'], 'MEGALODON / '+_label(finding.get('severity')))
+                                grouping_overflow |= _counter(result['finding_severities'], 'MEGALODON / '+_label(finding.get('severity')))
                                 if len(result['findings']) < MAX_FINDINGS:
                                     result['findings'].append(dict(id=entry['id']+':finding:'+str(finding['id']), observed_at=row['observed_at'], source='MEGALODON detector', title=_label(finding.get('message', finding.get('rule_id', 'Detector finding'))), severity=_label(finding.get('severity')), src_ip=data.get('src_ip'), dst_ip=data.get('dst_ip'), evidence_reference=row['id']))
                                 else:
                                     finding_overflow = True
                             for action in data.get('actions', []):
                                 key = entry['id']+':action:'+str(action['id'])
-                                if key not in response_ids and len(response_ids) < MAX_FINDINGS:
-                                    response_ids.add(key)
+                                if keep_response(key):
                                     result['responses'].append(dict(id=key, observed_at=row['observed_at'], source='MEGALODON action record', state=_label(action.get('status', action.get('outcome', 'Recorded outcome unavailable'))), detail=_label(action.get('action_type', action.get('action', 'Recorded response')))))
                         elif category == 'packet_rollups':
                             kind=data.get('kind')
@@ -319,13 +337,13 @@ class ReportService(RetainedEvidenceReader):
                                 result['summary']['packet_records']+=count
                                 result['summary']['packet_bytes']+=byte_count
                                 result['timeline'][min(47,int((stamp-start)/(end-start)*48))]+=count
-                                _counter(result['packet_protocols'],data.get('protocol','Unknown'),count)
-                                for key in ('src_ip','dst_ip'):_counter(result['endpoints'],data.get(key,'Unknown'),count)
+                                grouping_overflow|=_counter(result['packet_protocols'],data.get('protocol','Unknown'),count)
+                                for key in ('src_ip','dst_ip'):grouping_overflow|=_counter(result['endpoints'],data.get(key,'Unknown'),count)
                             elif kind=='finding_v1':
                                 finding=data.get('detection',{})
                                 event=data.get('event',{})
                                 result['summary']['finding_count']+=1
-                                _counter(result['finding_severities'],'MEGALODON / '+_label(finding.get('severity')))
+                                grouping_overflow|=_counter(result['finding_severities'],'MEGALODON / '+_label(finding.get('severity')))
                                 if len(result['findings'])<MAX_FINDINGS:
                                     result['findings'].append(dict(id=row['id'],observed_at=row['observed_at'],source='MEGALODON detector · compact history',
                                         title=_label(finding.get('message',finding.get('rule_id','Detector finding'))),severity=_label(finding.get('severity')),
@@ -335,8 +353,7 @@ class ReportService(RetainedEvidenceReader):
                             elif kind=='action_v1':
                                 action=data.get('action',{})
                                 key=row['id']
-                                if key not in response_ids and len(response_ids)<MAX_FINDINGS:
-                                    response_ids.add(key)
+                                if keep_response(key):
                                     result['responses'].append(dict(id=key,observed_at=row['observed_at'],source='MEGALODON action record · compact history',
                                         state=_label(action.get('status','Recorded outcome unavailable')),
                                         detail=_label(action.get('action','Recorded response'))))
@@ -353,7 +370,7 @@ class ReportService(RetainedEvidenceReader):
                                     previous[field] = max(previous[field] or 0, value)
                         elif category == 'findings':
                             result['summary']['finding_count'] += 1
-                            _counter(result['finding_severities'], source+' / '+_label(data.get('severity')))
+                            grouping_overflow |= _counter(result['finding_severities'], source+' / '+_label(data.get('severity')))
                             if len(result['findings']) < MAX_FINDINGS:
                                 result['findings'].append(dict(id=row['id'], observed_at=row['observed_at'], source=source, title=_label(data.get('signature', 'Sensor finding')), severity=_label(data.get('severity')), src_ip=data.get('src_ip'), dst_ip=data.get('dst_ip'), evidence_reference=row['id']))
                             else:
@@ -376,8 +393,7 @@ class ReportService(RetainedEvidenceReader):
                                     result['network'] = dict(observed_at=row['observed_at'], source=source, data=data)
                         elif category == 'audit' and data.get('state') != 'not_attempted':
                             key = source+':'+str(data.get('receipt_id', row['id']))
-                            if key not in response_ids and len(response_ids) < MAX_FINDINGS:
-                                response_ids.add(key)
+                            if keep_response(key):
                                 result['responses'].append(dict(id=row['id'], observed_at=row['observed_at'], source=source, state=_label(data.get('state')), detail=_label(data.get('message', data.get('action', 'Recorded advisory or response receipt')))))
                     with self.lock:
                         self.job.update(progress=min(95, int(95*processed/total_rows)), processed_records=processed)
@@ -389,7 +405,7 @@ class ReportService(RetainedEvidenceReader):
         for (source, identity, first_seen, basis), value in flows.items():
             group = grouped.setdefault((source, basis), dict(source=source, byte_basis=basis, records=0, connections=0, sent_bytes=0, received_bytes=0, unknown_counters=0, protocols=Counter()))
             group['connections'] += 1
-            _counter(group['protocols'], value['protocol'])
+            grouping_overflow |= _counter(group['protocols'], value['protocol'])
             group['records'] += value['updates']
             for field in ('sent_bytes', 'received_bytes'):
                 if value[field] is None:
@@ -400,14 +416,21 @@ class ReportService(RetainedEvidenceReader):
             group['protocols'] = dict(group['protocols'])
         result['flow_sources'] = list(grouped.values())
         result['summary']['flow_sources'] = result['flow_sources']
-        result['summary']['response_count'] = len(result['responses'])
+        result['summary']['response_count'] = response_total
         result['resources'] = [dict(bin=bucket, **_resource_mean(values)) for bucket, values in sorted(resource_bins.items())]
         result['packet_protocols'] = dict(result['packet_protocols'])
         result['finding_severities'] = dict(result['finding_severities'])
-        result['endpoints'] = dict(result['endpoints'].most_common(30))
+        endpoints = result['endpoints']
+        result['endpoints'] = dict(endpoints.most_common(30))
+        # The grouping-limit notice points at this bucket; keep it even when
+        # its combined count is too small to rank among the leaders.
+        if 'Other / grouping limit' in endpoints:
+            result['endpoints']['Other / grouping limit'] = endpoints['Other / grouping limit']
         result['source_counts'] = dict(result['source_counts'])
-        if len(response_ids) >= MAX_FINDINGS:
-            gaps.append('Response detail is bounded to 5,000 distinct records; additional response outcomes may be omitted.')
+        if response_overflow:
+            gaps.append('Response details are limited to 5,000 distinct records; the response total also counts later records, which could not be de-duplicated.')
+        if grouping_overflow:
+            gaps.append("Endpoint/protocol/source grouping limit reached; later distinct values are combined in 'Other / grouping limit'.")
         if finding_overflow:
             gaps.append('Finding details are limited to 5,000 rows; finding totals include every processed finding.')
         if flow_overflow:
@@ -426,12 +449,13 @@ class ReportService(RetainedEvidenceReader):
             gaps.append('A retained local-network topology snapshot was unavailable.')
         if not result['resources']:
             gaps.append('Historical interface speeds and resource measurements were unavailable.')
-        aggregation_limited = bounds_reached or finding_overflow or flow_overflow or any('could not' in g or 'limit' in g or 'excluded' in g for g in gaps)
+        aggregation_limited = bounds_reached or finding_overflow or flow_overflow or response_overflow or grouping_overflow or any('could not' in g or 'limit' in g or 'excluded' in g for g in gaps)
         gaps.append('Sensor continuity and unobserved traffic are not established by retained records.')
         result['coverage'] = dict(partial=True, aggregation_complete=not aggregation_limited and not compacted_edge,
                                   gaps=list(dict.fromkeys(gaps)), oldest_at=utc(first) if first is not None else None,
                                   newest_at=utc(last) if last is not None else None, processed_records=processed,
                                   matched_records=matched, source_history=True, finding_details_truncated=finding_overflow,
+                                  response_details_truncated=response_overflow, grouping_limited=grouping_overflow,
                                   flow_totals_truncated=flow_overflow, compacted_packet_records=compacted_records,
                                   compacted_segments=len(compacted_segments))
         status = self.evidence.snapshot()

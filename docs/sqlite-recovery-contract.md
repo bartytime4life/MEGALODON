@@ -134,14 +134,19 @@ The runtime follows this sequence:
    regular-file, single-link, descriptor/path identity, schema-v3, integrity,
    and foreign-key boundaries used by the audit store.
 3. For backup, use SQLite's online-backup API so committed WAL state is copied
-   coherently. Never copy a live database plus WAL/SHM files with ordinary file
-   operations.
+   coherently. Every bounded step reads one source read transaction, so the
+   artifact is the WAL snapshot taken when copying began; later commits by live
+   writers neither restart the copy nor appear in it. (A rollback-journal
+   source instead holds writers off until the copy ends.) Never copy a live
+   database plus WAL/SHM files with ordinary file operations.
 4. For restore, first validate the selected artifact digest and manifest.
    Restore only into a new path; never overwrite or restore in place.
 5. Before destination creation, prove the configured byte ceiling and free
    reserve. Create the owner-private destination exclusively, bind its
    descriptor identity, and refuse collision, symlink, FIFO, device, hardlink,
-   or unsafe ancestry.
+   or unsafe ancestry. A manifest collision that appears only after the
+   artifact was created is `IO_ERROR` with both objects preserved, never
+   `DESTINATION_EXISTS`.
 6. Copy in bounded page steps under a monotonic deadline and retry ceiling.
    Wall-clock timestamps are recorded as untrusted operator-clock context.
 7. Recheck source and destination identity, schema version, page count, logical
@@ -191,7 +196,7 @@ does not change configuration or activate it.
 
 | Fault | Required receipt and disposition | Claim withheld |
 | --- | --- | --- |
-| WAL changes during backup | Use online-backup snapshot semantics; identity and checks must still pass or fail closed | No claim that ordinary copies are coherent |
+| WAL changes during backup | Use online-backup snapshot semantics: one source read transaction spans every step, so commits do not restart the copy; identity and checks must still pass or fail closed | No claim that ordinary copies are coherent |
 | Lock contention | `LOCK_TIMEOUT` after at most 60 retries; no success receipt | No unbounded waiting guarantee |
 | Monotonic deadline | `DEADLINE_EXCEEDED`; preserve any incomplete destination | No whole-kernel-stall guarantee |
 | Disk full or reserve shortfall | `DISK_RESERVE_INSUFFICIENT` or `IO_ERROR`; never redirect/upload | No native disk-full acceptance |
@@ -200,7 +205,7 @@ does not change configuration or activate it.
 | Corrupt backup | `ARTIFACT_CORRUPT`; never select it for restore | No repair |
 | Wrong schema/version | `SCHEMA_INCOMPATIBLE`; source unchanged | No migration |
 | Foreign-key failure | `FOREIGN_KEY_VIOLATION`; never report completed | No partial acceptance |
-| Wall-clock rollback | `CLOCK_ROLLBACK`; monotonic duration retained | No trusted-time claim |
+| Wall-clock rollback | `CLOCK_ROLLBACK`; monotonic duration retained; `COMPLETION_UNCERTAIN` takes precedence | No trusted-time claim |
 | Cleanup/disposition failure | `CLEANUP_FAILED`; incomplete artifact preserved for operator review | No deletion authority |
 | Uncertain copy/commit outcome | `COMPLETION_UNCERTAIN`; destination state unknown | No success or activation |
 
