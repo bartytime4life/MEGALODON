@@ -21,6 +21,7 @@ from .evidence_storage import utc, epoch
 MAX_LINE=65536
 READ_BYTES=256*1024
 MAX_ALERT_METADATA=8*1024
+MAX_EPOCH=253402300799  # 9999-12-31T23:59:59Z, the last representable UTC second
 RAW_CONTENT_FIELDS=frozenset({'payload','payload_printable','packet','packet_base64','raw_packet','raw_payload','http_body','file_data'})
 
 
@@ -125,6 +126,8 @@ def normalize_zeek(value):
     if type(uid) is not str or not 1<=len(uid)<=64 or not uid.isalnum():raise ValueError('Invalid Zeek identity.')
     start=value['ts'];duration=value.get('duration',0)
     if type(start) not in (int,float) or type(duration) not in (int,float) or not 0<=duration<=30*86400:raise ValueError('Invalid Zeek time.')
+    # Out-of-range epochs (e.g. nanoseconds) make utc() raise OSError; reject them as data.
+    if not 0<=start<=MAX_EPOCH-duration:raise ValueError('Invalid Zeek time.')
     if type(value.get('proto','other')) is not str:raise ValueError('Invalid protocol label.')
     proto=value.get('proto','other').upper()
     if proto not in {'TCP','UDP','ICMP','ICMPV6'}:proto='OTHER'
@@ -203,16 +206,23 @@ class FlowIngestor:
 
     def _run(self):
         while not self._stop.is_set():
-            if self.evidence.enabled and self.enabled():
-                try:
-                    primary,detail=self.select_source()
-                    if detail=='file':self.poll(primary,include_flows=self.evidence.recording_mode=='connection_summaries')
-                    if primary!='suricata':
-                        try:self.poll('suricata',include_flows=False)
-                        except (OSError,ValueError,sqlite3.Error):pass  # optional alert source
-                except (OSError,ValueError,KeyError,TypeError,OverflowError,sqlite3.Error):
-                    with self._lock:self._state.update(state='unavailable',message='Local sensor input or evidence storage unavailable. Check Sensors and Storage.')
+            if self.evidence.enabled and self.enabled():self._cycle()
             self._stop.wait(.1 if self.snapshot()['backlog_bytes'] else 1)
+
+    def _cycle(self):
+        try:
+            primary,detail=self.select_source()
+            if detail=='file':self.poll(primary,include_flows=self.evidence.recording_mode=='connection_summaries')
+            if primary!='suricata':
+                try:self.poll('suricata',include_flows=False)
+                except (OSError,ValueError,sqlite3.Error):pass  # optional alert source
+            else:
+                # Keep the Zeek checkpoint current without importing its flows, so a later
+                # switch back to Zeek does not re-import connections EVE already supplied.
+                try:self.poll('zeek',include_flows=False)
+                except (OSError,ValueError,sqlite3.Error):pass
+        except (OSError,ValueError,KeyError,TypeError,OverflowError,sqlite3.Error):
+            with self._lock:self._state.update(state='unavailable',message='Local sensor input or evidence storage unavailable. Check Sensors and Storage.')
 
     def _checkpoint(self,source,position):
         if self._positions.get(source)!=position:
@@ -283,8 +293,14 @@ class FlowIngestor:
         return accepted
 
     def _commit(self,source,category,batch,checkpoint):
-        accepted=self.evidence.append_records(category,batch,checkpoint=('flow_'+source,checkpoint))
-        if accepted!=len(batch):raise ValueError('Sensor batch was not fully admitted; its checkpoint will be reviewed.')
+        try:
+            accepted=self.evidence.append_records(category,batch,checkpoint=('flow_'+source,checkpoint))
+            if accepted!=len(batch):raise ValueError('Sensor batch was not fully admitted; its checkpoint will be reviewed.')
+        except BaseException:
+            # The store may have committed rows and checkpoint before failing; its
+            # checkpoint, not this cache, decides where the next poll resumes.
+            self._positions.pop(source,None)
+            raise
         self._positions[source]=checkpoint
         with self._lock:
             self._state['imported_'+category]+=accepted;self._state['accepted']+=accepted

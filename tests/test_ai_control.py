@@ -488,6 +488,20 @@ def test_untrusted_detector_field_is_rejected_before_model_projection(broker):
     assert receipt["state"] == "failed" and receipt["error_code"] == "EVIDENCE_INVALID"
 
 
+def test_result_that_fits_alone_but_not_in_its_receipt_still_closes_the_receipt(broker):
+    from types import SimpleNamespace
+    from megalodon.ai_broker import MAX_RESULT_BYTES, _json
+    empty = len(_json({"references": [{"excerpt": ""}], "context_only": True}).encode())
+    excerpt = "x" * (MAX_RESULT_BYTES - 100 - empty)
+    broker.knowledge = SimpleNamespace(search=lambda query, limit: [{"excerpt": excerpt}])
+    assert len(_json({"references": [{"excerpt": excerpt}], "context_only": True}).encode()) < MAX_RESULT_BYTES
+    result = broker.dispatch(request("megalodon.knowledge.search", {"query": "dns tunneling"}))
+    assert result["state"] == "failed" and result["error_code"] == "RESULT_TOO_LARGE"
+    assert result["result"] is None and result["evidence_references"] == []
+    assert broker.receipts.latest(result["receipt_id"])["state"] == "failed"
+    assert broker.receipts.verify_chain()["incomplete_count"] == 0
+
+
 def test_ai_receipt_chain_verifies_complete_and_interrupted_history(broker):
     completed = broker.dispatch(request("megalodon.status"))
     interrupted_id = str(uuid4())
