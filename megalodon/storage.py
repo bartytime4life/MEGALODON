@@ -797,7 +797,18 @@ def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
 # /proc/self/fd anchor SQLite opens, are O_PATH there. Without O_PATH (not
 # Linux), the readable/writable open is kept and closing it still carries
 # the POSIX hazard while a connection to the same file is open in-process.
+# O_PATH descriptors need /proc/self/fd for the permission check and mode
+# change below, so without it (for example /proc not mounted) the plain
+# readable/writable open is used, as on other platforms.
 _LOCK_PRESERVING_OPEN = sys.platform.startswith("linux") and hasattr(os, "O_PATH")
+
+
+def _proc_fd_available() -> bool:
+    return os.path.isdir("/proc/self/fd")
+
+
+def _lock_preserving_open() -> bool:
+    return _LOCK_PRESERVING_OPEN and _proc_fd_available()
 
 
 def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
@@ -812,7 +823,7 @@ def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
     /proc/self/fd path: it supports no I/O, fchmod or locking.
     """
 
-    if not _LOCK_PRESERVING_OPEN:
+    if not _lock_preserving_open():
         return os.open(target, flags, **kwargs)
     descriptor = os.open(target, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, **kwargs)
     try:
@@ -850,12 +861,15 @@ def _reopen_for_identity(descriptor: int) -> int:
     original descriptor cannot release a lock anyone holds.
     """
 
-    if not _LOCK_PRESERVING_OPEN:
+    if not _lock_preserving_open():
         return descriptor
     try:
         reopened = os.open(f"/proc/self/fd/{descriptor}", os.O_PATH | os.O_CLOEXEC)
-    finally:
-        os.close(descriptor)
+    except OSError:
+        # Keep the original descriptor (the behaviour without O_PATH) rather
+        # than lose the just-created file's only handle.
+        return descriptor
+    os.close(descriptor)
     return reopened
 
 
@@ -870,10 +884,14 @@ def _restore_private_mode(descriptor: int) -> None:
 
     if stat.S_IMODE(os.fstat(descriptor).st_mode) == PRIVATE_DATABASE_MODE:
         return
-    if _LOCK_PRESERVING_OPEN:
-        os.chmod(f"/proc/self/fd/{descriptor}", PRIVATE_DATABASE_MODE)
-    else:
+    try:
         os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
+    except OSError as exc:
+        # Only an O_PATH descriptor (opened when /proc/self/fd was available)
+        # refuses fchmod with EBADF; change its inode through the magic link.
+        if exc.errno != errno.EBADF or not _LOCK_PRESERVING_OPEN:
+            raise
+        os.chmod(f"/proc/self/fd/{descriptor}", PRIVATE_DATABASE_MODE)
 
 
 def _absolute_database_path(

@@ -101,7 +101,8 @@ runs only when the mode is not already `0600`. Every existing no-follow,
 regular-file, single-link, owner, mode, and permission check and error code is
 unchanged. `-wal` is read with an ordinary descriptor because SQLite takes no
 locks on it. The Suricata store reads and OFD-locks its database descriptor,
-so it keeps an ordinary one. Without `O_PATH` (not Linux) the previous
+so it keeps an ordinary one. Without `O_PATH` (not Linux), or on Linux without
+`/proc/self/fd` (needed for the permission check and mode change), the previous
 descriptors are kept and this hazard remains while two connections to one
 database share a process. `tests/test_sqlite_lock_preservation.py` checks the
 rule against `/proc/locks`.
