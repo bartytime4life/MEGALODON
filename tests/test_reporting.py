@@ -343,6 +343,22 @@ def test_grouping_limit_is_disclosed_and_marks_report_partial(report_service,mon
     assert value['coverage']['grouping_limited'] is True
 
 
+def test_grouping_overflow_bucket_survives_the_leading_endpoint_cut(report_service,monkeypatch):
+    import megalodon.reporting as reporting
+    monkeypatch.setattr(reporting,'MAX_KEYS',40)
+    writer=report_service.evidence.packet_writer();run=writer.start_ingestion_run('jsonl')
+    stamp=datetime.fromtimestamp(report_service.clock()-600,timezone.utc)
+    for n in range(39):  # 39 sources plus one destination fill the table; each outranks the overflow.
+        for _ in range(3):
+            writer.record_event_bundle(PacketEvent(stamp,f'10.0.1.{n}','192.0.2.1','UDP',40000,53,byte_count=60),[],[],run_id=run)
+    writer.record_event_bundle(PacketEvent(stamp,'203.0.113.7','192.0.2.1','UDP',40000,53,byte_count=60),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    value=make(report_service)
+    assert value['endpoints']['Other / grouping limit']==1
+    assert len(value['endpoints'])==31  # the 30 leaders plus the disclosed overflow bucket
+    assert any("combined in 'Other / grouping limit'" in g for g in value['coverage']['gaps'])
+
+
 def test_mobile_and_print_chart_labels_keep_intrinsic_size(report_service):
     from megalodon.reporting import REPORT_CSS
     html=report_service.download(make(report_service)['id'],'html')[1].decode()

@@ -420,7 +420,12 @@ class ReportService(RetainedEvidenceReader):
         result['resources'] = [dict(bin=bucket, **_resource_mean(values)) for bucket, values in sorted(resource_bins.items())]
         result['packet_protocols'] = dict(result['packet_protocols'])
         result['finding_severities'] = dict(result['finding_severities'])
-        result['endpoints'] = dict(result['endpoints'].most_common(30))
+        endpoints = result['endpoints']
+        result['endpoints'] = dict(endpoints.most_common(30))
+        # The grouping-limit notice points at this bucket; keep it even when
+        # its combined count is too small to rank among the leaders.
+        if 'Other / grouping limit' in endpoints:
+            result['endpoints']['Other / grouping limit'] = endpoints['Other / grouping limit']
         result['source_counts'] = dict(result['source_counts'])
         if response_overflow:
             gaps.append('Response details are limited to 5,000 distinct records; the response total also counts later records, which could not be de-duplicated.')
