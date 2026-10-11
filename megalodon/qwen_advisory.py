@@ -38,6 +38,9 @@ MAX_PROVIDER_REQUEST_BYTES = 6144
 MAX_PROVIDER_ENVELOPE_BYTES = MAX_OUTPUT_BYTES * 8
 MAX_PROVIDER_PROTOCOL_BYTES = 8192
 MAX_SUMMARY_CHARACTERS = 1200
+# One anomaly answer displays a 600-character summary, up to eight candidate
+# IDs and two lists of four 300-character items joined as one string.
+MAX_ANOMALY_SUMMARY_CHARACTERS = 3200
 MAX_PREDICT_TOKENS = 512
 
 _READ_CHUNK_BYTES = 4096
@@ -88,9 +91,9 @@ _RESULT_CODES = {
 }
 
 
-def bounded_advisory_text(value: object) -> bool:
+def bounded_advisory_text(value: object, maximum: int = MAX_SUMMARY_CHARACTERS) -> bool:
     """One visible text field, with explicit controls shared by the browser."""
-    return (type(value) is str and 1 <= len(value) <= MAX_SUMMARY_CHARACTERS
+    return (type(value) is str and 1 <= len(value) <= maximum
             and bool(value.strip()) and _DISPLAY_CONTROLS.search(value) is None)
 
 
@@ -390,7 +393,9 @@ def validated_qwen_result(
                 or policy_version not in (POLICY_VERSION, "local-model-anomaly-advisory-v1")
                 or type(result.outcome) is not str or type(result.code) is not str
                 or _RESULT_CODES.get(result.outcome) != result.code
-                or not bounded_advisory_text(result.summary)
+                or not bounded_advisory_text(result.summary, MAX_ANOMALY_SUMMARY_CHARACTERS
+                                             if policy_version == "local-model-anomaly-advisory-v1"
+                                             else MAX_SUMMARY_CHARACTERS)
                 or type(result.limitations) is not tuple or not 1 <= len(result.limitations) <= 8
                 or any(not bounded_advisory_text(item) for item in result.limitations)
                 or len(set(result.limitations)) != len(result.limitations)
@@ -610,13 +615,13 @@ def _anomaly_summary(output: str, candidate_ids: tuple[str, ...]) -> str:
     def text_list(name: str) -> list[str]:
         items = value[name]
         if (type(items) is not list or not 1 <= len(items) <= 4
-                or any(not bounded_advisory_text(item) or len(item) > 300 for item in items)
+                or any(not bounded_advisory_text(item, 300) for item in items)
                 or len(set(items)) != len(items)):
             raise _ProviderResponseInvalid("anomaly advisory text list is invalid")
         return items
 
     summary = value["summary"]
-    if not bounded_advisory_text(summary) or len(summary) > 600:
+    if not bounded_advisory_text(summary, 600):
         raise _ProviderResponseInvalid("anomaly advisory summary is invalid")
     benign = text_list("benign_alternatives")
     missing = text_list("missing_evidence")
@@ -625,7 +630,9 @@ def _anomaly_summary(output: str, candidate_ids: tuple[str, ...]) -> str:
         f"Benign alternatives: {'; '.join(benign)}. "
         f"Missing evidence: {'; '.join(missing)}."
     )
-    return _plain_summary(combined)
+    # Every field passed the display check at its documented limit above; the
+    # v1 1,200-character summary cap does not apply to the joined answer.
+    return " ".join(combined.split())
 
 
 def _result(

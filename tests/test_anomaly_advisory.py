@@ -275,6 +275,36 @@ def test_anomaly_provider_rejects_incomplete_unknown_reordered_or_duplicate_ids(
     assert result.reason_code == 'PROVIDER_RESPONSE_INVALID'
 
 
+def test_answer_at_every_documented_field_limit_is_accepted(provider):
+    def text(prefix, size):
+        return (prefix + ' ' + 'x' * size)[:size]
+    answer = {'candidate_ids': ['a01', 'a02'], 'summary': text('Summary', 600),
+              'benign_alternatives': [text(f'Benign {i}', 300) for i in range(4)],
+              'missing_evidence': [text(f'Missing {i}', 300) for i in range(4)]}
+    Draft202012Validator(SCHEMA['$defs']['anomalyAdvisoryOutput']).validate(answer)
+    provider.next_response = FakeResponse(payload={
+        'model': 'local:qwen-approved-v1', 'done': True,
+        'response': json.dumps(answer, separators=(',', ':'))})
+    result = invoke()
+    assert result.outcome == 'ANSWER', result.reason_code
+    assert len(result.summary) > qwen.MAX_SUMMARY_CHARACTERS
+    assert answer['summary'] in result.summary and all(
+        item in result.summary for item in answer['benign_alternatives'] + answer['missing_evidence'])
+    assert qwen.validated_qwen_result(result, policy_version=POLICY_VERSION,
+                                      candidate_ids=('a01', 'a02')) == result
+    # The v1 display contract keeps its own 1,200-character summary limit.
+    with pytest.raises(ValueError):
+        qwen.validated_qwen_result(result)
+    # Per-field limits still apply, one field at a time.
+    for name, value in (('summary', text('Summary', 601)),
+                        ('missing_evidence', [text('Missing', 301)]),
+                        ('benign_alternatives', ['Bidi ‮ override'])):
+        provider.next_response = FakeResponse(payload={
+            'model': 'local:qwen-approved-v1', 'done': True,
+            'response': json.dumps({**answer, name: value}, separators=(',', ':'))})
+        assert invoke().reason_code == 'PROVIDER_RESPONSE_INVALID'
+
+
 def test_concurrency_is_shared_with_v1_and_cancellation_prevents_send(provider):
     assert qwen._INVOCATION_LOCK.acquire(blocking=False)
     try:
