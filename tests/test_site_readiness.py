@@ -17,8 +17,9 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="Node.js is required for HU
 
 
 def test_hud_rejects_ambiguous_and_unbounded_readiness_claims():
+    # The assertions below inspect TAP, regardless of Node's default reporter.
     result = subprocess.run(
-        [NODE, str(ROOT / "tests/readiness_browser.cjs")],
+        [NODE, "--test-reporter=tap", str(ROOT / "tests/readiness_browser.cjs")],
         cwd=ROOT, input=READINESS_JS, capture_output=True, text=True, timeout=15, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
