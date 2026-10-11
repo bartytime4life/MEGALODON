@@ -1032,9 +1032,15 @@ def _validate_sqlite_sidecars(
             )
             _raise_path_error(prefix, code, exc)
         try:
+            info = os.fstat(descriptor)
+            if info.st_nlink == 0 and stat.S_ISREG(info.st_mode):
+                # Its owner (another connection committing, checkpointing or
+                # closing) removed it after the open; it has no name left
+                # that a connection could use, so it is absent.
+                continue
             present.add(suffix)
             _validate_private_database_stat(
-                os.fstat(descriptor), writable=writable, prefix=prefix
+                info, writable=writable, prefix=prefix
             )
             if writable and os.name == "posix":
                 os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
