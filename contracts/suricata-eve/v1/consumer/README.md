@@ -93,7 +93,15 @@ wait, transaction, and required readback share a fixed 30,000 ms monotonic
 cooperative deadline. Store validation and the advisory pre-transaction replay
 probes use a zero SQLite busy timeout; `BEGIN IMMEDIATE`, commit, and post-commit
 readback bind a fresh busy timeout from the remaining shared budget immediately
-before each possible lock wait. The connection also installs a VM progress
+before each possible lock wait. Before connecting, the writer probes the same
+OFD lock region as the reconciliation reader: while another process holds a
+SQLite write lock (with its transient `-journal`), it waits within the shared
+budget and, if the budget expires, fails `TRANSACTION_TIMEOUT` without starting
+a transaction. A `-journal` present while no writer holds that lock is a hot
+journal and remains `DATABASE_IDENTITY`. Under the lock the writer also requires
+the rollback-journal header, 4,096-byte pages, and a file within the page
+ceiling, so a persistent-WAL store is refused here exactly as projection and
+reconciliation refuse it. The connection also installs a VM progress
 handler and checks the deadline before and after transaction stages. A single
 SQLite or kernel filesystem call can return
 after the deadline under uninterruptible I/O; such a late return never becomes
@@ -150,9 +158,14 @@ owner-private database and atomically reserves:
 
 `validate_suricata_store` opens an existing file read-only and query-only, then
 checks the exact version, SQL, columns, indexes, foreign keys, uniqueness,
-foreign-key integrity, and SQLite quick check. Its coordinated read-only open
-includes committed WAL pages; incomplete WAL sidecars and active rollback
-journals fail closed. Missing, partial, future, or weakened layouts fail closed.
+foreign-key integrity, and SQLite quick check. Before SQLite opens the file it
+refuses every coordination sidecar (`-wal`, `-shm`, `-journal`), a
+persistent-WAL header, a page size other than 4,096 bytes, and a file beyond
+the 131,072-page ceiling, so validation never creates `-wal`/`-shm` and never
+accepts a store the consumer, projection, or reconciliation would refuse. The
+initializer sets `page_size=4096` explicitly. Path refusals such as
+`SURICATA_STORE:AMBIGUOUS_PATH` keep their fixed code and are raised as
+`SuricataStoreError`. Missing, partial, future, or weakened layouts fail closed.
 Initialization refuses every existing database;
 there is no implicit upgrade or ordinary-startup hook. This is storage
 reservation evidence, not a consumer transaction, replay decision, retention

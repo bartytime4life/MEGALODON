@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
 import ipaddress
 import json
 import math
@@ -50,6 +49,14 @@ _VERSION = re.compile(
 _UTC_TIME = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:"
     r"[0-9]{2}\.[0-9]{6}Z\Z"
+)
+_MONTH_DAYS = (0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+_IPV4_OCTET = r"(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
+# Exactly the dotted-quad text ``str(IPv4Address)`` produces: no leading zeros.
+_CANONICAL_IPV4 = re.compile(rf"(?:{_IPV4_OCTET}\.){{3}}{_IPV4_OCTET}\Z")
+# Lowercase hextets without leading zeros, as ``str(IPv6Address)`` writes them.
+_CANONICAL_HEXTETS = re.compile(
+    r"(?:0|[1-9a-f][0-9a-f]{0,3})(?::(?:0|[1-9a-f][0-9a-f]{0,3}))*\Z"
 )
 _RUN_KEYS = (
     "engine", "adapter_profile", "declared_version", "version_basis",
@@ -237,11 +244,22 @@ def _validate_identity(value: Any) -> None:
 def _validate_timestamp(value: Any) -> None:
     if type(value) is not str or _UTC_TIME.fullmatch(value) is None:
         _fail("INPUT_CONTRACT")
-    try:
-        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
-    except ValueError:
+    # The pattern pins every ASCII digit position, so integer range checks
+    # accept exactly the real calendar instants strptime would, at a fraction
+    # of its per-record cost on a full-run projection.
+    year = int(value[0:4])
+    month = int(value[5:7])
+    day = int(value[8:10])
+    if not 1 <= month <= 12:
         _fail("INPUT_CONTRACT")
-    if parsed.year < 1970:
+    leap = month == 2 and year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    if (
+        year < 1970
+        or not 1 <= day <= _MONTH_DAYS[month] + leap
+        or int(value[11:13]) > 23
+        or int(value[14:16]) > 59
+        or int(value[17:19]) > 59
+    ):
         _fail("INPUT_CONTRACT")
 
 
@@ -260,6 +278,60 @@ def _canonical_ip(value: Any) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
         if not mapped or value != "::ffff:%x:%x" % divmod(int(parsed.ipv4_mapped), 0x10000):
             _fail("INPUT_CONTRACT")
     return parsed
+
+
+def _is_canonical_ipv6_text(value: str) -> bool:
+    """Return True only for hex IPv6 text ``_canonical_ip`` certainly accepts.
+
+    The text must be the RFC 5952 form ``str(IPv6Address)`` writes: lowercase
+    hextets without leading zeros, with only the first longest run of two or
+    more zero hextets compressed. An IPv4-mapped address in this hex form is
+    exactly the legacy text ``_canonical_ip`` still accepts. Anything else,
+    including every refusal, is left to the full ``ipaddress`` path.
+    """
+    head, separator, tail = value.partition("::")
+    if (head and _CANONICAL_HEXTETS.fullmatch(head) is None) or (
+        tail and _CANONICAL_HEXTETS.fullmatch(tail) is None
+    ):
+        return False
+    left = head.split(":") if head else []
+    right = tail.split(":") if tail else []
+    gap = 8 - len(left) - len(right)
+    if (separator and gap < 2) or (not separator and gap != 0):
+        return False
+    hextets = left + ["0"] * gap + right
+    best_start = best_length = 0
+    start = length = 0
+    for index, hextet in enumerate(hextets):
+        if hextet != "0":
+            length = 0
+            continue
+        if length == 0:
+            start = index
+        length += 1
+        if length > best_length:
+            best_start, best_length = start, length
+    if best_length < 2:
+        return not separator
+    return bool(separator) and best_start == len(left) and best_length == gap
+
+
+def _canonical_ip_version(value: Any) -> int:
+    """Return the IP version of canonical address text, or refuse it.
+
+    Common canonical forms are recognized directly; all other text, and every
+    refusal, goes through ``_canonical_ip`` so acceptance is unchanged.
+    """
+    if type(value) is str:
+        if 7 <= len(value) <= 15 and _CANONICAL_IPV4.fullmatch(value):
+            return 4
+        if 2 <= len(value) <= 39:
+            if value.startswith("::ffff:") and "." in value:
+                if _CANONICAL_IPV4.fullmatch(value, 7):
+                    return 6
+            elif "." not in value and _is_canonical_ipv6_text(value):
+                return 6
+    return _canonical_ip(value).version
 
 
 def _validate_alert(alert: Any, identity: Mapping[str, Any], index: int) -> None:
@@ -288,9 +360,7 @@ def _validate_alert(alert: Any, identity: Mapping[str, Any], index: int) -> None
     ):
         _fail("INPUT_CONTRACT")
     _validate_timestamp(alert["observed_at"])
-    source = _canonical_ip(alert["src_ip"])
-    destination = _canonical_ip(alert["dst_ip"])
-    if source.version != destination.version:
+    if _canonical_ip_version(alert["src_ip"]) != _canonical_ip_version(alert["dst_ip"]):
         _fail("INPUT_CONTRACT")
     _fixed_integer(alert["src_port"], maximum=65_535)
     _fixed_integer(alert["dst_port"], maximum=65_535)
@@ -700,6 +770,9 @@ def _readback_matches(
 
 def _store_failure_code(error: SuricataStoreError) -> str:
     diagnostic = str(error)
+    if diagnostic == "SURICATA_STORE:LOCK_WAIT_TIMEOUT":
+        # Another writer outlasted the shared budget; this is transient.
+        return "TRANSACTION_TIMEOUT"
     if "INCOMPATIBLE" in diagnostic:
         return "SCHEMA_INCOMPATIBLE"
     if "CAPACITY" in diagnostic:
@@ -980,8 +1053,13 @@ def consume_publication(
         with _open_suricata_store_writer(
             database_path,
             progress_handler=lambda: _deadline_progress(started),
+            remaining_milliseconds=lambda: _remaining_milliseconds(started),
         ) as writer:
             return _consume_open_store(writer, facts, attempt_id, started)
+    except _TransactionTimeout:
+        return _receipt(
+            facts, attempt_id, "preflight_failed", "TRANSACTION_TIMEOUT"
+        )
     except SuricataStoreError as error:
         return _receipt(
             facts,
