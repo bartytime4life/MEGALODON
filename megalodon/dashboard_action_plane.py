@@ -96,6 +96,13 @@ byId('action-script-copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(command); actionStatus('Fixed command copied for review in your terminal. Nothing was executed.'); }
   catch (_) { actionStatus('Clipboard unavailable. Select and copy the displayed command manually.'); }
 });
+const previewRefusals = Object.freeze({
+  DTSTART_VALUE: 'the start does not fit this pattern (weekday presets need a Monday to Friday start)',
+  DST_UNRESOLVED: 'a calculated time falls in a daylight-saving change; choose a time outside the change hour',
+  DST_POLICY_INAPPLICABLE: 'a calculated time falls in a daylight-saving change; choose a time outside the change hour',
+  TIMEZONE_VALUE: 'unknown time zone; use a name such as America/Chicago',
+  PREVIEW_UNAVAILABLE: 'the times could not be calculated',
+});
 byId('action-schedule').addEventListener('submit', async event => {
   event.preventDefault();
   const button = byId('action-schedule-preview'), status = byId('action-schedule-status'), results = byId('action-schedule-results');
@@ -103,20 +110,26 @@ byId('action-schedule').addEventListener('submit', async event => {
   const preset = byId('action-schedule-preset').value;
   results.replaceChildren(); button.disabled = true; status.textContent = 'Calculating preview…';
   try {
-    const payload = await requestBoundedJSON('/api/automation-preview', 4096, {method:'POST',
+    const payload = await requestBoundedJSON('/api/automation-preview', 4096, {method:'POST', acceptErrorStatus:400,
       headers:{'Content-Type':'application/json','X-Megalodon-Preview':'1'},
       body:JSON.stringify({dtstart:start.length===16?start+':00':start,schedule_timezone:zone,preset})});
+    if (payload && Object.prototype.hasOwnProperty.call(previewRefusals, payload.error_code)) {
+      throw new Error(previewRefusals[payload.error_code]);
+    }
     if (payload.schema_version !== 'megalodon-automation-preview-v1'
         || payload.status !== 'preview_only' || !Array.isArray(payload.occurrences)
-        || payload.occurrences.length > 8) throw new Error(payload.error_code || 'PREVIEW_UNAVAILABLE');
+        || payload.occurrences.length > 8) throw new Error(previewRefusals.PREVIEW_UNAVAILABLE);
     for (const item of payload.occurrences) {
       if (!item || typeof item.local_time !== 'string' || typeof item.occurrence_at !== 'string'
-          || !['normal','ambiguous','gap'].includes(item.dst_status)) throw new Error('PREVIEW_UNAVAILABLE');
+          || !['normal','ambiguous','gap'].includes(item.dst_status)) throw new Error(previewRefusals.PREVIEW_UNAVAILABLE);
       const row = document.createElement('li'); row.textContent = `${item.local_time.replace('T',' ')} (${zone}) → ${item.occurrence_at.replace('T',' ').replace('Z',' UTC')}${item.dst_status==='normal'?'':` · ${item.dst_status}`}`;
       results.append(row);
     }
     status.textContent = `Preview only: ${payload.occurrences.length} times calculated. No job was saved or run.`;
-  } catch (error) { status.textContent = `Preview unavailable: ${String(error.message).slice(0,40)}. No job was saved or run.`; }
+  } catch (error) {
+    const reason = Object.values(previewRefusals).includes(error.message) ? error.message : previewRefusals.PREVIEW_UNAVAILABLE;
+    status.textContent = `Preview unavailable: ${reason}. No job was saved or run.`;
+  }
   finally { button.disabled = false; }
 });
 """

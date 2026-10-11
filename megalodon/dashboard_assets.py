@@ -1342,13 +1342,15 @@ async function loadAdvisoryReceipt() {
   }
 }
 async function requestBoundedJSON(path, maxBytes, options = {}) {
+  const {acceptErrorStatus = null, ...fetchOptions} = options;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 5000);
   let reader = null;
   try {
     const response = await fetch(path, {cache: 'no-store', mode: 'same-origin', redirect: 'error', signal: controller.signal,
-      ...options, credentials: 'same-origin', headers: {'Accept': 'application/json', ...(options.headers || {})}});
-    if (!response.ok) throw new Error('bounded request failed');
+      ...fetchOptions, credentials: 'same-origin', headers: {'Accept': 'application/json', ...(fetchOptions.headers || {})}});
+    // A route with a closed error body may opt in to reading it; every other failure stays opaque.
+    if (!response.ok && response.status !== acceptErrorStatus) throw new Error('bounded request failed');
     if (!response.headers || typeof response.headers.get !== 'function') throw new Error('bounded response headers unavailable');
     const declared = response.headers.get('Content-Length');
     if (declared !== null
