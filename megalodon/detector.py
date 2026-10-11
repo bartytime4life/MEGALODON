@@ -144,6 +144,11 @@ class PreparedDetection:
         self._resolved = True
 
 
+# Every rule that records a cooldown; eviction drops each (rule, source) key
+# directly instead of scanning the whole cooldown map.
+EMITTING_RULES = ("SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING")
+
+
 class Detector:
     def __init__(
         self,
@@ -196,6 +201,8 @@ class Detector:
         now = event.observed_at.timestamp()
 
         def can_emit(rule_id: str) -> bool:
+            if rule_id not in EMITTING_RULES:
+                raise RuntimeError(f"cooldown rule {rule_id} is not registered for eviction")
             key = (rule_id, source)
             previous = self.last_emitted.get(key, _MISSING)
             if (
@@ -496,6 +503,5 @@ class Detector:
             self.port_windows.pop(evicted, None)
             self.port_counts.pop(evicted, None)
             self.source_high_watermarks.pop(evicted, None)
-            for key in tuple(self.last_emitted):
-                if key[1] == evicted:
-                    del self.last_emitted[key]
+            for rule_id in EMITTING_RULES:
+                self.last_emitted.pop((rule_id, evicted), None)
