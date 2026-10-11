@@ -87,8 +87,9 @@ at most one. The session cookie is found among other `Cookie` values, because
 browsers send cookies from every local app on the same host regardless of port;
 the whole header is bounded at 8 KiB. At the authentication
 gate, competing attempts return 429 with `Retry-After: 30` without waiting for or
-invoking the verifier, and do not count as failed guesses. A form request can
-instead receive the existing 409 refusal from the earlier POST maintenance guard.
+invoking the verifier, and do not count as failed guesses. When sign-in is
+enabled, the form route does not take the POST maintenance lock, so a running
+local operation never turns a sign-in into a 409.
 Admission, verification and failure accounting
 share one lock, released even if verification raises. The sign-in page rechecks
 admission after reading its bounded body. Five consecutive failed
