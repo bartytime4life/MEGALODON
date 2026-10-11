@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import builtins
 from contextlib import ExitStack
+from datetime import datetime, timezone
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 import traceback
 import unittest
 from unittest.mock import Mock, patch
@@ -164,6 +165,27 @@ class CaptureFailureReportingTests(unittest.TestCase):
         self.assertNotIn(PRIVATE_DIAGNOSTIC, "".join(traceback.format_exception(primary)))
         self.sniffer.stop.assert_called_once_with(join=False)
 
+
+    def test_wall_clock_step_back_keeps_live_stamps_ordered(self):
+        seconds = [10, 8, 11]
+
+        class SteppedClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2026, 1, 1, 0, 0, seconds.pop(0), tzinfo=tz)
+
+        self.stack.enter_context(patch.object(capture, "datetime", SteppedClock))
+        layers = {sys.modules["scapy.all"].IP: SimpleNamespace(src="192.0.2.7", dst="198.51.100.9")}
+        packet = Mock(__contains__=lambda _, key: key in layers, __getitem__=lambda _, key: layers[key], __len__=lambda _: 60)
+        source = capture.iter_scapy("synthetic")
+        next(source)
+        callback = self.factory.call_args.kwargs["prn"]
+        for _ in range(3):
+            callback(packet)
+        source.close()
+        observed = [call.args[0].observed_at.second for call in self.queue.offer.call_args_list]
+        # A backward step repeats the run's last stamp instead of reordering it.
+        self.assertEqual(observed, [10, 10, 11])
 
     def test_queue_telemetry_counts_accepted_and_dropped_events(self):
         events = _BoundedCaptureQueue(maximum=2)

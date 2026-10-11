@@ -3,6 +3,8 @@ from ipaddress import ip_address
 from types import SimpleNamespace
 import time
 
+import pytest
+
 from megalodon.background_monitor import BackgroundMonitor
 from megalodon.live_connections import LiveConnections, MAX_CONNECTIONS, MAX_TRACKED
 from megalodon.models import PacketEvent
@@ -138,3 +140,13 @@ def test_stop_during_background_warmup_cannot_later_start_capture():
     monitor.stop()
     assert not monitor._thread.is_alive()
     assert monitor.snapshot()['state']=='stopped'
+
+
+def test_slow_capture_shutdown_still_stops_background_monitoring():
+    def overrun():raise ValueError('Capture shutdown has not completed; check status again.')
+    capture=SimpleNamespace(snapshot=lambda:{'state':'running'},start=lambda iface:None,stop=overrun)
+    monitor=BackgroundMonitor(capture,Geo())
+    monitor.start('eth0')
+    with pytest.raises(ValueError,match='shutdown has not completed'):monitor.stop()
+    assert not monitor._thread.is_alive()
+    assert monitor.snapshot()['enabled'] is False and monitor.snapshot()['state']=='stopped'
