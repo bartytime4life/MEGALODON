@@ -774,12 +774,10 @@ def test_concurrent_password_checks_share_one_slot_and_preserve_lockout(first_ro
                               for route in ("basic", "form", "basic", "form")]
                 for route, result in zip(("basic", "form", "basic", "form"), concurrent):
                     status, body, headers = result.result(timeout=2)
-                    if route == "form" and status == 409:
-                        # The existing POST maintenance guard can refuse the form first.
-                        assert body == {"error": "A local operation is in progress; retry shortly."}
-                    else:
-                        assert (status, body) == (429, {"error": "try again shortly"})
-                        assert headers["Retry-After"] == "30"
+                    # The form route skips the POST maintenance lock, so both
+                    # routes reach the shared password slot and get 429.
+                    assert (status, body) == (429, {"error": "try again shortly"})
+                    assert headers["Retry-After"] == "30"
                 assert verifier.verify.call_count == 1
                 assert not store.summary.called
             finally:
