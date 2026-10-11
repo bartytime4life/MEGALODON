@@ -103,6 +103,28 @@ def test_packet_rotation_preserves_linked_run_receipts(manager):
             assert db.execute('PRAGMA foreign_key_check').fetchall()==[]
 
 
+@pytest.mark.parametrize('reason,failure',[('interrupted','INTERRUPTED'),('failed','CAPTURE_ERROR'),('source_exhausted',None)])
+def test_capacity_rotation_keeps_the_sessions_final_outcome(manager,reason,failure):
+    enable(manager,cap=GIB)
+    event=lambda:PacketEvent(datetime.fromtimestamp(manager.clock(),timezone.utc),'10.0.0.2','1.1.1.1','TCP',1,443,byte_count=1)
+    older=manager.packet_writer();older.record_event_bundle(event(),[],[],run_id=older.start_ingestion_run('jsonl'))
+    older.finish_ingestion_run(1,'source_exhausted');older.close();manager.test_clock[0]+=60
+    prior={e['id'] for e in manager._catalog['entries']}
+    writer=manager.packet_writer();run=writer.start_ingestion_run('jsonl')
+    writer.record_event_bundle(event(),[],[],run_id=run)
+    # The 30-second maintenance pass crosses the cap and seals the active unit mid-session.
+    with manager.lock:manager._ensure_space(GIB-manager._used()+1)
+    assert writer.store is None
+    writer.finish_ingestion_run(run,reason,failure_code=failure);writer.close()
+    receipts=[]
+    for entry in sorted((e for e in manager._catalog['entries'] if e['id'] not in prior),key=lambda e:e['created_at']):
+        with manager._db(entry) as db:
+            receipts+=db.execute('SELECT status,termination_reason,failure_code,processed_count FROM ingestion_runs').fetchall()
+    status={'interrupted':'failed','failed':'failed','source_exhausted':'completed'}[reason]
+    # The rotated unit's receipt covers its share; the stop or failure is never dropped.
+    assert [tuple(r) for r in receipts]==[('completed','source_exhausted',None,1),(status,reason,failure,0)]
+
+
 def test_restart_reconciles_generic_committed_counts(manager):
     enable(manager)
     manager.append_records('network',[row(manager)])
