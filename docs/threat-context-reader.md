@@ -17,7 +17,9 @@ gate. The selected path must be absolute. Every path component is opened
 descriptor-relative without following symlinks, and the final file must be a
 single-link regular file owned by the effective user with mode `0400` or
 `0600`. The reader accepts 1 byte through 16 MiB and verifies descriptor
-identity again after the bounded read. The caller supplies an exact lowercase
+identity again after the bounded read: the file's full metadata, and each
+ancestor directory's device, inode, owner and mode, since a directory's size and
+times change whenever an unrelated entry is added beside the path. The caller supplies an exact lowercase
 `sha256:<64 hex>` digest; a mismatch publishes no context.
 
 Parsing is UTF-8 and JSON-only. Duplicate keys, floats, non-finite values,
