@@ -61,6 +61,16 @@ class DetectorTests(unittest.TestCase):
         result = detector.analyze(event(0))[0]
         self.assertEqual(result.suppressed_reason, "source_allowlisted")
 
+    def test_ipv4_mapped_form_of_an_allowlisted_source_is_suppressed(self):
+        detector = Detector(
+            DetectionSettings(syn_flood_threshold=1),
+            (ipaddress.ip_network("8.8.8.8/32"),),
+        )
+        result = detector.analyze(event(0, src_ip="::ffff:8.8.8.8"))[0]
+        self.assertEqual(result.suppressed_reason, "source_allowlisted")
+        other = Detector(DetectionSettings(syn_flood_threshold=1), (ipaddress.ip_network("8.8.8.8/32"),))
+        self.assertIsNone(other.analyze(event(0, src_ip="::ffff:8.8.4.4"))[0].suppressed_reason)
+
     def test_detector_state_is_bounded(self):
         detector = Detector(
             DetectionSettings(
