@@ -18,6 +18,7 @@ import os
 import re
 import stat
 import time
+import unicodedata
 from types import MappingProxyType
 from typing import Any
 from uuid import UUID
@@ -28,17 +29,19 @@ from .offline.common import OfflineError, _parts, require_unprivileged_linux
 MAX_BUNDLE_BYTES = 16_777_216
 MAX_OBJECTS = 4_096
 MAX_NESTING_DEPTH = 32
+MAX_JSON_TOKENS = 1_000_000
 MAX_NORMALIZED_BYTES = 16_777_216
 MAX_PATTERN_CHARS = 8_192
 MAX_LABELS = 32
 MAX_MARKING_REFS = 64
 MAX_EXTERNAL_REFERENCES = 32
 MAX_ELAPSED_SECONDS = 15
+_SCAN_DEADLINE_INTERVAL = 65_536
 
 ERROR_CODES = frozenset({
     "SOURCE_PATH", "SOURCE_SYMLINK", "SOURCE_TYPE", "SOURCE_OWNER",
     "SOURCE_MODE", "SOURCE_LINK", "SOURCE_CHANGED", "BUNDLE_BYTES",
-    "EMPTY_INPUT", "UTF8", "DEPTH", "JSON", "DUPLICATE_KEY",
+    "EMPTY_INPUT", "UTF8", "DEPTH", "TOKEN_LIMIT", "JSON", "DUPLICATE_KEY",
     "JSON_NUMBER", "DIGEST", "SCHEMA", "OBJECT_LIMIT",
     "DUPLICATE_OBJECT", "MARKING", "TEXT", "OUTPUT_LIMIT", "TIME_LIMIT",
 })
@@ -51,6 +54,8 @@ _TIMESTAMP = re.compile(
 )
 _HASH_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 _HASH_VALUE = re.compile(r"[A-Fa-f0-9]{2,256}\Z")
+# Control (C0/C1), format (bidi overrides, zero-width) and surrogate code points.
+_REFUSED_TEXT_CATEGORIES = frozenset({"Cc", "Cf", "Cs"})
 
 
 class ThreatContextError(ValueError):
@@ -201,11 +206,14 @@ def _read_source(path: str, started: float) -> bytes:
         _close_all(descriptors, primary)
 
 
-def _scan_depth(text: str) -> None:
+def _scan_depth(text: str, started: float) -> None:
     depth = 0
+    tokens = 0
     quoted = False
     escaped = False
-    for char in text:
+    for position, char in enumerate(text):
+        if not position % _SCAN_DEADLINE_INTERVAL:
+            _deadline(started)
         if quoted:
             if escaped:
                 escaped = False
@@ -219,8 +227,15 @@ def _scan_depth(text: str) -> None:
             depth += 1
             if depth > MAX_NESTING_DEPTH:
                 _fail("DEPTH")
+            tokens += 1
+            if tokens > MAX_JSON_TOKENS:
+                _fail("TOKEN_LIMIT")
         elif char in "]}":
             depth -= 1
+        elif char in ",:":
+            tokens += 1
+            if tokens > MAX_JSON_TOKENS:
+                _fail("TOKEN_LIMIT")
     if quoted or depth != 0:
         _fail("JSON")
 
@@ -244,14 +259,14 @@ def _reject_number(_value: str) -> None:
     _fail("JSON_NUMBER")
 
 
-def _decode(raw: bytes) -> dict[str, Any]:
+def _decode(raw: bytes, started: float) -> dict[str, Any]:
     if raw.startswith(b"\xef\xbb\xbf"):
         _fail("UTF8")
     try:
         text = raw.decode("utf-8")
     except UnicodeError:
         _fail("UTF8")
-    _scan_depth(text)
+    _scan_depth(text, started)
     try:
         value = json.loads(
             text,
@@ -264,6 +279,7 @@ def _decode(raw: bytes) -> dict[str, Any]:
         raise
     except (json.JSONDecodeError, TypeError, ValueError):
         _fail("JSON")
+    _deadline(started)
     if type(value) is not dict:
         _fail("SCHEMA")
     return value
@@ -274,7 +290,7 @@ def _text(value: object, maximum: int) -> str:
         type(value) is not str
         or not 1 <= len(value) <= maximum
         or value != value.strip()
-        or any(ord(char) < 32 or ord(char) == 127 for char in value)
+        or any(unicodedata.category(char) in _REFUSED_TEXT_CATEGORIES for char in value)
     ):
         _fail("TEXT")
     return value
@@ -309,6 +325,12 @@ def _timestamp(value: object) -> str:
     return text
 
 
+def _instant(text: str) -> tuple[datetime, int]:
+    """Return an accepted timestamp with every fractional digit retained."""
+    seconds, _, fraction = text.removesuffix("Z").partition(".")
+    return datetime.fromisoformat(seconds + "+00:00"), int(fraction.ljust(9, "0"))
+
+
 def _string_list(value: object, maximum_items: int, maximum_chars: int) -> list[str]:
     if type(value) is not list or len(value) > maximum_items:
         _fail("SCHEMA")
@@ -337,7 +359,7 @@ def _external_references(value: object) -> list[dict[str, Any]]:
                 _fail("SCHEMA")
             normalized_hashes = {}
             for name, digest in hashes.items():
-                if type(name) is not str or not _HASH_NAME.fullmatch(name):
+                if not _HASH_NAME.fullmatch(_text(name, 64)):
                     _fail("SCHEMA")
                 digest_text = _text(digest, 256)
                 if not _HASH_VALUE.fullmatch(digest_text):
@@ -416,7 +438,8 @@ def _normalize_object(value: object) -> dict[str, Any]:
             item["pattern_version"] = _text(value["pattern_version"], 32)
         if "valid_until" in value:
             item["valid_until"] = _timestamp(value["valid_until"])
-            if datetime.fromisoformat(item["valid_until"].removesuffix("Z") + "+00:00") < datetime.fromisoformat(item["valid_from"].removesuffix("Z") + "+00:00"):
+            # STIX 2.1 requires valid_until to be strictly later than valid_from.
+            if _instant(item["valid_until"]) <= _instant(item["valid_from"]):
                 _fail("SCHEMA")
     elif "pattern" in value or "pattern_type" in value or "pattern_version" in value:
         _fail("SCHEMA")
@@ -457,7 +480,8 @@ def read_completed_bundle(
     artifact_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
     if artifact_digest != expected_digest:
         _fail("DIGEST")
-    bundle = _decode(raw)
+    _deadline(started)
+    bundle = _decode(raw, started)
     if set(bundle) != {"type", "id", "objects"} or bundle.get("type") != "bundle":
         _fail("SCHEMA")
     bundle_id = _stix_id(bundle.get("id"), "bundle")
@@ -476,7 +500,9 @@ def read_completed_bundle(
             _fail("DUPLICATE_OBJECT")
         seen_ids.add(item["id"])
         object_types[item["type"]] += 1
-        normalized_bytes += len(json.dumps(item, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        normalized_bytes += len(json.dumps(
+            item, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        ).encode("utf-8"))
         if normalized_bytes > MAX_NORMALIZED_BYTES:
             _fail("OUTPUT_LIMIT")
         normalized.append(item)

@@ -11,6 +11,7 @@
       "max_bundle_bytes": 16777216,
       "max_objects": 4096,
       "max_nesting_depth": 32,
+      "max_json_tokens": 1000000,
       "artifact_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "markings": "preserve",
       "pattern_handling": "store_as_untrusted_text_never_execute",
