@@ -94,7 +94,8 @@ def inspect():
 
 def act(action,target):
     address=ipaddress.ip_address(target)
-    if isinstance(address,ipaddress.IPv6Address) and address.ipv4_mapped:
+    if isinstance(address,ipaddress.IPv6Address) and (address.ipv4_mapped
+            or any(address in ipaddress.ip_network(prefix) for prefix in ('64:ff9b::/96','64:ff9b:1::/48'))):
         raise ValueError('Mapped target refused')
     if str(address)!=target or not address.is_global or address.is_multicast or address.is_unspecified:
         raise ValueError('Public single target required')
@@ -106,9 +107,14 @@ def act(action,target):
         values=inspect()
     name='blocked_v'+str(address.version)
     exists=values is not None and target in values[name]
-    if action=='apply' and not exists:
+    if action=='apply':
         element={**BASE,'name':name,'elem':[{'elem':{'val':target,'timeout':300}}]}
-        code,_=nft(['-f','-'],{'nftables':[{'add':{'element':element}}]})
+        commands=[{'add':{'element':element}}]
+        if exists:
+            # Re-apply restarts the five-minute timeout in one atomic transaction;
+            # the leading add keeps the delete valid if the element just expired.
+            commands+=[{'delete':{'element':{**BASE,'name':name,'elem':[target]}}},{'add':{'element':element}}]
+        code,_=nft(['-f','-'],{'nftables':commands})
         if code: raise ValueError('Containment not applied')
     elif action=='release' and exists:
         code,_=nft(['-f','-'],{'nftables':[{'delete':{'element':{**BASE,'name':name,'elem':[target]}}}]})
