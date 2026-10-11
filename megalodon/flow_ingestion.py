@@ -21,6 +21,7 @@ from .evidence_storage import utc, epoch
 MAX_LINE=65536
 READ_BYTES=256*1024
 MAX_ALERT_METADATA=8*1024
+TAIL_BYTES=64
 MAX_EPOCH=253402300799  # 9999-12-31T23:59:59Z, the last representable UTC second
 RAW_CONTENT_FIELDS=frozenset({'payload','payload_printable','packet','packet_base64','raw_packet','raw_payload','http_body','file_data'})
 
@@ -144,6 +145,11 @@ def normalize_zeek(value):
     return 'flows',dict(observed_at=utc(start+duration),source='zeek-conn',data=data)
 
 
+
+def _tail(value):
+    return hashlib.sha256(value).hexdigest()
+
+
 class FlowIngestor:
     def __init__(self,evidence,*,home=None,eve_path=Path('/var/log/suricata/eve.json'),on_flow=None,enabled=lambda:True):
         self.evidence=evidence;self.home=Path.home() if home is None else Path(home)
@@ -246,7 +252,7 @@ class FlowIngestor:
             if not stat.S_ISREG(info.st_mode):raise ValueError('Sensor input must be a regular file.')
             position=self._positions.get(source) or self.evidence.checkpoint(key)
             identity=[info.st_dev,info.st_ino]
-            if not position or position['identity']!=identity or position['offset']>info.st_size:
+            def rotated():
                 offset=max(0,info.st_size-READ_BYTES);discarding=False
                 with self._lock:
                     self._state['gaps']+=int(offset>0 or position is not None)
@@ -254,22 +260,35 @@ class FlowIngestor:
                 if offset:
                     os.lseek(fd,offset,os.SEEK_SET);prefix=os.read(fd,READ_BYTES);split=prefix.find(b'\n')
                     offset+=len(prefix) if split<0 else split+1;discarding=split<0
-                position=dict(identity=identity,offset=offset,discarding=discarding)
-            os.lseek(fd,position['offset'],os.SEEK_SET);raw=os.read(fd,READ_BYTES)
+                return dict(identity=identity,offset=offset,discarding=discarding)
+            def read(at):
+                pre=min(TAIL_BYTES,at);os.lseek(fd,at-pre,os.SEEK_SET)
+                return pre,os.read(fd,READ_BYTES+pre)
+            if not position or position['identity']!=identity or position['offset']>info.st_size:
+                position=rotated()
+            start=position['offset'];pre,data=read(start)
+            # copytruncate keeps the inode; a file that regrew past the saved offset is
+            # recognized by the bytes just before it, checked in the same read as the data.
+            if position.get('tail') is not None and _tail(data[:pre])!=position['tail']:
+                position=rotated();start=position['offset'];pre,data=read(start)
+            raw=data[pre:]
         finally:os.close(fd)
+        def tail(at):
+            # Digest of the bytes before an absolute offset inside the bytes just read.
+            return _tail(data[max(0,at-TAIL_BYTES-start+pre):at-start+pre])
         offset=position['offset'];rejected=0
         if position.get('discarding'):
             split=raw.find(b'\n')
             if split<0:
-                self._checkpoint(source,dict(identity=identity,offset=offset+len(raw),discarding=True))
+                self._checkpoint(source,dict(identity=identity,offset=offset+len(raw),discarding=True,tail=tail(offset+len(raw))))
                 with self._lock:self._set_backlog(source,max(0,info.st_size-offset-len(raw)))
                 return 0
             offset+=split+1;raw=raw[split+1:]
         end=raw.rfind(b'\n')
-        batch=[];category=None;accepted=0;has_flows=False;last_checkpoint=dict(identity=identity,offset=offset,discarding=False)
+        batch=[];category=None;accepted=0;has_flows=False;last_checkpoint=dict(identity=identity,offset=offset,discarding=False,tail=tail(offset))
         normalizer=normalize_suricata if source=='suricata' else normalize_zeek
         for line in raw[:end+1].splitlines(keepends=True) if end>=0 else []:
-            offset+=len(line);checkpoint=dict(identity=identity,offset=offset,discarding=False);item=None
+            offset+=len(line);checkpoint=dict(identity=identity,offset=offset,discarding=False,tail=tail(offset));item=None
             try:
                 if len(line)>MAX_LINE:raise ValueError('Oversized sensor record.')
                 item=normalizer(json.loads(line))
@@ -285,7 +304,7 @@ class FlowIngestor:
         trailing=raw[end+1:]
         if len(trailing)>MAX_LINE:
             rejected+=1;offset+=len(trailing)
-            self._checkpoint(source,dict(identity=identity,offset=offset,discarding=True))
+            self._checkpoint(source,dict(identity=identity,offset=offset,discarding=True,tail=tail(offset)))
             with self._lock:self._state['gaps']+=1
         with self._lock:
             self._state.update(updated_at=utc());self._set_backlog(source,max(0,info.st_size-offset))
