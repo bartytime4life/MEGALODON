@@ -141,8 +141,12 @@ def parse_inventory(addresses, routes, neighbors, stamp):
     return dict(groups=groups,nodes=nodes,edges=list({row['id']:row for row in edges}.values()),networks=networks,known6=known6)
 
 
-def discovery_jobs(scopes, inventory):
-    """Validate explicit choices against current on-link facts and split IPv4."""
+def discovery_jobs(scopes, inventory, *, on_link=True):
+    """Validate explicit choices against current on-link facts and split IPv4.
+
+    With ``on_link=False`` only the scope shape is checked, so discovery can be
+    switched off while a saved scope is not on any current interface.
+    """
     if type(scopes) is not list or not scopes or len(scopes)>MAX_SCOPES:
         raise ValueError('Choose 1–64 private on-link discovery scopes.')
     jobs, selected, total = [], [], 0
@@ -160,14 +164,20 @@ def discovery_jobs(scopes, inventory):
             candidates=[name for address,name in inventory['known6'] if address==str(network.network_address)]
         else:
             candidates=[name for available,name in inventory['networks'] if available.version==4 and network.subnet_of(available)]
-        if not candidates: raise ValueError('A selected scope is no longer on a local interface.')
+        if on_link and not candidates: raise ValueError('A selected scope is no longer on a local interface.')
         total+=network.num_addresses
         if total>MAX_HOSTS: raise ValueError('Discovery is limited to 4096 addresses in total.')
-        interface=sorted(candidates)[0]
         selected.append(network)
+        if not on_link: continue
+        interface=sorted(candidates)[0]
         segments=network.subnets(new_prefix=24) if network.version==4 and network.prefixlen<24 else [network]
         jobs.extend((str(segment),interface) for segment in segments)
     return jobs
+
+
+def _recent(node, now):
+    """Discovered identities are retained for 24 hours after their last response."""
+    return now-datetime.fromisoformat(node['last_seen'].replace('Z','+00:00')).timestamp()<86400
 
 
 def parse_discovery(raw, target, interface, stamp):
@@ -272,7 +282,7 @@ class NetworkTopology:
         if type(value) is not dict or set(value)!={'action','scopes','enabled'} or value.get('action')!='configure' or type(value.get('enabled')) is not bool or type(value.get('scopes')) is not list:
             raise ValueError('Invalid network configuration')
         with self._lock:
-            if value['scopes']: discovery_jobs(value['scopes'],self._inventory)
+            if value['scopes']: discovery_jobs(value['scopes'],self._inventory,on_link=value['enabled'])
             elif value['enabled']: raise ValueError('Select a private on-link scope before enabling discovery.')
             from .local_install import _owned_directory,_regular_owned_file,_atomic_write
             _owned_directory(self.profile.parent,private=True)
@@ -324,7 +334,7 @@ class NetworkTopology:
             for key,node in found.items():
                 if key in self._discovered: node['first_seen']=self._discovered[key]['first_seen']
             # Keep prior identities for a day, with their actual last response time.
-            retained={key:node for key,node in self._discovered.items() if started_wall-datetime.fromisoformat(node['last_seen'].replace('Z','+00:00')).timestamp()<86400}
+            retained={key:node for key,node in self._discovered.items() if _recent(node,started_wall)}
             retained.update(found)
             self._discovered=dict(sorted(retained.items(),key=lambda item:item[1]['last_seen'],reverse=True)[:MAX_HOSTS])
             self._next_discovery=started+INTERVAL_SECONDS
@@ -462,7 +472,10 @@ class NetworkTopology:
         if type(offset) is not int or not 0<=offset<=MAX_NODES or type(limit) is not int or not 1<=limit<=200 or type(query) is not str or len(query)>128 or type(group) is not str or len(group)>32:
             raise ValueError('Invalid topology page')
         with self._lock:
-            inventory=deepcopy(self._inventory);discovered=deepcopy(self._discovered)
+            inventory=deepcopy(self._inventory)
+            # Identities stay for a day even when no discovery run prunes them
+            # (discovery off, or a saved scope that no longer validates).
+            discovered={key:deepcopy(node) for key,node in self._discovered.items() if _recent(node,time.time())}
             settings=deepcopy(self._settings);discovery=deepcopy(self._discovery)
             stamp,state,message,coverage=self._observed_at,self._state,self._message,list(self._coverage)
         available=[]
