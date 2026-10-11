@@ -356,3 +356,18 @@ def test_source_retired_during_initial_save_prevents_inference(service, monkeypa
     monkeypatch.setattr(service,'_persist',persist)
     service.model=lambda *a,**kw:pytest.fail('Retired context must not reach inference')
     with pytest.raises(ValueError,match='expired before analysis'):service.explain_device('192.0.2.8')
+
+
+def test_background_tick_leaves_pending_endpoint_review_to_its_request(service):
+    append(service)
+    priorities=[];original=service.model
+    def model(settings,prompt,**kwargs):
+        priorities.append(kwargs['priority'])
+        if kwargs['priority']=='manual':
+            service.tick()  # The 15-second scheduler fires while the manual request awaits the model.
+            if service.worker:service.worker.join(5)
+        return original(settings,prompt,**kwargs)
+    service.model=model
+    result=service.explain_device('192.0.2.8')
+    assert result['analysis_state']=='ready' and priorities==['manual']
+    assert not service.evidence.checkpoint('patterns_ai_budget') and service.job['state']=='idle'

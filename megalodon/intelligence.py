@@ -441,8 +441,9 @@ class IntelligenceService(RetainedEvidenceReader):
             self.process_hour(max(self.last_hour,completed-7*86400))
         if self.settings['automatic']:
             with self.lock:
-                next_item=next((v for v in self.reviews.values() if 'analysis' not in v and epoch(v['end'])>=now-86400
-                               and self.feedback.get(v['id']) not in {'Expected activity','Incorrect match'}),None)
+                # Endpoint reviews belong to their manual request, even while it awaits the model.
+                next_item=next((v for v in self.reviews.values() if 'analysis' not in v and not v.get('endpoint_context')
+                               and epoch(v['end'])>=now-86400 and self.feedback.get(v['id']) not in {'Expected activity','Incorrect match'}),None)
                 idle=self.job['state']!='running'
             if idle and next_item:self.analyze(next_item['id'],automatic=True)
 
