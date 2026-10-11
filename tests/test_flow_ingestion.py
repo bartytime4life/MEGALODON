@@ -309,6 +309,21 @@ def test_copytruncate_rewrite_past_the_old_offset_is_a_rotation(evidence,tmp_pat
     again=reader(evidence,path);assert again.poll('suricata')==0
     assert again.snapshot()['rotations']==0
 
+
+def test_copytruncate_between_check_and_read_is_still_a_rotation(evidence,tmp_path,monkeypatch):
+    import megalodon.flow_ingestion as flows
+    path=tmp_path/'eve.json';write(path,[eve(i) for i in range(1,6)])
+    worker=reader(evidence,path);assert worker.poll('suricata')==5
+    real_read=flows.os.read;fired=[]
+    def rewrite_then_read(fd,size):
+        # The rewrite lands just before the data read, after any earlier look at the file.
+        if not fired:
+            fired.append(1);write(path,[eve(i) for i in range(101,112)])
+        return real_read(fd,size)
+    monkeypatch.setattr(flows.os,'read',rewrite_then_read)
+    assert worker.poll('suricata')==11
+    assert worker.snapshot()['rotations']==1
+
 class Geo:
     def snapshot(self):return {'anchor':None}
     def lookup(self,address):return None

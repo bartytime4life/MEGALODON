@@ -252,12 +252,7 @@ class FlowIngestor:
             if not stat.S_ISREG(info.st_mode):raise ValueError('Sensor input must be a regular file.')
             position=self._positions.get(source) or self.evidence.checkpoint(key)
             identity=[info.st_dev,info.st_ino]
-            # copytruncate keeps the inode; a file that regrew past the saved offset is
-            # recognized by the bytes just before it no longer matching the checkpoint.
-            rewritten=bool(position and position['identity']==identity and position['offset']<=info.st_size
-                           and position.get('tail') is not None
-                           and _tail(os.pread(fd,min(TAIL_BYTES,position['offset']),position['offset']-min(TAIL_BYTES,position['offset'])))!=position['tail'])
-            if not position or position['identity']!=identity or position['offset']>info.st_size or rewritten:
+            def rotated():
                 offset=max(0,info.st_size-READ_BYTES);discarding=False
                 with self._lock:
                     self._state['gaps']+=int(offset>0 or position is not None)
@@ -265,9 +260,18 @@ class FlowIngestor:
                 if offset:
                     os.lseek(fd,offset,os.SEEK_SET);prefix=os.read(fd,READ_BYTES);split=prefix.find(b'\n')
                     offset+=len(prefix) if split<0 else split+1;discarding=split<0
-                position=dict(identity=identity,offset=offset,discarding=discarding)
-            start=position['offset'];pre=min(TAIL_BYTES,start)
-            os.lseek(fd,start-pre,os.SEEK_SET);data=os.read(fd,READ_BYTES+pre);raw=data[pre:]
+                return dict(identity=identity,offset=offset,discarding=discarding)
+            def read(at):
+                pre=min(TAIL_BYTES,at);os.lseek(fd,at-pre,os.SEEK_SET)
+                return pre,os.read(fd,READ_BYTES+pre)
+            if not position or position['identity']!=identity or position['offset']>info.st_size:
+                position=rotated()
+            start=position['offset'];pre,data=read(start)
+            # copytruncate keeps the inode; a file that regrew past the saved offset is
+            # recognized by the bytes just before it, checked in the same read as the data.
+            if position.get('tail') is not None and _tail(data[:pre])!=position['tail']:
+                position=rotated();start=position['offset'];pre,data=read(start)
+            raw=data[pre:]
         finally:os.close(fd)
         def tail(at):
             # Digest of the bytes before an absolute offset inside the bytes just read.
