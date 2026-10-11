@@ -227,6 +227,12 @@ def test_an_idle_zeek_follow_poll_does_not_hide_the_primary_backlog(evidence,tmp
     worker._select_at=0;worker._cycle()
     assert worker._primary==('suricata','file')
     assert worker.snapshot()['backlog_bytes']>0
+    # The backlogged EVE file then disappears and Zeek takes over; its stale
+    # backlog must not keep the loop at the fast pace.
+    eve_path.unlink();write(zeek_path,[zeek(2)],'a')
+    worker._select_at=0;worker._cycle()
+    assert worker._primary==('zeek','file')
+    assert worker.snapshot()['backlog_bytes']==0
 
 
 def test_rejected_sensor_lines_cannot_poison_following_valid_records(evidence,tmp_path):

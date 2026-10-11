@@ -210,6 +210,9 @@ class FlowIngestor:
             self._stop.wait(.1 if self.snapshot()['backlog_bytes'] else 1)
 
     def _cycle(self):
+        # Pace by sources read in this cycle only: a file that became unreadable
+        # or is no longer polled must not keep the loop at its fast backlog pace.
+        with self._lock:self._backlog.clear()
         try:
             primary,detail=self.select_source()
             if detail=='file':self.poll(primary,include_flows=self.evidence.recording_mode=='connection_summaries')
@@ -223,6 +226,8 @@ class FlowIngestor:
                 except (OSError,ValueError,sqlite3.Error):pass
         except (OSError,ValueError,KeyError,TypeError,OverflowError,sqlite3.Error):
             with self._lock:self._state.update(state='unavailable',message='Local sensor input or evidence storage unavailable. Check Sensors and Storage.')
+        finally:
+            with self._lock:self._state['backlog_bytes']=max(self._backlog.values(),default=0)
 
     def _checkpoint(self,source,position):
         if self._positions.get(source)!=position:
