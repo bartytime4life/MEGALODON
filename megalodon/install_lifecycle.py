@@ -19,20 +19,18 @@ def selected_extras(paths):
 
 
 def service_running(paths):
-    from .hud_autostart import unit_path, unit_contents
+    from . import hud_autostart
     from .local_install import _regular_owned_file, InstallError
-    unit = unit_path(paths)
-    if not unit.exists():
-        return False
-    if _regular_owned_file(unit, maximum=8192) != unit_contents(paths):
+    unit = hud_autostart.unit_path(paths)
+    managed = unit.exists()
+    if managed and (_regular_owned_file(unit, maximum=8192) != hud_autostart.unit_contents(paths)
+                    or os.path.lexists(hud_autostart.dropin_path(paths))):
         raise InstallError('Preserve and review the modified HUD service before upgrading')
-    loaded = subprocess.run(['systemctl', '--user', 'show', '--property=FragmentPath', '--value',
-                             'megalodon-hud.service'], capture_output=True, text=True, timeout=15, check=False)
-    if loaded.returncode != 0 or loaded.stdout.strip() != str(unit):
-        return False
-    result = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'megalodon-hud.service'],
-                            timeout=15, check=False)
-    return result.returncode == 0
+    # The unit path follows XDG_CONFIG_HOME; systemd reports the file it loaded.
+    state = hud_autostart._service_state()
+    if hud_autostart.loaded_elsewhere(state, unit, managed):
+        raise InstallError('The HUD service is loaded from another unit file; stop it there before upgrading')
+    return managed and state is not None and state['FragmentPath'] == str(unit) and state['ActiveState'] == 'active'
 
 
 def service_action(action):
@@ -110,8 +108,12 @@ def retire_releases(paths, manifest):
     data outside releases are never candidates. Interrupted deletion remains in
     the manifest and is safe to retry.
     """
-    from .local_install import _expected_release, _owned_directory, _atomic_write
+    from .local_install import _expected_release, _owned_directory, _atomic_write, _current_target
     protected = {manifest['active_release'], manifest['previous_release']}
+    # An owner rollback may point the selector at an older tree; never retire it.
+    selected = _current_target(paths)
+    if selected is not None and Path(os.path.normpath(selected)).parent == paths.releases:
+        protected.add(Path(os.path.normpath(selected)).name)
     protected.update(row['id'] for row in manifest['releases'][-4:])
     retired = []
     for row in manifest['releases']:

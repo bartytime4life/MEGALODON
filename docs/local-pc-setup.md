@@ -42,6 +42,11 @@ for installation without launching.
 The installed launcher reopens an active background HUD only when called
 without options. Any explicit options, including `--help`, go to a new
 foreground invocation. They never change an already-running session.
+Before opening the browser, it checks that the configured listener belongs to
+the managed user service's own process. If another local program holds that
+port, it reports that the service is not ready and opens nothing. The background
+service requires `[dashboard] host = "127.0.0.1"`; the HUD server listens on
+IPv4 only, so `::1` is refused for background startup and reopen.
 
 To open a separate HUD with companion collection disabled, run this from any
 directory, choosing an unused port:
@@ -157,6 +162,16 @@ directory and settings file. If uninstall is interrupted after it starts
 removing files, run it again to finish; because the launchers may already be
 gone, use `./scripts/install-local.sh uninstall` from a reviewed checkout. An
 install interrupted during its package build removes its partial release.
+
+The startup unit is looked for under the current `XDG_CONFIG_HOME`. Uninstall
+and upgrade also ask the user service manager which unit file it loaded for
+`megalodon-hud.service`. If it is loaded from another file (for example, the
+unit was enabled under a different `XDG_CONFIG_HOME`), or is running without
+the managed file, they refuse before changing anything. Stop and disable it
+where it was enabled, then retry. If no user service manager answers, they
+proceed as before. A `megalodon-hud.service.d/` drop-in directory (for example,
+from `systemctl --user edit`) can replace the unit's command, so startup,
+upgrade and uninstall refuse while it exists. Review and remove it yourself.
 
 ## Alternative: check and run this checkout
 
@@ -388,12 +403,13 @@ extras. Geography support is retained; an installed Scapy capture extra carries
 forward. Arbitrary packages from a user's environment are never copied. The
 four newest releases plus current/previous selections remain available; older
 manifest-owned releases are retired only when no observed process uses them.
-Uncertain process inspection preserves the release. User data, models and
-settings are outside retirement. Modified service units require review before
+Uncertain process inspection preserves the release. The release the active
+selector points at is also kept, including after an owner rollback. User data,
+models and settings are outside retirement. Modified service units require review before
 activation; a foreground/manual HUD must be closed and relaunched separately.
 
 Upgrade readiness checks the restarted systemd process owns the configured
-loopback listener before and after reading its package identity. A matching
+IPv4 loopback listener before and after reading its package identity. A matching
 public hash from an unrelated local process is insufficient. Running releases
 hold a read-only directory descriptor so automatic retirement can identify code
 still in use even after the active selector changes. Older ambiguous processes

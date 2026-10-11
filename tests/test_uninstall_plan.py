@@ -260,3 +260,43 @@ def test_service_preview_uses_same_identity_check_as_disable(private_tmp_path, m
         assert unit.read_bytes() == before
     else:
         assert not unit.exists()
+
+
+def test_service_drop_in_is_listed_and_unit_needs_review(private_tmp_path, monkeypatch):
+    home = private_tmp_path / 'home'
+    home.mkdir(mode=0o700)
+    paths = local_install.install_paths({'HOME': str(home)})
+    unit = hud_autostart.unit_path(paths)
+    local_install._create_directory_chain(unit.parent, 0o700)
+    unit.write_bytes(hud_autostart.unit_contents(paths))
+    override = unit.parent / 'megalodon-hud.service.d' / 'override.conf'
+    override.parent.mkdir()
+    override.write_text('[Service]\nExecStart=\nExecStart=/synthetic/other\n')
+    monkeypatch.setattr(local_install, '_load_manifest', lambda _: {'releases': []})
+    monkeypatch.setattr(uninstall_audit, 'local_status', lambda _: (0, {'status': 'ready', 'artifacts': {}}))
+    monkeypatch.setattr(uninstall_audit, '_package_status', lambda: {})
+    monkeypatch.setattr(hud_autostart, '_systemctl', lambda *a: pytest.fail('preview must not change services'))
+    report = uninstall_plan.plan(paths=paths, home=home)
+    items = {item['name']: item for item in report['files']}
+    assert items['hud_user_service']['installed_artifact_status'] == 'needs_review'
+    assert items['hud_user_service']['disposition'] == 'preserve_for_review'
+    assert items['hud_user_service_dropins']['path'] == str(override.parent)
+    assert items['hud_user_service_dropins']['disposition'] == 'preserve_for_review'
+    assert override.exists()
+
+
+def test_nested_manifest_is_a_review_item_not_a_crash(private_tmp_path, monkeypatch, capsys):
+    home = private_tmp_path / 'home'
+    home.mkdir(mode=0o700)
+    paths = local_install.install_paths({'HOME': str(home)})
+    monkeypatch.setattr(local_install, '_require_supported_user', lambda: None)
+    local_install._prepare_directories(paths)
+    paths.manifest.write_text('[' * 60000)
+    paths.manifest.chmod(0o600)
+    monkeypatch.setattr(local_install, 'install_paths', lambda *a: paths)
+    monkeypatch.setattr(uninstall_audit, '_package_status', lambda: {})
+    monkeypatch.setenv('HOME', str(home))
+    assert uninstall_plan.main(['--json']) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert 'managed_code_manifest_unavailable' in report['issues']
+    assert report['installed_hud'] == {'status': 'needs_review'}

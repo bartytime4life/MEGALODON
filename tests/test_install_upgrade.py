@@ -96,3 +96,48 @@ def test_retirement_preserves_release_directory_held_by_a_process(layout,monkeyp
     assert ids[0] in [r['id'] for r in value['releases']]
     assert ids[1] not in [r['id'] for r in value['releases']]
     assert (layout.releases/ids[0]).exists() and not (layout.releases/ids[1]).exists()
+
+
+def test_retirement_keeps_the_release_the_selector_points_at(layout,monkeypatch):
+    local_install._prepare_directories(layout)
+    ids=[f'1-20261001T1200{i:02d}Z-aaaabbbb' for i in range(8)]
+    for identifier in ids:(layout.releases/identifier).mkdir(parents=True,mode=0o700)
+    layout.current.symlink_to(layout.releases/ids[0])  # owner rollback to an old tree
+    proc=layout.app/'fake-proc';proc.mkdir()
+    realpath=install_lifecycle.Path
+    monkeypatch.setattr(install_lifecycle,'Path',lambda p:proc if str(p)=='/proc' else realpath(p))
+    monkeypatch.setattr(local_install,'_atomic_write',lambda *args:None)
+    manifest=dict(active_release=ids[-1],previous_release=ids[-2],releases=[{'id':v} for v in ids])
+    value=install_lifecycle.retire_releases(layout,manifest)
+    assert (layout.releases/ids[0]).exists() and ids[0] in [r['id'] for r in value['releases']]
+    assert not (layout.releases/ids[1]).exists()
+
+
+@pytest.mark.parametrize('managed,state,expected',[
+    (False,None,False),
+    (False,{'FragmentPath':'','LoadState':'not-found','ActiveState':'inactive'},False),
+    (False,{'FragmentPath':'/other/config/systemd/user/megalodon-hud.service','LoadState':'loaded','ActiveState':'active'},'refuse'),
+    (False,{'FragmentPath':'','LoadState':'not-found','ActiveState':'active'},'refuse'),
+    (True,{'FragmentPath':'/other/config/systemd/user/megalodon-hud.service','LoadState':'loaded','ActiveState':'inactive'},'refuse'),
+    (True,{'FragmentPath':'UNIT','LoadState':'loaded','ActiveState':'active'},True),
+    (True,{'FragmentPath':'UNIT','LoadState':'loaded','ActiveState':'inactive'},False),
+    (True,None,False),
+])
+def test_service_running_asks_systemd_which_unit_file_it_loaded(layout,monkeypatch,managed,state,expected):
+    from megalodon import hud_autostart
+    unit=hud_autostart.unit_path(layout)
+    if managed:
+        unit.parent.mkdir(parents=True);unit.write_bytes(hud_autostart.unit_contents(layout))
+    if state is not None and state['FragmentPath']=='UNIT':state=dict(state,FragmentPath=str(unit))
+    monkeypatch.setattr(hud_autostart,'_service_state',lambda:state,raising=False)
+    if expected=='refuse':
+        with pytest.raises(local_install.InstallError,match='another unit file'):install_lifecycle.service_running(layout)
+    else:assert install_lifecycle.service_running(layout) is expected
+
+
+def test_service_running_refuses_drop_in_override(layout,monkeypatch):
+    from megalodon import hud_autostart
+    unit=hud_autostart.unit_path(layout)
+    (unit.parent/'megalodon-hud.service.d').mkdir(parents=True);unit.write_bytes(hud_autostart.unit_contents(layout))
+    monkeypatch.setattr(hud_autostart,'_service_state',lambda:pytest.fail('checked files first'),raising=False)
+    with pytest.raises(local_install.InstallError,match='modified HUD service'):install_lifecycle.service_running(layout)

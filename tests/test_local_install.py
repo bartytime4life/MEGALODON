@@ -12,7 +12,7 @@ import warnings
 
 import pytest
 
-from megalodon import __version__, local_install
+from megalodon import __version__, hud_autostart, local_install
 
 
 def test_chosen_hud_password_is_private_rotatable_and_resettable(layout):
@@ -107,6 +107,8 @@ def layout(tmp_path, monkeypatch):
         "XDG_CONFIG_HOME": str(home / "config"),
     })
     monkeypatch.setattr(local_install, "_require_supported_user", lambda: None)
+    # Never ask the real user service manager; individual tests fake its answer.
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: None, raising=False)
     return paths
 
 
@@ -597,3 +599,32 @@ def test_release_creation_uses_private_venv_and_installed_import(layout, source,
     assert clean.parent==layout.releases/release_id and not clean.exists()
     assert calls[2][1:3] == ["-I", "-c"]
     assert (layout.releases / release_id / "venv" / "bin" / "python").exists()
+
+
+def test_uninstall_refuses_while_systemd_runs_unit_from_another_config_home(layout, source, monkeypatch):
+    monkeypatch.setattr(local_install, '_create_release', release_factory(layout, iter(['synthetic-release'])))
+    local_install.install(source, layout)
+    unit = hud_autostart.unit_path(layout)
+    local_install._create_directory_chain(unit.parent, 0o700)
+    unit.write_bytes(hud_autostart.unit_contents(layout))
+    home = layout.hud_launcher.parent.parent.parent
+    other = local_install.install_paths({'HOME': str(home), 'XDG_DATA_HOME': str(home / 'share'),
+                                         'XDG_CONFIG_HOME': str(home / 'other-config')})
+    assert hud_autostart.unit_path(other) != unit and other.manifest == layout.manifest
+    monkeypatch.setattr(hud_autostart, '_service_state', lambda: {
+        'FragmentPath': str(unit), 'LoadState': 'loaded', 'ActiveState': 'active'}, raising=False)
+    monkeypatch.setattr(hud_autostart, '_systemctl', lambda *args: pytest.fail('must not change services'))
+
+    with pytest.raises(local_install.InstallError, match='another unit file'):
+        local_install.uninstall(other)
+
+    assert unit.exists() and layout.manifest.exists()
+    assert (layout.current / 'venv/bin/python').exists()
+
+
+def test_deeply_nested_manifest_is_refused_not_crashing(layout):
+    local_install._prepare_directories(layout)
+    layout.manifest.write_text('[' * 60000)
+    layout.manifest.chmod(0o600)
+    with pytest.raises(local_install.InstallError, match='invalid'):
+        local_install.status(layout)

@@ -34,6 +34,11 @@ def unit_path(paths: InstallPaths | None = None) -> Path:
     return paths.config.parent / "systemd" / "user" / UNIT
 
 
+def dropin_path(paths: InstallPaths | None = None) -> Path:
+    """`systemctl --user edit` overrides; they can replace ExecStart without touching the unit."""
+    return unit_path(paths).with_name(UNIT + ".d")
+
+
 def unit_contents(paths: InstallPaths | None = None) -> bytes:
     paths = install_paths() if paths is None else paths
     python = paths.current / "venv" / "bin" / "python"
@@ -56,14 +61,37 @@ def _systemctl(*args: str) -> None:
         raise InstallError("user service manager could not update HUD startup") from exc
 
 
+def _service_state() -> dict[str, str] | None:
+    """Ask the user manager which unit file it loaded; None when no manager answers."""
+    try:
+        result = subprocess.run(["systemctl", "--user", "show", "--property=FragmentPath,LoadState,ActiveState", UNIT],
+                                capture_output=True, encoding="utf-8", errors="surrogateescape", timeout=15, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    state = dict(line.partition("=")[::2] for line in result.stdout.splitlines())
+    if result.returncode or set(state) != {"FragmentPath", "LoadState", "ActiveState"}:
+        return None
+    return state
+
+
+def loaded_elsewhere(state: dict[str, str] | None, unit: Path, managed: bool) -> bool:
+    """The unit name is loaded from another file, or running without the managed file."""
+    return state is not None and (
+        (state["LoadState"] != "not-found" and state["FragmentPath"] != str(unit))
+        or (not managed and state["ActiveState"] not in {"inactive", "failed"}))
+
+
 def _prepare_unit() -> None:
     if status()[0] != 0:
         raise InstallError("install or repair the local HUD before enabling startup")
-    if load_settings(install_paths().settings).dashboard.host not in {"127.0.0.1", "::1"}:
-        raise InstallError("automatic HUD startup requires a loopback dashboard host")
+    # The HUD server binds IPv4 only; upgrade verification proves an IPv4 listener.
+    if load_settings(install_paths().settings).dashboard.host != "127.0.0.1":
+        raise InstallError("automatic HUD startup requires the IPv4 loopback dashboard host 127.0.0.1")
     unit = unit_path()
     expected = unit_contents()
     _owned_directory(unit.parent, private=False)
+    if os.path.lexists(dropin_path()):
+        raise InstallError("a HUD startup drop-in override exists; preserve and review it")
     if os.path.lexists(unit):
         existing = _regular_owned_file(unit, maximum=8192)
         if existing != expected:
@@ -95,14 +123,20 @@ def validate_unit(paths: InstallPaths | None = None) -> bool:
     existing = _regular_owned_file(unit, maximum=8192)
     if existing != unit_contents(selected):
         raise InstallError("the existing HUD startup unit differs; preserve and review it")
+    if os.path.lexists(dropin_path(selected)):
+        raise InstallError("the existing HUD startup unit has a drop-in override; preserve and review it")
     return True
 
 
 def disable(paths: InstallPaths | None = None) -> None:
     selected = install_paths() if paths is None else paths
-    if not validate_unit(selected):
-        return
     unit = unit_path(selected)
+    managed = validate_unit(selected)
+    # A different XDG_CONFIG_HOME selects a different unit path; ask systemd.
+    if loaded_elsewhere(_service_state(), unit, managed):
+        raise InstallError("the HUD service is loaded from another unit file; stop and disable it there first")
+    if not managed:
+        return
     _systemctl("disable", "--now", UNIT)
     unit.unlink()
     _systemctl("daemon-reload")

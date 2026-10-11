@@ -17,7 +17,7 @@ import stat
 import subprocess
 import sys
 
-from .hud_autostart import unit_path
+from .hud_autostart import dropin_path, unit_path
 from .local_install import InstallError, InstallPaths, install_paths, status as local_status
 from .tool_locations import load_directories
 
@@ -100,6 +100,8 @@ def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dic
         'hud_launcher', 'manager_launcher', 'desktop_entry', 'icon',
     )}
     artifacts['hud_user_service'] = _entry(unit_path(selected))
+    # `systemctl --user edit` overrides can replace ExecStart; never treat them as managed.
+    artifacts['hud_user_service_dropins'] = _entry(dropin_path(selected))
     artifacts['wireshark_profile'] = _entry(home / '.config/wireshark/profiles/MEGALODON')
     # Support evidence uses a fixed home root even when the installer uses XDG.
     artifacts['fixed_support_data'] = _entry(home / '.local/share/megalodon/support')

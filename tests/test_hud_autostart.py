@@ -136,6 +136,7 @@ def test_user_service_is_reversible_and_uses_the_selected_release(tmp_path, monk
     monkeypatch.setattr(hud_autostart, "status", lambda: (0, {"status": "ready"}))
     calls = []
     monkeypatch.setattr(hud_autostart, "_systemctl", lambda *args: calls.append(args))
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: None, raising=False)
 
     hud_autostart.enable()
     unit = hud_autostart.unit_path()
@@ -158,29 +159,35 @@ def test_user_service_is_reversible_and_uses_the_selected_release(tmp_path, monk
     assert calls[-2:] == [("disable", "--now", "megalodon-hud.service"), ("daemon-reload",)]
 
 
-def test_autostart_refuses_non_loopback_settings(tmp_path, monkeypatch):
+@pytest.mark.parametrize("host", ["0.0.0.0", "::1"])
+def test_autostart_refuses_non_loopback_settings(tmp_path, monkeypatch, host):
+    # ::1 is refused: the HUD server binds IPv4 and upgrades verify an IPv4 listener.
     home = tmp_path / "home"
     home.mkdir(mode=0o700)
     paths = local_install.install_paths({"HOME": str(home)})
     paths.config.mkdir(parents=True)
-    paths.settings.write_text('[dashboard]\nhost="0.0.0.0"\n')
+    paths.settings.write_text(f'[dashboard]\nhost="{host}"\n')
     monkeypatch.setattr(hud_autostart, "install_paths", lambda: paths)
     monkeypatch.setattr(hud_autostart, "status", lambda: (0, {"status": "ready"}))
+    monkeypatch.setattr(hud_autostart, "_systemctl", lambda *a: pytest.fail("must not change services"))
     with pytest.raises(local_install.InstallError, match="loopback"):
         hud_autostart.enable()
+    assert not hud_autostart.unit_path(paths).exists()
 
 
 def test_application_menu_reopens_running_service_in_browser(monkeypatch):
     opened = []
     monkeypatch.setattr(hud_reopen, "_wait_until_listening", lambda host, port: True)
+    monkeypatch.setattr(hud_reopen, "_listener_pid", lambda port, host: 501, raising=False)
     monkeypatch.setattr(hud_reopen, "load_settings", lambda _:
                         SimpleNamespace(dashboard=SimpleNamespace(host="127.0.0.1", port=8787)))
     monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda url: opened.append(url) or True)
     assert hud_reopen.main(["/private/settings.toml"]) == 0
     assert opened == ["http://127.0.0.1:8787/"]
-    monkeypatch.setattr(hud_reopen, "load_settings", lambda _:
-                        SimpleNamespace(dashboard=SimpleNamespace(host="0.0.0.0", port=8787)))
-    assert hud_reopen.main(["/private/settings.toml"]) == 2
+    for host in ("0.0.0.0", "::1"):
+        monkeypatch.setattr(hud_reopen, "load_settings", lambda _, host=host:
+                            SimpleNamespace(dashboard=SimpleNamespace(host=host, port=8787)))
+        assert hud_reopen.main(["/private/settings.toml"]) == 2
     assert opened == ["http://127.0.0.1:8787/"]
 
 
@@ -203,3 +210,103 @@ def test_reopen_waits_for_socket_and_reports_failed_start(monkeypatch, capsys):
     monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda _: pytest.fail("Do not open a failed service"))
     assert hud_reopen.main(["/private/settings.toml"]) == 2
     assert "not finished starting" in capsys.readouterr().err
+
+
+def test_reopen_never_opens_a_listener_the_service_does_not_own(tmp_path, monkeypatch, capsys):
+    import socket
+    from megalodon import install_lifecycle
+    squatter = socket.socket()
+    squatter.bind(("127.0.0.1", 0))
+    squatter.listen()
+    port = squatter.getsockname()[1]
+    settings = tmp_path / "settings.toml"
+    settings.write_text(f'[dashboard]\nhost = "127.0.0.1"\nport = {port}\n')
+    # The managed service is not running (MainPID 0); a same-host program owns the port.
+    monkeypatch.setattr(install_lifecycle.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="0\n", returncode=0))
+    monkeypatch.setattr(hud_reopen.webbrowser, "open_new_tab", lambda _: pytest.fail("Opened another program's page"))
+    try:
+        assert hud_reopen.main([str(settings)]) == 2
+    finally:
+        squatter.close()
+    assert "not ready" in capsys.readouterr().err
+
+
+@pytest.fixture
+def unit_layout(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    paths = local_install.install_paths({"HOME": str(home)})
+    paths.config.mkdir(parents=True)
+    paths.settings.write_text('[dashboard]\nhost="127.0.0.1"\nport=8787\n')
+    monkeypatch.setattr(hud_autostart, "install_paths", lambda: paths)
+    monkeypatch.setattr(hud_autostart, "status", lambda: (0, {"status": "ready"}))
+    calls = []
+    monkeypatch.setattr(hud_autostart, "_systemctl", lambda *args: calls.append(args))
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: None, raising=False)
+    unit = hud_autostart.unit_path(paths)
+    unit.parent.mkdir(parents=True)
+    return paths, unit, calls
+
+
+@pytest.mark.parametrize("unit_present", [True, False])
+def test_drop_in_override_is_never_treated_as_the_managed_unit(unit_layout, unit_present):
+    paths, unit, calls = unit_layout
+    if unit_present:
+        unit.write_bytes(hud_autostart.unit_contents(paths))
+    override = unit.parent / "megalodon-hud.service.d" / "override.conf"
+    override.parent.mkdir()
+    override.write_text("[Service]\nExecStart=\nExecStart=/synthetic/other\n")
+    for action in (hud_autostart.enable, hud_autostart.start):
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            action()
+    if unit_present:
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            hud_autostart.validate_unit(paths)
+        with pytest.raises(local_install.InstallError, match="drop-in"):
+            hud_autostart.disable(paths)
+    assert calls == [] and override.exists() and unit.exists() is unit_present
+
+
+@pytest.mark.parametrize("unit_present,state,refused", [
+    (False, {"FragmentPath": "/other/systemd/user/megalodon-hud.service", "LoadState": "loaded", "ActiveState": "active"}, True),
+    (False, {"FragmentPath": "", "LoadState": "not-found", "ActiveState": "activating"}, True),
+    (True, {"FragmentPath": "/other/systemd/user/megalodon-hud.service", "LoadState": "loaded", "ActiveState": "inactive"}, True),
+    (True, {"FragmentPath": "/dev/null", "LoadState": "masked", "ActiveState": "inactive"}, True),
+    (False, {"FragmentPath": "", "LoadState": "not-found", "ActiveState": "inactive"}, False),
+    (True, {"FragmentPath": "UNIT", "LoadState": "loaded", "ActiveState": "active"}, False),
+    (True, None, False),
+])
+def test_disable_asks_systemd_which_unit_file_is_loaded(unit_layout, monkeypatch, unit_present, state, refused):
+    paths, unit, calls = unit_layout
+    if unit_present:
+        unit.write_bytes(hud_autostart.unit_contents(paths))
+    if state is not None and state["FragmentPath"] == "UNIT":
+        state = dict(state, FragmentPath=str(unit))
+    monkeypatch.setattr(hud_autostart, "_service_state", lambda: state, raising=False)
+    if refused:
+        with pytest.raises(local_install.InstallError, match="another unit file"):
+            hud_autostart.disable(paths)
+        assert calls == [] and unit.exists() is unit_present
+    else:
+        hud_autostart.disable(paths)
+        assert not unit.exists()
+        assert calls == ([("disable", "--now", hud_autostart.UNIT), ("daemon-reload",)] if unit_present else [])
+
+
+def test_service_state_reads_only_fixed_properties(monkeypatch):
+    seen = []
+    def run(argv, **kwargs):
+        seen.append(argv)
+        return SimpleNamespace(returncode=0, stdout="LoadState=loaded\nActiveState=active\nFragmentPath=/u/megalodon-hud.service\n")
+    monkeypatch.setattr(hud_autostart.subprocess, "run", run)
+    assert hud_autostart._service_state() == {
+        "FragmentPath": "/u/megalodon-hud.service", "LoadState": "loaded", "ActiveState": "active"}
+    assert seen == [["systemctl", "--user", "show", "--property=FragmentPath,LoadState,ActiveState", hud_autostart.UNIT]]
+    monkeypatch.setattr(hud_autostart.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stdout=""))
+    assert hud_autostart._service_state() is None
+    monkeypatch.setattr(hud_autostart.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="LoadState=loaded\n"))
+    assert hud_autostart._service_state() is None
+    def missing(*a, **k):
+        raise FileNotFoundError("systemctl")
+    monkeypatch.setattr(hud_autostart.subprocess, "run", missing)
+    assert hud_autostart._service_state() is None
