@@ -55,7 +55,12 @@ completion capabilities and rejects cloud model references. Inference uses one n
 `POST /api/generate` on the existing literal-loopback transport with no proxy,
 DNS, redirect, retry, cloud fallback or model-requested tool field. The
 transport uses the existing one-slot process lock, response-framing budget,
-and active deadline. A successful TCP connection or tag lookup is never
+and active deadline. A request waits up to one second (never past its
+deadline) for the in-process slot held by a short metadata read before it
+reports `CONCURRENCY_LIMIT_REACHED`; a deadline that expires mid-body is
+`REQUEST_TIMEOUT`, not `invalid_response`. The installed-model catalog applies
+the same listener check as admission, so a stopped Ollama reads as
+`ollama_unavailable` in the HUD and in Setup's refresh. A successful TCP connection or tag lookup is never
 reported as `model_ready`; one bounded validated inference must complete.
 The status states are `disabled`, `ollama_unavailable`, `model_missing`,
 `model_available`, `model_loading`, `concurrency_unavailable`, `model_ready`,

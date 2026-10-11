@@ -187,6 +187,69 @@ def test_deadline_socket_close_is_reported_as_timeout(monkeypatch,reason,expecte
     with pytest.raises(provider.AIProviderError,match=expected):provider._request('/api/generate','POST',b'{}',1)
 
 
+def test_deadline_during_partial_body_is_a_timeout_not_invalid_response(monkeypatch):
+    import socket,threading,time
+    listener=socket.socket();listener.bind(('127.0.0.1',0));listener.listen(1);listener.settimeout(3)
+    stop=threading.Event()
+    def serve():
+        try:
+            client,_=listener.accept()
+        except OSError:return
+        with client:
+            client.settimeout(3)
+            data=b''
+            while b'\r\n\r\n' not in data:data+=client.recv(4096)
+            client.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4096\r\n\r\n')
+            try:
+                while not stop.wait(0.02):client.sendall(b' ')
+            except OSError:pass
+    server=threading.Thread(target=serve,daemon=True);server.start()
+    monkeypatch.setattr(provider.transport,'LOOPBACK_PORT',listener.getsockname()[1])
+    monkeypatch.setattr(provider.transport,'_acquire_process_invocation_lock',lambda:None)
+    # Only the shared watchdog ends the read, as when it wins the race with the socket timeout.
+    def generous_timeout(connection,deadline):
+        connection.timeout=3
+        if connection.sock is not None:connection.sock.settimeout(3)
+    monkeypatch.setattr(provider.transport,'_set_connection_timeout',generous_timeout)
+    started=time.monotonic()
+    try:
+        with pytest.raises(provider.AIProviderError,match='REQUEST_TIMEOUT'):provider._request('/api/tags','GET',None,0.5)
+    finally:
+        stop.set();server.join(3);listener.close()
+    assert time.monotonic()-started<2.5
+
+
+def test_manual_request_waits_briefly_for_a_metadata_read(monkeypatch):
+    import threading,time
+    class Connection:
+        def __init__(self,*a,**kw):pass
+        def request(self,*a,**kw):raise OSError('no listener')
+        def close(self):pass
+    class Guard:
+        def __init__(self,*a):pass
+        def start(self):pass
+        def finish(self):return None
+    monkeypatch.setattr(provider.transport,'_LiteralLoopbackHTTPConnection',Connection)
+    monkeypatch.setattr(provider.transport,'_InvocationGuard',Guard)
+    monkeypatch.setattr(provider.transport,'_acquire_process_invocation_lock',lambda:None)
+    lock=provider.transport._INVOCATION_LOCK
+    assert lock.acquire(blocking=False)
+    threading.Timer(0.2,lock.release).start()
+    # The slot frees within the bounded wait, so the request reaches the transport.
+    with pytest.raises(provider.AIProviderError,match='OLLAMA_UNAVAILABLE'):provider._request('/api/tags','GET',None,3)
+    assert lock.acquire(blocking=False)
+    try:
+        started=time.monotonic()
+        with pytest.raises(provider.AIProviderError,match='CONCURRENCY_LIMIT_REACHED'):provider._request('/api/tags','GET',None,3)
+        assert 0.9<=time.monotonic()-started<2
+        started=time.monotonic()
+        with pytest.raises(provider.AIProviderError,match='CONCURRENCY_LIMIT_REACHED'):
+            provider._request('/api/tags','GET',None,3,deadline=time.monotonic()+0.2)
+        assert time.monotonic()-started<0.6
+    finally:
+        lock.release()
+
+
 def test_long_budget_keeps_metadata_fast_and_rejects_unbounded_requests(model_provider,monkeypatch):
     settings,_,_=model_provider
     assert settings.timeout_seconds==300
@@ -296,3 +359,38 @@ def test_disabled_model_inventory_requires_explicit_setup_refresh(tmp_path, monk
     assert calls == ['catalog']
     manager.snapshot()
     assert calls == ['catalog']
+
+
+@pytest.mark.parametrize('posture,expected', [
+    ({'listening': 'no', 'loopback_only': None}, 'OLLAMA_UNAVAILABLE'),
+    ({'listening': 'unknown', 'loopback_only': None}, 'POLICY_REJECTION'),
+    ({'listening': 'yes', 'loopback_only': False}, 'POLICY_REJECTION'),
+    (OSError('proc unreadable'), 'POLICY_REJECTION'),
+    (ValueError('PROVIDER_CONTAINMENT:INVALID_TARGET'), 'POLICY_REJECTION'),
+])
+def test_catalog_and_admission_share_one_listener_verdict(monkeypatch, posture, expected):
+    def observe(**_):
+        if isinstance(posture, Exception):
+            raise posture
+        return posture
+    monkeypatch.setattr(provider, 'qwen_provider_posture', observe)
+    monkeypatch.setattr(provider, '_request', lambda *a, **k: pytest.fail('posture failure reached Ollama'))
+    with pytest.raises(provider.AIProviderError) as catalog:
+        provider.model_catalog()
+    with pytest.raises(provider.AIProviderError) as admitted:
+        provider._admitted(AISettings(enabled=True))
+    assert catalog.value.code == admitted.value.code == expected
+
+
+def test_stopped_ollama_reads_as_unavailable_in_hud_and_setup_refresh(tmp_path, monkeypatch):
+    monkeypatch.setattr(provider, 'qwen_provider_posture', lambda **_: {'listening': 'no', 'loopback_only': None})
+    settings = AISettings(enabled=True, model='llama3.2:3b', model_digest='b' * 64)
+    telemetry = ModelTelemetry(lambda: settings, inspect=lambda value: provider.status(value, probe=False))
+    telemetry.snapshot(); telemetry._thread.join(2)
+    assert telemetry.snapshot()['model_state'] == 'ollama_unavailable'
+    monkeypatch.setattr(support_config, 'interfaces', lambda: [])
+    manager = support_config.SupportConfiguration(Settings(db_path=tmp_path / 'events.db'), home=tmp_path)
+    manager.start(dict(action='model_refresh')); manager._thread.join(3)
+    job = manager.snapshot()['job']
+    assert job['state'] == 'failed' and 'Ollama is unavailable' in job['message']
+    assert 'stopped unexpectedly' not in job['message']

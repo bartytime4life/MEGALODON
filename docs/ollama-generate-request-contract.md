@@ -35,7 +35,10 @@ schema:
 - limits each supporting list to one through four unique strings of at most
   300 characters.
 
-MEGALODON still validates the returned JSON independently. Provider-side
+MEGALODON still validates the returned JSON independently, checking each
+field against these limits and the shared display-control rules. The joined
+anomaly display text is not held to the generic 1,200-character v1 summary
+limit; an answer at every per-field limit is accepted. Provider-side
 structured output is defense in depth, not a replacement for the existing
 closed parser.
 
