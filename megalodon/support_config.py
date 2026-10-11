@@ -520,13 +520,7 @@ class SupportConfiguration:
                 message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
                     'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
             elif action == 'model_refresh':
-                from .ai_provider import AIProviderError
-                from .model_telemetry import ERROR_STATES, MESSAGES
-                try:
-                    self.model_telemetry.refresh_installed_models()
-                except AIProviderError as exc:
-                    # Same operator wording the HUD shows for this provider state.
-                    raise ValueError(MESSAGES.get(ERROR_STATES.get(exc.code), 'Installed models could not be read. Retry the refresh.')) from None
+                self.model_telemetry.refresh_installed_models()
                 message=('Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
                          if self.settings.ai.enabled else 'Installed local models refreshed by your request. No model was downloaded or loaded.')
             elif action == 'qwen_check':
@@ -562,10 +556,17 @@ class SupportConfiguration:
             message = ('A private MEGALODON file or folder is unsafe; review its ownership and permissions.' if isinstance(exc, InstallError) else
                        str(exc)[:512] if isinstance(exc, (ValueError, ConfigBusy)) else 'This setup action could not complete. Check the installed tool and system authorization.')
             self._tool(tool, 'needs_setup', message)
-        except Exception:
+        except Exception as exc:
             failed = True
-            message = 'Setup stopped unexpectedly. Completed settings are preserved; check the local service.'
-            self._tool(tool, 'failed', message)
+            from .ai_provider import AIProviderError
+            if isinstance(exc, AIProviderError):
+                # Same operator wording the HUD shows for this provider state.
+                from .model_telemetry import ERROR_STATES, MESSAGES
+                message = MESSAGES.get(ERROR_STATES.get(exc.code), 'The local model check could not complete. Retry it from Setup.')
+                self._tool(tool, 'needs_setup', message)
+            else:
+                message = 'Setup stopped unexpectedly. Completed settings are preserved; check the local service.'
+                self._tool(tool, 'failed', message)
         finally:
             with self._lock:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
