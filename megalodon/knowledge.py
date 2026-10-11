@@ -33,9 +33,9 @@ class KnowledgeLibrary:
         self.clock, self.downloader = clock, downloader
         self.lock = RLock()
         self.stop = Event()
-        self.thread = self.worker = None
+        self.thread = self.worker = self.slot_claim = None
         self.token = secrets.token_hex(16)
-        self.busy = False
+        self.busy = self.fallback = False
         self.verified = {}
         self.path = self.root/'manifest.json'
         self.state = dict(schema=SCHEMA, active=None, previous=None, enabled=True,
@@ -101,7 +101,12 @@ class KnowledgeLibrary:
         return db
 
     def _used(self):
-        return sum(p.lstat().st_size for p in self.root.iterdir())
+        total=0
+        for p in self.root.iterdir():
+            # SQLite journals of a concurrent build can vanish after listing.
+            try:total+=p.lstat().st_size
+            except FileNotFoundError:pass
+        return total
 
     def _cleanup(self):
         keep = {self.state.get('active'), self.state.get('previous')}
@@ -160,7 +165,8 @@ class KnowledgeLibrary:
     def _activate(self, name):
         with self.lock:
             old = deepcopy(self.state)
-            self.state.update(previous=self.state['active'], active=name, error=None)
+            # A damaged active generation never displaces the last good rollback target.
+            self.state.update(previous=self.state['previous'] if self.fallback else self.state['active'], active=name, error=None)
             with self._generation(name).open('rb') as handle:
                 content_digest=hashlib.file_digest(handle,'sha256').hexdigest()
             self.state['digests']={k:v for k,v in self.state.get('digests',{}).items() if k==self.state['previous']}
@@ -248,13 +254,15 @@ class KnowledgeLibrary:
 
     def update(self):
         with self.lock:
+            restore,self.slot_claim=self.slot_claim,None
             if self.busy: return self.snapshot()
             self.busy=True
-            self.worker=Thread(target=self._update, name='megalodon-knowledge-update', daemon=True)
+            self.worker=Thread(target=self._update, args=(restore,), name='megalodon-knowledge-update', daemon=True)
             self.worker.start()
         return self.snapshot()
 
-    def _update(self):
+    def _update(self, restore=None):
+        activated=False
         try:
             assets={}
             if not self.fallback:
@@ -298,13 +306,21 @@ class KnowledgeLibrary:
                     license_text=self.seed['sources'][source]['license_text'],coverage='Supported published records')
             if changed or self.fallback:
                 name=self._build(entries,sources,downloaded)
-                self._activate(name)
+                self._activate(name);activated=True
             with self.lock:
                 self.state.update(last_check=utc(self.clock()),error=None)
                 self._save()
         except Exception:
             with self.lock:
-                self.state.update(last_check=utc(self.clock()),error='Update was not activated. The previous library is still available; check source availability, format and free disk space.')
+                if self.stop.is_set() and not activated:
+                    # Shutdown is not a failed check: keep the prior status and
+                    # leave an interrupted scheduled slot to run after restart.
+                    if not restore:return
+                    self.state.update(last_slot=restore[0],slot_at=restore[1])
+                elif activated:
+                    self.state.update(last_check=utc(self.clock()),error='The update was activated, but its status could not be saved. Check free disk space.')
+                else:
+                    self.state.update(last_check=utc(self.clock()),error='Update was not activated. The previous library is still available; check source availability, format and free disk space.')
                 try:self._save()
                 except OSError:pass
         finally:
@@ -316,9 +332,12 @@ class KnowledgeLibrary:
         with self.lock:
             if not self.state['enabled'] or self.busy or self.state['last_slot']==slot or slot_at<=self.state.get('slot_at',0): return
             # A checked slot survives failure and restart: no hammering sources.
+            # Only shutdown during the check returns it (see _update).
+            claim=(self.state['last_slot'],self.state.get('slot_at',0))
             self.state['last_slot']=slot
             self.state['slot_at']=slot_at
             self._save()
+            self.slot_claim=claim
         self.update()
 
     def start(self):
