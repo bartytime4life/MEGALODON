@@ -130,3 +130,87 @@ def test_cancelled_build_never_activates(library):
     before=library.snapshot()['generation'];library.stop.set()
     with pytest.raises(ValueError,match='cancelled'):library._build(library.seed['entries'],library.seed['sources'],{})
     assert library.snapshot()['generation']==before
+
+
+def test_download_worker_ignores_working_directory_modules(tmp_path,monkeypatch):
+    import subprocess
+    from megalodon import knowledge_sources
+    marker=tmp_path/'planted-ran';(tmp_path/'json.py').write_text(f'open({str(marker)!r},"w").close()\n')
+    monkeypatch.chdir(tmp_path)
+    # A source-checkout launch; the isolated worker must not depend on this variable.
+    monkeypatch.setenv('PYTHONPATH',str(Path(knowledge_sources.__file__).resolve().parents[1]))
+    # The worker's own allowlist refuses this loopback URL before any connection.
+    monkeypatch.setattr(knowledge_sources,'approved_url',lambda url:True)
+    spawned=[];real=subprocess.Popen
+    def spawn(command,**options):
+        spawned.append((command,options));return real(command,**options)
+    with patch('megalodon.knowledge_sources.subprocess.Popen',spawn):
+        with pytest.raises(ValueError,match='unavailable'):fetch('https://127.0.0.1:9/unapproved',100)
+    assert not marker.exists()
+    command,options=spawned[0]
+    assert options.get('cwd') not in {None,str(tmp_path)} and '-I' in command
+    # The isolated worker still imports this package and exits cleanly on refusal.
+    result=subprocess.run(command,cwd=options['cwd'],capture_output=True,timeout=30)
+    assert (result.returncode,result.stdout,result.stderr)==(1,b'',b'')
+
+
+def test_damaged_active_keeps_good_rollback_target(library):
+    good=library.state['active']
+    damaged=library._build(library.seed['entries'],library.seed['sources'],{});library._activate(damaged)
+    with open(library._generation(damaged),'r+b') as handle:
+        handle.seek(5000);value=handle.read(1);handle.seek(5000);handle.write(bytes([value[0]^0xFF]))
+    reopened=KnowledgeLibrary(library.root.parents[3])
+    assert reopened.fallback and reopened.state['previous']==good
+    reopened._activate(reopened._build(reopened.seed['entries'],reopened.seed['sources'],{}))
+    assert reopened.state['previous']==good and reopened._generation(good).exists()
+    assert reopened.action({'action':'rollback'})['generation']==good
+    reopened.close()
+
+
+def kev_only(library):
+    from megalodon.knowledge_sources import LICENSE_URLS
+    kev=json.dumps(dict(catalogVersion='2026.10.01',count=1,vulnerabilities=[dict(cveID='CVE-2024-0001',vendorProject='V',
+        product='P',shortDescription='s',requiredAction='a',dateAdded='2026-01-01',vulnerabilityName='Vuln')])).encode()
+    bodies={LICENSE_URLS['kev']:b'license',SOURCES['kev']['url']:kev}
+    library.downloader=lambda url,limit,etag=None,*,stop=None:(bodies[url],'"1"')
+    return patch.multiple('megalodon.knowledge',SOURCES={'kev':SOURCES['kev']},
+                          license_identity=lambda source,raw:library.seed['sources'][source]['license_sha256'])
+
+
+def test_activation_reported_when_final_status_save_fails(library):
+    before=library.state['active'];saved=library._save;calls=[]
+    def save():
+        calls.append(1)
+        if len(calls)==2:raise OSError(28,'No space left on device')
+        saved()
+    with kev_only(library),patch.object(library,'_save',save):library._update()
+    assert library.state['active']!=before and library.snapshot()['sources']['kev']['edition']=='2026.10.01'
+    assert 'was activated' in library.state['error'] and 'not activated' not in library.state['error']
+
+
+def test_shutdown_during_scheduled_update_leaves_slot_retryable(library):
+    from threading import Event
+    started=Event()
+    def blocked(url,limit,etag=None,*,stop=None):
+        started.set();stop.wait(10)
+        raise ValueError('Knowledge download cancelled or timed out')
+    library.downloader=blocked
+    library.tick();assert started.wait(5)
+    library.close()
+    assert library.state['error'] is None and library.state['last_check'] is None
+    restarted=KnowledgeLibrary(library.root.parents[3])
+    assert restarted.snapshot()['state']=='ready' and restarted.state['last_check'] is None
+    with patch.object(restarted,'update') as run:
+        restarted.tick()
+        assert run.call_count==1
+    restarted.close()
+
+
+def test_vanished_journal_does_not_break_usage(library,monkeypatch):
+    journal=library.root/(library.state['active']+'-journal');journal.write_bytes(b'')
+    real=Path.lstat
+    def lstat(path,*args,**kwargs):
+        if path.name.endswith('-journal'):raise FileNotFoundError(path)
+        return real(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'lstat',lstat)
+    assert library.usage()['used_bytes']>0 and library.snapshot()['used_bytes']>0
