@@ -2,7 +2,7 @@
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 import json
 from pathlib import Path
 import re
@@ -19,6 +19,11 @@ from .operations import PROTECTED_SERVICE_PORTS
 
 ACTIONS = {'analyze':{'ip'},'refresh_inventory':set(),'scan_files':set(),
            'plan_containment':{'ip'},'apply_containment':{'plan_id'},'release_containment':{'ip'}}
+# NAT64 prefixes embed an IPv4 peer; like IPv4-mapped forms they are refused so
+# the IPv4 allowlist and reserved-range checks cannot be bypassed.
+NAT64=(ip_network('64:ff9b::/96'),ip_network('64:ff9b:1::/48'))
+# A block's longest lifetime: helper run bound (90 s) plus kernel timeout (300 s).
+BLOCK_LIFETIME=timedelta(seconds=390)
 
 
 class DefenseBusy(ValueError):
@@ -38,6 +43,24 @@ def validate_request(value):
     return dict(value)
 
 
+def _restorable(rows,cutoff):
+    """Rows replayed after restart, in ledger order: the latest 64 (recent list),
+    every row since the cutoff, and each apply opened without an outcome row that
+    no later verified apply/release of its address supersedes."""
+    tail=deque(maxlen=64);window=deque(maxlen=4096);unfinished={}
+    for item in enumerate(rows):
+        row=item[1];tail.append(item);unfinished.pop(row['receipt_id'],None)
+        if datetime.fromisoformat(row['timestamp'].replace('Z','+00:00'))>=cutoff:window.append(item)
+        else:window.clear()
+        if row.get('state')=='applied' and row.get('action') in {'apply_containment','release_containment'}:
+            unfinished={k:v for k,v in unfinished.items() if v[1]['approved_preview']['ip']!=(row.get('result') or {}).get('ip')}
+        elif row.get('state')=='not_attempted' and row.get('action')=='apply_containment' and row.get('approved_preview'):
+            unfinished[row['receipt_id']]=item
+            if len(unfinished)>64:unfinished.pop(next(iter(unfinished)))
+    selected=dict((*unfinished.values(),*tail,*window))
+    return [selected[index] for index in sorted(selected)]
+
+
 class Defense:
     def __init__(self,operations,configuration,*,run=_run_fixed,model=generate):
         self.operations,self.configuration,self.run,self.model=operations,configuration,run,model
@@ -51,17 +74,19 @@ class Defense:
         self._audit_ready=True
         try:
             evidence=getattr(configuration,'evidence',None)
+            cutoff=datetime.now(timezone.utc)-BLOCK_LIFETIME
             if self.path.exists():
                 with ReceiptStore(self.path) as store:
                     store.verify_chain()
-                    rows=store.connection.execute('SELECT receipt_id,timestamp,payload_json FROM ai_receipt_events ORDER BY sequence DESC LIMIT 64').fetchall()
-                for identifier,stamp,raw in reversed(rows):
-                    self._restore(dict(receipt_id=identifier,timestamp=stamp,**json.loads(raw)))
+                    rows=_restorable((dict(receipt_id=identifier,timestamp=stamp,**json.loads(raw)) for identifier,stamp,raw in
+                                      store.connection.execute('SELECT receipt_id,timestamp,payload_json FROM ai_receipt_events ORDER BY sequence')),cutoff)
+                for row in rows:self._restore(row)
             if evidence is not None and evidence.enabled:
                 from .managed_receipts import ManagedReceipts
                 with ManagedReceipts(evidence,'defense') as store:
                     store.verify_chain()
-                    for row in store.recent():self._restore(row)
+                    with evidence.lock:rows=_restorable(store._rows(),cutoff)
+                    for row in rows:self._restore(row)
         except (OSError,ValueError,RuntimeError):
             self._audit_ready=False
             self._job.update(state='failed',message='Defense audit could not be validated; actions are unavailable until it is reviewed.')
@@ -89,6 +114,11 @@ class Defense:
             if self._pending.get(row.get('ip'))==row['receipt_id']:
                 self._active.pop(row.get('ip'),None)
                 self._pending.pop(row.get('ip'),None)
+        elif (row.get('state')=='failed' and action=='apply_containment' and row.get('host_attempted')
+                and self._active.get(row.get('ip'),{}).get('verified')):
+            # An ambiguous re-apply may have restarted the recorded block's timeout.
+            expiry=(datetime.fromisoformat(row['timestamp'].replace('Z','+00:00'))+timedelta(seconds=300)).isoformat().replace('+00:00','Z')
+            self._active[row['ip']]=dict(self._active[row['ip']],verified=False,expires_at=expiry)
 
     def snapshot(self,include_token=False):
         with self._lock:
@@ -121,7 +151,7 @@ class Defense:
         row=self.operations.endpoint(value)
         address=ip_address(row['ip'])
         if (row['local'] or not address.is_global or address.is_multicast
-                or (address.version==6 and address.ipv4_mapped)
+                or (address.version==6 and (address.ipv4_mapped or any(address in network for network in NAT64)))
                 or any(address in network for network in self.configuration.settings.blocking.allowlist)
                 or any(p['port'] in PROTECTED_SERVICE_PORTS for p in row['ports'])):
             raise ValueError('This address is protected: local/reserved, allowlisted, DNS or remote-access service.')
@@ -233,7 +263,7 @@ class Defense:
                 # The action ledger keeps a reference, never a longer-lived copy.
                 audit_result=dict(review_id=result['review_id'],action_status='not_attempted')
             self._append(identifier,opened=True,state=state,action=action,ip=request.get('ip') or (result or {}).get('ip'),message=message,result=audit_result)
-            with self._lock:self._job.update(state='finished',message=message,result=result)
+            with self._lock:self._job.update(state='finished',message=message,result=result,finished_at=now())
         except Exception as exc:
             provider_message = {
                 'CONCURRENCY_LIMIT_REACHED':'Local AI is working on another local summary. Retry this analysis shortly.',
@@ -249,14 +279,17 @@ class Defense:
                 'PROVIDER_ERROR':'Ollama could not complete model inference. Review its model and available memory in Setup, then retry.',
             }.get(exc.code, 'Local AI is unavailable; review its status in Setup.') if isinstance(exc, AIProviderError) else None
             message=('Host action outcome needs review; the five-minute kernel timeout bounds a successfully added block. Use Release for any recorded block.' if attempted_host else
-                     provider_message or (str(exc) if type(exc) is ValueError and len(str(exc))<=240 else 'Local defense workflow unavailable. No model proposal was executed.'))
-            try:self._append(identifier,opened=opened,state='failed',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),message=message,host_attempted=attempted_host,result=None)
-            except Exception:
-                self._audit_ready=False
-                message='Defense audit unavailable. Review the last attempted action before continuing.'
-            with self._lock:self._job.update(state='failed',message=message,result=None)
-        finally:
-            with self._lock:self._job['finished_at']=now()
+                     provider_message or (str(exc) if type(exc) is ValueError and len(str(exc))<=240 else
+                     'Local defense workflow unavailable. No model proposal was executed.' if opened else
+                     'Defense audit could not record this request; nothing was attempted. Retry shortly.'))
+            # An outcome row needs its recorded opening row; an unrecorded request
+            # (including the storage reserve refusal) ran nothing and leaves no row.
+            if opened:
+                try:self._append(identifier,opened=True,state='failed',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),message=message,host_attempted=attempted_host,result=None)
+                except Exception:
+                    self._audit_ready=False
+                    message='Defense audit unavailable. Review the last attempted action before continuing.'
+            with self._lock:self._job.update(state='failed',message=message,result=None,finished_at=now())
 
     def close(self):
         from .ai_provider import cancel_current
