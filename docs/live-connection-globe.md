@@ -46,6 +46,10 @@ location request may finish; later monitoring restarts do not resume online
 location refreshes unless you explicitly enable them again.
 GET requests never perform either network action. A failed lookup clears the
 internet-exit anchor rather than keeping an old marker as current.
+A saved database whose build date is out of range or malformed is closed and
+treated as not set up, so the HUD still starts. A database whose data section
+is damaged returns no location for the affected peers instead of failing the
+live or operations views.
 
 The live atlas preserves provider coordinates instead of rounding them to 5°.
 They remain approximate IP locations: an ISP gateway, VPN, proxy, anycast or cloud
@@ -62,10 +66,15 @@ traffic is observed. It is not a one-dot-per-packet animation, route tracer or
 latency measurement. TCP/UDP labels describe transport, not inferred applications.
 
 Recent activity expires after 15 seconds, and rows leave the cache after 60 seconds
-without another packet. TCP resets stop activity; FIN marks closing. This is
+without another packet. TCP resets stop activity; FIN marks closing. A SYN on
+a reset tuple, or a SYN without ACK on a closing tuple, starts a new row rather
+than adding to the old connection's counters. This is
 captured activity, not a claim that an operating-system socket is established.
 At most 512 tuples are retained and 128 are returned. Truncation/eviction is
 reported. Counters describe the current in-memory flow; session renewal resets them.
+Sensor flow-summary baselines are also bounded at 512; the least recently
+updated baseline is dropped first, so a long-lived flow that keeps reporting
+retains its baseline and its later deltas still reach the timeline.
 
 The atlas uses stable animation phases, separate land/traffic canvases, bounded
 rendering, great-circle interpolation and hidden-hemisphere clipping. Pausing,

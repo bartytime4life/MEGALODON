@@ -75,7 +75,9 @@ class LiveConnections:
             if reverse:
                 a, b = b, a
             key = (event.protocol, a, b)
-            if key in self._flows and self._flows[key]['state']=='closed' and 'SYN' in event.tcp_flags:
+            # A SYN reopens a reset tuple; a bare SYN (no ACK) also starts a new connection after FIN.
+            if key in self._flows and 'SYN' in event.tcp_flags and (self._flows[key]['state']=='closed' or
+                    (self._flows[key]['state']=='closing' and 'ACK' not in event.tcp_flags)):
                 del self._flows[key]
             for old in [k for k,v in self._flows.items() if stamp-v['_seen']>RETENTION_SECONDS]:
                 del self._flows[old]
@@ -134,6 +136,7 @@ class LiveConnections:
             if prior and (value['last_seen']<prior[1] or any(v<p for v,p in zip(totals,prior[0]))):return
             completed=bool(value.get('completed',True) or (prior and len(prior)>2 and prior[2]))
             if prior and totals==prior[0] and completed==prior[2]:return
+            self._summary_counts.pop(identity,None)  # refresh recency so eviction drops the stalest baseline
             self._summary_counts[identity]=(totals,value['last_seen'],completed,byte_basis)
             if len(self._summary_counts)>MAX_TRACKED:self._summary_counts.pop(next(iter(self._summary_counts)))
             for old in [k for k,v in self._flows.items() if self.clock()-v['_seen']>RETENTION_SECONDS]:del self._flows[old]

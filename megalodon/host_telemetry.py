@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter, deque
 from copy import deepcopy
 from datetime import datetime, timezone
+from ipaddress import ip_address
 import os
 from pathlib import Path
 import re
@@ -37,18 +38,27 @@ NOTES = [
     "CPU is a percentage of total PC capacity. Memory is summed resident memory; shared pages may be counted more than once.",
     "Companion totals cover recognized local processes, including work started outside MEGALODON. Embedded Python/SQLite/Scapy work is included in MEGALODON; browsers and their other tabs are excluded.",
     "Network rates are per interface; VPNs and bridges may count the same traffic. Receive/send does not establish Internet direction or application ownership.",
-    "TCP/UDP values count sockets, not packets or application protocols. Remote peers count sockets and exclude listeners.",
+    "TCP/UDP values count sockets, not packets or application protocols. Remote peers count sockets and exclude listeners and loopback; IPv4-mapped IPv6 peers count as IPv4.",
     "CPU and network activity are concurrent observations, not proof that traffic caused resource use. GPU memory and utilization are not measured.",
     "History covers this HUD session only, up to ten minutes. Restricted processes and short-lived jobs may be missed.",
 ]
 
 
-def _read(path: Path, limit: int = 65536) -> str:
+def _read(path: Path, limit: int = 65536, errors: str = "strict") -> str:
     with path.open("rb") as stream:
         value = stream.read(limit + 1)
     if len(value) > limit:
         raise ValueError("counter limit")
-    return value.decode("utf-8", errors="strict")
+    return value.decode("utf-8", errors=errors)
+
+
+def _args(path: Path, limit: int = 8192) -> list[str]:
+    """Leading NUL-separated arguments within `limit` bytes; a cut-off final argument is dropped."""
+    with path.open("rb") as stream:
+        value = stream.read(limit + 1)
+    if len(value) > limit:
+        value = value[:value.rfind(b"\0", 0, limit) + 1]
+    return value.decode("utf-8", errors="replace").split("\0")
 
 
 def _delta(value: int, previous: int | None, elapsed: float) -> float | None:
@@ -74,6 +84,10 @@ def _sockets(root: Path) -> dict:
     counts = {"tcp": 0, "udp": 0, "established": 0, "listening": 0, "time_wait": 0}
     peers: Counter = Counter()
     complete = True
+    try:  # Booting with ipv6.disable=1 removes the v6 tables along with these.
+        ipv6 = (root / "net" / "if_inet6").exists() or (root / "sys" / "net" / "ipv6").exists()
+    except OSError:
+        ipv6 = True
     for filename in ("tcp", "tcp6", "udp", "udp6"):
         try:
             lines = _read(root / "net" / filename, 2 * 1024 * 1024).splitlines()[1:]
@@ -88,7 +102,13 @@ def _sockets(root: Path) -> dict:
                     for name, code in (("established", "01"), ("listening", "0A"), ("time_wait", "06")):
                         counts[name] += state == code
                 if int(port, 16) and int(remote, 16):
-                    peers[_address(remote)] += 1
+                    peer = ip_address(_address(remote))
+                    peer = getattr(peer, "ipv4_mapped", None) or peer
+                    if not peer.is_loopback:
+                        peers[str(peer)] += 1
+        except FileNotFoundError:
+            if ipv6 or not filename.endswith("6"):
+                complete = False  # Without an IPv6 stack an absent v6 table holds zero sockets.
         except (OSError, ValueError, IndexError, UnicodeError):
             complete = False
     # Partial socket tables must not silently become zero measured totals.
@@ -154,7 +174,7 @@ class HostTelemetry:
                     continue
                 folder = self.root / entry.name
                 try:
-                    raw = _read(folder / "stat", 4096)
+                    raw = _read(folder / "stat", 4096, "replace")  # comm may cut a UTF-8 sequence
                     name = raw[raw.index("(") + 1:raw.rindex(")")]
                     fields = raw[raw.rindex(")") + 2:].split()
                     pid = int(entry.name)
@@ -162,7 +182,7 @@ class HostTelemetry:
                     if pid == self.own_pid:
                         app = "core"
                     elif name.startswith("python") or name.startswith("megalodon"):
-                        args = _read(folder / "cmdline", 8192).split("\0")
+                        args = _args(folder / "cmdline")  # bounded prefix; argv can be long
                         if any(args[i:i+2] == ["-m", "megalodon"] or
                                (args[i] == "-m" and args[i+1].startswith("megalodon."))
                                for i in range(len(args)-1)) or (args and Path(args[0]).name in {"megalodon", "megalodon-hud"}):
