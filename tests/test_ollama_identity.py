@@ -91,6 +91,12 @@ def test_duplicate_key_and_nonfinite_number_refuse():
         parse_observation_bytes(b'{"value":NaN}')
 
 
+def test_oversized_integer_is_a_fixed_json_refusal():
+    # Python's integer digit limit raises a bare ValueError inside json.loads.
+    with pytest.raises(OllamaIdentityError, match="^INVALID_JSON$"):
+        parse_observation_bytes(b'{"value":' + b"9" * 5000 + b"}")
+
+
 def test_invalid_timestamp_refuses():
     value = observation()
     value["observed_at"] = "2026-02-30T00:00:00Z"

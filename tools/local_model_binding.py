@@ -51,6 +51,21 @@ def _is_empty_identity(document: dict[str, Any]) -> bool:
     )
 
 
+def _timestamp(value: str) -> datetime:
+    """Parse a schema-shaped RFC 3339 UTC timestamp as a real calendar time.
+
+    The schema pattern fixes the ``YYYY-MM-DDTHH:MM:SSZ`` shape, but its
+    ``date-time`` format is only enforced when an optional checker is installed,
+    so impossible dates such as month 13 are refused here instead.
+    """
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except (TypeError, ValueError):
+        raise BindingError("INVALID_TIMESTAMP") from None
+
+
 def validate(document: Any) -> dict[str, Any]:
     schema = load_json(SCHEMA)
     errors = sorted(
@@ -67,6 +82,10 @@ def validate(document: Any) -> dict[str, Any]:
                 for error in errors
             )
         )
+
+    generated_at = _timestamp(document["generated_at"])
+    approved_at = document["operator_decision"]["approved_at"]
+    approved = None if approved_at is None else _timestamp(approved_at)
 
     if document["status"] == "UNBOUND":
         if not _is_empty_identity(document):
@@ -120,7 +139,7 @@ def validate(document: Any) -> dict[str, Any]:
         raise BindingError("LICENSE_REFERENCE_REQUIRED")
     if decision["status"] != "APPROVED" or not decision["evidence_refs"]:
         raise BindingError("OPERATOR_APPROVAL_REQUIRED")
-    if document["generated_at"] < decision["approved_at"]:
+    if approved is None or generated_at < approved:
         raise BindingError("BINDING_PRECEDES_APPROVAL")
     return document
 

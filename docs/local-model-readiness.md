@@ -24,10 +24,24 @@ For a bound candidate the assessor checks:
 5. the profile hashes the exact containment packet;
 6. the evaluation binds the exact profile and comparison-boundary hashes;
 7. corpus identity, sample count, p95 latency, and peak memory agree between
-   the profile, evaluation, and containment records; and
+   the profile, evaluation, and containment records;
 8. the request retains `num_ctx=4096`, `num_predict=512`, `seed=0`,
    `temperature=0`, `keep_alive=0`, `raw=true`, `stream=false`, `think=false`,
-   and no `tools` field.
+   and no `tools` field; and
+9. the request runs inside the profiled posture: `num_ctx` equals the
+   profile's `operational_context` and does not exceed its `context_window`,
+   and a profile recording `structured_output: true` requires a request that
+   carries a `format` schema.
+
+The profile's `model_family` and `quantization` are not compared with the
+identity observation's Ollama `details`: Ollama reports API family names (a
+Qwen 2.5 model reports `qwen2`) and labels such as `F16`, while profiles use
+free-form names such as `qwen2.5` and `fp16`. Reviewers check those manually.
+
+The binding is decoded as strictly as the other evidence files (bounded read,
+duplicate-key, non-finite-number, invalid-UTF-8 and nesting refusal) and its
+timestamps must be real UTC calendar times; failures refuse with exit 2 and
+`BINDING_INVALID`.
 
 A model may advertise a tools capability. The packet records that observation
 but fixes `tools_used_or_authorized` to `false`; capability discovery never
@@ -43,7 +57,9 @@ execute the signed corpus on the owner's machine, or provide independent
 security acceptance.
 
 The strongest offline state is therefore `CANDIDATE_PACKET_CONSISTENT`, not
-`ACCEPTED`, `READY`, `RELEASED`, or `DEPLOYED`.
+`ACCEPTED`, `READY`, `RELEASED`, or `DEPLOYED`. Every packet also keeps the
+`RUNTIME_PROVIDER_WIRING` HOLD: the live advisory transport does not yet send
+the request contract's `num_ctx`, `seed`, or `format` controls.
 
 ## Next native evidence sequence
 

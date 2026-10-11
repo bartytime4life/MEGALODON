@@ -128,7 +128,8 @@ def parse_receipt_bytes(data: bytes) -> object:
         )
     except ModelEvaluationError:
         raise
-    except (UnicodeError, json.JSONDecodeError, RecursionError):
+    except (ValueError, RecursionError):
+        # Includes UTF-8/JSON errors and the interpreter's integer digit limit.
         raise ModelEvaluationError("INVALID_JSON") from None
 
 
@@ -201,7 +202,8 @@ def validate_evaluation_receipt(value: object) -> dict[str, Any]:
     if receipt["schema"] != RECEIPT_SCHEMA:
         raise ModelEvaluationError("SCHEMA_MISMATCH")
     evidence_class = receipt["evidence_class"]
-    if evidence_class not in EVIDENCE_CLASSES:
+    # Type first: an unhashable JSON value would raise TypeError in the set lookup.
+    if type(evidence_class) is not str or evidence_class not in EVIDENCE_CLASSES:
         raise ModelEvaluationError("EVIDENCE_CLASS")
     _sha(receipt["profile_sha256"], "PROFILE_SHA256")
     _sha(receipt["comparison_boundary_sha256"], "COMPARISON_BOUNDARY_SHA256")
@@ -488,7 +490,8 @@ def parse_manifest_bytes(data: bytes) -> object:
         )
     except ModelEvaluationError:
         raise
-    except (UnicodeError, json.JSONDecodeError, RecursionError):
+    except (ValueError, RecursionError):
+        # Includes UTF-8/JSON errors and the interpreter's integer digit limit.
         raise ModelEvaluationError("INVALID_JSON") from None
     if type(value) is not dict or data != _canonical(value):
         raise ModelEvaluationError("MANIFEST_NOT_CANONICAL")
@@ -506,7 +509,10 @@ def validate_corpus_manifest(value: object) -> dict[str, Any]:
     manifest = _closed(value, MANIFEST_KEYS, "MANIFEST_SHAPE")
     if manifest["schema"] != MANIFEST_SCHEMA:
         raise ModelEvaluationError("SCHEMA_MISMATCH")
-    if manifest["evidence_class"] not in MANIFEST_EVIDENCE_CLASSES:
+    if (
+        type(manifest["evidence_class"]) is not str
+        or manifest["evidence_class"] not in MANIFEST_EVIDENCE_CLASSES
+    ):
         raise ModelEvaluationError("EVIDENCE_CLASS")
     candidate = _closed(manifest["candidate"], CANDIDATE_KEYS, "CANDIDATE_SHAPE")
     for field in sorted(CANDIDATE_KEYS):
