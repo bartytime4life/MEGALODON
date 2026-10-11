@@ -11,6 +11,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from threading import Timer
+import time
 import unittest
 from unittest.mock import patch
 
@@ -514,6 +516,238 @@ class CliTests(unittest.TestCase):
                     "SELECT action, status, target FROM actions ORDER BY id DESC LIMIT 1"
                 ).fetchone()
                 self.assertEqual(tuple(action), ("block", "planned", "8.8.8.8"))
+
+    def test_firewall_plans_at_storage_high_water_have_a_fixed_refusal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write("[storage]\nmax_database_bytes = 1048576\n")
+            Store(database).close()
+            # About 1 MiB of audit rows in one transaction: past the 1 MiB
+            # budget less the one-write reserve.
+            connection = sqlite3.connect(database)
+            with connection:
+                connection.executemany(
+                    "INSERT INTO actions (created_at, action, target, status, reason, "
+                    "expires_at, details_json) VALUES (?, 'block', '192.0.2.1', "
+                    "'planned', 'fill', NULL, ?)",
+                    [("2026-01-01T00:00:00+00:00", json.dumps({"message": "x" * 4000}))]
+                    * 250,
+                )
+            connection.close()
+            for argv in (
+                ["firewall-plan", "8.8.8.8"],
+                ["block", "8.8.8.8", "--reason", "review"],
+            ):
+                with self.subTest(command=argv[0]):
+                    output, error = io.StringIO(), io.StringIO()
+                    with (
+                        redirect_stdout(output),
+                        redirect_stderr(error),
+                        self.assertRaises(SystemExit) as raised,
+                    ):
+                        main([*argv, "--config", str(config)])
+                    self.assertEqual(raised.exception.code, 2)
+                    self.assertEqual(output.getvalue(), "")
+                    self.assertEqual(
+                        error.getvalue(), "megalodon: STORAGE_CAPACITY:HIGH_WATER\n"
+                    )
+            with sqlite3.connect(database) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM actions").fetchone()[0], 250
+                )
+
+    def test_reconciliation_commands_report_fixed_storage_failures(self):
+        commands = (
+            (
+                ["database-reconcile", "1", "--started-at", "2026-01-01T00:00:00+00:00"],
+                "mark_ingestion_run_reconciliation_required",
+            ),
+            (["database-reconciliation-status"], "pending_ingestion_reconciliation"),
+        )
+        failures = (
+            # A concurrent local writer holding the write lock past the wait.
+            (sqlite3.OperationalError("database is locked"), "storage operation failed"),
+            (OSError("/private/SECRET/events.db"), "I/O operation failed"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            Store(database).close()
+            for argv, method in commands:
+                for failure, message in failures:
+                    with self.subTest(command=argv[0], failure=type(failure).__name__):
+                        output, error = io.StringIO(), io.StringIO()
+                        with (
+                            patch.object(Store, method, side_effect=failure),
+                            redirect_stdout(output),
+                            redirect_stderr(error),
+                            self.assertRaises(SystemExit) as raised,
+                        ):
+                            main([*argv, "--config", str(config)])
+                        self.assertEqual(raised.exception.code, 2)
+                        self.assertEqual(output.getvalue(), "")
+                        self.assertEqual(error.getvalue(), f"megalodon: {message}\n")
+
+    def test_source_specific_run_options_refuse_before_store(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            jsonl_config = Path(directory) / "jsonl.toml"
+            jsonl_config.write_text(
+                f'[app]\ndb_path = "{database.as_posix()}"\n[capture]\nsource = "jsonl"\n',
+                encoding="utf-8",
+            )
+            events = Path(directory) / "events.jsonl"
+            events.write_text("", encoding="utf-8")
+            input_refusal = "megalodon: --input is only valid with the jsonl source\n"
+            interface_refusal = "megalodon: --interface is only valid with the scapy source\n"
+            demo_refusal = "megalodon: --demo-threat is only valid with the sample source\n"
+            cases = (
+                # The configured default source is the synthetic sample.
+                (config, ["--input", str(events)], input_refusal),
+                (config, ["--source", "sample", "--input", str(events)], input_refusal),
+                (config, ["--source", "sample", "--interface", "eth0"], interface_refusal),
+                (
+                    config,
+                    ["--source", "jsonl", "--max-events", "1", "--interface", "eth0"],
+                    interface_refusal,
+                ),
+                (
+                    config,
+                    ["--source", "jsonl", "--max-events", "1", "--demo-threat"],
+                    demo_refusal,
+                ),
+                (
+                    config,
+                    ["--source", "scapy", "--max-events", "1", "--input", str(events)],
+                    input_refusal,
+                ),
+                (jsonl_config, ["--max-events", "1", "--demo-threat"], demo_refusal),
+            )
+            for selected_config, argv, message in cases:
+                with self.subTest(argv=argv):
+                    output, error = io.StringIO(), io.StringIO()
+                    with (
+                        patch("megalodon.cli.Store", side_effect=AssertionError("store opened")),
+                        patch("megalodon.cli._events_for", side_effect=AssertionError("source opened")),
+                        redirect_stdout(output),
+                        redirect_stderr(error),
+                        self.assertRaises(SystemExit) as raised,
+                    ):
+                        main(["run", *argv, "--config", str(selected_config)])
+                    self.assertEqual(raised.exception.code, 2)
+                    self.assertEqual(output.getvalue(), "")
+                    self.assertEqual(error.getvalue(), message)
+            self.assertFalse(database.exists())
+
+    def test_deeply_nested_ai_tool_request_is_an_invalid_request_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, database = write_config(directory)
+            output, error = io.StringIO(), io.StringIO()
+            with (
+                redirect_stdout(output),
+                redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(["ai", "tool", "--request", "[" * 1500, "--config", str(config)])
+            self.assertEqual(raised.exception.code, 1)
+            self.assertEqual(error.getvalue(), "")
+            result = json.loads(output.getvalue())
+            self.assertEqual(
+                (result["state"], result["error_code"]), ("failed", "INVALID_REQUEST")
+            )
+            receipts = database.with_name("megalodon-ai-receipts.db")
+            with sqlite3.connect(receipts) as connection:
+                self.assertGreater(
+                    connection.execute("SELECT COUNT(*) FROM ai_receipt_events").fetchone()[0], 0
+                )
+
+    @unittest.skipUnless(
+        hasattr(signal, "pthread_sigmask") and hasattr(signal, "SIGTERM"),
+        "POSIX signal masking required",
+    )
+    def test_signal_during_terminal_receipt_write_never_leaves_it_running(self):
+        # One accepted event with a detection, whose log line is written only
+        # after its transaction commits; no reader polls the live database.
+        event = json.dumps(
+            {
+                "observed_at": "2026-01-01T00:00:00Z",
+                "src_ip": "8.8.8.8",
+                "dst_ip": "192.0.2.20",
+                "protocol": "DNS",
+                "src_port": 5353,
+                "dst_port": 53,
+                "dns_query_length": 80,
+                "byte_count": 300,
+            }
+        )
+        root = Path(__file__).resolve().parents[1]
+        cases = (
+            # A signal while the success receipt waits for another writer's lock.
+            ("finish", signal.SIGINT, 130, ("completed", "source_exhausted")),
+            ("finish", signal.SIGTERM, 143, ("completed", "source_exhausted")),
+            # Ctrl-C during intake, then again while the interrupted receipt waits.
+            ("double", signal.SIGINT, 130, ("failed", "interrupted")),
+        )
+        for mode, signum, expected_code, expected_receipt in cases:
+            with self.subTest(mode=mode, signum=signum), tempfile.TemporaryDirectory() as directory:
+                config, database = write_config(directory)
+                process = subprocess.Popen(
+                    [
+                        sys.executable, "-m", "megalodon", "run", "--config", str(config),
+                        "--source", "jsonl", "--max-events", "100",
+                    ],
+                    cwd=root,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                watchdog = Timer(30, process.kill)
+                watchdog.start()
+                holder = None
+                try:
+                    process.stdin.write(event + "\n")
+                    process.stdin.flush()
+                    self.assertIn("DNS_TUNNELING", process.stderr.readline())
+                    self.assertIsNone(process.poll())
+                    holder = sqlite3.connect(database, isolation_level=None)
+                    holder.execute("BEGIN IMMEDIATE")
+                    if mode == "finish":
+                        process.stdin.close()
+                    else:
+                        process.send_signal(signal.SIGINT)
+                    time.sleep(1.0)
+                    process.send_signal(signum)
+                    time.sleep(0.5)
+                    holder.execute("ROLLBACK")
+                    holder.close()
+                    holder = None
+                    self.assertEqual(process.wait(timeout=20), expected_code)
+                    output = process.stdout.read()
+                    error = process.stderr.read()
+                finally:
+                    watchdog.cancel()
+                    if holder is not None:
+                        holder.close()
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait()
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None and not stream.closed:
+                            stream.close()
+                self.assertEqual(output, "")
+                self.assertNotIn("Traceback", error)
+                self.assertIn("megalodon: ingestion interrupted", error)
+                connection = sqlite3.connect(database)
+                try:
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT status, termination_reason FROM ingestion_runs"
+                        ).fetchall(),
+                        [expected_receipt],
+                    )
+                finally:
+                    connection.close()
 
     def test_live_apply_cli_routes_refuse_before_config_host_or_process_work(self):
         def forbidden(*_args, **_kwargs):

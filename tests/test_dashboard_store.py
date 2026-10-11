@@ -8,6 +8,7 @@ from pathlib import Path
 import sqlite3
 import stat
 from threading import Event, Thread
+import time
 
 import pytest
 
@@ -678,6 +679,8 @@ def test_reader_refuses_mixed_sqlite_sidecars_without_connecting(tmp_path, monke
         raise AssertionError("mixed sidecars reached sqlite")
 
     monkeypatch.setattr(sqlite3, "connect", forbidden)
+    # A mixed set that outlasts the settle bound is refused.
+    monkeypatch.setattr(storage_module, "_DASHBOARD_SETTLE_SECONDS", 0.05)
     with pytest.raises(
         StorageSchemaError, match="^DASHBOARD_STORE:UNSAFE_SIDECAR_STATE$"
     ):
@@ -802,15 +805,18 @@ def test_writer_rejects_a_transient_public_sqlite_path_before_query(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory generation required")
-def test_writer_start_during_immutable_preflight_fails_closed(tmp_path, monkeypatch):
+def test_writer_start_during_immutable_preflight_is_never_served(tmp_path, monkeypatch):
     path = tmp_path / "private" / "audit.db"
     _seed(path)
     original_connect = sqlite3.connect
     concurrent_writer: sqlite3.Connection | None = None
+    immutable: list[sqlite3.Connection] = []
 
     def start_writer_during_preflight(database, *args, **kwargs):
         nonlocal concurrent_writer
         connection = original_connect(database, *args, **kwargs)
+        if "immutable=1" in str(database):
+            immutable.append(connection)
         if "immutable=1" in str(database) and concurrent_writer is None:
             concurrent_writer = original_connect(path)
             concurrent_writer.execute("PRAGMA journal_mode=WAL")
@@ -827,13 +833,112 @@ def test_writer_start_during_immutable_preflight_fails_closed(tmp_path, monkeypa
 
     monkeypatch.setattr(sqlite3, "connect", start_writer_during_preflight)
     try:
-        with pytest.raises(
-            StorageSchemaError, match="^DASHBOARD_STORE:DIRECTORY_CHANGED$"
-        ):
-            DashboardStore(path)
+        # The preflight attempt sees the writer's sidecars appear and is
+        # discarded; a fresh attempt validates them and serves WAL reads.
+        with DashboardStore(path) as reader:
+            assert reader.summary()["actions"] == 2
+        assert len(immutable) == 1
+        with pytest.raises(sqlite3.ProgrammingError):
+            immutable[0].execute("SELECT 1")
     finally:
         if concurrent_writer is not None:
             concurrent_writer.close()
+
+
+def _connect_changing_directory(monkeypatch, directory: Path, *, times: int | None):
+    """Patch sqlite3.connect to change the directory's entries, as another
+    opener's SQLite creating and removing a journal does."""
+
+    real_connect = sqlite3.connect
+    opened: list[sqlite3.Connection] = []
+
+    def changing_connect(*args, **kwargs):
+        if times is None or len(opened) < times:
+            journal = directory / f"audit.db-journal-{len(opened)}"
+            journal.touch()
+            journal.unlink()
+        connection = real_connect(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", changing_connect)
+    return opened
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory generation required")
+def test_reader_reopens_from_scratch_after_transient_directory_change(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "private" / "audit.db"
+    _seed(path)
+    opened = _connect_changing_directory(monkeypatch, path.parent, times=1)
+    with DashboardStore(path) as reader:
+        assert reader.summary()["actions"] == 1
+        served = reader._connection
+        # Every connection of the refused attempt was closed unserved.
+        for connection in opened:
+            if connection is not served:
+                with pytest.raises(sqlite3.ProgrammingError):
+                    connection.execute("SELECT 1")
+    assert len(opened) > 2
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory generation required")
+def test_reader_waits_out_a_momentarily_mixed_sidecar_set(tmp_path, monkeypatch):
+    path = tmp_path / "private" / "audit.db"
+    _seed(path)
+    wal = path.with_name(path.name + "-wal")
+    wal.write_bytes(b"")
+    wal.chmod(0o600)
+    real_sleep = storage_module.sleep
+    pauses = []
+
+    def writer_finishes_closing(seconds):
+        pauses.append(seconds)
+        if wal.exists():
+            wal.unlink()
+        real_sleep(seconds)
+
+    monkeypatch.setattr(storage_module, "sleep", writer_finishes_closing)
+    with DashboardStore(path) as reader:
+        assert reader.summary()["actions"] == 1
+    assert len(pauses) == 1
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory generation required")
+def test_reader_refuses_directory_change_that_persists_for_the_settle_bound(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "private" / "audit.db"
+    _seed(path)
+    monkeypatch.setattr(storage_module, "_DASHBOARD_SETTLE_SECONDS", 0.2)
+    opened = _connect_changing_directory(monkeypatch, path.parent, times=None)
+    started = time.monotonic()
+    with pytest.raises(
+        StorageSchemaError, match="^DASHBOARD_STORE:DIRECTORY_CHANGED$"
+    ):
+        DashboardStore(path)
+    assert 0.2 <= time.monotonic() - started < 5
+    assert len(opened) > 2
+    for connection in opened:
+        with pytest.raises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")
+
+
+def test_reader_does_not_retry_other_open_refusals(tmp_path, monkeypatch):
+    path = tmp_path / "private" / "audit.db"
+    _seed(path)
+    connection = sqlite3.connect(path)
+    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
+    connection.commit()
+    connection.close()
+    pauses = []
+    monkeypatch.setattr(storage_module, "sleep", pauses.append)
+    with pytest.raises(
+        StorageSchemaError, match="^DASHBOARD_STORE:INCOMPATIBLE_SCHEMA$"
+    ):
+        DashboardStore(path)
+    assert pauses == []
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory generation required")

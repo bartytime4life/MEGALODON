@@ -30,6 +30,11 @@ the store lock and refuses the write with the fixed
 is opened, no row ID is returned, and the writer does not purge, redirect,
 compress, upload, or silently discard evidence. Run-finalization writes remain
 available so a capacity-stopped intake can record a failed terminal receipt.
+The standalone `firewall-plan`, `firewall-install`, and `block` audit writes
+take the same stop: the command prints `megalodon: STORAGE_CAPACITY:HIGH_WATER`
+(or another fixed `STORAGE_CAPACITY` code), prints no plan, and exits 2. Other
+storage or I/O failures of those commands print a fixed path-free message and
+also exit 2.
 
 This is a preflight high-water control, not proof against a physical disk-full
 condition or a guarantee that filesystem growth cannot race the next write.
@@ -107,6 +112,18 @@ every served read must preserve the same parent directory-entry generation and
 path/descriptor identity. Use a dedicated database directory: any entry-level
 change, including an unrelated file rename, forces restart rather than letting
 SQLite retain an unlinked main or sidecar file.
+
+A writer opening or closing the same database creates and removes sidecar
+entries, so an open can observe a directory-generation change or a momentarily
+mixed WAL/SHM set. In that case only (`DIRECTORY_CHANGED` or
+`UNSAFE_SIDECAR_STATE` during the open), every connection of that attempt is
+closed unserved and the whole open sequence -- identity and sidecar validation,
+the preflight choice, fresh generation baselines, and the served-connection
+proofs -- is repeated after a short growing pause, for up to one second. The
+kept connection is always one whose own attempt passed every check, so a retry
+accepts nothing a single attempt would refuse. A change that persists for the
+whole bound still refuses, every other refusal is final, and served reads keep
+their per-read identity and generation checks.
 
 The served connection enables `PRAGMA query_only=ON` and installs a
 deny-by-default SQLite authorizer. It permits only `SELECT`, `count`, and reads

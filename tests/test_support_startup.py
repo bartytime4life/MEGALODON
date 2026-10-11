@@ -348,3 +348,53 @@ def test_cli_uses_configured_loopback_host(monkeypatch,configured,expected):
     monkeypatch.setattr(support_startup.os,'geteuid',lambda:1000)
     assert support_startup.main(['--check']) == 0
     assert requests == [('GET',None)]
+
+
+def _scripted_cli(monkeypatch, responses):
+    """A fake HUD connection that answers each request from a fixed script."""
+    requests = []
+    class Connection:
+        def __init__(self, host, port, timeout):
+            assert host == '127.0.0.1'
+        def request(self, method, path, **kw):
+            requests.append(method)
+        def getresponse(self):
+            status, body = responses.pop(0)
+            return SimpleNamespace(status=status, read=lambda limit: json.dumps(body).encode())
+        def close(self):
+            pass
+    monkeypatch.setattr('megalodon.config.load_settings', lambda path: Settings())
+    monkeypatch.setattr(support_startup, 'HTTPConnection', Connection)
+    monkeypatch.setattr(support_startup.os, 'getuid', lambda: 1000)
+    monkeypatch.setattr(support_startup.os, 'geteuid', lambda: 1000)
+    monkeypatch.setattr(support_startup.subprocess, 'run', lambda *a, **kw: pytest.fail('HUD is already up'))
+    return requests
+
+
+def test_cli_refused_start_does_not_report_an_earlier_job(monkeypatch, capsys):
+    earlier = {'schema':support_startup.SCHEMA,'state':'finished','token':'x'*32,
+               'items':[{'name':'Suricata','state':'running','message':'Service is already active.'}]}
+    requests = _scripted_cli(monkeypatch, [
+        (200, earlier),
+        (409, {'error':'support startup or tool maintenance is already in progress'}),
+        (200, earlier),
+    ])
+    assert support_startup.main([]) == 1
+    out, err = capsys.readouterr()
+    assert requests == ['GET', 'POST']
+    assert 'Support startup:' not in out and 'Suricata' not in out
+    assert err == ('Support startup not started: startup is already in progress or tool '
+                   'maintenance is running. Try again shortly.\n')
+
+
+@pytest.mark.parametrize('reply', [
+    [], 'finished', 7, None,
+    {'schema':support_startup.SCHEMA,'state':'idle','token':'x'*32,'items':{}},
+    {'schema':support_startup.SCHEMA,'state':'idle','token':'x'*32,'items':['Suricata']},
+])
+def test_cli_treats_a_non_hud_reply_shape_as_unexpected(monkeypatch, capsys, reply):
+    requests = _scripted_cli(monkeypatch, [(200, reply)])
+    assert support_startup.main(['--check']) == 2
+    assert requests == ['GET']
+    assert capsys.readouterr().err == (
+        'MEGALODON support startup unavailable: Update the local HUD before starting support apps.\n')

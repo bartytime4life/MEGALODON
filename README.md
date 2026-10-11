@@ -1089,7 +1089,10 @@ The static
 `run --max-events N` provides an accepted-event stop limit from 1 through 10,000,000.
 It is required for JSONL/stdin and Scapy sources; the repository-owned sample
 generator is finite and may omit it. Zero and missing limits on non-sample
-sources fail before the audit store or source is opened. Use `python -m megalodon --help` and
+sources fail before the audit store or source is opened. So do `--input` without
+the jsonl source, `--interface` without the scapy source, and `--demo-threat`
+without the sample source, whether the source comes from `--source` or the
+configuration. Use `python -m megalodon --help` and
 `python -m megalodon.offline --help` for the complete operational argument
 surface, and `megalodon-evaluate --help` for the separate evaluation surface.
 
