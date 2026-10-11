@@ -358,3 +358,65 @@ def test_managed_evidence_reader_keeps_the_writers_locks(tmp_path):
         writer.close()
     finally:
         manager.close()
+
+
+def _hide_proc_fd(monkeypatch):
+    """Make /proc/self/fd look unavailable to the storage helpers."""
+    real_access, real_chmod, real_open = os.access, os.chmod, os.open
+
+    def unavailable(path):
+        return str(path).startswith("/proc/self/fd/")
+
+    def access(path, mode, *args, **kwargs):
+        return False if unavailable(path) else real_access(path, mode, *args, **kwargs)
+
+    def chmod(path, mode, *args, **kwargs):
+        if unavailable(path):
+            raise FileNotFoundError(errno.ENOENT, "no /proc", str(path))
+        return real_chmod(path, mode, *args, **kwargs)
+
+    def open_(path, flags, *args, **kwargs):
+        if unavailable(path) and flags & getattr(os, "O_PATH", 0):
+            raise FileNotFoundError(errno.ENOENT, "no /proc", str(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(storage_module, "_proc_fd_available", lambda: False, raising=False)
+    monkeypatch.setattr(os, "access", access)
+    monkeypatch.setattr(os, "chmod", chmod)
+    monkeypatch.setattr(os, "open", open_)
+
+
+def test_without_proc_fd_storage_falls_back_to_plain_descriptors(tmp_path, monkeypatch):
+    # Without /proc/self/fd the O_PATH helpers cannot check access or change
+    # modes, so the plain readable/writable open is used, as before.
+    path = _private(tmp_path)
+    _hide_proc_fd(monkeypatch)
+    with Store(path) as store:
+        _action(store)
+    sidecar = path.with_name(path.name + "-journal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o644)
+    assert storage_module._validate_sqlite_sidecars(
+        path, None, writable=True, prefix="STORAGE_PATH"
+    ) == frozenset({"-journal"})
+    assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
+    sidecar.unlink()
+    with Store(path) as store:
+        assert store.summary()["actions"] == 1
+
+
+def test_failed_reopen_keeps_the_created_databases_descriptor(tmp_path, monkeypatch):
+    path = _private(tmp_path)
+    real_open = os.open
+
+    def refuse_reopen(target, flags, *args, **kwargs):
+        if str(target).startswith("/proc/self/fd/") and flags & os.O_PATH:
+            raise OSError(errno.EACCES, "refused", str(target))
+        return real_open(target, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", refuse_reopen)
+    with Store(path) as store:
+        _action(store)
+    monkeypatch.undo()
+    with Store(path) as store:
+        assert store.summary()["actions"] == 1
