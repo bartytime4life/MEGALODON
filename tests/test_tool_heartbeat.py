@@ -436,3 +436,24 @@ def test_qwen_model_is_unknown_without_a_visible_store(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_heartbeat.os, "stat", guarded)
     # A readable empty store plus an unreadable one cannot prove absence.
     assert tool_heartbeat._model_status(tmp_path / "home") == "unknown"
+
+
+def test_process_scan_stays_complete_when_unrelated_processes_exit_or_have_odd_names(tmp_path):
+    proc = _fake_proc(tmp_path / "proc", {42: ("osqueryd", 500), 4242: ("bash", 600), 77: ("shell", 700)})
+    (proc / "4242" / "comm").unlink()  # exited between the /proc listing and the open
+    (proc / "77" / "comm").write_bytes(b"caf\xe9\n")  # any local user can set a non-UTF-8 name
+    starts, complete = tool_heartbeat._process_starts(proc, frozenset({"osqueryd", "suricata"}))
+    assert complete is True
+    assert set(starts) == {"osqueryd"}
+
+
+def test_wanted_process_that_exits_mid_scan_is_simply_not_running(tmp_path):
+    proc = _fake_proc(tmp_path / "proc", {42: ("suricata", 500)})
+    (proc / "42" / "stat").unlink()
+    assert tool_heartbeat._process_starts(proc, frozenset({"suricata"})) == ({}, True)
+
+
+def test_unreadable_wanted_process_still_makes_the_scan_incomplete(tmp_path):
+    proc = _fake_proc(tmp_path / "proc", {42: ("suricata", 500)})
+    (proc / "42" / "stat").write_text("42 (suricata) S")
+    assert tool_heartbeat._process_starts(proc, frozenset({"suricata"})) == ({}, False)
