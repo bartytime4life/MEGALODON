@@ -223,7 +223,7 @@ def _load_manifest(paths: InstallPaths) -> dict[str, object] | None:
     raw = _regular_owned_file(paths.manifest, maximum=MAX_MANIFEST_BYTES)
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise InstallError("installation manifest is invalid") from exc
     expected = {
         "schema", "active_release", "previous_release", "version", "installed_at",

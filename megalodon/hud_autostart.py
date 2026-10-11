@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import stat
 import subprocess
 import sys
 
@@ -12,6 +13,10 @@ from .config import load_settings
 from .local_install import InstallError, InstallPaths, _atomic_write, _owned_directory, _regular_owned_file, install_paths, status
 
 UNIT = "megalodon-hud.service"
+# Distribution-owned user-unit directories. A root-owned type-wide `service.d/`
+# drop-in there (for example Fedora's 10-timeout-abort.conf) applies to every
+# user service and is not an override of this unit.
+VENDOR_UNIT_DIRS = ("/usr/lib/systemd/user", "/lib/systemd/user")
 
 
 def _unit_arg(value: Path) -> str:
@@ -32,6 +37,11 @@ def _unit_env(name: str, value: Path) -> str:
 def unit_path(paths: InstallPaths | None = None) -> Path:
     paths = install_paths() if paths is None else paths
     return paths.config.parent / "systemd" / "user" / UNIT
+
+
+def dropin_path(paths: InstallPaths | None = None) -> Path:
+    """`systemctl --user edit` overrides; they can replace ExecStart without touching the unit."""
+    return unit_path(paths).with_name(UNIT + ".d")
 
 
 def unit_contents(paths: InstallPaths | None = None) -> bytes:
@@ -56,14 +66,58 @@ def _systemctl(*args: str) -> None:
         raise InstallError("user service manager could not update HUD startup") from exc
 
 
+def _service_state() -> dict[str, str] | None:
+    """Ask the user manager which unit file it loaded; None when no manager answers."""
+    try:
+        result = subprocess.run(["systemctl", "--user", "show",
+                                 "--property=FragmentPath,DropInPaths,LoadState,ActiveState", UNIT],
+                                capture_output=True, encoding="utf-8", errors="surrogateescape", timeout=15, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    state = dict(line.partition("=")[::2] for line in result.stdout.splitlines())
+    if result.returncode or set(state) != {"FragmentPath", "DropInPaths", "LoadState", "ActiveState"}:
+        return None
+    return state
+
+
+def _vendor_type_wide(path: str) -> bool:
+    candidate = PurePosixPath(path)
+    if candidate.parent.name != "service.d" or str(candidate.parent.parent) not in VENDOR_UNIT_DIRS:
+        return False
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
+
+
+def loaded_dropins(state: dict[str, str] | None) -> bool:
+    """systemd also merges drop-ins from /etc, runtime and type-wide `service.d/` paths.
+
+    Only a root-owned, distribution-wide `service.d/` drop-in is tolerated;
+    any unit-specific, prefix, admin, runtime or user drop-in needs review.
+    """
+    return state is not None and any(not _vendor_type_wide(path) for path in state["DropInPaths"].split())
+
+
+def loaded_elsewhere(state: dict[str, str] | None, unit: Path, managed: bool) -> bool:
+    """The unit name is loaded from another file, or running without the managed file."""
+    return state is not None and (
+        (state["LoadState"] != "not-found" and state["FragmentPath"] != str(unit))
+        or (not managed and state["ActiveState"] not in {"inactive", "failed"}))
+
+
 def _prepare_unit() -> None:
     if status()[0] != 0:
         raise InstallError("install or repair the local HUD before enabling startup")
-    if load_settings(install_paths().settings).dashboard.host not in {"127.0.0.1", "::1"}:
-        raise InstallError("automatic HUD startup requires a loopback dashboard host")
+    # The HUD server binds IPv4 only; upgrade verification proves an IPv4 listener.
+    if load_settings(install_paths().settings).dashboard.host != "127.0.0.1":
+        raise InstallError("automatic HUD startup requires the IPv4 loopback dashboard host 127.0.0.1")
     unit = unit_path()
     expected = unit_contents()
     _owned_directory(unit.parent, private=False)
+    if os.path.lexists(dropin_path()) or loaded_dropins(_service_state()):
+        raise InstallError("a HUD startup drop-in override exists; preserve and review it")
     if os.path.lexists(unit):
         existing = _regular_owned_file(unit, maximum=8192)
         if existing != expected:
@@ -95,14 +149,23 @@ def validate_unit(paths: InstallPaths | None = None) -> bool:
     existing = _regular_owned_file(unit, maximum=8192)
     if existing != unit_contents(selected):
         raise InstallError("the existing HUD startup unit differs; preserve and review it")
+    if os.path.lexists(dropin_path(selected)):
+        raise InstallError("the existing HUD startup unit has a drop-in override; preserve and review it")
     return True
 
 
 def disable(paths: InstallPaths | None = None) -> None:
     selected = install_paths() if paths is None else paths
-    if not validate_unit(selected):
-        return
     unit = unit_path(selected)
+    managed = validate_unit(selected)
+    # A different XDG_CONFIG_HOME selects a different unit path; ask systemd.
+    state = _service_state()
+    if loaded_elsewhere(state, unit, managed):
+        raise InstallError("the HUD service is loaded from another unit file; stop and disable it there first")
+    if managed and loaded_dropins(state):
+        raise InstallError("the existing HUD startup unit has a drop-in override; preserve and review it")
+    if not managed:
+        return
     _systemctl("disable", "--now", UNIT)
     unit.unlink()
     _systemctl("daemon-reload")

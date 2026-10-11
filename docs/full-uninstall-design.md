@@ -69,9 +69,14 @@ never a recursive removal candidate: unrecognized children, custom Zeek
 installations, custom tool directories and external backups need their own
 ownership review. The release selector also needs verification against the
 manifest. A user service is a candidate only when its safe regular-file read
-matches the current manager's exact unit contents; modified, unrelated or
-unreadable units stay held for review. This identity check does not establish
-whether the service is running. No report is accepted as execution input, so an
+matches the current manager's exact unit contents and no
+`megalodon-hud.service.d/` drop-in directory exists; modified, unrelated or
+unreadable units stay held for review. A drop-in directory is listed as
+`hud_user_service_dropins` and is always held for review. This identity check
+does not establish whether the service is running, and it does not see drop-ins
+outside that directory; uninstall itself also refuses when the user service
+manager reports any loaded drop-in (`DropInPaths`). An unreadable or deeply
+nested manifest is reported as `managed_code_manifest_unavailable`, not a crash. No report is accepted as execution input, so an
 old plan cannot authorize a later action.
 
 Exit code 0 means the report was produced with no blocked/failed package
