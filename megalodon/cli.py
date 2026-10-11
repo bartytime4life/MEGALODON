@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 import errno
 import json
@@ -846,15 +846,20 @@ def _finish_run_receipt(store, run_id: int, reason: str, **kwargs):
             previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, _TERMINAL_SIGNALS)
         except (OSError, ValueError):
             previous_mask = None
+    # Without masking, the run's SIGTERM handler has already been restored by
+    # the time a terminal write runs; keep SIGTERM raising for the write so it
+    # takes the retry below instead of the default termination.
+    guard = _scoped_sigterm_interrupt() if previous_mask is None else nullcontext()
     try:
-        while True:
-            try:
-                receipt = store.finish_ingestion_run(run_id, reason, **kwargs)
-                break
-            except KeyboardInterrupt as exc:
-                if received is None:
-                    received = _interruption_signal(exc)
-                reason, kwargs = "interrupted", {}
+        with guard:
+            while True:
+                try:
+                    receipt = store.finish_ingestion_run(run_id, reason, **kwargs)
+                    break
+                except KeyboardInterrupt as exc:
+                    if received is None:
+                        received = _interruption_signal(exc)
+                    reason, kwargs = "interrupted", {}
     finally:
         if previous_mask is not None:
             deferred = _release_terminal_signals(previous_mask)
