@@ -89,7 +89,7 @@ def parse_inventory(addresses, routes, neighbors, stamp):
     """Turn bounded ip JSON into interface facts; a neighbor is not a flow."""
     if any(type(value) is not list for value in (addresses,routes,neighbors)):
         raise ValueError('Invalid local network response')
-    groups, nodes, edges, networks, known6 = {}, {}, [], [], set()
+    groups, nodes, edges, networks, known6, broadcast4 = {}, {}, [], [], set(), set()
     if len(addresses)>128 or len(routes)>2048 or len(neighbors)>4096:
         raise ValueError('Local network table exceeds bounds')
     for row in addresses:
@@ -107,6 +107,9 @@ def parse_inventory(addresses, routes, neighbors, stamp):
                 if _text(row.get('address'),32): item['mac']=row['address']
                 nodes[item['id']]=item
                 if _private(iface.network) and kind!='loopback': networks.append((iface.network,name))
+                # Every local IPv4 subnet's network/broadcast address, public ones
+                # included, is a broadcast destination rather than a device.
+                if iface.version==4 and kind!='loopback' and iface.network.prefixlen<=30: broadcast4.update((iface.network.network_address,iface.network.broadcast_address))
         except (KeyError,ValueError,TypeError,AttributeError):
             continue
     for row in routes:
@@ -138,7 +141,7 @@ def parse_inventory(addresses, routes, neighbors, stamp):
             nodes[item['id']]=item
             if address.version==6: known6.add((str(address),name))
         except (KeyError,ValueError,TypeError): continue
-    return dict(groups=groups,nodes=nodes,edges=list({row['id']:row for row in edges}.values()),networks=networks,known6=known6)
+    return dict(groups=groups,nodes=nodes,edges=list({row['id']:row for row in edges}.values()),networks=networks,known6=known6,broadcast4=broadcast4)
 
 
 def discovery_jobs(scopes, inventory, *, on_link=True):
@@ -372,7 +375,7 @@ class NetworkTopology:
             devices=_filtered(self._current()[2],'devices','','')
             stamp=_now()
             for offset in range(0,len(devices),200):
-                self.evidence.append_records('network',[dict(observed_at=stamp,source='network-device-observation',data=dict(node=node,window_seconds=60,coverage='Sensor-visible traffic only; window counters overlap across observations.')) for node in devices[offset:offset+200]])
+                self.evidence.append_records('network',[dict(observed_at=stamp,source='network-device-observation',data=dict(node=node,pass_devices=len(devices),window_seconds=60,coverage='Sensor-visible traffic only; window counters overlap across observations.')) for node in devices[offset:offset+200]])
             self._persistence=dict(state='saved',last_saved_at=stamp,message='Device observations saved at most once per minute under Storage & history limits.')
         except (OSError,ValueError,TypeError):
             self._persistence=dict(state='error',last_saved_at=self._persistence['last_saved_at'],message='Network history could not be saved. Check managed storage; current observations remain visible.')
@@ -430,7 +433,7 @@ class NetworkTopology:
         groups.setdefault('unattributed',dict(id='unattributed',label='Observed peers / route unknown',kind='other'))
         # Broadcast destinations are not devices: the limited broadcast and the
         # network/broadcast addresses of each local IPv4 subnet (/30 or wider).
-        refused={ip_address('255.255.255.255')}
+        refused={ip_address('255.255.255.255'),*inventory.get('broadcast4',())}
         for network,_name in inventory['networks']:
             if network.version==4 and network.prefixlen<=30: refused.update((network.network_address,network.broadcast_address))
         for flow in live.get('connections',[])[:128]:
