@@ -1071,7 +1071,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         # Validate the support action before choosing its lock policy. Cancellation
         # must be reachable while a synchronous compatibility AI request owns it.
-        if self.path in {'/api/support-config', '/api/ai/cancel'}:
+        # Sign-in changes only login state, which its own login lock serializes,
+        # so a long local operation must not turn a correct password into a 409.
+        if (self.path in {'/api/support-config', '/api/ai/cancel'}
+                or (self.path == '/sign-in' and self._sign_in_enabled())):
             self._dispatch_POST()
             return
         if self.path in {'/api/storage', '/api/network'}:
