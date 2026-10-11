@@ -10,7 +10,7 @@ operator-invoked:
 
 | Lane | v1 shape | Explicitly absent |
 | --- | --- | --- |
-| Threat context | Implemented `read_completed_bundle` API for one operator-supplied, completed STIX 2.1 JSON bundle with an exact SHA-256 digest; at most 16 MiB, 4,096 objects, 32 levels of nesting, and 15 seconds | TAXII, HTTP, credentials, automatic refresh, STIX pattern execution, persistence, attribution, blocking, model input, or detection authority |
+| Threat context | Implemented `read_completed_bundle` API for one operator-supplied, completed STIX 2.1 JSON bundle with an exact SHA-256 digest; at most 16 MiB, 4,096 objects, 32 levels of nesting, 1,000,000 JSON structural tokens, and 15 seconds | TAXII, HTTP, credentials, automatic refresh, STIX pattern execution, persistence, attribution, blocking, model input, or detection authority |
 | SIEM export | Implemented `to_ecs_record` / `to_ocsf_record` / `write_export` API projecting one already-accepted event/detection pair into a new local file containing at most 10,000 records and 16 MiB under fixed ECS 9.5.0 or OCSF 1.9.0 projection profiles | Network delivery, collector/agent control, credentials, `event.original`, payloads, raw log bodies, or acknowledgement |
 | SOAR handoff | An inert local handoff that can only say `destination_class=not_configured`, `max_attempts=0`, and `status=not_attempted` | Endpoint, webhook, token, retry, scheduler, playbook, case mutation, host action, firewall action, or model authority |
 
@@ -91,6 +91,7 @@ The contract tests validate the closed schema, exact three-lane vocabulary,
 fixed limits, and negative fixtures for live TAXII, network SIEM delivery/raw
 retention, and active SOAR behavior. The reader tests additionally exercise
 digest, file identity/mode/owner/link, UTF-8, duplicate-key, numeric, depth,
+structural-token, control/format/surrogate text, validity-interval,
 object-count, marking-resolution, immutability, deadline, output, and no-side-
 effect boundaries. `tests/test_siem_export.py` additionally validates every
 projected ECS/OCSF record against `schema.json`, that neither profile ever
