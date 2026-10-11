@@ -214,6 +214,21 @@ def test_zeek_checkpoint_follows_while_suricata_is_primary_so_flap_back_does_not
     assert worker.snapshot()['imported_flows']==9
 
 
+def test_an_idle_zeek_follow_poll_does_not_hide_the_primary_backlog(evidence,tmp_path):
+    eve_path=tmp_path/'eve.json'
+    worker=reader(evidence,eve_path)
+    zeek_path=worker.paths['zeek'];zeek_path.parent.mkdir(parents=True)
+    write(zeek_path,[zeek(1)]);write(eve_path,[eve(1)])
+    worker._select_at=0;worker._cycle()
+    assert worker._primary==('suricata','file')
+    # More EVE input arrives than one read takes; the quiet Zeek file polled
+    # after it must not report the loop as drained.
+    write(eve_path,[eve(i) for i in range(2,2000)],'a')
+    worker._select_at=0;worker._cycle()
+    assert worker._primary==('suricata','file')
+    assert worker.snapshot()['backlog_bytes']>0
+
+
 def test_rejected_sensor_lines_cannot_poison_following_valid_records(evidence,tmp_path):
     path=tmp_path/'eve.json';bad=eve(2);bad['proto']={'unexpected':'object'}
     write(path,[eve(1),bad,{'event_type':'stats'},eve(3)])

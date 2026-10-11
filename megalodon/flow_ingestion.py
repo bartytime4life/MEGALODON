@@ -152,7 +152,7 @@ class FlowIngestor:
         self._lock=Lock();self._work_lock=RLock();self._stop=Event();self._thread=None
         self._state=dict(state='stopped',source=None,source_detail=None,accepted=0,rejected=0,imported_flows=0,imported_findings=0,
                          backlog_bytes=0,rotations=0,gaps=0,sampling_gaps=0,samples=0,updated_at=None,message='Flow collection is stopped.')
-        self._positions={};self._primary=None;self._select_at=0
+        self._positions={};self._backlog={};self._primary=None;self._select_at=0
 
     def snapshot(self):
         with self._lock:
@@ -257,7 +257,7 @@ class FlowIngestor:
             split=raw.find(b'\n')
             if split<0:
                 self._checkpoint(source,dict(identity=identity,offset=offset+len(raw),discarding=True))
-                with self._lock:self._state['backlog_bytes']=max(0,info.st_size-offset-len(raw))
+                with self._lock:self._set_backlog(source,max(0,info.st_size-offset-len(raw)))
                 return 0
             offset+=split+1;raw=raw[split+1:]
         end=raw.rfind(b'\n')
@@ -283,7 +283,7 @@ class FlowIngestor:
             self._checkpoint(source,dict(identity=identity,offset=offset,discarding=True))
             with self._lock:self._state['gaps']+=1
         with self._lock:
-            self._state.update(updated_at=utc(),backlog_bytes=max(0,info.st_size-offset))
+            self._state.update(updated_at=utc());self._set_backlog(source,max(0,info.st_size-offset))
             if has_flows and (self._primary is None or self._primary==(source,'file')):
                 self._state.update(state='connected',message='Source-qualified metadata is retained; input rotations and skipped intervals are reported as gaps.')
             if self._state['source'] is None:
@@ -291,6 +291,11 @@ class FlowIngestor:
                 if not has_flows:self._state.update(state='waiting',message='Waiting for connection summaries. Sensor findings are retained separately when available.')
             self._state['rejected']+=rejected
         return accepted
+
+    def _set_backlog(self,source,value):
+        # Each cycle polls the primary and a secondary file; the busiest source sets
+        # the poll pace, so one quiet file cannot slow draining of another.
+        self._backlog[source]=value;self._state['backlog_bytes']=max(self._backlog.values())
 
     def _commit(self,source,category,batch,checkpoint):
         try:
