@@ -325,10 +325,19 @@ class SupportConfiguration:
                 self._cancel_capture_start = True
                 was_enabled = self._background_enabled
                 self._background_enabled = False
-            self.background.stop()
-            self.sensors.stop()
-            if was_enabled:
-                self._save()
+            # A slow capture shutdown still reports its error, but the user's stop
+            # is persisted so the next launch does not resume collection. The
+            # first failure is the one reported; later cleanup still runs.
+            error = None
+            for step in (self.background.stop, self.sensors.stop, self._save if was_enabled else None):
+                if step is None:
+                    continue
+                try:
+                    step()
+                except BaseException as exc:
+                    error = error or exc
+            if error is not None:
+                raise error
             self._tool('capture', 'ready', 'HUD capture stopped; stored metadata remains available.')
             with self._lock:
                 if self._job['state'] != 'running':

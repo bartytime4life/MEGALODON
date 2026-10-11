@@ -509,6 +509,31 @@ def test_failed_sensor_cleanup_still_stops_the_monitor(manager,monkeypatch):
     assert not manager.profile.exists() or json.loads(manager.profile.read_text())['background_enabled'] is False
 
 
+def test_slow_capture_shutdown_still_persists_background_stop(manager,monkeypatch):
+    manager._save(background_enabled=True)
+    stopped=[]
+    def overrun():raise ValueError('Capture shutdown has not completed; check status again.')
+    monkeypatch.setattr(manager.background,'stop',overrun)
+    monkeypatch.setattr(manager.sensors,'stop',lambda:stopped.append('sensors'),raising=False)
+    with pytest.raises(ValueError,match='shutdown has not completed'):
+        manager.start({'action':'background_stop'})
+    assert stopped==['sensors'] and manager._background_enabled is False
+    assert json.loads(manager.profile.read_text())['background_enabled'] is False
+    assert config.SupportConfiguration(manager.settings,home=manager.home)._background_enabled is False
+
+
+def test_slow_capture_shutdown_error_survives_a_later_cleanup_failure(manager,monkeypatch):
+    manager._save(background_enabled=True)
+    def overrun():raise ValueError('Capture shutdown has not completed; check status again.')
+    def sensors_fail():raise OSError('sensor stop failed')
+    monkeypatch.setattr(manager.background,'stop',overrun)
+    monkeypatch.setattr(manager.sensors,'stop',sensors_fail,raising=False)
+    # The capture diagnostic is the one reported, and the stop is still saved.
+    with pytest.raises(ValueError,match='shutdown has not completed'):
+        manager.start({'action':'background_stop'})
+    assert json.loads(manager.profile.read_text())['background_enabled'] is False
+
+
 def test_concurrent_stop_keeps_the_saved_collector_scope(manager,monkeypatch):
     manager._save(background_enabled=True)
     configure=manager.companions.configure
