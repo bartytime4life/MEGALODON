@@ -212,6 +212,10 @@ def parse_discovery(raw, target, interface, stamp):
     return result
 
 
+def _filtered(rows, view, query, group):
+    return [r for r in rows[:MAX_NODES] if (view=='all' or r.get('on_link',True)) and (not group or r['group']==group) and (not query or query.casefold() in (r['ip']+' '+r['name']+' '+r['interface']+' '+str(r['mac'] or '')+' '+json.dumps(r['names'])+' '+json.dumps(r['services'])).casefold())]
+
+
 class NetworkTopology:
     def __init__(self,configuration,operations,*,home=None,run=_run_fixed,evidence=None):
         self.configuration,self.operations,self.run,self.evidence=configuration,operations,run,evidence
@@ -363,13 +367,12 @@ class NetworkTopology:
         try:
             if not self.evidence.enabled:
                 self._persistence.update(state='disabled',message='Enable managed history in Setup to retain device observations.');return
-            first=self.snapshot(include_token=False,limit=200,view='devices')
-            rows=[];stamp=_now()
-            for offset in range(0,min(first['total'],MAX_NODES),200):
-                page=first if offset==0 else self.snapshot(include_token=False,limit=200,offset=offset,view='devices')
-                rows.extend(dict(observed_at=stamp,source='network-device-observation',data=dict(node=node,window_seconds=60,coverage='Sensor-visible traffic only; window counters overlap across observations.')) for node in page['nodes'])
-                if rows:self.evidence.append_records('network',rows)
-                rows=[]
+            # One overlay for the whole pass: response-size trimming in
+            # snapshot() must not skip devices, and batches must not shift.
+            devices=_filtered(self._current()[2],'devices','','')
+            stamp=_now()
+            for offset in range(0,len(devices),200):
+                self.evidence.append_records('network',[dict(observed_at=stamp,source='network-device-observation',data=dict(node=node,window_seconds=60,coverage='Sensor-visible traffic only; window counters overlap across observations.')) for node in devices[offset:offset+200]])
             self._persistence=dict(state='saved',last_saved_at=stamp,message='Device observations saved at most once per minute under Storage & history limits.')
         except (OSError,ValueError,TypeError):
             self._persistence=dict(state='error',last_saved_at=self._persistence['last_saved_at'],message='Network history could not be saved. Check managed storage; current observations remain visible.')
@@ -381,15 +384,22 @@ class NetworkTopology:
         result=[];gaps=[];next_cursor=cursor;scanned=0
         if self.evidence is None or not self.evidence.enabled:return dict(schema='megalodon-device-history-v1',records=[],next_cursor=None,truncated=False,gaps=['Managed history unavailable.'])
         while scanned<500 and len(result)<limit:
-            page=self.evidence.history(category='network',limit=min(100,limit-len(result)),cursor=next_cursor)
+            # Fixed pages; filtering is client-side, so shrinking pages to the
+            # remaining limit would multiply reads.
+            page=self.evidence.history(category='network',limit=100,cursor=next_cursor)
             scanned+=len(page['records']);gaps.extend(page['gaps'])
-            for record in page['records']:
+            for index,record in enumerate(page['records']):
                 data=record['data'];nodes=[data['node']] if record['source']=='network-device-observation' and isinstance(data.get('node'),dict) else data.get('nodes',[])
                 for node in nodes[:200]:
                     if node.get('ip')==address and (not interface or node.get('interface')==interface):
                         result.append(dict(id=record['id'],observed_at=record['observed_at'],source=record['source'],node=node));break
-            next_cursor=page['next_cursor']
-            if not next_cursor or not page['records']:break
+                if len(result)>=limit and index+1<len(page['records']):
+                    # Resume right after the last examined record.
+                    scanned-=len(page['records'])-index-1
+                    next_cursor=record['id'];break
+            else:
+                next_cursor=page['next_cursor']
+            if len(result)>=limit or not next_cursor or not page['records']:break
         while result and len(json.dumps(result).encode())>240*1024:
             result.pop()
             next_cursor=result[-1]['id'] if result else cursor
@@ -418,13 +428,21 @@ class NetworkTopology:
         selected=live.get('capture',{}).get('interface')
         if selected not in groups: selected='unattributed'
         groups.setdefault('unattributed',dict(id='unattributed',label='Observed peers / route unknown',kind='other'))
+        # Broadcast destinations are not devices: the limited broadcast and the
+        # network/broadcast addresses of each local IPv4 subnet (/30 or wider).
+        refused={ip_address('255.255.255.255')}
+        for network,_name in inventory['networks']:
+            if network.version==4 and network.prefixlen<=30: refused.update((network.network_address,network.broadcast_address))
         for flow in live.get('connections',[])[:128]:
             pair=[]
             try:
                 ab,ba=flow['a_to_b'],flow['b_to_a']
-                for side in ('a','b'):
-                    endpoint=flow[side];parsed=ip_address(endpoint['ip']);address=str(parsed)
-                    if parsed.is_unspecified or parsed.is_multicast:raise ValueError('Not a unicast device')
+                # Refuse the whole flow before either side's counters change.
+                endpoints=[(side,flow[side],ip_address(flow[side]['ip'])) for side in ('a','b')]
+                if any(parsed.is_unspecified or parsed.is_multicast or parsed in refused for _side,_endpoint,parsed in endpoints):
+                    raise ValueError('Not a unicast device')
+                for side,endpoint,parsed in endpoints:
+                    address=str(parsed)
                     matches=[row for row in nodes.values() if row['ip']==address and (not endpoint.get('local') or row['role']=='pc')]
                     row=next((r for r in matches if r['interface']==selected),matches[0] if matches else None)
                     if row is None:
@@ -467,26 +485,31 @@ class NetworkTopology:
             if local: edges.append(dict(id='known-'+row['id'],source=local['id'],target=row['id'],kind='discovered',sent_bytes=None,received_bytes=None,active=False))
         return inventory,bool(live.get('totals',{}).get('truncated'))
 
-    def snapshot(self,include_token=True,offset=0,limit=50,query='',group='',view='devices'):
-        if view not in {'devices','all'}:raise ValueError('Choose devices or all peers')
-        if type(offset) is not int or not 0<=offset<=MAX_NODES or type(limit) is not int or not 1<=limit<=200 or type(query) is not str or len(query)>128 or type(group) is not str or len(group)>32:
-            raise ValueError('Invalid topology page')
+    def _current(self):
+        """One consistent overlay of inventory, discovery and live context."""
         with self._lock:
             inventory=deepcopy(self._inventory)
             # Identities stay for a day even when no discovery run prunes them
             # (discovery off, or a saved scope that no longer validates).
             discovered={key:deepcopy(node) for key,node in self._discovered.items() if _recent(node,time.time())}
             settings=deepcopy(self._settings);discovery=deepcopy(self._discovery)
-            stamp,state,message,coverage=self._observed_at,self._state,self._message,list(self._coverage)
+            meta=(settings,discovery,self._observed_at,self._state,self._message,list(self._coverage))
+        inventory,flow_partial=self._overlay(inventory,discovered)
+        rows=sorted(inventory['nodes'].values(),key=lambda r:(r['role']!='pc',r['role']!='gateway',not r.get('on_link',True),not r['discovered'],not r['observed'],r['group'],r['ip']))
+        return inventory,flow_partial,rows,meta
+
+    def snapshot(self,include_token=True,offset=0,limit=50,query='',group='',view='devices'):
+        if view not in {'devices','all'}:raise ValueError('Choose devices or all peers')
+        if type(offset) is not int or not 0<=offset<=MAX_NODES or type(limit) is not int or not 1<=limit<=200 or type(query) is not str or len(query)>128 or type(group) is not str or len(group)>32:
+            raise ValueError('Invalid topology page')
+        inventory,flow_partial,rows,(settings,discovery,stamp,state,message,coverage)=self._current()
         available=[]
         for network,interface in inventory['networks']:
             if network.version==4: available.append(dict(cidr=str(network),interface=interface,label=f'{interface} · on-link IPv4'))
         for address,interface in sorted(inventory['known6']):
             network=ip_network(address+'/128')
             if _private(network): available.append(dict(cidr=str(network),interface=interface,label=f'{interface} · known IPv6 peer'))
-        inventory,flow_partial=self._overlay(inventory,discovered)
-        rows=sorted(inventory['nodes'].values(),key=lambda r:(r['role']!='pc',r['role']!='gateway',not r.get('on_link',True),not r['discovered'],not r['observed'],r['group'],r['ip']))
-        filtered=[r for r in rows[:MAX_NODES] if (view=='all' or r.get('on_link',True)) and (not group or r['group']==group) and (not query or query.casefold() in (r['ip']+' '+r['name']+' '+r['interface']+' '+str(r['mac'] or '')+' '+json.dumps(r['names'])+' '+json.dumps(r['services'])).casefold())]
+        filtered=_filtered(rows,view,query,group)
         selected=filtered[offset:offset+limit];ids={r['id'] for r in selected}
         edges=[r for r in inventory['edges'] if r['source'] in ids and r['target'] in ids][:1024]
         value=dict(schema=SCHEMA,view=view,persistence=deepcopy(self._persistence),observed_at=stamp,state=state,message=message,settings=settings,available_scopes=available[:MAX_SCOPES],

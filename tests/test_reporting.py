@@ -107,6 +107,48 @@ def test_resource_sample_formats_match_host_sampler(report_service):
     assert 'eth0' in report_service.download(value['id'],'html')[1].decode()
 
 
+def test_per_device_topology_rows_form_the_latest_bounded_map(report_service,tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    import megalodon.network_topology as topology
+    addresses=[dict(ifname='eth0',address='02:00:00:00:00:01',addr_info=[dict(local='192.168.2.10',prefixlen=24)])]
+    neighbors=[dict(dev='eth0',dst=f'192.168.2.{n}',state=['REACHABLE']) for n in (20,21,22,23,24,99)]
+    def run(argv,limit,timeout,cancel):
+        return json.dumps(addresses if 'address' in argv else neighbors if 'neigh' in argv else []).encode(),0
+    home=tmp_path/'network';home.mkdir(mode=0o700)
+    network=topology.NetworkTopology(SimpleNamespace(live_snapshot=lambda:dict(capture={},connections=[],totals={})),SimpleNamespace(snapshot=lambda:{}),
+                                     home=home,run=run,evidence=report_service.evidence)
+    try:
+        for age in (600,120):  # An earlier pass's departed device stays out of the latest map.
+            monkeypatch.setattr(topology,'_now',lambda age=age:utc(report_service.clock()-age))
+            network._refresh_passive();network._persist_observations()
+            neighbors.pop()
+    finally:network.close()
+    expected=['192.168.2.10']+[f'192.168.2.{n}' for n in range(20,25)]
+    value=make(report_service)
+    assert value['summary']['network_samples']==13
+    assert value['network']['observed_at']==utc(report_service.clock()-120)
+    assert [n['ip'] for n in value['network']['data']['nodes']]==expected
+    assert not any('topology snapshot was unavailable' in g for g in value['coverage']['gaps'])
+    assert value['coverage']['aggregation_complete']
+    html=report_service.download(value['id'],'html')[1].decode()
+    section=html[html.index('Latest retained network map'):]
+    assert 'No retained topology nodes.' not in section
+    assert all(ip in section for ip in expected[1:]) and '192.168.2.99' not in html
+    assert json.loads(report_service.download(value['id'],'json')[1])['network']['data']['nodes'][1]['ip']=='192.168.2.20'
+    monkeypatch.setattr('megalodon.reporting.MAX_NETWORK_NODES',3)
+    value=make(report_service)
+    assert [n['ip'] for n in value['network']['data']['nodes']]==expected[:3]
+    assert any('network map is limited to 3 devices' in g for g in value['coverage']['gaps'])
+    assert not value['coverage']['aggregation_complete']
+
+
+def test_legacy_topology_snapshot_rows_still_render(report_service):
+    add(report_service,'network',dict(nodes=[dict(id='ip-legacy',ip='192.168.5.5',name='Legacy printer',interface='eth0',role='device')],edges=[]),source='network-topology',age=300)
+    value=make(report_service)
+    assert value['network']['data']['nodes'][0]['name']=='Legacy printer'
+    assert 'Legacy printer' in report_service.download(value['id'],'html')[1].decode()
+
+
 def test_report_integrity_and_source_expiry(report_service):
     add(report_service,'network',{'nodes':[]},age=86400)
     value=make(report_service)
