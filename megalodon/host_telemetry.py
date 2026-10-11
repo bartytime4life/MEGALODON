@@ -88,6 +88,7 @@ def _sockets(root: Path) -> dict:
         ipv6 = (root / "net" / "if_inet6").exists() or (root / "sys" / "net" / "ipv6").exists()
     except OSError:
         ipv6 = True
+    absent_v6 = set()
     for filename in ("tcp", "tcp6", "udp", "udp6"):
         try:
             lines = _read(root / "net" / filename, 2 * 1024 * 1024).splitlines()[1:]
@@ -109,8 +110,11 @@ def _sockets(root: Path) -> dict:
         except FileNotFoundError:
             if ipv6 or not filename.endswith("6"):
                 complete = False  # Without an IPv6 stack an absent v6 table holds zero sockets.
+            absent_v6.add(filename)
         except (OSError, ValueError, IndexError, UnicodeError):
             complete = False
+    if len(absent_v6 & {"tcp6", "udp6"}) == 1:
+        complete = False  # A readable v6 table proves the stack exists; its sibling is missing, not empty.
     # Partial socket tables must not silently become zero measured totals.
     return {"status": "ready" if complete else "unavailable",
             **(counts if complete else dict.fromkeys(counts)),
