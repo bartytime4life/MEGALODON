@@ -278,7 +278,10 @@ The pure builder does not truncate. If a selected projection exceeds its byte
 or node budget, the adapter removes records from the end until it fits and sets
 `coverage.truncated`. Hitting either read/selection bound also sets that flag
 conservatively. Coverage always declares `incomplete_window`; source errors or
-withheld malformed rows add `source_gap`. No comparison or reference-library
+withheld malformed rows add `source_gap`. A verified `packet_rollups` summary
+overlapping the window also adds `source_gap` (and the `incomplete_hours`
+comparison reason): its conversation fragments are not individual observations,
+so compacted packet detail is reported missing, not as no records. No comparison or reference-library
 claim is supplied on this generic observation path. A context without qualified
 protocol/detail evidence skips inference and reports `insufficient_context`.
 

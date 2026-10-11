@@ -609,6 +609,9 @@ not evidence of an empty successful result.
 
 History v2 excludes sample/unlinked/unqualified core rows. Original packet rows
 and verified compact conversations are mutually exclusive per source segment.
+Segments are paged in creation order, and a compact summary keeps its source
+segment's position, so a cursor taken before compaction finished does not
+revisit that source's packets through its later summary.
 Its half-open UTC interval is `[start,end)`. A conversation crossing a requested
 boundary is marked `partial_interval`, not counted as fully observed within it.
 The envelope carries `range`, `source_segments`, `candidate_count`, `next_cursor`,

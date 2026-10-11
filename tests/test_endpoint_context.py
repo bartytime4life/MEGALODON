@@ -371,3 +371,22 @@ def test_background_tick_leaves_pending_endpoint_review_to_its_request(service):
     result=service.explain_device('192.0.2.8')
     assert result['analysis_state']=='ready' and priorities==['manual']
     assert not service.evidence.checkpoint('patterns_ai_budget') and service.job['state']=='idle'
+
+
+def test_compacted_packet_detail_is_reported_as_a_source_gap(tmp_path):
+    from test_packet_compaction import _source, _compact
+    tmp_path.chmod(0o700)
+    clock=[NOW]
+    evidence=EvidenceStorage(Settings(db_path=tmp_path/'old.db'),home=tmp_path,clock=lambda:clock[0],monotonic=lambda:clock[0])
+    try:
+        evidence.apply(evidence.preview(dict(profile='home',retention_days=14,cap_bytes=GIB))['preview_id'])
+        _source(evidence,with_finding=False,count=20)
+        clock[0]+=60
+        before=retained_context(evidence,'10.0.0.2',clock[0],comparison_reason='no_baseline')
+        assert before['groups'] and 'source_gap' not in before['coverage']['missing']
+        _compact(evidence)
+        # Raw detail is hidden behind a verified summary; it is not "no records".
+        context=retained_context(evidence,'10.0.0.2',clock[0],comparison_reason='no_baseline')
+        assert context['groups']==[] and 'source_gap' in context['coverage']['missing']
+        assert context['comparison']==dict(state='unavailable',reason='incomplete_hours')
+    finally:evidence.close()

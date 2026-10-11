@@ -23,9 +23,14 @@ class RetainedEvidenceReader:
         history_parameters(start, end)
         first, last = epoch(start), epoch(end)
         sources, gaps = self._sources(first, last,watermarks=False)
+        # A summary keeps its source segment's position, so a cursor taken
+        # before compaction finished never revisits the source's packets.
+        with self.evidence.lock:
+            created = {e['id']:e['created_at'] for e in self.evidence._catalog['entries']}
         sources = sorted([(e, maximum) for e, maximum in sources
                           if e['category'] in {'packets','packet_rollups','flows','findings'}],
-                         key=lambda row:(row[0]['created_at'],row[0]['id']))
+                         key=lambda row:(row[0].get('source_created_at') or created.get(row[0].get('source_segment'))
+                                         or row[0]['created_at'],row[0]['id']))
         after = 0
         if cursor is not None:
             if not isinstance(cursor,str) or not re.fullmatch(r'[a-f0-9]{32}:[0-9]{1,19}',cursor):

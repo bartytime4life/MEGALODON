@@ -22,6 +22,31 @@ def test_history_reaches_multiple_segments_without_recounting_compact_copy(manag
     assert len(ids)==len(set(ids))
 
 
+def test_history_cursor_does_not_recount_source_compacted_mid_paging(manager):
+    start=utc(manager.clock()-60)
+    first=_source(manager,count=200)
+    manager.test_clock[0]+=1
+    _source(manager,count=5,with_finding=False)
+    second=next(e for e in manager._catalog['entries'] if e['category']=='packets' and e['id']!=first['id'])
+    manager.test_clock[0]+=1  # The summary is created after the next raw segment.
+    reader=RetainedEvidenceReader(manager)
+    cursor=None;count=0;ids=[]
+    for _ in range(20):
+        page=reader.history_page(start,utc(manager.clock()+1),cursor)
+        for row in page['records']:
+            if row['data'].get('kind') in {'packet_v1','conversation_v1'}:
+                count+=row['data']['packet_count'];ids.append(row['id'])
+        cursor=page['next_cursor']
+        if cursor and cursor.startswith(second['id']) and first.get('compaction_state')!='complete':
+            for _ in range(100):  # Only the earlier segment finishes.
+                if first.get('compaction_state')=='complete' or not manager.compact_step():break
+            rollup=next(e for e in manager._catalog['entries'] if e['category']=='packet_rollups')
+            assert rollup['created_at']>second['created_at']
+        if cursor is None:break
+    assert first['compaction_state']=='complete'
+    assert count==205 and len(ids)==len(set(ids))
+
+
 def test_history_expired_cursor_and_invalid_query_are_explicit(manager):
     reader=RetainedEvidenceReader(manager)
     page=reader.history_page(utc(manager.clock()-60),utc(manager.clock()),'f'*32+':12')

@@ -383,19 +383,23 @@ class EvidenceStorage:
         # leaves a known, protected unit instead of an unaccounted file.
         self._save()
         if kind=='generic':
-            try:
-                with self._db(entry,write=True) as db:
-                    db.execute('PRAGMA journal_mode=WAL')
-                    db.execute('CREATE TABLE records(id INTEGER PRIMARY KEY,observed_at TEXT NOT NULL,recorded_at TEXT NOT NULL,source TEXT NOT NULL,data TEXT NOT NULL)')
-                    db.execute('CREATE INDEX records_time ON records(observed_at)')
-                    if category=='reports':
-                        db.execute('CREATE INDEX reports_source ON records(source,id)')
-                    db.execute('CREATE TABLE checkpoints(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
-                    db.commit()
+            try:self._schema(entry)
             except BaseException:
                 entry['state']='needs_review';self._save()
                 raise
         return entry
+
+    def _schema(self,entry):
+        # Idempotent: a building summary registered just before a crash may have
+        # no or partial schema. No records exist until checkpoints is created.
+        with self._db(entry,write=True) as db:
+            db.execute('PRAGMA journal_mode=WAL')
+            db.execute('CREATE TABLE IF NOT EXISTS records(id INTEGER PRIMARY KEY,observed_at TEXT NOT NULL,recorded_at TEXT NOT NULL,source TEXT NOT NULL,data TEXT NOT NULL)')
+            db.execute('CREATE INDEX IF NOT EXISTS records_time ON records(observed_at)')
+            if entry['category']=='reports':
+                db.execute('CREATE INDEX IF NOT EXISTS reports_source ON records(source,id)')
+            db.execute('CREATE TABLE IF NOT EXISTS checkpoints(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
+            db.commit()
 
     def _working_bytes(self):
         # Only the fixed private Zeek temporary workspace is accounted here.
@@ -469,10 +473,21 @@ class EvidenceStorage:
             if not extra:return result
             result+=extra;removed.update(e['id'] for e in extra)
 
+    def _abandoned(self,entry,policy):
+        # Age still bounds a source whose summary never finished (for example a
+        # build that keeps failing). Its detail then follows normal retention.
+        return self._expired(entry,policy) and all(e['state']=='building' for e in self._catalog['entries']
+                                                   if e['category']=='packet_rollups' and e.get('source_segment')==entry['id'])
+
+    def _unfinished(self,entries,chosen):
+        # An unfinished summary is removed first, with its source; it never
+        # becomes authority for, or outlives, the original it was built from.
+        return [e for e in entries if e['category']=='packet_rollups' and e['state']=='building' and e.get('source_segment') in chosen]
+
     def _candidates(self,policy,reserve=WORK_RESERVE):
         used=self._used(); result=[]
         eligible=[e for e in self._catalog['entries'] if e['state']=='closed' and not e.get('pending_receipts')
-                  and e.get('compaction_state')!='building']
+                  and (e.get('compaction_state')!='building' or self._abandoned(e,policy))]
         ordered=sorted(eligible,key=lambda e:e.get('first_at') or e['created_at'])
         by_id={e['id']:e for e in self._catalog['entries']}
         for entry in sorted(ordered,key=lambda e:(0 if e['category']=='packets' and e.get('compaction_state')=='complete' else 1,
@@ -496,6 +511,7 @@ class EvidenceStorage:
         for entry in remaining:
             if used+reserve<=policy['cap_bytes']:break
             result.append(entry);used-=self._size(entry)
+        result=self._unfinished(self._catalog['entries'],{e['id'] for e in result})+result
         return self._cascade(self._catalog['entries'],result)
 
     def _check_compact_source(self,source):
@@ -560,6 +576,8 @@ class EvidenceStorage:
                 self._save();continue
             if entry['category']=='packets' and entry.get('compaction_state')=='complete':
                 self._check_compact_source(entry)
+            context=self._write_dbs.pop(entry['id'],None)
+            if context:context[0].__exit__(None,None,None)
             size=self._size(entry)
             if entry['category']=='audit':
                 if entry['kind']=='generic':
@@ -737,7 +755,7 @@ class EvidenceStorage:
         # Apply seals open writers first. Use the same category priority as the
         # active cap path so the review names the units that will actually go.
         eligible=[e for e in entries if e['state'] in {'closed','open'} and not e.get('pending_receipts')
-                  and e.get('compaction_state')!='building']
+                  and (e.get('compaction_state')!='building' or self._abandoned(e,policy))]
         ordered=sorted(eligible,key=lambda e:e.get('first_at') or e['created_at'])
         by_id={e['id']:e for e in entries}
         for entry in sorted(ordered,key=lambda e:(0 if e['category']=='packets' and e.get('compaction_state')=='complete' else 1,
@@ -758,6 +776,7 @@ class EvidenceStorage:
         for entry in remaining:
             if used+WORK_RESERVE<=policy['cap_bytes']:break
             size=self._size(entry);result.append((entry,size));used-=size
+        result=[(e,self._size(e)) for e in self._unfinished(entries,{e['id'] for e,_ in result})]+result
         selected={e['id'] for e,_ in result}
         result += [(e,self._size(e)) for e in self._cascade(entries,[e for e,_ in result]) if e['id'] not in selected]
         return result
@@ -1007,8 +1026,11 @@ class EvidenceStorage:
             # Capture and prompt finding commits take priority over a derived
             # history build. The worker retries after the write queue drains.
             if self._recording.get('pending_records',0)>128:return False
+            # An expired source without a closed summary is left to normal
+            # retention; starting or resuming its build would race that removal.
             sources=[e for e in self._catalog['entries'] if e['category']=='packets' and e['state']=='closed'
-                     and not e.get('legacy') and e.get('records',0)>0 and e.get('compaction_state') not in {'complete','inefficient','ineligible'}]
+                     and not e.get('legacy') and e.get('records',0)>0 and e.get('compaction_state') not in {'complete','inefficient','ineligible'}
+                     and not self._abandoned(e,self._catalog['policy'])]
             if not sources:return False
             source=min(sources,key=lambda e:e.get('first_at') or e['created_at'])
             if source.get('compaction_state')!='building':
@@ -1019,6 +1041,8 @@ class EvidenceStorage:
             if targets and targets[0]['state'] not in {'building','closed'}:
                 raise ValueError('An interrupted compact history needs review; the original remains protected.')
             target=targets[0] if targets else self._new('packet_rollups',state='building',source_segment=source['id'])
+            # Resuming after a restart: finish schema an interrupted _new() left.
+            if targets and target['state']=='building' and target['id'] not in self._write_dbs:self._schema(target)
             outcome=step(self,source,target) if target['state']=='building' else True
             if outcome in {'inefficient','ineligible'}:
                 # A high-cardinality source did not compress. Remove only the
@@ -1036,7 +1060,8 @@ class EvidenceStorage:
                     row=db.execute('SELECT COUNT(*),MIN(observed_at),MAX(observed_at) FROM records').fetchone()
                 with self._db(source) as db:
                     incomplete=db.execute("SELECT COUNT(*) FROM ingestion_runs WHERE status!='completed'").fetchone()[0]
-                target.update(records=row[0],first_at=row[1],last_at=row[2],source_incomplete=bool(incomplete or source.get('recovered_incomplete')))
+                target.update(records=row[0],first_at=row[1],last_at=row[2],source_incomplete=bool(incomplete or source.get('recovered_incomplete')),
+                              source_created_at=source['created_at'])
                 source.update(compaction_state='complete',compacted_to=target['id'])
                 self._save()
             if self._error and self._error.startswith('Compact history paused:'):

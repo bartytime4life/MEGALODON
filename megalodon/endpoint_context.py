@@ -94,13 +94,18 @@ def retained_context(evidence, address, now, *, comparison_reason=None, referenc
     address = str(ip_address(address))
     end = int(now)
     reader = RetainedEvidenceReader(evidence)
-    sources, gaps = reader._sources(end - 3600, end, categories={'packets', 'flows'})
+    sources, gaps = reader._sources(end - 3600, end, categories={'packets', 'flows', 'packet_rollups'})
     selected, dependencies = [], {}
     scanned = 0
     truncated = False
     missing = {'incomplete_window'}  # Selection does not certify full capture coverage.
     for gap in gaps:
         missing.add(gap if gap == 'sensor_disagreement' else 'source_gap')
+    # Compacted packet detail is replaced by conversation summaries, which are
+    # not individual observations. Report the hidden detail as a gap.
+    if any(entry['category'] == 'packet_rollups' for entry, _ in sources):
+        missing.add('source_gap')
+        sources = [(entry, watermark) for entry, watermark in sources if entry['category'] != 'packet_rollups']
     for entry, watermark in reversed(sources):
         expires = int(epoch(entry.get('first_at') or entry['created_at']) + evidence.retention_days * 86400)
         if expires <= now:
