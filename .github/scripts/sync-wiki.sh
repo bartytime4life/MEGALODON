@@ -70,6 +70,10 @@ fi
 
 declare -A listed=()
 preferred_pages=(
+  builder-profile
+  visual-tour
+  engineering-case-studies
+  evidence-index
   quick-start
   security-boundaries
   operator-guide
