@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import inspect
 import json
 import os
@@ -88,6 +88,69 @@ def test_backup_and_restore_complete_with_closed_verified_receipts(
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert connection.execute("PRAGMA foreign_key_check").fetchone() is None
+
+
+def test_backup_copies_one_snapshot_while_another_connection_commits(
+    private_directory: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = create_store(private_directory)
+    writer = sqlite3.connect(source, timeout=5, isolation_level=None)
+    original_copy = recovery._copy_online
+    remaining_seen: list[int] = []
+
+    class CommitBetweenSteps:
+        # Live ingestion commits through its own connection between steps.
+        def __init__(self, connection: sqlite3.Connection) -> None:
+            self.connection = connection
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self.connection, name)
+
+        def backup(self, target, *, progress, **kwargs):
+            def observe(status: int, remaining: int, total: int) -> None:
+                remaining_seen.append(remaining)
+                if len(remaining_seen) <= 5:
+                    writer.execute(
+                        "INSERT INTO actions (created_at, action, target, status, "
+                        "reason, details_json) VALUES ('2026-09-19T00:00:00Z', "
+                        "'block', '192.0.2.1', 'proposed', 'live', '{}')"
+                    )
+                progress(status, remaining, total)
+
+            return self.connection.backup(target, progress=observe, **kwargs)
+
+    def copy_during_commits(operation, source_database, destination_database):
+        connection = source_database.connection
+        source_database.connection = CommitBetweenSteps(connection)
+        try:
+            original_copy(operation, source_database, destination_database)
+        finally:
+            source_database.connection = connection
+
+    monkeypatch.setattr(recovery, "PAGES_PER_STEP", 2)
+    monkeypatch.setattr(recovery, "_copy_online", copy_during_commits)
+    artifact = private_directory / "backup.db"
+    try:
+        receipt = backup_database(
+            source,
+            artifact,
+            private_directory / "manifest.json",
+            operation_id="backup-live-writer",
+        )
+        committed = writer.execute("SELECT count(*) FROM actions").fetchone()[0]
+    finally:
+        writer.close()
+
+    assert_contract_receipt(receipt)
+    assert receipt["status"] == "completed"
+    assert committed == 5
+    assert len(remaining_seen) > 5
+    # A restart from page 1 stops the remaining page count from falling.
+    assert all(
+        earlier > later for earlier, later in zip(remaining_seen, remaining_seen[1:])
+    )
+    with sqlite3.connect(artifact) as connection:
+        assert connection.execute("SELECT count(*) FROM actions").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize("operation", ("backup", "restore"))
@@ -277,6 +340,32 @@ def test_manifest_collision_refuses_backup_before_artifact_creation(
     assert receipt["destination_created"] is False
     assert not artifact.exists()
     assert manifest.read_text(encoding="utf-8") == "review pending"
+
+
+def test_manifest_collision_after_artifact_creation_preserves_both_objects(
+    private_directory: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = create_store(private_directory)
+    artifact = private_directory / "backup.db"
+    manifest = private_directory / "manifest.json"
+    original_copy = recovery._copy_online
+
+    def collide_after_copy(operation, source_database, destination_database):
+        original_copy(operation, source_database, destination_database)
+        manifest.write_text("concurrent operator file", encoding="utf-8")
+        manifest.chmod(0o600)
+
+    monkeypatch.setattr(recovery, "_copy_online", collide_after_copy)
+    receipt = backup_database(
+        source, artifact, manifest, operation_id="backup-manifest-race"
+    )
+
+    assert_contract_receipt(receipt)
+    assert receipt["reason"] == "IO_ERROR"
+    assert receipt["destination_created"] is True
+    assert receipt["destination_state"] == "incomplete_preserved"
+    assert artifact.exists()
+    assert manifest.read_text(encoding="utf-8") == "concurrent operator file"
 
 
 def test_restore_rejects_changed_artifact_digest_before_destination_creation(
@@ -547,6 +636,43 @@ def test_wall_clock_rollback_overrides_failure_reason_with_valid_receipt(
     assert_contract_receipt(receipt)
     assert receipt["reason"] == "CLOCK_ROLLBACK"
     assert receipt["clock_rollback_observed"] is True
+
+
+def test_completion_uncertainty_outranks_wall_clock_rollback(
+    private_directory: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = create_store(private_directory)
+    destination = private_directory / "backup.db"
+    original_copy = recovery._copy_online
+    original_now = recovery._wall_now
+    stepped = False
+
+    def stepped_clock() -> datetime:
+        now = original_now()
+        return now - timedelta(seconds=30) if stepped else now
+
+    def replace_destination_after_copy(operation, source_database, destination_database):
+        nonlocal stepped
+        original_copy(operation, source_database, destination_database)
+        destination.rename(private_directory / "moved-backup.db")
+        destination.write_bytes(b"")
+        destination.chmod(0o600)
+        stepped = True
+
+    monkeypatch.setattr(recovery, "_wall_now", stepped_clock)
+    monkeypatch.setattr(recovery, "_copy_online", replace_destination_after_copy)
+    receipt = backup_database(
+        source,
+        destination,
+        private_directory / "manifest.json",
+        operation_id="backup-uncertain-rollback",
+    )
+
+    assert_contract_receipt(receipt)
+    assert receipt["reason"] == "COMPLETION_UNCERTAIN"
+    assert receipt["completion_uncertain"] is True
+    assert receipt["destination_state"] == "unknown"
+    assert receipt["clock_rollback_observed"] is False
 
 
 def test_invalid_manifest_and_config_emit_input_invalid_receipts(

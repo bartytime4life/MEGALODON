@@ -305,6 +305,60 @@ def test_core_findings_and_action_links_remain_qualified(report_service):
     assert 'Packet records per interval' in html
 
 
+@pytest.mark.parametrize('recorded,truncated',((3,False),(5,True)))
+def test_response_total_is_uncapped_and_dropped_detail_is_partial(report_service,monkeypatch,recorded,truncated):
+    import megalodon.reporting as reporting
+    monkeypatch.setattr(reporting,'MAX_FINDINGS',3)
+    receipts=[f'r{i}' for i in range(recorded)]+['r0']  # A repeated receipt counts once.
+    report_service.evidence.append_records('audit',[dict(observed_at=utc(report_service.clock()-60),source='companion',
+        data=dict(state='succeeded',receipt_id=receipt,action='block')) for receipt in receipts])
+    value=make(report_service)
+    manifest=next(m for m in report_service.manifests() if m['id']==value['id'])
+    assert value['summary']['response_count']==recorded
+    assert len(value['responses'])==3
+    assert any(g.startswith('Response detail') for g in value['coverage']['gaps']) is truncated
+    assert value['coverage']['aggregation_complete'] is not truncated
+    assert manifest['state']==('incomplete' if truncated else 'ready')
+    assert value['coverage']['response_details_truncated'] is truncated
+
+
+def test_grouping_limit_is_disclosed_and_marks_report_partial(report_service,monkeypatch):
+    import megalodon.reporting as reporting
+    monkeypatch.setattr(reporting,'MAX_KEYS',4)
+    writer=report_service.evidence.packet_writer();run=writer.start_ingestion_run('jsonl')
+    early=datetime.fromtimestamp(report_service.clock()-3600,timezone.utc)
+    for n in range(5):  # One-off peers fill the grouping table first.
+        writer.record_event_bundle(PacketEvent(early,f'10.0.0.{n}','192.0.2.1','UDP',40000,53,byte_count=60),[],[],run_id=run)
+    late=datetime.fromtimestamp(report_service.clock()-60,timezone.utc)
+    for _ in range(20):
+        writer.record_event_bundle(PacketEvent(late,'203.0.113.99','192.0.2.1','TCP',40000,443,byte_count=1500),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    value=make(report_service)
+    manifest=next(m for m in report_service.manifests() if m['id']==value['id'])
+    assert '203.0.113.99' not in value['endpoints']
+    assert value['endpoints']['Other / grouping limit']==22  # Two later peers, then 20 packets.
+    assert any("combined in 'Other / grouping limit'" in g for g in value['coverage']['gaps'])
+    assert value['coverage']['aggregation_complete'] is False
+    assert manifest['state']=='incomplete'
+    assert value['coverage']['grouping_limited'] is True
+
+
+def test_grouping_overflow_bucket_survives_the_leading_endpoint_cut(report_service,monkeypatch):
+    import megalodon.reporting as reporting
+    monkeypatch.setattr(reporting,'MAX_KEYS',40)
+    writer=report_service.evidence.packet_writer();run=writer.start_ingestion_run('jsonl')
+    stamp=datetime.fromtimestamp(report_service.clock()-600,timezone.utc)
+    for n in range(39):  # 39 sources plus one destination fill the table; each outranks the overflow.
+        for _ in range(3):
+            writer.record_event_bundle(PacketEvent(stamp,f'10.0.1.{n}','192.0.2.1','UDP',40000,53,byte_count=60),[],[],run_id=run)
+    writer.record_event_bundle(PacketEvent(stamp,'203.0.113.7','192.0.2.1','UDP',40000,53,byte_count=60),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    value=make(report_service)
+    assert value['endpoints']['Other / grouping limit']==1
+    assert len(value['endpoints'])==31  # the 30 leaders plus the disclosed overflow bucket
+    assert any("combined in 'Other / grouping limit'" in g for g in value['coverage']['gaps'])
+
+
 def test_mobile_and_print_chart_labels_keep_intrinsic_size(report_service):
     from megalodon.reporting import REPORT_CSS
     html=report_service.download(make(report_service)['id'],'html')[1].decode()

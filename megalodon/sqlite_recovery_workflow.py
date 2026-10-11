@@ -615,13 +615,32 @@ def _copy_online(operation: _Operation, source: _Database, destination: _Databas
         elif status not in (sqlite3.SQLITE_OK, sqlite3.SQLITE_DONE):
             raise sqlite3.OperationalError(f"backup status {status}")
 
+    connection = source.connection
+
+    def open_snapshot() -> None:
+        connection.execute("BEGIN")
+        try:
+            connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        except BaseException:
+            connection.rollback()
+            raise
+
     try:
-        source.connection.backup(
-            destination.connection,
-            pages=PAGES_PER_STEP,
-            progress=progress,
-            sleep=BUSY_SLEEP_SECONDS,
-        )
+        # Hold one read transaction across every backup step. Without it each
+        # step reads the latest commit, and any commit by another connection
+        # restarts the copy from page 1, so live ingestion can starve a backup
+        # until its deadline. A WAL reader does not block those writers.
+        _retry_busy(operation, open_snapshot)
+        try:
+            connection.backup(
+                destination.connection,
+                pages=PAGES_PER_STEP,
+                progress=progress,
+                sleep=BUSY_SLEEP_SECONDS,
+            )
+        finally:
+            if connection.in_transaction:
+                connection.rollback()
     except _RecoveryFailure:
         raise
     except sqlite3.Error as exc:
@@ -687,7 +706,12 @@ def _write_manifest(operation: _Operation, path: Path, document: dict[str, objec
     directory_descriptor = _open_destination_directory(path)
     descriptor: int | None = None
     try:
-        _preflight_new_path(path, directory_descriptor)
+        try:
+            _preflight_new_path(path, directory_descriptor)
+        except _RecoveryFailure as exc:
+            if exc.reason != "DESTINATION_EXISTS":
+                raise
+            raise FileExistsError(path.name) from exc
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
         flags |= getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
         target: str | Path = path.name if directory_descriptor is not None else path
@@ -716,8 +740,9 @@ def _write_manifest(operation: _Operation, path: Path, document: dict[str, objec
     except _RecoveryFailure:
         raise
     except FileExistsError as exc:
-        # A collision discovered here raced the preflight and occurred after the
-        # database artifact was created. Preserve both objects and avoid a
+        # A collision discovered here, by the preflight or the exclusive open,
+        # raced the backup's initial preflight and occurred after the database
+        # artifact was created. Preserve both objects and avoid a
         # contradictory DESTINATION_EXISTS receipt, whose contract requires that
         # no destination was created.
         raise _RecoveryFailure("IO_ERROR", source_state="admitted") from exc
@@ -882,9 +907,13 @@ def _terminal_manifest_digest(operation: _Operation, failure: _RecoveryFailure) 
 
 def _failure_receipt(operation: _Operation, failure: _RecoveryFailure) -> dict[str, object]:
     finished = _wall_now()
-    rollback = finished < operation.started_wall
+    completion_uncertain = (
+        failure.completion_uncertain or failure.reason == "COMPLETION_UNCERTAIN"
+    )
+    # An unknown destination outranks a clock rollback. The contract binds each
+    # reason to its own flag, so the rollback is then not reported.
+    rollback = finished < operation.started_wall and not completion_uncertain
     reason = "CLOCK_ROLLBACK" if rollback else failure.reason
-    completion_uncertain = failure.completion_uncertain or reason == "COMPLETION_UNCERTAIN"
     elapsed = max(0, int((_monotonic() - operation.started_monotonic) * 1000))
     return {
         "schema_version": RECEIPT_SCHEMA,

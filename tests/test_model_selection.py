@@ -394,3 +394,19 @@ def test_stopped_ollama_reads_as_unavailable_in_hud_and_setup_refresh(tmp_path, 
     job = manager.snapshot()['job']
     assert job['state'] == 'failed' and 'Ollama is unavailable' in job['message']
     assert 'stopped unexpectedly' not in job['message']
+
+
+@pytest.mark.parametrize('posture,expected', [
+    ({'listening': 'no', 'loopback_only': None}, 'Ollama is unavailable'),
+    ({'listening': 'yes', 'loopback_only': False}, 'did not pass verification'),
+])
+def test_model_select_provider_refusal_reads_as_its_state_not_a_crash(tmp_path, monkeypatch, posture, expected):
+    monkeypatch.setattr(provider, 'qwen_provider_posture', lambda **_: posture)
+    monkeypatch.setattr(support_config, 'interfaces', lambda: [])
+    manager = support_config.SupportConfiguration(Settings(db_path=tmp_path / 'events.db'), home=tmp_path)
+    manager.start(dict(action='model_select', model='llama3.2:3b', model_digest='b' * 64, compute_mode='auto'))
+    manager._thread.join(3)
+    job = manager.snapshot()['job']
+    assert job['state'] == 'failed' and expected in job['message']
+    assert 'stopped unexpectedly' not in job['message']
+    assert not (tmp_path / '.config/megalodon/qwen-profile.json').exists()  # nothing was selected

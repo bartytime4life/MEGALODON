@@ -196,7 +196,7 @@ def test_validation_is_read_only_and_initializer_refuses_existing_store(tmp_path
 
 def test_validation_refuses_missing_future_partial_and_weakened_stores(tmp_path):
     missing = tmp_path / "missing" / "durable.db"
-    with pytest.raises(SuricataStoreError, match="VALIDATION_FAILED"):
+    with pytest.raises(SuricataStoreError, match="^SURICATA_STORE:NO_DIRECTORY$"):
         validate_suricata_store(missing)
 
     cases = ("future", "partial", "weakened")
@@ -220,7 +220,7 @@ def test_validation_refuses_missing_future_partial_and_weakened_stores(tmp_path)
             validate_suricata_store(path)
 
 
-def test_validation_reads_committed_uncheckpointed_wal_pages(tmp_path):
+def test_validation_refuses_live_wal_sidecars_instead_of_reading_through(tmp_path):
     path = tmp_path / "durable.db"
     initialize_suricata_store(path)
     writer = _connect(path)
@@ -234,10 +234,87 @@ def test_validation_reads_committed_uncheckpointed_wal_pages(tmp_path):
         writer.commit()
         assert path.with_name(path.name + "-wal").exists()
 
-        with pytest.raises(SuricataStoreError, match="INCOMPATIBLE_DATA"):
+        with pytest.raises(SuricataStoreError, match="ACTIVE_SIDECAR_REFUSED$"):
             validate_suricata_store(path)
     finally:
         writer.close()
+
+
+def _open_writer(path: Path) -> None:
+    with suricata_store._open_suricata_store_writer(path):
+        pass
+
+
+def _persistent_wal_store(path: Path) -> list[str]:
+    initialize_suricata_store(path)
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+    finally:
+        connection.close()
+    assert path.read_bytes()[18:20] == b"\x02\x02"
+    entries = sorted(item.name for item in path.parent.iterdir())
+    assert entries == [path.name]
+    return entries
+
+
+def test_persistent_wal_header_is_refused_before_sqlite_opens_it(tmp_path):
+    path = tmp_path / "durable.db"
+    entries = _persistent_wal_store(path)
+
+    with pytest.raises(SuricataStoreError, match="ROLLBACK_JOURNAL_REQUIRED$"):
+        validate_suricata_store(path)
+    assert sorted(item.name for item in tmp_path.iterdir()) == entries
+
+    with pytest.raises(SuricataStoreError, match="ROLLBACK_JOURNAL_REQUIRED$"):
+        _open_writer(path)
+    assert sorted(item.name for item in tmp_path.iterdir()) == entries
+
+
+def test_foreign_page_size_and_oversized_header_are_refused_before_open(tmp_path):
+    large_pages = tmp_path / "large-pages.db"
+    initialize_suricata_store(large_pages)
+    connection = sqlite3.connect(large_pages)
+    try:
+        connection.execute("PRAGMA page_size=8192")
+        connection.execute("VACUUM")
+    finally:
+        connection.close()
+    assert int.from_bytes(large_pages.read_bytes()[16:18], "big") == 8192
+    with pytest.raises(SuricataStoreError, match="INCOMPATIBLE_PAGE_SIZE$"):
+        validate_suricata_store(large_pages)
+    with pytest.raises(SuricataStoreError, match="INCOMPATIBLE_PAGE_SIZE$"):
+        _open_writer(large_pages)
+
+    oversized = tmp_path / "oversized.db"
+    initialize_suricata_store(oversized)
+    header = bytearray(oversized.read_bytes())
+    assert header[92:96] == header[24:28]
+    header[28:32] = (suricata_store._STORE_MAX_PAGES + 1).to_bytes(4, "big")
+    oversized.write_bytes(bytes(header))
+    for open_store in (validate_suricata_store, _open_writer):
+        with pytest.raises(SuricataStoreError, match="CAPACITY_EXCEEDED$"):
+            open_store(oversized)
+    assert sorted(item.name for item in tmp_path.iterdir()) == [
+        "large-pages.db", "oversized.db",
+    ]
+
+
+def test_initializer_writes_the_fixed_rollback_journal_page_layout(tmp_path):
+    path = tmp_path / "durable.db"
+    initialize_suricata_store(path)
+    header = path.read_bytes()[:20]
+    assert int.from_bytes(header[16:18], "big") == suricata_store._STORE_PAGE_SIZE_BYTES
+    assert header[18:20] == b"\x01\x01"
+
+
+@pytest.mark.parametrize(
+    "operation", (initialize_suricata_store, validate_suricata_store)
+)
+def test_ambiguous_path_refusal_keeps_the_store_error_contract(tmp_path, operation):
+    with pytest.raises(SuricataStoreError, match="^SURICATA_STORE:AMBIGUOUS_PATH$"):
+        operation(tmp_path / "x" / ".." / "durable.db")
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_validation_rechecks_path_identity_after_schema_scan(tmp_path, monkeypatch):
