@@ -92,7 +92,8 @@ def parse_input_bytes(data: bytes) -> object:
         )
     except GenerateContractError:
         raise
-    except (UnicodeError, json.JSONDecodeError, RecursionError):
+    except (ValueError, RecursionError):
+        # Includes UTF-8/JSON errors and the interpreter's integer digit limit.
         raise GenerateContractError("INVALID_JSON") from None
 
 

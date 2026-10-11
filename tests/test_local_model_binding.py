@@ -55,3 +55,31 @@ def test_effects_cannot_claim_host_or_model_mutation() -> None:
     candidate["effects"]["model_started"] = True
     with pytest.raises(TOOL.BindingError):
         TOOL.validate(candidate)
+
+
+@pytest.mark.parametrize(
+    ("document", "field", "value"),
+    [
+        (BOUND, "approved_at", "2026-02-31T25:61:61Z"),
+        (BOUND, "generated_at", "2026-99-99T99:99:99Z"),
+        (BOUND, "generated_at", "2026-02-29T04:00:00Z"),
+        (UNBOUND, "generated_at", "2026-13-01T00:00:00Z"),
+    ],
+)
+def test_impossible_timestamps_refuse(document, field, value) -> None:
+    candidate = copy.deepcopy(document)
+    if field == "approved_at":
+        candidate["operator_decision"]["approved_at"] = value
+    else:
+        candidate["generated_at"] = value
+    # The schema's date-time format only applies when an optional checker is
+    # installed; the datetime parse refuses either way.
+    with pytest.raises(TOOL.BindingError, match="INVALID_TIMESTAMP|date-time"):
+        TOOL.validate(candidate)
+
+
+def test_binding_generated_before_approval_refuses() -> None:
+    candidate = copy.deepcopy(BOUND)
+    candidate["generated_at"] = "2026-09-22T03:59:59Z"
+    with pytest.raises(TOOL.BindingError, match="BINDING_PRECEDES_APPROVAL"):
+        TOOL.validate(candidate)

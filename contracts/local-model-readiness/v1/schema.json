@@ -96,13 +96,14 @@
       "prefixItems": [
         {"const": "EVIDENCE_ORIGIN_AUTHENTICATION"},
         {"const": "LOADED_RUNTIME_BYTES_NOT_ATTESTED"},
+        {"const": "RUNTIME_PROVIDER_WIRING"},
         {"const": "INDEPENDENT_SECURITY_ACCEPTANCE_CURRENTNESS"},
         {"const": "OWNER_FINAL_ACCEPTANCE"},
         {"const": "RELEASE_AND_DEPLOYMENT_AUTHORITY"}
       ],
       "items": false,
-      "minItems": 5,
-      "maxItems": 5
+      "minItems": 6,
+      "maxItems": 6
     },
     "authority": {
       "type": "object",
