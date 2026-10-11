@@ -151,3 +151,19 @@ def test_impossible_regular_group_is_rejected_even_below_whole_run_count(tmp_pat
     replace_findings(output, rows)
     with pytest.raises(OfflineError, match='^INVALID_OFFLINE_CANDIDATE$'):
         load_offline_projection(output)
+
+
+def test_wall_clock_stepping_back_still_writes_a_loadable_run(tmp_path, monkeypatch):
+    class SteppedBackClock(datetime):
+        readings = iter((datetime(2026, 10, 11, 12, 0, 2, tzinfo=timezone.utc),
+                         datetime(2026, 10, 11, 12, 0, 0, tzinfo=timezone.utc)))
+
+        @classmethod
+        def now(cls, tz=None):
+            return next(cls.readings)
+
+    monkeypatch.setattr(reports, 'datetime', SteppedBackClock)
+    output = report(tmp_path)
+    manifest = json.loads((output / 'manifest.json').read_text())
+    assert manifest['started_at'] == manifest['ended_at'] == '2026-10-11T12:00:02+00:00'
+    assert load_offline_projection(output)['run']['source'] == 'tshark'

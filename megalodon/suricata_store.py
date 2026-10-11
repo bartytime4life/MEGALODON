@@ -8,9 +8,11 @@ it never creates, migrates, repairs, purges, or exposes a generic write API.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import errno
 import os
 from pathlib import Path
 import sqlite3
+import time
 from typing import Callable, Iterator
 
 from .storage import (
@@ -32,6 +34,8 @@ SCHEMA_VERSION = 1
 _STORE_PAGE_SIZE_BYTES = 4_096
 _STORE_MAX_PAGES = 131_072
 _STORE_MAX_BYTES = _STORE_PAGE_SIZE_BYTES * _STORE_MAX_PAGES
+_SQLITE_HEADER_BYTES = 100
+_WRITER_LOCK_POLL_SECONDS = 0.05
 
 SCHEMA_STATEMENTS = (
     """CREATE TABLE consumer_runs (
@@ -189,8 +193,12 @@ class _SuricataReaderHandle:
         )
 
 
-def _lock_suricata_read_snapshot(database_descriptor: int) -> None:
-    """Hold a Linux OFD read lock across SQLite's complete locking region."""
+def _set_sqlite_region_lock(database_descriptor: int, *, unlock: bool = False) -> bool:
+    """Set or clear a nonblocking Linux OFD read lock on SQLite's lock region.
+
+    Returns False only when another process holds a conflicting SQLite write
+    lock. Every other failure is a fixed unavailable-lock refusal.
+    """
 
     try:
         import ctypes
@@ -216,7 +224,7 @@ def _lock_suricata_read_snapshot(database_descriptor: int) -> None:
     # SHARED locks. A read lock over the whole region remains compatible with
     # readers and conflicts with every writer, including journal-mode changes.
     lock = _Flock(
-        fcntl.F_RDLCK,
+        fcntl.F_UNLCK if unlock else fcntl.F_RDLCK,
         os.SEEK_SET,
         0x40000000,
         512,
@@ -224,8 +232,68 @@ def _lock_suricata_read_snapshot(database_descriptor: int) -> None:
     )
     libc = ctypes.CDLL(None, use_errno=True)
     libc.fcntl.restype = ctypes.c_int
-    if libc.fcntl(database_descriptor, command, ctypes.byref(lock)) != 0:
+    if libc.fcntl(database_descriptor, command, ctypes.byref(lock)) == 0:
+        return True
+    if not unlock and ctypes.get_errno() in (errno.EACCES, errno.EAGAIN):
+        return False
+    raise SuricataStoreError("SURICATA_STORE:SNAPSHOT_LOCK_UNAVAILABLE")
+
+
+def _lock_suricata_read_snapshot(database_descriptor: int) -> None:
+    """Hold a Linux OFD read lock across SQLite's complete locking region."""
+
+    if not _set_sqlite_region_lock(database_descriptor):
         raise SuricataStoreError("SURICATA_STORE:SNAPSHOT_LOCKED")
+
+
+def _await_writer_quiescence(
+    database_descriptor: int,
+    remaining_milliseconds: Callable[[], int] | None,
+) -> None:
+    """Wait, within the caller's budget, until no other SQLite writer is active.
+
+    It returns holding the OFD read lock, which keeps any writer from starting,
+    so a rollback journal seen under it is a hot journal rather than another
+    consumer's in-flight commit. Without a budget there is no wait.
+    """
+
+    while not _set_sqlite_region_lock(database_descriptor):
+        remaining = (
+            remaining_milliseconds() if remaining_milliseconds is not None else 0
+        )
+        if remaining <= 0:
+            raise SuricataStoreError("SURICATA_STORE:LOCK_WAIT_TIMEOUT")
+        time.sleep(min(_WRITER_LOCK_POLL_SECONDS, remaining / 1_000))
+
+
+def _require_rollback_store_header(database_descriptor: int) -> None:
+    """Refuse persistent WAL, a foreign page size, or an oversized file.
+
+    This reads the pinned descriptor before SQLite opens the file, so a refused
+    store is never opened through SQLite and no ``-wal``/``-shm`` is created.
+    """
+
+    try:
+        header = os.pread(database_descriptor, _SQLITE_HEADER_BYTES, 0)
+        size = os.fstat(database_descriptor).st_size
+    except OSError as exc:
+        raise SuricataStoreError("SURICATA_STORE:HEADER_READ_FAILED") from exc
+    if (
+        len(header) != _SQLITE_HEADER_BYTES
+        or header[:16] != b"SQLite format 3\x00"
+        or header[18:20] != b"\x01\x01"
+    ):
+        raise SuricataStoreError("SURICATA_STORE:ROLLBACK_JOURNAL_REQUIRED")
+    if int.from_bytes(header[16:18], "big") != _STORE_PAGE_SIZE_BYTES:
+        raise SuricataStoreError("SURICATA_STORE:INCOMPATIBLE_PAGE_SIZE")
+    # SQLite trusts the in-header page count only while its validity counter
+    # matches the change counter; otherwise it derives the count from size.
+    header_pages_valid = header[92:96] == header[24:28]
+    if size > _STORE_MAX_BYTES or (
+        header_pages_valid
+        and int.from_bytes(header[28:32], "big") > _STORE_MAX_PAGES
+    ):
+        raise SuricataStoreError("SURICATA_STORE:CAPACITY_EXCEEDED")
 
 
 @contextmanager
@@ -276,20 +344,7 @@ def _open_suricata_store_reader(
             if "-journal" in sidecars:
                 raise SuricataStoreError("SURICATA_STORE:ACTIVE_JOURNAL_REFUSED")
             if require_sidecar_free:
-                try:
-                    header = os.pread(database_descriptor, 20, 0)
-                except OSError as exc:
-                    raise SuricataStoreError(
-                        "SURICATA_STORE:HEADER_READ_FAILED"
-                    ) from exc
-                if (
-                    len(header) != 20
-                    or header[:16] != b"SQLite format 3\x00"
-                    or header[18:20] != b"\x01\x01"
-                ):
-                    raise SuricataStoreError(
-                        "SURICATA_STORE:ROLLBACK_JOURNAL_REQUIRED"
-                    )
+                _require_rollback_store_header(database_descriptor)
             sqlite_path = _anchored_database_path(
                 database_descriptor, database_path, "SURICATA_STORE"
             )
@@ -361,8 +416,14 @@ def _open_suricata_store_writer(
     path: str | Path,
     *,
     progress_handler: Callable[[], int] | None = None,
+    remaining_milliseconds: Callable[[], int] | None = None,
 ) -> Iterator[_SuricataWriterHandle]:
-    """Open one existing exact v1 store without creation or migration."""
+    """Open one existing exact v1 store without creation or migration.
+
+    Another active writer is waited out only within ``remaining_milliseconds``;
+    a rollback journal left while no writer holds the lock is a hot journal
+    and still requires recovery.
+    """
 
     directory_descriptor: int | None = None
     database_descriptor: int | None = None
@@ -387,13 +448,19 @@ def _open_suricata_store_writer(
             _assert_path_identity(
                 database_path, database_descriptor, directory_descriptor
             )
-            if _validate_sqlite_sidecars(
-                database_path,
-                directory_descriptor,
-                writable=False,
-                prefix="SURICATA_STORE",
-            ):
-                raise SuricataStoreError("SURICATA_STORE:RECOVERY_REQUIRED")
+            _await_writer_quiescence(database_descriptor, remaining_milliseconds)
+            try:
+                if _validate_sqlite_sidecars(
+                    database_path,
+                    directory_descriptor,
+                    writable=False,
+                    prefix="SURICATA_STORE",
+                ):
+                    raise SuricataStoreError("SURICATA_STORE:RECOVERY_REQUIRED")
+                _require_rollback_store_header(database_descriptor)
+            finally:
+                # SQLite's own write locks on this file conflict with the probe.
+                _set_sqlite_region_lock(database_descriptor, unlock=True)
             sqlite_path = _anchored_database_path(
                 database_descriptor, database_path, "SURICATA_STORE"
             )
@@ -567,12 +634,12 @@ def _refuse_orphaned_sidecars(
 def initialize_suricata_store(path: str | Path) -> dict[str, object]:
     """Explicitly create the exact v1 store; never open an existing database."""
 
-    database_path = _absolute_database_path(path, "SURICATA_STORE")
     directory_descriptor: int | None = None
     database_descriptor: int | None = None
     connection: sqlite3.Connection | None = None
     created = False
     try:
+        database_path = _absolute_database_path(path, "SURICATA_STORE")
         directory_descriptor = _open_private_directory(
             database_path.parent, create=True, prefix="SURICATA_STORE"
         )
@@ -600,6 +667,8 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
         )
         _refuse_orphaned_sidecars(database_path, directory_descriptor)
         connection.execute("PRAGMA foreign_keys=ON")
+        # Do not rely on SQLite's compile-time default for the fixed v1 page.
+        connection.execute(f"PRAGMA page_size={_STORE_PAGE_SIZE_BYTES}")
         connection.execute("BEGIN IMMEDIATE")
         for statement in SCHEMA_STATEMENTS:
             connection.execute(statement)
@@ -607,6 +676,7 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
         _validate_current(connection)
         connection.commit()
         _refuse_orphaned_sidecars(database_path, directory_descriptor)
+        _require_rollback_store_header(database_descriptor)
         _assert_path_identity(
             database_path, database_descriptor, directory_descriptor
         )
@@ -618,14 +688,16 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
             "schema_version": SCHEMA_VERSION,
             "tables": tuple(_TABLE_COLUMNS),
         }
-    except SuricataStoreError:
+    except (SuricataStoreError, StorageSchemaError) as exc:
         if connection is not None and connection.in_transaction:
             connection.rollback()
         if created:
             _discard_created_database(
                 database_path, database_descriptor, directory_descriptor
             )
-        raise
+        if isinstance(exc, SuricataStoreError):
+            raise
+        raise SuricataStoreError(str(exc)) from exc
     except (OSError, sqlite3.Error, ValueError) as exc:
         if connection is not None and connection.in_transaction:
             connection.rollback()
@@ -642,13 +714,17 @@ def initialize_suricata_store(path: str | Path) -> dict[str, object]:
 
 
 def validate_suricata_store(path: str | Path) -> dict[str, object]:
-    """Validate an existing store through a read-only, query-only connection."""
+    """Validate an existing store through a read-only, query-only connection.
 
-    database_path = _absolute_database_path(path, "SURICATA_STORE")
+    Coordination sidecars and a persistent-WAL header are refused before
+    SQLite opens the file, so validation never creates ``-wal``/``-shm``.
+    """
+
     directory_descriptor: int | None = None
     database_descriptor: int | None = None
     connection: sqlite3.Connection | None = None
     try:
+        database_path = _absolute_database_path(path, "SURICATA_STORE")
         directory_descriptor = _open_private_directory(
             database_path.parent, create=False, prefix="SURICATA_STORE"
         )
@@ -669,10 +745,11 @@ def validate_suricata_store(path: str | Path) -> dict[str, object]:
             writable=False,
             prefix="SURICATA_STORE",
         )
-        if ("-wal" in sidecars) != ("-shm" in sidecars):
-            raise SuricataStoreError("SURICATA_STORE:INCOMPLETE_WAL_STATE")
         if "-journal" in sidecars:
             raise SuricataStoreError("SURICATA_STORE:ACTIVE_JOURNAL_REFUSED")
+        if sidecars:
+            raise SuricataStoreError("SURICATA_STORE:ACTIVE_SIDECAR_REFUSED")
+        _require_rollback_store_header(database_descriptor)
         sqlite_path = _anchored_database_path(
             database_descriptor, database_path, "SURICATA_STORE"
         )
@@ -698,6 +775,8 @@ def validate_suricata_store(path: str | Path) -> dict[str, object]:
         }
     except SuricataStoreError:
         raise
+    except StorageSchemaError as exc:
+        raise SuricataStoreError(str(exc)) from exc
     except (OSError, sqlite3.Error, ValueError) as exc:
         raise SuricataStoreError("SURICATA_STORE:VALIDATION_FAILED") from exc
     finally:

@@ -122,7 +122,14 @@ def finish(directory: int, receipt: dict, limits: Limits, *, batch: Batch | None
     else:
         receipt.update(status='failed', failure_code=failure or 'NO_BATCH', reports=[],
                        accepted_records=0, rejected_records=None, candidate_count=0)
-    receipt['ended_at'] = datetime.now(timezone.utc).isoformat()
+    ended = datetime.now(timezone.utc)
+    try:
+        # The wall clock can step back (NTP) between manifest() and here; a
+        # run never ends before it started.
+        ended = max(ended, datetime.fromisoformat(receipt['started_at']))
+    except (KeyError, TypeError, ValueError):
+        pass
+    receipt['ended_at'] = ended.isoformat()
     receipt_bytes = json_bytes(receipt)
     if len(receipt_bytes) + sum(map(len, content.values())) > limits.report_bytes:
         raise OfflineError('REPORT_SIZE_LIMIT')

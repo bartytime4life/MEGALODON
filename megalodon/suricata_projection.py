@@ -105,11 +105,9 @@ def _text(value: Any, maximum: int) -> str:
 
 
 def _unique_object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise _ProjectionRefusal("INVALID_EVIDENCE")
-        result[key] = value
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise _ProjectionRefusal("INVALID_EVIDENCE")
     return result
 
 
@@ -117,15 +115,20 @@ def _reject_constant(_value):
     raise _ProjectionRefusal("INVALID_EVIDENCE")
 
 
+# One reusable codec pair: json.loads/json.dumps would rebuild both per record.
+_DECODER = json.JSONDecoder(
+    object_pairs_hook=_unique_object, parse_constant=_reject_constant,
+)
+_CANONICAL_ENCODER = json.JSONEncoder(sort_keys=True, separators=(",", ":"))
+
+
 def _object(value: Any) -> tuple[dict, str]:
     raw = _text(value, _MAX_RECORD_BYTES)
-    parsed = json.loads(
-        raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant,
-    )
+    parsed = _DECODER.decode(raw)
     if type(parsed) is not dict:
         raise _ProjectionRefusal("INVALID_EVIDENCE")
     # Durable consumer rows are exactly canonical, not arbitrary JSON documents.
-    if json.dumps(parsed, sort_keys=True, separators=(",", ":")) != raw:
+    if _CANONICAL_ENCODER.encode(parsed) != raw:
         raise _ProjectionRefusal("INVALID_EVIDENCE")
     return parsed, raw
 
@@ -158,9 +161,10 @@ def _read_run(connection, row, started):
         _remaining_ms(started)
         if count > consumer.MAX_RECORDS or _integer(record_index, positive=True) != count:
             raise _ProjectionRefusal("INVALID_EVIDENCE")
-        alert, raw = _object(encoded)
+        alert, _raw = _object(encoded)
         consumer._validate_alert(alert, identity, count)
-        normalized_bytes += len(raw.encode("utf-8"))
+        # ``_object`` strictly decoded these exact bytes; no re-encode needed.
+        normalized_bytes += len(encoded)
         if normalized_bytes > consumer.MAX_NORMALIZED_BATCH_BYTES:
             raise _ProjectionRefusal("INVALID_EVIDENCE")
         blocked += alert["producer_reported_action"] == "blocked"

@@ -95,7 +95,15 @@ inside SQLite before Python receives it; a cell beyond 4,096 bytes is refused.
 Declared identifiers are similarly sliced before validation. The serialized
 response is limited to 65,536 UTF-8 bytes. No caller can raise these limits.
 
-Holding the snapshot lock can briefly refuse a concurrent consumer write.
+Per-alert timestamp and address checks use integer range checks and canonical
+text fast paths that accept and refuse exactly what the earlier `strptime` and
+`ipaddress` validators did (a differential test covers this). On a 4-core
+development VM, five complete 10,000-alert runs validate in about 1.5–1.8 s,
+or about 3.3–4.3 s while sharing one core with a busy process; much slower
+hosts can still reach `QUERY_TIMEOUT`.
+
+Holding the snapshot lock makes a concurrent consumer write wait within the
+consumer's own budget.
 Capturing the dashboard snapshot once at startup avoids repeated query or lock
 work from HTTP polling. An unavailable snapshot is not a finding of zero alerts
 or a healthy sensor; operator review or an explicit later restart is needed.
