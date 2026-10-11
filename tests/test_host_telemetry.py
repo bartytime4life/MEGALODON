@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from threading import Thread
 
+import pytest
+
 from megalodon.dashboard import DashboardHandler
 from megalodon.host_telemetry import HostTelemetry, MAX_HISTORY
 
@@ -127,6 +129,19 @@ def test_ipv6_disabled_host_counts_absent_v6_tables_as_zero(tmp_path):
     (root / 'sys/net/ipv6').mkdir(parents=True)  # stack present: absence is no longer a measured zero
     assert sampler.sample(14)['sockets'] == {'status': 'unavailable', 'tcp': None, 'udp': None, 'established': None,
                                               'listening': None, 'time_wait': None, 'remote_peers': []}
+
+
+@pytest.mark.parametrize('missing', ['tcp6', 'udp6'])
+def test_one_readable_v6_table_proves_ipv6_so_its_missing_sibling_is_unavailable(tmp_path, missing):
+    # A container can expose selected procfs entries without the IPv6 markers.
+    root = tmp_path / 'proc'
+    write_proc(root)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    write_proc(root, total=1200, idle=900)
+    (root / 'net' / missing).unlink()
+    assert not (root / 'net/if_inet6').exists() and not (root / 'sys/net/ipv6').exists()
+    assert sampler.sample(12)['sockets']['status'] == 'unavailable'
 
 
 def test_remote_peers_merge_ipv4_mapped_and_exclude_loopback(tmp_path):
