@@ -520,7 +520,13 @@ class SupportConfiguration:
                 message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
                     'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
             elif action == 'model_refresh':
-                self.model_telemetry.refresh_installed_models()
+                from .ai_provider import AIProviderError
+                from .model_telemetry import ERROR_STATES, MESSAGES
+                try:
+                    self.model_telemetry.refresh_installed_models()
+                except AIProviderError as exc:
+                    # Same operator wording the HUD shows for this provider state.
+                    raise ValueError(MESSAGES.get(ERROR_STATES.get(exc.code), 'Installed models could not be read. Retry the refresh.')) from None
                 message=('Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
                          if self.settings.ai.enabled else 'Installed local models refreshed by your request. No model was downloaded or loaded.')
             elif action == 'qwen_check':

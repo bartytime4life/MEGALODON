@@ -132,6 +132,12 @@ provider adapter may accept only this conceptual envelope:
 }
 ~~~
 
+`summary` and each `limitations` item hold at most 1,200 characters, must not
+be blank, and must contain no control or bidirectional-format characters. A v1
+model answer whose whitespace-normalized text exceeds 1,200 characters is
+rejected as an invalid provider response rather than truncated; the v1 prompt
+does not state this limit.
+
 No field can hold an executable, command, argument list, URL, endpoint,
 credential, SQL, firewall target, file path, code block, tool call, action
 request, raw model trace, or confidence score that changes a deterministic

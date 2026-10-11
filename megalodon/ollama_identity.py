@@ -195,7 +195,9 @@ def validate_observation(value: object) -> dict[str, Any]:
     observation = _closed(value, TOP_KEYS, "OBSERVATION_SHAPE")
     if observation["schema"] != OBSERVATION_SCHEMA:
         raise OllamaIdentityError("SCHEMA_MISMATCH")
-    if observation["evidence_class"] not in EVIDENCE_CLASSES:
+    # Type first: an unhashable JSON value would raise TypeError in the set lookup.
+    if (type(observation["evidence_class"]) is not str
+            or observation["evidence_class"] not in EVIDENCE_CLASSES):
         raise OllamaIdentityError("EVIDENCE_CLASS")
     _timestamp(observation["observed_at"], "OBSERVED_AT")
     if observation["endpoint"] != "http://127.0.0.1:11434":
@@ -252,6 +254,7 @@ def validate_observation(value: object) -> dict[str, Any]:
     if (
         type(capabilities) is not list
         or not 1 <= len(capabilities) <= 16
+        or any(type(item) is not str for item in capabilities)
         or len(capabilities) != len(set(capabilities))
     ):
         raise OllamaIdentityError("CAPABILITIES")
