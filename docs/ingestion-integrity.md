@@ -216,8 +216,10 @@ lifecycle.
   `completed` or `incomplete` (no success JSON is printed; stderr says the
   receipt was recorded), and a run already being interrupted keeps the exit code
   of its first signal. A signal the process ignores is not reported. Without
-  POSIX signal masking, an interrupted receipt write has rolled back and is
-  retried as `failed/interrupted`.
+  POSIX signal masking (or if blocking fails), SIGTERM is recorded rather than
+  raised for the write, with the same result: the receipt being written is
+  kept and the command exits 143. SIGINT still raises there; a write it
+  interrupts has rolled back and is retried as `failed/interrupted`.
 - Ctrl-C while the store is still opening (for example while another writer
   holds its lock) exits 130 with a fixed message; no run receipt exists yet.
 - `--input` is accepted only with the jsonl source, `--interface` only with the

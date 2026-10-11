@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import errno
 import json
@@ -828,14 +828,34 @@ def _release_terminal_signals(previous_mask) -> int | None:
     return received
 
 
+_NO_PREVIOUS_HANDLER = object()
+
+
+def _record_sigterm(deferred: list[int]):
+    """Install a SIGTERM handler that only records; return the previous one.
+
+    Returns _NO_PREVIOUS_HANDLER when nothing was installed: SIGTERM is
+    ignored (an ignored signal is not reported) or this is not the main thread.
+    """
+    previous = signal.getsignal(signal.SIGTERM)
+    if previous == signal.SIG_IGN:
+        return _NO_PREVIOUS_HANDLER
+    try:
+        signal.signal(signal.SIGTERM, lambda signum, _frame: deferred.append(signum))
+    except (ValueError, OSError):
+        return _NO_PREVIOUS_HANDLER
+    return previous
+
+
 def _finish_run_receipt(store, run_id: int, reason: str, **kwargs):
     """Write a terminal run receipt that SIGINT/SIGTERM cannot abandon.
 
     On POSIX both signals are blocked for the write, so a second Ctrl-C or a
     SIGTERM cannot roll it back and leave a ``running`` receipt; only a hard
-    kill can. Elsewhere, or if a signal still interrupts the write (for
-    example after reaching another thread), the write has rolled back and is
-    retried as ``interrupted``. Returns the receipt and the first terminating
+    kill can. Without masking, SIGTERM is recorded for the write and reported
+    afterwards. If a signal still interrupts the write (SIGINT without
+    masking, or a signal reaching another thread), the write has rolled back
+    and is retried as ``interrupted``. Returns the receipt and the first terminating
     signal that arrived during the write, if any; the caller exits with that
     signal's code and never rewrites the recorded receipt.
     """
@@ -847,20 +867,31 @@ def _finish_run_receipt(store, run_id: int, reason: str, **kwargs):
         except (OSError, ValueError):
             previous_mask = None
     # Without masking, the run's SIGTERM handler has already been restored by
-    # the time a terminal write runs; keep SIGTERM raising for the write so it
-    # takes the retry below instead of the default termination.
-    guard = _scoped_sigterm_interrupt() if previous_mask is None else nullcontext()
+    # the time a terminal write runs. Record SIGTERM for the write instead, as
+    # masking would defer it: the handler never raises, so no signal can
+    # escape between the write and the handler's removal, and the caller
+    # still exits 143.
+    deferred_terms: list[int] = []
+    previous_term = _NO_PREVIOUS_HANDLER
+    if previous_mask is None:
+        previous_term = _record_sigterm(deferred_terms)
     try:
-        with guard:
-            while True:
-                try:
-                    receipt = store.finish_ingestion_run(run_id, reason, **kwargs)
-                    break
-                except KeyboardInterrupt as exc:
-                    if received is None:
-                        received = _interruption_signal(exc)
-                    reason, kwargs = "interrupted", {}
+        while True:
+            try:
+                receipt = store.finish_ingestion_run(run_id, reason, **kwargs)
+                break
+            except KeyboardInterrupt as exc:
+                if received is None:
+                    received = _interruption_signal(exc)
+                reason, kwargs = "interrupted", {}
     finally:
+        if previous_term is not _NO_PREVIOUS_HANDLER:
+            signal.signal(
+                signal.SIGTERM,
+                signal.SIG_DFL if previous_term is None else previous_term,
+            )
+            if deferred_terms and received is None:
+                received = signal.SIGTERM
         if previous_mask is not None:
             deferred = _release_terminal_signals(previous_mask)
             if received is None:
