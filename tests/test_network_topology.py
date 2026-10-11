@@ -105,6 +105,44 @@ def test_discovery_uses_fixed_unprivileged_argv_and_rejects_out_of_scope_xml(top
     with pytest.raises(ValueError): parse_discovery(b'<!DOCTYPE nmaprun SYSTEM "file:///etc/passwd"><nmaprun/>','192.168.2.0/24','eth0',STAMP)
 
 
+def test_discovery_can_be_disabled_while_its_scope_is_off_link(topology):
+    import megalodon.network_topology as module
+    topology.configure(dict(action='configure',scopes=['192.168.2.0/24'],enabled=True))
+    # Away from that network: the saved scope is on no current interface.
+    topology._inventory=parse_inventory([dict(ifname='eth0',addr_info=[dict(local='10.0.0.5',prefixlen=24)])],[],[],STAMP)
+    # The Setup form re-sends the saved scopes with the unchecked box.
+    result=topology.configure(dict(action='configure',scopes=['192.168.2.0/24'],enabled=False))
+    assert result['settings']['scopes']==['192.168.2.0/24'] and result['settings']['enabled'] is False
+    assert json.loads(topology.profile.read_text())['enabled'] is False
+    # A different network that reuses the range is never scanned.
+    topology._inventory=parse_inventory([dict(ifname='wlan0',addr_info=[dict(local='192.168.2.77',prefixlen=24)])],[],[],STAMP)
+    topology.run=lambda *args:pytest.fail('Disabled discovery must not run Nmap')
+    topology._next_discovery=0;topology._discover()
+    # Enabling still requires the scope to be on-link now.
+    topology._inventory=parse_inventory([dict(ifname='eth0',addr_info=[dict(local='10.0.0.5',prefixlen=24)])],[],[],STAMP)
+    with pytest.raises(ValueError,match='no longer on a local interface'):
+        topology.configure(dict(action='configure',scopes=['192.168.2.0/24'],enabled=True))
+    for bad in (['8.8.8.0/24'],['192.168.2.1/24'],['192.168.2.0/24','192.168.2.0/25']):
+        with pytest.raises(ValueError):
+            topology.configure(dict(action='configure',scopes=bad,enabled=False))
+    assert module.discovery_jobs(['192.168.2.0/24'],topology._inventory,on_link=False)==[]
+
+
+def test_discovered_identities_leave_the_inventory_after_a_day_without_a_run(topology,monkeypatch):
+    import megalodon.network_topology as module
+    raw=b'<nmaprun><host><status state="up"/><address addr="192.168.2.30" addrtype="ipv4"/></host></nmaprun>'
+    topology.configure(dict(action='configure',scopes=['192.168.2.0/24'],enabled=True))
+    topology.run=lambda *args:(raw,0)
+    monkeypatch.setattr(module,'_now',lambda:'2026-01-01T00:00:00Z')
+    topology._discover()
+    monkeypatch.undo()
+    topology.run=run_inventory
+    # Discovery off: no run prunes, but the snapshot still honors the 24 hours.
+    topology.configure(dict(action='configure',scopes=[],enabled=False))
+    topology._refresh_passive()
+    assert '192.168.2.30' not in [r['ip'] for r in topology.snapshot(view='all')['nodes']]
+
+
 def test_failed_and_cancelled_discovery_do_not_claim_success(topology):
     topology.configure(dict(action='configure',scopes=['192.168.2.0/24'],enabled=True))
     topology.run=lambda *args:(b'',1)
