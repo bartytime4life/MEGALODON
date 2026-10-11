@@ -1,65 +1,33 @@
 # Security Boundaries
 
-MEGALODON is evidence and decision support, not autonomous host control. The
-following controls are product boundaries, not optional setup advice.
+The local HUD has real, scoped operator actions. Its safety depends on keeping evidence reads, model advice, configuration, privileged execution and acceptance distinct.
 
-## Defaults that must remain true
+## Controls that matter
 
-- **Observe only.** Installation does not activate a service, scheduler, sensor, model, or firewall mutation.
-- **Metadata only.** Packet payloads, payload-derived hashes, credentials, raw bodies, and arbitrary protocol trees do not enter core events, reports, prompts, or dashboards.
-- **Closed and bounded inputs.** Every admitted source has a typed schema, quotas, provenance fields, and explicit rejection behavior.
-- **Local telemetry reads.** The server binds to numeric loopback and reads an existing compatible core store through a constrained SQLite path. Core telemetry routes are read-only. The separately enabled, token-gated AI question POST writes only its private AI receipt ledger and bounded report snapshots; it has no firewall apply route.
-- **No untrusted control plane.** Events, prompts, documents, model text, and browser fields cannot select arbitrary executables, arguments, SQL, credentials, endpoints, or actions.
-- **Evidence is not proof.** A finding, signature alert, severity, registration, recommendation, or process observation does not authorize a response.
-- **Fail closed.** Ambiguous identity, provenance, privacy, authority, schema, storage, or resource state is unavailable rather than partially accepted.
+- **Metadata core:** typed inputs, fixed heuristics, quotas, source identity and private storage. Packet payloads and payload-derived hashes are outside the core event model.
+- **Local requests:** numeric loopback binding, Host/Origin/request checks, scoped tokens where required, and local-user admission. A loopback address alone is not sufficient authority.
+- **Private storage:** ownership/path/identity admission, transactional writes and bounded managed capacity. Telemetry-reader APIs do not migrate or create the core audit database.
+- **Fixed workflows:** untrusted events, browser fields, filenames, prompts and model text cannot select arbitrary executable paths, shell code, SQL, targets or provider endpoints.
+- **Visible failure:** unavailable, unknown, stale and ambiguous outcomes remain explicit. A source alert, model explanation or app badge is not proof of compromise or protection.
 
-## Data and storage
+## Defaults and enabled workflows
 
-The core audit store is private local SQLite. Supported writers use atomic
-transactions and a finite high-water stop. Dashboard reads are separate,
-least-data projections; a healthy HTTP response does not prove ingestion or
-capture health.
+A fresh configuration does not mutate the firewall. The installed launcher can start/reuse the local user HUD service; login autostart is separate. HUD companion jobs and report scheduling have documented local defaults. Saved monitoring choices can resume capture. Explicit support configuration may install fixed packages, start configured services, or invoke OS authorization. These effects must not be described as a universally read-only application.
 
-Backup and restore are explicit operator commands. They use SQLite's online
-backup API, new destinations, bounded manifests, and integrity checks. A restored
-database is not automatically activated, and incomplete artifacts are preserved
-for review rather than silently deleted.
+[Support configuration](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/support-configuration.md) and [companion collection](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/companion-automation.md) define the exact scope. The static workflow catalog remains non-executing.
 
-## Network and browser boundary
+## Temporary defense and recovery
 
-Core telemetry, reference lookup, reports, and static integration maps have no
-cloud upload path. The optional Qwen adapter can make one explicitly enabled,
-bounded request only to literal `127.0.0.1:11434`; the separately operated model
-provider still requires its own containment evidence.
+Legacy firewall CLI `--apply` flags refuse before host interaction. The separate HUD containment workflow supports a currently observed public endpoint through preview, operator confirmation and OS approval. It protects local/reserved/allowlisted and observed DNS/remote-access services, uses only its fixed managed nftables table, and gives each element a five-minute kernel timeout. Model proposals never authorize application.
 
-The Apps viewer is an explicit browser navigation to a saved companion-console
-URL. The frame or externally opened application may use the network and retains
-its own permissions. MEGALODON does not proxy it, inspect its content, test the
-connection, or treat a load event as success. Never place credentials in a saved
-URL.
+Audit admission precedes requested actions. Failed or ambiguous helper results retain review/release paths; a receipt hash chain is not protection against an owner rewriting the ledger. See [the defense contract](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/visual-operations-defense.md) and [failure and refusal tests](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/tests/test_defense.py).
 
-## Response boundary
+Backup/restore uses explicit commands and new destinations. Restoring does not automatically activate the database or complete native recovery acceptance.
 
-Firewall output is plan-only. Retained `--apply` flags refuse before
-configuration, executable lookup, privilege checks, process creation, or host
-mutation. A plan, stored action record, Suricata `blocked` observation, or model
-recommendation is not proof that MEGALODON changed the host.
+## Egress and advice
 
-## External evidence and AI
+There is no core telemetry cloud-analytics/SIEM/SOAR upload path. Separately opted-in location requests, support downloads and externally opened companion consoles have their own network behavior. Location providers see this PC’s connection address; peer locations are looked up locally.
 
-Offline TShark, Zeek, Suricata, STIX, SIEM projections, and Qwen each have
-separate contracts. Catalog presence does not connect a data source. Qwen output
-cannot become a finding, audit fact, command, tool call, database write, or
-response action. Model denial or failure must preserve the deterministic
-evidence independently.
+The model receives bounded evidence through the literal loopback provider. It can explain and return closed proposals; it cannot turn generated code into execution. The canonical Qwen record remains UNBOUND and [#446](https://github.com/bartytime4life/MEGALODON/issues/446) remains open. Runtime selection is not canonical acceptance.
 
-## When to stop
-
-Stop rather than weaken a control when the selected source, operator authority,
-data sensitivity, filesystem ownership, model identity, installed-tool version,
-or requested action is unclear. Passing tests and green CI are evidence about a
-revision, not deployment approval.
-
-Read the complete [security review](../../SECURITY_REVIEW.md) and [MVP safety
-invariants](../../SPECIFICATION.md#2-safety-invariants) before changing these
-boundaries.
+Read [the full security review](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SECURITY_REVIEW.md) and [the specification](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SPECIFICATION.md) for the complete contracts and open controls. This Wiki renovation is documentation and graphics work; it does not operate a model, collector, service or firewall, and is not a security certification.

@@ -1,55 +1,38 @@
 # MEGALODON Documentation Wiki
 
-MEGALODON is a local-first defensive network telemetry MVP. It accepts bounded
-metadata, applies fixed deterministic rules, records a private SQLite audit
-trail, and presents qualified evidence in a read-only loopback HUD.
+## From complex telemetry to a useful local workspace
 
-This Wiki is a practical guide, not a second specification. The repository's
-versioned [README](../../README.md), [specification](../../SPECIFICATION.md),
-[security review](../../SECURITY_REVIEW.md), source, and tests remain
-authoritative.
+**A portfolio of AI-assisted product direction, systems engineering, security design, and visual communication.** Built under [Andy’s project direction](https://github.com/bartytime4life), MEGALODON brings a Python metadata core, private SQLite evidence, a visual Linux HUD, and bounded local-model advice into one inspectable project.
 
-## Start here
+![MEGALODON architecture: bounded inputs feed a deterministic core and local HUD; model advice and operator authority are separate.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/3c81889ba37953e997620c8bf15b3c1239bfc103/assets/wiki/evidence-architecture.png)
 
-- [Visual quick start](../gui-quick-start.md) - buttons, checks, downloads, and where to go next
-- [Software downloads](../software-downloads.md) - required runtime and optional tools with official links
-- [Quick start](quick-start.md) - open an existing checkout without data, or follow the optional synthetic walkthrough
-- [Operator guide](operator-guide.md) - read Home, Traffic, Findings, Apps, Reports, Evidence, and Help correctly
-- [Security boundaries](security-boundaries.md) - understand the controls that must remain true
-- [Integrations and Qwen](integrations-and-qwen.md) - distinguish a documented app, an evidence adapter, and an advisory model
-- [Development and validation](development-and-validation.md) - make and verify a narrow change
-- [Roadmap and current limits](roadmap-and-limits.md) - see what is delivered, still gated, or explicitly unsupported
+The design challenge is to make a complex security workspace understandable while keeping evidence, uncertainty, and authority visible. Explore the decisions and their implementation below.
 
-## Current product snapshot
+## The two-minute recruiter tour
 
-| Area | Current boundary |
-| --- | --- |
-| Inputs | Finite sample metadata, bounded JSONL replay, and optional explicit Linux Scapy capture |
-| Detection | Three fixed metadata heuristics: `SYN_FLOOD`, `PORT_SCAN`, and `DNS_TUNNELING` |
-| Storage | Private schema-v3 SQLite audit store with explicit migration, backup, and restore-to-new-destination commands |
-| HUD | Read-only `127.0.0.1` interface with qualified traffic history, findings, app guidance, local JSON reports, and separate evidence views |
-| Offline evidence | Linux-only TShark and Zeek analysis, plus closed Suricata file/store workflows under separate contracts |
-| Integrations | A static 14-tool capability and workflow map; no general runner, installer, scheduler, or sensor manager |
-| Response | Reviewable nftables plans only; every retained live-apply path refuses before host interaction |
-| Local AI | Optional bounded Qwen explanation through literal loopback; no detection, evidence, tool, or action authority |
+1. **[Meet the builder](builder-profile.md)** — product judgment, AI collaboration, and how to assess the work.
+2. **[See the visual design](visual-tour.md)** — the atlas, workspace hierarchy, motion, status, and reports.
+3. **[Inspect four engineering case studies](engineering-case-studies.md)** — concrete problems, choices, results, tradeoffs, and tests.
+4. **[Follow the evidence](evidence-index.md)** — immutable source links and the limits behind each claim.
 
-## Read status words literally
+## A result you can inspect
 
-- **Unavailable** means no usable evidence was admitted.
-- **Unknown** means the admitted evidence cannot answer the question.
-- **Degraded** means some evidence is limited or incomplete.
-- **Stale** means a saved view is old or a refresh failed.
+The saved October 1 benchmark records **98.1% fewer OS-written bytes** for 10,000 synthetic packet records, with all 10,000 retained in both runs. History-query p95 increased from 4.21 ms to 27.06 ms. This is a finite workstation measurement, with its tradeoff disclosed; it is not a production-capacity or SSD-lifetime claim. Read the [storage case study](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff) and [raw measurements](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/benchmarks/efficient-recording-comparison.json).
 
-None of these states means the network is safe, compromised, fully observed, or
-being protected in real time.
+## What the project brings together
 
-## Evidence basis
+| Layer | Implemented scope | Evidence to inspect |
+| --- | --- | --- |
+| Product and graphics | Local connection atlas, resource strip, findings, source status, topology and visual reports | [Visual tour](visual-tour.md) |
+| Systems engineering | Typed metadata, three fixed detection heuristics, segmented storage, bounded history, scheduled local reports and Linux installation | [Case studies](engineering-case-studies.md) |
+| Security judgment | Local request controls, private storage admission, bounded collectors, explicit operator actions and expiring containment | [Security boundaries](security-boundaries.md) |
+| Applied AI | Digest-pinned installed local models, bounded explanations, closed proposals and failure states | [Integrations and local AI](integrations-and-qwen.md) |
+| Delivery discipline | Versioned contracts, negative tests, reproducible measurements and separate acceptance gates | [Evidence index](evidence-index.md) |
 
-Current alignment: [2026-09-21 repository, Console, and telemetry record](../document-alignment-2026-09-21.md),
-based on `main@bdddd427df3c06e30c0d7e6e3405a0e1932fc971` and the separate
-owner-only Console v30 publication. The original full-page review was at
-`main@5ac382d` on 2026-09-19. Dated receipts remain distinct from a release
-or operational acceptance.
+## Use or contribute
 
-Wiki content is generated from `docs/wiki/`. The native GitHub Wiki is a public
-projection of those reviewed source files, not an independent authority.
+[Quick start](quick-start.md) · [Operator guide](operator-guide.md) · [Development and validation](development-and-validation.md) · [Roadmap and limits](roadmap-and-limits.md)
+
+The supported application is the **local Linux HUD**. The former hosted Sites console is retired; it is not a recruiter demo or a connection to this PC. Source and publication history remain in [the Site record](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/site-source-alignment.md).
+
+This showcase was checked against repository main at `4da7fae0d8df2d8cd6b3ff93964055f7e14972bb` (October 11, 2026 UTC / October 10 in America/Chicago). Case-study evidence is pinned to that revision. Guides link to current repository documentation. Code, tests, merges, host operation, release, and independent acceptance remain separate claims. Wiki source lives in `docs/wiki/`; this public projection does not replace the [specification](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SPECIFICATION.md) or [security review](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SECURITY_REVIEW.md).

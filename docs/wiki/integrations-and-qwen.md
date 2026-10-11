@@ -1,71 +1,27 @@
-# Integrations and Local Qwen
+# Integrations and Local AI
 
-MEGALODON owns its evidence model, receipts, local reports, and browser
-projection. Companion applications remain separately operated evidence sources
-or reference tools; they are not embedded control authority.
+## Distinguish planning, presence and data
 
-## Three different meanings
+The active catalog has ten entries: Python/SQLite, TShark/Wireshark, Zeek, Suricata, Scapy, nftables, ClamAV, osquery, local Qwen/Ollama, and Nmap. A catalog entry describes a capability; executable/process observations describe presence; admitted evidence requires the selected workflow’s own contract.
 
-| Claim | Meaning |
-| --- | --- |
-| Listed in Setup → Apps & connections | A repository-defined capability slot and workflow description exists |
-| Present at startup | An executable name or bounded process-name observation was found |
-| Data connected | A separately reviewed adapter admitted evidence under its own contract |
+The static `capabilities` and `hub-plan` commands execute nothing. The local HUD separately implements fixed support configuration, service-start controls, finite capture, bounded inventory/scan collectors, and completed-report watching. These are real host workflows with explicit scope and authorization, not capabilities granted by a catalog listing.
 
-These claims are never interchangeable. A saved console URL or visible app UI
-also does not establish a data connection.
+See [Background tools](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/background-tools.md), [Support configuration](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/support-configuration.md), and [the integration hub contract](../integration-hub.md).
 
-## Closed workflow map
+## Sensor evidence remains source-specific
 
-`megalodon hub-plan` returns static, non-executing workflow descriptions. It does
-not probe, install, start, update, authenticate to, or network-connect a tool.
+Saved-capture TShark analysis, closed Zeek JSON/TSV import, the strict Suricata alert publication chain and the HUD’s separate background observations have different schemas and acceptance boundaries. An offline importer does not start its producer. A background sensor summary does not become a core fixed-rule finding or establish offline producer qualification.
 
-Current positions include:
+[#445](https://github.com/bartytime4life/MEGALODON/issues/445) remains open for exact Zeek offline producer acceptance. [The IP inspector](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/visual-operations-defense.md) can read bounded recent EVE context without making it part of the strict admitted-detection chain. Packet, flow and alert counts are different units.
 
-- core Python and SQLite metadata intake;
-- optional explicit Linux Scapy capture;
-- fixed-argument Linux TShark saved-capture analysis;
-- closed Zeek JSON/TSV `conn.log` import;
-- nftables planning with live application refused;
-- manual ClamAV companionship with no file, result, or quarantine importer;
-- bounded completed-file STIX context reading and pure ECS/OCSF projection;
-- limited osquery and Nmap relationships with no general runner.
+## Installed local models in the HUD
 
-Adding an application requires a capability status, one closed workflow, typed
-input/output contracts, privacy and action boundaries, negative tests, and
-separate approval for any egress, credentials, scheduler, privileged action, or
-remote listener.
+Setup selects an installed local completion model with an exact digest. Provider checks, prompt/output bounds, explicit cancellation and separate last-response/last-attempt status constrain analysis. No model-generated executable path, shell command, destination or scan scope is accepted. Closed proposals require an operator-selected workflow.
 
-## Suricata chain
+The provider uses literal loopback. Local model code does not sandbox the separately operated Ollama service, prove its provenance, or grant response authority. Read [model selection](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/local-model-selection.md) and [the original Qwen advisory contract](../local-model-advisory-contract.md).
 
-The current Linux main-thread APIs form an explicit, operator-driven chain:
+## Canonical Qwen Airlock is still held
 
-1. convert one checksum-bound, private Suricata 8.0.7 alert-only raw-EVE file into a new closed envelope;
-2. validate one completed envelope into an immutable normalized batch and receipt;
-3. transact one validated publication into a pre-created private durable store;
-4. reconcile an unknown commit through a separate read-only API; and
-5. optionally load one bounded read-only dashboard snapshot at startup.
+[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) is open. The HUD’s saved runtime model selection is distinct from that owner binding and does not complete native containment or representative evaluation. Disabled/UNBOUND claims must be made per entrypoint; canonical UNBOUND is not a universal runtime gate.
 
-There is no Suricata sensor launch, rule update, mixed EVE firehose, directory
-watcher, background consumer, retention service, dashboard ingestion control,
-IPS mode, or response authority. Producer-reported `blocked` remains an external
-observation; MEGALODON action stays `not_attempted`.
-
-## Local Qwen advisory
-
-Qwen is optional explanation, not detection or automation.
-
-- The only provider endpoint is literal numeric loopback at `127.0.0.1:11434`.
-- Requests require explicit enablement and a closed, size-limited projection of already validated local evidence.
-- Outcomes are bounded to `ANSWER`, `ABSTAIN`, `DENY`, or `ERROR`.
-- The adapter does not discover, install, pull, start, retry, redirect to, or schedule a model.
-- The HUD can display one validated startup-supplied receipt but cannot request, poll, or rerun Qwen.
-- Output cannot alter evidence, detections, tools, files, storage, capture, quarantine, firewall state, or reports.
-
-Application-level checks do not sandbox Ollama or attest the bytes behind a model
-alias. Provider filesystem access, model identity, compatibility, cancellation,
-and egress containment remain separate acceptance work.
-
-See the [integration hub contract](../integration-hub.md) and [local Qwen
-advisory contract](../local-model-advisory-contract.md) for exact schemas and
-gates.
+[Scoped sentinel tests](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/tests/test_qwen_zero_effect.py) and [the dated reconciliation](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/qwen-446-zero-effect-reconciliation-2026-10-07.md) make those differences inspectable. Working application AI and pending canonical acceptance can coexist; neither should be described as the other.
