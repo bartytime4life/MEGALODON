@@ -191,6 +191,52 @@ def test_validation_and_identity_helpers_keep_a_live_connections_locks(
         connection.close()
 
 
+@pytest.mark.parametrize("replacement", ["private", "hard_linked"])
+def test_sidecar_relookup_keeps_live_connections_locks(
+    tmp_path, monkeypatch, replacement
+):
+    path = _private(tmp_path)
+    connection = _wal_connection(path)
+    sidecar = path.with_name(path.name + "-journal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    original_open = storage_module._open_for_identity
+    journal_opens = []
+
+    def open_then_replace(target, flags, **kwargs):
+        descriptor = original_open(target, flags, **kwargs)
+        if str(target).endswith("-journal"):
+            journal_opens.append(descriptor)
+            if len(journal_opens) == 1:
+                sidecar.unlink()
+                other = path.parent / "replacement"
+                other.write_bytes(b"")
+                other.chmod(0o600)
+                os.link(other, sidecar)
+                if replacement == "private":
+                    other.unlink()
+        return descriptor
+
+    monkeypatch.setattr(storage_module, "_open_for_identity", open_then_replace)
+    try:
+        if replacement == "hard_linked":
+            with pytest.raises(
+                StorageSchemaError, match="^STORAGE_PATH:UNSAFE_DATABASE$"
+            ):
+                storage_module._validate_sqlite_sidecars(
+                    path, None, writable=True, prefix="STORAGE_PATH"
+                )
+        else:
+            present = storage_module._validate_sqlite_sidecars(
+                path, None, writable=True, prefix="STORAGE_PATH"
+            )
+            assert "-journal" in present
+        assert len(journal_opens) == 2
+        _assert_sqlite_locks_held(path)
+    finally:
+        connection.close()
+
+
 def test_lock_preserving_open_fails_where_the_replaced_open_failed(tmp_path):
     path = _private(tmp_path)
     with Store(path) as store:
@@ -219,16 +265,20 @@ def test_lock_preserving_open_fails_where_the_replaced_open_failed(tmp_path):
         )
     sidecar.rmdir()
 
+    directory = os.open(sidecar.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     listener = socket.socket(socket.AF_UNIX)
     try:
-        listener.bind(str(sidecar))
+        # Keep the socket address below Linux's sun_path limit even when the
+        # owner-private pytest directory has a long absolute pathname.
+        listener.bind(f"/proc/self/fd/{directory}/{sidecar.name}")
         with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:UNSAFE_SIDECAR$"):
             storage_module._validate_sqlite_sidecars(
                 path, None, writable=False, prefix="STORAGE_PATH"
             )
     finally:
         listener.close()
-        sidecar.unlink()
+        os.close(directory)
+        sidecar.unlink(missing_ok=True)
 
     if os.geteuid() != 0:
         sidecar.write_bytes(b"")
