@@ -7,6 +7,13 @@
 **MEGALODON** = **M**alware **E**limination **G**ateway **A**nd **L**ayered
 **O**perations **D**efense **O**nline **N**etwork.
 
+> **For recruiters: [Take the two-minute MEGALODON portfolio tour →](https://github.com/bartytime4life/MEGALODON/wiki)**
+>
+> Explore how Andy directs AI-assisted development across product design,
+> systems engineering, security judgment, and visual communication. The Wiki
+> connects those capabilities to original graphics, four engineering case
+> studies, and source-linked evidence.
+
 MEGALODON is a local-first defensive network telemetry MVP with a Python
 metadata core and separately scoped tool integrations. It validates bounded
 network metadata, applies three fixed detection heuristics, stores an SQLite
