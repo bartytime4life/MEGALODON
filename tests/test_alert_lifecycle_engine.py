@@ -88,6 +88,77 @@ def test_full_open_acknowledge_resolve_flow() -> None:
     assert replay in {"STALE_REVISION", "STATE_MISMATCH"}
 
 
+def _ack_fields(**overrides):
+    value = dict(
+        id="t1", alert_id="alert-100", policy_version="alert-policy-v1",
+        sequence=2, expected_revision=1, from_state="open", to_state="acknowledged",
+        actor_id="operator-1", reason_code="operator_acknowledged",
+        idempotency_key="alert-100.t.2", occurred_at="2026-09-19T00:01:00Z",
+    )
+    value.update(overrides)
+    return value
+
+
+def _ledger() -> AlertLifecycleLedger:
+    ledger = AlertLifecycleLedger()
+    ledger.open_alert(
+        id="alert-100", detection_id="detection-100",
+        policy_version="alert-policy-v1", opened_at="2026-09-19T00:00:00Z",
+    )
+    return ledger
+
+
+@pytest.mark.parametrize("bad", [
+    {"id": "t 1\n"}, {"actor_id": "a" * 5001}, {"reason_code": ""},
+    {"idempotency_key": ["not", "a", "string"]},
+    {"from_state": ["open"]}, {"to_state": {"state": "acknowledged"}},
+])
+def test_plain_mapping_candidates_get_the_same_value_checks(bad) -> None:
+    with pytest.raises(AlertLifecycleError):
+        transition(**_ack_fields(**bad))
+    ledger = _ledger()
+    with pytest.raises(AlertLifecycleError):
+        ledger.apply(_ack_fields(**bad))
+    assert ledger.projection("alert-100")["state"] == "open"
+    assert ledger.history("alert-100") == ()
+
+
+def test_ledger_history_is_detached_from_the_callers_mapping() -> None:
+    ledger = _ledger()
+    request = _ack_fields()
+    assert ledger.apply(request) == "accepted"
+    # A caller that reuses its dict for the next request must not rewrite history.
+    request.update(id="t2", sequence=3, expected_revision=2, from_state="acknowledged",
+                   to_state="resolved", idempotency_key="alert-100.t.3",
+                   occurred_at="2026-09-19T00:02:00Z")
+    assert ledger.history("alert-100")[0]["to_state"] == "acknowledged"
+    assert ledger.history("alert-100")[0]["idempotency_key"] == "alert-100.t.2"
+    assert ledger.apply(request) == "accepted"
+    assert ledger.projection("alert-100")["state"] == "resolved"
+
+
+def test_unhashable_projection_state_is_a_schema_refusal() -> None:
+    projection = dict(
+        id="alert-100", detection_id="detection-100", policy_version="alert-policy-v1",
+        state=["open"], revision=1, created_at="2026-09-19T00:00:00Z",
+        updated_at="2026-09-19T00:00:00Z",
+    )
+    with pytest.raises(AlertLifecycleError):
+        apply_transition(projection, _ack_fields())
+
+
+def test_sub_microsecond_clock_rollback_is_rejected() -> None:
+    projection = alert_projection(
+        id="alert-100", detection_id="detection-100", policy_version="alert-policy-v1",
+        state="open", revision=1, created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00.000000900Z",
+    )
+    earlier = transition(**_ack_fields(occurred_at="2026-01-01T00:00:00.000000100Z"))
+    assert apply_transition(projection, earlier) == ("CLOCK_ROLLBACK", None)
+    same = transition(**_ack_fields(occurred_at="2026-01-01T00:00:00.0000009Z"))
+    assert apply_transition(projection, same)[0] == "accepted"
+
+
 def test_ledger_rejects_unknown_alert() -> None:
     ledger = AlertLifecycleLedger()
     candidate = transition(

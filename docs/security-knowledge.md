@@ -36,16 +36,21 @@ until reviewed. Updates cannot silently change these assumptions.
 
 Reference checks run in the local service at **08:00 local time**. The latest
 missed slot is checked once after downtime. The slot is persisted before the
-attempt; failure does not cause repeated downloads on refresh. A clock rollback
-does not repeat an earlier slot. **Check references now** retries immediately.
+attempt; failure does not cause repeated downloads on refresh. Shutdown during
+a check is not recorded as a failed check; the interrupted slot runs again after
+restart. A clock rollback does not repeat an earlier slot. **Check references
+now** retries immediately.
 
 Requests use fixed HTTPS publisher endpoints, no proxy or redirect, and
 conditional ETags. No IP observations, hostnames, prompts or reports accompany
 them. ATLAS's release pointer is restricted to an approved monthly filename
 within the format-6 directory. Document links are never fetched automatically.
 Each download has an outer 90-second deadline in a disposable, resource-limited
-worker. UTF-8 JSON structure and YAML nesting are bounded before object
-materialization. Cancellation kills and reaps the download worker.
+worker. The worker runs in Python isolated mode from `/`, so the dashboard's
+working directory, user site and `PYTHON*` variables cannot supply its modules;
+only this package's own directory is added to its import path. UTF-8 JSON
+structure and YAML nesting are bounded before object materialization.
+Cancellation kills and reaps the download worker.
 
 The private `knowledge` directory beside managed evidence has a separate
 **512 MiB maximum**. It holds immutable SQLite FTS5 generations, compressed
@@ -55,7 +60,10 @@ generation, its predecessor and staging. Updates need this headroom and a
 16 MiB free-disk reserve. Failed validation, interruption or insufficient
 space leaves the active version in place. Activation replaces the manifest
 atomically; **Use previous library** swaps the retained generations. Corrupt
-indexes fall back to the starter while visibly reporting the problem.
+indexes fall back to the starter while visibly reporting the problem. The next
+successful update then keeps the last good predecessor as the rollback target
+and retires the damaged generation. If an update activates but its final status
+cannot be saved, the status reports the activation rather than a failure.
 
 `pip install .[knowledge]` supplies PyYAML for ATLAS updates. The Linux installer
 includes this supported extra. The packaged starter works without PyYAML.
@@ -112,6 +120,8 @@ to 64 per status response. **Expected activity**, **Investigate** and **Incorrec
 match** are durable feedback, not detector edits. Investigate remains unresolved.
 
 Automatic inference allows four attempts in a sliding hour, including failures.
+Endpoint inspector reviews are never selected for automatic explanation; they
+belong to the manual request that created them.
 Budget admission persists before inference. One inference slot is shared with
 existing controls. Manual requests can interrupt background generation; queued
 manual reviews take the next slot. Cancellation targets that background job.

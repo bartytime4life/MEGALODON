@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -37,6 +38,8 @@ LICENSE_URLS = {
     'kev': RAW+'cisagov/kev-data/develop/LICENSE',
     'owasp': RAW+'GenAI-Security-Project/GenAI-LLM-Top10/main/README.md',
 }
+WORKER = ("import runpy,sys;root=sys.argv.pop(1);root in sys.path or sys.path.insert(0,root);"
+          "runpy.run_module('megalodon.knowledge_sources',run_name='__main__',alter_sys=True)")
 
 
 def license_identity(source, raw):
@@ -118,8 +121,11 @@ def fetch(url, limit, etag=None, *, stop=None):
     if not approved_url(url) or type(limit) is not int or not 1<=limit<=80*1024**2:
         raise ValueError('Unapproved knowledge request')
     if stop and stop.is_set():raise ValueError('Download cancelled')
-    process=subprocess.Popen([sys.executable,'-m','megalodon.knowledge_sources',url,str(limit),etag or ''],
-                             stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,stdin=subprocess.DEVNULL)
+    # Isolated mode: no working directory, user site or PYTHON* variables on the
+    # import path. Only this package's own parent directory is added, so source
+    # checkouts and installed environments both load the same reviewed code.
+    process=subprocess.Popen([sys.executable,'-I','-c',WORKER,str(Path(__file__).resolve().parents[1]),url,str(limit),etag or ''],
+                             cwd='/',stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,stdin=subprocess.DEVNULL)
     deadline=time.monotonic()+90
     try:
         while True:

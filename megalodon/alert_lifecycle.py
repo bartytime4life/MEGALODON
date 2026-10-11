@@ -105,6 +105,12 @@ def _parse(value: str) -> datetime:
     return datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
 
 
+def _instant(value: str) -> tuple[datetime, int]:
+    # datetime keeps microseconds only; compare the full nanosecond fraction.
+    whole, _, fraction = value.removesuffix("Z").partition(".")
+    return _parse(whole + "Z"), int(fraction.ljust(9, "0"))
+
+
 def _bounded_int(value: object) -> int:
     if type(value) is not int or not 1 <= value <= 2_147_483_647:
         _fail("SCHEMA")
@@ -112,7 +118,8 @@ def _bounded_int(value: object) -> int:
 
 
 def _state(value: object) -> str:
-    if value not in ALERT_STATES:
+    # The type check first: an unhashable value would raise TypeError in the lookup.
+    if type(value) is not str or value not in ALERT_STATES:
         _fail("SCHEMA")
     return value
 
@@ -196,14 +203,17 @@ def not_attempted_receipt(
     })
 
 
-def _require_projection(value: Mapping[str, Any]) -> None:
+def _require_projection(value: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(value, Mapping) or set(value) != _PROJECTION_KEYS:
         _fail("SCHEMA")
+    # Rebuild to validate every value and detach from the caller's object.
+    return alert_projection(**value)
 
 
-def _require_transition(value: Mapping[str, Any]) -> None:
+def _require_transition(value: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(value, Mapping) or set(value) != _TRANSITION_KEYS:
         _fail("SCHEMA")
+    return transition(**value)
 
 
 def apply_transition(
@@ -221,11 +231,9 @@ def apply_transition(
     rollback, or out-of-order sequence value, matching the checked-in
     contract fixtures exactly.
     """
-    _require_projection(projection)
-    _require_transition(candidate)
-    prior = list(prior)
-    for item in prior:
-        _require_transition(item)
+    projection = _require_projection(projection)
+    candidate = _require_transition(candidate)
+    prior = [_require_transition(item) for item in prior]
 
     if candidate["alert_id"] != projection["id"]:
         return "ALERT_MISMATCH", None
@@ -237,7 +245,7 @@ def apply_transition(
         return "STATE_MISMATCH", None
     if candidate["policy_version"] != projection["policy_version"]:
         return "POLICY_VERSION_MISMATCH", None
-    if _parse(candidate["occurred_at"]) < _parse(projection["updated_at"]):
+    if _instant(candidate["occurred_at"]) < _instant(projection["updated_at"]):
         return "CLOCK_ROLLBACK", None
     if any(
         item["alert_id"] == candidate["alert_id"]
@@ -300,7 +308,7 @@ class AlertLifecycleLedger:
 
     def apply(self, candidate: Mapping[str, Any]) -> str:
         """Apply `candidate` to its referenced alert, if this ledger holds one."""
-        _require_transition(candidate)
+        candidate = _require_transition(candidate)
         alert_id = candidate["alert_id"]
         if alert_id not in self._projections:
             return "ALERT_MISMATCH"
