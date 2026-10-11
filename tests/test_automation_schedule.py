@@ -221,6 +221,39 @@ def test_dst_gap_rejects_by_default() -> None:
     assert caught.value.code == "DST_UNRESOLVED"
 
 
+@pytest.mark.parametrize("policy", ["reject", "skip", "fold_earlier", "fold_later"])
+@pytest.mark.parametrize("dtstart,until,last", [
+    ("2027-03-10T02:30:00", "20270313T235959Z", "2027-03-13"),  # next candidate is in the spring gap
+    ("2027-11-03T01:30:00", "20271106T120000Z", "2027-11-06"),  # next candidate is the repeated hour
+])
+def test_dst_change_just_past_until_does_not_refuse_the_preview(policy, dtstart, until, last) -> None:
+    occ = next_occurrences(
+        dtstart=dtstart, schedule_timezone="America/Chicago",
+        rrule=f"FREQ=DAILY;UNTIL={until}", dst_policy=policy, limit=10,
+    )
+    assert len(occ) == 4
+    assert occ[-1]["local_time"][:10] == last
+    assert all(o["dst_status"] == "normal" for o in occ)
+
+
+def test_dst_gap_inside_until_still_refuses() -> None:
+    with pytest.raises(AutomationScheduleError) as caught:
+        next_occurrences(
+            dtstart="2027-03-10T02:30:00", schedule_timezone="America/Chicago",
+            rrule="FREQ=DAILY;UNTIL=20270314T120000Z",
+        )
+    assert caught.value.code == "DST_UNRESOLVED"
+
+
+@pytest.mark.parametrize("policy", ["reject", "shift_forward"])
+def test_occurrence_at_is_a_four_digit_year_before_1000(policy) -> None:
+    occ = next_occurrences(
+        dtstart="0999-01-01T00:00:00", schedule_timezone="UTC",
+        rrule="FREQ=YEARLY;COUNT=2", dst_policy=policy, limit=2,
+    )
+    assert [o["occurrence_at"] for o in occ] == ["0999-01-01T00:00:00Z", "1000-01-01T00:00:00Z"]
+
+
 def test_dst_gap_skip_omits_the_nonexistent_occurrence() -> None:
     occ = next_occurrences(
         dtstart="2027-03-13T02:30:00", schedule_timezone="America/Chicago",

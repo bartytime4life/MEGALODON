@@ -246,6 +246,11 @@ def _zone(name: object) -> ZoneInfo:
         _fail("TIMEZONE_VALUE")
 
 
+def _utc_text(value: datetime) -> str:
+    # strftime("%Y") does not zero-pad years before 1000 on glibc.
+    return value.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds") + "Z"
+
+
 def _local_datetime(value: object) -> datetime:
     if type(value) is not str or not _DTSTART.fullmatch(value):
         _fail("DTSTART_VALUE")
@@ -492,7 +497,7 @@ def _forward_preview(
     results: list[Mapping[str, Any]] = []
     for resolved, (candidate, status) in sorted(pending.items()):
         results.append(MappingProxyType({
-            "occurrence_at": resolved.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "occurrence_at": _utc_text(resolved),
             "local_time": candidate.isoformat(),
             "dst_status": status,
         }))
@@ -534,13 +539,15 @@ def next_occurrences(
         if scanned >= _MAX_CANDIDATE_SCANS or len(results) >= cap:
             break
         status, utc0, utc1 = _dst_status(candidate, zone)
+        if until_utc is not None and min(utc0, utc1) > until_utc:
+            break  # Past UNTIL: not in the set, so its DST state cannot refuse the preview.
         resolved = _resolve(status, utc0, utc1, dst_policy)
         if resolved is None:
             continue
         if until_utc is not None and resolved > until_utc:
             break
         results.append(MappingProxyType({
-            "occurrence_at": resolved.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "occurrence_at": _utc_text(resolved),
             "local_time": candidate.isoformat(),
             "dst_status": status,
         }))
