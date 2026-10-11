@@ -441,6 +441,18 @@ def test_malformed_saved_profile_fails_closed_without_stopping_startup(manager,r
     assert restored._configured==set() and restored._background_enabled is False
 
 
+def test_deeply_nested_qwen_profile_falls_back_to_setup_without_stopping_startup(manager):
+    raw=b'['*1020  # Within the 1024-byte cap but deep enough to exhaust the decoder.
+    directory=manager.home/'.config/megalodon'
+    directory.mkdir(parents=True,exist_ok=True);directory.chmod(0o700)
+    path=directory/'qwen-profile.json'
+    path.write_bytes(raw);path.chmod(0o600)
+    restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    assert restored.qwen_status['state']=='needs_setup'
+    assert 'could not be validated' in restored.qwen_status['message']
+    assert restored.settings.ai.enabled is manager.settings.ai.enabled
+
+
 def test_failed_save_does_not_enable_geography_or_background(manager,monkeypatch):
     refreshed,started=[],[]
     monkeypatch.setattr(manager.background,'refresh_geography',lambda:refreshed.append(True))

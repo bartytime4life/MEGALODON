@@ -157,6 +157,20 @@ def test_duplicate_key_and_nonfinite_number_refuse():
         parse_receipt_bytes(b'{"value":NaN}')
 
 
+def test_oversized_integer_is_a_fixed_json_refusal():
+    # Python's integer digit limit raises a bare ValueError inside json.loads.
+    with pytest.raises(ModelEvaluationError, match="^INVALID_JSON$"):
+        parse_receipt_bytes(b'{"value":' + b"9" * 5000 + b"}")
+
+
+@pytest.mark.parametrize("evidence_class", [["operator_observed"], {"a": 1}])
+def test_unhashable_evidence_class_is_a_fixed_refusal(evidence_class):
+    value = receipt()
+    value["evidence_class"] = evidence_class
+    with pytest.raises(ModelEvaluationError, match="^EVIDENCE_CLASS$"):
+        validate_evaluation_receipt(value)
+
+
 def test_time_order_refuses():
     value = receipt()
     value["execution"]["completed_at"] = "2025-12-31T23:59:59Z"

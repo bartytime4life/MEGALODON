@@ -30,6 +30,10 @@ MISSING_COMPONENTS = (
 REMAINING_HOLDS = (
     "EVIDENCE_ORIGIN_AUTHENTICATION",
     "LOADED_RUNTIME_BYTES_NOT_ATTESTED",
+    # The live advisory transport does not yet send the request contract's
+    # num_ctx, seed, or format controls, so a consistent request contract is
+    # not evidence of what a provider call would carry.
+    "RUNTIME_PROVIDER_WIRING",
     "INDEPENDENT_SECURITY_ACCEPTANCE_CURRENTNESS",
     "OWNER_FINAL_ACCEPTANCE",
     "RELEASE_AND_DEPLOYMENT_AUTHORITY",
@@ -565,6 +569,29 @@ def assess_readiness(
             mode == "anomaly_advisory" and format_digest is None,
             "ANOMALY_FORMAT_SCHEMA_MISSING",
         )
+        if profile_value is not None:
+            # The request must run inside the posture the profile measured.
+            num_ctx = options.get("num_ctx") if type(options) is dict else None
+            context_window = profile_value.get("context_window")
+            _append(
+                failures,
+                type(num_ctx) is not int
+                or num_ctx != profile_value.get("operational_context"),
+                "REQUEST_CONTEXT_PROFILE_MISMATCH",
+            )
+            _append(
+                failures,
+                type(num_ctx) is not int
+                or type(context_window) is not int
+                or num_ctx > context_window,
+                "REQUEST_CONTEXT_EXCEEDS_PROFILE_WINDOW",
+            )
+            _append(
+                failures,
+                profile_value.get("structured_output") is True
+                and "format" not in request_map,
+                "PROFILE_STRUCTURED_OUTPUT_FORMAT_MISSING",
+            )
 
     state = "CANDIDATE_PACKET_CONSISTENT" if not failures else "EVIDENCE_HOLD"
     return _packet(

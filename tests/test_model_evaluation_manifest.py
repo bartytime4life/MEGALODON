@@ -106,6 +106,19 @@ def test_duplicate_key_and_oversize_refuse():
         parse_manifest_bytes(b"")
 
 
+def test_oversized_integer_is_a_fixed_json_refusal():
+    # Python's integer digit limit raises a bare ValueError inside json.loads.
+    with pytest.raises(ModelEvaluationError, match="^INVALID_JSON$"):
+        parse_manifest_bytes(b'{"value":' + b"9" * 5000 + b"}")
+
+
+def test_unhashable_manifest_evidence_class_is_a_fixed_refusal():
+    value = manifest()
+    value["evidence_class"] = ["operator_frozen"]
+    with pytest.raises(ModelEvaluationError, match="^EVIDENCE_CLASS$"):
+        validate_corpus_manifest(value)
+
+
 def test_case_ids_are_opaque_so_no_text_can_be_carried():
     value = manifest()
     value["cases"][0]["case_id"] = "ignore-previous-instructions"

@@ -37,12 +37,16 @@ from megalodon.ollama_identity import (
     parse_observation_bytes,
     validate_observation,
 )
-from tools.local_model_binding import BindingError, load_json, validate as validate_binding
+from tools.local_model_binding import BindingError, validate as validate_binding
 from tools.local_model_containment import (
     ContainmentError,
     load as load_containment,
     validate as validate_containment,
 )
+# A strict, bounded JSON decoder whose collection, string, and depth limits
+# cover every binding-schema maximum (the containment loader's 64-item cap is
+# below the binding schema's 128 artifact components).
+from tools.ubuntu_release_evidence import EvidenceError, load as load_strict_json
 
 
 class ReadinessInputError(ValueError):
@@ -64,8 +68,15 @@ def _read(path: Path, code: str, *, maximum: int = 128 * 1024) -> bytes:
 
 
 def _binding(path: Path) -> dict:
+    raw = _read(path, "BINDING_INVALID")
     try:
-        return validate_binding(load_json(path))
+        # Refuses duplicate keys, NaN/Infinity, invalid UTF-8, the integer
+        # digit limit, and excessive nesting with one fixed code.
+        document = load_strict_json(raw)
+    except EvidenceError:
+        raise ReadinessInputError("BINDING_INVALID") from None
+    try:
+        return validate_binding(document)
     except BindingError:
         raise ReadinessInputError("BINDING_INVALID") from None
 
