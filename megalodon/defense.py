@@ -16,6 +16,7 @@ from .companion_automation import _run_fixed
 from .defense_guard import ROOT_PROGRAM
 from .managed_capture import now
 from .operations import PROTECTED_SERVICE_PORTS
+from .qwen_advisory import bounded_advisory_text
 
 ACTIONS = {'analyze':{'ip'},'refresh_inventory':set(),'scan_files':set(),
            'plan_containment':{'ip'},'apply_containment':{'plan_id'},'release_containment':{'ip'}}
@@ -213,8 +214,8 @@ class Defense:
                     reject_response(model_settings)
                     raise AIProviderError('INVALID_RESPONSE') from None
                 if (type(answer) is not dict or set(answer)!={'explanation','proposal'}
-                        or type(answer['explanation']) is not str or not 1<=len(answer['explanation'])<=240
-                        or any(ord(c)<32 and c not in '\n\t' for c in answer['explanation'])
+                        # Decoded JSON escapes can yield bidi or C1 controls; use the shared display check.
+                        or not bounded_advisory_text(answer['explanation'],240)
                         or type(answer['proposal']) is not str or answer['proposal'] not in {'observe','refresh_inventory','scan_files','contain'}):
                     reject_response(model_settings)
                     raise AIProviderError('INVALID_RESPONSE')

@@ -121,7 +121,10 @@ def _request(path: str, method: str, body: bytes | None, timeout: float,
         request_deadline = min(request_deadline, deadline)
     if request_deadline <= time.monotonic():
         raise AIProviderError("REQUEST_TIMEOUT")
-    if not transport._INVOCATION_LOCK.acquire(blocking=False):
+    # Metadata reads hold this in-process slot only briefly, so wait a bounded
+    # moment rather than failing a manual request behind a telemetry refresh.
+    lock_wait = max(0.0, min(1.0, request_deadline - time.monotonic()))
+    if not transport._INVOCATION_LOCK.acquire(timeout=lock_wait):
         raise AIProviderError("CONCURRENCY_LIMIT_REACHED")
     process_lock: int | None = None
     connection: transport._LiteralLoopbackHTTPConnection | None = None
@@ -173,6 +176,9 @@ def _request(path: str, method: str, body: bytes | None, timeout: float,
     except (ValueError, transport._ProviderResponseInvalid):
         if getattr(_request_context,"cancel",None) is not None and _request_context.cancel.is_set():
             raise AIProviderError('REQUEST_CANCELLED') from None
+        # A deadline abort mid-body surfaces as a short read, not a bad reply.
+        if guard is not None and guard.finish() == 'PROVIDER_TIMEOUT':
+            raise AIProviderError('REQUEST_TIMEOUT') from None
         raise AIProviderError("INVALID_RESPONSE") from None
     finally:
         if guard is not None:
@@ -192,6 +198,21 @@ def _json(data: bytes) -> object:
         raise AIProviderError("INVALID_RESPONSE") from None
 
 
+def _listener_admitted(deadline: float | None = None) -> None:
+    """One listener-posture verdict shared by admission and the model catalog."""
+    try:
+        posture = qwen_provider_posture(deadline=deadline)
+    except (OSError, ValueError):
+        raise AIProviderError("POLICY_REJECTION") from None
+    # A scan cut short by the caller's deadline is a timeout, not a posture finding.
+    if deadline is not None and time.monotonic() >= deadline:
+        raise AIProviderError("REQUEST_TIMEOUT")
+    if posture["listening"] == "no":
+        raise AIProviderError("OLLAMA_UNAVAILABLE")
+    if posture["loopback_only"] is not True:
+        raise AIProviderError("POLICY_REJECTION")
+
+
 def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, Any]:
     if not settings.enabled:
         raise AIProviderError("DISABLED")
@@ -206,17 +227,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
         raise AIProviderError("POLICY_REJECTION")
     if deadline is not None and time.monotonic() >= deadline:
         raise AIProviderError("REQUEST_TIMEOUT")
-    try:
-        posture = qwen_provider_posture(deadline=deadline)
-    except (OSError, ValueError):
-        raise AIProviderError("POLICY_REJECTION") from None
-    # A scan cut short by the caller's deadline is a timeout, not a posture finding.
-    if deadline is not None and time.monotonic() >= deadline:
-        raise AIProviderError("REQUEST_TIMEOUT")
-    if posture["listening"] == "no":
-        raise AIProviderError("OLLAMA_UNAVAILABLE")
-    if posture["loopback_only"] is not True:
-        raise AIProviderError("POLICY_REJECTION")
+    _listener_admitted(deadline)
     remaining = 3 if deadline is None else min(3, deadline - time.monotonic())
     if remaining <= 0:
         raise AIProviderError("REQUEST_TIMEOUT")
@@ -245,8 +256,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
 
 def model_catalog() -> list[dict]:
     """Read installed artifacts only; full local completion checks run on selection."""
-    posture=qwen_provider_posture()
-    if posture.get('loopback_only') is not True:raise AIProviderError('POLICY_REJECTION')
+    _listener_admitted()
     value=_json(_request('/api/tags','GET',None,3))
     if type(value) is not dict or type(value.get('models')) is not list or len(value['models'])>256:
         raise AIProviderError('INVALID_RESPONSE')

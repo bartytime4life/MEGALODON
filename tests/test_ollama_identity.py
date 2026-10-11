@@ -142,6 +142,57 @@ def test_cli_success_projects_no_raw_template_or_license(tmp_path: Path):
     assert "license_sha256" not in rendered
 
 
+@pytest.mark.parametrize("field,value,code", [
+    ("evidence_class", [], "EVIDENCE_CLASS"),
+    ("evidence_class", {}, "EVIDENCE_CLASS"),
+    ("capabilities", [["completion"]], "CAPABILITIES"),
+    ("capabilities", ["completion", {"tools": True}], "CAPABILITIES"),
+])
+def test_unhashable_json_values_are_fixed_code_refusals(field, value, code):
+    observed = observation()
+    (observed["show"] if field == "capabilities" else observed)[field] = value
+    with pytest.raises(OllamaIdentityError) as raised:
+        validate_observation(observed)
+    assert raised.value.code == code
+
+
+def test_cli_reads_no_more_than_the_input_cap(tmp_path: Path, capsys):
+    import importlib.util
+    import os
+    import threading
+    import time
+    from megalodon.ollama_identity import MAX_INPUT_BYTES
+
+    spec = importlib.util.spec_from_file_location("ollama_identity_lab", ROOT / "tools" / "ollama_identity_lab.py")
+    lab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lab)
+    path = tmp_path / "identity.json"
+    os.mkfifo(path)
+    release = threading.Event()
+
+    def writer():
+        # Oversized input whose writer stays open: only a bounded read can finish.
+        with open(path, "wb", buffering=0) as handle:
+            pending = memoryview(b" " * (MAX_INPUT_BYTES + 2))
+            try:
+                while pending:
+                    pending = pending[handle.write(pending):]
+            except OSError:
+                pass
+            release.wait(3)
+
+    thread = threading.Thread(target=writer, daemon=True)
+    thread.start()
+    started = time.monotonic()
+    try:
+        assert lab.main([str(path)]) == 2
+        assert time.monotonic() - started < 2
+    finally:
+        release.set()
+        thread.join(5)
+    assert json.loads(capsys.readouterr().out)["error_code"] == "OBSERVATION_SIZE"
+
+
 def test_schema_accepts_fixture_and_runtime_validator_agrees():
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
     fixture = observation()

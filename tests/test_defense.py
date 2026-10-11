@@ -61,6 +61,25 @@ def test_analysis_uses_real_provider_contract_without_model_authority(manager,mo
     assert not calls
 
 
+@pytest.mark.parametrize('escape',['\\u202e','\\u009b','\\u2066','\\u0000','\\u2028'])
+def test_escaped_display_controls_in_explanation_fail_analysis(manager,monkeypatch,escape):
+    from megalodon import ai_provider
+    defense,calls,_=manager
+    monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda **_:{'listening':'yes','loopback_only':True})
+    # The raw model text is plain ASCII; only JSON decoding creates the control.
+    output='{"explanation":"Observed '+escape+'traffic.","proposal":"observe"}'
+    def transport(path,method,body,timeout,*,deadline=None):
+        if path=='/api/show':return json.dumps({'details':{'format':'gguf'},'capabilities':['completion']}).encode()
+        if path=='/api/tags':return json.dumps({'models':[{'name':AISettings.model,'digest':AISettings.model_digest}]}).encode()
+        return json.dumps({'model':AISettings.model,'response':output,'done':True,'done_reason':'stop'}).encode()
+    monkeypatch.setattr(ai_provider,'_request',transport)
+    defense.model=ai_provider.generate
+    result=perform(defense,dict(action='analyze',ip='1.1.1.1'))
+    assert result['state']=='failed' and 'invalid or incomplete answer' in result['message']
+    assert result['result'] is None and not calls
+    assert ai_provider.last_observation(AISettings(enabled=True))['error_code']=='INVALID_RESPONSE'
+
+
 def test_provider_busy_reports_retry_without_action(manager):
     from megalodon.ai_provider import AIProviderError
     defense,calls,_=manager
