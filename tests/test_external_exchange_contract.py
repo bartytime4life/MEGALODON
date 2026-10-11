@@ -76,6 +76,7 @@ def test_threat_context_is_offline_bounded_and_non_authoritative() -> None:
     assert value["input_mode"] == "operator_supplied_completed_file"
     assert value["max_bundle_bytes"] == 16 * 1024 * 1024
     assert value["max_objects"] == 4096
+    assert value["max_json_tokens"] == 1_000_000
     assert value["runtime_fetch"] is value["taxii"] is False
     assert value["pattern_handling"] == "store_as_untrusted_text_never_execute"
     assert value["attribution_authority"] is False

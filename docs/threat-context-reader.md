@@ -25,9 +25,22 @@ times change whenever an unrelated entry is added beside the path. The caller su
 Parsing is UTF-8 and JSON-only. Duplicate keys, floats, non-finite values,
 integers beyond 20 digits, more than 32 nesting levels, an empty bundle, more
 than 4,096 objects, duplicate object identities, non-STIX 2.1 objects, and
-invalid timestamps or identifiers fail with fixed path-free diagnostics. The
-operation has a cooperative 15-second deadline and a 16 MiB normalized-output
-ceiling.
+invalid timestamps or identifiers fail with fixed path-free diagnostics. Before
+the JSON parser runs, a structural scan counts opening brackets, commas, and
+colons outside strings and refuses more than 1,000,000 of them with
+`TOKEN_LIMIT`, bounding the parsed object graph whatever its shape. An
+indicator's `valid_until` must be strictly later than its `valid_from`,
+compared at every supplied fractional digit. The operation has a cooperative
+15-second deadline, checked while reading, after hashing, every 65,536
+characters of the structural scan, after parsing, and per object, plus a
+16 MiB normalized-output ceiling measured as the UTF-8 size of the compact
+JSON projection (the receipt's `normalized_context_bytes`).
+
+Every retained text field, including external-reference hash names and
+values, is refused with `TEXT` when it is empty, over its length limit, has
+surrounding whitespace, or contains a Unicode control (C0 or C1), format
+(such as bidirectional overrides and zero-width characters), or surrogate
+code point.
 
 ## Retained context
 
