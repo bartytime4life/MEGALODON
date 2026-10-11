@@ -350,8 +350,11 @@ RETENTION_RECEIPT_VERSION = "retention-purge-v1"
 RETENTION_RECONCILIATION_REQUIRED = "RETENTION:RECONCILIATION_REQUIRED"
 RETENTION_RECONCILIATION_EVIDENCE_HELD = "RETENTION:RECONCILIATION_EVIDENCE_HELD"
 # Fresh, fully re-verified connection attempts made when a Store open sees
-# activity it cannot attribute (see _connect_verified_sqlite and Store).
+# activity it cannot attribute (see _connect_verified_sqlite).
 _VERIFIED_CONNECT_ATTEMPTS = 3
+# How long Store waits, re-verifying each attempt from scratch, for other
+# openers' sidecar churn to settle before refusing DIRECTORY_CHANGED.
+_DIRECTORY_SETTLE_SECONDS = 10.0
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
@@ -1332,6 +1335,9 @@ class Store:
         self._directory_descriptor: int | None = None
         self._database_descriptor: int | None = None
         database_created = False
+        # Once any connection to a database this process created has opened,
+        # another opener may already share it; it is then never discarded.
+        database_shared = False
         connection: sqlite3.Connection | None = None
         try:
             self._directory_descriptor = _open_private_directory(
@@ -1354,11 +1360,16 @@ class Store:
             # swap by generation alone. A connection whose window saw such a
             # change is closed unused and the whole sequence -- sidecar
             # validation, a fresh generation baseline, connect and both path
-            # proofs -- is repeated, at most _VERIFIED_CONNECT_ATTEMPTS times.
-            # The connection kept is always one whose own window passed every
-            # check, so a retry accepts nothing a single attempt would refuse;
-            # a change on every attempt still refuses DIRECTORY_CHANGED.
-            for attempt in range(1, _VERIFIED_CONNECT_ATTEMPTS + 1):
+            # proofs -- is repeated, with a short pause, until it passes or
+            # _DIRECTORY_SETTLE_SECONDS elapse. Concurrent first opens can keep
+            # the directory changing for several immediate attempts, so the
+            # bound is time, not a count. The connection kept is always one
+            # whose own window passed every check, so a retry accepts nothing
+            # a single attempt would refuse; a change that persists for the
+            # whole bound still refuses DIRECTORY_CHANGED.
+            settle_deadline = monotonic() + _DIRECTORY_SETTLE_SECONDS
+            pause = 0.005
+            while True:
                 _validate_sqlite_sidecars(
                     self.path,
                     self._directory_descriptor,
@@ -1382,6 +1393,7 @@ class Store:
                     connection = sqlite3.connect(
                         uri, uri=True, timeout=10, check_same_thread=False
                     )
+                database_shared = True
                 _validate_connection_path(
                     connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor
                 )
@@ -1391,10 +1403,12 @@ class Store:
                     == opening_generation
                 ):
                     break
-                if attempt == _VERIFIED_CONNECT_ATTEMPTS:
+                if monotonic() >= settle_deadline:
                     _raise_path_error("STORAGE_PATH", "DIRECTORY_CHANGED")
                 connection.close()
                 connection = None
+                sleep(pause)
+                pause = min(pause * 2, 0.1)
             connection.row_factory = sqlite3.Row
             self.connection = connection
             with self._lock:
@@ -1415,7 +1429,7 @@ class Store:
                     connection.close()
                 except sqlite3.Error:
                     pass
-            if database_created and connection is None:
+            if database_created and connection is None and not database_shared:
                 self._discard_created_database()
             self._close_descriptors()
             raise

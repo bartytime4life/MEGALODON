@@ -45,8 +45,10 @@ The version and schema are read, then created or validated, under one
 `BEGIN IMMEDIATE` lock, so openers that meet a new database at the same time
 (for example the HUD and a CLI command on first launch) all open it: one
 creates the schema and the others validate it. A directory or database file
-another opener created first is opened and validated like an existing one, and
-the first WAL switch waits out a concurrent writer for the busy timeout.
+another opener created first is opened and validated like an existing one,
+the first WAL switch waits out a concurrent writer for the busy timeout, and
+the other openers' sidecar churn is waited out, re-verifying from scratch,
+for up to 10 seconds.
 Exact v1, unversioned-v1, and v2
 layouts fail with `STORAGE_SCHEMA:MIGRATION_REQUIRED`; they are not changed by
 ordinary startup. Partial, altered, extended, unsupported, and future layouts

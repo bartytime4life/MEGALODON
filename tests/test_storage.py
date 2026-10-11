@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
 
 import pytest
 
@@ -677,10 +678,65 @@ def test_store_refuses_directory_entry_change_on_every_connect(
     database = tmp_path / "audit.db"
     with Store(database):
         pass
+    monkeypatch.setattr(storage, "_DIRECTORY_SETTLE_SECONDS", 0.2)
     connects = _connect_changing_directory(monkeypatch, tmp_path, every=True)
+    started = time.monotonic()
     with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DIRECTORY_CHANGED$"):
         Store(database, create=False)
-    assert len(connects) == storage._VERIFIED_CONNECT_ATTEMPTS
+    # A change that persists for the whole settle bound still refuses, after
+    # several paced, fully re-verified attempts rather than a fixed count.
+    assert len(connects) > storage._VERIFIED_CONNECT_ATTEMPTS
+    assert 0.2 <= time.monotonic() - started < 5
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_store_waits_out_directory_churn_longer_than_three_attempts(
+    tmp_path, monkeypatch
+):
+    # Several processes opening one new database can keep its directory
+    # changing for more than a few immediate attempts.
+    database = tmp_path / "audit.db"
+    with Store(database) as store:
+        _populate(store)
+    real_connect = sqlite3.connect
+    connects = []
+
+    def churning_connect(*args, **kwargs):
+        connects.append(None)
+        if len(connects) <= 6:
+            journal = tmp_path / f"audit.db-journal-{len(connects)}"
+            journal.touch()
+            journal.unlink()
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", churning_connect)
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 1
+    assert len(connects) == 7
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_new_database_is_kept_once_a_connection_opened(tmp_path, monkeypatch):
+    # This process created the file and connected, then a retry failed. Another
+    # opener may already share the database, so it must not be unlinked.
+    database = tmp_path / "audit.db"
+    real_connect = sqlite3.connect
+    connects = []
+
+    def churn_then_fail(*args, **kwargs):
+        connects.append(None)
+        if len(connects) == 1:
+            journal = tmp_path / "audit.db-journal-x"
+            journal.touch()
+            journal.unlink()
+            return real_connect(*args, **kwargs)
+        raise sqlite3.OperationalError("unable to open database file")
+
+    monkeypatch.setattr(storage.sqlite3, "connect", churn_then_fail)
+    with pytest.raises(sqlite3.OperationalError):
+        Store(database)
+    assert len(connects) == 2
+    assert database.exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlink semantics")
