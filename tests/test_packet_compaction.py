@@ -148,3 +148,34 @@ def test_interrupted_build_resumes_without_duplicate_conversations(manager):
         with again._db(rollup) as db:
             assert sum(json.loads(r[0]).get('packet_count',0) for r in db.execute('SELECT data FROM records'))==1030
     finally:again.close()
+
+
+def test_crash_before_summary_schema_resumes_instead_of_stalling(manager):
+    source=_source(manager,with_finding=False)
+    # A crash right after _new() saved the catalog leaves a building summary
+    # registered over an empty file, before any schema exists.
+    source['compaction_state']='building'
+    target=manager._new('packet_rollups','interrupted',state='building',source_segment=source['id'])
+    target['kind']='generic';manager._save()
+    assert manager._size(target)==0
+    manager.close()
+    again=EvidenceStorage(manager.settings,home=manager.home,clock=manager.clock,monotonic=manager.monotonic)
+    try:
+        _compact(again)
+        rollups=[e for e in again._catalog['entries'] if e['category']=='packet_rollups']
+        assert [e['id'] for e in rollups]==[target['id']] and rollups[0]['state']=='closed'
+        with again._db(rollups[0]) as db:
+            assert sum(json.loads(r[0]).get('packet_count',0) for r in db.execute('SELECT data FROM records'))==200
+    finally:again.close()
+
+
+def test_unfinished_summary_does_not_exempt_its_source_from_age_expiry(manager):
+    source=_source(manager,with_finding=False,count=1030)
+    assert manager.compact_step()
+    target=next(e for e in manager._catalog['entries'] if e['category']=='packet_rollups')
+    assert source['compaction_state']=='building' and target['state']=='building'
+    manager.test_clock[0]+=15*86400
+    manager._ensure_space()
+    assert source not in manager._catalog['entries'] and target not in manager._catalog['entries']
+    assert not manager._path(source).exists() and not manager._path(target).exists()
+    assert manager.compact_step() is False
