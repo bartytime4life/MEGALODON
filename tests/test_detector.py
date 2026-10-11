@@ -71,6 +71,20 @@ class DetectorTests(unittest.TestCase):
         other = Detector(DetectionSettings(syn_flood_threshold=1), (ipaddress.ip_network("8.8.8.8/32"),))
         self.assertIsNone(other.analyze(event(0, src_ip="::ffff:8.8.4.4"))[0].suppressed_reason)
 
+    def test_eviction_drops_cooldowns_without_scanning_every_source(self):
+        class NoScan(dict):
+            def __iter__(self):
+                raise AssertionError("eviction must not scan every recorded cooldown")
+        detector = Detector(DetectionSettings(dns_query_length=50, max_tracked_sources=2))
+        detector.last_emitted = NoScan()
+        sources = ("8.8.8.8", "8.8.4.4", "1.1.1.1")
+        for index, source in enumerate(sources):
+            # One long DNS query per source records a DNS_TUNNELING cooldown.
+            detector.analyze(event(index, src_ip=source, protocol="DNS", dst_port=53,
+                                   tcp_flags=[], dns_query_length=60))
+        self.assertEqual(set(dict.keys(detector.last_emitted)),
+                         {("DNS_TUNNELING", "8.8.4.4"), ("DNS_TUNNELING", "1.1.1.1")})
+
     def test_detector_state_is_bounded(self):
         detector = Detector(
             DetectionSettings(
