@@ -37,11 +37,15 @@ The `automation-preview` CLI exposes only that pure preview as bounded JSON.
 The local HUD Actions workspace also exposes three fixed recurrence presets
 through an explicit same-origin `POST /api/automation-preview`. It uses the
 same occurrence engine with an eight-item cap and no scheduling, job storage,
-script execution, or host action. Its reviewed-script cards only copy fixed
-commands for operator review in a terminal; they do not run them.
+script execution, or host action. A refused preview shows a fixed sentence
+for the closed `error_code` (start does not fit the preset, daylight-saving
+change, unknown zone); any other failure shows one generic sentence. Its
+reviewed-script cards only copy fixed commands for operator review in a
+terminal; they do not run them.
 It takes an explicit local start time, IANA zone, RRULE, DST policy, and a
 1–366 occurrence limit. Invalid inputs return a fixed refusal without a
-partial preview. It does not create an automation or run a job.
+partial preview. A candidate after `UNTIL` is outside the set, so its DST
+state never refuses the preview. It does not create an automation or run a job.
 
 Weekly previews order each week's `BYDAY` candidates relative to `WKST`
 before applying `COUNT`, inclusive UTC `UNTIL`, or the preview limit. The

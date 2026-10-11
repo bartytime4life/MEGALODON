@@ -4,9 +4,14 @@ from contextlib import contextmanager
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
+import shutil
+import subprocess
 from threading import Thread
 
+import pytest
+
 from megalodon.dashboard import DashboardHandler
+from megalodon.dashboard_action_plane import ACTION_JS
 from megalodon.dashboard_assets import DASHBOARD_JS, INDEX_HTML
 
 
@@ -95,3 +100,53 @@ def test_preview_rejects_untrusted_instructions_and_ambiguous_body():
             status, result = post(server, body)
             assert status == 400
             assert "occurrences" not in result
+
+
+def _preview_status_in_browser(status, body):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node needed for browser behavior")
+    start = DASHBOARD_JS.index("async function requestBoundedJSON(")
+    bounded = DASHBOARD_JS[start:DASHBOARD_JS.index("\nasync function requestJSON(", start)]
+    script = r"""
+const vm = require('node:vm'); let input = ''; process.stdin.on('data', v => input += v); process.stdin.on('end', async () => {
+  const {bounded, action, status, body} = JSON.parse(input), nodes = new Map();
+  const element = () => ({value: '', textContent: '', disabled: false, listeners: {}, children: [],
+    addEventListener(type, fn) { this.listeners[type] = fn; }, replaceChildren() { this.children = []; }, append(c) { this.children.push(c); }});
+  const byId = id => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
+  const bytes = new TextEncoder().encode(body);
+  const fetch = async () => ({ok: status >= 200 && status < 300, status, headers: {get: () => String(bytes.length)},
+    body: {getReader() { let done = false; return {read: async () => done ? {done: true} : (done = true, {done: false, value: bytes}), cancel: async () => {}}; }}});
+  const context = {byId, fetch, TextEncoder, TextDecoder, Uint8Array, AbortController, Object, JSON, String, Array, Error, Number,
+    window: {setTimeout: () => 0, clearTimeout: () => {}}, document: {createElement: () => element()}, navigator: {}};
+  vm.createContext(context); vm.runInContext(bounded + '\n' + action, context);
+  byId('action-schedule-start').value = '2026-10-10T09:00'; byId('action-schedule-zone').value = 'America/Chicago';
+  byId('action-schedule-preset').value = 'weekdays';
+  await byId('action-schedule').listeners.submit({preventDefault() {}});
+  process.stdout.write(byId('action-schedule-status').textContent);
+});
+"""
+    result = subprocess.run([node, "-e", script], input=json.dumps({
+        "bounded": bounded, "action": ACTION_JS, "status": status, "body": body,
+    }), capture_output=True, text=True, timeout=20, check=True)
+    return result.stdout
+
+
+def test_preview_refusal_explains_the_closed_error_code():
+    with preview_server() as server:
+        saturday = b'{"dtstart":"2026-10-10T09:00:00","schedule_timezone":"America/Chicago","preset":"weekdays"}'
+        status, result = post(server, saturday)
+    assert (status, result) == (400, {"error_code": "DTSTART_VALUE"})
+    shown = _preview_status_in_browser(status, json.dumps(result))
+    assert shown == ("Preview unavailable: the start does not fit this pattern "
+                     "(weekday presets need a Monday to Friday start). No job was saved or run.")
+
+
+@pytest.mark.parametrize("status,body", [
+    (400, '{"error_code":"<img src=x>"}'),
+    (400, '{"error":"invalid preview request length"}'),
+    (403, '{"error_code":"DTSTART_VALUE"}'),
+])
+def test_preview_shows_only_fixed_text_for_other_failures(status, body):
+    assert _preview_status_in_browser(status, body) == (
+        "Preview unavailable: the times could not be calculated. No job was saved or run.")
