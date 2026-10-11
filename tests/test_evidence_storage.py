@@ -250,6 +250,28 @@ def test_oldest_history_paging_total_and_saved_case_expiry(manager):
     assert manager.history(category='cases')['total']==0
 
 
+def test_a_retired_source_removes_only_the_case_copied_from_it(manager):
+    enable(manager)
+    writer=manager.packet_writer();run=writer.start_ingestion_run('jsonl')
+    writer.record_event_bundle(PacketEvent(datetime.fromtimestamp(manager.clock(),timezone.utc),'10.0.0.2','1.1.1.1','TCP',1,443,byte_count=1),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    packets=[e for e in manager._catalog['entries'] if e['category']=='packets'][0]
+    manager.append_records('baselines',[dict(observed_at=utc(manager.clock()),source='fixture',data={'source_segments':[packets['id']]})])
+    manager.append_records('network',[row(manager,7)])
+    derived=manager.history(category='baselines')['records'][0]['id']
+    unrelated=manager.history(category='network')['records'][0]['id']
+    # Two cases saved in the same hour.
+    manager.save_case([unrelated]);manager.save_case([derived])
+    for entry in list(manager._generic.values()):manager._seal(entry)
+    manager._generic.clear()
+    retired=list(manager._cascade(manager._catalog['entries'],[packets]))
+    gone={e['id'] for e in retired}
+    cases=[e for e in manager._catalog['entries'] if e['category']=='cases']
+    assert len(cases)==2
+    # Only the case that copied packet-derived evidence leaves with its source.
+    assert sum(e['id'] in gone for e in cases)==1
+
+
 def test_managed_receipt_chain_retained_boundary_and_crash_recovery(manager):
     from megalodon.managed_receipts import ManagedReceipts
     enable(manager,days=7)

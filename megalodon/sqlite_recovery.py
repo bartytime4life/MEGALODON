@@ -496,6 +496,10 @@ def restore_backup(
         artifact = Path(os.fspath(artifact_path))
         if _same_file(artifact, destination):
             raise _Halt("SAME_FILE_REFUSED")
+        # The digest covers only the artifact bytes; SQLite would also apply a
+        # WAL or rollback journal beside it, so a sidecar is never accepted.
+        if any(os.path.lexists(str(artifact) + suffix) for suffix in ("-wal", "-shm", "-journal")):
+            raise _Halt("SOURCE_UNSAFE", source_state="unsafe")
         descriptor = _open_existing(artifact)
         try:
             actual_bytes = _read_all(descriptor, MAX_ARTIFACT_BYTES)

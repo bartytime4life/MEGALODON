@@ -229,6 +229,37 @@ def test_restore_rejects_a_digest_mismatch(tmp_path) -> None:
     _assert_valid(receipt)
 
 
+def test_restore_refuses_an_artifact_with_an_undigested_wal(tmp_path) -> None:
+    import shutil
+    live = tmp_path / "live.sqlite3"
+    connection = sqlite3.connect(str(live))
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA wal_autocheckpoint=0")
+    connection.execute("PRAGMA user_version=3")
+    connection.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+    connection.execute("INSERT INTO events (name) VALUES ('base')")
+    connection.commit()
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    connection.execute("INSERT INTO events (name) VALUES ('only-in-the-wal')")
+    connection.commit()
+    artifact = tmp_path / "a.sqlite3"
+    shutil.copyfile(live, artifact)
+    shutil.copyfile(str(live) + "-wal", str(artifact) + "-wal")
+    connection.close()
+    for path in (artifact, Path(str(artifact) + "-wal")):
+        os.chmod(path, 0o600)
+    digest = "sha256:" + hashlib.sha256(artifact.read_bytes()).hexdigest()
+    destination = tmp_path / "restored.sqlite3"
+    receipt = sr.restore_backup(
+        operation_id="op-wal", artifact_path=artifact, expected_artifact_sha256=digest,
+        destination_path=destination,
+    )
+    # The digest covers the artifact alone; its WAL would add unverified rows.
+    assert (receipt["status"], receipt["reason"]) == ("failed", "SOURCE_UNSAFE")
+    assert receipt["destination_created"] is False and not destination.exists()
+    _assert_valid(receipt)
+
+
 def test_restore_in_place_is_refused_by_destination_must_not_exist(tmp_path) -> None:
     artifact = tmp_path / "a.sqlite3"
     _make_database(artifact)
