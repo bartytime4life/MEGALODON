@@ -69,6 +69,10 @@ class BackgroundMonitor:
         self._stop.set()
         if self._thread:
             self._thread.join(5)
-        self.capture.stop()
-        with self._lock:
-            self._state.update(enabled=False,state='stopped',message='Background monitoring stopped. Stored metadata is retained.')
+        try:
+            self.capture.stop()
+        finally:
+            # The restart loop has ended even when the current session is still
+            # finishing; the caller still sees that shutdown error.
+            with self._lock:
+                self._state.update(enabled=False,state='stopped',message='Background monitoring stopped. Stored metadata is retained.')

@@ -76,6 +76,13 @@ class CaptureTests(unittest.TestCase):
         with self.assertRaises(CaptureError):
             list(iter_jsonl(StringIO("x" * 33 + "\n"), max_line_bytes=32))
 
+    def test_jsonl_rejects_lone_surrogate_text_before_storage(self):
+        # Valid JSON escapes, but not encodable as UTF-8 for SQLite.
+        for line in (self.EVENT[:-1] + ',"interface":"\\ud800"}', self.EVENT.replace('"TCP"', '"\\udc00"')):
+            with self.subTest(line=line):
+                with self.assertRaisesRegex(CaptureError, "^invalid JSONL event at line 1$"):
+                    list(iter_jsonl(StringIO(line + "\n")))
+
     def test_jsonl_normalizes_parser_recursion_without_echoing_the_record(self):
         hostile = "[" * 1100 + "]" * 1100
         with self.assertRaisesRegex(CaptureError, "^invalid JSONL event at line 1$"):

@@ -11,6 +11,7 @@ from megalodon.validation import (
     parse_nonnegative_int,
     parse_port,
     parse_timestamp,
+    safe_text,
     validate_metadata,
     validate_packet_metadata,
 )
@@ -74,6 +75,12 @@ class ValidationTests(unittest.TestCase):
             validate_metadata({"a": {"b": {"c": {"d": {"e": "too deep"}}}}})
         with self.assertRaises(ValidationError):
             validate_metadata({"sensor": "line\nbreak"})
+
+    def test_text_that_cannot_be_stored_as_utf8_is_rejected(self):
+        self.assertEqual(safe_text("eth0 \u00e9\U0001f600", "interface"), "eth0 \u00e9\U0001f600")
+        for value in ("\ud800", "eth\udfff0", "\ud83d\ude00"):
+            with self.subTest(value=ascii(value)), self.assertRaisesRegex(ValidationError, "^interface is not valid UTF-8 text$"):
+                safe_text(value, "interface")
 
     def test_packet_metadata_is_a_closed_adapter_record(self):
         self.assertEqual(
