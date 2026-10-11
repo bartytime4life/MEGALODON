@@ -282,3 +282,101 @@ def test_source_type_rejection_does_not_block_regular_file(tmp_path):
     path, digest = _write(tmp_path / "context.json")
     assert stat.S_ISREG(path.stat().st_mode)
     assert threat_context.read_completed_bundle(path, digest)[1]["status"] == "complete"
+
+
+@pytest.mark.parametrize(
+    "escape",
+    ["\\ud800", "\\u202e", "\\u0085", "\\u009b", "\\u200b"],
+    ids=["lone-surrogate", "bidi-override", "c1-next-line", "c1-csi", "zero-width-space"],
+)
+@pytest.mark.parametrize("field", ["name", "label", "hash-name", "hash-value"])
+def test_surrogate_control_and_format_code_points_are_refused_as_text(tmp_path, escape, field):
+    text = json.dumps(_bundle(), separators=(",", ":"))
+    marker, replacement = {
+        "name": ('"Synthetic producer"', f'"Synthetic{escape}producer"'),
+        "label": ('"test-only"', f'"test{escape}only"'),
+        "hash-name": ('"external_id":"fixture-1"', f'"external_id":"fixture-1","hashes":{{"SHA{escape}256":"00"}}'),
+        "hash-value": ('"external_id":"fixture-1"', f'"external_id":"fixture-1","hashes":{{"SHA-256":"0{escape}0"}}'),
+    }[field]
+    assert text.count(marker) == 1
+    path, digest = _write(tmp_path / "context.json", raw=text.replace(marker, replacement).encode())
+    with pytest.raises(threat_context.ThreatContextError, match="TEXT$"):
+        threat_context.read_completed_bundle(path, digest)
+
+
+def test_normalized_output_is_measured_as_utf8_not_ascii_escapes(tmp_path, monkeypatch):
+    bundle = _bundle()
+    bundle["objects"][0]["name"] = "威胁情报报告" * 42
+    bundle["objects"][0]["labels"] = ["威胁情报" * 60 + str(index) for index in range(32)]
+    data = json.dumps(bundle, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    path, digest = _write(tmp_path / "context.json", raw=data)
+    expected = sum(
+        len(json.dumps(_plain(item), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+        for item in threat_context.read_completed_bundle(path, digest)[0]
+    )
+    # Exactly at the ceiling the UTF-8 projection fits; \uXXXX escapes would not.
+    monkeypatch.setattr(threat_context, "MAX_NORMALIZED_BYTES", expected)
+    _, receipt = threat_context.read_completed_bundle(path, digest)
+    assert receipt["normalized_context_bytes"] == expected
+    monkeypatch.setattr(threat_context, "MAX_NORMALIZED_BYTES", expected - 1)
+    with pytest.raises(threat_context.ThreatContextError, match="OUTPUT_LIMIT$"):
+        threat_context.read_completed_bundle(path, digest)
+
+
+def _structural_tokens(value) -> int:
+    """Count opening brackets, commas, and colons outside strings."""
+    if isinstance(value, dict):
+        return 1 + len(value) + max(len(value) - 1, 0) + sum(map(_structural_tokens, value.values()))
+    if isinstance(value, list):
+        return 1 + max(len(value) - 1, 0) + sum(map(_structural_tokens, value))
+    return 0
+
+
+def test_json_structural_token_cap_refuses_before_parsing(tmp_path, monkeypatch):
+    padded = _bundle()
+    padded["objects"][0]["x_padding"] = [{} for _ in range(64)]
+    path, digest = _write(tmp_path / "context.json", padded)
+    tokens = _structural_tokens(padded)
+    monkeypatch.setattr(threat_context, "MAX_JSON_TOKENS", tokens)
+    assert threat_context.read_completed_bundle(path, digest)[1]["status"] == "complete"
+
+    def parse_forbidden(*_args, **_kwargs):
+        raise AssertionError("an over-cap bundle must be refused before json.loads")
+
+    monkeypatch.setattr(threat_context, "MAX_JSON_TOKENS", tokens - 1)
+    monkeypatch.setattr(threat_context.json, "loads", parse_forbidden)
+    with pytest.raises(threat_context.ThreatContextError, match="TOKEN_LIMIT$"):
+        threat_context.read_completed_bundle(path, digest)
+
+
+def test_structural_scan_consults_the_deadline_while_scanning(monkeypatch):
+    text = "[" + "0," * threat_context._SCAN_DEADLINE_INTERVAL + "0]"
+    # The first check sees time left; a later in-scan check sees it expired.
+    clock = iter((0.0,))
+    monkeypatch.setattr(threat_context.time, "monotonic", lambda: next(clock, 16.0))
+    with pytest.raises(threat_context.ThreatContextError, match="TIME_LIMIT$"):
+        threat_context._scan_depth(text, 0.0)
+
+
+@pytest.mark.parametrize(
+    ("valid_from", "valid_until", "accepted"),
+    [
+        ("2026-09-17T12:00:00Z", "2026-09-17T12:00:00Z", False),
+        ("2026-09-17T12:00:00.5Z", "2026-09-17T12:00:00.500000000Z", False),
+        ("2026-09-17T12:00:00.0000009Z", "2026-09-17T12:00:00.0000001Z", False),
+        ("2026-09-17T12:00:00.000000001Z", "2026-09-17T12:00:00Z", False),
+        ("2026-09-17T12:00:00Z", "2026-09-17T12:00:00.000000001Z", True),
+        ("2026-09-17T12:00:00.9Z", "2026-09-17T12:00:01Z", True),
+    ],
+)
+def test_valid_until_must_be_strictly_later_at_full_precision(tmp_path, valid_from, valid_until, accepted):
+    bundle = _bundle()
+    bundle["objects"][2]["valid_from"] = valid_from
+    bundle["objects"][2]["valid_until"] = valid_until
+    path, digest = _write(tmp_path / "context.json", bundle)
+    if accepted:
+        objects, _ = threat_context.read_completed_bundle(path, digest)
+        assert objects[2]["valid_until"] == valid_until
+    else:
+        with pytest.raises(threat_context.ThreatContextError, match="SCHEMA$"):
+            threat_context.read_completed_bundle(path, digest)
