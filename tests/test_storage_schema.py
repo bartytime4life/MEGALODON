@@ -692,6 +692,56 @@ def test_concurrent_processes_creating_one_new_database_all_open(tmp_path):
     assert outcomes == ["OK"] * 16
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX link-count semantics")
+@pytest.mark.parametrize("suffix", ["-journal", "-wal", "-shm"])
+def test_sidecar_removed_by_its_owner_after_the_open_is_absent(
+    tmp_path, monkeypatch, suffix
+):
+    # Another connection committing, checkpointing or closing removes its
+    # -journal/-wal/-shm between this validator's open and fstat; the open
+    # descriptor then has no links. That is an absent sidecar, not an unsafe
+    # database.
+    path = tmp_path / "audit.db"
+    with Store(path) as store:
+        store.summary()
+    sidecar = path.with_name(path.name + suffix)
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    real_open = os.open
+
+    def open_then_owner_removes(target, *args, **kwargs):
+        descriptor = real_open(target, *args, **kwargs)
+        if str(target).endswith(suffix):
+            os.unlink(target, dir_fd=kwargs.get("dir_fd"))
+        return descriptor
+
+    directory = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        monkeypatch.setattr(os, "open", open_then_owner_removes)
+        present = storage_module._validate_sqlite_sidecars(
+            path, directory, writable=True, prefix="STORAGE_PATH"
+        )
+    finally:
+        monkeypatch.undo()
+        os.close(directory)
+    assert suffix not in present
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX link-count semantics")
+def test_sidecar_with_a_second_link_is_still_refused(tmp_path):
+    path = tmp_path / "audit.db"
+    with Store(path) as store:
+        store.summary()
+    sidecar = path.with_name(path.name + "-journal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    os.link(sidecar, tmp_path / "elsewhere")
+    with pytest.raises(StorageSchemaError, match="STORAGE_PATH:UNSAFE_DATABASE"):
+        storage_module._validate_sqlite_sidecars(
+            path, None, writable=True, prefix="STORAGE_PATH"
+        )
+
+
 def test_new_database_wal_switch_waits_out_a_concurrent_writer(
     tmp_path, monkeypatch
 ):
