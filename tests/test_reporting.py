@@ -132,7 +132,10 @@ def test_cancel_preserves_ready_reports_and_single_job(report_service,monkeypatc
     first=report_service.create(request)
     assert report_service.create(request)['id']==first['id']
     with pytest.raises(ValueError,match='already'):report_service.create({})
-    report_service.cancel();report_service.worker.join(3)
+    report_service.cancel()
+    # A request after the cancel is refused, not folded into the cancelled job.
+    with pytest.raises(ValueError,match='already'):report_service.create(request)
+    report_service.worker.join(3)
     assert report_service.job['state']=='cancelled'
     assert report_service.report(saved['id'])['id']==saved['id']
 
@@ -184,6 +187,24 @@ def test_dst_repeated_hour_uses_first_fold():
     first=latest_slot(schedule,datetime(2026,11,1,6,45,tzinfo=timezone.utc).timestamp(),zone)
     repeated=latest_slot(schedule,datetime(2026,11,1,7,45,tzinfo=timezone.utc).timestamp(),zone)
     assert first==repeated
+
+
+@pytest.mark.parametrize('frequency,first,second',[
+    ('daily',(2026,10,31),(2026,11,1)),   # fall back: the slots are 25 hours apart
+    ('daily',(2027,3,13),(2027,3,14)),    # spring forward: 23 hours apart
+    ('weekly',(2026,10,26),(2026,11,2)),  # a week containing the fall-back change
+])
+def test_consecutive_scheduled_reports_meet_across_dst(report_service,frequency,first,second):
+    zone=ZoneInfo('America/Chicago')
+    report_service.configure(dict(enabled=True,time='09:00',frequency=frequency,weekday=0))
+    ranges=[]
+    for day in (first,second):
+        report_service.test_clock[0]=datetime(*day,9,5,tzinfo=zone).timestamp()
+        report_service.tick();report_service.worker.join(20)
+        assert report_service.job['state']=='ready', report_service.job
+        ranges.append((report_service.job['start'],report_service.job['end']))
+    assert ranges[1][0]==ranges[0][1]
+    assert datetime.fromisoformat(ranges[1][0].replace('Z','+00:00')).astimezone(zone).hour==9
 
 
 def test_weekly_and_clock_backwards_do_not_duplicate(report_service):

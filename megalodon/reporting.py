@@ -191,7 +191,10 @@ class ReportService(RetainedEvidenceReader):
                 return
             self.settings['pending'] = dict(slot=identity, at=stamp)
             self._save_settings()
-            self.create(dict(start=utc(stamp - (7 if schedule['frequency'] == 'weekly' else 1) * 86400), end=utc(stamp)), scheduled=self.settings['pending'])
+            # Start at the previous local-time slot, not a fixed 86400 s earlier,
+            # so consecutive reports meet exactly across daylight-saving changes.
+            _, previous = latest_slot(schedule, stamp - 1, self.zone)
+            self.create(dict(start=utc(previous), end=utc(stamp)), scheduled=self.settings['pending'])
 
     def create(self, value, *, scheduled=None):
         if type(value) is not dict or set(value) not in (set(), {'start', 'end'}):
@@ -204,7 +207,8 @@ class ReportService(RetainedEvidenceReader):
             raise ValueError('Enable managed storage before making a saved report.')
         with self.lock:
             if self.job['state'] == 'running':
-                if ((not value and self.job.get('default_range')) or (self.job.get('start') == utc(start) and self.job.get('end') == utc(end))):
+                # A request made after a cancel is not a duplicate of the job being cancelled.
+                if not self.cancel_event.is_set() and ((not value and self.job.get('default_range')) or (self.job.get('start') == utc(start) and self.job.get('end') == utc(end))):
                     return dict(self.job)
                 raise ValueError('A report is already being made. Wait or cancel it first.')
             self.cancel_event.clear()
