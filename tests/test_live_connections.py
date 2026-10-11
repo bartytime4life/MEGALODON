@@ -150,3 +150,31 @@ def test_slow_capture_shutdown_still_stops_background_monitoring():
     with pytest.raises(ValueError,match='shutdown has not completed'):monitor.stop()
     assert not monitor._thread.is_alive()
     assert monitor.snapshot()['enabled'] is False and monitor.snapshot()['state']=='stopped'
+
+
+def test_summary_baseline_eviction_keeps_recently_updated_long_lived_flow():
+    cache=LiveConnections(Geo());cache._local={'10.0.0.3'}
+    base=datetime.now(timezone.utc).replace(microsecond=0).timestamp()-10
+    def update(flow,sent,second):
+        stamp=datetime.fromtimestamp(base+second,timezone.utc).isoformat().replace('+00:00','Z')
+        cache.observe_summary(dict(source='suricata-eve',data=dict(source_id=str(flow),first_seen='2026-01-01T00:00:00Z',last_seen=stamp,
+            src_ip='10.0.0.3',dst_ip='8.8.8.8',src_port=1024+flow,dst_port=443,protocol='TCP',completed=False,byte_basis='ip',
+            sent_bytes=sent,received_bytes=0,sent_packets=1,received_packets=0)))
+    update(0,100,1)
+    for flow in range(1,MAX_TRACKED):update(flow,1,1)
+    update(0,200,2)  # the long-lived flow is now the most recently updated baseline
+    update(MAX_TRACKED,1,2)  # one more identity forces an eviction
+    update(0,1200,3)
+    assert sum(p['sent_bytes'] for p in snapshot(cache)['timeline'])==1100
+
+
+def test_bare_syn_after_fin_starts_a_new_flow_on_a_reused_tuple():
+    cache=LiveConnections(Geo());cache._local={'10.0.0.3'}
+    cache.observe(packet(flags=frozenset({'SYN'})))
+    cache.observe(packet(size=5000))
+    cache.observe(packet('8.8.8.8','10.0.0.3',443,40000,flags=frozenset({'FIN','ACK'})))
+    cache.observe(packet('8.8.8.8','10.0.0.3',443,40000,flags=frozenset({'SYN','ACK'})))  # not a new connection
+    assert snapshot(cache)['connections'][0]['b_to_a']['packets']==2
+    cache.observe(packet(flags=frozenset({'SYN'}),size=60))
+    row=snapshot(cache)['connections'][0]
+    assert row['state']=='recent' and row['a_to_b']['packets']==1 and row['a_to_b']['bytes']==60 and row['b_to_a']['packets']==0

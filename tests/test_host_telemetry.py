@@ -104,12 +104,56 @@ def test_partial_process_visibility_and_unavailable_socket_table(tmp_path):
     sampler = HostTelemetry(root, own_pid=42)
     sampler.sample(10)
     write_proc(root, total=1200, idle=900)
+    (root / 'net/if_inet6').write_text('')  # IPv6 is enabled, so a missing v6 table is a read failure.
     (root / 'net/udp6').unlink()
     value = sampler.sample(12)
     assert value['status'] == 'partial'
     assert value['coverage']['processes'] == 'partial'
     assert value['sockets']['tcp'] is None
     assert value['sockets']['status'] == 'unavailable'
+
+
+
+def test_ipv6_disabled_host_counts_absent_v6_tables_as_zero(tmp_path):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    write_proc(root, total=1200, idle=900)
+    (root / 'net/tcp6').unlink()
+    (root / 'net/udp6').unlink()
+    value = sampler.sample(12)
+    assert value['sockets']['status'] == 'ready' and value['sockets']['tcp'] == 1 and value['sockets']['udp'] == 0
+    (root / 'sys/net/ipv6').mkdir(parents=True)  # stack present: absence is no longer a measured zero
+    assert sampler.sample(14)['sockets'] == {'status': 'unavailable', 'tcp': None, 'udp': None, 'established': None,
+                                              'listening': None, 'time_wait': None, 'remote_peers': []}
+
+
+def test_remote_peers_merge_ipv4_mapped_and_exclude_loopback(tmp_path):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    # 192.0.2.1 over IPv4 and dual-stack (::ffff:192.0.2.1); HUD loopback sockets in both families.
+    (root / 'net/tcp').write_text('header\n 0: 0100007F:1000 010200C0:01BB 01 0 0 0 0\n'
+                                  ' 1: 0100007F:1F90 0100007F:D000 01 0 0 0 0\n')
+    (root / 'net/tcp6').write_text('header\n 0: 00000000000000000000000001000000:0016 0000000000000000FFFF0000010200C0:D431 01 0 0 0 0\n'
+                                   ' 1: 00000000000000000000000001000000:1F90 00000000000000000000000001000000:D001 01 0 0 0 0\n'
+                                   ' 2: 00000000000000000000000001000000:1F90 0000000000000000FFFF00000100007F:D002 01 0 0 0 0\n')
+    value = HostTelemetry(root, own_pid=42).sample(10)
+    assert value['sockets']['tcp'] == 5
+    assert value['sockets']['remote_peers'] == [{'address': '192.0.2.1', 'connections': 2}]
+
+
+def test_truncated_comm_and_long_argv_keep_process_coverage(tmp_path):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    process(root, 60, 'python3', 5, parent=1)
+    process(root, 61, 'x', 5, parent=1)
+    # The kernel cuts comm at 15 bytes, which can split a UTF-8 sequence.
+    (root / '61/stat').write_bytes((root / '61/stat').read_bytes().replace(b'(x)', b'(Dropbox\xe5\x90\x8c\xe6\xad\xa5\xe5\x8a)'))
+    (root / '60/cmdline').write_bytes(b'python3\0-m\0megalodon\0hud\0' + b'--x\0' * 4096)
+    value = HostTelemetry(root, own_pid=42).sample(10)
+    assert value['coverage']['processes'] == 'complete'
+    assert value['suite']['rss_bytes'] == 2 * 100 * os.sysconf('SC_PAGE_SIZE')  # long argv is still classified
 
 
 def test_history_bound_and_snapshot_isolation(tmp_path):

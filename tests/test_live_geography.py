@@ -72,3 +72,30 @@ def test_failed_public_lookup_clears_old_anchor_without_fabricating_location(tmp
     geo.refresh()
     assert geo.snapshot()['anchor'] is None
     assert geo.snapshot()['status']=='ready'
+
+
+@pytest.mark.parametrize('epoch',[2**63,'garbage',None])
+def test_saved_database_with_unusable_build_date_is_unavailable_and_closed(tmp_path,monkeypatch,epoch):
+    closed=[]
+    class Reader:
+        def metadata(self): return SimpleNamespace(database_type='DBIP-City-Lite',build_epoch=epoch)
+        def close(self): closed.append(1)
+    monkeypatch.setattr(module.OfflineLocations,'open',lambda path:Reader())
+    geo=module.Geography(tmp_path)
+    module._owned_directory(geo.root,private=True)
+    module._atomic_write(geo.path,b'saved',0o600)
+    module._atomic_write(geo.receipt,json.dumps(dict(source='DB-IP City Lite',downloaded_at='2026-10-01T00:00:00+00:00')).encode(),0o600)
+    geo=module.Geography(tmp_path)  # dashboard startup must survive a damaged saved file
+    assert geo.snapshot()['status']=='missing' and geo._reader is None and closed==[1]
+    assert geo.lookup('8.8.8.8') is None
+
+
+def test_damaged_database_data_is_a_cached_miss_not_a_live_failure():
+    calls=[]
+    def get(ip):
+        calls.append(ip)
+        raise RuntimeError('data section contains bad data')  # maxminddb.InvalidDatabaseError subclasses RuntimeError
+    geo=module.Geography('/nonexistent-home')
+    geo._reader=module.OfflineLocations(SimpleNamespace(get=get))
+    assert geo.lookup('8.8.8.8') is None and geo.lookup('8.8.8.8') is None
+    assert calls==['8.8.8.8']
