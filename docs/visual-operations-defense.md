@@ -26,6 +26,7 @@ IP rows. It includes addresses, address class, exact interface-local membership,
 observed ports, directional byte/packet counts, first/last observation, TCP
 flags and approximate offline geography when configured. Per-IP sent/received
 is relative to that endpoint; overview direction is relative to this PC.
+A connection whose two endpoints share one address counts once for that IP.
 The traffic pulse uses five-second bins of accepted metadata, retained for up
 to a minute. Gaps, evictions and capture drops limit coverage. These are neither
 complete network totals nor a measure of link capacity.
