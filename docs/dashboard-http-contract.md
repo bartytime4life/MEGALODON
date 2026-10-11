@@ -646,12 +646,17 @@ observations; this is not a physical-device count. `all` includes external peers
 Nodes add `on_link`, `protocols`, and source/time-qualified `services`; optional
 `last_discovered_at` distinguishes actual discovery replies from refreshed local
 cache observations. Per-direction edge activity expires independently.
+Observed flows to the limited broadcast address, or to the network or broadcast
+address of a local IPv4 subnet of /30 or wider, are not devices; such a flow adds
+no node, edge or counter to either endpoint.
 `persistence` reports history-write state independently of live inventory health.
 
 `GET /api/network/history?ip=<IP>&interface=<interface>&limit=20&cursor=<cursor>`
 returns `megalodon-device-history-v1`. It uses the same local read protections as
 network inventory. Limit is 1–50; interface and cursor are optional. Each request
-examines at most 500 network records across retained segments; `next_cursor`,
+examines at most 500 network records across retained segments, read in fixed
+pages of 100. `next_cursor` resumes immediately after the last examined record, so
+consecutive pages neither skip nor repeat matches; `next_cursor`,
 `truncated`, and `gaps` describe incomplete coverage. Each returned match has its
 segment-qualified evidence ID, timestamp, source, and saved node. Legacy topology
 records are readable. Saved byte counts describe overlapping recent windows,
