@@ -81,6 +81,14 @@ class FirewallTests(unittest.TestCase):
         with self.assertRaises(FirewallError):
             firewall().plan_block("192.168.1.2", "test")
 
+    def test_embedded_ipv4_targets_are_refused(self):
+        # The mapped form of an allowlisted host must not slip past the IPv4
+        # allowlist, and a v6 set entry for it would never match IPv4 traffic.
+        for target in ("::ffff:192.168.1.2", "::ffff:8.8.8.8", "64:ff9b::808:808", "64:ff9b:1::808:808"):
+            with self.subTest(target=target), self.assertRaises(FirewallError):
+                firewall().validate_target(target)
+        self.assertEqual(firewall().validate_target("2001:4860:4860::8888"), "2001:4860:4860::8888")
+
     def test_direct_apply_routes_refuse_before_host_or_process_work(self):
         def forbidden(*_args, **_kwargs):
             raise AssertionError("live apply must refuse before host or process work")

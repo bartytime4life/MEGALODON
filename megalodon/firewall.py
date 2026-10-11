@@ -20,6 +20,7 @@ class FirewallError(RuntimeError):
 
 
 LIVE_APPLY_UNSUPPORTED = "live firewall application is unsupported in this evaluation release"
+_EMBEDDED_IPV4 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,10 @@ class NftablesFirewall:
     def validate_target(self, value: str) -> str:
         target = parse_ip(value)
         address = ipaddress.ip_address(target)
+        # Mapped and NAT64 forms embed an IPv4 host that the IPv4 allowlist and
+        # public-only checks would not see; a v6 set entry never matches it either.
+        if address.version == 6 and (address.ipv4_mapped or any(address in network for network in _EMBEDDED_IPV4)):
+            raise FirewallError(f"refusing to block embedded-IPv4 address {target}; block the IPv4 address itself")
         if any(address in network for network in self.allowlist):
             raise FirewallError(f"refusing to block allowlisted address {target}")
         if self.public_only and not is_global_unicast(target):
