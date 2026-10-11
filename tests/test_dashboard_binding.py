@@ -695,6 +695,37 @@ def test_basic_credentials_share_the_sign_in_throttle_before_verification():
         _stop(server, thread)
 
 
+def test_sign_in_is_not_refused_while_a_local_operation_holds_the_maintenance_lock():
+    handler = type("BusySignInHandler", (dashboard.DashboardHandler,), {
+        "store": Mock(), "http_read_password": "twelve-chars", "http_session_token": "private-session-token",
+        "login_lock": dashboard.Lock(), "login_failures": 0, "login_blocked_until": 0.0,
+        "maintenance_lock": dashboard.Lock(),
+    })
+    server, thread = _serve(handler)
+    # A long local POST (for example a model request) owns the shared lock.
+    handler.maintenance_lock.acquire()
+    try:
+        host = f"127.0.0.1:{server.server_port}"
+        headers = {"Host": host, "Origin": f"http://{host}", "Content-Type": "application/json",
+                   "X-Megalodon-Sign-In": "1"}
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("POST", "/sign-in", body=b'{"password":"twelve-chars"}', headers=headers)
+        response = connection.getresponse()
+        assert response.status == 200, "a correct password is not shown as wrong while the HUD is busy"
+        assert "megalodon_session_" in response.getheader("Set-Cookie")
+        connection.close()
+        # Other state-changing routes still wait for the running operation.
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("POST", "/api/ai/ask", body=b"{}", headers={
+            "Host": host, "Origin": f"http://{host}", "Content-Type": "application/json",
+            "Cookie": f"megalodon_session_{server.server_port}=private-session-token"})
+        assert connection.getresponse().status == 409
+        connection.close()
+    finally:
+        handler.maintenance_lock.release()
+        _stop(server, thread)
+
+
 @pytest.mark.parametrize("first_route", ("basic", "form"))
 def test_concurrent_password_checks_share_one_slot_and_preserve_lockout(first_route):
     entered, release = Event(), Event()
