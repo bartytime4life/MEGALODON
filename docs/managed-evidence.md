@@ -44,7 +44,7 @@ Receipt chains have explicit retained boundary anchors when completed ledger uni
 
 ## Migration and rollback boundary
 
-Before apply, legacy databases stay at their original paths and are readable by the previous release. Preview is read-only. Apply first drains the HUD capture/flow workers, serializes local mutation requests, checks receipt/integrity readiness, and enrolls the original files without rewriting their event relationships. Future writes use new segments. Validation failure preserves the prior policy and original files.
+Before apply, legacy databases stay at their original paths and are readable by the previous release. Preview is read-only. Apply first drains the HUD capture/flow workers, serializes local mutation requests, checks receipt/integrity readiness, and enrolls the original files without rewriting their event relationships. Future writes use new segments. Validation failure preserves the prior policy and original files. The command line (`megalodon run`, firewall action records and `megalodon ai`) still writes to the original paths; before cleanup removes an enrolled file it compares the file's per-table row counts with those recorded at enrollment, and a file that gained rows is kept and marked for review instead of being deleted.
 
 Keep the previous installed application release until the update is accepted. Code rollback before policy-driven expiry preserves the original database; an older application cannot display newer segmented history. Export required evidence before reducing limits. Once an approved cleanup removes expired files, code rollback cannot recreate them. Protected uncertain data can temporarily prevent a cap from being met and pause collection; its warning is intentional.
 

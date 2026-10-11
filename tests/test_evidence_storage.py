@@ -175,6 +175,56 @@ def test_legacy_current_evidence_relationship_survives_enrollment(manager):
     assert len(result['id'].split(':')[0])==32
 
 
+@pytest.mark.parametrize('late_write',['event','action','event-older-catalog'])
+def test_legacy_database_written_after_enrollment_is_retained_for_review(manager,late_write):
+    from megalodon.storage import Store
+    from megalodon.models import ActionRecord
+    old=datetime.fromtimestamp(manager.clock()-10*86400,timezone.utc)
+    with Store(manager.settings.db_path) as db:
+        run=db.start_ingestion_run('jsonl')
+        db.record_event_bundle(PacketEvent(old,'10.0.0.2','1.1.1.1','TCP'),[],[],run_id=run)
+        db.finish_ingestion_run(run,'source_exhausted')
+    enable(manager)
+    # A command-line run or firewall action still writes to the enrolled
+    # legacy path; retention must not delete those rows unseen.
+    now=datetime.fromtimestamp(manager.clock(),timezone.utc)
+    with Store(manager.settings.db_path) as db:
+        if late_write.startswith('event'):
+            run=db.start_ingestion_run('jsonl')
+            db.record_event_bundle(PacketEvent(now,'10.0.0.3','1.1.1.1','TCP'),[],[],run_id=run)
+            db.finish_ingestion_run(run,'source_exhausted')
+        else:
+            db.record_action(ActionRecord(now,'block','10.0.0.3','applied','synthetic'))
+    if late_write=='event-older-catalog':
+        # Catalogs enrolled before content was recorded compare event counts.
+        next(e for e in manager._catalog['entries'] if e.get('legacy')).pop('content_sha256')
+    manager.test_clock[0]+=5*86400
+    manager._ensure_space()
+    assert manager.settings.db_path.exists()
+    legacy=next(e for e in manager._catalog['entries'] if e.get('legacy'))
+    assert legacy['state']=='needs_review'
+    assert manager.snapshot()['evicted_records']==0
+    snapshot=manager.snapshot()
+    assert snapshot['state']=='needs_review' and 'changed after enrollment' in snapshot['message']
+
+
+def test_ai_receipt_ledger_written_after_enrollment_is_retained_for_review(manager):
+    from megalodon.ai_broker import ReceiptStore
+    path=manager.settings.db_path.parent/'megalodon-ai-receipts.db'
+    def receipt(state):
+        return {'state':state,'tool':'megalodon.ai.doctor','authority_level':0,'authorization_source':'operator_cli',
+                'model':'fixture','model_request':'none','validated_arguments':{},'result':{'checked':True},
+                'error_code':None,'duration_ms':0,'evidence_references':[]}
+    from uuid import uuid4
+    with ReceiptStore(path) as ledger:ledger.append(str(uuid4()),receipt('observed'))
+    enable(manager,days=7)
+    with ReceiptStore(path) as ledger:ledger.append(str(uuid4()),receipt('observed'))
+    manager.test_clock[0]+=8*86400
+    manager._ensure_space()
+    assert path.exists()
+    assert next(e for e in manager._catalog['entries'] if e.get('legacy'))['state']=='needs_review'
+
+
 def test_changed_deletion_impact_requires_new_review(manager):
     enable(manager)
     manager.append_records('network',[row(manager)])

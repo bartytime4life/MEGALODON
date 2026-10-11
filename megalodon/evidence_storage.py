@@ -554,6 +554,10 @@ class EvidenceStorage:
             if entry['state']=='open':
                 self._seal(entry)
                 if self._generic.get(entry['category']) is entry:self._generic.pop(entry['category'])
+            if entry.get('legacy') and not self._legacy_unchanged(entry):
+                entry['state']='needs_review'
+                self._error='Legacy evidence changed after enrollment (a command-line run may have written to it); it stays retained until reviewed.'
+                self._save();continue
             if entry['category']=='packets' and entry.get('compaction_state')=='complete':
                 self._check_compact_source(entry)
             size=self._size(entry)
@@ -672,6 +676,7 @@ class EvidenceStorage:
         entry=dict(id=uuid4().hex,path=str(path),legacy=True,kind='core',category='packets',dev=info.st_dev,ino=info.st_ino,
                    state='closed',created_at=utc(self.clock()),first_at=first,last_at=last,records=count)
         self._size(entry)
+        entry['content_sha256']=self._legacy_content(entry)
         self._catalog['entries'].append(entry)
 
     def _adopt_receipts(self):
@@ -687,7 +692,26 @@ class EvidenceStorage:
             info=path.lstat()
             entry=dict(id=uuid4().hex,path=str(path),legacy=True,kind='receipt',category='audit',dev=info.st_dev,ino=info.st_ino,
                        state='closed',created_at=utc(self.clock()),first_at=first,last_at=last,records=count,chain_head=verified['head'])
-            self._size(entry);self._catalog['entries'].append(entry)
+            self._size(entry);entry['content_sha256']=self._legacy_content(entry)
+            self._catalog['entries'].append(entry)
+
+    def _legacy_content(self,entry):
+        # Row counts and highest row ids per table: the command line can still
+        # write to an enrolled legacy path, and every such write adds rows.
+        with self._db(entry) as db:
+            tables=[r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+            counts=[[name,*db.execute('SELECT COUNT(*),MAX(rowid) FROM "%s"'%name.replace('"','""')).fetchone()] for name in tables]
+        return hashlib.sha256(json.dumps(counts,separators=(',',':')).encode()).hexdigest()
+
+    def _legacy_unchanged(self,entry):
+        try:
+            if 'content_sha256' in entry:return self._legacy_content(entry)==entry['content_sha256']
+            # Enrolled before content was recorded: compare the main table.
+            table='events' if entry['kind']=='core' else 'ai_receipt_events'
+            with self._db(entry) as db:
+                return db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]==entry['records']
+        except (OSError,ValueError,sqlite3.Error):
+            return False
 
     def _legacy_inventory(self):
         """Read-only inventory for the same evidence that apply will enroll."""
