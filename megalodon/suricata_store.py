@@ -323,6 +323,8 @@ def _open_suricata_store_reader(
                 create=False,
                 prefix="SURICATA_STORE",
                 normalize_writable_mode=False,
+                # Read and OFD-locked below, so it cannot be O_PATH.
+                identity_only=False,
             )
             if created:
                 raise SuricataStoreError("SURICATA_STORE:UNEXPECTED_CREATION")
@@ -442,6 +444,8 @@ def _open_suricata_store_writer(
                 create=False,
                 prefix="SURICATA_STORE",
                 normalize_writable_mode=False,
+                # Read and OFD-locked below, so it cannot be O_PATH.
+                identity_only=False,
             )
             if created:
                 raise SuricataStoreError("SURICATA_STORE:UNEXPECTED_CREATION")
@@ -735,6 +739,8 @@ def validate_suricata_store(path: str | Path) -> dict[str, object]:
             writable=False,
             create=False,
             prefix="SURICATA_STORE",
+            # Its header is read below, so it cannot be O_PATH.
+            identity_only=False,
         )
         _assert_path_identity(
             database_path, database_descriptor, directory_descriptor

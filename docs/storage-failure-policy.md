@@ -83,6 +83,29 @@ control. Re-running against v3 is an idempotent no-op. Version-2 run receipts
 retain their original state with `receipt_version = 2` and a null reason; the
 migration does not invent source exhaustion for an ambiguous legacy completion.
 
+## SQLite lock preservation
+
+On POSIX, closing any descriptor a process holds for a file releases all of
+that process's `fcntl` locks on it, including those a live SQLite connection in
+the same process holds: the database `SHARED` lock and the `-shm` dead-man-switch
+and read/write-mark locks. Another process would then treat the WAL index as
+unused and could reinitialize or truncate `-shm` under the live writer
+(observed as `SIGBUS`). Rule: while a connection to a database may be open in
+the process, MEGALODON never opens and closes a readable or writable descriptor
+for that database or its `-shm`/`-journal` sidecars. On Linux, the database
+descriptors held by `Store`, `DashboardStore`, managed evidence, and the AI
+receipt store, the sidecar validator, and the capacity check's sidecar sizing
+use `O_PATH` no-follow descriptors, which Linux never lets release POSIX
+locks; mode normalization goes through `/proc/self/fd` instead of `fchmod` and
+runs only when the mode is not already `0600`. Every existing no-follow,
+regular-file, single-link, owner, mode, and permission check and error code is
+unchanged. `-wal` is read with an ordinary descriptor because SQLite takes no
+locks on it. The Suricata store reads and OFD-locks its database descriptor,
+so it keeps an ordinary one. Without `O_PATH` (not Linux) the previous
+descriptors are kept and this hazard remains while two connections to one
+database share a process. `tests/test_sqlite_lock_preservation.py` checks the
+rule against `/proc/locks`.
+
 ## Dashboard read isolation
 
 `DashboardStore` is separate from the writer `Store`. It requires an existing
