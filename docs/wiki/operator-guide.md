@@ -1,87 +1,35 @@
 # Operator Guide
 
-The HUD is for reading bounded local evidence. It is not a sensor controller,
-host-management console, incident verdict, or proof that an external tool is
-healthy.
+The HUD combines evidence views with separately authorized local workflows. Read source, time, scope and action state before interpreting any display.
 
-## Start and stop
+## Find the right workspace
 
-For the desktop installation, open **MEGALODON** from the application menu or
-run `~/.local/bin/megalodon-hud`. From a checkout, use
-`./scripts/start-local.sh`; its optional `--check` preflight is useful when the
-HUD cannot start. An ordinary installed environment can run
-`python -m megalodon hud`. Use <http://127.0.0.1:8787/> on the same computer.
-The process stays in the foreground; stop it with Ctrl+C. Do not expose it
-through a remote bind, reverse proxy, tunnel, or port forward.
-
-On Home → **Data and tools**, use **Change data for the next launch** to prepare a quoted restart
-command for a settings file, completed offline run, or Suricata store. The form
-does not browse, open, or validate an arbitrary path. Restarting is required to
-take new startup snapshots.
-
-Use **Check this computer** to refresh tool observations and check the runtime
-and selected store without restarting. Download buttons open publisher pages;
-the software list groups essentials and optional workflows. Follow the
-[visual quick start](../gui-quick-start.md) for a click-by-click tour. The optional
-terminal preflight `./scripts/start-local.sh --check` helps when startup fails.
-
-## Read the seven workspaces
-
-| Workspace | Use it for | Do not infer |
+| Workspace | Task | Interpretation limit |
 | --- | --- | --- |
-| HUD | Live network, background tools, interface and resource rates, qualified traffic visuals, connection roster, shared UTC range, and headline counts | Whole-network visibility, sensor continuity, payload content, or an incident verdict |
-| Findings | Fixed detector results linked to the qualified event set; severity is shown as a coloured, labelled pill | Malware attribution, uniqueness, or authorization to respond |
-| Sensors | What each background tool is doing and which data has reached MEGALODON; **Advanced actions** holds readiness checks and copy-only commands | Installation integrity, supported compatibility, service health, or connected data |
-| Setup | Apps & connections for the 10 supporting apps, capture permissions and interface, discovery scopes, AI knowledge, storage, IP location data, and local sign-in | That saving a configuration started collection |
-| Reports | Make, save, schedule, and print local visual reports for the selected period; CSV and JSON under **Advanced exports** | Server-side persistence, complete case evidence, or a compliance report |
-| Evidence | Separate audit, offline, Suricata, reference, ingestion, and optional Qwen projections | That the sources share one transactional snapshot or live connection |
-| Help | Status vocabulary and safe next steps | Operational acceptance |
+| HUD | Inspect live atlas, resources, network directory and history; start configured background tools | Captured observations are not whole-network visibility or physical routes |
+| Findings | Review deterministic findings and separately identified advice | Severity and model text are not attribution or action authority |
+| Sensors | See background workflow status and admitted source observations | Installed, running, supported and connected are distinct |
+| Setup | Configure capture scope, storage, discovery, installed local models, apps and local sign-in | Saving settings and starting a workflow are different actions |
+| Reports | Make, schedule, save and print local visual reports; use Advanced exports | Missing intervals remain missing; sensor and packet units remain separate |
+| Evidence | Inspect audit, offline, reference and separately admitted sensor/model receipts | Sources need not share one snapshot or acquisition clock |
+| Help | Read status vocabulary and safe next steps | Help text does not establish operational acceptance |
 
-## Time range, paging, and qualification
+## Monitoring and geographic context
 
-Traffic defaults to the newest bounded view. Choose **Last hour**, **Today
-(UTC)**, or a custom UTC interval of at most 31 days. History uses pages of at
-most 500 candidates; a page can contain only excluded records. Findings are
-capped at 200 rows per page. Retention or concurrent ingestion can change a page
-when it is read again.
+Choose the actual interface and use the explicit monitoring control. Saved background opt-in can resume finite capture sessions on later launches; errors stop retries. Stop monitoring revokes resumption. Status and ingestion receipts disclose failures and limits.
 
-Sample, unlinked, and unqualified records are excluded from the primary Traffic
-and Findings views. An imported JSONL provenance statement remains
-operator-supplied rather than independently attested. Always record the selected
-range, fetch time, source/run identity, exclusions, and row bounds when handing
-off evidence.
+IP locations are approximate. The separately enabled location workflow downloads a bounded public database and queries this PC’s public internet address; those providers see the connection’s public address. Peer lookups use the local database. Unmapped peers stay in the roster. See [live connection atlas](https://github.com/bartytime4life/MEGALODON/blob/main/docs/live-connection-globe.md).
 
-## Apps and companion consoles
+## Reports and history
 
-**Executable found**, **Process observed**, **Supported**, and **Connected** are
-different claims. Startup checks do not execute a tool, probe a version, test a
-service, or prove data flow.
+History views are bounded pages; selected ranges and exclusions matter. Reports aggregate retained source segments rather than only the latest dashboard page. **Make report now**, **Save report**, and **Print / save PDF** have distinct outcomes. Daily/weekly scheduling runs with the local service, including one catch-up interval after downtime. Downloaded copies are outside managed retention. See [recording and reports](https://github.com/bartytime4life/MEGALODON/blob/main/docs/efficient-recording-reports.md).
 
-A saved HTTP(S) console address stays in this browser origin. Do not include
-credentials in it. **View in HUD** opens the explicitly selected address in a
-sandboxed frame; some applications will require **Open outside HUD** because
-they refuse embedding or need external sign-in. The companion application keeps
-its own network access, authentication, and action permissions. Viewing its UI
-does not connect its telemetry to MEGALODON.
+## Local AI and actions
 
-## Reports
+Choose an installed local model through Setup. Availability, loaded allocation, a verified response and a failed latest attempt are distinct. An explanation or closed proposal does not execute. Fixed inventory/scan workflows use configured scopes. Containment has an expiring preview, a separate operator action, OS authorization and a five-minute kernel timeout; affected unrelated connections can also be interrupted.
 
-Reports use the currently selected range and already accepted local projections.
-Preview the exact JSON before downloading it. The browser does not POST evidence,
-write the database, invoke an analyzer, or create a server-side report. A report
-describes bounded stored metadata; it does not prove capture completeness,
-service health, incident state, or remediation.
+See [visual operations and defense](https://github.com/bartytime4life/MEGALODON/blob/main/docs/visual-operations-defense.md), [model selection](https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-model-selection.md), and [security boundaries](security-boundaries.md) before operating those controls.
 
-## Separate evidence sources
+Companion console navigation keeps the other application’s permissions and network behavior. Viewing a UI does not admit its telemetry. Never store credentials in a console URL.
 
-- **Reference Library:** verified bundled IANA registration context, never a service or threat verdict.
-- **Offline snapshot:** one explicitly selected completed report loaded at startup, not a live analyzer.
-- **Suricata evidence:** one bounded startup snapshot from a separate durable store, not a live sensor or MEGALODON finding.
-- **Qwen receipt:** one optional validated startup-supplied result, not a dashboard invocation or evidence source.
-- **Ingestion receipts:** bounded run outcomes, not proof that a source was complete beyond its own receipt.
-
-Unavailable and empty are intentionally distinct. A failed refresh may preserve
-an older view as stale; do not silently treat it as current.
-
-Use the full [operator and acceptance runbook](../dashboard-operations.md) for
-storage admission, troubleshooting, browser checks, and exact API semantics.
+The complete [dashboard operations runbook](../dashboard-operations.md) remains the detailed authority for endpoint behavior, storage admission and troubleshooting. The former hosted Sites console is retired.
