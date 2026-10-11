@@ -47,10 +47,11 @@
     "A consistent packet is not model acceptance, release, deployment, or host authority."
   ],
   "model_advertises_tools": false,
-  "packet_sha256": "918109945774d6fe3c2fa00b35c999f26e56d208e5bbc1aa1d9ef578286187ff",
+  "packet_sha256": "eaa70bbeba1e121db1ebf4fe1bab15e00b9313d7b5954962aa97eb24c23e331f",
   "remaining_holds": [
     "EVIDENCE_ORIGIN_AUTHENTICATION",
     "LOADED_RUNTIME_BYTES_NOT_ATTESTED",
+    "RUNTIME_PROVIDER_WIRING",
     "INDEPENDENT_SECURITY_ACCEPTANCE_CURRENTNESS",
     "OWNER_FINAL_ACCEPTANCE",
     "RELEASE_AND_DEPLOYMENT_AUTHORITY"

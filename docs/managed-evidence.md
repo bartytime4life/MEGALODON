@@ -89,6 +89,9 @@ probe is not an offline verdict.
 
 Each minute, the worker saves compact per-device rows in bounded batches. It no
 longer attempts to put a whole large topology into one 32-KiB evidence record.
+Every device in the directory (up to 4,608) is saved from one consistent
+inventory read, independent of the live API's response-size trimming. Reports
+combine the rows of the latest pass into their network map.
 These saved observations share the existing retention/cap policy. History errors
 are visible separately from a functioning live feed. A selected address offers
 saved observations and a continuation for earlier evidence. Source-qualified

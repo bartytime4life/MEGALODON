@@ -231,7 +231,7 @@ class SupportConfiguration:
             self.qwen_status.update(state='ready',message='Pinned local model configured; a completed response is required to confirm advice.',updated_at=now())
         except FileNotFoundError:
             pass
-        except (OSError,ValueError,TypeError):
+        except (OSError,ValueError,TypeError,RecursionError):
             self.qwen_status.update(state='needs_setup',message='Saved model profile could not be validated; select a local model in Setup again.')
 
     def _paths(self):

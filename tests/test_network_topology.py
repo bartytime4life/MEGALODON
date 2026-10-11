@@ -248,3 +248,90 @@ def test_history_failure_does_not_mark_passive_inventory_failed(topology):
     topology._persist_observations()
     value=topology.snapshot()
     assert value['state']=='ready' and value['persistence']['state']=='error'
+
+
+def test_persistence_saves_every_device_when_snapshot_pages_are_trimmed(tmp_path):
+    # Large sensor context makes a 200-node snapshot page exceed its response
+    # bound; trimming a page must never drop devices from history.
+    addresses=[dict(ifname='eth0',address='02:00:00:00:00:01',addr_info=[dict(local='192.168.0.10',prefixlen=20)])]
+    neighbors=[dict(dev='eth0',dst=f'192.168.{1+n//250}.{1+n%250}',lladdr='02:00:00:00:%02x:%02x'%(n//256,n%256),state=['REACHABLE']) for n in range(300)]
+    def run(argv,limit,timeout,cancel):
+        return json.dumps(addresses if 'address' in argv else neighbors if 'neigh' in argv else []).encode(),0
+    def context(ip):
+        return dict(ip=ip,names=[dict(name=f'host-{ip.replace(".","-")}-{k}.corp.example.internal',source='Suricata DNS answer',observed_at=STAMP) for k in range(5)],
+            findings=[dict(signature='ET POLICY Suspicious outbound connection sample signature text',severity=2,observed_at=STAMP,source='Suricata EVE (sensor context)') for _ in range(5)],
+            services=[dict(name=s,role='server',peer='192.168.0.10',source='Suricata application protocol',observed_at=STAMP) for s in ('http','tls','dns','ssh','smb','rdp','ldap','ntp')])
+    ips=[n['dst'] for n in neighbors]
+    ops=SimpleNamespace(snapshot=lambda:dict(sensor_endpoints=[context(ip) for ip in ips[:128]],endpoints=[]))
+    cfg=SimpleNamespace(live_snapshot=lambda:dict(capture=dict(state='stopped',interface='eth0'),connections=[],totals=dict(truncated=False)))
+    batches=[]
+    home=tmp_path/'home';home.mkdir(mode=0o700)
+    value=NetworkTopology(cfg,ops,home=home,run=run,evidence=SimpleNamespace(enabled=True,append_records=lambda category,rows:batches.append(rows)))
+    try:
+        value._refresh_passive()
+        assert len(value.snapshot(include_token=False,limit=200)['nodes'])<200
+        value._persist_observations()
+        saved=[r['data']['node']['ip'] for rows in batches for r in rows]
+        assert sorted(saved)==sorted(['192.168.0.10',*ips])
+        assert all(len(rows)<=200 for rows in batches)
+        assert len({r['observed_at'] for rows in batches for r in rows})==1
+        assert value.snapshot()['persistence']['state']=='saved'
+    finally:value.close()
+
+
+def test_broadcast_and_non_unicast_flows_never_become_devices_or_count(topology):
+    current=live()
+    def flow(identifier,a,b,sent=240):
+        return dict(id=identifier,protocol='UDP',a=dict(ip=a,port=138,local=a=='192.168.2.10'),b=dict(ip=b,port=138,local=False),first_seen=STAMP,last_seen=STAMP,active=True,a_to_b=dict(bytes=sent,packets=1),b_to_a=dict(bytes=0,packets=0))
+    refused=['192.168.15.255','192.168.0.0','255.255.255.255','172.17.255.255','172.17.0.0']
+    current['connections']+=[flow(f'b{n}','192.168.2.10',ip) for n,ip in enumerate(refused)]
+    # Side b is refused after side a would already have been counted.
+    current['connections']+=[flow('m1','192.168.2.20','224.0.0.251'),flow('b9','192.168.2.20','192.168.15.255')]
+    # Inside a /20, x.x.1.255 is an ordinary host address.
+    current['connections']+=[flow('host','192.168.2.10','192.168.1.255',sent=7)]
+    topology.configuration.live_snapshot=lambda:current
+    value=topology.snapshot(view='all',limit=200)
+    ips={n['ip'] for n in value['nodes']}
+    assert not ips&set(refused) and '224.0.0.251' not in ips and '192.168.1.255' in ips
+    pc=next(n for n in value['nodes'] if n['ip']=='192.168.2.10')
+    assert pc['sent_bytes']==107 and pc['packets']==4 and pc['active_connections']==2
+    peer=next(n for n in value['nodes'] if n['ip']=='192.168.2.20')
+    assert peer['sent_bytes']==200 and peer['received_bytes']==100 and peer['packets']==3 and peer['active_connections']==1
+    assert {e['id'] for e in value['edges'] if e['kind']=='observed'}=={'flow-f1','flow-host'}
+
+
+def test_device_history_reads_fixed_pages_and_cursor_is_exact(tmp_path):
+    from datetime import datetime,timezone
+    from megalodon.config import Settings
+    from megalodon.evidence_storage import EvidenceStorage,GIB
+    manager=EvidenceStorage(Settings(db_path=tmp_path/'old.db'),home=tmp_path)
+    try:
+        preview=manager.preview(dict(profile='home',retention_days=14,cap_bytes=20*GIB));manager.apply(preview['preview_id'])
+        stamp=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
+        # Newest first: 150 other devices, then matches spread across pages.
+        targets={n for n in range(100) if n%7==0}
+        rows=[dict(observed_at=stamp,source='network-device-observation',data=dict(node=dict(ip='192.168.2.20' if n in targets else f'192.168.3.{n%250}',interface='eth0'),window_seconds=60)) for n in range(250)]
+        for start in range(0,250,125):manager.append_records('network',rows[start:start+125])
+        calls=[]
+        def history(**options):
+            calls.append(options['limit']);return manager.history(**options)
+        home=tmp_path/'home';home.mkdir(mode=0o700)
+        value=NetworkTopology(SimpleNamespace(),SimpleNamespace(),home=home,run=run_inventory,evidence=SimpleNamespace(enabled=True,history=history))
+        first=value.device_history('192.168.2.20',interface='eth0',limit=1)
+        assert len(first['records'])==1 and len(calls)==2 and first['next_cursor']
+        expected=[];cursor=None
+        while True:
+            page=manager.history(category='network',limit=100,cursor=cursor)
+            expected+=[r['id'] for r in page['records'] if r['data']['node']['ip']=='192.168.2.20']
+            cursor=page['next_cursor']
+            if not cursor:break
+        assert len(expected)==len(targets) and first['records'][0]['id']==expected[0]
+        for limit in (1,2,3):
+            seen=[];cursor=None
+            while True:
+                page=value.device_history('192.168.2.20',interface='eth0',cursor=cursor,limit=limit)
+                assert len(page['records'])<=limit
+                seen+=[r['id'] for r in page['records']];cursor=page['next_cursor']
+                if not cursor:break
+            assert seen==expected
+    finally:manager.close()

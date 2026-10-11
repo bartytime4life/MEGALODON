@@ -31,8 +31,11 @@ python tools/local_model_binding.py collect-unbound
 A `BOUND` record refuses mutable `:latest` tags, duplicate component identities,
 missing component closure, a weight digest that differs from the sole weight
 component, missing license/provenance/host/registry data, or an absent operator
-decision. Structural validation does not authenticate the named actor, receipts,
-provider binary, or model bytes.
+decision. `generated_at` and `approved_at` must parse as real UTC calendar times
+(`YYYY-MM-DDTHH:MM:SSZ`; impossible dates such as month 13 refuse with
+`INVALID_TIMESTAMP`), and the binding may not be generated before its parsed
+approval time. Structural validation does not authenticate the named actor,
+receipts, provider binary, or model bytes.
 
 All effect fields are fixed to `false`. This contract cannot pull or start a
 model, create an alias, change host configuration, grant detector/action

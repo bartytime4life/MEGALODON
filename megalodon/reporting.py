@@ -36,6 +36,8 @@ MAX_BODY = 8 * 1024 * 1024
 MAX_FINDINGS = 5000
 MAX_KEYS = 4096
 MAX_FLOWS = 100_000
+MAX_NETWORK_NODES = 100
+MAX_NETWORK_BYTES = 256 * 1024
 CHUNK_BYTES = 16 * 1024
 REPORT_CSS = """
 :root{color-scheme:dark;--ink:#e6f2f5;--muted:#aec5ce;--line:#31505e;--cyan:#81e5de;--gold:#f0c575}
@@ -273,6 +275,8 @@ class ReportService(RetainedEvidenceReader):
         compacted_segments = set()
         compacted_edge = False
         bounds_reached = False
+        network_stamp = None
+        device_map = None
 
         def keep_response(key):
             # Totals count every response; detail keeps 5,000 distinct keys.
@@ -385,11 +389,28 @@ class ReportService(RetainedEvidenceReader):
                                 resource_bins[bucket] = [_resource_mean(resource_bins[bucket])]
                         elif category == 'network':
                             result['summary']['network_samples'] += 1
-                            if result['network'] is None or row['observed_at'] > result['network']['observed_at']:
+                            node = data.get('node') if source == 'network-device-observation' else None
+                            if type(node) is dict:
+                                # Topology persists one row per device; one pass
+                                # shares a stamp. Keep a bounded view of the latest.
+                                if device_map is None or stamp > device_map['stamp']:
+                                    device_map = dict(stamp=stamp, observed_at=row['observed_at'], nodes={}, bytes=0, limited=False,
+                                                      coverage=data.get('coverage') if type(data.get('coverage')) is str else None)
+                                if stamp == device_map['stamp']:
+                                    key = str(node.get('id', node.get('ip')))
+                                    size = len(json.dumps(node, allow_nan=False).encode())
+                                    if key not in device_map['nodes']:
+                                        if len(device_map['nodes']) >= MAX_NETWORK_NODES or device_map['bytes']+size > MAX_NETWORK_BYTES:
+                                            device_map['limited'] = True
+                                        else:
+                                            device_map['nodes'][key] = node
+                                            device_map['bytes'] += size
+                            elif network_stamp is None or stamp > network_stamp:
                                 # Capture a bounded topology snapshot, preserving
                                 # source fields and truthful observation labels.
                                 encoded = json.dumps(data, allow_nan=False)
                                 if len(encoded.encode()) <= 32768:
+                                    network_stamp = stamp
                                     result['network'] = dict(observed_at=row['observed_at'], source=source, data=data)
                         elif category == 'audit' and data.get('state') != 'not_attempted':
                             key = source+':'+str(data.get('receipt_id', row['id']))
@@ -445,6 +466,13 @@ class ReportService(RetainedEvidenceReader):
             gaps.append('Retained evidence begins after the requested start; earlier coverage is unavailable.')
         if last is not None and last < end - 120:
             gaps.append('Retained evidence ends before the requested end; later coverage is unavailable.')
+        if device_map is not None and (network_stamp is None or device_map['stamp'] >= network_stamp):
+            view = dict(nodes=list(device_map['nodes'].values()), edges=[])
+            if device_map['coverage']:
+                view['coverage'] = device_map['coverage'][:512]
+            result['network'] = dict(observed_at=device_map['observed_at'], source='network-device-observation', data=view)
+            if device_map['limited']:
+                gaps.append(f'The retained network map is limited to {MAX_NETWORK_NODES} devices and {MAX_NETWORK_BYTES//1024} KiB from its latest observation; other devices from that observation are omitted.')
         if result['network'] is None:
             gaps.append('A retained local-network topology snapshot was unavailable.')
         if not result['resources']:

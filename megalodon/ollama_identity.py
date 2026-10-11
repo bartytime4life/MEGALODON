@@ -113,7 +113,8 @@ def parse_observation_bytes(data: bytes) -> object:
         )
     except OllamaIdentityError:
         raise
-    except (UnicodeError, json.JSONDecodeError, RecursionError):
+    except (ValueError, RecursionError):
+        # Includes UTF-8/JSON errors and the interpreter's integer digit limit.
         raise OllamaIdentityError("INVALID_JSON") from None
 
 
