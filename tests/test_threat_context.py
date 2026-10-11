@@ -242,6 +242,27 @@ def test_owner_change_deadline_and_output_limit_refuse_before_success(tmp_path, 
         threat_context.read_completed_bundle(path, digest)
 
 
+def test_unrelated_entry_beside_the_path_is_not_a_source_change(tmp_path, monkeypatch):
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    path, digest = _write(private / "context.json")
+    read = os.read
+
+    def read_with_ancestor_change(change):
+        def wrapped(descriptor, size):
+            change()
+            return read(descriptor, size)
+        return wrapped
+
+    monkeypatch.setattr(threat_context.os, "read", read_with_ancestor_change(
+        lambda: (tmp_path / "unrelated.txt").write_text("x")))
+    threat_context.read_completed_bundle(path, digest)
+    # An ancestor's mode is still part of its identity.
+    monkeypatch.setattr(threat_context.os, "read", read_with_ancestor_change(lambda: private.chmod(0o750)))
+    with pytest.raises(threat_context.ThreatContextError, match="SOURCE_CHANGED$"):
+        threat_context.read_completed_bundle(path, digest)
+
+
 def test_reader_has_no_network_subprocess_persistence_or_pattern_execution(tmp_path, monkeypatch):
     path, digest = _write(tmp_path / "context.json")
 
