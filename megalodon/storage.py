@@ -356,6 +356,7 @@ _VERIFIED_CONNECT_ATTEMPTS = 3
 # openers' sidecar churn to settle before refusing DIRECTORY_CHANGED.
 _DIRECTORY_SETTLE_SECONDS = 10.0
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+_SIDECAR_LOOKUP_ATTEMPTS = 8
 
 
 class StorageSchemaError(ValueError):
@@ -1017,35 +1018,42 @@ def _validate_sqlite_sidecars(
             if directory_descriptor is not None
             else {}
         )
-        descriptor: int | None = None
-        try:
-            if os.name != "posix" and sidecar.is_symlink():
-                _raise_path_error(prefix, "SYMLINK_REFUSED")
-            descriptor = os.open(target, flags, **kwargs)
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            code = (
-                "SYMLINK_REFUSED"
-                if getattr(exc, "errno", None) == errno.ELOOP
-                else "UNSAFE_SIDECAR"
-            )
-            _raise_path_error(prefix, code, exc)
-        try:
-            info = os.fstat(descriptor)
-            if info.st_nlink == 0 and stat.S_ISREG(info.st_mode):
-                # Its owner (another connection committing, checkpointing or
-                # closing) removed it after the open; it has no name left
-                # that a connection could use, so it is absent.
-                continue
-            present.add(suffix)
-            _validate_private_database_stat(
-                info, writable=writable, prefix=prefix
-            )
-            if writable and os.name == "posix":
-                os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
-        finally:
-            os.close(descriptor)
+        # A sidecar its owner (another connection committing, checkpointing or
+        # closing) unlinks between the open and the fstat leaves a descriptor
+        # with no links. That describes only the old file: the name may already
+        # hold a replacement, so it is looked up again, a bounded number of
+        # times, and whatever it holds then is validated as usual.
+        for _attempt in range(_SIDECAR_LOOKUP_ATTEMPTS):
+            descriptor: int | None = None
+            try:
+                if os.name != "posix" and sidecar.is_symlink():
+                    _raise_path_error(prefix, "SYMLINK_REFUSED")
+                descriptor = os.open(target, flags, **kwargs)
+            except FileNotFoundError:
+                break
+            except OSError as exc:
+                code = (
+                    "SYMLINK_REFUSED"
+                    if getattr(exc, "errno", None) == errno.ELOOP
+                    else "UNSAFE_SIDECAR"
+                )
+                _raise_path_error(prefix, code, exc)
+            try:
+                info = os.fstat(descriptor)
+                if info.st_nlink == 0 and stat.S_ISREG(info.st_mode):
+                    continue
+                present.add(suffix)
+                _validate_private_database_stat(
+                    info, writable=writable, prefix=prefix
+                )
+                if writable and os.name == "posix":
+                    os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
+                break
+            finally:
+                os.close(descriptor)
+        else:
+            # The name never settled on a linked file or on absence.
+            _raise_path_error(prefix, "UNSAFE_DATABASE")
     return frozenset(present)
 
 
