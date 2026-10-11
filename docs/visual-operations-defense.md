@@ -75,13 +75,17 @@ systems, exploit delivery, credential collection, or traffic flooding.
 ## Temporary containment
 
 A preview must name a currently observed public endpoint. Local/reserved,
-allowlisted, observed DNS, SSH and RDP service endpoints are protected. A preview
+allowlisted, observed DNS, SSH and RDP service endpoints are protected, as are
+IPv6 forms embedding an IPv4 address (IPv4-mapped and NAT64 `64:ff9b::/96`,
+`64:ff9b:1::/48`), which both the HUD and the helper refuse. A preview
 expires after 60 seconds and can be used once. Apply is a separate operator
 action and requires the OS authorization prompt. All applications using the
 selected IP may lose connectivity, including unrelated sites sharing that IP.
 
 The fixed helper creates only `inet megalodon_guard`, with two 64-element timeout
-sets and input/output drop rules. Each element has a five-minute kernel timeout.
+sets and input/output drop rules. Each element has a five-minute kernel timeout;
+applying an address that is already blocked restarts that timeout in one atomic
+transaction.
 An existing table must match the expected comment, chains, expressions, types,
 sizes and timeouts before it can be used. Other tables are neither flushed nor
 rewritten. Add and release perform readback. Release removes only that managed
@@ -90,15 +94,22 @@ element. Legacy `firewall-install` / `firewall-block --apply` routes still refus
 The kernel timeout continues if the HUD exits. After the displayed expiry,
 `expiry_elapsed` means the expected expiry has passed; the UI does not invent
 a fresh ruleset inspection. A new OS-authorized release verifies absence.
-An ambiguous helper failure is reported as an outcome needing review. No host
-block is applied merely to demonstrate the feature.
+An ambiguous helper failure is reported as an outcome needing review, including
+a failed re-apply of a recorded block, which is shown with a conservative new
+expiry. After a HUD restart, recorded blocks from the last 390 seconds
+(helper bound plus kernel timeout) and applies interrupted before their outcome
+was recorded are restored so Release remains available. No host block is
+applied merely to demonstrate the feature.
 
 Every requested action is recorded before execution in the private
 `~/.local/share/megalodon/defense/receipts.db` ledger, followed by the observed,
 applied or failed result. Its hash chain detects accidental changes against
 a trusted head; it is not protection against an owner rewriting the ledger.
-Unavailable or invalid audit storage stops actions. Model output is untrusted
-advice and never becomes privilege or authorization.
+Unavailable or invalid audit storage stops actions. A request whose opening
+record cannot be written, including the refusal near the storage limit, runs
+nothing and writes no outcome record. It does not mark the audit unavailable;
+Release runs once its own opening record can be written. Model output is
+untrusted advice and never becomes privilege or authorization.
 
 ## HTTP boundary
 

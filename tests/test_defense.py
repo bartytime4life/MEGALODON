@@ -235,3 +235,168 @@ def test_protected_service_survives_port_list_truncation(tmp_path):
     defense=Defense(operations,config,run=lambda *a:pytest.fail('no host action expected'))
     with pytest.raises(ValueError,match='protected'):
         defense._target('8.8.4.4')
+
+
+def test_unrecorded_request_writes_no_outcome_row_and_keeps_release(manager,monkeypatch):
+    from megalodon import defense as defense_module
+    from megalodon.ai_broker import BrokerError,ReceiptStore
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    assert perform(defense,dict(action='apply_containment',plan_id=plan['id']))['state']=='finished'
+
+    class Contended(ReceiptStore):
+        # Another writer holds the ledger: only the opening row is refused, once.
+        def append(self,receipt_id,payload):
+            if payload['state']=='not_attempted':
+                monkeypatch.setattr(defense_module,'ReceiptStore',ReceiptStore)
+                raise BrokerError('AUDIT_UNAVAILABLE')
+            return super().append(receipt_id,payload)
+
+    monkeypatch.setattr(defense_module,'ReceiptStore',Contended)
+    refused=perform(defense,{'action':'refresh_inventory'})
+    with ReceiptStore(defense.path) as store:store.verify_chain()
+    restored=Defense(defense.operations,defense.configuration,run=defense.run)
+    assert restored.snapshot()['audit_ready'] is True
+    assert refused['state']=='failed' and 'nothing was attempted' in refused['message']
+    assert calls[-1]!={'nmap','osquery'} and defense.snapshot()['audit_ready'] is True
+    assert perform(restored,dict(action='release_containment',ip='1.1.1.1'))['state']=='finished'
+
+
+def test_storage_reserve_refusal_does_not_disable_release(manager,monkeypatch):
+    from megalodon import defense as defense_module
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    assert perform(defense,dict(action='apply_containment',plan_id=plan['id']))['state']=='finished'
+    limit=defense_module.MAX_LEDGER_BYTES
+    monkeypatch.setattr(defense_module,'MAX_LEDGER_BYTES',0)
+    refused=perform(defense,{'action':'scan_files'})
+    assert defense.snapshot()['audit_ready'] is True and calls[-1]!={'clamav'}
+    assert refused['state']=='failed' and refused['message']=='Defense audit storage is full.'
+    # Once the operator frees space, Release works without a restart.
+    monkeypatch.setattr(defense_module,'MAX_LEDGER_BYTES',limit)
+    assert perform(defense,dict(action='release_containment',ip='1.1.1.1'))['state']=='finished'
+    assert calls[-1][-2:]==['release','1.1.1.1'] and defense.snapshot()['active']==[]
+
+
+@pytest.mark.parametrize('ip',['64:ff9b::808:808','64:ff9b::101:101','64:ff9b::c0a8:101','64:ff9b:1::808:808'])
+def test_nat64_forms_are_refused_like_mapped_addresses(manager,ip):
+    from dataclasses import replace
+    from ipaddress import ip_network
+    defense,calls,_=manager
+    settings=defense.configuration.settings
+    defense.configuration.settings=replace(settings,blocking=replace(settings.blocking,allowlist=(ip_network('8.8.8.0/24'),)))
+    refused=perform(defense,dict(action='plan_containment',ip=ip))
+    assert refused['state']=='failed' and 'protected' in refused['message'] and calls==[]
+    helper={'__name__':'guard_fixture'};exec(ROOT_PROGRAM,helper)
+    helper['nft']=lambda *a,**k:pytest.fail('no firewall access expected')
+    with pytest.raises(ValueError,match='Mapped target refused'):helper['act']('apply',ip)
+
+
+def _guard_with_kernel(kernel):
+    """The fixed helper against a fake nft modelling set semantics: add of an
+    existing element is a no-op, and a -f batch applies all-or-nothing."""
+    helper={'__name__':'guard_fixture'};exec(ROOT_PROGRAM,helper)
+    def nft(args,body=None):
+        if args==['list','tables']:
+            return 0,{'nftables':[{'metainfo':{}},{'table':{'family':'inet','name':'megalodon_guard'}}]}
+        if args==['list','table','inet','megalodon_guard']:
+            objects=[deepcopy(item['add']) for item in helper['initial']()['nftables']]
+            for item in objects:
+                if 'set' in item:
+                    item['set']['elem']=[{'elem':{'val':ip,'timeout':300,'expires':left}} for ip,left in kernel.items()
+                                         if ip_address(ip).version==int(item['set']['name'][-1])]
+            return 0,{'nftables':objects}
+        assert args==['-f','-']
+        staged=dict(kernel)
+        for command in body['nftables']:
+            (verb,item),=command.items()
+            for entry in item['element']['elem']:
+                ip=entry['elem']['val'] if type(entry) is dict else entry
+                if verb=='add':staged.setdefault(ip,entry['elem']['timeout'])
+                elif ip not in staged:return 1,None
+                else:del staged[ip]
+        kernel.clear();kernel.update(staged)
+        return 0,None
+    helper['nft']=nft
+    return helper
+
+
+def test_reapply_restarts_the_kernel_timeout():
+    kernel={'1.1.1.1':2,'1.0.0.1':150}
+    helper=_guard_with_kernel(kernel)
+    assert helper['act']('apply','1.1.1.1')=={'ip':'1.1.1.1','present':True,'remaining_seconds':300,'verified':True}
+    assert kernel=={'1.1.1.1':300,'1.0.0.1':150}
+    assert helper['act']('apply','2606:4700::1111')['remaining_seconds']==300
+    assert helper['act']('release','1.1.1.1')['present'] is False and '1.1.1.1' not in kernel
+
+
+def test_restart_restores_blocks_within_their_lifetime_and_unfinished_applies(manager,monkeypatch):
+    from datetime import datetime,timedelta
+    from megalodon import defense as defense_module
+    from megalodon.ai_broker import ReceiptStore
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    assert perform(defense,dict(action='apply_containment',plan_id=plan['id']))['state']=='finished'
+    with ReceiptStore(defense.path) as store:
+        # The HUD stopped while an apply of another address was running.
+        store.append('interrupted',dict(state='not_attempted',action='apply_containment',ip='1.0.0.1',message='Operator requested a fixed workflow.',
+                     request=dict(action='apply_containment',plan_id='a'*32),approved_preview=dict(plan,ip='1.0.0.1'),result=None))
+    for _ in range(40):perform(defense,{'action':'scan_files'})
+    states=lambda value:sorted((a['ip'],a['state']) for a in value.snapshot()['active'])
+    restored=Defense(defense.operations,defense.configuration,run=defense.run)
+    assert states(restored)==[('1.0.0.1','needs_review'),('1.1.1.1','applied')]
+    assert len(restored.snapshot()['recent'])==20
+
+    class Later(datetime):
+        @classmethod
+        def now(cls,tz=None):return datetime.now(tz)+timedelta(hours=1)
+
+    monkeypatch.setattr(defense_module,'datetime',Later)
+    # The kernel timeout removed the older block; the unfinished apply still needs review.
+    later=Defense(defense.operations,defense.configuration,run=defense.run)
+    assert states(later)==[('1.0.0.1','needs_review')]
+    assert perform(later,dict(action='release_containment',ip='1.0.0.1'))['state']=='finished'
+    assert states(Defense(defense.operations,defense.configuration,run=defense.run))==[]
+
+
+def test_ambiguous_reapply_of_a_recorded_block_needs_review(manager):
+    from megalodon.managed_capture import now
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    assert perform(defense,dict(action='apply_containment',plan_id=plan['id']))['state']=='finished'
+    defense._active['1.1.1.1']=dict(defense._active['1.1.1.1'],expires_at='2000-01-01T00:00:00Z')
+    second=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    defense.run=lambda *a:(b'',126)   # the helper may have changed the host; its result was lost
+    assert perform(defense,dict(action='apply_containment',plan_id=second['id']))['state']=='failed'
+    for value in (defense,Defense(defense.operations,defense.configuration,run=defense.run)):
+        (entry,)=value.snapshot()['active']
+        assert (entry['ip'],entry['state'],entry['verified'])==('1.1.1.1','needs_review',False)
+        assert entry['expires_at']>now()
+
+
+def test_finished_at_is_never_stamped_onto_the_next_job(manager):
+    import threading,time
+    defense,calls,_=manager
+    real=defense._lock;paused=threading.Event();go=threading.Event();gate=threading.Event()
+
+    class Preempt:
+        # Stall a worker that re-enters the lock after reporting completion.
+        def __enter__(self):
+            if (threading.current_thread().name=='megalodon-defense' and defense._job['state'] in {'finished','failed'}
+                    and not go.is_set()):
+                paused.set();go.wait(3)
+            return real.__enter__()
+        def __exit__(self,*a):return real.__exit__(*a)
+
+    defense._lock=Preempt()
+    defense.start({'action':'scan_files'});first=defense._thread
+    deadline=time.monotonic()+3
+    while first.is_alive() and not paused.is_set() and time.monotonic()<deadline:time.sleep(.01)
+    collect=defense.configuration.companions.request_collection
+    defense.configuration.companions.request_collection=lambda selected:(gate.wait(3),collect(selected))[1]
+    defense.start({'action':'refresh_inventory'})
+    go.set();first.join(3)
+    job=defense.snapshot()['job']
+    assert (job['action'],job['state'],job['finished_at'])==('refresh_inventory','running',None)
+    gate.set();defense._thread.join(3)
+    assert defense.snapshot()['job']['finished_at'] is not None
