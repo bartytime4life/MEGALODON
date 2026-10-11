@@ -173,6 +173,68 @@ def test_failed_later_batch_resumes_after_committed_batch_without_duplicates(evi
     assert len(records)==401 and len({r['data']['source_id'] for r in records})==401
 
 
+def test_post_commit_failure_resumes_from_stored_checkpoint_without_reimport(evidence,tmp_path,monkeypatch):
+    path=tmp_path/'eve.json';write(path,[eve(1)])
+    worker=reader(evidence,path);assert worker.poll('suricata')==1
+    write(path,[eve(i) for i in range(2,6)],'a')
+    original=evidence._save;fired=[]
+    def fail_once(**kwargs):
+        if not fired:fired.append(1);raise OSError(5,'Synthetic catalog write failure after commit')
+        return original(**kwargs)
+    monkeypatch.setattr(evidence,'_save',fail_once)
+    with pytest.raises(OSError):worker.poll('suricata')
+    assert evidence.history()['total']==5
+    worker.poll('suricata')
+    records=all_history(evidence)
+    assert len(records)==5 and {r['data']['source_id'] for r in records}=={'1','2','3','4','5'}
+
+
+def test_malformed_zeek_epoch_is_rejected_without_blocking_following_records(evidence,tmp_path):
+    worker=reader(evidence,tmp_path/'missing-eve.json');path=worker.paths['zeek'];path.parent.mkdir(parents=True)
+    huge=zeek(2);huge['ts']=1.79172e18
+    with pytest.raises(ValueError,match='Zeek time'):normalize_zeek(huge)
+    write(path,[zeek(1),huge,zeek(3)])
+    assert worker.poll('zeek')==2 and worker.snapshot()['rejected']==1
+    assert evidence.checkpoint('flow_zeek')['offset']==path.stat().st_size
+
+
+def test_zeek_checkpoint_follows_while_suricata_is_primary_so_flap_back_does_not_reimport(evidence,tmp_path):
+    eve_path=tmp_path/'eve.json';seen=[]
+    worker=reader(evidence,eve_path,lambda row:seen.append((row['source'],row['data']['source_id'])))
+    zeek_path=worker.paths['zeek'];zeek_path.parent.mkdir(parents=True)
+    def cycle():
+        worker._select_at=0;worker._cycle();return worker._primary
+    write(zeek_path,[zeek(i) for i in (1,2,3)])
+    assert cycle()==('zeek','file')
+    write(eve_path,[eve(i) for i in (4,5,6)]);write(zeek_path,[zeek(i) for i in (4,5,6)],'a')
+    assert cycle()==('suricata','file')
+    eve_path.unlink();write(zeek_path,[zeek(i) for i in (7,8,9)],'a')
+    assert cycle()==('zeek','file')
+    assert sorted(seen)==[('suricata-eve',str(i)) for i in (4,5,6)]+[('zeek-conn',f'C{i:015d}') for i in (1,2,3,7,8,9)]
+    assert worker.snapshot()['imported_flows']==9
+
+
+def test_an_idle_zeek_follow_poll_does_not_hide_the_primary_backlog(evidence,tmp_path):
+    eve_path=tmp_path/'eve.json'
+    worker=reader(evidence,eve_path)
+    zeek_path=worker.paths['zeek'];zeek_path.parent.mkdir(parents=True)
+    write(zeek_path,[zeek(1)]);write(eve_path,[eve(1)])
+    worker._select_at=0;worker._cycle()
+    assert worker._primary==('suricata','file')
+    # More EVE input arrives than one read takes; the quiet Zeek file polled
+    # after it must not report the loop as drained.
+    write(eve_path,[eve(i) for i in range(2,2000)],'a')
+    worker._select_at=0;worker._cycle()
+    assert worker._primary==('suricata','file')
+    assert worker.snapshot()['backlog_bytes']>0
+    # The backlogged EVE file then disappears and Zeek takes over; its stale
+    # backlog must not keep the loop at the fast pace.
+    eve_path.unlink();write(zeek_path,[zeek(2)],'a')
+    worker._select_at=0;worker._cycle()
+    assert worker._primary==('zeek','file')
+    assert worker.snapshot()['backlog_bytes']==0
+
+
 def test_rejected_sensor_lines_cannot_poison_following_valid_records(evidence,tmp_path):
     path=tmp_path/'eve.json';bad=eve(2);bad['proto']={'unexpected':'object'}
     write(path,[eve(1),bad,{'event_type':'stats'},eve(3)])

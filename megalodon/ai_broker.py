@@ -395,6 +395,12 @@ class Broker:
             if len(_json(result).encode()) > MAX_RESULT_BYTES:
                 raise BrokerError("RESULT_TOO_LARGE")
             references = ["finding:" + item["id"] for item in result.get("qualified_findings", [])] if type(result) is dict else []
+            # The terminal receipt, not only the result, must fit the ledger;
+            # otherwise the final append fails and leaves `not_attempted`.
+            final = {**base, "result": result, "evidence_references": references[:8],
+                     "error_code": None, "duration_ms": 60_000, "state": state}
+            if len(_json(final).encode()) > MAX_RESULT_BYTES:
+                raise BrokerError("RESULT_TOO_LARGE")
             base.update(result=result, evidence_references=references[:8])
         except BrokerError as exc:
             if exc.code in {"AUDIT_INTEGRITY", "AUDIT_UNAVAILABLE"}:

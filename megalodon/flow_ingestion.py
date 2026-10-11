@@ -21,6 +21,7 @@ from .evidence_storage import utc, epoch
 MAX_LINE=65536
 READ_BYTES=256*1024
 MAX_ALERT_METADATA=8*1024
+MAX_EPOCH=253402300799  # 9999-12-31T23:59:59Z, the last representable UTC second
 RAW_CONTENT_FIELDS=frozenset({'payload','payload_printable','packet','packet_base64','raw_packet','raw_payload','http_body','file_data'})
 
 
@@ -125,6 +126,8 @@ def normalize_zeek(value):
     if type(uid) is not str or not 1<=len(uid)<=64 or not uid.isalnum():raise ValueError('Invalid Zeek identity.')
     start=value['ts'];duration=value.get('duration',0)
     if type(start) not in (int,float) or type(duration) not in (int,float) or not 0<=duration<=30*86400:raise ValueError('Invalid Zeek time.')
+    # Out-of-range epochs (e.g. nanoseconds) make utc() raise OSError; reject them as data.
+    if not 0<=start<=MAX_EPOCH-duration:raise ValueError('Invalid Zeek time.')
     if type(value.get('proto','other')) is not str:raise ValueError('Invalid protocol label.')
     proto=value.get('proto','other').upper()
     if proto not in {'TCP','UDP','ICMP','ICMPV6'}:proto='OTHER'
@@ -149,7 +152,7 @@ class FlowIngestor:
         self._lock=Lock();self._work_lock=RLock();self._stop=Event();self._thread=None
         self._state=dict(state='stopped',source=None,source_detail=None,accepted=0,rejected=0,imported_flows=0,imported_findings=0,
                          backlog_bytes=0,rotations=0,gaps=0,sampling_gaps=0,samples=0,updated_at=None,message='Flow collection is stopped.')
-        self._positions={};self._primary=None;self._select_at=0
+        self._positions={};self._backlog={};self._primary=None;self._select_at=0
 
     def snapshot(self):
         with self._lock:
@@ -203,16 +206,28 @@ class FlowIngestor:
 
     def _run(self):
         while not self._stop.is_set():
-            if self.evidence.enabled and self.enabled():
-                try:
-                    primary,detail=self.select_source()
-                    if detail=='file':self.poll(primary,include_flows=self.evidence.recording_mode=='connection_summaries')
-                    if primary!='suricata':
-                        try:self.poll('suricata',include_flows=False)
-                        except (OSError,ValueError,sqlite3.Error):pass  # optional alert source
-                except (OSError,ValueError,KeyError,TypeError,OverflowError,sqlite3.Error):
-                    with self._lock:self._state.update(state='unavailable',message='Local sensor input or evidence storage unavailable. Check Sensors and Storage.')
+            if self.evidence.enabled and self.enabled():self._cycle()
             self._stop.wait(.1 if self.snapshot()['backlog_bytes'] else 1)
+
+    def _cycle(self):
+        # Pace by sources read in this cycle only: a file that became unreadable
+        # or is no longer polled must not keep the loop at its fast backlog pace.
+        with self._lock:self._backlog.clear()
+        try:
+            primary,detail=self.select_source()
+            if detail=='file':self.poll(primary,include_flows=self.evidence.recording_mode=='connection_summaries')
+            if primary!='suricata':
+                try:self.poll('suricata',include_flows=False)
+                except (OSError,ValueError,sqlite3.Error):pass  # optional alert source
+            else:
+                # Keep the Zeek checkpoint current without importing its flows, so a later
+                # switch back to Zeek does not re-import connections EVE already supplied.
+                try:self.poll('zeek',include_flows=False)
+                except (OSError,ValueError,sqlite3.Error):pass
+        except (OSError,ValueError,KeyError,TypeError,OverflowError,sqlite3.Error):
+            with self._lock:self._state.update(state='unavailable',message='Local sensor input or evidence storage unavailable. Check Sensors and Storage.')
+        finally:
+            with self._lock:self._state['backlog_bytes']=max(self._backlog.values(),default=0)
 
     def _checkpoint(self,source,position):
         if self._positions.get(source)!=position:
@@ -247,7 +262,7 @@ class FlowIngestor:
             split=raw.find(b'\n')
             if split<0:
                 self._checkpoint(source,dict(identity=identity,offset=offset+len(raw),discarding=True))
-                with self._lock:self._state['backlog_bytes']=max(0,info.st_size-offset-len(raw))
+                with self._lock:self._set_backlog(source,max(0,info.st_size-offset-len(raw)))
                 return 0
             offset+=split+1;raw=raw[split+1:]
         end=raw.rfind(b'\n')
@@ -273,7 +288,7 @@ class FlowIngestor:
             self._checkpoint(source,dict(identity=identity,offset=offset,discarding=True))
             with self._lock:self._state['gaps']+=1
         with self._lock:
-            self._state.update(updated_at=utc(),backlog_bytes=max(0,info.st_size-offset))
+            self._state.update(updated_at=utc());self._set_backlog(source,max(0,info.st_size-offset))
             if has_flows and (self._primary is None or self._primary==(source,'file')):
                 self._state.update(state='connected',message='Source-qualified metadata is retained; input rotations and skipped intervals are reported as gaps.')
             if self._state['source'] is None:
@@ -282,9 +297,20 @@ class FlowIngestor:
             self._state['rejected']+=rejected
         return accepted
 
+    def _set_backlog(self,source,value):
+        # Each cycle polls the primary and a secondary file; the busiest source sets
+        # the poll pace, so one quiet file cannot slow draining of another.
+        self._backlog[source]=value;self._state['backlog_bytes']=max(self._backlog.values())
+
     def _commit(self,source,category,batch,checkpoint):
-        accepted=self.evidence.append_records(category,batch,checkpoint=('flow_'+source,checkpoint))
-        if accepted!=len(batch):raise ValueError('Sensor batch was not fully admitted; its checkpoint will be reviewed.')
+        try:
+            accepted=self.evidence.append_records(category,batch,checkpoint=('flow_'+source,checkpoint))
+            if accepted!=len(batch):raise ValueError('Sensor batch was not fully admitted; its checkpoint will be reviewed.')
+        except BaseException:
+            # The store may have committed rows and checkpoint before failing; its
+            # checkpoint, not this cache, decides where the next poll resumes.
+            self._positions.pop(source,None)
+            raise
         self._positions[source]=checkpoint
         with self._lock:
             self._state['imported_'+category]+=accepted;self._state['accepted']+=accepted

@@ -81,9 +81,11 @@ example, nothing captured since install) fails with `EVIDENCE_UNAVAILABLE`.
 
 Every request is a JSON object with exactly `tool`, `arguments`, and `reason`.
 The full request is capped at 2048 bytes. Tool results and receipt events are
-capped at 8192 bytes. Arguments have closed per-tool schemas; unknown fields,
-commands, URLs, paths, wildcards, oversized values and unsupported destinations
-are refused. The broker stores a SHA-256 digest of the model request, not a raw
+capped at 8192 bytes. A result whose terminal receipt would exceed that cap is
+discarded and recorded as `failed` with `RESULT_TOO_LARGE`, so every opened
+receipt still reaches a terminal state. Arguments have closed per-tool
+schemas; unknown fields, commands, URLs, paths, wildcards, oversized values and
+unsupported destinations are refused. The broker stores a SHA-256 digest of the model request, not a raw
 prompt. Durations and fixed error codes accompany durable state transitions.
 
 | Level | Tools | Result |
