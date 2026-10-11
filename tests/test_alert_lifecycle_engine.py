@@ -111,6 +111,7 @@ def _ledger() -> AlertLifecycleLedger:
 @pytest.mark.parametrize("bad", [
     {"id": "t 1\n"}, {"actor_id": "a" * 5001}, {"reason_code": ""},
     {"idempotency_key": ["not", "a", "string"]},
+    {"from_state": ["open"]}, {"to_state": {"state": "acknowledged"}},
 ])
 def test_plain_mapping_candidates_get_the_same_value_checks(bad) -> None:
     with pytest.raises(AlertLifecycleError):
@@ -134,6 +135,16 @@ def test_ledger_history_is_detached_from_the_callers_mapping() -> None:
     assert ledger.history("alert-100")[0]["idempotency_key"] == "alert-100.t.2"
     assert ledger.apply(request) == "accepted"
     assert ledger.projection("alert-100")["state"] == "resolved"
+
+
+def test_unhashable_projection_state_is_a_schema_refusal() -> None:
+    projection = dict(
+        id="alert-100", detection_id="detection-100", policy_version="alert-policy-v1",
+        state=["open"], revision=1, created_at="2026-09-19T00:00:00Z",
+        updated_at="2026-09-19T00:00:00Z",
+    )
+    with pytest.raises(AlertLifecycleError):
+        apply_transition(projection, _ack_fields())
 
 
 def test_sub_microsecond_clock_rollback_is_rejected() -> None:

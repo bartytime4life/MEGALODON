@@ -118,7 +118,8 @@ def _bounded_int(value: object) -> int:
 
 
 def _state(value: object) -> str:
-    if value not in ALERT_STATES:
+    # The type check first: an unhashable value would raise TypeError in the lookup.
+    if type(value) is not str or value not in ALERT_STATES:
         _fail("SCHEMA")
     return value
 
