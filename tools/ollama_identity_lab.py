@@ -13,6 +13,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from megalodon.ollama_identity import (
+    MAX_INPUT_BYTES,
     OllamaIdentityError,
     canonical_json,
     identity_receipt,
@@ -37,7 +38,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         try:
-            raw = args.observation.read_bytes()
+            # One byte past the cap is enough to refuse; never buffer the rest.
+            with args.observation.open("rb") as handle:
+                raw = handle.read(MAX_INPUT_BYTES + 1)
         except OSError as exc:
             raise OllamaIdentityError("OBSERVATION_READ") from exc
         result = identity_receipt(
