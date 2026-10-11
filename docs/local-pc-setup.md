@@ -277,7 +277,11 @@ installed launcher. From this checkout, run:
 ```
 
 The script starts the installed HUD user service if necessary, then invokes
-the same fixed action as the button. `--check` only reads startup status.
+the same fixed action as the button. `--check` only reads startup status. If
+the HUD refuses the start because startup is already in progress, tool
+maintenance is running, or the last start was under five seconds ago, the
+script says so and exits 1 instead of reporting an earlier job's results; a
+reply that is not the HUD's startup status is refused as unexpected.
 
 - TShark supplies continuous metadata; Zeek supplies separate bounded CLI samples.
   Wireshark, Zenmap and ClamTk windows are optional Advanced actions only.

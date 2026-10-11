@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import signal
 import sqlite3
 import sys
@@ -30,6 +31,7 @@ from .storage import (
     migrate_database,
     RECONCILIATION_REQUIRED,
     Store,
+    StorageCapacityError,
     DEFAULT_MAX_DATABASE_BYTES,
 )
 from .validation import parse_timestamp, safe_text, ValidationError
@@ -39,6 +41,7 @@ MAX_RUN_EVENTS = 10_000_000
 MAX_RUN_SECONDS = 86_400
 _LIMITED_RUN_SOURCES = frozenset({"jsonl", "scapy"})
 _AI_SUCCESS_STATES = frozenset({"observed", "applied", "awaiting_confirmation"})
+_STORAGE_CAPACITY_CODE = re.compile(r"STORAGE_CAPACITY:[A-Z_]{1,64}")
 
 
 def _ai_receipt_path(db_path: Path) -> Path:
@@ -409,6 +412,21 @@ def _require_finite_run_limit(source: str | None, max_events: int | None) -> Non
         )
 
 
+_SOURCE_ONLY_OPTIONS = (
+    ("input", "jsonl", "--input is only valid with the jsonl source"),
+    ("interface", "scapy", "--interface is only valid with the scapy source"),
+    ("demo_threat", "sample", "--demo-threat is only valid with the sample source"),
+)
+
+
+def _require_source_options(source: str | None, args: argparse.Namespace) -> None:
+    """Refuse a source-specific option the selected source would ignore."""
+    for name, owner, message in _SOURCE_ONLY_OPTIONS:
+        value = getattr(args, name, None)
+        if value is not None and value is not False and source != owner:
+            raise ValueError(message)
+
+
 def _require_run_deadline_source(
     source: str | None, max_seconds: int | None
 ) -> None:
@@ -487,6 +505,16 @@ def _require_run_deadline_support(max_seconds: int | None) -> None:
 def _storage_limit(settings) -> int:
     storage = getattr(settings, "storage", None)
     return getattr(storage, "max_database_bytes", DEFAULT_MAX_DATABASE_BYTES)
+
+
+def _storage_failure_message(exc: BaseException) -> str:
+    """Return a fixed, path-free diagnostic for a storage or I/O failure."""
+    code = str(exc)
+    if isinstance(exc, StorageCapacityError) and _STORAGE_CAPACITY_CODE.fullmatch(code):
+        return f"megalodon: {code}"
+    if isinstance(exc, sqlite3.Error):
+        return "megalodon: storage operation failed"
+    return "megalodon: I/O operation failed"
 
 
 def _run_failure_code(exc: Exception) -> str:
@@ -750,6 +778,91 @@ def _scoped_sigterm_interrupt():
         signal.signal(signal.SIGTERM, previous)
 
 
+_TERMINAL_SIGNALS = tuple(
+    signum
+    for signum in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None))
+    if signum is not None
+)
+
+
+def _interruption_signal(exc: KeyboardInterrupt) -> int:
+    return exc.signum if isinstance(exc, _RunInterrupted) else signal.SIGINT
+
+
+def _signal_exit_code(signum: int) -> int:
+    return 143 if signum == getattr(signal, "SIGTERM", None) else 130
+
+
+def _terminal_signals_deferrable() -> bool:
+    return (
+        hasattr(signal, "SIG_BLOCK")
+        and hasattr(signal, "SIG_SETMASK")
+        and callable(getattr(signal, "pthread_sigmask", None))
+        and callable(getattr(signal, "sigpending", None))
+        and callable(getattr(signal, "sigwait", None))
+    )
+
+
+def _release_terminal_signals(previous_mask) -> int | None:
+    """Consume SIGINT/SIGTERM held during a terminal write, then unblock."""
+    received = None
+    try:
+        pending = signal.sigpending()
+    except (OSError, ValueError):
+        pending = set()
+    for signum in _TERMINAL_SIGNALS:
+        if signum in pending and signum not in previous_mask:
+            # Consume it while still blocked so neither its handler nor
+            # SIGTERM's default action runs once the receipt is final. A
+            # signal this process ignores is consumed but not reported.
+            signal.sigwait({signum})
+            if received is None and signal.getsignal(signum) != signal.SIG_IGN:
+                received = signum
+    try:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    except KeyboardInterrupt as exc:
+        # A signal arriving after the pending check is dispatched as the mask
+        # is restored; the receipt is already final.
+        if received is None:
+            received = _interruption_signal(exc)
+    return received
+
+
+def _finish_run_receipt(store, run_id: int, reason: str, **kwargs):
+    """Write a terminal run receipt that SIGINT/SIGTERM cannot abandon.
+
+    On POSIX both signals are blocked for the write, so a second Ctrl-C or a
+    SIGTERM cannot roll it back and leave a ``running`` receipt; only a hard
+    kill can. Elsewhere, or if a signal still interrupts the write (for
+    example after reaching another thread), the write has rolled back and is
+    retried as ``interrupted``. Returns the receipt and the first terminating
+    signal that arrived during the write, if any; the caller exits with that
+    signal's code and never rewrites the recorded receipt.
+    """
+    received = None
+    previous_mask = None
+    if _terminal_signals_deferrable():
+        try:
+            previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, _TERMINAL_SIGNALS)
+        except (OSError, ValueError):
+            previous_mask = None
+    try:
+        while True:
+            try:
+                receipt = store.finish_ingestion_run(run_id, reason, **kwargs)
+                break
+            except KeyboardInterrupt as exc:
+                if received is None:
+                    received = _interruption_signal(exc)
+                reason, kwargs = "interrupted", {}
+    finally:
+        if previous_mask is not None:
+            deferred = _release_terminal_signals(previous_mask)
+            if received is None:
+                received = deferred
+    return receipt, received
+
+
 def _reconciliation_message() -> str:
     return (
         "megalodon: ingestion reconciliation required; stop all ingestion, "
@@ -765,14 +878,26 @@ def _run(args: argparse.Namespace) -> int:
         _require_finite_run_limit(args.source, args.max_events)
         _require_run_deadline_source(args.source, args.max_seconds)
         _require_run_deadline_support(args.max_seconds)
+        if args.source is not None:
+            _require_source_options(args.source, args)
         settings = _load(args.config)
         source = _source_for(args, settings)
         _require_finite_run_limit(source, args.max_events)
         _require_run_deadline_source(source, args.max_seconds)
-        with Store(
-            settings.db_path,
-            max_database_bytes=_storage_limit(settings),
-        ) as store:
+        # A source-specific option the resolved source would ignore (for
+        # example --input with the sample source) refuses before the store
+        # opens, so no synthetic rows reach the audit database by mistake.
+        _require_source_options(source, args)
+        try:
+            store = Store(
+                settings.db_path,
+                max_database_bytes=_storage_limit(settings),
+            )
+        except KeyboardInterrupt:
+            # Opening can wait out another writer's lock; no run exists yet.
+            print("megalodon: interrupted before ingestion started", file=sys.stderr)
+            return 130
+        with store:
             service = MegalodonService(settings, store)
             run_id = store.start_ingestion_run(source)
             processed = 0
@@ -794,7 +919,7 @@ def _run(args: argparse.Namespace) -> int:
                             break
             except KeyboardInterrupt as exc:
                 try:
-                    receipt = store.finish_ingestion_run(run_id, "interrupted")
+                    receipt, _ = _finish_run_receipt(store, run_id, "interrupted")
                 except IngestionRunError as finish_error:
                     if str(finish_error) == RECONCILIATION_REQUIRED:
                         print(_reconciliation_message(), file=sys.stderr)
@@ -811,8 +936,8 @@ def _run(args: argparse.Namespace) -> int:
                     return 2
                 failure_code = _run_failure_code(exc)
                 try:
-                    receipt = store.finish_ingestion_run(
-                        run_id, "failed", failure_code=failure_code
+                    receipt, received = _finish_run_receipt(
+                        store, run_id, "failed", failure_code=failure_code
                     )
                 except IngestionRunError as finish_error:
                     if str(finish_error) == RECONCILIATION_REQUIRED:
@@ -822,16 +947,32 @@ def _run(args: argparse.Namespace) -> int:
                 if receipt["status"] == "reconciliation_required":
                     print(_reconciliation_message(), file=sys.stderr)
                     return 2
-                print(
-                    f"megalodon: ingestion failed ({failure_code})",
-                    file=sys.stderr,
-                )
-                return 2
-            receipt = store.finish_ingestion_run(run_id, termination_reason)
+                if receipt["termination_reason"] == "interrupted":
+                    print("megalodon: ingestion interrupted", file=sys.stderr)
+                else:
+                    print(
+                        f"megalodon: ingestion failed ({failure_code})",
+                        file=sys.stderr,
+                    )
+                return 2 if received is None else _signal_exit_code(received)
+            # A signal during this write keeps the receipt being written (the
+            # source really ended), prints no success JSON, and exits 130/143.
+            receipt, received = _finish_run_receipt(store, run_id, termination_reason)
             if receipt["status"] == "reconciliation_required":
                 print(_reconciliation_message(), file=sys.stderr)
                 return 2
-            print(json.dumps({**receipt, "totals": store.summary()}, sort_keys=True))
+            if received is None:
+                try:
+                    totals = store.summary()
+                except KeyboardInterrupt:
+                    received = signal.SIGINT
+            if received is not None:
+                print(
+                    "megalodon: ingestion interrupted after its receipt was recorded",
+                    file=sys.stderr,
+                )
+                return _signal_exit_code(received)
+            print(json.dumps({**receipt, "totals": totals}, sort_keys=True))
     except sqlite3.Error:
         print("megalodon: storage operation failed", file=sys.stderr)
         return 2
@@ -1024,7 +1165,9 @@ def _ai(args: argparse.Namespace) -> int:
                 try:
                     from .ai_provider import _strict_pairs
                     request = json.loads(args.request, object_pairs_hook=_strict_pairs)
-                except ValueError:
+                except (ValueError, RecursionError):
+                    # Deep nesting within the byte bound is malformed input,
+                    # not a crash: it takes the normal INVALID_REQUEST receipt.
                     request = None
                 result = broker.dispatch(request, authorization_source="operator_cli")
             else:
@@ -1091,7 +1234,10 @@ def _database_reconciliation_status(args: argparse.Namespace) -> int:
         ) as store:
             pending = store.pending_ingestion_reconciliation()
         print(json.dumps({"pending": pending}, sort_keys=True))
-    except (OSError, ValueError) as exc:
+    except (OSError, sqlite3.Error) as exc:
+        print(_storage_failure_message(exc), file=sys.stderr)
+        return 2
+    except ValueError as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     return 0
@@ -1110,7 +1256,10 @@ def _database_reconcile(args: argparse.Namespace) -> int:
                 args.run_id, expected_started_at=started_at
             )
         print(json.dumps(receipt, sort_keys=True))
-    except (OSError, ValueError) as exc:
+    except (OSError, sqlite3.Error) as exc:
+        print(_storage_failure_message(exc), file=sys.stderr)
+        return 2
+    except ValueError as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     return 0
@@ -1162,6 +1311,11 @@ def _firewall(args: argparse.Namespace, mode: str) -> int:
         print(json.dumps(operation.to_dict(), indent=2, sort_keys=True))
     except (FirewallError, ValueError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, sqlite3.Error) as exc:
+        # The plan is printed only after its audit row commits; a refused or
+        # failed audit write prints no plan.
+        print(_storage_failure_message(exc), file=sys.stderr)
         return 2
     return 0
 

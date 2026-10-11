@@ -207,8 +207,30 @@ lifecycle.
   `CAPTURE_ERROR` class.
 - A handled SIGINT returns 130 and a handled SIGTERM returns 143 after recording
   `failed/interrupted` when finalization succeeds.
+- Every terminal receipt write (completed, incomplete, failed, or interrupted)
+  is uninterruptible on POSIX: SIGINT and SIGTERM are blocked for the write, so
+  a second Ctrl-C or a SIGTERM while it waits for another writer's lock cannot
+  roll it back and leave `running`. A signal that arrived during the write is
+  consumed afterwards and the command exits 130 (SIGINT) or 143 (SIGTERM),
+  keeping the receipt that was written: a source that really ended keeps
+  `completed` or `incomplete` (no success JSON is printed; stderr says the
+  receipt was recorded), and a run already being interrupted keeps the exit code
+  of its first signal. A signal the process ignores is not reported. Without
+  POSIX signal masking, an interrupted receipt write has rolled back and is
+  retried as `failed/interrupted`.
+- Ctrl-C while the store is still opening (for example while another writer
+  holds its lock) exits 130 with a fixed message; no run receipt exists yet.
+- `--input` is accepted only with the jsonl source, `--interface` only with the
+  scapy source, and `--demo-threat` only with the sample source, whether the
+  source comes from `--source` or configuration. Any other combination exits 2
+  with a fixed message before the store is opened, so no synthetic sample rows
+  can reach the audit database in place of the named input.
 - A hard kill or ambiguous terminal write can leave `running`, which blocks the
-  next run until explicit reconciliation.
+  next run until explicit reconciliation. So can a terminal write that fails,
+  for example because another writer holds the lock past the 10-second wait.
+- `database-reconciliation-status` and `database-reconcile` report a storage
+  failure (such as a write lock held past the wait) or an I/O failure with a
+  fixed path-free message and exit 2.
 
 Diagnostics and shared receipts contain only closed status values, fixed failure
 classes, timestamps, counts, and source names. They do not include packet
@@ -240,7 +262,7 @@ identity/permission guarantees for input files.
 | Event limit | Returns normally | Existing `incomplete/event_limit_reached` receipt; no read-ahead |
 | No earlier failure | Ordinary close exception | Fixed `CaptureError`; `failed/failed` with `CAPTURE_ERROR`, exit 2, no success JSON |
 | Capture, I/O, validation, or storage failure | Also raises | Preserve the primary exception and its existing failure category; attach one fixed cleanup note at each failing ownership boundary |
-| Handled SIGINT/SIGTERM | Also raises | Preserve the interruption path and exit 130/143 when finalization succeeds |
+| Handled SIGINT/SIGTERM | Also raises | Preserve the interruption path and exit 130/143 when finalization succeeds; a further signal cannot interrupt the receipt write |
 | Reconciliation-required failure | Either | Preserve the refusal; do not retry or write a normal terminal receipt on the poisoned writer |
 | No earlier failure | `KeyboardInterrupt` or `SystemExit` during close | Preserve control flow rather than converting it to an ordinary capture failure |
 

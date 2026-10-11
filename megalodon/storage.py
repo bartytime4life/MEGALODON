@@ -355,6 +355,13 @@ _VERIFIED_CONNECT_ATTEMPTS = 3
 # How long Store waits, re-verifying each attempt from scratch, for other
 # openers' sidecar churn to settle before refusing DIRECTORY_CHANGED.
 _DIRECTORY_SETTLE_SECONDS = 10.0
+# The same settle loop for a DashboardStore open. Readers open per HUD request
+# (sometimes under a caller's lock), so the bound stays within the dashboard's
+# one-second query budget; ordinary writer churn settles in milliseconds.
+_DASHBOARD_SETTLE_SECONDS = 1.0
+_DASHBOARD_SETTLING_ERRORS = frozenset(
+    {"DASHBOARD_STORE:DIRECTORY_CHANGED", "DASHBOARD_STORE:UNSAFE_SIDECAR_STATE"}
+)
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
@@ -2636,9 +2643,6 @@ class DashboardStore:
         self._database_descriptor: int | None = None
         if sqlite3.sqlite_version_info < MINIMUM_READ_ONLY_WAL_SQLITE:
             raise StorageSchemaError("DASHBOARD_STORE:UNSUPPORTED_SQLITE")
-        connection: sqlite3.Connection | None = None
-        preflight: sqlite3.Connection | None = None
-        coordination: sqlite3.Connection | None = None
         try:
             self._directory_descriptor = _open_private_directory(
                 self.path.parent, create=False, prefix="DASHBOARD_STORE"
@@ -2653,6 +2657,47 @@ class DashboardStore:
             self._sqlite_path = _anchored_database_path(
                 self._database_descriptor, self.path, "DASHBOARD_STORE"
             )
+            # A legitimate writer opening or closing this database (another
+            # process's Store) creates and removes -journal/-wal/-shm entries
+            # in the admitted directory. An open whose window saw that churn,
+            # as a directory-generation change or a momentarily mixed sidecar
+            # set, closes every connection of that attempt unserved and
+            # repeats the whole sequence -- identity and sidecar validation,
+            # the preflight choice, fresh generation baselines and both
+            # served-connection proofs -- after a short pause, until one
+            # attempt passes or _DASHBOARD_SETTLE_SECONDS elapse. This is safe
+            # because the connection kept is always one whose own attempt
+            # passed every check, so a retry accepts nothing a single attempt
+            # would refuse; a change that persists for the whole bound still
+            # refuses, every other refusal is final, and served reads keep
+            # checking against the kept attempt's generation.
+            settle_deadline = monotonic() + _DASHBOARD_SETTLE_SECONDS
+            pause = 0.005
+            while True:
+                try:
+                    self._open_served_connection()
+                    break
+                except StorageSchemaError as exc:
+                    if (
+                        str(exc) not in _DASHBOARD_SETTLING_ERRORS
+                        or monotonic() >= settle_deadline
+                    ):
+                        raise
+                sleep(pause)
+                pause = min(pause * 2, 0.1)
+        except StorageSchemaError:
+            self._close_descriptors()
+            raise
+        except (OSError, sqlite3.Error) as exc:
+            self._close_descriptors()
+            raise StorageSchemaError("DASHBOARD_STORE:OPEN_FAILED") from exc
+
+    def _open_served_connection(self) -> None:
+        """Make one complete open attempt, closing all its connections on failure."""
+        connection: sqlite3.Connection | None = None
+        preflight: sqlite3.Connection | None = None
+        coordination: sqlite3.Connection | None = None
+        try:
             sidecars = self._assert_path_identity()
 
             # Without live WAL coordination files, validate the immutable main
@@ -2694,42 +2739,15 @@ class DashboardStore:
             self._assert_path_identity()
             self._assert_directory_generation(served_generation)
             self._served_directory_generation = served_generation
-        except StorageSchemaError:
-            if preflight is not None:
-                try:
-                    preflight.close()
-                except sqlite3.Error:
-                    pass
-            if connection is not None:
-                try:
-                    connection.close()
-                except sqlite3.Error:
-                    pass
-            if coordination is not None:
-                try:
-                    coordination.close()
-                except sqlite3.Error:
-                    pass
-            self._close_descriptors()
+        except BaseException:
+            for opened in (preflight, connection, coordination):
+                if opened is not None:
+                    try:
+                        opened.close()
+                    except sqlite3.Error:
+                        pass
+            self._connection = None
             raise
-        except (OSError, sqlite3.Error) as exc:
-            if preflight is not None:
-                try:
-                    preflight.close()
-                except sqlite3.Error:
-                    pass
-            if connection is not None:
-                try:
-                    connection.close()
-                except sqlite3.Error:
-                    pass
-            if coordination is not None:
-                try:
-                    coordination.close()
-                except sqlite3.Error:
-                    pass
-            self._close_descriptors()
-            raise StorageSchemaError("DASHBOARD_STORE:OPEN_FAILED") from exc
 
     def _connect(self, parameters: str) -> sqlite3.Connection:
         self._assert_path_identity()

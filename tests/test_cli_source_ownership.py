@@ -7,6 +7,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 import io
 import json
+import os
 from pathlib import Path
 import signal
 import sqlite3
@@ -69,7 +70,7 @@ class SourceOwnershipTests(unittest.TestCase):
         )
         self.settings = SimpleNamespace(db_path=Path("unused.db"), capture_source="sample")
 
-    def run_source(self, source, *, process_error=None, finish_error=None):
+    def run_source(self, source, *, process_error=None, finish_error=None, finish_hook=None):
         journal = source.journal
         store = Mock()
         store.__enter__ = Mock(return_value=store)
@@ -79,6 +80,8 @@ class SourceOwnershipTests(unittest.TestCase):
 
         def finish(run_id, reason, **kwargs):
             journal.append("finish")
+            if finish_hook is not None:
+                finish_hook(reason)
             if finish_error is not None:
                 raise finish_error
             status = {
@@ -104,7 +107,10 @@ class SourceOwnershipTests(unittest.TestCase):
             patch.object(cli, "_events_for", return_value=source),
             redirect_stdout(out), redirect_stderr(err),
         ):
-            code = cli._run(self.args)
+            try:
+                code = cli._run(self.args)
+            except KeyboardInterrupt:
+                code = "escaped KeyboardInterrupt"
         return code, store, out.getvalue(), err.getvalue()
 
     def test_limit_closes_before_incomplete_receipt_without_reading_ahead(self):
@@ -1127,6 +1133,75 @@ class SourceOwnershipTests(unittest.TestCase):
                 self.assertEqual(source.journal, ["process", "close", "finish"])
                 self.assertEqual(err, "megalodon: ingestion interrupted\n")
                 store.finish_ingestion_run.assert_called_once_with(1, "interrupted")
+
+    @unittest.skipUnless(hasattr(signal, "pthread_sigmask"), "POSIX signal masking required")
+    def test_signal_during_terminal_receipt_write_keeps_receipt_and_signal_code(self):
+        def raise_interrupt(_signum, _frame):
+            raise KeyboardInterrupt()
+
+        previous = signal.signal(signal.SIGTERM, raise_interrupt)
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        cases = (
+            ("source_exhausted", None, signal.SIGINT, 130),
+            ("source_exhausted", None, signal.SIGTERM, 143),
+            ("interrupted", KeyboardInterrupt(), signal.SIGINT, 130),
+            ("interrupted", cli._RunInterrupted(signal.SIGTERM), signal.SIGINT, 143),
+            ("failed", OSError(CANARY), signal.SIGTERM, 143),
+        )
+        for reason, process_error, signum, expected in cases:
+            with self.subTest(reason=reason, signum=signum):
+                # The operator's (second) signal arrives while the receipt is
+                # being written; it must neither abandon nor rewrite it.
+                code, store, out, err = self.run_source(
+                    Source([]),
+                    process_error=process_error,
+                    finish_hook=lambda _reason: os.kill(os.getpid(), signum),
+                )
+                self.assertEqual((code, out), (expected, ""))
+                store.finish_ingestion_run.assert_called_once()
+                self.assertEqual(store.finish_ingestion_run.call_args.args, (1, reason))
+                self.assertIn("interrupted" if reason != "failed" else "failed (IO_ERROR)", err)
+                self.assertFalse(
+                    set(signal.sigpending()) & {signal.SIGINT, signal.SIGTERM}
+                )
+                self.assertFalse(
+                    set(signal.pthread_sigmask(signal.SIG_BLOCK, ()))
+                    & {signal.SIGINT, signal.SIGTERM}
+                )
+
+    def test_interrupted_receipt_write_is_retried_as_interrupted_without_masking(self):
+        attempts = []
+
+        def interrupt_first_attempt(reason):
+            attempts.append(reason)
+            if len(attempts) == 1:
+                raise KeyboardInterrupt()
+
+        # As on a runtime without POSIX signal masking.
+        with patch.object(cli.signal, "pthread_sigmask", None):
+            code, store, out, err = self.run_source(
+                Source([]), finish_hook=interrupt_first_attempt
+            )
+        self.assertEqual((code, out), (130, ""))
+        self.assertEqual(attempts, ["source_exhausted", "interrupted"])
+        self.assertEqual(
+            err, "megalodon: ingestion interrupted after its receipt was recorded\n"
+        )
+
+    def test_interrupt_while_opening_the_store_has_fixed_exit(self):
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            patch.object(cli, "_load", return_value=self.settings),
+            patch.object(cli, "Store", side_effect=KeyboardInterrupt()),
+            patch.object(cli, "_events_for", side_effect=AssertionError("source opened")),
+            redirect_stdout(out), redirect_stderr(err),
+        ):
+            try:
+                code = cli._run(self.args)
+            except KeyboardInterrupt:
+                code = "escaped KeyboardInterrupt"
+        self.assertEqual((code, out.getvalue()), (130, ""))
+        self.assertEqual(err.getvalue(), "megalodon: interrupted before ingestion started\n")
 
     def test_reconciliation_required_is_not_replaced_or_finalized_after_cleanup(self):
         primary = IngestionRunError(RECONCILIATION_REQUIRED)

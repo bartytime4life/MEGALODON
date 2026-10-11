@@ -203,9 +203,13 @@ def main(argv=None):
                 if response.status not in (200, 202, 409) or len(raw) > 32768:
                     raise ValueError("Open the local HUD first; if sign-in is enabled, use its Start support apps button.")
                 value = json.loads(raw)
-                if response.status == 409:
+                if method == "POST" and response.status == 409:
                     return None
-                if value.get("schema") != SCHEMA:
+                # Another local service on the HUD port can answer with any
+                # JSON; only the expected job shape is read further.
+                if (type(value) is not dict or value.get("schema") != SCHEMA
+                        or type(value.get("items")) is not list
+                        or any(type(item) is not dict for item in value["items"])):
                     raise ValueError("Update the local HUD before starting support apps.")
                 return value
             finally:
@@ -229,7 +233,12 @@ def main(argv=None):
                         raise
                     time.sleep(.25)
         if not args.check:
-            request("POST", value["token"])
+            if request("POST", value["token"]) is None:
+                # Refused (409): no job was started by this request, so a
+                # later status read would describe someone else's job.
+                print("Support startup not started: startup is already in progress or tool "
+                      "maintenance is running. Try again shortly.", file=sys.stderr)
+                return 1
             deadline = time.monotonic() + 120
             print("Starting background tools; no extra application windows will open.", flush=True)
             while time.monotonic() < deadline:
