@@ -786,6 +786,96 @@ def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
     return descriptor
 
 
+# On POSIX, closing ANY descriptor a process holds for a file releases ALL of
+# that process's fcntl (POSIX advisory) locks on the file, including those a
+# live SQLite connection in the same process holds: its SHARED lock on the
+# database and its -shm dead-man-switch and read-mark locks. Another process
+# then believes nobody uses the WAL index and may reinitialise or truncate
+# -shm under the live connection (seen as SIGBUS). Linux skips that release
+# for O_PATH descriptors, and fstat works on them, so the descriptors used
+# here only for identity/type/link/owner/mode/size checks, or as the
+# /proc/self/fd anchor SQLite opens, are O_PATH there. Without O_PATH (not
+# Linux), the readable/writable open is kept and closing it still carries
+# the POSIX hazard while a connection to the same file is open in-process.
+_LOCK_PRESERVING_OPEN = sys.platform.startswith("linux") and hasattr(os, "O_PATH")
+
+
+def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
+    """Open ``target`` as ``os.open(target, flags)`` would, keeping locks.
+
+    ``flags`` is the no-follow readable/writable open this replaces. Where
+    O_PATH is available the descriptor is an O_PATH one, which cannot release
+    this process's SQLite locks when closed; it fails with the errno that open
+    would have raised (ELOOP for a symlink, ENXIO for a socket, EISDIR for a
+    directory opened for writing, EACCES without read/write permission), so
+    callers keep their error codes. Use it only for fstat checks and as a
+    /proc/self/fd path: it supports no I/O, fchmod or locking.
+    """
+
+    if not _LOCK_PRESERVING_OPEN:
+        return os.open(target, flags, **kwargs)
+    descriptor = os.open(target, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, **kwargs)
+    try:
+        mode = os.fstat(descriptor).st_mode
+        access = {
+            os.O_RDONLY: os.R_OK,
+            os.O_WRONLY: os.W_OK,
+        }.get(flags & os.O_ACCMODE, os.R_OK | os.W_OK)
+        failure = None
+        if stat.S_ISLNK(mode):
+            failure = errno.ELOOP
+        elif stat.S_ISSOCK(mode):
+            failure = errno.ENXIO
+        elif access & os.W_OK and stat.S_ISDIR(mode):
+            failure = errno.EISDIR
+        elif not os.access(
+            f"/proc/self/fd/{descriptor}",
+            access,
+            effective_ids=os.access in os.supports_effective_ids,
+        ):
+            failure = errno.EACCES
+        if failure is not None:
+            raise OSError(failure, os.strerror(failure), os.fspath(target))
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _reopen_for_identity(descriptor: int) -> int:
+    """Swap a just-created file's descriptor for a lock-preserving one.
+
+    Called only for a file this process created with O_EXCL under
+    _DATABASE_OPEN_LOCK, before any connection opened it, so closing the
+    original descriptor cannot release a lock anyone holds.
+    """
+
+    if not _LOCK_PRESERVING_OPEN:
+        return descriptor
+    try:
+        reopened = os.open(f"/proc/self/fd/{descriptor}", os.O_PATH | os.O_CLOEXEC)
+    finally:
+        os.close(descriptor)
+    return reopened
+
+
+def _restore_private_mode(descriptor: int) -> None:
+    """Set PRIVATE_DATABASE_MODE without opening (and later closing) the file.
+
+    fchmod fails on an O_PATH descriptor, so change the mode through its
+    /proc/self/fd magic link, which names exactly that inode. A mode that is
+    already private is left alone (SQLite gives -wal/-shm/-journal the
+    database's own permission bits, so they normally already are).
+    """
+
+    if stat.S_IMODE(os.fstat(descriptor).st_mode) == PRIVATE_DATABASE_MODE:
+        return
+    if _LOCK_PRESERVING_OPEN:
+        os.chmod(f"/proc/self/fd/{descriptor}", PRIVATE_DATABASE_MODE)
+    else:
+        os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
+
+
 def _absolute_database_path(
     path: str | Path, prefix: str = "STORAGE_PATH"
 ) -> Path:
@@ -946,7 +1036,18 @@ def _open_private_database(
     create: bool,
     prefix: str,
     normalize_writable_mode: bool = True,
+    identity_only: bool = True,
 ) -> tuple[int, bool]:
+    """Open and validate an admitted database file.
+
+    With ``identity_only`` (the default) the descriptor serves only fstat
+    checks and the /proc/self/fd path SQLite opens, so where supported it is
+    an O_PATH descriptor whose close cannot release SQLite's locks held by
+    this or another connection in the process. Pass False for a descriptor
+    that must support reads or fcntl locking.
+    """
+
+    open_file = _open_for_identity if identity_only else os.open
     flags = (os.O_RDWR if writable else os.O_RDONLY) | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NONBLOCK", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -959,7 +1060,7 @@ def _open_private_database(
             _raise_path_error(prefix, "SYMLINK_REFUSED")
         with _DATABASE_OPEN_LOCK:
             try:
-                descriptor = os.open(target, flags, **kwargs)
+                descriptor = open_file(target, flags, **kwargs)
             except FileNotFoundError:
                 if not create:
                     _raise_path_error(prefix, "NO_DATABASE")
@@ -971,18 +1072,24 @@ def _open_private_database(
                         **kwargs,
                     )
                     created = True
+                    if identity_only:
+                        created_descriptor, descriptor = descriptor, None
+                        descriptor = _reopen_for_identity(created_descriptor)
                 except FileExistsError:
                     # Another process created it between the two opens. Open
                     # what is there with the same no-follow flags as an
                     # existing database; the regular-file, link-count, owner
                     # and mode validation below still applies, and it is not
                     # ours to discard on a later failure (created stays False).
-                    descriptor = os.open(target, flags, **kwargs)
+                    descriptor = open_file(target, flags, **kwargs)
         info = os.fstat(descriptor)
         _validate_private_database_stat(info, writable=writable, prefix=prefix)
         if writable and os.name == "posix":
             if normalize_writable_mode:
-                os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
+                if identity_only:
+                    _restore_private_mode(descriptor)
+                else:
+                    os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
             _validate_private_database_stat(
                 os.fstat(descriptor), writable=False, prefix=prefix
             )
@@ -1009,7 +1116,12 @@ def _validate_sqlite_sidecars(
     writable: bool,
     prefix: str,
 ) -> frozenset[str]:
-    """Reject unsafe pre-existing SQLite coordination files before connect."""
+    """Reject unsafe pre-existing SQLite coordination files.
+
+    Also runs while this process has a live connection to ``path``, so each
+    sidecar is opened with _open_for_identity: closing a readable or
+    writable descriptor for -shm would release that connection's locks.
+    """
 
     present: set[str] = set()
     for suffix in _SQLITE_SIDECAR_SUFFIXES:
@@ -1035,7 +1147,7 @@ def _validate_sqlite_sidecars(
             try:
                 if os.name != "posix" and sidecar.is_symlink():
                     _raise_path_error(prefix, "SYMLINK_REFUSED")
-                descriptor = os.open(target, flags, **kwargs)
+                descriptor = _open_for_identity(target, flags, **kwargs)
             except FileNotFoundError:
                 break
             except OSError as exc:
@@ -1054,7 +1166,7 @@ def _validate_sqlite_sidecars(
                     info, writable=writable, prefix=prefix
                 )
                 if writable and os.name == "posix":
-                    os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
+                    _restore_private_mode(descriptor)
                 break
             finally:
                 os.close(descriptor)
@@ -1472,7 +1584,9 @@ class Store:
             if os.name != "posix" and sidecar.is_symlink():
                 raise StorageCapacityError("STORAGE_CAPACITY:UNSAFE_SIDECAR")
             try:
-                descriptor = os.open(target, flags, **kwargs)
+                # Runs before every write while self.connection is live; a
+                # readable -shm descriptor would release its locks on close.
+                descriptor = _open_for_identity(target, flags, **kwargs)
             except FileNotFoundError:
                 return 0
             except OSError as exc:

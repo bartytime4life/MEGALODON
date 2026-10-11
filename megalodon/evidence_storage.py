@@ -251,6 +251,9 @@ class EvidenceStorage:
         See sqlite.org/fileformat2.html#walformat (32-byte/24-byte headers).
         """
         path = Path(str(self._path(entry))+'-wal')
+        # A readable descriptor is needed for pread. Closing it is safe while
+        # the writer is live: SQLite takes no POSIX locks on -wal (only on the
+        # database and -shm), so there is none for the close to release.
         try:descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
         except FileNotFoundError:return 0,None,0,1
         try:
