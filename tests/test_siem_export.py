@@ -166,6 +166,50 @@ def test_suppressed_reason_carries_through_when_present() -> None:
     )["megalodon"]
 
 
+def test_both_profiles_keep_the_same_millisecond_time() -> None:
+    detection = _sample_detection(detected_at=datetime(2026, 9, 19, 12, 0, 1, 250000, tzinfo=timezone.utc))
+    ingested = datetime(2026, 9, 19, 12, 0, 5, 999999, tzinfo=timezone.utc)
+    ecs = to_ecs_record(
+        _sample_event(), detection, run_id="r", event_id="e", detection_id="d", source_kind="sample",
+        ingested_at=ingested,
+    )
+    ocsf = to_ocsf_record(
+        _sample_event(), detection, run_id="r", event_id="e", detection_id="d", source_kind="sample",
+        ingested_at=ingested,
+    )
+    assert ecs["@timestamp"] == "2026-09-19T12:00:01.250Z"
+    assert ecs["event"]["ingested"] == "2026-09-19T12:00:05.999Z"
+    assert ocsf["time"] == int(detection.detected_at.timestamp() * 1000)
+    assert list(_validator("ecsRecord").iter_errors(_as_plain(ecs))) == []
+
+
+def test_ecs_refuses_a_rule_id_the_schema_rejects() -> None:
+    detection = _sample_detection(rule_id="Port Scan/v2")
+    for project in (to_ecs_record, to_ocsf_record):
+        with pytest.raises(SiemExportError) as caught:
+            project(
+                _sample_event(), detection, run_id="r", event_id="e", detection_id="d", source_kind="sample",
+                ingested_at=datetime.now(timezone.utc),
+            )
+        assert caught.value.code == "INVALID_ID"
+
+
+def test_blank_suppressed_reason_is_omitted() -> None:
+    detection = _sample_detection(suppressed_reason="  ")
+    ecs = to_ecs_record(
+        _sample_event(), detection, run_id="r", event_id="e", detection_id="d", source_kind="sample",
+        ingested_at=datetime.now(timezone.utc),
+    )
+    ocsf = to_ocsf_record(
+        _sample_event(), detection, run_id="r", event_id="e", detection_id="d", source_kind="sample",
+        ingested_at=datetime.now(timezone.utc),
+    )
+    assert "suppressed_reason" not in ecs["megalodon"]
+    assert "suppressed_reason" not in ocsf["unmapped"]
+    assert list(_validator("ecsRecord").iter_errors(_as_plain(ecs))) == []
+    assert list(_validator("ocsfRecord").iter_errors(_as_plain(ocsf))) == []
+
+
 @pytest.mark.parametrize("bad_id", ["", "has spaces", "..", "a" * 129])
 def test_invalid_identifiers_are_rejected(bad_id) -> None:
     with pytest.raises(SiemExportError):
@@ -482,3 +526,12 @@ def test_engine_exposes_no_delivery_or_credential_surface() -> None:
     for name in public_names:
         lowered = name.lower()
         assert not any(term in lowered for term in forbidden), name
+
+
+@pytest.mark.parametrize("name", ["bad\x00name.jsonl", b"bad\x00name.jsonl"])
+def test_write_export_refuses_a_nul_in_the_destination(tmp_path, name) -> None:
+    destination = os.path.join(os.fsencode(tmp_path) if isinstance(name, bytes) else str(tmp_path), name)
+    with pytest.raises(SiemExportError) as caught:
+        write_export([], destination, profile="ecs-9.5.0")
+    assert caught.value.code == "DESTINATION_UNSAFE"
+    assert list(tmp_path.iterdir()) == []
