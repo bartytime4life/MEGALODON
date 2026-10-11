@@ -612,7 +612,7 @@ def test_uninstall_refuses_while_systemd_runs_unit_from_another_config_home(layo
                                          'XDG_CONFIG_HOME': str(home / 'other-config')})
     assert hud_autostart.unit_path(other) != unit and other.manifest == layout.manifest
     monkeypatch.setattr(hud_autostart, '_service_state', lambda: {
-        'FragmentPath': str(unit), 'LoadState': 'loaded', 'ActiveState': 'active'}, raising=False)
+        'FragmentPath': str(unit), 'DropInPaths': '', 'LoadState': 'loaded', 'ActiveState': 'active'}, raising=False)
     monkeypatch.setattr(hud_autostart, '_systemctl', lambda *args: pytest.fail('must not change services'))
 
     with pytest.raises(local_install.InstallError, match='another unit file'):

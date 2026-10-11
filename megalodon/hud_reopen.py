@@ -8,7 +8,8 @@ import time
 import webbrowser
 
 from .config import load_settings
-from .install_lifecycle import _listener_pid
+from .install_lifecycle import _listener_pid, service_running
+from .local_install import InstallError, install_paths
 
 
 def _wait_until_listening(host: str, port: int, timeout: float = 15) -> bool:
@@ -37,6 +38,15 @@ def main(argv: list[str] | None = None) -> int:
         url = f"http://{dashboard.host}:{dashboard.port}/"
         if not _wait_until_listening(dashboard.host, dashboard.port):
             print("MEGALODON has not finished starting. Check the local service, then open the launcher again.", file=sys.stderr)
+            return 2
+        # MainPID below is only meaningful for the managed unit: same fragment, unmodified, no drop-ins.
+        try:
+            managed = service_running(install_paths())
+        except InstallError:
+            managed = False
+        if not managed:
+            print("The MEGALODON service is not ready: megalodon-hud.service is not the managed, unmodified unit, "
+                  "so nothing was opened. Check the local service, then open the launcher again.", file=sys.stderr)
             return 2
         # Another local program can hold the port first; open only the managed service's own listener.
         if _listener_pid(dashboard.port, dashboard.host) is None:

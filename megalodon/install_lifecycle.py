@@ -30,6 +30,8 @@ def service_running(paths):
     state = hud_autostart._service_state()
     if hud_autostart.loaded_elsewhere(state, unit, managed):
         raise InstallError('The HUD service is loaded from another unit file; stop it there before upgrading')
+    if managed and hud_autostart.loaded_dropins(state):
+        raise InstallError('Preserve and review the modified HUD service before upgrading')
     return managed and state is not None and state['FragmentPath'] == str(unit) and state['ActiveState'] == 'active'
 
 
@@ -111,8 +113,10 @@ def retire_releases(paths, manifest):
     from .local_install import _expected_release, _owned_directory, _atomic_write, _current_target
     protected = {manifest['active_release'], manifest['previous_release']}
     # An owner rollback may point the selector at an older tree; never retire it.
+    # XDG_DATA_HOME may contain `..`; normalize both sides of the comparison.
+    releases = Path(os.path.normpath(paths.releases))
     selected = _current_target(paths)
-    if selected is not None and Path(os.path.normpath(selected)).parent == paths.releases:
+    if selected is not None and Path(os.path.normpath(selected)).parent == releases:
         protected.add(Path(os.path.normpath(selected)).name)
     protected.update(row['id'] for row in manifest['releases'][-4:])
     retired = []
@@ -120,6 +124,8 @@ def retire_releases(paths, manifest):
         if row['id'] in protected:
             continue
         path = _expected_release(paths, row['id'])
+        # /proc reports normalized paths; the command line may use either spelling.
+        held = str(releases / row['id'])
         if path.exists():
             _owned_directory(path, private=True)
             used = False
@@ -134,12 +140,13 @@ def retire_releases(paths, manifest):
                     for descriptor in (process/'fd').iterdir():
                         try:descriptors.append(str(descriptor.readlink()))
                         except FileNotFoundError:continue
-                    marker=any(value.startswith(str(paths.releases)+'/') and value.endswith('/megalodon') for value in descriptors)
+                    marker=any(value.startswith(str(releases)+'/') and value.endswith('/megalodon') for value in descriptors)
                     # Older runtimes may use the mutable alias without a
                     # release descriptor. Keep uncertain releases intact.
                     ambiguous=str(paths.current).encode() in command and not marker
-                    if (ambiguous or str(path).encode() in command or str(path).encode() in (process / 'maps').read_bytes()
-                            or any(value.startswith(str(path)+'/') for value in descriptors)):
+                    if (ambiguous or str(path).encode() in command or held.encode() in command
+                            or held.encode() in (process / 'maps').read_bytes()
+                            or any(value.startswith(held+'/') for value in descriptors)):
                         used = True
                         break
                 except FileNotFoundError:

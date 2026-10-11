@@ -42,9 +42,11 @@ for installation without launching.
 The installed launcher reopens an active background HUD only when called
 without options. Any explicit options, including `--help`, go to a new
 foreground invocation. They never change an already-running session.
-Before opening the browser, it checks that the configured listener belongs to
-the managed user service's own process. If another local program holds that
-port, it reports that the service is not ready and opens nothing. The background
+Before opening the browser, it checks that the user service manager loaded the
+managed, unmodified unit from the current `XDG_CONFIG_HOME` with no drop-ins,
+and that the configured listener belongs to that service's own process. If
+either check fails, for example because another local program holds that port,
+it reports that the service is not ready and opens nothing. The background
 service requires `[dashboard] host = "127.0.0.1"`; the HUD server listens on
 IPv4 only, so `::1` is refused for background startup and reopen.
 
@@ -171,7 +173,10 @@ the managed file, they refuse before changing anything. Stop and disable it
 where it was enabled, then retry. If no user service manager answers, they
 proceed as before. A `megalodon-hud.service.d/` drop-in directory (for example,
 from `systemctl --user edit`) can replace the unit's command, so startup,
-upgrade and uninstall refuse while it exists. Review and remove it yourself.
+upgrade and uninstall refuse while it exists. They also refuse when the user
+service manager reports any drop-in it loaded for the unit (its `DropInPaths`),
+including ones under `/etc/systemd/user/`, runtime directories or a type-wide
+`service.d/`. Review and remove it yourself.
 
 ## Alternative: check and run this checkout
 

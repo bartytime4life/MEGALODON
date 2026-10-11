@@ -64,14 +64,20 @@ def _systemctl(*args: str) -> None:
 def _service_state() -> dict[str, str] | None:
     """Ask the user manager which unit file it loaded; None when no manager answers."""
     try:
-        result = subprocess.run(["systemctl", "--user", "show", "--property=FragmentPath,LoadState,ActiveState", UNIT],
+        result = subprocess.run(["systemctl", "--user", "show",
+                                 "--property=FragmentPath,DropInPaths,LoadState,ActiveState", UNIT],
                                 capture_output=True, encoding="utf-8", errors="surrogateescape", timeout=15, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return None
     state = dict(line.partition("=")[::2] for line in result.stdout.splitlines())
-    if result.returncode or set(state) != {"FragmentPath", "LoadState", "ActiveState"}:
+    if result.returncode or set(state) != {"FragmentPath", "DropInPaths", "LoadState", "ActiveState"}:
         return None
     return state
+
+
+def loaded_dropins(state: dict[str, str] | None) -> bool:
+    """systemd also merges drop-ins from /etc, runtime and type-wide `service.d/` paths."""
+    return state is not None and bool(state["DropInPaths"].split())
 
 
 def loaded_elsewhere(state: dict[str, str] | None, unit: Path, managed: bool) -> bool:
@@ -90,7 +96,7 @@ def _prepare_unit() -> None:
     unit = unit_path()
     expected = unit_contents()
     _owned_directory(unit.parent, private=False)
-    if os.path.lexists(dropin_path()):
+    if os.path.lexists(dropin_path()) or loaded_dropins(_service_state()):
         raise InstallError("a HUD startup drop-in override exists; preserve and review it")
     if os.path.lexists(unit):
         existing = _regular_owned_file(unit, maximum=8192)
@@ -133,8 +139,11 @@ def disable(paths: InstallPaths | None = None) -> None:
     unit = unit_path(selected)
     managed = validate_unit(selected)
     # A different XDG_CONFIG_HOME selects a different unit path; ask systemd.
-    if loaded_elsewhere(_service_state(), unit, managed):
+    state = _service_state()
+    if loaded_elsewhere(state, unit, managed):
         raise InstallError("the HUD service is loaded from another unit file; stop and disable it there first")
+    if managed and loaded_dropins(state):
+        raise InstallError("the existing HUD startup unit has a drop-in override; preserve and review it")
     if not managed:
         return
     _systemctl("disable", "--now", UNIT)
