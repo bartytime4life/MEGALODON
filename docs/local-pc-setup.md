@@ -176,7 +176,11 @@ from `systemctl --user edit`) can replace the unit's command, so startup,
 upgrade and uninstall refuse while it exists. They also refuse when the user
 service manager reports any drop-in it loaded for the unit (its `DropInPaths`),
 including ones under `/etc/systemd/user/`, runtime directories or a type-wide
-`service.d/`. Review and remove it yourself.
+`service.d/`. The one exception is a root-owned, not group- or world-writable
+type-wide `service.d/` drop-in in the distribution's `/usr/lib/systemd/user/`
+(or `/lib/systemd/user/`), such as Fedora's `10-timeout-abort.conf`, which
+applies to every user service rather than overriding this one. Review and
+remove any other drop-in yourself.
 
 ## Alternative: check and run this checkout
 

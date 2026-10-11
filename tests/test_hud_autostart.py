@@ -297,6 +297,34 @@ def test_disable_asks_systemd_which_unit_file_is_loaded(unit_layout, monkeypatch
         assert calls == ([("disable", "--now", hud_autostart.UNIT), ("daemon-reload",)] if unit_present else [])
 
 
+def test_only_root_owned_distribution_wide_drop_ins_are_tolerated(tmp_path, monkeypatch):
+    vendor = tmp_path / "usr/lib/systemd/user"
+    monkeypatch.setattr(hud_autostart, "VENDOR_UNIT_DIRS", (str(vendor),))
+    owners = {}
+    def lstat(path, real=os.lstat):
+        info = real(path)
+        uid = owners.get(str(path))
+        return info if uid is None else SimpleNamespace(st_mode=info.st_mode, st_uid=uid)
+    monkeypatch.setattr(hud_autostart.os, "lstat", lstat)
+    def dropin(relative, uid=0, mode=0o644):
+        path = vendor / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[Service]\nTimeoutStopFailureMode=abort\n")
+        path.chmod(mode)
+        owners[str(path)] = uid
+        return str(path)
+    def state(*paths):
+        return {"FragmentPath": "/u/megalodon-hud.service", "DropInPaths": " ".join(paths),
+                "LoadState": "loaded", "ActiveState": "active"}
+    fedora = dropin("service.d/10-timeout-abort.conf")
+    assert not hud_autostart.loaded_dropins(state(fedora))
+    # Unit-specific, prefix, writable, non-root or non-vendor drop-ins still need review.
+    for path in (dropin("megalodon-hud.service.d/override.conf"), dropin("megalodon-.service.d/p.conf"),
+                 dropin("service.d/writable.conf", mode=0o666), dropin("service.d/user.conf", uid=1000),
+                 "/etc/systemd/user/service.d/admin.conf", str(vendor / "service.d/missing.conf")):
+        assert hud_autostart.loaded_dropins(state(fedora, path)), path
+
+
 def test_service_state_reads_only_fixed_properties(monkeypatch):
     seen = []
     def run(argv, **kwargs):

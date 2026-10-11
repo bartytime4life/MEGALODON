@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import stat
 import subprocess
 import sys
 
@@ -12,6 +13,10 @@ from .config import load_settings
 from .local_install import InstallError, InstallPaths, _atomic_write, _owned_directory, _regular_owned_file, install_paths, status
 
 UNIT = "megalodon-hud.service"
+# Distribution-owned user-unit directories. A root-owned type-wide `service.d/`
+# drop-in there (for example Fedora's 10-timeout-abort.conf) applies to every
+# user service and is not an override of this unit.
+VENDOR_UNIT_DIRS = ("/usr/lib/systemd/user", "/lib/systemd/user")
 
 
 def _unit_arg(value: Path) -> str:
@@ -75,9 +80,24 @@ def _service_state() -> dict[str, str] | None:
     return state
 
 
+def _vendor_type_wide(path: str) -> bool:
+    candidate = PurePosixPath(path)
+    if candidate.parent.name != "service.d" or str(candidate.parent.parent) not in VENDOR_UNIT_DIRS:
+        return False
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
+
+
 def loaded_dropins(state: dict[str, str] | None) -> bool:
-    """systemd also merges drop-ins from /etc, runtime and type-wide `service.d/` paths."""
-    return state is not None and bool(state["DropInPaths"].split())
+    """systemd also merges drop-ins from /etc, runtime and type-wide `service.d/` paths.
+
+    Only a root-owned, distribution-wide `service.d/` drop-in is tolerated;
+    any unit-specific, prefix, admin, runtime or user drop-in needs review.
+    """
+    return state is not None and any(not _vendor_type_wide(path) for path in state["DropInPaths"].split())
 
 
 def loaded_elsewhere(state: dict[str, str] | None, unit: Path, managed: bool) -> bool:
