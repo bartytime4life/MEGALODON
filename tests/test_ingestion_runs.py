@@ -15,6 +15,7 @@ import pytest
 
 import megalodon.capture as capture
 import megalodon.cli as cli
+import megalodon.storage as storage_module
 from megalodon.capture import MAX_JSONL_SKIPPED_LINES
 from megalodon.cli import main
 from megalodon.config import Settings
@@ -213,6 +214,46 @@ def test_run_fields_are_closed_and_rejected_before_mutation(tmp_path):
         assert store.connection.execute(
             "SELECT status FROM ingestion_runs WHERE id = ?", (run_id,)
         ).fetchone()[0] == "running"
+
+
+@pytest.mark.parametrize(
+    ("termination", "failure", "status"),
+    [
+        ("source_exhausted", None, "completed"),
+        ("failed", "CAPTURE_ERROR", "failed"),
+        ("interrupted", None, "failed"),
+    ],
+)
+def test_default_finish_time_survives_backward_wall_clock_step(
+    tmp_path, monkeypatch, termination, failure, status
+):
+    # NTP or a VM resume steps the wall clock back after the run started.
+    clock = [STAMP + timedelta(seconds=5)]
+
+    class SteppedClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0]
+
+    monkeypatch.setattr(storage_module, "datetime", SteppedClock)
+    with Store(tmp_path / "audit.db") as store:
+        run_id = store.start_ingestion_run("sample")
+        clock[0] = STAMP
+        receipt = store.finish_ingestion_run(
+            run_id, termination, failure_code=failure
+        )
+        assert receipt["status"] == status
+        started_at, finished_at = store.connection.execute(
+            "SELECT started_at, finished_at FROM ingestion_runs WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+        assert finished_at == started_at
+        assert store.pending_ingestion_reconciliation() == []
+
+        next_run = store.start_ingestion_run("sample")
+        assert store.finish_ingestion_run(next_run, "source_exhausted")[
+            "status"
+        ] == "completed"
 
 
 def test_unknown_or_invalid_run_id_rolls_back_the_event(tmp_path):

@@ -14,7 +14,7 @@ import sqlite3
 import stat
 import sys
 from threading import RLock
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any
 
 from .models import ActionRecord, DetectionResult, PacketEvent
@@ -348,6 +348,13 @@ DEFAULT_RETENTION_BATCH_ROWS = 100
 MAX_RETENTION_BATCH_ROWS = 256
 RETENTION_RECEIPT_VERSION = "retention-purge-v1"
 RETENTION_RECONCILIATION_REQUIRED = "RETENTION:RECONCILIATION_REQUIRED"
+RETENTION_RECONCILIATION_EVIDENCE_HELD = "RETENTION:RECONCILIATION_EVIDENCE_HELD"
+# Fresh, fully re-verified connection attempts made when a Store open sees
+# activity it cannot attribute (see _connect_verified_sqlite).
+_VERIFIED_CONNECT_ATTEMPTS = 3
+# How long Store waits, re-verifying each attempt from scratch, for other
+# openers' sidecar churn to settle before refusing DIRECTORY_CHANGED.
+_DIRECTORY_SETTLE_SECONDS = 10.0
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
@@ -586,47 +593,116 @@ def _connect_verified_sqlite(
     pathname resolves through the admitted directory to the admitted file.
     Other threads' concurrent opens of this database's own sidecars are set
     aside on the same basis; any other unattributed open refuses.
+
+    That reused-descriptor refusal cannot tell a swap from unrelated activity:
+    any file opened elsewhere in the process, or any entry created in an
+    ancestor such as /tmp or $HOME, during the connect looks the same. Its
+    connection is therefore closed unused and the whole verified connect is
+    repeated, up to _VERIFIED_CONNECT_ATTEMPTS times in total. This is safe:
+    a connection is returned only from an attempt that passed every check on
+    its own (fresh baseline, pre-connect pathname proof, post-connect
+    comparison), exactly as when only one attempt was made, and a refused
+    attempt's connection runs no statement. Transient activity passes on a
+    later attempt; a swap or change present on every attempt still refuses.
+    Every other refusal is definitive and is not retried.
     """
 
     with _DATABASE_OPEN_LOCK:
-        before = _open_regular_file_identities()
-        ancestors = _ancestor_generations(path.parent)
-        if before is None:
+        for _ in range(_VERIFIED_CONNECT_ATTEMPTS):
+            connection = _connect_verified_sqlite_attempt(
+                uri, path, descriptor, directory_descriptor, prefix, **kwargs
+            )
+            if connection is not None:
+                return connection
+        _raise_path_error(prefix, "DATABASE_CHANGED")
+
+
+def _connect_verified_sqlite_attempt(
+    uri: str,
+    path: Path,
+    descriptor: int,
+    directory_descriptor: int,
+    prefix: str,
+    **kwargs: Any,
+) -> sqlite3.Connection | None:
+    """Make one verified connect; ``None`` means an unproven descriptor reuse.
+
+    The caller holds _DATABASE_OPEN_LOCK. On ``None`` the connection has
+    already been closed without running any statement.
+    """
+
+    before = _open_regular_file_identities()
+    ancestors = _ancestor_generations(path.parent)
+    if before is None:
+        _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
+    if ancestors is None:
+        _raise_path_error(prefix, "DIRECTORY_CHANGED")
+    # A swap before the baseline would leave both samples equal; prove the
+    # pathname still names the admitted file, through the admitted
+    # directory, once the baseline is held.
+    if not (
+        _path_matches_descriptor(path, descriptor)
+        and _path_matches_descriptor(path.parent, directory_descriptor)
+    ):
+        _raise_path_error(prefix, "DATABASE_CHANGED")
+    connection = sqlite3.connect(uri, uri=True, **kwargs)
+    try:
+        # Any later sample still covers SQLite's path resolution (a rename
+        # cannot restore the generations it changed); sampling first keeps
+        # the window that unrelated ancestor activity can hit short.
+        ancestors_after = _ancestor_generations(path.parent)
+        after = _open_regular_file_identities()
+        if after is None:
             _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
-        if ancestors is None:
-            _raise_path_error(prefix, "DIRECTORY_CHANGED")
-        # A swap before the baseline would leave both samples equal; prove the
-        # pathname still names the admitted file, through the admitted
-        # directory, once the baseline is held.
-        if not (
-            _path_matches_descriptor(path, descriptor)
-            and _path_matches_descriptor(path.parent, directory_descriptor)
-        ):
-            _raise_path_error(prefix, "DATABASE_CHANGED")
-        connection = sqlite3.connect(uri, uri=True, **kwargs)
+        info = os.fstat(descriptor)
+        admitted = (info.st_dev, info.st_ino)
+        opened = {
+            identity
+            for candidate, identity in after.items()
+            if before.get(candidate) != identity
+        }
+        unattributed = opened - _sidecar_identities(path, directory_descriptor)
+        reused_unproven = admitted not in opened and bool(
+            unattributed or ancestors_after != ancestors
+        )
+    except BaseException:
         try:
-            after = _open_regular_file_identities()
-            if after is None:
-                _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
-            info = os.fstat(descriptor)
-            admitted = (info.st_dev, info.st_ino)
-            opened = {
-                identity
-                for candidate, identity in after.items()
-                if before.get(candidate) != identity
-            }
-            unattributed = opened - _sidecar_identities(path, directory_descriptor)
-            if admitted not in opened and (
-                unattributed or _ancestor_generations(path.parent) != ancestors
-            ):
-                _raise_path_error(prefix, "DATABASE_CHANGED")
-        except BaseException:
-            try:
-                connection.close()
-            except sqlite3.Error:
-                pass
-            raise
-        return connection
+            connection.close()
+        except sqlite3.Error:
+            pass
+        raise
+    if reused_unproven:
+        try:
+            connection.close()
+        except sqlite3.Error:
+            pass
+        return None
+    return connection
+
+
+def _enable_wal_journal(connection: sqlite3.Connection, *, timeout: float) -> None:
+    """Switch to WAL, waiting out a concurrent first-time switch or creation.
+
+    Changing a rollback-journal database into WAL needs an exclusive lock.
+    While another connection holds a RESERVED lock (for example another
+    opener's schema transaction on a newly created database), SQLite returns
+    SQLITE_BUSY at once without consulting the busy handler. Retry only that
+    busy result, for the same bound as the connection's busy timeout; the
+    switch is idempotent and every other error propagates unchanged.
+    """
+
+    deadline = monotonic() + timeout
+    while True:
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            code = getattr(exc, "sqlite_errorcode", None)
+            if code is None or code & 0xFF != sqlite3.SQLITE_BUSY:
+                raise
+            if monotonic() >= deadline:
+                raise
+        sleep(0.005)
 
 
 def _path_matches_descriptor(path: Path, descriptor: int) -> bool:
@@ -813,7 +889,15 @@ def _open_private_directory(
             except FileNotFoundError:
                 if not create:
                     _raise_path_error(prefix, "NO_DIRECTORY")
-                os.mkdir(component, PRIVATE_DIRECTORY_MODE, dir_fd=descriptor)
+                try:
+                    os.mkdir(component, PRIVATE_DIRECTORY_MODE, dir_fd=descriptor)
+                except FileExistsError:
+                    # A concurrent opener created it first. Whatever now has
+                    # this name gets exactly the treatment an entry found on
+                    # the first lookup gets: the no-follow directory open
+                    # below refuses a symlink or non-directory, and the
+                    # ownership/mode validation that follows still applies.
+                    pass
                 next_descriptor = os.open(component, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
@@ -871,13 +955,21 @@ def _open_private_database(
             except FileNotFoundError:
                 if not create:
                     _raise_path_error(prefix, "NO_DATABASE")
-                descriptor = os.open(
-                    target,
-                    flags | os.O_CREAT | os.O_EXCL,
-                    PRIVATE_DATABASE_MODE,
-                    **kwargs,
-                )
-                created = True
+                try:
+                    descriptor = os.open(
+                        target,
+                        flags | os.O_CREAT | os.O_EXCL,
+                        PRIVATE_DATABASE_MODE,
+                        **kwargs,
+                    )
+                    created = True
+                except FileExistsError:
+                    # Another process created it between the two opens. Open
+                    # what is there with the same no-follow flags as an
+                    # existing database; the regular-file, link-count, owner
+                    # and mode validation below still applies, and it is not
+                    # ours to discard on a later failure (created stays False).
+                    descriptor = os.open(target, flags, **kwargs)
         info = os.fstat(descriptor)
         _validate_private_database_stat(info, writable=writable, prefix=prefix)
         if writable and os.name == "posix":
@@ -1243,6 +1335,9 @@ class Store:
         self._directory_descriptor: int | None = None
         self._database_descriptor: int | None = None
         database_created = False
+        # Once any connection to a database this process created has opened,
+        # another opener may already share it; it is then never discarded.
+        database_shared = False
         connection: sqlite3.Connection | None = None
         try:
             self._directory_descriptor = _open_private_directory(
@@ -1258,42 +1353,68 @@ class Store:
             sqlite_path, sqlite_anchor = _writable_sqlite_connection_path(
                 self._database_descriptor, self.path, "STORAGE_PATH"
             )
-            _validate_sqlite_sidecars(
-                self.path,
-                self._directory_descriptor,
-                writable=True,
-                prefix="STORAGE_PATH",
-            )
-            opening_generation = _directory_generation(
-                self._directory_descriptor
-            )
             uri = f"{sqlite_path.as_uri()}?mode=rw&cache=private"
-            if sqlite_anchor is None:
-                connection = _connect_verified_sqlite(
-                    uri,
+            # Another legitimate opener of this database (another process's
+            # Store or HUD) creates and removes -journal/-wal/-shm entries in
+            # the admitted directory, which is indistinguishable from an entry
+            # swap by generation alone. A connection whose window saw such a
+            # change is closed unused and the whole sequence -- sidecar
+            # validation, a fresh generation baseline, connect and both path
+            # proofs -- is repeated, with a short pause, until it passes or
+            # _DIRECTORY_SETTLE_SECONDS elapse. Concurrent first opens can keep
+            # the directory changing for several immediate attempts, so the
+            # bound is time, not a count. The connection kept is always one
+            # whose own window passed every check, so a retry accepts nothing
+            # a single attempt would refuse; a change that persists for the
+            # whole bound still refuses DIRECTORY_CHANGED.
+            settle_deadline = monotonic() + _DIRECTORY_SETTLE_SECONDS
+            pause = 0.005
+            while True:
+                _validate_sqlite_sidecars(
                     self.path,
-                    self._database_descriptor,
                     self._directory_descriptor,
-                    "STORAGE_PATH",
-                    timeout=10,
-                    check_same_thread=False,
+                    writable=True,
+                    prefix="STORAGE_PATH",
                 )
-            else:
-                connection = sqlite3.connect(
-                    uri, uri=True, timeout=10, check_same_thread=False
+                opening_generation = _directory_generation(
+                    self._directory_descriptor
                 )
-            _validate_connection_path(
-                connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor
-            )
-            self._assert_path_identity()
-            if _directory_generation(self._directory_descriptor) != opening_generation:
-                _raise_path_error("STORAGE_PATH", "DIRECTORY_CHANGED")
+                if sqlite_anchor is None:
+                    connection = _connect_verified_sqlite(
+                        uri,
+                        self.path,
+                        self._database_descriptor,
+                        self._directory_descriptor,
+                        "STORAGE_PATH",
+                        timeout=10,
+                        check_same_thread=False,
+                    )
+                else:
+                    connection = sqlite3.connect(
+                        uri, uri=True, timeout=10, check_same_thread=False
+                    )
+                database_shared = True
+                _validate_connection_path(
+                    connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor
+                )
+                self._assert_path_identity()
+                if (
+                    _directory_generation(self._directory_descriptor)
+                    == opening_generation
+                ):
+                    break
+                if monotonic() >= settle_deadline:
+                    _raise_path_error("STORAGE_PATH", "DIRECTORY_CHANGED")
+                connection.close()
+                connection = None
+                sleep(pause)
+                pause = min(pause * 2, 0.1)
             connection.row_factory = sqlite3.Row
             self.connection = connection
             with self._lock:
                 self.connection.execute("PRAGMA foreign_keys=ON")
                 self._initialize_schema()
-                self.connection.execute("PRAGMA journal_mode=WAL")
+                _enable_wal_journal(self.connection, timeout=10)
                 self.connection.execute("PRAGMA synchronous=FULL")
             self._assert_path_identity()
             _validate_sqlite_sidecars(
@@ -1308,7 +1429,7 @@ class Store:
                     connection.close()
                 except sqlite3.Error:
                     pass
-            if database_created and connection is None:
+            if database_created and connection is None and not database_shared:
                 self._discard_created_database()
             self._close_descriptors()
             raise
@@ -1428,26 +1549,27 @@ class Store:
             pass
 
     def _initialize_schema(self) -> None:
+        # Read the version and schema objects, then create or validate, all
+        # under one write lock: an empty database seen outside that lock may
+        # already be receiving its schema from a concurrent opener.
         try:
-            version = int(self.connection.execute("PRAGMA user_version").fetchone()[0])
-            if version > SCHEMA_VERSION:
-                raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
-            if version not in (0, 1, 2, SCHEMA_VERSION):
-                raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
-
-            present = _schema_objects(self.connection)
-            if version == 0 and not present:
-                self._create_schema()
-                return
-            if version in (0, 1, 2):
-                self.connection.execute("BEGIN IMMEDIATE")
-                try:
-                    _validate_schema(self.connection, *_schema_contract(version))
-                finally:
-                    self.connection.rollback()
-                raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_REQUIRED")
             self.connection.execute("BEGIN IMMEDIATE")
             try:
+                version = int(
+                    self.connection.execute("PRAGMA user_version").fetchone()[0]
+                )
+                if version > SCHEMA_VERSION:
+                    raise StorageSchemaError("STORAGE_SCHEMA:FUTURE_VERSION")
+                if version not in (0, 1, 2, SCHEMA_VERSION):
+                    raise StorageSchemaError("STORAGE_SCHEMA:UNSUPPORTED_VERSION")
+
+                present = _schema_objects(self.connection)
+                if version == 0 and not present:
+                    self._create_schema()
+                    return
+                if version in (0, 1, 2):
+                    _validate_schema(self.connection, *_schema_contract(version))
+                    raise StorageSchemaError("STORAGE_SCHEMA:MIGRATION_REQUIRED")
                 _validate_schema(
                     self.connection,
                     _TABLE_COLUMNS_V3,
@@ -1457,8 +1579,9 @@ class Store:
                     (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS),
                 )
                 self.connection.commit()
-            except Exception:
-                self.connection.rollback()
+            except BaseException:
+                if self.connection.in_transaction:
+                    self.connection.rollback()
                 raise
         except StorageSchemaError:
             raise
@@ -1468,7 +1591,8 @@ class Store:
             raise StorageSchemaError("STORAGE_SCHEMA:INSPECTION_FAILED") from exc
 
     def _create_schema(self) -> None:
-        self.connection.execute("BEGIN IMMEDIATE")
+        """Create the schema inside the caller's BEGIN IMMEDIATE transaction."""
+
         try:
             for statement in (*SCHEMA_V1_STATEMENTS, *SCHEMA_V3_STATEMENTS):
                 self.connection.execute(statement)
@@ -1667,8 +1791,15 @@ class Store:
                     or int(row["receipt_version"]) != 3
                 ):
                     raise IngestionRunError("INGESTION_RUN:NOT_ACTIVE")
-                if finished < parse_timestamp(row["started_at"]):
-                    raise IngestionRunError("INGESTION_RUN:INVALID_TIMESTAMP")
+                started = parse_timestamp(row["started_at"])
+                if finished < started:
+                    if finished_at is not None:
+                        raise IngestionRunError("INGESTION_RUN:INVALID_TIMESTAMP")
+                    # The wall clock stepped back (NTP, resume) after the run
+                    # started. Refusing would strand the receipt as running
+                    # and block every later run, so stamp the earliest time
+                    # consistent with the stored start instead.
+                    finished = started
                 processed_count, detection_count, action_count = (
                     self._actual_run_counts(safe_run_id)
                 )
@@ -2189,11 +2320,30 @@ class Store:
     def _assert_retention_ready(self) -> None:
         if self.connection.in_transaction:
             raise RetentionError("RETENTION:ACTIVE_TRANSACTION")
-        if self.connection.execute(
-            "SELECT 1 FROM ingestion_runs "
-            "WHERE status IN ('running', 'reconciliation_required') LIMIT 1"
-        ).fetchone() is not None:
+        self._assert_no_retention_blocking_run()
+
+    def _assert_no_retention_blocking_run(self) -> None:
+        """Refuse retention while any receipt still holds evidence open.
+
+        A ``running`` receipt is an active (or orphaned) writer. A
+        ``reconciliation_required`` receipt is terminal, but its preserved rows
+        await an evidence-disposition decision that has no transition yet
+        (docs/ingestion-integrity.md), so it keeps blocking retention -- under
+        its own code, because no run is active and stopping ingestion cannot
+        clear it.
+        """
+
+        statuses = {
+            str(row[0])
+            for row in self.connection.execute(
+                "SELECT DISTINCT status FROM ingestion_runs "
+                "WHERE status IN ('running', 'reconciliation_required')"
+            )
+        }
+        if "running" in statuses:
             raise RetentionError("RETENTION:ACTIVE_RUN")
+        if statuses:
+            raise RetentionError(RETENTION_RECONCILIATION_EVIDENCE_HELD)
 
     def _retention_candidates(
         self, cutoff: str, batch_limit: int
@@ -2339,11 +2489,7 @@ class Store:
             self.connection.execute("BEGIN")
             try:
                 store_identity = self._retention_store_identity()
-                if self.connection.execute(
-                    "SELECT 1 FROM ingestion_runs "
-                    "WHERE status IN ('running', 'reconciliation_required') LIMIT 1"
-                ).fetchone() is not None:
-                    raise RetentionError("RETENTION:ACTIVE_RUN")
+                self._assert_no_retention_blocking_run()
                 candidates = self._retention_candidates(cutoff, safe_limit)
                 preview_token = self._retention_token(
                     store_identity=store_identity,
@@ -2391,11 +2537,7 @@ class Store:
             try:
                 self.connection.execute("BEGIN IMMEDIATE")
                 store_identity = self._retention_store_identity()
-                if self.connection.execute(
-                    "SELECT 1 FROM ingestion_runs "
-                    "WHERE status IN ('running', 'reconciliation_required') LIMIT 1"
-                ).fetchone() is not None:
-                    raise RetentionError("RETENTION:ACTIVE_RUN")
+                self._assert_no_retention_blocking_run()
                 candidates = self._retention_candidates(cutoff, safe_limit)
                 actual_token = self._retention_token(
                     store_identity=store_identity,

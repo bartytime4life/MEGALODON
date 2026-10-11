@@ -101,7 +101,18 @@ identity and timestamps are unchanged; the pathname and its parent directory
 are re-checked against the admitted file and directory descriptors after that
 ancestor baseline is taken, so a swap made before the baseline cannot pass as
 unchanged. In-process opens of admitted databases are serialized for that
-window. The PR-only workflow adds two native
+window. Unrelated activity (another thread opening a file, an entry created in
+`/tmp` or `$HOME`) during that window looks the same as a swap, so a refused
+reuse closes its unused connection and repeats the whole verified connect, at
+most three attempts in total; only an attempt that passes every check on its
+own is kept, and a swap or change present on every attempt still refuses.
+The `Store` open similarly repeats a connect whose window saw its admitted
+directory's entries change (another opener's `-journal`/`-wal`/`-shm`),
+re-validating sidecars and taking a fresh directory baseline each time, with
+a short growing pause, for up to 10 seconds before refusing
+`STORAGE_PATH:DIRECTORY_CHANGED`. A database file this open created is never
+removed after any connection to it has opened, because another opener may
+already share it. The PR-only workflow adds two native
 negatives, a connect-time ancestor swap and the same swap onto a file with a
 reusable SQLite descriptor; both must refuse with `STORAGE_PATH:DATABASE_CHANGED`
 and leave the swapped-in file unchanged. Until a hosted run records them, these

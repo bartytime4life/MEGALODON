@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
 
 import pytest
 
@@ -368,14 +369,64 @@ def test_darwin_store_accepts_reused_descriptor_only_with_unchanged_ancestors(
         assert store.summary()["events"] == 0
 
     real_connect = sqlite3.connect
+    connects = []
 
     def touching_connect(*args, **kwargs):
-        (tmp_path / "ancestor-entry").touch()
+        # A new ancestor entry on every attempt: a sustained change.
+        connects.append(None)
+        (tmp_path / f"ancestor-entry-{len(connects)}").touch()
         return real_connect(*args, **kwargs)
 
     monkeypatch.setattr(storage.sqlite3, "connect", touching_connect)
     with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
         Store(database, create=False)
+    assert len(connects) == storage._VERIFIED_CONNECT_ATTEMPTS
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_store_retries_reused_descriptor_after_transient_ancestor_change(
+    tmp_path, monkeypatch
+):
+    # Unrelated activity in an ancestor (a shell rewriting a file in $HOME,
+    # another program using /tmp) during one connect is not a swap.
+    database = tmp_path / "nested" / "audit.db"
+    database.parent.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+    with Store(database) as store:
+        _populate(store)
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    frozen = storage._open_regular_file_identities()
+    monkeypatch.setattr(storage, "_open_regular_file_identities", lambda: frozen)
+    real_connect = sqlite3.connect
+    connects = []
+
+    def once_touching_connect(*args, **kwargs):
+        connects.append(None)
+        if len(connects) == 1:
+            (tmp_path / "unrelated-entry").touch()
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", once_touching_connect)
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 1
+    assert len(connects) == 2
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
+def test_darwin_store_retries_reused_descriptor_after_transient_unattributed_open(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    with Store(database):
+        pass
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    frozen = storage._open_regular_file_identities()
+    snapshots = iter([frozen, {**frozen, 1_000_000: (0, 0)}, frozen, frozen])
+    monkeypatch.setattr(
+        storage, "_open_regular_file_identities", lambda: next(snapshots)
+    )
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 0
+    assert next(snapshots, None) is None
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
@@ -387,12 +438,19 @@ def test_darwin_store_refuses_unattributed_open_without_admitted_descriptor(
         pass
     monkeypatch.setattr(storage.sys, "platform", "darwin")
     frozen = storage._open_regular_file_identities()
-    snapshots = iter([frozen, {**frozen, 1_000_000: (0, 0)}])
+    samples = []
+
+    def unattributed_every_attempt():
+        # Each attempt's second sample shows a new, unattributed open.
+        samples.append(None)
+        return frozen if len(samples) % 2 else {**frozen, 1_000_000: (0, 0)}
+
     monkeypatch.setattr(
-        storage, "_open_regular_file_identities", lambda: next(snapshots)
+        storage, "_open_regular_file_identities", unattributed_every_attempt
     )
     with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"):
         Store(database, create=False)
+    assert len(samples) == 2 * storage._VERIFIED_CONNECT_ATTEMPTS
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX rename semantics")
@@ -428,8 +486,12 @@ def test_darwin_store_refuses_swap_to_file_with_reusable_sqlite_descriptor(
             StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$"
         ):
             Store(database, create=False)
-        before, after = snapshots
-        assert not {fd for fd, identity in after.items() if before.get(fd) != identity}
+        # The swap is in place on every attempt, so each one refuses.
+        assert len(snapshots) == 2 * storage._VERIFIED_CONNECT_ATTEMPTS
+        for before, after in zip(snapshots[::2], snapshots[1::2]):
+            assert not {
+                fd for fd, identity in after.items() if before.get(fd) != identity
+            }
     finally:
         for holder in holders:
             holder.close()
@@ -545,12 +607,19 @@ def test_darwin_store_refuses_swapped_parent_holding_admitted_hardlink(
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor semantics")
 def test_darwin_store_verification_tolerates_concurrent_admitted_opens(
-    tmp_path, monkeypatch
+    monkeypatch,
 ):
     from concurrent.futures import ThreadPoolExecutor
+    import shutil
 
     monkeypatch.setattr(storage.sys, "platform", "darwin")
-    database = tmp_path / "audit.db"
+    # A reused descriptor is accepted only while every ancestor directory is
+    # unchanged, so entries other tests or pytest sessions keep creating in
+    # the shared basetemp tree would refuse opens on every bounded attempt.
+    # Use an owner-private directory of this test's own instead; the system
+    # temporary directory remains its only shared ancestor below the root.
+    private = Path(tempfile.mkdtemp(prefix="megalodon-darwin-opens-"))
+    database = private / "audit.db"
 
     def open_and_read(index: int) -> int:
         if index % 2:
@@ -559,12 +628,238 @@ def test_darwin_store_verification_tolerates_concurrent_admitted_opens(
         with Store(database, create=False) as store:
             return store.summary()["events"]
 
-    # A long-lived writer keeps WAL sidecars in place, as the HUD does, and
-    # makes SQLite defer and reuse closed connections' descriptors.
-    with Store(database) as holder:
-        _populate(holder)
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            assert set(pool.map(open_and_read, range(96))) == {1}
+    try:
+        # A long-lived writer keeps WAL sidecars in place, as the HUD does,
+        # and makes SQLite defer and reuse closed connections' descriptors.
+        with Store(database) as holder:
+            _populate(holder)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                assert set(pool.map(open_and_read, range(96))) == {1}
+    finally:
+        shutil.rmtree(private)
+
+
+def _connect_changing_directory(monkeypatch, directory: Path, *, every: bool):
+    """Patch sqlite3.connect to change the admitted directory's entries."""
+
+    real_connect = sqlite3.connect
+    connects = []
+
+    def changing_connect(*args, **kwargs):
+        connects.append(None)
+        if every or len(connects) == 1:
+            # As another opener's SQLite creating and removing a journal.
+            journal = directory / f"audit.db-journal-{len(connects)}"
+            journal.touch()
+            journal.unlink()
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", changing_connect)
+    return connects
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_store_retries_connect_after_transient_directory_entry_change(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    with Store(database) as store:
+        _populate(store)
+    connects = _connect_changing_directory(monkeypatch, tmp_path, every=False)
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 1
+    assert len(connects) == 2
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_store_refuses_directory_entry_change_on_every_connect(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    with Store(database):
+        pass
+    monkeypatch.setattr(storage, "_DIRECTORY_SETTLE_SECONDS", 0.2)
+    connects = _connect_changing_directory(monkeypatch, tmp_path, every=True)
+    started = time.monotonic()
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DIRECTORY_CHANGED$"):
+        Store(database, create=False)
+    # A change that persists for the whole settle bound still refuses, after
+    # several paced, fully re-verified attempts rather than a fixed count.
+    assert len(connects) > storage._VERIFIED_CONNECT_ATTEMPTS
+    assert 0.2 <= time.monotonic() - started < 5
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_store_waits_out_directory_churn_longer_than_three_attempts(
+    tmp_path, monkeypatch
+):
+    # Several processes opening one new database can keep its directory
+    # changing for more than a few immediate attempts.
+    database = tmp_path / "audit.db"
+    with Store(database) as store:
+        _populate(store)
+    real_connect = sqlite3.connect
+    connects = []
+
+    def churning_connect(*args, **kwargs):
+        connects.append(None)
+        if len(connects) <= 6:
+            journal = tmp_path / f"audit.db-journal-{len(connects)}"
+            journal.touch()
+            journal.unlink()
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", churning_connect)
+    with Store(database, create=False) as store:
+        assert store.summary()["events"] == 1
+    assert len(connects) == 7
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_new_database_is_kept_once_a_connection_opened(tmp_path, monkeypatch):
+    # This process created the file and connected, then a retry failed. Another
+    # opener may already share the database, so it must not be unlinked.
+    database = tmp_path / "audit.db"
+    real_connect = sqlite3.connect
+    connects = []
+
+    def churn_then_fail(*args, **kwargs):
+        connects.append(None)
+        if len(connects) == 1:
+            journal = tmp_path / "audit.db-journal-x"
+            journal.touch()
+            journal.unlink()
+            return real_connect(*args, **kwargs)
+        raise sqlite3.OperationalError("unable to open database file")
+
+    monkeypatch.setattr(storage.sqlite3, "connect", churn_then_fail)
+    with pytest.raises(sqlite3.OperationalError):
+        Store(database)
+    assert len(connects) == 2
+    assert database.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlink semantics")
+def test_store_connect_retry_revalidates_sidecars_planted_meanwhile(
+    tmp_path, monkeypatch
+):
+    # The entry change that forces a retry is itself a symlinked sidecar; the
+    # retry must not take a fresh directory baseline without validating it.
+    private = tmp_path / "private"
+    private.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+    database = private / "audit.db"
+    with Store(database):
+        pass
+    target = tmp_path / "outside"
+    target.write_bytes(b"sidecar-target")
+    target.chmod(storage.PRIVATE_DATABASE_MODE)
+    real_connect = sqlite3.connect
+
+    def planting_connect(*args, **kwargs):
+        sidecar = private / "audit.db-wal"
+        if not sidecar.is_symlink():
+            sidecar.symlink_to(target)
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(storage.sqlite3, "connect", planting_connect)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:SYMLINK_REFUSED$"):
+        Store(database, create=False)
+    assert target.read_bytes() == b"sidecar-target"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory descriptor semantics")
+def test_store_uses_directories_a_concurrent_opener_created_first(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "x" / "data" / "audit.db"
+    real_mkdir = os.mkdir
+    raced = []
+
+    def racing_mkdir(name, mode=0o777, *, dir_fd=None):
+        # Another process's Store wins the race for this component.
+        real_mkdir(name, storage.PRIVATE_DIRECTORY_MODE, dir_fd=dir_fd)
+        raced.append(name)
+        return real_mkdir(name, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(storage.os, "mkdir", racing_mkdir)
+    with Store(database) as store:
+        assert store.summary()["events"] == 0
+    assert raced == ["x", "data"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlink and mode semantics")
+@pytest.mark.parametrize("planted", ["symlink", "public_directory"])
+def test_store_still_refuses_unsafe_directory_planted_in_creation_race(
+    tmp_path, monkeypatch, planted
+):
+    database = tmp_path / "data" / "audit.db"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir(mode=storage.PRIVATE_DIRECTORY_MODE)
+    real_mkdir = os.mkdir
+
+    def racing_mkdir(name, mode=0o777, *, dir_fd=None):
+        if planted == "symlink":
+            os.symlink(elsewhere, name, dir_fd=dir_fd)
+        else:
+            real_mkdir(name, 0o700, dir_fd=dir_fd)
+            os.chmod(name, 0o777, dir_fd=dir_fd)
+        return real_mkdir(name, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(storage.os, "mkdir", racing_mkdir)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:UNSAFE_DIRECTORY$"):
+        Store(database)
+    assert list(elsewhere.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX exclusive-create semantics")
+def test_store_opens_database_file_a_concurrent_opener_created_first(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    real_open = os.open
+    raced = []
+
+    def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+        if flags & os.O_CREAT and flags & os.O_EXCL:
+            # Another process's Store creates the file between our two opens.
+            os.close(
+                real_open(
+                    path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    storage.PRIVATE_DATABASE_MODE,
+                    dir_fd=dir_fd,
+                )
+            )
+            raced.append(path)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(storage.os, "open", racing_open)
+    with Store(database) as store:
+        _populate(store)
+        assert store.summary()["events"] == 1
+    assert raced == ["audit.db"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlink semantics")
+def test_store_still_refuses_symlinked_database_planted_in_creation_race(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "audit.db"
+    target = tmp_path / "outside.db"
+    target.write_bytes(b"outside-sentinel")
+    target.chmod(storage.PRIVATE_DATABASE_MODE)
+    real_open = os.open
+
+    def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+        if flags & os.O_CREAT and flags & os.O_EXCL:
+            os.symlink(target, path, dir_fd=dir_fd)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(storage.os, "open", racing_open)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:SYMLINK_REFUSED$"):
+        Store(database)
+    assert target.read_bytes() == b"outside-sentinel"
+    assert database.is_symlink()
 
 
 def test_purge_requires_a_timezone_aware_cutoff(tmp_path):
