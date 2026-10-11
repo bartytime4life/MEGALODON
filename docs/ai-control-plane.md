@@ -280,7 +280,9 @@ or node budget, the adapter removes records from the end until it fits and sets
 conservatively. Coverage always declares `incomplete_window`; source errors or
 withheld malformed rows add `source_gap`. A verified `packet_rollups` summary
 overlapping the window also adds `source_gap` (and the `incomplete_hours`
-comparison reason): its conversation fragments are not individual observations,
+comparison reason). Summary rows are stamped at a conversation's first packet,
+so the overlap check looks back one 300-second bucket for conversations that end
+inside the window. Its conversation fragments are not individual observations,
 so compacted packet detail is reported missing, not as no records. No comparison or reference-library
 claim is supplied on this generic observation path. A context without qualified
 protocol/detail evidence skips inference and reports `insufficient_context`.

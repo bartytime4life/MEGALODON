@@ -390,3 +390,37 @@ def test_compacted_packet_detail_is_reported_as_a_source_gap(tmp_path):
         assert context['groups']==[] and 'source_gap' in context['coverage']['missing']
         assert context['comparison']==dict(state='unavailable',reason='incomplete_hours')
     finally:evidence.close()
+
+
+def test_compacted_conversation_ending_inside_the_window_is_a_source_gap(tmp_path, monkeypatch):
+    # A summary row is stamped at its conversation's first packet. A conversation
+    # that starts before the window and ends inside it still hides window detail.
+    from datetime import datetime, timezone
+    from test_packet_compaction import _compact
+    from megalodon.models import PacketEvent
+    from megalodon.storage import Store
+    tmp_path.chmod(0o700)
+    first=NOW-3590  # same 300-second bucket as first+100
+    # The capture run starts with its first packet, as it would on a live sensor.
+    monkeypatch.setattr(Store,'_run_timestamp',staticmethod(lambda value:datetime.fromtimestamp(first,timezone.utc)))
+    clock=[first]
+    evidence=EvidenceStorage(Settings(db_path=tmp_path/'old.db'),home=tmp_path,clock=lambda:clock[0],monotonic=lambda:clock[0])
+    try:
+        evidence.apply(evidence.preview(dict(profile='home',retention_days=14,cap_bytes=GIB))['preview_id'])
+        writer=evidence.packet_writer();run=writer.start_ingestion_run('jsonl')
+        for stamp in (first,first+100):
+            clock[0]=stamp
+            writer.record_event_bundle(PacketEvent(datetime.fromtimestamp(stamp,timezone.utc),'10.0.0.2','1.1.1.1','TCP',
+                                                   50000,443,byte_count=100,interface='eth0'),[],[],run_id=run)
+        writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+        end=first+3650  # the window opens after the first packet and before the second
+        clock[0]=end
+        before=retained_context(evidence,'10.0.0.2',end,comparison_reason='no_baseline')
+        assert before['groups'] and 'source_gap' not in before['coverage']['missing']
+        _compact(evidence)
+        rollup=next(e for e in evidence._catalog['entries'] if e['category']=='packet_rollups')
+        assert rollup['last_at']<utc(end-3600)
+        context=retained_context(evidence,'10.0.0.2',end,comparison_reason='no_baseline')
+        assert context['groups']==[] and 'source_gap' in context['coverage']['missing']
+        assert context['comparison']==dict(state='unavailable',reason='incomplete_hours')
+    finally:evidence.close()

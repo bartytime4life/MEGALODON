@@ -7,6 +7,7 @@ import sqlite3
 
 from .ai_context import build_context, ContextError, INPUT_SCHEMA, FACTS, FLAGS, PROTOCOLS, RULES, SOURCE_KINDS, TRANSPORTS
 from .evidence_storage import epoch
+from .packet_compaction import BUCKET_SECONDS
 from .retained_history import RetainedEvidenceReader
 from .security_patterns import MAX_RECORDS
 
@@ -94,7 +95,7 @@ def retained_context(evidence, address, now, *, comparison_reason=None, referenc
     address = str(ip_address(address))
     end = int(now)
     reader = RetainedEvidenceReader(evidence)
-    sources, gaps = reader._sources(end - 3600, end, categories={'packets', 'flows', 'packet_rollups'})
+    sources, gaps = reader._sources(end - 3600, end, categories={'packets', 'flows'})
     selected, dependencies = [], {}
     scanned = 0
     truncated = False
@@ -102,10 +103,12 @@ def retained_context(evidence, address, now, *, comparison_reason=None, referenc
     for gap in gaps:
         missing.add(gap if gap == 'sensor_disagreement' else 'source_gap')
     # Compacted packet detail is replaced by conversation summaries, which are
-    # not individual observations. Report the hidden detail as a gap.
-    if any(entry['category'] == 'packet_rollups' for entry, _ in sources):
+    # not individual observations. Report the hidden detail as a gap. A summary
+    # is stamped at its conversation's first packet, and a conversation spans at
+    # most one bucket, so look back one bucket for summaries ending in the window.
+    rollups, _ = reader._sources(end - 3600 - BUCKET_SECONDS, end, watermarks=False, categories={'packet_rollups'})
+    if rollups:
         missing.add('source_gap')
-        sources = [(entry, watermark) for entry, watermark in sources if entry['category'] != 'packet_rollups']
     for entry, watermark in reversed(sources):
         expires = int(epoch(entry.get('first_at') or entry['created_at']) + evidence.retention_days * 86400)
         if expires <= now:
