@@ -41,6 +41,12 @@ Startup validates the closed set of application tables and indexes, rejects
 additional non-internal tables, indexes, triggers, and views, and checks the
 normalized declared DDL, column, foreign-key, required-index, primary-key, and
 uniqueness shape before enabling WAL. A fresh database is created atomically.
+The version and schema are read, then created or validated, under one
+`BEGIN IMMEDIATE` lock, so openers that meet a new database at the same time
+(for example the HUD and a CLI command on first launch) all open it: one
+creates the schema and the others validate it. A directory or database file
+another opener created first is opened and validated like an existing one, and
+the first WAL switch waits out a concurrent writer for the busy timeout.
 Exact v1, unversioned-v1, and v2
 layouts fail with `STORAGE_SCHEMA:MIGRATION_REQUIRED`; they are not changed by
 ordinary startup. Partial, altered, extended, unsupported, and future layouts
@@ -214,7 +220,12 @@ can of course add new eligible data, so the receipt is not a permanent database
 state claim.
 
 Preview and apply both refuse an unrelated open transaction and any ingestion
-run in `running` or `reconciliation_required` state. Apply also refuses malformed
+run in `running` (`RETENTION:ACTIVE_RUN`) or `reconciliation_required`
+(`RETENTION:RECONCILIATION_EVIDENCE_HELD`) state. The second is not an active
+run: that terminal classification preserves its evidence and has no resolve or
+evidence-disposition transition yet, so it keeps retention refused until that
+separately reviewed decision exists; stopping ingestion does not clear it.
+`running` takes precedence when both are present. Apply also refuses malformed
 or stale tokens, database-path replacement, and candidate row-count mismatch.
 Any statement failure rolls the whole batch back. Rollback failure or uncertain
 commit poisons the writer and returns `RETENTION:RECONCILIATION_REQUIRED` without

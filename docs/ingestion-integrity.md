@@ -141,7 +141,9 @@ claim whether the last input was processed and does not authorize replay.
 `reconciliation_required` is a terminal, evidence-preserving integrity
 classification in this slice, not an active-writer state and not an alert
 acknowledgement workflow. It does not block a later run and is retained in
-readback for operator visibility. Because readback is capped at 100 rows, any
+readback for operator visibility. It does keep live-audit retention refused,
+with `RETENTION:RECONCILIATION_EVIDENCE_HELD` rather than
+`RETENTION:ACTIVE_RUN`, because its evidence awaits that disposition. Because readback is capped at 100 rows, any
 `running` receipt is ordered before historical reconciliation classifications;
 old rows therefore cannot hide the run that is blocking new intake, and the
 remaining capacity shows the most recent preserved classifications. There is
@@ -158,6 +160,11 @@ lifecycle.
   stamp until the clock catches up, so per-source ordering does not fail the
   run. A step of more than 60 seconds still exceeds the detector's future-skew
   bound and fails the run with its fixed diagnostic.
+- A terminal receipt written without an explicit `finished_at` uses the wall
+  clock but never stamps a time before the stored `started_at`: after a
+  backward step it records `finished_at = started_at`, so the run is not
+  stranded as `running`. An explicitly supplied earlier `finished_at` is still
+  refused with `INGESTION_RUN:INVALID_TIMESTAMP`.
 - JSONL/stdin and Scapy sources require an explicit positive `--max-events N`
   ceiling from 1 through 10,000,000 before the audit store or source is opened.
   The finite repository-owned sample generator may omit it.

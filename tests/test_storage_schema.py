@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
+from pathlib import Path
 import sqlite3
 import stat
+import subprocess
+import sys
+import threading
 
 import pytest
 import megalodon.storage as storage_module
@@ -599,3 +603,118 @@ def test_nonempty_unversioned_schema_is_refused_without_mutation(tmp_path):
         assert connection.execute(
             "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'sentinel'"
         ).fetchone()[0] == 1
+
+
+def test_concurrent_creators_of_new_database_both_open(tmp_path, monkeypatch):
+    # Force the window: each opener waits, after inspecting the schema, until
+    # the other has inspected it too (or a short timeout passes because the
+    # other is held behind the first one's write lock).
+    path = tmp_path / "audit.db"
+    barrier = threading.Barrier(2)
+    real_schema_objects = storage_module._schema_objects
+
+    def synchronized_schema_objects(connection):
+        objects = real_schema_objects(connection)
+        try:
+            barrier.wait(timeout=1)
+        except threading.BrokenBarrierError:
+            pass
+        return objects
+
+    monkeypatch.setattr(
+        storage_module, "_schema_objects", synchronized_schema_objects
+    )
+    results = {}
+
+    def open_store(name):
+        try:
+            with Store(path) as store:
+                results[name] = store.summary()["events"]
+        except Exception as exc:
+            results[name] = f"{exc} ({exc.__cause__!r})"
+
+    threads = [threading.Thread(target=open_store, args=(name,)) for name in "AB"]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert results == {"A": 0, "B": 0}
+    assert _application_tables(path) == APPLICATION_TABLES
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+
+
+_CONCURRENT_OPENER = """
+import os, sys, time
+from megalodon.storage import Store
+database, go = sys.argv[1], sys.argv[2]
+print("READY", flush=True)
+while not os.path.exists(go):
+    time.sleep(0.001)
+try:
+    with Store(database) as store:
+        store.summary()
+    print("OK")
+except Exception as exc:
+    print(f"{exc} / {exc.__cause__!r}")
+"""
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory and lock semantics")
+def test_concurrent_processes_creating_one_new_database_all_open(tmp_path):
+    root = Path(storage_module.__file__).resolve().parents[1]
+    environment = {**os.environ, "PYTHONPATH": str(root)}
+    outcomes = []
+    for index in range(4):
+        go = tmp_path / f"go-{index}"
+        # A fresh nested location, so the processes race to create the
+        # directories, the database file, its schema and its WAL switch.
+        database = tmp_path / f"case-{index}" / "x" / "data" / "audit.db"
+        openers = [
+            subprocess.Popen(
+                [sys.executable, "-c", _CONCURRENT_OPENER, str(database), str(go)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=environment,
+            )
+            for _ in range(4)
+        ]
+        # Release them together once every process has imported the store.
+        for opener in openers:
+            assert opener.stdout.readline().strip() == "READY"
+        go.touch()
+        for opener in openers:
+            output, _ = opener.communicate(timeout=60)
+            outcomes.append(output.strip())
+
+    assert outcomes == ["OK"] * 16
+
+
+def test_new_database_wal_switch_waits_out_a_concurrent_writer(
+    tmp_path, monkeypatch
+):
+    # Switching a new rollback-journal database into WAL fails at once with
+    # SQLITE_BUSY, without the busy handler, while another connection holds
+    # a write lock (for example another opener's schema transaction).
+    path = tmp_path / "audit.db"
+    real_initialize = Store._initialize_schema
+    holders = []
+
+    def initialize_then_contend(self):
+        real_initialize(self)
+        holder = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
+        holder.execute("BEGIN IMMEDIATE")
+        holders.append(holder)
+        threading.Timer(0.2, holder.rollback).start()
+
+    monkeypatch.setattr(Store, "_initialize_schema", initialize_then_contend)
+    try:
+        with Store(path) as store:
+            mode = store.connection.execute("PRAGMA journal_mode").fetchone()[0]
+            assert mode == "wal"
+    finally:
+        for holder in holders:
+            holder.close()
+    assert len(holders) == 1

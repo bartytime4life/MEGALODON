@@ -13,6 +13,7 @@ from megalodon.models import ActionRecord, DetectionResult, PacketEvent
 from megalodon.storage import (
     MAX_RETENTION_BATCH_ROWS,
     RETENTION_RECEIPT_VERSION,
+    RETENTION_RECONCILIATION_EVIDENCE_HELD,
     RETENTION_RECONCILIATION_REQUIRED,
     RetentionError,
     StorageSchemaError,
@@ -245,8 +246,43 @@ def test_active_or_reconciliation_required_run_blocks_preview(tmp_path):
         store.mark_ingestion_run_reconciliation_required(
             run_id, expected_started_at=STAMP
         )
+        with pytest.raises(
+            RetentionError, match=f"^{RETENTION_RECONCILIATION_EVIDENCE_HELD}$"
+        ):
+            store.preview_purge(CUTOFF)
+
+
+def test_reconciled_run_holds_evidence_under_its_own_code(tmp_path):
+    # A reconciliation_required receipt is terminal and no run is active, so
+    # the refusal must not claim one; a running receipt still takes priority.
+    with Store(tmp_path / "audit.db") as store:
+        _populate_bundle(store)
+        preview = store.preview_purge(CUTOFF, batch_limit=1)
+        reconciled = store.start_ingestion_run("sample", started_at=STAMP)
+        store.mark_ingestion_run_reconciliation_required(
+            reconciled, expected_started_at=STAMP
+        )
+        later = store.start_ingestion_run("sample")
+        assert store.finish_ingestion_run(later, "source_exhausted")[
+            "status"
+        ] == "completed"
+        before = store.summary()
+
+        for attempt in (
+            lambda: store.preview_purge(CUTOFF),
+            lambda: _apply_preview(store, preview),
+            store._assert_retention_ready,
+        ):
+            with pytest.raises(
+                RetentionError,
+                match=f"^{RETENTION_RECONCILIATION_EVIDENCE_HELD}$",
+            ):
+                attempt()
+
+        store.start_ingestion_run("sample")
         with pytest.raises(RetentionError, match="^RETENTION:ACTIVE_RUN$"):
             store.preview_purge(CUTOFF)
+        assert store.summary() == before
 
 
 def test_unrelated_open_transaction_blocks_preview_without_committing_it(tmp_path):
