@@ -360,90 +360,232 @@ def test_managed_evidence_reader_keeps_the_writers_locks(tmp_path):
         manager.close()
 
 
-def _hide_proc_fd(monkeypatch):
-    """Make /proc/self/fd look unavailable to the storage helpers."""
-    real_access, real_chmod, real_open = os.access, os.chmod, os.open
+def _hide_fd_aliases(monkeypatch, *, proc_directory, hide_dev=False):
+    """Synthetic alias visibility; SQLite and /proc/locks use real OS calls."""
+    real_stat, real_access, real_isdir = os.stat, os.access, os.path.isdir
 
-    def unavailable(path):
-        return str(path).startswith("/proc/self/fd/")
+    def hidden(path):
+        value = os.fspath(path) if isinstance(path, (str, bytes, os.PathLike)) else ""
+        return isinstance(value, str) and (
+            value.startswith("/proc/self/fd/")
+            or (hide_dev and value.startswith("/dev/fd/"))
+        )
+
+    def stat_(path, *args, **kwargs):
+        if hidden(path):
+            raise FileNotFoundError(errno.ENOENT, "synthetic unavailable alias", str(path))
+        return real_stat(path, *args, **kwargs)
 
     def access(path, mode, *args, **kwargs):
-        return False if unavailable(path) else real_access(path, mode, *args, **kwargs)
+        return False if hidden(path) else real_access(path, mode, *args, **kwargs)
 
-    def chmod(path, mode, *args, **kwargs):
-        if unavailable(path):
-            raise FileNotFoundError(errno.ENOENT, "no /proc", str(path))
-        return real_chmod(path, mode, *args, **kwargs)
+    def isdir(path):
+        if str(path) == "/proc/self/fd":
+            return proc_directory
+        return real_isdir(path)
 
-    def open_(path, flags, *args, **kwargs):
-        if unavailable(path) and flags & getattr(os, "O_PATH", 0):
-            raise FileNotFoundError(errno.ENOENT, "no /proc", str(path))
-        return real_open(path, flags, *args, **kwargs)
-
-    monkeypatch.setattr(storage_module, "_proc_fd_available", lambda: False, raising=False)
+    monkeypatch.setattr(os, "stat", stat_)
     monkeypatch.setattr(os, "access", access)
-    monkeypatch.setattr(os, "chmod", chmod)
-    monkeypatch.setattr(os, "open", open_)
+    monkeypatch.setattr(os.path, "isdir", isdir)
 
 
-def test_without_proc_fd_storage_falls_back_to_plain_descriptors(tmp_path, monkeypatch):
-    # Without /proc/self/fd the O_PATH helpers cannot check access or change
-    # modes, so the plain readable/writable open is used, as before.
+_TRANSACTION_PROBE = r"""
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1], timeout=0)
+try:
+    print(c.execute("SELECT group_concat(v) FROM probe").fetchone()[0])
+    try:
+        c.execute("BEGIN IMMEDIATE")
+    except sqlite3.OperationalError as exc:
+        if exc.sqlite_errorcode != sqlite3.SQLITE_BUSY:
+            raise
+        print("busy")
+    else:
+        print("admitted")
+        c.rollback()
+finally:
+    c.close()
+"""
+
+
+def _transaction_connection(path, journal):
+    connection = sqlite3.connect(path, timeout=0)
+    connection.execute(f"PRAGMA journal_mode={journal}")
+    connection.execute("CREATE TABLE probe(v INTEGER)")
+    connection.execute("INSERT INTO probe VALUES (1)")
+    connection.commit()
+    path.chmod(0o600)
+    connection.execute("BEGIN IMMEDIATE")
+    connection.execute("INSERT INTO probe VALUES (2)")
+    assert connection.in_transaction
+    assert _locks(path)
+    return connection
+
+
+def _assert_competing_writer_refused(path):
+    result = subprocess.run(
+        [sys.executable, "-c", _TRANSACTION_PROBE, str(path)],
+        capture_output=True, text=True, timeout=30, check=True,
+    )
+    assert result.stdout.split() == ["1", "busy"]
+
+
+@pytest.mark.parametrize("proc_directory", [False, True])
+@pytest.mark.parametrize("journal", ["WAL", "DELETE"])
+def test_dev_fd_identity_fallback_preserves_active_transaction(
+    tmp_path, monkeypatch, proc_directory, journal
+):
+    # Real Linux locks and separate SQLite processes, synthetic alias denial.
+    assert os.geteuid() != 0, "acceptance must run without root"
     path = _private(tmp_path)
-    _hide_proc_fd(monkeypatch)
-    with Store(path) as store:
-        _action(store)
-    sidecar = path.with_name(path.name + "-journal")
-    sidecar.write_bytes(b"")
-    sidecar.chmod(0o644)
-    assert storage_module._validate_sqlite_sidecars(
-        path, None, writable=True, prefix="STORAGE_PATH"
-    ) == frozenset({"-journal"})
-    assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
-    sidecar.unlink()
-    with Store(path) as store:
-        assert store.summary()["actions"] == 1
+    connection = _transaction_connection(path, journal)
+    try:
+        before = _locks(path)
+        _assert_competing_writer_refused(path)
+        _hide_fd_aliases(monkeypatch, proc_directory=proc_directory)
+        path.chmod(0o644)
+        descriptor, created = storage_module._open_private_database(
+            path, None, writable=True, create=False, prefix="STORAGE_PATH"
+        )
+        try:
+            assert not created
+            assert storage_module._path_matches_descriptor(path, descriptor)
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600
+            assert storage_module._anchored_database_path(
+                descriptor, path, "STORAGE_PATH"
+            ) == Path(f"/dev/fd/{descriptor}")
+        finally:
+            os.close(descriptor)
+        storage_module._validate_sqlite_sidecars(
+            path, None, writable=True, prefix="STORAGE_PATH"
+        )
+        assert _locks(path) == before
+        if journal == "WAL":
+            _assert_sqlite_locks_held(path)
+        _assert_competing_writer_refused(path)
+        connection.rollback()
+        monkeypatch.undo()
+        assert connection.execute("SELECT group_concat(v) FROM probe").fetchone() == ("1",)
+        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+        other = sqlite3.connect(path, timeout=0)
+        try:
+            other.execute("INSERT INTO probe VALUES (3)")
+            other.commit()
+        finally:
+            other.close()
+        assert connection.execute("SELECT group_concat(v) FROM probe").fetchone() == ("1,3",)
+    finally:
+        connection.close()
 
 
-def test_failed_reopen_keeps_the_created_databases_descriptor(tmp_path, monkeypatch):
+@pytest.mark.parametrize("journal", ["WAL", "DELETE"])
+def test_no_identity_alias_refuses_without_releasing_active_locks(
+    tmp_path, monkeypatch, journal
+):
+    assert os.geteuid() != 0, "acceptance must run without root"
+    path = _private(tmp_path)
+    connection = _transaction_connection(path, journal)
+    try:
+        before = _locks(path)
+        _hide_fd_aliases(monkeypatch, proc_directory=True, hide_dev=True)
+        with pytest.raises(OSError) as raised:
+            storage_module._open_for_identity(path, os.O_RDWR | os.O_NOFOLLOW)
+        assert raised.value.errno == errno.ENOTSUP
+        with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:OPEN_FAILED$"):
+            storage_module._open_private_database(
+                path, None, writable=True, create=False, prefix="STORAGE_PATH"
+            )
+        with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:UNSAFE_SIDECAR$"):
+            storage_module._validate_sqlite_sidecars(
+                path, None, writable=True, prefix="STORAGE_PATH"
+            )
+        assert _locks(path) == before
+        if journal == "WAL":
+            _assert_sqlite_locks_held(path)
+        _assert_competing_writer_refused(path)
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+def test_no_identity_alias_refuses_new_database_and_keeps_created_file(tmp_path, monkeypatch):
+    path = _private(tmp_path)
+    _hide_fd_aliases(monkeypatch, proc_directory=False, hide_dev=True)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:OPEN_FAILED$"):
+        Store(path)
+    assert path.is_file()
+    assert path.stat().st_size == 0
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_failed_reopen_refuses_without_leaking_created_descriptor(tmp_path, monkeypatch):
     path = _private(tmp_path)
     real_open = os.open
+    created = []
 
     def refuse_reopen(target, flags, *args, **kwargs):
-        if str(target).startswith("/proc/self/fd/") and flags & os.O_PATH:
+        if str(target).startswith(("/proc/self/fd/", "/dev/fd/")) and flags & os.O_PATH:
             raise OSError(errno.EACCES, "refused", str(target))
-        return real_open(target, flags, *args, **kwargs)
+        descriptor = real_open(target, flags, *args, **kwargs)
+        if flags & os.O_EXCL:
+            created.append(descriptor)
+        return descriptor
 
     monkeypatch.setattr(os, "open", refuse_reopen)
-    with Store(path) as store:
-        _action(store)
-    monkeypatch.undo()
-    with Store(path) as store:
-        assert store.summary()["actions"] == 1
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:OPEN_FAILED$"):
+        Store(path)
+    assert len(created) == 1
+    with pytest.raises(OSError) as raised:
+        os.fstat(created[0])
+    assert raised.value.errno == errno.EBADF
+    assert path.is_file()
 
 
-def test_unusable_fd_links_fall_back_to_plain_descriptors(tmp_path, monkeypatch):
-    # /proc/self/fd exists but its per-descriptor links do not resolve.
+def test_dev_fd_fallback_preserves_permission_refusal(tmp_path, monkeypatch):
+    assert os.geteuid() != 0, "permission acceptance must run without root"
     path = _private(tmp_path)
-    real_access, real_exists = os.access, os.path.exists
+    path.write_bytes(b"")
+    path.chmod(0o400)
+    _hide_fd_aliases(monkeypatch, proc_directory=True)
+    with pytest.raises(OSError) as raised:
+        storage_module._open_for_identity(path, os.O_RDWR | os.O_NOFOLLOW)
+    assert raised.value.errno == errno.EACCES
+    descriptor = storage_module._open_for_identity(path, os.O_RDONLY | os.O_NOFOLLOW)
+    os.close(descriptor)
 
-    def unavailable(target):
-        return str(target).startswith("/proc/self/fd/")
 
-    monkeypatch.setattr(
-        os, "access",
-        lambda target, mode, *a, **k: False if unavailable(target) else real_access(target, mode, *a, **k),
-    )
-    monkeypatch.setattr(
-        os.path, "exists",
-        lambda target: False if unavailable(target) else real_exists(target),
-    )
-    monkeypatch.setattr(storage_module, "_proc_fd_available", lambda: True, raising=False)
-    sidecar = path.with_name(path.name + "-journal")
+def test_dev_fd_fallback_can_create_and_reopen_store(tmp_path, monkeypatch):
+    path = _private(tmp_path)
+    _hide_fd_aliases(monkeypatch, proc_directory=False)
     with Store(path) as store:
         _action(store)
-    sidecar.write_bytes(b"")
-    sidecar.chmod(0o600)
-    assert storage_module._validate_sqlite_sidecars(
-        path, None, writable=True, prefix="STORAGE_PATH"
-    ) == frozenset({"-journal"})
+        _assert_sqlite_locks_held(path)
+    with Store(path, create=False) as store:
+        assert store.summary()["actions"] == 1
+        _assert_sqlite_locks_held(path)
+
+
+def test_wrong_inode_alias_refuses_without_releasing_locks(tmp_path, monkeypatch):
+    path = _private(tmp_path)
+    connection = _transaction_connection(path, "WAL")
+    other = path.parent / "other.db"
+    other.write_bytes(b"")
+    unrelated = other.stat()
+    real_stat = os.stat
+
+    def wrong_inode(target, *args, **kwargs):
+        if str(target).startswith(("/proc/self/fd/", "/dev/fd/")):
+            return unrelated
+        return real_stat(target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", wrong_inode)
+    try:
+        before = _locks(path)
+        with pytest.raises(OSError) as raised:
+            storage_module._open_for_identity(path, os.O_RDWR | os.O_NOFOLLOW)
+        assert raised.value.errno == errno.ENOTSUP
+        assert _locks(path) == before
+        _assert_sqlite_locks_held(path)
+    finally:
+        connection.rollback()
+        connection.close()

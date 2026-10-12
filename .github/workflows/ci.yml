@@ -19,6 +19,54 @@ env:
   PYTEST_ADDOPTS: ""
 
 jobs:
+  sqlite-lock-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      # Official Docker Python image, Linux amd64 manifest resolved 2026-10-11.
+      SQLITE_TEST_IMAGE: python:3.11-slim-bookworm@sha256:8a00ecb83ed9d0864dfd102a1bdb2067fda907ceb30bb86d09da9ee558b19590
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Prepare pinned test image and immutable baseline
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          git rev-parse HEAD
+          docker pull "$SQLITE_TEST_IMAGE"
+          mkdir -p "$RUNNER_TEMP/sqlite-alias-absent" "$RUNNER_TEMP/sqlite-alias-unusable/self/fd"
+          git show 269b2231b504f2603dcf477556b57aadf5f907a5:megalodon/storage.py > "$RUNNER_TEMP/sqlite-baseline-storage.py"
+      - name: Exercise real descriptor filesystems without root or network
+        run: |
+          set -euo pipefail
+          for shape in available absent unusable; do
+            for revision in baseline candidate; do
+              mounts=(--mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly")
+              if [ "$shape" != available ]; then
+                mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-alias-$shape,dst=/proc,readonly")
+              fi
+              probe_args=(--shape "$shape")
+              if [ "$revision" = baseline ]; then
+                mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-baseline-storage.py,dst=/workspace/megalodon/storage.py,readonly")
+                if [ "$shape" != available ]; then
+                  probe_args+=(--expect-lock-loss)
+                fi
+              fi
+              echo "SQLite lock acceptance: $revision / $shape"
+              docker run --rm --pull never --network none --read-only \
+                --user "$(id -u):$(id -g)" --cap-drop ALL \
+                --security-opt no-new-privileges --pids-limit 64 \
+                --tmpfs /tmp:rw,nosuid,nodev,mode=1777 \
+                --env PYTHONDONTWRITEBYTECODE=1 --workdir /workspace \
+                "${mounts[@]}" "$SQLITE_TEST_IMAGE" \
+                python tools/probe_sqlite_lock_preservation.py "${probe_args[@]}"
+            done
+          done
+
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
