@@ -74,6 +74,9 @@ def check_shape(shape: str, descriptor: int) -> None:
     dev = Path(f'/dev/fd/{descriptor}')
     if shape == 'available':
         assert proc.exists() and dev.exists()
+    elif shape == 'dev_only':
+        assert not proc.exists() and dev.exists()
+        assert not Path('/proc/self/fd').is_dir()
     else:
         assert not proc.exists() and not dev.exists()
         assert Path('/proc/self/fd').is_dir() == (shape == 'unusable')
@@ -98,7 +101,7 @@ def exercise(journal: str, shape: str, expect_loss: bool) -> dict[str, object]:
             shape_fd = os.open(path, os.O_PATH | os.O_CLOEXEC)
             try:
                 check_shape(shape, shape_fd)
-                if shape != 'available':
+                if shape in ('absent', 'unusable'):
                     try:
                         storage._anchored_database_path(shape_fd, path, 'STORAGE_PATH')
                     except storage.StorageSchemaError as exc:
@@ -125,8 +128,8 @@ def exercise(journal: str, shape: str, expect_loss: bool) -> dict[str, object]:
                 assert c.in_transaction
                 return {'journal': journal, 'outcome': 'baseline_lock_loss_reproduced'}
             assert after_database == before
-            assert refused == (shape != 'available')
-            if shape == 'available':
+            assert refused == (shape in ('absent', 'unusable'))
+            if not refused:
                 denied = Path(directory) / 'permission.db'
                 denied.write_bytes(b'')
                 denied.chmod(0o400)
@@ -141,10 +144,10 @@ def exercise(journal: str, shape: str, expect_loss: bool) -> dict[str, object]:
                     path, None, writable=True, prefix='STORAGE_PATH'
                 )
             except storage.StorageSchemaError as exc:
-                assert shape != 'available'
+                assert refused
                 assert str(exc) == 'STORAGE_PATH:UNSAFE_SIDECAR'
             else:
-                assert shape == 'available'
+                assert not refused
             assert locks(path, journal) == before
             assert child(SQLITE_PROBE, path) == 'busy'
             c.rollback()
@@ -165,7 +168,7 @@ def exercise(journal: str, shape: str, expect_loss: bool) -> dict[str, object]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--shape', choices=('available', 'absent', 'unusable'), required=True)
+    parser.add_argument('--shape', choices=('available', 'absent', 'unusable', 'dev_only'), required=True)
     parser.add_argument('--expect-lock-loss', action='store_true')
     args = parser.parse_args()
     assert sys.platform.startswith('linux') and hasattr(os, 'O_PATH')

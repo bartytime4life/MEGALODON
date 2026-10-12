@@ -42,12 +42,14 @@ jobs:
           container_id="$(docker create "$SQLITE_TEST_IMAGE")"
           trap 'docker rm -f "$container_id" >/dev/null' EXIT
           docker export "$container_id" | tar --no-same-owner -x -C "$RUNNER_TEMP/sqlite-rootfs"
-          mkdir -p "$RUNNER_TEMP/sqlite-rootfs/workspace"
+          mkdir -p "$RUNNER_TEMP/sqlite-rootfs/workspace" "$RUNNER_TEMP/sqlite-rootfs/alternate-proc"
+          rm -f "$RUNNER_TEMP/sqlite-rootfs/dev/fd"
+          ln -s /alternate-proc/self/fd "$RUNNER_TEMP/sqlite-rootfs/dev/fd"
           git show 269b2231b504f2603dcf477556b57aadf5f907a5:megalodon/storage.py > "$RUNNER_TEMP/sqlite-baseline-storage.py"
       - name: Exercise real descriptor filesystems without root or network
         run: |
           set -euo pipefail
-          for shape in available absent unusable; do
+          for shape in available absent unusable dev_only; do
             for revision in baseline candidate; do
               probe_args=(--shape "$shape")
               sandbox_args=(--user "$(id -u):$(id -g)" --cap-drop ALL)
@@ -59,6 +61,11 @@ jobs:
                 mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-rootfs,dst=/sandbox,readonly")
                 if [ "$shape" = unusable ]; then
                   mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-alias-unusable,dst=/sandbox/proc,readonly")
+                fi
+                if [ "$shape" = dev_only ]; then
+                  # A real procfs alias at an alternate location keeps /dev/fd
+                  # usable even though /proc/self/fd is genuinely absent.
+                  mounts+=(--mount "type=bind,src=/proc,dst=/sandbox/alternate-proc,readonly")
                 fi
                 # Only the sandbox bootstrap has these capabilities. It chroots
                 # into the disposable image and drops all groups and root UID

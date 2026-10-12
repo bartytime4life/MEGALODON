@@ -119,7 +119,8 @@ competing SQLite processes. Its alias-visibility tests simulate filesystem
 behavior and do not establish restricted-filesystem acceptance.
 `tools/probe_sqlite_lock_preservation.py` creates only disposable databases.
 The `sqlite-lock-acceptance` CI job runs it as a non-root user in containers
-with ordinary, absent, and placeholder descriptor filesystems. These use real
+with ordinary, absent, placeholder, and usable `/dev/fd`-only descriptor
+filesystems. These use real
 mounts and syscalls, without filesystem-call emulation. Test-image acquisition
 is setup; each probe runs with networking disabled. Restricted cases use an
 exported image as a disposable chroot. Only the container bootstrap has
