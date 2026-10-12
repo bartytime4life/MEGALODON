@@ -38,32 +38,49 @@ jobs:
           test "$(id -u)" -ne 0
           git rev-parse HEAD
           docker pull "$SQLITE_TEST_IMAGE"
-          mkdir -p "$RUNNER_TEMP/sqlite-alias-absent" "$RUNNER_TEMP/sqlite-alias-unusable/self/fd"
+          mkdir -p "$RUNNER_TEMP/sqlite-rootfs" "$RUNNER_TEMP/sqlite-alias-unusable/self/fd"
+          container_id="$(docker create "$SQLITE_TEST_IMAGE")"
+          trap 'docker rm -f "$container_id" >/dev/null' EXIT
+          docker export "$container_id" | tar --no-same-owner -x -C "$RUNNER_TEMP/sqlite-rootfs"
+          mkdir -p "$RUNNER_TEMP/sqlite-rootfs/workspace"
           git show 269b2231b504f2603dcf477556b57aadf5f907a5:megalodon/storage.py > "$RUNNER_TEMP/sqlite-baseline-storage.py"
       - name: Exercise real descriptor filesystems without root or network
         run: |
           set -euo pipefail
           for shape in available absent unusable; do
             for revision in baseline candidate; do
-              mounts=(--mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly")
-              if [ "$shape" != available ]; then
-                mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-alias-$shape,dst=/proc,readonly")
-              fi
               probe_args=(--shape "$shape")
+              sandbox_args=(--user "$(id -u):$(id -g)" --cap-drop ALL)
+              destination=/workspace
+              mounts=()
+              entrypoint=(python)
+              if [ "$shape" != available ]; then
+                destination=/sandbox/workspace
+                mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-rootfs,dst=/sandbox,readonly")
+                if [ "$shape" = unusable ]; then
+                  mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-alias-unusable,dst=/sandbox/proc,readonly")
+                fi
+                # Only the sandbox bootstrap has these capabilities. It chroots
+                # into the disposable image and drops all groups and root UID
+                # before exec; the application probe always rejects root.
+                sandbox_args=(--user 0:0 --cap-drop ALL --cap-add SYS_CHROOT --cap-add SETUID --cap-add SETGID)
+                entrypoint=(python -c 'import os,sys; os.chroot("/sandbox"); os.chdir("/workspace"); os.setgroups([]); os.setgid(int(sys.argv[1])); os.setuid(int(sys.argv[2])); os.execv("/usr/local/bin/python", ["python", *sys.argv[3:]])' "$(id -g)" "$(id -u)")
+              fi
+              mounts+=(--mount "type=bind,src=$GITHUB_WORKSPACE,dst=$destination,readonly")
               if [ "$revision" = baseline ]; then
-                mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-baseline-storage.py,dst=/workspace/megalodon/storage.py,readonly")
+                mounts+=(--mount "type=bind,src=$RUNNER_TEMP/sqlite-baseline-storage.py,dst=$destination/megalodon/storage.py,readonly")
                 if [ "$shape" != available ]; then
                   probe_args+=(--expect-lock-loss)
                 fi
               fi
               echo "SQLite lock acceptance: $revision / $shape"
               docker run --rm --pull never --network none --read-only \
-                --user "$(id -u):$(id -g)" --cap-drop ALL \
-                --security-opt no-new-privileges --pids-limit 64 \
+                "${sandbox_args[@]}" --security-opt no-new-privileges --pids-limit 64 \
                 --tmpfs /tmp:rw,nosuid,nodev,mode=1777 \
+                --tmpfs /sandbox/tmp:rw,nosuid,nodev,mode=1777 \
                 --env PYTHONDONTWRITEBYTECODE=1 --workdir /workspace \
                 "${mounts[@]}" "$SQLITE_TEST_IMAGE" \
-                python tools/probe_sqlite_lock_preservation.py "${probe_args[@]}"
+                "${entrypoint[@]}" tools/probe_sqlite_lock_preservation.py "${probe_args[@]}"
             done
           done
 
