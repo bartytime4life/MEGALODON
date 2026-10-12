@@ -50,7 +50,7 @@ def _interface(value):
 
 def _group(name, kind=None):
     if name == 'lo': return 'loopback'
-    if kind in {'wireguard','tun','tap','gre','sit','ip6tnl','vti'} or name.startswith(('tailscale','wg','tun','tap','ppp')): return 'vpn'
+    if kind in {'wireguard','tun','tap','gre','sit','ip6tnl','vti'} or name.startswith(('wg','tun','tap','ppp')): return 'vpn'
     if kind in {'veth','bridge','vxlan'} or name.startswith(('docker','br-','veth','virbr','cni','podman')): return 'container'
     return 'lan'
 
