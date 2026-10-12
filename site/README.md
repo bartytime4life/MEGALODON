@@ -1,20 +1,28 @@
-# Retired hosted console
+# Hosted snapshot viewer and local application
 
-The **local Linux HUD is the sole supported application**. Double-click
+The **local Linux HUD remains the host application**. Double-click
 [`Start-MEGALODON.sh`](../Start-MEGALODON.sh) to install or open it directly.
-There is no hosted replacement page or redirect.
 
-The retirement worker in `retired/worker.mjs` returns HTTP 410. Hosting identity
-metadata is retained to identify the retired deployment; it is not a live-data
-connection. See the dated [retirement receipt](../docs/site-source-alignment.md).
+The existing owner-private [MEGALODON Site](https://megalodon-defense-console.blackbart-55.chatgpt.site)
+is restored as a separate browser-only snapshot viewer at the owner's
+request. It imports the address-free `megalodon-hud-snapshot-v1` summary from
+the local HUD's Advanced exports. Import keeps the data in tab memory; Clear
+or reload removes it. The Site starts empty, performs no local network requests,
+and cannot start sensors, services, models or firewall actions.
 
-`.openai/hosting.json` records only that existing project's identity; it does
-not point to the removed `dist` dashboard. The separate Site source repository
-keeps its retirement worker at `worker/index.js` and its deployable copy at
-`dist/server/index.js`. A source checkpoint there is a backup of committed
-repository files, outside the deployment artifact. Saving a checkpoint does not
-publish a site or change the local HUD.
+The dated summary describes a bounded evidence window, not live PC activity
+or proof that a network is safe. IP addresses, ports, packet payloads, raw
+records, device names, account data and operator tokens are outside the import
+schema. No telemetry is committed to Site source or deployment output.
 
-The former static UI and its Site-only tests are recoverable from Git commit
-`4b5f8f8`. Shared control and input-validation tests now exercise the canonical
-Python package. No runtime or build step reads a hosted asset mirror.
+The separate Site source repository owns the current static viewer under
+`web/`, its tests under `tests-current/`, and generated `dist/` output.
+See [the source alignment record](../docs/site-source-alignment.md) for exact
+publication identity and validation. This repository's hosting manifest retains
+the existing project identity; it does not build or deploy the separate viewer.
+
+`retired/worker.mjs` preserves the historical empty HTTP 410 handler. It is not
+the restored viewer's deployment entry point. The former static console and
+its Site-only tests remain recoverable from Git commit `4b5f8f8`. Shared control
+and input-validation tests exercise the canonical Python package. No local
+runtime or build step reads a hosted asset mirror.
