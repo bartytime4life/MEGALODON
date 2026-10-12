@@ -96,16 +96,39 @@ for that database or its `-shm`/`-journal` sidecars. On Linux, the database
 descriptors held by `Store`, `DashboardStore`, managed evidence, and the AI
 receipt store, the sidecar validator, and the capacity check's sidecar sizing
 use `O_PATH` no-follow descriptors, which Linux never lets release POSIX
-locks; mode normalization goes through `/proc/self/fd` instead of `fchmod` and
+locks; mode normalization goes through a verified `/proc/self/fd` or `/dev/fd`
+alias instead of `fchmod` and
 runs only when the mode is not already `0600`. Every existing no-follow,
 regular-file, single-link, owner, mode, and permission check and error code is
 unchanged. `-wal` is read with an ordinary descriptor because SQLite takes no
 locks on it. The Suricata store reads and OFD-locks its database descriptor,
-so it keeps an ordinary one. Without `O_PATH` (not Linux), or on Linux without
-`/proc/self/fd` (needed for the permission check and mode change), the previous
+so it keeps an ordinary one. Without `O_PATH` (not Linux), the previous
 descriptors are kept and this hazard remains while two connections to one
-database share a process. `tests/test_sqlite_lock_preservation.py` checks the
-rule against `/proc/locks`.
+database share a process. On Linux with `O_PATH`, an absent or unusable
+`/proc/self/fd` alias uses `/dev/fd` only if it names the held inode. If neither
+alias is usable, identity inspection refuses with `ENOTSUP`, classified as
+`STORAGE_PATH:OPEN_FAILED` for a database and `STORAGE_PATH:UNSAFE_SIDECAR`
+for a sidecar (or the corresponding caller prefix). It never reopens an
+existing inode with an ordinary descriptor as an availability fallback.
+The descriptor-path admission rule still refuses an unanchored database path.
+A newly created file whose descriptor cannot be converted to `O_PATH` is
+closed before SQLite connects, and retained for inspection; opening refuses.
+
+`tests/test_sqlite_lock_preservation.py` checks real Linux `/proc/locks` and
+competing SQLite processes. Its alias-visibility tests simulate filesystem
+behavior and do not establish restricted-filesystem acceptance.
+`tools/probe_sqlite_lock_preservation.py` creates only disposable databases.
+The `sqlite-lock-acceptance` CI job runs it as a non-root user in containers
+with ordinary, absent, placeholder, and usable `/dev/fd`-only descriptor
+filesystems. These use real
+mounts and syscalls, without filesystem-call emulation. Test-image acquisition
+is setup; each probe runs with networking disabled. Restricted cases use an
+exported image as a disposable chroot. Only the container bootstrap has
+chroot/set-ID capabilities; it drops groups and root identity before executing
+the probe, which independently refuses root operation. No host security setting
+is changed. The immutable pre-fix
+baseline is a negative control for lock loss. Passing these bounded cases
+does not establish behavior under every sandbox policy, filesystem or race.
 
 ## Dashboard read isolation
 

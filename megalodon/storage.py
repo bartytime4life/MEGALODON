@@ -797,18 +797,27 @@ def _open_regular_file(path: Path, flags: int, mode: int | None = None) -> int:
 # /proc/self/fd anchor SQLite opens, are O_PATH there. Without O_PATH (not
 # Linux), the readable/writable open is kept and closing it still carries
 # the POSIX hazard while a connection to the same file is open in-process.
-# O_PATH descriptors need /proc/self/fd for the permission check and mode
-# change below, so without it (for example /proc not mounted) the plain
-# readable/writable open is used, as on other platforms.
+# O_PATH descriptors need a usable descriptor alias for permission checks
+# and mode changes. Linux refuses inspection if neither alias is usable;
+# falling back to an ordinary descriptor would bring back the lock hazard.
 _LOCK_PRESERVING_OPEN = sys.platform.startswith("linux") and hasattr(os, "O_PATH")
 
 
-def _proc_fd_available() -> bool:
-    return os.path.isdir("/proc/self/fd")
-
-
 def _lock_preserving_open() -> bool:
-    return _LOCK_PRESERVING_OPEN and _proc_fd_available()
+    return _LOCK_PRESERVING_OPEN
+
+
+def _identity_descriptor_path(descriptor: int) -> str:
+    """Find an alias that still names the held inode, or refuse inspection."""
+    expected = os.fstat(descriptor)
+    for directory in ("/proc/self/fd", "/dev/fd"):
+        candidate = f"{directory}/{descriptor}"
+        try:
+            if os.path.samestat(expected, os.stat(candidate)):
+                return candidate
+        except OSError:
+            continue
+    raise OSError(errno.ENOTSUP, "lock-preserving descriptor path unavailable")
 
 
 def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
@@ -820,18 +829,13 @@ def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
     would have raised (ELOOP for a symlink, ENXIO for a socket, EISDIR for a
     directory opened for writing, EACCES without read/write permission), so
     callers keep their error codes. Use it only for fstat checks and as a
-    /proc/self/fd path: it supports no I/O, fchmod or locking.
+    descriptor alias: it supports no I/O, fchmod or locking. On Linux an
+    unavailable alias is a refusal, never an ordinary-descriptor fallback.
     """
 
     if not _lock_preserving_open():
         return os.open(target, flags, **kwargs)
     descriptor = os.open(target, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, **kwargs)
-    if not os.path.exists(f"/proc/self/fd/{descriptor}"):
-        # The directory is there but its descriptor links are not usable (for
-        # example a sandbox placeholder): the access check below would wrongly
-        # refuse, so use the plain open instead.
-        os.close(descriptor)
-        return os.open(target, flags, **kwargs)
     try:
         mode = os.fstat(descriptor).st_mode
         access = {
@@ -846,7 +850,7 @@ def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
         elif access & os.W_OK and stat.S_ISDIR(mode):
             failure = errno.EISDIR
         elif not os.access(
-            f"/proc/self/fd/{descriptor}",
+            _identity_descriptor_path(descriptor),
             access,
             effective_ids=os.access in os.supports_effective_ids,
         ):
@@ -870,11 +874,15 @@ def _reopen_for_identity(descriptor: int) -> int:
     if not _lock_preserving_open():
         return descriptor
     try:
-        reopened = os.open(f"/proc/self/fd/{descriptor}", os.O_PATH | os.O_CLOEXEC)
+        reopened = os.open(
+            _identity_descriptor_path(descriptor), os.O_PATH | os.O_CLOEXEC
+        )
     except OSError:
-        # Keep the original descriptor (the behaviour without O_PATH) rather
-        # than lose the just-created file's only handle.
-        return descriptor
+        # No connection has opened this newly created inode yet. Close it now
+        # and refuse, rather than retain a handle whose later close could
+        # release another connection's locks. Keep the file for inspection.
+        os.close(descriptor)
+        raise
     os.close(descriptor)
     return reopened
 
@@ -883,7 +891,7 @@ def _restore_private_mode(descriptor: int) -> None:
     """Set PRIVATE_DATABASE_MODE without opening (and later closing) the file.
 
     fchmod fails on an O_PATH descriptor, so change the mode through its
-    /proc/self/fd magic link, which names exactly that inode. A mode that is
+    verified descriptor alias, which names exactly that inode. A mode that is
     already private is left alone (SQLite gives -wal/-shm/-journal the
     database's own permission bits, so they normally already are).
     """
@@ -893,11 +901,11 @@ def _restore_private_mode(descriptor: int) -> None:
     try:
         os.fchmod(descriptor, PRIVATE_DATABASE_MODE)
     except OSError as exc:
-        # Only an O_PATH descriptor (opened when /proc/self/fd was available)
-        # refuses fchmod with EBADF; change its inode through the magic link.
+        # An O_PATH descriptor refuses fchmod with EBADF; change its inode
+        # through a freshly verified alias.
         if exc.errno != errno.EBADF or not _LOCK_PRESERVING_OPEN:
             raise
-        os.chmod(f"/proc/self/fd/{descriptor}", PRIVATE_DATABASE_MODE)
+        os.chmod(_identity_descriptor_path(descriptor), PRIVATE_DATABASE_MODE)
 
 
 def _absolute_database_path(
