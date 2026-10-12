@@ -1,6 +1,55 @@
 # Defense Console source alignment
 
-## Current saved source and publication — version 63
+## Current publication — browser-only PC snapshot viewer, version 66
+
+VERIFIED 2026-10-12 UTC: the owner requested restoration of this Site and
+selected local snapshot import that keeps telemetry off the hosting service.
+The existing owner-private Site now serves a read-only static viewer. It starts
+empty and accepts only the bounded, address-free `megalodon-hud-snapshot-v1`
+export already supported by the local Linux HUD. Data stays in tab memory;
+Clear or reload removes it. No automatic localhost request, cloud telemetry
+upload, browser persistence, host control or model call is added.
+
+- Project: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3`.
+- URL: <https://megalodon-defense-console.blackbart-55.chatgpt.site>.
+- Site source: `4f7bab7bea7eb2acc49e17b36efd74b14c18215c`; active source is
+  `web/`, current tests are `tests-current/`, and generated output is `dist/`
+  in the separate Site source repository.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_704b45b3b16c8191aebd843dd9f36436` (66).
+- Deployment: `appgdep_6acd0c12527c8191ac64d9eb12eb7423`, succeeded at
+  `2026-10-12T16:34:33.334935+00:00`.
+- Native metadata readback: **MEGALODON — PC Snapshot Console**, version 66;
+  existing custom access still contains only the owner account.
+- GitHub application basis: `main@bad6a98751a81a453d5917d9ee6c4ae1540f45cc`.
+  This documentation change does not modify the local application or its data.
+
+The deployment contains only HTML, CSS, JavaScript, branding images, response
+headers and hosting identity. Actual local summaries, databases, checkpoints,
+archival pages, tests and credentials are outside the deployment artifact.
+The response policy and in-page policy set `connect-src 'none'` and
+`form-action 'none'`; page scripts have no telemetry transport or persistent
+storage. The historical empty-410 worker remains archived outside current
+output. Publication replaces that retirement response with the snapshot viewer.
+
+Validation: 15 current viewer tests and 5 existing Python export/privacy tests
+passed; JavaScript syntax, source whitespace, historical checkpoint checksums
+and deployment archive inventory passed. Local browser testing imported an
+actual qualified PC summary, rejected malformed input while preserving the
+previous summary, and confirmed Clear/reload emptiness. Independent local
+layout review passed at 1440, 768 and 375 pixels, including keyboard navigation,
+synthetic import, dates, source limits and mobile overflow. No different-provider
+evaluator was available. Browser inspection of the production URL was blocked
+by browser policy, so authenticated production rendering is unverified; native
+source, deployment and audience readback succeeded.
+
+This is a dated, bounded metadata viewer. Export time and observation time are
+separate; no linked findings does not mean safe traffic. It does not provide
+live PC counters, detailed addresses, device topology, geographic attribution,
+complete retained history, host actions or installed-host acceptance. Use the
+local HUD for those supported local workflows. Prior publication receipts below
+retain their historical meaning.
+
+## Historical saved source and publication — version 63
 
 VERIFIED 2026-10-07 UTC against GitHub
 `main@2d2aa8eee40d0072182f9211b942fe41945e4bd3`: the separate Sites
