@@ -168,7 +168,7 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
     expected = {
         "attrs==26.1.0",
         "build==1.6.0",
-        "iniconfig==2.3.0",
+        "iniconfig==2.3.1",
         "jsonschema==4.26.0",
         "jsonschema-specifications==2025.9.1",
         "packaging==26.3",
@@ -178,7 +178,7 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
         "pytest==9.1.1",
         "pyyaml==6.0.3",
         "referencing==0.37.0",
-        "rpds-py==2026.6.3",
+        "rpds-py==2026.9.1",
         "setuptools==84.0.0",
         "typing-extensions==4.16.0",
     }
