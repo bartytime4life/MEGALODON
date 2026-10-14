@@ -16,7 +16,7 @@ IDENTIFIERS = re.compile(
 
 
 @pytest.mark.parametrize('relative', [
-    'megalodon', 'scripts', '.github', 'config', 'constraints',
+    'megalodon', 'scripts', 'tools', '.github', 'config', 'constraints',
     'Start-MEGALODON.sh', 'pyproject.toml', 'MANIFEST.in',
 ])
 def test_active_distribution_has_no_tailscale_hooks(relative):
