@@ -9,7 +9,7 @@
 # evidence.
 attrs==26.1.0
 build==1.6.0
-iniconfig==2.3.0
+iniconfig==2.3.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 packaging==26.3
