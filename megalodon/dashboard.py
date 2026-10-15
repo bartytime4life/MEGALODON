@@ -19,6 +19,7 @@ import binascii
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer as _ThreadingHTTPServer
 from ipaddress import AddressValueError, IPv4Address
 import hmac
+import io
 import json
 import os
 import re
@@ -1089,8 +1090,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self.maintenance_lock.acquire(blocking=False):
             self._send_json({'error':'A local operation is in progress; retry shortly.'},status=409)
             return
+        # Hold the response until the lock is released, so a client that sends
+        # its next request as soon as it reads this one never finds it held.
+        connection_writer, self.wfile = self.wfile, io.BytesIO()
         try:self._dispatch_POST()
-        finally:self.maintenance_lock.release()
+        finally:
+            self.maintenance_lock.release()
+            response, self.wfile = self.wfile.getvalue(), connection_writer
+            if response:self.wfile.write(response)
 
     def _dispatch_POST(self) -> None:
         if not self._has_expected_host():
