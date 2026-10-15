@@ -25,6 +25,10 @@ updates:
       timezone: "Etc/UTC"
     open-pull-requests-limit: 3
     rebase-strategy: "disabled"
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
     commit-message:
       prefix: "deps"
       include: "scope"
