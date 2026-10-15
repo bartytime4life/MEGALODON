@@ -222,6 +222,10 @@ updates:
       timezone: "Etc/UTC"
     open-pull-requests-limit: 3
     rebase-strategy: "disabled"
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -238,12 +242,51 @@ updates:
     assert "include .github/dependabot.yml" in manifest_entries
 
 
+def _assert_codeql_steps_share_pinned_revision(workflow):
+    refs = re.findall(
+        r"(?m)^\s+(?:- )?uses:\s+github/codeql-action/([^@\s]+)@([^\s#]+)",
+        workflow,
+    )
+    assert sorted(name for name, _ in refs) == ["analyze", "init"]
+    assert all(re.fullmatch(r"[0-9a-f]{40}", revision) for _, revision in refs)
+    assert len({revision for _, revision in refs}) == 1
+
+
+@pytest.mark.parametrize("revision", ["a" * 40, "b" * 40])
+def test_codeql_guard_accepts_matching_full_sha_updates(revision):
+    _assert_codeql_steps_share_pinned_revision(
+        f"      - uses: github/codeql-action/init@{revision}\n"
+        f"      - uses: github/codeql-action/analyze@{revision}\n"
+    )
+
+
+@pytest.mark.parametrize("init_revision,analyze_revision", [
+    ("a" * 40, "b" * 40),
+    ("v4", "v4"),
+    ("main", "main"),
+    ("a" * 39, "a" * 39),
+])
+def test_codeql_guard_rejects_mixed_or_unpinned_revisions(init_revision, analyze_revision):
+    with pytest.raises(AssertionError):
+        _assert_codeql_steps_share_pinned_revision(
+            f"      - uses: github/codeql-action/init@{init_revision}\n"
+            f"      - uses: github/codeql-action/analyze@{analyze_revision}\n"
+            + "      # " + "a" * 40 + "\n"
+        )
+
+
+@pytest.mark.parametrize("step", ["init", "analyze"])
+def test_codeql_guard_requires_both_steps(step):
+    with pytest.raises(AssertionError):
+        _assert_codeql_steps_share_pinned_revision(
+            f"      - uses: github/codeql-action/{step}@" + "a" * 40 + "\n"
+        )
+
+
 def test_codeql_scans_python_source_with_only_required_permissions():
     workflow = (ROOT / ".github" / "workflows" / "codeql.yml").read_text(
         encoding="utf-8"
     )
-    codeql_revision = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
-
     assert "name: CodeQL\n" in workflow
     assert "push:\n    branches: [main]" in workflow
     assert "pull_request:\n    branches: [main]" in workflow
@@ -259,9 +302,7 @@ def test_codeql_scans_python_source_with_only_required_permissions():
     jobs = workflow.split("\njobs:\n", 1)[1]
     assert not re.findall(r"(?m)^ +permissions:\s*", jobs)
     assert "persist-credentials: false" in workflow
-    assert workflow.count(codeql_revision) == 2
-    assert f"github/codeql-action/init@{codeql_revision}" in workflow
-    assert f"github/codeql-action/analyze@{codeql_revision}" in workflow
+    _assert_codeql_steps_share_pinned_revision(workflow)
     assert "languages: python" in workflow
     assert "build-mode: none" in workflow
     assert "run:" not in workflow
