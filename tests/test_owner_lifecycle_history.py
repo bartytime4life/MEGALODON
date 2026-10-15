@@ -158,7 +158,7 @@ def test_full_last_page_requires_endpoint_exhaustion(monkeypatch, tmp_path, repo
 
 @pytest.mark.parametrize("bad", [[], {}, [comment(100)], [comment(101, id=True)],
     [comment(101, body={})], [comment(101, user=None)], [comment(101, created_at="2026-99-23T00:00:00Z")],
-    b"invalid JSON", b" " * (8 * 1024 * 1024 + 1)])
+    b"invalid JSON", pytest.param(b" " * (8 * 1024 * 1024 + 1), id="oversized-page")])
 def test_incomplete_or_malformed_later_page_holds(monkeypatch, tmp_path, bad):
     history = [comment(1, "authorized")] + [comment(i) for i in range(2, 102)]
     assert run_gate(monkeypatch, tmp_path, history,
