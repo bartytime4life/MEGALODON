@@ -115,8 +115,26 @@ removed after any connection to it has opened, because another opener may
 already share it. The PR-only workflow adds two native
 negatives, a connect-time ancestor swap and the same swap onto a file with a
 reusable SQLite descriptor; both must refuse with `STORAGE_PATH:DATABASE_CHANGED`
-and leave the swapped-in file unchanged. Until a hosted run records them, these
-controls are Linux-observed with the Darwin branch selected, not native receipts.
+and leave the swapped-in file unchanged. Hosted
+[run 38071148443](https://github.com/bartytime4life/MEGALODON/actions/runs/38071148443/job/114268639280)
+(PR #528; macOS arm64, Python 3.12.10, SQLite 3.49.1) recorded both refusals
+natively with the earlier eight controls and the 13/114 samples.
+
+PR #529 added the post-baseline pathname and parent re-checks after that run,
+so the workflow now carries two further negatives for its orderings:
+`baseline-ancestor-swap` (an ancestor swap taken before the verifier's ancestor
+baseline and restored after the second sample) and `baseline-parent-hardlink`
+(a swapped-in parent whose `audit.db` is a temporary hard link to the admitted
+inode, which must refuse on the parent check right after the first sample).
+Both must refuse with `STORAGE_PATH:DATABASE_CHANGED` and leave the swapped-in
+files unchanged, and the step requires all 12 refusals. Removing either
+re-check makes the step fail when it runs on Linux with the Darwin branch
+selected. Hosted
+[run 38812472872](https://github.com/bartytime4life/MEGALODON/actions/runs/38812472872/job/116688838537)
+(PR #602 head `9db7bd5`; macOS arm64, Python 3.12.10, SQLite 3.49.1) recorded
+all 12 refusals natively, including both new cases, and the 13/114 samples
+ended `source_exhausted`. That is one hosted runner, not independent storage
+review.
 
 That exact-head result advances only the hosted arm64 sample portion of M1. It
 does not exercise JSONL replay, a dashboard listener or browser, x86_64, a

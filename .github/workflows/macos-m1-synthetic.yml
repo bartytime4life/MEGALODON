@@ -261,8 +261,114 @@ jobs:
                   if store.summary()["events"] != 0:
                       raise SystemExit("MACOS_STORAGE_NEGATIVES:SWAP_ADMITTED_CHANGED")
 
+              # Swap before the verifier's ancestor baseline, so both ancestor
+              # samples see the same swapped tree; restore after the second.
+              real_generations = storage_module._ancestor_generations
+              baseline = Path(root) / "baseline"
+              admitted_root = baseline / "admitted"
+              other_root = baseline / "other"
+              held_root = baseline / "held"
+              for tree in (admitted_root, other_root):
+                  (tree / "private").mkdir(parents=True, mode=0o700)
+              admitted = admitted_root / "private" / "audit.db"
+              other = other_root / "private" / "audit.db"
+              holders = [Store(admitted), Store(other)]
+              try:
+                  Store(other, create=False).close()
+                  other_bytes = other.read_bytes()
+                  calls = []
+
+                  def swapping_generations(directory):
+                      calls.append(directory)
+                      if len(calls) == 1:
+                          admitted_root.rename(held_root)
+                          other_root.rename(admitted_root)
+                      generations = real_generations(directory)
+                      if len(calls) == 2:
+                          admitted_root.rename(other_root)
+                          held_root.rename(admitted_root)
+                      return generations
+
+                  def baseline_swapped_open():
+                      storage_module._ancestor_generations = swapping_generations
+                      try:
+                          Store(admitted, create=False)
+                      finally:
+                          storage_module._ancestor_generations = real_generations
+                          if held_root.exists():
+                              admitted_root.rename(other_root)
+                              held_root.rename(admitted_root)
+
+                  expect(
+                      "baseline-ancestor-swap",
+                      "STORAGE_PATH:DATABASE_CHANGED",
+                      baseline_swapped_open,
+                  )
+                  if other.read_bytes() != other_bytes:
+                      raise SystemExit("MACOS_STORAGE_NEGATIVES:SWAP_TARGET_MUTATED")
+              finally:
+                  for holder in holders:
+                      holder.close()
+
+              # Before the baseline, swap in a parent whose audit.db is a
+              # temporary hard link to the admitted inode, so a pathname
+              # identity check alone passes; the parent must also match.
+              hardlink = Path(root) / "hardlink"
+              admitted_root = hardlink / "admitted"
+              swapped_root = hardlink / "swapped"
+              held_root = hardlink / "held"
+              alternate_root = hardlink / "alternate"
+              for tree in (admitted_root, swapped_root, alternate_root):
+                  (tree / "private").mkdir(parents=True, mode=0o700)
+              admitted = admitted_root / "private" / "audit.db"
+              alternate = alternate_root / "private" / "audit.db"
+              link = swapped_root / "private" / "audit.db"
+              holders = [Store(admitted), Store(alternate)]
+              try:
+                  Store(alternate, create=False).close()
+                  admitted_bytes = admitted.read_bytes()
+                  alternate_bytes = alternate.read_bytes()
+                  calls = []
+
+                  def linking_generations(directory):
+                      calls.append(directory)
+                      if len(calls) == 1:
+                          os.link(admitted, link)
+                          admitted_root.rename(held_root)
+                          swapped_root.rename(admitted_root)
+                      return real_generations(directory)
+
+                  def hardlink_swapped_open():
+                      storage_module._ancestor_generations = linking_generations
+                      try:
+                          Store(admitted, create=False)
+                      finally:
+                          storage_module._ancestor_generations = real_generations
+                          if held_root.exists():
+                              admitted_root.rename(swapped_root)
+                              held_root.rename(admitted_root)
+
+                  expect(
+                      "baseline-parent-hardlink",
+                      "STORAGE_PATH:DATABASE_CHANGED",
+                      hardlink_swapped_open,
+                  )
+                  # The parent re-check refuses right after the first sample.
+                  if len(calls) != 1:
+                      raise SystemExit("MACOS_STORAGE_NEGATIVES:HARDLINK_NOT_FIRST_SAMPLE")
+                  if (
+                      admitted.read_bytes() != admitted_bytes
+                      or alternate.read_bytes() != alternate_bytes
+                  ):
+                      raise SystemExit("MACOS_STORAGE_NEGATIVES:HARDLINK_TARGET_MUTATED")
+              finally:
+                  if link.exists():
+                      link.unlink()
+                  for holder in holders:
+                      holder.close()
+
           print(json.dumps(results, sort_keys=True))
-          if len(results) != 10:
+          if len(results) != 12:
               raise SystemExit("MACOS_STORAGE_NEGATIVES:INCOMPLETE")
           PY
       - name: Record bounded storage-admission diagnostic
