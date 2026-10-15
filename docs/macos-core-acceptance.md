@@ -129,8 +129,12 @@ inode, which must refuse on the parent check right after the first sample).
 Both must refuse with `STORAGE_PATH:DATABASE_CHANGED` and leave the swapped-in
 files unchanged, and the step requires all 12 refusals. Removing either
 re-check makes the step fail when it runs on Linux with the Darwin branch
-selected. Until a hosted run records them, these two controls are
-Linux-observed, not native receipts.
+selected. Hosted
+[run 38812472872](https://github.com/bartytime4life/MEGALODON/actions/runs/38812472872/job/116688838537)
+(PR #602 head `9db7bd5`; macOS arm64, Python 3.12.10, SQLite 3.49.1) recorded
+all 12 refusals natively, including both new cases, and the 13/114 samples
+ended `source_exhausted`. That is one hosted runner, not independent storage
+review.
 
 That exact-head result advances only the hosted arm64 sample portion of M1. It
 does not exercise JSONL replay, a dashboard listener or browser, x86_64, a
