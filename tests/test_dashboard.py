@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
 from threading import Lock, Thread
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -1635,6 +1636,25 @@ def test_managed_evidence_actions_use_exact_preview_and_coordinate_collectors(ma
     status, body, _ = h.request("POST", "/api/network", configured)
     assert status == 200 and body["settings"]["scopes"] == ["192.168.50.0/24"]
     assert h.calls == [("network.configure", configured)]
+
+
+def test_locked_post_response_is_sent_only_after_the_lock_is_released(managed_evidence_http, monkeypatch):
+    # Widen the gap between a locked action finishing and its lock release.
+    # A client that sends its next request as soon as it reads a response
+    # must not be refused as busy.
+    h = managed_evidence_http
+    real_dispatch = DashboardHandler._dispatch_POST
+
+    def slow_release(self):
+        real_dispatch(self)
+        time.sleep(0.2)
+
+    monkeypatch.setattr(DashboardHandler, "_dispatch_POST", slow_release)
+    policy = {"profile": "home", "retention_days": 14, "cap_bytes": 20 * 1024**3}
+    assert h.request("POST", "/api/storage", {"action": "preview", "policy": policy})[0] == 200
+    status, body, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})
+    assert status == 200 and body["enabled"] is True
+    assert not h.handler.maintenance_lock.locked()
 
 
 def test_managed_evidence_apply_failure_restores_prior_collector_intent(managed_evidence_http):
