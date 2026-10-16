@@ -18,6 +18,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -74,6 +75,14 @@ def _wal_connection(path: Path) -> sqlite3.Connection:
     connection.execute("SELECT COUNT(*) FROM actions").fetchone()
     _assert_sqlite_locks_held(path)
     return connection
+
+
+def _without_o_path(monkeypatch) -> None:
+    """Run storage as on Darwin: no O_PATH, so closing any descriptor for an
+    inode releases this process's locks on it. SQLite and /proc/locks still
+    use the real OS, so the lock assertions below observe real locks."""
+    monkeypatch.setattr(storage_module, "sys", SimpleNamespace(platform="darwin"))
+    monkeypatch.setattr(storage_module, "_LOCK_PRESERVING_OPEN", False)
 
 
 def test_premise_readable_close_drops_locks_and_o_path_close_does_not(tmp_path):
@@ -237,7 +246,12 @@ def test_sidecar_relookup_keeps_live_connections_locks(
         connection.close()
 
 
-def test_lock_preserving_open_fails_where_the_replaced_open_failed(tmp_path):
+@pytest.mark.parametrize("o_path", [True, False], ids=["o_path", "stat_only"])
+def test_lock_preserving_open_fails_where_the_replaced_open_failed(
+    tmp_path, monkeypatch, o_path
+):
+    if not o_path:
+        _without_o_path(monkeypatch)
     path = _private(tmp_path)
     with Store(path) as store:
         store.summary()
@@ -589,3 +603,106 @@ def test_wrong_inode_alias_refuses_without_releasing_locks(tmp_path, monkeypatch
     finally:
         connection.rollback()
         connection.close()
+
+
+def test_store_without_o_path_keeps_its_own_locks_through_writes(
+    tmp_path, monkeypatch
+):
+    # Every write runs the capacity check, which sizes -wal and -shm. Opening
+    # and closing -shm for that released the Store's own dead-man switch, so a
+    # second process could take it and reinitialise the live WAL index.
+    _without_o_path(monkeypatch)
+    path = _private(tmp_path)
+    with Store(path) as store:
+        _action(store)
+        _assert_sqlite_locks_held(path)
+        store._ensure_capacity()
+        _action(store)
+        _assert_sqlite_locks_held(path)
+        result = subprocess.run(
+            [sys.executable, "-c", _SECOND_PROCESS, str(path)],
+            capture_output=True, text=True, timeout=30, check=True,
+        )
+        assert result.stdout.split() == ["True", "True", "2"]
+        _assert_sqlite_locks_held(path)
+
+
+@pytest.mark.parametrize("writable", [True, False])
+def test_sidecar_validation_without_o_path_keeps_locks_and_normalises_mode(
+    tmp_path, monkeypatch, writable
+):
+    _without_o_path(monkeypatch)
+    path = _private(tmp_path)
+    connection = _wal_connection(path)
+    directory = storage_module._open_private_directory(
+        path.parent, create=False, prefix="STORAGE_PATH"
+    )
+    real_open = os.open
+    sidecar_opens = []
+
+    def recording_open(target, *args, **kwargs):
+        if str(target).endswith(("-wal", "-shm", "-journal")):
+            sidecar_opens.append(target)
+        return real_open(target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", recording_open)
+    try:
+        wal = path.with_name(path.name + "-wal")
+        wal.chmod(0o644 if writable else 0o600)
+        for descriptor in (directory, None):
+            assert {"-wal", "-shm"} <= storage_module._validate_sqlite_sidecars(
+                path, descriptor, writable=writable, prefix="STORAGE_PATH"
+            )
+            assert stat.S_IMODE(wal.stat().st_mode) == 0o600
+            _assert_sqlite_locks_held(path)
+        assert sidecar_opens == []
+    finally:
+        os.close(directory)
+        connection.close()
+
+
+def test_mode_restore_by_name_refuses_a_swapped_sidecar(tmp_path):
+    path = _private(tmp_path)
+    sidecar = path.with_name(path.name + "-wal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o644)
+    admitted = os.stat(sidecar, follow_symlinks=False)
+    # Keep the admitted inode linked so the replacement cannot reuse its number.
+    sidecar.rename(path.parent / "admitted")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o644)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:UNSAFE_SIDECAR$"):
+        storage_module._restore_private_mode_by_name(
+            admitted, sidecar, "STORAGE_PATH"
+        )
+
+
+@pytest.mark.parametrize("o_path", [True, False], ids=["o_path", "stat_only"])
+def test_capacity_sidecar_refusals_match_with_and_without_o_path(
+    tmp_path, monkeypatch, o_path
+):
+    if not o_path:
+        _without_o_path(monkeypatch)
+    path = _private(tmp_path)
+    with Store(path) as store:
+        _action(store)
+        journal = path.with_name(path.name + "-journal")
+        journal.symlink_to(path)
+        with pytest.raises(
+            storage_module.StorageCapacityError,
+            match="^STORAGE_CAPACITY:SIDECAR_UNREADABLE$",
+        ):
+            store._sidecar_size("-journal")
+        journal.unlink()
+        journal.mkdir(mode=0o700)
+        with pytest.raises(
+            storage_module.StorageCapacityError,
+            match="^STORAGE_CAPACITY:UNSAFE_SIDECAR$",
+        ):
+            store._sidecar_size("-journal")
+        journal.rmdir()
+        assert store._sidecar_size("-journal") == 0
+        assert store._sidecar_size("-wal") == path.with_name(
+            path.name + "-wal"
+        ).stat().st_size
+        _assert_sqlite_locks_held(path)

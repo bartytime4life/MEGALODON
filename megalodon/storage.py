@@ -837,30 +837,77 @@ def _open_for_identity(target: str | Path, flags: int, **kwargs: Any) -> int:
         return os.open(target, flags, **kwargs)
     descriptor = os.open(target, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, **kwargs)
     try:
-        mode = os.fstat(descriptor).st_mode
-        access = {
-            os.O_RDONLY: os.R_OK,
-            os.O_WRONLY: os.W_OK,
-        }.get(flags & os.O_ACCMODE, os.R_OK | os.W_OK)
-        failure = None
-        if stat.S_ISLNK(mode):
-            failure = errno.ELOOP
-        elif stat.S_ISSOCK(mode):
-            failure = errno.ENXIO
-        elif access & os.W_OK and stat.S_ISDIR(mode):
-            failure = errno.EISDIR
-        elif not os.access(
-            _identity_descriptor_path(descriptor),
-            access,
-            effective_ids=os.access in os.supports_effective_ids,
-        ):
-            failure = errno.EACCES
-        if failure is not None:
-            raise OSError(failure, os.strerror(failure), os.fspath(target))
+        _refuse_as_open_would(
+            os.fstat(descriptor).st_mode,
+            flags,
+            target,
+            lambda access: os.access(
+                _identity_descriptor_path(descriptor),
+                access,
+                effective_ids=os.access in os.supports_effective_ids,
+            ),
+        )
     except BaseException:
         os.close(descriptor)
         raise
     return descriptor
+
+
+def _refuse_as_open_would(
+    mode: int, flags: int, target: str | Path, accessible: Any
+) -> None:
+    """Raise the OSError a no-follow ``os.open(target, flags)`` would raise.
+
+    ``accessible(access)`` reports whether the caller may open the inspected
+    inode with ``access``; it is consulted only for a non-symlink, non-socket.
+    """
+
+    access = {
+        os.O_RDONLY: os.R_OK,
+        os.O_WRONLY: os.W_OK,
+    }.get(flags & os.O_ACCMODE, os.R_OK | os.W_OK)
+    failure = None
+    if stat.S_ISLNK(mode):
+        failure = errno.ELOOP
+    elif stat.S_ISSOCK(mode):
+        failure = errno.ENXIO
+    elif access & os.W_OK and stat.S_ISDIR(mode):
+        failure = errno.EISDIR
+    elif not accessible(access):
+        failure = errno.EACCES
+    if failure is not None:
+        raise OSError(failure, os.strerror(failure), os.fspath(target))
+
+
+def _stat_for_identity(
+    target: str | Path, flags: int, **kwargs: Any
+) -> os.stat_result:
+    """Inspect ``target`` as _open_for_identity would, holding no descriptor.
+
+    For use where no lock-preserving descriptor exists (no O_PATH, as on
+    Darwin) while this process may have a live SQLite connection to the file:
+    closing *any* descriptor for an inode releases all of the process's fcntl
+    locks on it, so even a read-only open of -shm would drop that connection's
+    dead-man-switch lock. It refuses with the errno the replaced open would
+    have raised, so callers keep their error codes.
+    """
+
+    info = os.stat(target, follow_symlinks=False, **kwargs)
+    _refuse_as_open_would(
+        info.st_mode,
+        flags,
+        target,
+        lambda access: os.access(
+            target,
+            access,
+            effective_ids=os.access in os.supports_effective_ids,
+            # The symlink case is refused above; no-follow where supported
+            # also covers a name swapped to a symlink after the stat.
+            follow_symlinks=os.access not in os.supports_follow_symlinks,
+            **kwargs,
+        ),
+    )
+    return info
 
 
 def _reopen_for_identity(descriptor: int) -> int:
@@ -906,6 +953,30 @@ def _restore_private_mode(descriptor: int) -> None:
         if exc.errno != errno.EBADF or not _LOCK_PRESERVING_OPEN:
             raise
         os.chmod(_identity_descriptor_path(descriptor), PRIVATE_DATABASE_MODE)
+
+
+def _restore_private_mode_by_name(
+    info: os.stat_result, target: str | Path, prefix: str, **kwargs: Any
+) -> None:
+    """Make the inode ``info`` describes private without opening it.
+
+    The descriptor-free counterpart of _restore_private_mode, for platforms
+    without O_PATH. The no-follow chmod acts on whatever the name holds now,
+    so the result is checked against ``info``: a name swapped in between is
+    refused rather than admitted on the earlier inode's validation.
+    """
+
+    if stat.S_IMODE(info.st_mode) == PRIVATE_DATABASE_MODE:
+        return
+    try:
+        os.chmod(target, PRIVATE_DATABASE_MODE, follow_symlinks=False, **kwargs)
+        changed = os.stat(target, follow_symlinks=False, **kwargs)
+    except (NotImplementedError, OSError) as exc:
+        _raise_path_error(prefix, "UNSAFE_SIDECAR", exc)
+    if not os.path.samestat(info, changed) or (
+        stat.S_IMODE(changed.st_mode) != PRIVATE_DATABASE_MODE
+    ):
+        _raise_path_error(prefix, "UNSAFE_SIDECAR")
 
 
 def _absolute_database_path(
@@ -1151,8 +1222,9 @@ def _validate_sqlite_sidecars(
     """Reject unsafe pre-existing SQLite coordination files.
 
     Also runs while this process has a live connection to ``path``, so each
-    sidecar is opened with _open_for_identity: closing a readable or
-    writable descriptor for -shm would release that connection's locks.
+    sidecar is opened with _open_for_identity, or without O_PATH inspected by
+    _stat_for_identity: closing a readable or writable descriptor for -shm
+    would release that connection's locks.
     """
 
     present: set[str] = set()
@@ -1176,6 +1248,27 @@ def _validate_sqlite_sidecars(
         # times, and whatever it holds then is validated as usual.
         for _attempt in range(_SIDECAR_LOOKUP_ATTEMPTS):
             descriptor: int | None = None
+            if os.name == "posix" and not _lock_preserving_open():
+                # Without O_PATH, closing a descriptor for -shm would release
+                # this process's SQLite locks on it: inspect by no-follow stat.
+                try:
+                    info = _stat_for_identity(target, flags, **kwargs)
+                except FileNotFoundError:
+                    break
+                except OSError as exc:
+                    code = (
+                        "SYMLINK_REFUSED"
+                        if getattr(exc, "errno", None) == errno.ELOOP
+                        else "UNSAFE_SIDECAR"
+                    )
+                    _raise_path_error(prefix, code, exc)
+                present.add(suffix)
+                _validate_private_database_stat(
+                    info, writable=writable, prefix=prefix
+                )
+                if writable:
+                    _restore_private_mode_by_name(info, target, prefix, **kwargs)
+                break
             try:
                 if os.name != "posix" and sidecar.is_symlink():
                     _raise_path_error(prefix, "SYMLINK_REFUSED")
@@ -1615,6 +1708,26 @@ class Store:
         try:
             if os.name != "posix" and sidecar.is_symlink():
                 raise StorageCapacityError("STORAGE_CAPACITY:UNSAFE_SIDECAR")
+            if os.name == "posix" and not _lock_preserving_open():
+                # Without O_PATH, closing a descriptor for -shm would release
+                # this connection's locks on it: size it by no-follow stat.
+                try:
+                    info = _stat_for_identity(target, flags, **kwargs)
+                except FileNotFoundError:
+                    return 0
+                except OSError as exc:
+                    raise StorageCapacityError(
+                        "STORAGE_CAPACITY:SIDECAR_UNREADABLE"
+                    ) from exc
+                try:
+                    _validate_private_database_stat(
+                        info, writable=True, prefix="STORAGE_CAPACITY"
+                    )
+                except StorageSchemaError as exc:
+                    raise StorageCapacityError(
+                        "STORAGE_CAPACITY:UNSAFE_SIDECAR"
+                    ) from exc
+                return int(info.st_size)
             try:
                 # Runs before every write while self.connection is live; a
                 # readable -shm descriptor would release its locks on close.
