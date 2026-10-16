@@ -371,6 +371,86 @@ jobs:
           if len(results) != 12:
               raise SystemExit("MACOS_STORAGE_NEGATIVES:INCOMPLETE")
           PY
+      - name: Check a live Store keeps its own SQLite locks
+        run: |
+          python - <<'PY'
+          # Without O_PATH, closing any descriptor for -shm releases this
+          # process's locks on it, including the dead-man switch that tells
+          # other processes the WAL index is live. A second process probes
+          # SQLite's unix-VFS lock bytes after MEGALODON's own checks ran.
+          from datetime import datetime, timezone
+          import json
+          import os
+          from pathlib import Path
+          import stat
+          import subprocess
+          import sys
+          import tempfile
+
+          import megalodon.storage as storage_module
+          from megalodon.models import ActionRecord
+          from megalodon.storage import Store
+
+          if sys.platform != "darwin" or storage_module._lock_preserving_open():
+              raise SystemExit("MACOS_LOCKS:UNEXPECTED_PLATFORM")
+
+          PROBE = r"""
+          import fcntl, os, sys
+          def in_use(target, length, start):
+              descriptor = os.open(target, os.O_RDWR)
+              try:
+                  fcntl.lockf(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB, length, start)
+              except OSError:
+                  return True
+              finally:
+                  os.close(descriptor)
+              return False
+          print(in_use(sys.argv[1] + "-shm", 1, 128), in_use(sys.argv[1], 510, 0x40000002))
+          """
+          stamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
+          results = []
+
+          def held(label, database):
+              observed = subprocess.run(
+                  [sys.executable, "-c", PROBE, str(database)],
+                  capture_output=True, text=True, timeout=30, check=True,
+              ).stdout.split()
+              results.append({"case": label, "dead_man_switch_and_shared": observed})
+              if observed != ["True", "True"]:
+                  raise SystemExit(f"MACOS_LOCKS:{label}:RELEASED")
+
+          with tempfile.TemporaryDirectory(prefix="megalodon-m1-locks-") as root:
+              private = Path(root) / "private"
+              private.mkdir(mode=0o700)
+              database = private / "audit.db"
+              with Store(database) as store:
+                  for _ in range(3):
+                      store.record_action(
+                          ActionRecord(stamp, "probe", "192.0.2.1", "not_attempted", "x")
+                      )
+                  held("after-writes", database)
+                  store._ensure_capacity()
+                  held("after-capacity-check", database)
+                  wal = private / "audit.db-wal"
+                  wal.chmod(0o644)
+                  storage_module._validate_sqlite_sidecars(
+                      database, None, writable=True, prefix="STORAGE_PATH"
+                  )
+                  if stat.S_IMODE(os.stat(wal).st_mode) != 0o600:
+                      raise SystemExit("MACOS_LOCKS:SIDECAR_MODE_NOT_NORMALISED")
+                  held("after-sidecar-normalisation", database)
+                  store.record_action(
+                      ActionRecord(stamp, "probe", "192.0.2.1", "not_attempted", "x")
+                  )
+                  held("after-later-write", database)
+                  if store.summary()["actions"] != 4:
+                      raise SystemExit("MACOS_LOCKS:UNEXPECTED_COUNT")
+                  check = store.connection.execute("PRAGMA integrity_check").fetchone()
+                  if check[0] != "ok":
+                      raise SystemExit("MACOS_LOCKS:INTEGRITY")
+
+          print(json.dumps(results, sort_keys=True))
+          PY
       - name: Record bounded storage-admission diagnostic
         run: |
           set -euo pipefail

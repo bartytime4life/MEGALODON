@@ -102,9 +102,18 @@ runs only when the mode is not already `0600`. Every existing no-follow,
 regular-file, single-link, owner, mode, and permission check and error code is
 unchanged. `-wal` is read with an ordinary descriptor because SQLite takes no
 locks on it. The Suricata store reads and OFD-locks its database descriptor,
-so it keeps an ordinary one. Without `O_PATH` (not Linux), the previous
-descriptors are kept and this hazard remains while two connections to one
-database share a process. On Linux with `O_PATH`, an absent or unusable
+so it keeps an ordinary one. Without `O_PATH` (Darwin), the sidecar validator
+and the capacity check's sidecar sizing hold no descriptor at all, because
+every write's capacity check would otherwise release the writing `Store`'s own
+`-shm` locks. They inspect each sidecar with a no-follow `stat` and an access
+check that refuse where the replaced open would (`ELOOP`, `ENXIO`, `EISDIR`,
+`EACCES`), with the same error codes. A non-`0600` mode is tightened with a
+no-follow `chmod` by name, refused as `UNSAFE_SIDECAR` unless the name still
+holds the inspected inode afterwards. Database descriptors there remain
+ordinary ones, so the hazard remains while two connections to one database
+share a process (for example a `Store` and a `DashboardStore`). The Darwin
+behavior is simulated on Linux in tests, not natively confirmed on macOS.
+On Linux with `O_PATH`, an absent or unusable
 `/proc/self/fd` alias uses `/dev/fd` only if it names the held inode. If neither
 alias is usable, identity inspection refuses with `ENOTSUP`, classified as
 `STORAGE_PATH:OPEN_FAILED` for a database and `STORAGE_PATH:UNSAFE_SIDECAR`
