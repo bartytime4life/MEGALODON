@@ -71,6 +71,9 @@ def test_sensor_normalizers_preserve_provenance_directions_and_completed_state()
     category,record=normalize_suricata(alert)
     assert category=='findings' and 'not an admitted core detector finding' in record['data']['observation']
     assert normalize_suricata({'event_type':'stats'}) is None
+    icmp=eve();icmp['proto']='IPv6-ICMP'
+    # Suricata's name for protocol 58 is not a raw "ICMPv6" label.
+    assert normalize_suricata(icmp)[1]['data']['protocol']=='ICMPV6'
 
 
 def test_missing_zeek_measurements_stay_unknown_with_explicit_byte_basis():
