@@ -146,3 +146,103 @@ def test_evidence_segment_writer_refuses_a_substituted_segment(tmp_path, monkeyp
     finally:
         monkeypatch.undo()
         manager.close()
+
+
+def test_verified_connect_refuses_same_directory_swap_with_reused_descriptor(
+    tmp_path, monkeypatch
+):
+    import megalodon.storage as storage
+
+    tmp_path.chmod(0o700)
+    database = tmp_path / "admitted.db"
+    foreign = tmp_path / "foreign.db"
+    held = tmp_path / "admitted-held.db"
+    for path, marker in ((database, "ADMITTED"), (foreign, "FOREIGN")):
+        connection = sqlite3.connect(path)
+        connection.execute("CREATE TABLE marker(value TEXT)")
+        connection.execute("INSERT INTO marker VALUES(?)", (marker,))
+        connection.commit()
+        connection.close()
+        path.chmod(0o600)
+    before_bytes = foreign.read_bytes()
+
+    # A live reader makes SQLite defer closing a second descriptor to this
+    # inode. The substituted connect can reuse it without opening a new fd.
+    holder = sqlite3.connect(foreign)
+    holder.execute("BEGIN")
+    holder.execute("SELECT value FROM marker").fetchall()
+    spare = sqlite3.connect(foreign)
+    spare.execute("SELECT value FROM marker").fetchall()
+    spare.close()
+    directory = storage._open_private_directory(
+        tmp_path, create=False, prefix="PROBE"
+    )
+    descriptor, _ = storage._open_private_database(
+        database, directory, writable=True, create=False, prefix="PROBE"
+    )
+    anchor = storage._anchored_database_path(descriptor, database, "PROBE")
+    real_connect = sqlite3.connect
+    real_identities = storage._open_regular_file_identities
+    samples = []
+    calls = []
+
+    def substituted_connect(database_uri, *args, **kwargs):
+        calls.append(database_uri)
+        database.rename(held)
+        foreign.rename(database)
+        try:
+            return real_connect(
+                f"{database.as_uri()}?{str(database_uri).partition('?')[2]}",
+                *args, **kwargs,
+            )
+        finally:
+            database.rename(foreign)
+            held.rename(database)
+
+    def identities():
+        observed = real_identities()
+        samples.append(observed)
+        return observed
+
+    monkeypatch.setattr(sqlite3, "connect", substituted_connect)
+    monkeypatch.setattr(storage, "_open_regular_file_identities", identities)
+    try:
+        with pytest.raises(StorageSchemaError, match="^PROBE:DATABASE_CHANGED$"):
+            connection = storage._connect_verified_sqlite(
+                f"{anchor.as_uri()}?mode=rw", database, descriptor, directory, "PROBE"
+            )
+            connection.close()
+        assert len(calls) == storage._VERIFIED_CONNECT_ATTEMPTS
+        assert len(samples) == 2 * len(calls)
+        assert all(
+            not {fd for fd, identity in after.items() if before.get(fd) != identity}
+            for before, after in zip(samples[::2], samples[1::2])
+        )
+        assert foreign.read_bytes() == before_bytes
+    finally:
+        os.close(descriptor)
+        os.close(directory)
+        holder.close()
+
+
+@pytest.mark.parametrize("proc_available", [True, False])
+def test_writer_descriptor_inventory_uses_available_alias(
+    tmp_path, monkeypatch, proc_available
+):
+    real_listdir = os.listdir
+
+    def listdir(path):
+        if path == "/dev/fd" or (path == "/proc/self/fd" and not proc_available):
+            raise FileNotFoundError(path)
+        return real_listdir(path)
+
+    monkeypatch.setattr(os, "listdir", listdir)
+    database = tmp_path / "audit.db"
+    if proc_available:
+        with Store(database) as store:
+            assert store.summary()["actions"] == 0
+    else:
+        with pytest.raises(
+            StorageSchemaError, match="^STORAGE_PATH:DESCRIPTOR_PATH_UNAVAILABLE$"
+        ):
+            Store(database)
