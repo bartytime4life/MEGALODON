@@ -932,6 +932,7 @@ class EvidenceStorage:
                 match=re.fullmatch(r'([a-f0-9]{32}):([0-9]{1,19})',cursor)
                 if not match:raise ValueError('Invalid history cursor.')
                 start_id,before=match[1],int(match[2])
+                if before>2**63-1:raise ValueError('Invalid history cursor.')
                 if start_id not in {e['id'] for e in entries}:
                     return dict(schema='megalodon-history-v1',records=[],total=total,offset=offset,limit=limit,truncated=True,next_cursor=None,gaps=['The requested segment expired; start a new history page.'])
                 entries=entries[next(i for i,e in enumerate(entries) if e['id']==start_id):]
@@ -993,7 +994,7 @@ class EvidenceStorage:
                         truncated=bool(next_cursor or gaps),next_cursor=next_cursor,gaps=gaps)
 
     def save_case(self,ids):
-        if not self.enabled or type(ids) is not list or not 1<=len(ids)<=50 or any(type(v) is not str or not re.fullmatch(r'[a-f0-9]{32}:[1-9][0-9]{0,18}',v) for v in ids):
+        if not self.enabled or type(ids) is not list or not 1<=len(ids)<=50 or any(type(v) is not str or not re.fullmatch(r'[a-f0-9]{32}:[1-9][0-9]{0,18}',v) or int(v[33:])>=2**63-1 for v in ids):
             raise ValueError('Select up to 50 retained evidence records.')
         with self.lock:
             rows=[];dependencies=set()

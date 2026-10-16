@@ -283,7 +283,7 @@ def test_weekly_and_clock_backwards_do_not_duplicate(report_service):
     assert report_service.settings['completed_slot']==saved
 
 
-@pytest.mark.parametrize('value',[{}, {'enabled':1,'time':'09:00','frequency':'daily'}, {'enabled':True,'time':'25:00','frequency':'daily'}, {'enabled':True,'time':'09:00','frequency':'hourly'}, {'enabled':True,'time':'09:00','frequency':'weekly','weekday':True}])
+@pytest.mark.parametrize('value',[{}, {'enabled':1,'time':'09:00','frequency':'daily'}, {'enabled':True,'time':'25:00','frequency':'daily'}, {'enabled':True,'time':'09:00','frequency':'hourly'}, {'enabled':True,'time':'09:00','frequency':'weekly','weekday':True}, {'enabled':True,'time':'09:00','frequency':[]}, {'enabled':True,'time':'09:00','frequency':{}}])
 def test_schedule_validation(value):
     with pytest.raises(ValueError):schedule_value(value)
 

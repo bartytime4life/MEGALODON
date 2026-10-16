@@ -63,7 +63,7 @@ def schedule_value(value):
         raise ValueError('Choose automatic reports, a time, and daily or weekly.')
     if (type(value.get('enabled')) is not bool or type(value.get('time')) is not str
             or not re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]', value['time'])
-            or value.get('frequency') not in {'daily', 'weekly'}
+            or type(value.get('frequency')) is not str or value['frequency'] not in {'daily', 'weekly'}
             or type(value.get('weekday', 0)) is not int or not 0 <= value.get('weekday', 0) <= 6):
         raise ValueError('Invalid report schedule.')
     return dict(enabled=value['enabled'], time=value['time'], frequency=value['frequency'], weekday=value.get('weekday', 0))

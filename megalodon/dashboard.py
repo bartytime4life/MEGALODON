@@ -1246,7 +1246,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if self.support_config.snapshot()['job']['state']=='running':
                     raise ValueError('Wait for the current setup action before changing evidence policy.')
                 running=self.support_config.background.snapshot()['enabled']
-                if self.reports:self.reports.close()
+                if self.reports:
+                    try:self.reports.close()
+                    except ValueError:
+                        # A still-running build refuses the apply; the
+                        # scheduler it stopped must not stay stopped.
+                        self.reports.start()
+                        raise
                 interface=self.support_config._settings['interface']
                 try:
                     self.support_config.background.stop()

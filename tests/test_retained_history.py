@@ -54,6 +54,14 @@ def test_history_expired_cursor_and_invalid_query_are_explicit(manager):
     with pytest.raises(ValueError):reader.history_page(utc(manager.clock()-60),utc(manager.clock()),'../store:0')
 
 
+def test_history_cursor_and_case_ids_beyond_sqlite_integers_are_invalid(manager):
+    first=_source(manager,count=5,with_finding=False)
+    with pytest.raises(ValueError):manager.history(cursor=first['id']+':'+str(2**63))
+    assert manager.history(cursor=first['id']+':'+str(2**63-1))['records']
+    for number in (2**63-1,10**19-1):
+        with pytest.raises(ValueError):manager.save_case([first['id']+':'+str(number)])
+
+
 def test_reports_exclude_sample_ingestion(manager):
     from datetime import datetime,timezone
     from megalodon.models import PacketEvent

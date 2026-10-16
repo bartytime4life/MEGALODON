@@ -1763,6 +1763,25 @@ def test_managed_evidence_post_rejects_unsupported_targets_and_network_body_shap
     assert h.calls == [("network.configure", body)], "the provider validates its closed network configuration schema"
 
 
+def test_report_build_refusing_apply_restarts_the_report_scheduler(managed_evidence_http, monkeypatch):
+    h = managed_evidence_http
+
+    class Reports:
+        def close(self):
+            h.calls.append(("reports.close",))
+            raise ValueError("PRIVATE_REPORT_BUSY")
+
+        def start(self):
+            h.calls.append(("reports.start",))
+
+    monkeypatch.setattr(h.handler, "reports", Reports(), raising=False)
+    status, payload, _ = h.request("POST", "/api/storage", {"action": "apply", "preview_id": "preview-123"})
+    assert status == 422 and "PRIVATE" not in json.dumps(payload)
+    # The refused apply stops nothing else and leaves reports scheduled.
+    assert h.calls[-2:] == [("reports.close",), ("reports.start",)]
+    assert not any(row[0] in {"background.stop", "flows.close", "storage.apply"} for row in h.calls)
+
+
 def test_expired_storage_preview_never_stops_collectors(managed_evidence_http):
     h = managed_evidence_http
     h.evidence.expired_preview = True
