@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,8 @@ class ManifestError(ValueError):
 def load_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ManifestError(f"{path}: unreadable JSON: {exc}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+        raise ManifestError(f"{path}: unreadable JSON: {type(exc).__name__}") from exc
 
 
 def validate_manifest(document: Any, *, current_head: str | None = None) -> None:
@@ -41,6 +42,20 @@ def validate_manifest(document: Any, *, current_head: str | None = None) -> None
         raise ManifestError(rendered)
 
     execution = document["execution"]
+    # FormatChecker skips date-time unless an optional package is installed,
+    # so real calendar times and their order are checked here.
+    try:
+        started, finished = (
+            datetime.fromisoformat(execution[key].replace("Z", "+00:00"))
+            if execution[key].isascii() else None
+            for key in ("started_at", "finished_at")
+        )
+        if started is None or finished is None:
+            raise ValueError("non-ASCII timestamp")
+    except (TypeError, ValueError):
+        raise ManifestError("execution times must be UTC RFC 3339 timestamps") from None
+    if finished < started:
+        raise ManifestError("execution finished_at precedes started_at")
     if len(execution["commands"]) != len(execution["exit_codes"]):
         raise ManifestError("execution commands and exit_codes must have equal length")
 

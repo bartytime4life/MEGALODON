@@ -26,7 +26,7 @@ def fail(code: str) -> None:
 def read_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError):
         fail("INPUT_INVALID")
 
 

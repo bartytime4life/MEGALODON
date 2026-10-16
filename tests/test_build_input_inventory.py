@@ -144,9 +144,11 @@ def test_tool_has_only_the_reviewed_standard_library_imports():
         "argparse",
         "hashlib",
         "json",
+        "os",
         "pathlib",
         "re",
         "sys",
+        "tempfile",
         "tomllib",
     }
 
@@ -157,3 +159,17 @@ def test_contract_and_documentation_remain_packaged_and_bounded():
     assert "recursive-include contracts *" in manifest
     assert "not an\nartifact SBOM" in documentation
     assert "no network access, package resolution, package\ninstallation, or subprocess execution" in documentation
+
+
+def test_explicit_output_replaces_a_symlink_instead_of_writing_through_it(tmp_path, capsys):
+    root = fixture_source_tree(tmp_path)
+    victim = tmp_path / "victim.txt"
+    victim.write_text("preserve", encoding="utf-8")
+    output = tmp_path / "shared" / "inventory.json"
+    output.parent.mkdir()
+    output.symlink_to(victim)
+    assert inventory_tool.main(["--output", str(output)], root=root) == 0
+    assert victim.read_text(encoding="utf-8") == "preserve"
+    assert not output.is_symlink()
+    assert output.read_text(encoding="utf-8") == inventory_tool.render_inventory(root)
+    assert sorted(p.name for p in output.parent.iterdir()) == ["inventory.json"]
