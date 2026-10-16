@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "contracts" / "exact-head-evidence" / "v1" / "schema.json"
+# fromisoformat also accepts basic, space-separated and minute-only forms.
+RFC3339_UTC = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z")
 
 
 class ManifestError(ValueError):
@@ -47,11 +50,11 @@ def validate_manifest(document: Any, *, current_head: str | None = None) -> None
     try:
         started, finished = (
             datetime.fromisoformat(execution[key].replace("Z", "+00:00"))
-            if execution[key].isascii() else None
+            if type(execution[key]) is str and RFC3339_UTC.fullmatch(execution[key]) else None
             for key in ("started_at", "finished_at")
         )
         if started is None or finished is None:
-            raise ValueError("non-ASCII timestamp")
+            raise ValueError("not an RFC 3339 UTC timestamp")
     except (TypeError, ValueError):
         raise ManifestError("execution times must be UTC RFC 3339 timestamps") from None
     if finished < started:
