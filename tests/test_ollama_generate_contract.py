@@ -133,6 +133,9 @@ def test_receipt_omits_prompt_and_preserves_all_separate_holds():
     ("mutator", "code"),
     [
         (lambda value: value.__setitem__("extra", True), "INPUT_SHAPE"),
+        (lambda value: value.__setitem__("tools", []), "INPUT_SHAPE"),
+        (lambda value: value.__setitem__("tool_choice", "none"), "INPUT_SHAPE"),
+        (lambda value: value.__setitem__("memory", "hidden"), "INPUT_SHAPE"),
         (lambda value: value.__setitem__("schema", "v2"), "SCHEMA_MISMATCH"),
         (lambda value: value.__setitem__("mode", "chat"), "MODE"),
         (lambda value: value.__setitem__("model_id", "qwen2.5:7b"), "MODEL_ID"),

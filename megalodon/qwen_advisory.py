@@ -27,6 +27,12 @@ from .advisory import (
     PROVIDER_CLASS,
     preflight_advisory,
 )
+from .ollama_generate_contract import (
+    GenerateContractError,
+    INPUT_SCHEMA as GENERATE_INPUT_SCHEMA,
+    MAX_REQUEST_BYTES as GENERATE_MAX_REQUEST_BYTES,
+    build_generate_request,
+)
 
 
 LOOPBACK_HOST = "127.0.0.1"
@@ -34,14 +40,13 @@ LOOPBACK_PORT = 11434
 GENERATE_PATH = "/api/generate"
 MAX_OUTPUT_BYTES = FIXED_LIMITS["max_output_bytes"]
 TIMEOUT_SECONDS = FIXED_LIMITS["timeout_seconds"]
-MAX_PROVIDER_REQUEST_BYTES = 6144
+MAX_PROVIDER_REQUEST_BYTES = GENERATE_MAX_REQUEST_BYTES
 MAX_PROVIDER_ENVELOPE_BYTES = MAX_OUTPUT_BYTES * 8
 MAX_PROVIDER_PROTOCOL_BYTES = 8192
 MAX_SUMMARY_CHARACTERS = 1200
 # One anomaly answer displays a 600-character summary, up to eight candidate
 # IDs and two lists of four 300-character items joined as one string.
 MAX_ANOMALY_SUMMARY_CHARACTERS = 3200
-MAX_PREDICT_TOKENS = 512
 
 _READ_CHUNK_BYTES = 4096
 _WATCHDOG_POLL_SECONDS = 0.05
@@ -451,25 +456,33 @@ def _set_connection_timeout(
         active_socket.settimeout(remaining)
 
 
-def _request_bytes(model_id: str, prompt: str) -> bytes:
-    return json.dumps(
-        {
-            "keep_alive": 0,
-            "model": model_id,
-            "options": {
-                "num_predict": MAX_PREDICT_TOKENS,
-                "temperature": 0,
-            },
-            "prompt": prompt,
-            "stream": False,
-            "think": False,
-            "raw": True,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    ).encode("ascii")
+def _request_bytes(
+    model_id: str, prompt: str, candidate_ids: tuple[str, ...]
+) -> bytes:
+    """Build the exact provider body through the offline request contract.
+
+    No caller can add tools, memory, role history, transport controls, or an
+    alternate output schema. The canonical builder owns every provider field,
+    fixes deterministic options, and applies the shared byte budget before any
+    HTTP object is constructed.
+    """
+    if type(candidate_ids) is not tuple:
+        raise _ProviderRequestInvalid("provider candidate set is invalid")
+    try:
+        built = build_generate_request(
+            {
+                "schema": GENERATE_INPUT_SCHEMA,
+                "mode": (
+                    "anomaly_advisory" if candidate_ids else "generic_advisory"
+                ),
+                "model_id": model_id,
+                "prompt": prompt,
+                "candidate_ids": list(candidate_ids),
+            }
+        )
+    except GenerateContractError:
+        raise _ProviderRequestInvalid("provider request violates contract") from None
+    return built.request_bytes
 
 
 def _content_length(response: http.client.HTTPResponse) -> int | None:
@@ -807,7 +820,9 @@ def _invoke_admitted(
                 admitted, "ADMITTED_PREFLIGHT_INVALID", request_performed=False
             )
         else:
-            body = _request_bytes(admitted.model_id, admitted.prompt)
+            body = _request_bytes(
+                admitted.model_id, admitted.prompt, admitted.candidate_ids
+            )
             if len(body) > MAX_PROVIDER_REQUEST_BYTES:
                 raise _ProviderRequestInvalid("provider request exceeds limit")
             if cancellation is not None and cancellation.is_set():

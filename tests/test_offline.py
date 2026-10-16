@@ -193,7 +193,7 @@ def test_fixed_argv():
     args = tshark.fixed_argv(7, Limits(records=2))
     assert args[:8] == ('/usr/bin/tshark', '-n', '-l', '-r', '/proc/self/fd/7', '-c', '3', '-T')
     assert tuple(args[index + 1] for index, value in enumerate(args) if value == '-e') == tshark.FIELDS
-    assert not {'-i', '-Y', '-f', '-x', '-V', '-w', '-X', '-z'} & set(args)
+    assert not {'-i', '-Y', '-f', '-x', '-V', '-O', '-J', '-w', '-X', '-z'} & set(args)
     assert 'occurrence=a' in args
     assert all('payload' not in field and 'dns.qry.name' not in field for field in tshark.FIELDS)
 

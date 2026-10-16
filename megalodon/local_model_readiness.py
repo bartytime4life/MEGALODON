@@ -30,9 +30,9 @@ MISSING_COMPONENTS = (
 REMAINING_HOLDS = (
     "EVIDENCE_ORIGIN_AUTHENTICATION",
     "LOADED_RUNTIME_BYTES_NOT_ATTESTED",
-    # The live advisory transport does not yet send the request contract's
-    # num_ctx, seed, or format controls, so a consistent request contract is
-    # not evidence of what a provider call would carry.
+    # The live advisory transport now imports the canonical request builder,
+    # but exact-head independent acceptance of that runtime wiring has not
+    # been recorded. Construction parity alone cannot retire this gate.
     "RUNTIME_PROVIDER_WIRING",
     "INDEPENDENT_SECURITY_ACCEPTANCE_CURRENTNESS",
     "OWNER_FINAL_ACCEPTANCE",

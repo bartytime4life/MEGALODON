@@ -247,7 +247,17 @@ def test_anomaly_provider_reuses_exact_transport_and_result_policy(provider):
     payload = json.loads(body)
     assert payload['prompt'] == admit().prompt
     assert payload['stream'] is False and payload['think'] is False
-    assert payload['options'] == {'num_predict': 512, 'temperature': 0}
+    assert payload['options'] == {
+        'num_ctx': 4096, 'num_predict': 512, 'seed': 0, 'temperature': 0,
+    }
+    assert payload['format']['properties']['candidate_ids'] == {
+        'type': 'array',
+        'prefixItems': [{'const': 'a01'}, {'const': 'a02'}],
+        'items': False,
+        'minItems': 2,
+        'maxItems': 2,
+    }
+    assert not {'tools', 'tool_choice', 'messages', 'memory'} & set(payload)
     assert 'tools' not in payload and connection.closed
 
 
