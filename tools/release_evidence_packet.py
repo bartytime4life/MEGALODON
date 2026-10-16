@@ -39,7 +39,9 @@ ORIGIN_SCHEMA = "megalodon-release-evidence-packet-v2"
 ORIGIN_LIMITATION = "The retained producer declaration is self-asserted CI context; its digest binds bytes, not builder identity or execution."
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){2}$")
-TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+# ASCII digits only: \d and strptime both accept other Unicode digits, which
+# would then compare as text after every ASCII date.
+TIMESTAMP = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
 EFFECTS = {
     "network_used": False,

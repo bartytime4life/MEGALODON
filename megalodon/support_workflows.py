@@ -31,7 +31,9 @@ def snapshot(configuration, companions):
             else:
                 metrics=[metric('Hosts up',result['hosts'][0]),metric('Hosts down',result['hosts'][1])]; stamp=result.get('finished_at')
         collecting=any(word in message.lower() for word in ('scanning','collecting','queued','waiting'))
-        state='collecting' if collecting else 'connected' if result else 'needs_setup'
+        # A prior result after a rejected or failed run is stale, not available.
+        completed=message.endswith(' · completed; saved aggregate')
+        state='collecting' if collecting else 'connected' if result and completed else 'error' if result else 'needs_setup'
         add(key,name,state,message[:512],stamp,metrics)
     if hasattr(configuration,'model_telemetry'):
         observed=configuration.model_telemetry.snapshot()
@@ -40,7 +42,8 @@ def snapshot(configuration, companions):
         if observed.get('memory_bytes') is not None:qwen['metrics'].append(metric('Loaded allocation',observed['memory_bytes']/1024**3,'GiB'))
         if observed.get('vram_bytes') is not None:qwen['metrics'].append(metric('GPU allocation',observed['vram_bytes']/1024**3,'GiB'))
     else:qwen=dict(configuration.qwen_status)
-    good=[v for v in data['advisory'].values() if v and not v.startswith(('Qwen unavailable','Local AI unavailable'))]
+    # A queued request is not saved advice until the model has answered.
+    good=[v for v in data['advisory'].values() if v and not v.startswith(('Qwen unavailable','Local AI unavailable','Local AI advice queued'))]
     if good:
         # A saved answer is evidence of past use, not current provider readiness.
         qwen['metrics']=[*qwen.get('metrics',[]),metric('Saved summaries with advice',len(good))]

@@ -54,3 +54,11 @@ def test_scanner_cannot_grant_merge_authority() -> None:
     candidate["authority"]["merge_authority"] = True
     with pytest.raises(TOOL.ReceiptError, match="SCHEMA_INVALID"):
         TOOL.validate(candidate)
+
+
+@pytest.mark.parametrize("raw", [b'{"a":"\xff"}', b"[" * 100000], ids=["undecodable", "deeply-nested"])
+def test_undecodable_or_deeply_nested_receipt_is_input_invalid(tmp_path, raw) -> None:
+    path = tmp_path / "receipt.json"
+    path.write_bytes(raw)
+    with pytest.raises(TOOL.ReceiptError, match="INPUT_INVALID"):
+        TOOL.read_json(path)

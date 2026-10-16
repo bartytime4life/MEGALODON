@@ -466,3 +466,14 @@ def test_unreadable_wanted_process_still_makes_the_scan_incomplete(tmp_path):
     proc = _fake_proc(tmp_path / "proc", {42: ("suricata", 500)})
     (proc / "42" / "stat").write_text("42 (suricata) S")
     assert tool_heartbeat._process_starts(proc, frozenset({"suricata"})) == ({}, False)
+
+
+def test_install_refuses_while_another_support_action_runs():
+    def runner(*args, **kwargs):
+        raise AssertionError("a refused install must not run its command")
+
+    installer = Installer(runner=runner)
+    installer.busy = lambda: True
+    with pytest.raises(tool_installer.InstallBusy):
+        installer.start("scapy")
+    assert installer.status()["state"] == "idle"

@@ -306,7 +306,7 @@ def validate(manifest: dict) -> dict:
         _fail("INPUT_INVALID")
     generated_at = manifest["generated_at"]
     if type(generated_at) is not str or re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", generated_at,
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", generated_at,
     ) is None:
         _fail("INPUT_INVALID")
     try:

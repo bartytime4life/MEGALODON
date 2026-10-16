@@ -104,6 +104,8 @@ def test_candidate_requires_every_check_and_both_ephemeral_subjects():
     ({"/effects/release_published": 0}, "AUTHORITY_CLAIM", True),
     ({"/effects/model_invoked": None}, "AUTHORITY_CLAIM", True),
     ({"/generated_at": "2026-02-30T00:00:00Z"}, "INPUT_INVALID", False),
+    # The schema pattern admits Unicode digits; the semantic check refuses them.
+    ({"/generated_at": "\u0662\u0660\u0662\u0666-09-20T00:00:00Z"}, "INPUT_INVALID", False),
     ({"/platform/pip_version": "1." + "2" * 31}, "INPUT_INVALID", True),
     ({"/platform/systemd_version": "255 (" + "a" * 59 + ")"}, "INPUT_INVALID", True),
 ])

@@ -10,7 +10,7 @@ The normal check performs no network access, package resolution, package
 installation, or subprocess execution. To inspect a freshly rendered candidate
 without changing the committed artifact:
 
-    python tools/build_input_inventory.py --output /tmp/megalodon-build-input-inventory.json
+    python tools/build_input_inventory.py --output "$(mktemp -d)/megalodon-build-input-inventory.json"
 
 After reviewing an intentional source-input change, regenerate the committed
 artifact explicitly, inspect the resulting diff, and run the focused tests and

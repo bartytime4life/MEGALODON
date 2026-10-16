@@ -10,9 +10,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 import tomllib
 
 
@@ -279,6 +281,21 @@ def inventory_matches(root: Path = PROJECT_ROOT) -> bool:
     return actual == render_inventory(root).encode("utf-8")
 
 
+def _replace_file(path: Path, text: str) -> None:
+    """Write a new file and rename it into place; never write through a link."""
+    # Renaming replaces a symlink at the destination instead of following it,
+    # so a link planted at a shared path cannot redirect the write.
+    descriptor, temporary = tempfile.mkstemp(prefix=".inventory-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
 def main(argv: list[str] | None = None, *, root: Path = PROJECT_ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -288,9 +305,9 @@ def main(argv: list[str] | None = None, *, root: Path = PROJECT_ROOT) -> int:
 
     try:
         if args.output is not None:
-            output = args.output.resolve()
+            output = args.output.absolute()
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(render_inventory(root), encoding="utf-8")
+            _replace_file(output, render_inventory(root))
             print("BUILD_INPUT_INVENTORY:WROTE")
             return 0
         if inventory_matches(root):

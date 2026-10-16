@@ -52,6 +52,18 @@ def test_browser_marks_failed_observations_stale_and_recovers():
     assert result.returncode == 0, result.stderr
 
 
+def test_stale_poll_does_not_erase_a_just_started_install():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node required for heartbeat browser behavior")
+    result = subprocess.run(
+        [node, str(Path(__file__).with_name("heartbeat_install_race.cjs"))],
+        input=json.dumps({"code": HEARTBEAT_JS}), text=True,
+        capture_output=True, timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_history_excludes_unobserved_gaps_and_clock_reversal():
     history = tool_heartbeat.HeartbeatHistory(started=1000)
     report = lambda light: {"tools": [{"id": "suricata", "light": light}]}

@@ -28,6 +28,15 @@ def test_eve_tail_excludes_stale_future_and_incomplete_records(tmp_path):
     with pytest.raises(OSError): sensor.read_eve(link)
 
 
+def test_eve_tail_skips_a_deeply_nested_line(tmp_path):
+    path=tmp_path/'eve.json'
+    now=datetime.now(timezone.utc).isoformat()
+    # One corrupt line must not end the summary thread with a stale "connected".
+    path.write_text(json.dumps(dict(timestamp=now,event_type='alert'))+'\n'+'['*200000+'\n')
+    stamp,metrics=sensor.read_eve(path)
+    assert stamp is not None and metrics[0]['value']==1
+
+
 def test_zeek_pipeline_is_bounded_headless_and_does_not_save_raw_capture(tmp_path,monkeypatch):
     sampler=sensor.SupportSensors(tmp_path)
     sampler.root.mkdir(parents=True)
@@ -87,9 +96,26 @@ def test_old_qwen_advice_does_not_override_current_failure():
     idle=dict(state='needs_setup',message='Provider unavailable',updated_at=None,metrics=[])
     config=SimpleNamespace(capture=SimpleNamespace(snapshot=lambda:dict(state='stopped',accepted=0,skipped=0,started_at=None,message='Stopped')),
         sensors=SimpleNamespace(snapshot=lambda:dict(zeek=idle,suricata=idle)),qwen_status=dict(idle))
-    companions=SimpleNamespace(snapshot=lambda:dict(results={},status={},advisory={'nmap':'Saved old advice','clamav':'Local AI unavailable (PROVIDER_ERROR).','osquery':'Qwen unavailable (DISABLED).'}))
+    companions=SimpleNamespace(snapshot=lambda:dict(results={},status={},advisory={'nmap':'Saved old advice','clamav':'Local AI unavailable (PROVIDER_ERROR).','osquery':'Local AI advice queued; collection is complete.'}))
     row=next(r for r in snapshot(config,companions)['tools'] if r['id']=='qwen')
     assert row['state']=='needs_setup' and row['message']=='Provider unavailable'
     assert row['metrics'][-1]['label']=='Saved summaries with advice'
 
     assert row['metrics'][-1]['value']==1
+
+
+def test_a_rejected_run_marks_a_prior_companion_result_stale():
+    idle=dict(state='stopped',message='No sample',updated_at=None,metrics=[])
+    config=SimpleNamespace(capture=SimpleNamespace(snapshot=lambda:dict(state='stopped',accepted=0,skipped=0,started_at=None,message='Stopped')),
+        sensors=SimpleNamespace(snapshot=lambda:dict(zeek=idle,suricata=idle)),qwen_status=dict(idle))
+    result=dict(scanned_files=4,infected_files=0,errors=0,exported_at='2026-10-16T12:00:00Z')
+
+    def state(message):
+        companions=SimpleNamespace(snapshot=lambda:dict(results={'clamav':result},status={'clamav':message},advisory={}))
+        return next(r for r in snapshot(config,companions)['tools'] if r['id']=='clamav')['state']
+
+    assert state('clamscan text report · completed; saved aggregate')=='connected'
+    assert state('Scanning configured files; previous aggregate retained until complete')=='collecting'
+    # The old clean count must not read as an available result after a rejection.
+    assert state('ClamAV reported matches, but its report was rejected; the prior aggregate is stale.')=='error'
+

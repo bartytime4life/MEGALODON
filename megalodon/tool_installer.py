@@ -233,6 +233,9 @@ class Installer:
         self._job = _Job()
         self._on_finish = on_finish
         self._runner = runner
+        # Set by the HUD: true while support startup or a setup action runs,
+        # so an install never overlaps another unit change or password prompt.
+        self.busy: Callable[[], bool] | None = None
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -248,6 +251,10 @@ class Installer:
         command = install_command(tool_id) if action == "install" else start_command(tool_id)
         if command is None:
             raise InstallUnavailable(tool_id)
+        # Checked before this lock: the other actions read installer status
+        # under their own locks, so the order must not be reversed here.
+        if self.busy is not None and self.busy():
+            raise InstallBusy
         with self._lock:
             if self._job.state == "running":
                 raise InstallBusy

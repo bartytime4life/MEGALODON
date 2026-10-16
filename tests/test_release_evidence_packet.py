@@ -441,3 +441,11 @@ def test_canonical_sbom_profile_matches_current_package_metadata():
     assert project["license"] == "Apache-2.0"
     assert project["dependencies"] == []
     assert namespace["__version__"] == VERSION
+
+
+@pytest.mark.parametrize("value", ["\u0662\u0660\u0660\u0660-01-01T00:00:00Z", "2026-09-2\u0661T00:00:00Z"],
+                         ids=["arabic-indic-year", "arabic-indic-day"])
+def test_generated_at_accepts_only_ascii_digits(value):
+    # Unicode digits pass \d and strptime but sort after every ASCII date.
+    with pytest.raises(tool.PacketError, match="INPUT_INVALID"):
+        tool._timestamp(value)
