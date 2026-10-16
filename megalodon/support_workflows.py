@@ -42,10 +42,10 @@ def snapshot(configuration, companions):
         if observed.get('memory_bytes') is not None:qwen['metrics'].append(metric('Loaded allocation',observed['memory_bytes']/1024**3,'GiB'))
         if observed.get('vram_bytes') is not None:qwen['metrics'].append(metric('GPU allocation',observed['vram_bytes']/1024**3,'GiB'))
     else:qwen=dict(configuration.qwen_status)
-    # A queued request is not saved advice until the model has answered.
+    # Count completed answers; availability does not establish persistence.
     good=[v for v in data['advisory'].values() if v and not v.startswith(('Qwen unavailable','Local AI unavailable','Local AI advice queued'))]
     if good:
-        # A saved answer is evidence of past use, not current provider readiness.
-        qwen['metrics']=[*qwen.get('metrics',[]),metric('Saved summaries with advice',len(good))]
+        # An available answer reflects past use, not current provider readiness.
+        qwen['metrics']=[*qwen.get('metrics',[]),metric('Available summaries with advice',len(good))]
     add('qwen','Local AI via Ollama',**qwen)
     return dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)
