@@ -499,15 +499,16 @@ def _writable_sqlite_connection_path(
 ) -> tuple[Path, Path | None]:
     """Choose a writable SQLite path without weakening descriptor admission.
 
-    Linux keeps the descriptor pathname so SQLite and its sidecars stay tied to
-    the already-open file. Native Darwin accepts the database descriptor for
-    reads but cannot create the rollback journal through /dev/fd/N
-    (SQLITE_CANTOPEN). There, use only the already-canonicalized, owner-private
-    admitted pathname after proving it still names the exact open descriptor.
-    That proof precedes SQLite's own pathname resolution, so a ``None`` anchor
-    also obliges the caller to connect through _connect_verified_sqlite. The
-    returned optional anchor tells _validate_connection_path which pathname
-    SQLite is permitted to report.
+    Linux passes SQLite the descriptor pathname. That does not pin the open:
+    SQLite reads the /proc/self/fd link and reopens the pathname it names, so
+    an ancestor swapped in between can substitute another file. Native Darwin
+    accepts the database descriptor for reads but cannot create the rollback
+    journal through /dev/fd/N (SQLITE_CANTOPEN); there, use only the
+    already-canonicalized, owner-private admitted pathname after proving it
+    still names the exact open descriptor. Either way, SQLite resolves a
+    pathname after these checks, so a writable connection must be made through
+    _connect_verified_sqlite. The returned optional anchor tells
+    _validate_connection_path which pathname SQLite is permitted to report.
     """
 
     anchor = _anchored_database_path(descriptor, expected, prefix)
@@ -615,6 +616,11 @@ def _connect_verified_sqlite(
     Every other refusal is definitive and is not retried.
     """
 
+    if os.name != "posix":
+        # No descriptor enumeration or pathname anchor exists here; Windows
+        # replacement resistance is the separate private-directory/NTFS ACL
+        # control (docs/storage-failure-policy.md).
+        return sqlite3.connect(uri, uri=True, **kwargs)
     with _DATABASE_OPEN_LOCK:
         for _ in range(_VERIFIED_CONNECT_ATTEMPTS):
             connection = _connect_verified_sqlite_attempt(
@@ -1646,20 +1652,15 @@ class Store:
                 opening_generation = _directory_generation(
                     self._directory_descriptor
                 )
-                if sqlite_anchor is None:
-                    connection = _connect_verified_sqlite(
-                        uri,
-                        self.path,
-                        self._database_descriptor,
-                        self._directory_descriptor,
-                        "STORAGE_PATH",
-                        timeout=10,
-                        check_same_thread=False,
-                    )
-                else:
-                    connection = sqlite3.connect(
-                        uri, uri=True, timeout=10, check_same_thread=False
-                    )
+                connection = _connect_verified_sqlite(
+                    uri,
+                    self.path,
+                    self._database_descriptor,
+                    self._directory_descriptor,
+                    "STORAGE_PATH",
+                    timeout=10,
+                    check_same_thread=False,
+                )
                 database_shared = True
                 _validate_connection_path(
                     connection, self.path, "STORAGE_PATH", anchor=sqlite_anchor

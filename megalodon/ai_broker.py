@@ -20,8 +20,9 @@ from .config import AISettings, BlockingSettings
 from .firewall import FirewallError, NftablesFirewall
 from .hub import integration_plan
 from .storage import (
-    StorageSchemaError, _absolute_database_path, _anchored_database_path, _open_private_database,
-    _open_private_directory, _validate_connection_path, _validate_sqlite_sidecars,
+    StorageSchemaError, _absolute_database_path, _anchored_database_path, _connect_verified_sqlite,
+    _open_private_database, _open_private_directory, _validate_connection_path,
+    _validate_sqlite_sidecars,
 )
 from .validation import parse_timestamp
 
@@ -164,8 +165,11 @@ class ReceiptStore:
             )
             _validate_sqlite_sidecars(self.path, self._directory, writable=True, prefix="AI_RECEIPT")
             anchored = _anchored_database_path(self._descriptor, self.path, "AI_RECEIPT")
-            self.connection = sqlite3.connect(
-                f"{anchored.as_uri()}?mode=rw&cache=private", uri=True, timeout=2,
+            # SQLite resolves the anchor to its pathname and reopens that, so
+            # prove the connection opened the admitted file.
+            self.connection = _connect_verified_sqlite(
+                f"{anchored.as_uri()}?mode=rw&cache=private", self.path,
+                self._descriptor, self._directory, "AI_RECEIPT", timeout=2,
                 check_same_thread=False,
             )
             _validate_connection_path(self.connection, self.path, "AI_RECEIPT")

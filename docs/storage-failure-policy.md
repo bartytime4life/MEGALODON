@@ -75,7 +75,15 @@ failure removes only the backup path that still identifies the file it created;
 a migration-stage failure rolls back the source and retains the verified backup.
 POSIX creation uses mode 0600. Writer and reader startup require a stable
 descriptor-backed SQLite path through `/proc/self/fd` or `/dev/fd`; absence is a
-fixed refusal. Path ancestors must be owned by root or the runtime user and must
+fixed refusal. That path does not pin what SQLite opens: SQLite reads the link
+and reopens the pathname it names, so an ancestor directory swapped in between
+could substitute another same-owner file under the expected name. Every
+connection that can write (`Store`, the AI receipt store and managed-evidence
+segment writers) therefore proves after connecting that SQLite opened the
+admitted inode, repeating the whole check a bounded number of times before
+refusing `DATABASE_CHANGED`. Read-only `DashboardStore` and evidence segment
+readers keep the unverified connect, because they open per request and
+cannot write; a substituted reader can show another file's rows. Path ancestors must be owned by root or the runtime user and must
 not be group/world-writable unless a trusted sticky directory prevents another
 user from renaming the next entry. Windows confidentiality and replacement
 resistance remain part of the separately unverified private-directory/NTFS ACL
