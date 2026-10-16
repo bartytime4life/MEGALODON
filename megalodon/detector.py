@@ -147,6 +147,16 @@ class PreparedDetection:
         self._resolved = True
 
 
+def _source_key(address: str) -> str:
+    """One host keeps one window, cooldown and watermark whatever its spelling."""
+    # Normalized mapped forms start with ::ffff: on every supported Python.
+    if address.startswith("::ffff:"):
+        mapped = ipaddress.ip_address(address).ipv4_mapped
+        if mapped is not None:
+            return str(mapped)
+    return address
+
+
 # Every rule that records a cooldown; eviction drops each (rule, source) key
 # directly instead of scanning the whole cooldown map.
 EMITTING_RULES = ("SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING")
@@ -200,7 +210,7 @@ class Detector:
         window_undos: list[_WindowUndo | _PortWindowUndo] = []
         emission_undos: list[tuple[tuple[str, str], object]] = []
         results: list[DetectionResult] = []
-        source = event.src_ip
+        source = _source_key(event.src_ip)
         now = event.observed_at.timestamp()
 
         def can_emit(rule_id: str) -> bool:
@@ -466,7 +476,7 @@ class Detector:
             raise RuntimeError("detector clock must be timezone-aware")
         if observed > current.astimezone(timezone.utc).timestamp() + MAX_FUTURE_SKEW_SECONDS:
             raise ValidationError("event timestamp exceeds allowed future skew")
-        previous = self.source_high_watermarks.get(event.src_ip)
+        previous = self.source_high_watermarks.get(_source_key(event.src_ip))
         if previous is not None and observed < previous:
             raise ValidationError("event timestamp precedes source high watermark")
 

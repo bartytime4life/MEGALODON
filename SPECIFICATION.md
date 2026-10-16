@@ -195,7 +195,9 @@ measured without the root label's trailing dot. A response echoes the client's
 question, so it keeps protocol `DNS` without a length and is never measured as a
 query from the resolver. An allowlist entry written as `::ffff:a.b.c.d/N` loads
 as the IPv4 network it names; the detector also suppresses a well-known NAT64
-(`64:ff9b::/96`) source whose embedded IPv4 host is allowlisted.
+(`64:ff9b::/96`) source whose embedded IPv4 host is allowlisted. Windows,
+cooldowns and per-source time watermarks treat `::ffff:a.b.c.d` and
+`a.b.c.d` as one source; findings still report the observed spelling.
 
 ### ActionRecord
 
