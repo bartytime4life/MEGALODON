@@ -1326,7 +1326,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if type(body) is not dict or set(body) != {"ips"}:
                 raise ValueError("invalid lookup body")
             validate_lookup_ips(body["ips"])
-        except (ValueError, UnicodeError, TypeError, OverflowError, RecursionError):
+        # OSError covers a body that stops arriving before the 2-second timeout.
+        except (ValueError, UnicodeError, TypeError, OverflowError, RecursionError, OSError):
             self._send_json({"error": "invalid offline location request"}, status=400)
             return
         try:

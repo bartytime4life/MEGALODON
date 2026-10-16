@@ -106,6 +106,15 @@ def test_http_lookup_is_same_origin_only_and_unconfigured_is_explicit():
         assert request(headers, json.dumps({"ips": ["008.8.8.8"]}))[0] == 400
         assert request(headers, "x" * 2049)[0] == 400
         assert request(headers, "[" * 1024 + "]" * 1024)[0] == 400
+        # A body that stops arriving times out into the same refusal.
+        import socket
+        stalled = socket.create_connection(("127.0.0.1", server.server_port), timeout=6)
+        stalled.sendall((f"POST /api/offline-locations HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\n"
+                         "X-Megalodon-Location: 1\r\nContent-Type: application/json\r\nContent-Length: 10\r\n\r\n"
+                         '{"ips":').encode())
+        reply = stalled.recv(4096)
+        stalled.close()
+        assert reply.startswith(b"HTTP/1.0 400") or reply.startswith(b"HTTP/1.1 400")
     finally:
         server.shutdown()
         server.server_close()
