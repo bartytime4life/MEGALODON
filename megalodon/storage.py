@@ -528,9 +528,13 @@ _DATABASE_OPEN_LOCK = RLock()
 def _open_regular_file_identities() -> dict[int, tuple[int, int]] | None:
     """Map this process's open regular-file descriptors to (st_dev, st_ino)."""
 
-    try:
-        names = os.listdir("/dev/fd")
-    except OSError:
+    for alias in ("/dev/fd", "/proc/self/fd"):
+        try:
+            names = os.listdir(alias)
+            break
+        except OSError:
+            continue
+    else:
         return None
     identities: dict[int, tuple[int, int]] = {}
     for name in names:
@@ -596,9 +600,9 @@ def _connect_verified_sqlite(
     WAL mode while one stays open), so no new descriptor appears. A reused
     descriptor can only name a file this process already holds open, and
     redirecting the pathname to it needs an entry change in the admitted
-    directory (checked by the caller) or an ancestor, which updates that
-    directory's generation. Only in that case are unchanged ancestor
-    generations accepted, after proving, once they are sampled, that the
+    directory or an ancestor, which updates that directory's generation.
+    A reused descriptor therefore requires both the admitted directory and
+    its ancestors to have unchanged generations, after proving that the
     pathname resolves through the admitted directory to the admitted file.
     Other threads' concurrent opens of this database's own sidecars are set
     aside on the same basis; any other unattributed open refuses.
@@ -647,6 +651,7 @@ def _connect_verified_sqlite_attempt(
 
     before = _open_regular_file_identities()
     ancestors = _ancestor_generations(path.parent)
+    directory_generation = _directory_generation(directory_descriptor)
     if before is None:
         _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
     if ancestors is None:
@@ -664,6 +669,7 @@ def _connect_verified_sqlite_attempt(
         # Any later sample still covers SQLite's path resolution (a rename
         # cannot restore the generations it changed); sampling first keeps
         # the window that unrelated ancestor activity can hit short.
+        directory_after = _directory_generation(directory_descriptor)
         ancestors_after = _ancestor_generations(path.parent)
         after = _open_regular_file_identities()
         if after is None:
@@ -677,7 +683,9 @@ def _connect_verified_sqlite_attempt(
         }
         unattributed = opened - _sidecar_identities(path, directory_descriptor)
         reused_unproven = admitted not in opened and bool(
-            unattributed or ancestors_after != ancestors
+            unattributed
+            or ancestors_after != ancestors
+            or directory_after != directory_generation
         )
     except BaseException:
         try:
