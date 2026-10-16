@@ -95,16 +95,23 @@ def fetch(source):
         response = connection.getresponse()
         if response.status != 200 or response.getheader('Content-Encoding', 'identity') != 'identity':
             raise ValueError('Threat publisher response unavailable.')
+        declared = response.getheader('Content-Length')
+        if declared is not None and (not re.fullmatch(r'[0-9]{1,9}', declared) or not 0 < int(declared) <= MAX_FEED):
+            raise ValueError('Invalid or excessive threat download length.')
         body = bytearray()
         while True:
             if time.monotonic() > deadline:
                 raise ValueError('Threat download deadline exceeded.')
             part = response.read1(65536)
             if not part:
+                if declared is not None and len(body) != int(declared):
+                    raise ValueError('Threat download was incomplete.')
                 return bytes(body)
             body.extend(part)
             if len(body) > MAX_FEED:
                 raise ValueError('Threat feed exceeded download bound.')
+    except (OSError, http.client.HTTPException):
+        raise ValueError('Threat publisher download could not complete.') from None
     finally:
         connection.close()
 

@@ -129,3 +129,20 @@ def test_drop_preserves_multiple_sbl_references_for_one_range():
     raw=('\n'.join(json.dumps(row) for row in rows)+'\n').encode()
     value=parse_feed('drop-v4',raw,NOW)
     assert value['entries']==[['8.8.8.0/24','SBL1, SBL2']]
+
+
+@pytest.mark.parametrize('declared', ['5','999999999','2, 2'])
+def test_download_rejects_truncation_or_ambiguous_size(monkeypatch,declared):
+    from megalodon import host_security as module
+    class Response:
+        status=200
+        def getheader(self,key,default=None):return declared if key=='Content-Length' else default
+        def read1(self,size):
+            value=getattr(self,'body',b'xy');self.body=b'';return value
+    class Connection:
+        def __init__(self,host,timeout):assert host=='www.spamhaus.org' and timeout==10
+        def request(self,method,target,headers):assert method=='GET' and target=='/drop/drop_v4.json'
+        def getresponse(self):return Response()
+        def close(self):pass
+    monkeypatch.setattr(module.http.client,'HTTPSConnection',Connection)
+    with pytest.raises(ValueError):module.fetch('drop-v4')
