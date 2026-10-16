@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sqlite3
 from threading import Event, Lock, Thread
 import time
 import xml.etree.ElementTree as ET
@@ -362,7 +363,9 @@ class NetworkTopology:
                 if self.evidence is not None and time.monotonic()-self._last_evidence>=60:
                     self._persist_observations()
                     self._last_evidence=time.monotonic()
-            except (OSError,ValueError,TypeError):
+            except Exception:
+                # Any failure leaves the loop running: an exited thread would
+                # keep reporting the last inventory as ready indefinitely.
                 with self._lock: self._state='partial';self._message='Some network observations are unavailable; last known inventory is retained.'
             self._wake.wait(PASSIVE_SECONDS);self._wake.clear()
 
@@ -378,7 +381,8 @@ class NetworkTopology:
             for offset in range(0,len(devices),200):
                 self.evidence.append_records('network',[dict(observed_at=stamp,source='network-device-observation',data=dict(node=node,pass_devices=len(devices),window_seconds=60,coverage='Sensor-visible traffic only; window counters overlap across observations.')) for node in devices[offset:offset+200]])
             self._persistence=dict(state='saved',last_saved_at=stamp,message='Device observations saved at most once per minute under Storage & history limits.')
-        except (OSError,ValueError,TypeError):
+        # A full disk raises a sqlite3 error (StorageCapacityError) here.
+        except (OSError,ValueError,TypeError,sqlite3.Error):
             self._persistence=dict(state='error',last_saved_at=self._persistence['last_saved_at'],message='Network history could not be saved. Check managed storage; current observations remain visible.')
 
     def device_history(self,ip,interface='',cursor=None,limit=20):

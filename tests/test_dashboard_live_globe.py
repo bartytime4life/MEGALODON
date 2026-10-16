@@ -26,11 +26,15 @@ def live_fixture():
                 limits=dict(idle_seconds=15, retention_seconds=60, max_connections=128, tracked_connections=512))
 
 
-def test_live_globe_behavior_and_geometry():
+# Suricata flow summaries keep SCTP; one such row must not blank the globe.
+@pytest.mark.parametrize('protocol', ['TCP', 'SCTP'])
+def test_live_globe_behavior_and_geometry(protocol):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node unavailable')
-    result = subprocess.run([node, str(Path(__file__).with_name('live_globe_browser.cjs'))], input=json.dumps(dict(code=LIVE_GLOBE_JS, fixture=live_fixture())), capture_output=True, text=True, timeout=10, check=False)
+    fixture = live_fixture()
+    fixture['connections'][0]['protocol'] = protocol
+    result = subprocess.run([node, str(Path(__file__).with_name('live_globe_browser.cjs'))], input=json.dumps(dict(code=LIVE_GLOBE_JS, fixture=fixture)), capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 
 

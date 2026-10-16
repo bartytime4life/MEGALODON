@@ -1,5 +1,6 @@
 """Shared bounded, source-qualified reads for visual reports and HUD history."""
 from copy import deepcopy
+from datetime import datetime, timezone
 import json
 import sqlite3
 import re
@@ -8,6 +9,13 @@ from .evidence_storage import epoch, utc
 from .packet_qualification import qualified_event_ids, qualified_receipt
 
 MAX_SEGMENTS = 2048
+
+def _utc_text(value):
+    parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError('Invalid evidence time.')
+    return parsed.astimezone(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
+
 
 class RetainedEvidenceReader:
     def __init__(self, evidence):
@@ -190,6 +198,10 @@ class RetainedEvidenceReader:
                             data=dict(kind='partial_interval')
                             stamp=utc(max(start,first))
                     elif not start <= epoch(stamp) < end:continue
+                if entry['kind'] in {'core', 'receipt'}:
+                    # Core rows store isoformat() with "+00:00"; the HUD history
+                    # contract requires a trailing Z, so normalize exactly here.
+                    stamp = _utc_text(stamp)
                 output.append(dict(id=entry['id'] + ':' + str(row[key]), category=entry['category'], observed_at=stamp, source=source, data=data))
             last = rows[-1][key]
             self.read_cursor = last
