@@ -696,6 +696,40 @@ def test_incompatible_evidence_store_is_not_reported_as_missing(tmp_path):
         assert receipt["state"] == "failed" and receipt["error_code"] == "TOOL_UNAVAILABLE"
 
 
+def test_oversized_prompt_is_refused_before_provider_admission(monkeypatch):
+    from megalodon import ai_provider as provider
+    monkeypatch.setattr(provider, "_admitted", lambda *_: pytest.fail("oversized prompt reached admission"))
+    monkeypatch.setattr(provider, "_request", lambda *_, **__: pytest.fail("oversized prompt reached provider"))
+    with pytest.raises(AIProviderError) as raised:
+        provider._generate(AISettings(enabled=True), "x" * (provider.MAX_PROMPT_BYTES + 1))
+    assert raised.value.code == "REQUEST_TOO_LARGE"
+
+
+def test_full_size_knowledge_references_still_reach_an_explanation(monkeypatch, broker):
+    from types import SimpleNamespace
+    from megalodon.ai_provider import MAX_PROMPT_BYTES
+    references = [{"id": f"K{n}", "source": "MITRE ATT&CK", "edition": "v1", "identifier": f"T10{n}",
+                   "title": "Application Layer Protocol: DNS command and control over resolver traffic",
+                   "url": "https://attack.mitre.org/techniques/T1071/004/",
+                   "excerpt": "x" * 1000, "context_only": True} for n in range(3)]
+    broker.knowledge = SimpleNamespace(search=lambda query, limit: references)
+    prompts = []
+
+    def generate(_settings, prompt, **_kwargs):
+        prompts.append(prompt)
+        if len(prompt.encode("utf-8")) > MAX_PROMPT_BYTES:
+            raise AIProviderError("REQUEST_TOO_LARGE")
+        return json.dumps(request("megalodon.knowledge.search", {"query": "dns"})) if len(prompts) == 1 else "Context only."
+
+    monkeypatch.setattr("megalodon.ai_interface.generate", generate)
+    answer = ask("alerts", broker)
+    assert answer["execution_state"] == "observed" and "error_code" not in answer
+    assert answer["inferred"] == "Context only."
+    # The operator keeps the complete excerpts; only the model copy is shortened.
+    assert [len(item["excerpt"]) for item in answer["observed"]["references"]] == [1000] * 3
+    assert len(prompts[1].encode("utf-8")) <= MAX_PROMPT_BYTES
+
+
 def test_constrained_selection_can_request_a_knowledge_search(monkeypatch, broker):
     from types import SimpleNamespace
     broker.knowledge = SimpleNamespace(search=lambda query, limit: [{"id": "K1", "query": query}])

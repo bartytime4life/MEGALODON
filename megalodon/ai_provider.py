@@ -293,6 +293,9 @@ def inventory(settings: AISettings) -> dict[str, object]:
         return {"model_present": False, "digest_matches": False, "error_code": exc.code}
 
 
+MAX_PROMPT_BYTES = 4096
+
+
 def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
               choices: tuple[str, ...] = (), deadline: float | None = None) -> str:
     """One deterministic request after live listener and manifest admission."""
@@ -302,9 +305,10 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
         deadline = time.monotonic() + settings.timeout_seconds
     if deadline <= time.monotonic():
         raise AIProviderError("REQUEST_TIMEOUT")
-    _admitted(settings, deadline)
-    if type(prompt) is not str or not 1 <= len(prompt.encode("utf-8")) <= 4096:
+    # Refuse an oversized prompt before admission contacts the provider.
+    if type(prompt) is not str or not 1 <= len(prompt.encode("utf-8")) <= MAX_PROMPT_BYTES:
         raise AIProviderError("REQUEST_TOO_LARGE")
+    _admitted(settings, deadline)
     if type(max_tokens) is not int or not 1 <= max_tokens <= 256:
         raise AIProviderError("POLICY_REJECTION")
     if response_format not in ('text','defense','intelligence','selection'):

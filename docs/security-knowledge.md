@@ -126,7 +126,11 @@ Budget admission persists before inference. One inference slot is shared with
 existing controls. Manual requests can interrupt background generation; queued
 manual reviews take the next slot. Cancellation targets that background job.
 
-Prompts retain the existing 4 KiB and 256-output-token bounds. Responses use a
+Prompts retain the existing 4 KiB and 256-output-token bounds. An oversized
+prompt is refused before the provider is contacted. When a HUD question's
+knowledge search returns more than one prompt holds, only the model's copy of
+the excerpts is shortened; the operator still receives the complete broker
+result. Responses use a
 closed JSON contract with evidence/reference identifiers and a fixed workflow
 ID. Unknown citations, executable fields and unsupported workflows are rejected.
 Measurements are rendered from stored values. The provider schema asks for short,
