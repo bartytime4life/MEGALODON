@@ -99,9 +99,50 @@ def test_old_qwen_advice_does_not_override_current_failure():
     companions=SimpleNamespace(snapshot=lambda:dict(results={},status={},advisory={'nmap':'Saved old advice','clamav':'Local AI unavailable (PROVIDER_ERROR).','osquery':'Local AI advice queued; collection is complete.'}))
     row=next(r for r in snapshot(config,companions)['tools'] if r['id']=='qwen')
     assert row['state']=='needs_setup' and row['message']=='Provider unavailable'
-    assert row['metrics'][-1]['label']=='Saved summaries with advice'
+    assert row['metrics'][-1]['label']=='Available summaries with advice'
 
     assert row['metrics'][-1]['value']==1
+
+
+@pytest.mark.parametrize('history', ['saved', 'failed', 'disabled'])
+def test_available_advice_does_not_claim_history_persistence(monkeypatch, history):
+    from megalodon.config import AISettings
+    from megalodon.companion_automation import CompanionAutomation, CompanionConfig
+    from megalodon.storage import StorageCapacityError
+
+    config = CompanionConfig(3600, None, (), False, None, None, None, None, True)
+    worker = CompanionAutomation(config, AISettings(enabled=True))
+    writes = []
+
+    def append_records(*args, **kwargs):
+        writes.append(args)
+        if history == 'failed':
+            raise StorageCapacityError('Insufficient disk reserve')
+
+    worker.evidence = SimpleNamespace(
+        enabled=history != 'disabled', append_records=append_records
+    )
+    monkeypatch.setattr(
+        'megalodon.ai_provider.generate',
+        lambda *args, **kwargs: 'Counts are not proof of safety.',
+    )
+    worker._explain('nmap', {'count': 1})
+
+    idle = dict(state='stopped', message='Idle', updated_at=None, metrics=[])
+    hud = SimpleNamespace(
+        capture=SimpleNamespace(snapshot=lambda: dict(
+            state='stopped', accepted=0, skipped=0, started_at=None, message='Stopped'
+        )),
+        sensors=SimpleNamespace(snapshot=lambda: dict(zeek=idle, suricata=idle)),
+        qwen_status=dict(idle),
+    )
+    row = next(r for r in snapshot(hud, worker)['tools'] if r['id'] == 'qwen')
+    advice = worker.snapshot()['advisory']['nmap']
+    assert advice.endswith('(Not saved to managed history.)') == (history == 'failed')
+    assert len(writes) == (0 if history == 'disabled' else 1)
+    assert row['state'] == 'stopped'
+    assert row['metrics'][-1]['label'] == 'Available summaries with advice'
+    assert row['metrics'][-1]['value'] == 1
 
 
 def test_a_rejected_run_marks_a_prior_companion_result_stale():
