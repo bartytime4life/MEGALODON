@@ -419,7 +419,8 @@ def test_compacted_conversation_ending_inside_the_window_is_a_source_gap(tmp_pat
         assert before['groups'] and 'source_gap' not in before['coverage']['missing']
         _compact(evidence)
         rollup=next(e for e in evidence._catalog['entries'] if e['category']=='packet_rollups')
-        assert rollup['last_at']<utc(end-3600)
+        # The summary segment keeps the conversation's last packet inside the window.
+        assert rollup['last_at']==utc(first+100) and rollup['last_at']>=utc(end-3600)
         context=retained_context(evidence,'10.0.0.2',end,comparison_reason='no_baseline')
         assert context['groups']==[] and 'source_gap' in context['coverage']['missing']
         assert context['comparison']==dict(state='unavailable',reason='incomplete_hours')
