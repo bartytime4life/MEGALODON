@@ -52,6 +52,14 @@ def test_highest_severity_counts_each_event_once():
     assert snapshot_from_projection(projection)['lanes']==[0,0,1]
 
 
+def test_sub_second_window_spreads_across_the_whole_timeline():
+    stamps=('2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.200Z','2026-01-01T00:00:00.400Z')
+    projection={'status':'available','generated_at':'2026-01-01T00:00:01Z','window':{'start':stamps[0],'end':stamps[-1]},'truncated':False,'quality':'unknown',
+      'events':[{'id':str(n),'observed_at':stamp,'byte_count':'0','protocol':'TCP','source':'jsonl'} for n,stamp in enumerate(stamps)],'findings':[]}
+    # The newest record belongs in the last interval, not the fifth of twelve.
+    assert snapshot_from_projection(projection)['timeline']==[1,0,0,0,0,0,1,0,0,0,0,1]
+
+
 def test_snapshot_http_route_preserves_readonly_scope_and_refuses_queries(tmp_path):
     from http.client import HTTPConnection
     from http.server import ThreadingHTTPServer

@@ -339,8 +339,11 @@ function renderAppStatusRail() {
     else {
       const parts = [counts.running + ' running'];
       if (counts.ready) parts.push(counts.ready + ' installed');
-      if (counts.stopped + counts.attention) parts.push((counts.stopped + counts.attention) + ' stopped');
+      // Match the chips: needs-setup and unknown tools are neither stopped nor omitted.
+      if (counts.stopped) parts.push(counts.stopped + ' stopped');
+      if (counts.attention) parts.push(counts.attention + ' need setup');
       if (counts.missing) parts.push(counts.missing + ' missing');
+      if (counts.unknown) parts.push(counts.unknown + ' status unknown');
       summary.textContent = parts.join(' · ');
     }
   }

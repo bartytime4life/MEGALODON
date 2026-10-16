@@ -63,7 +63,7 @@ assert.equal(tiles[0].label.textContent,'Running · up 2h 0m');
 assert.equal(tiles[4].label.textContent,'Installed · runs on demand');
 assert.equal(tiles[8].label.textContent,'Running · model missing');
 assert.equal(rail[2].title,'light red','the full heartbeat wording stays in the tooltip');
-assert.equal(byId['app-rail-summary'].textContent,'2 running · 3 installed · 2 stopped · 2 missing');
+assert.equal(byId['app-rail-summary'].textContent,'2 running · 3 installed · 1 stopped · 1 need setup · 2 missing · 1 status unknown');
 assert.equal(byId['app-rail'].dataset.stale,'false');assert.equal(refilters,1);
 stale=true;context.renderAppStatusRail();
 assert.ok(rail.every(n=>n.dataset.state==='unknown'),'stale observations never show green');

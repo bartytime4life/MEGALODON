@@ -71,6 +71,20 @@ def test_globe_history_is_in_hud_disclosures_and_uses_validated_projection():
     assert 'at most 20 distinct public IPs per view, signal IPs first' in GLOBE_HTML
 
 
+def test_rolling_minute_labels_include_seconds_only_off_the_minute():
+    import re
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node required for dashboard JavaScript behavior')
+    source = re.search(r'^function globeHourTime\(.*$', GLOBE_JS, re.M).group(0)
+    script = source + """
+console.log(JSON.stringify([globeHourTime(Date.parse('2026-10-16T11:59:45.500Z')),
+                            globeHourTime(Date.parse('2026-10-16T00:59:00.000Z'))]));"""
+    result = subprocess.run([node, '-e', script], capture_output=True, text=True, timeout=10, check=True)
+    # An unaligned bin edge keeps its seconds so 12:00:30 is not filed under 11:59–12:00.
+    assert result.stdout.strip() == '["11:59:45 UTC","00:59 UTC"]'
+
+
 def test_embedded_natural_earth_mask_has_expected_land_and_water():
     assert (LAND_MASK_WIDTH, LAND_MASK_HEIGHT) == (720, 360)
     mask = base64.b64decode(LAND_MASK_BASE64, validate=True)
