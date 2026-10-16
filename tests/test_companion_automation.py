@@ -341,6 +341,32 @@ def test_local_hud_companion_route_is_read_only_and_query_closed(tmp_path):
         server.server_close()
 
 
+def test_advice_survives_a_history_write_failure(tmp_path,monkeypatch):
+    from threading import Thread
+    import time
+    from types import SimpleNamespace
+    from megalodon.storage import StorageCapacityError
+    config=_config(tmp_path,'[qwen]\nadvisory=true\n')
+    worker=CompanionAutomation(config,AISettings(enabled=True))
+    def full(*args,**kwargs):raise StorageCapacityError('Insufficient disk reserve')
+    worker.evidence=SimpleNamespace(enabled=True,append_records=full)
+    monkeypatch.setattr('megalodon.ai_provider.generate',lambda *a,**k:'Counts are not proof of safety.')
+    thread=Thread(target=worker._advice_loop,daemon=True);worker._threads=[thread];thread.start()
+    try:
+        with worker._lock:
+            worker._advice_jobs={'nmap':{'count':1},'osquery':{'count':2}}
+        worker._advice_wake.set()
+        deadline=time.monotonic()+3
+        while worker._advice_jobs and time.monotonic()<deadline:time.sleep(.05)
+        time.sleep(.1)
+        advisory=worker.snapshot()['advisory']
+        # The answer is shown, marked unsaved, and the queue keeps draining.
+        assert all(advisory[k].endswith('(Not saved to managed history.)') for k in ('nmap','osquery'))
+        assert thread.is_alive()
+    finally:
+        worker._stop.set();worker.stop()
+
+
 def test_slow_advice_does_not_block_collection_and_queue_coalesces(tmp_path,monkeypatch):
     from threading import Event,Thread
     entered,release=Event(),Event();calls=[]

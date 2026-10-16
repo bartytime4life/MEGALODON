@@ -319,7 +319,12 @@ class CompanionAutomation:
                 with self._lock:
                     if not self._advice_jobs:break
                     kind=next(iter(self._advice_jobs));value=self._advice_jobs.pop(kind)
-                self._explain(kind,value)
+                try:
+                    self._explain(kind,value)
+                except Exception:
+                    # One failed advisory must not end the queue for every later result.
+                    with self._lock:
+                        self._advisory[kind] = 'Local AI unavailable (ADVICE_FAILED).'
 
     def _explain(self,kind,value):
         from .ai_provider import AIProviderError, generate
@@ -332,8 +337,12 @@ class CompanionAutomation:
         except (AIProviderError, ValueError) as exc:
             explanation = f"Local AI unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
         if self.evidence is not None and self.evidence.enabled:
-            self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
-                source='local model advisory',data=dict(tool=kind,model=model_settings.model,model_digest=model_settings.model_digest,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
+            try:
+                self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),
+                    source='local model advisory',data=dict(tool=kind,model=model_settings.model,model_digest=model_settings.model_digest,advisory=explanation[:1024],basis='Completed collector aggregate; model interpretation'))])
+            except (OSError, ValueError, sqlite3.Error):
+                # The answer is still shown; only its managed history copy failed.
+                explanation = explanation[:960] + ' (Not saved to managed history.)'
         with self._lock:
             self._advisory[kind] = explanation[:1024]
 

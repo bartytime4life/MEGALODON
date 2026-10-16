@@ -255,6 +255,27 @@ def test_history_failure_does_not_mark_passive_inventory_failed(topology):
     assert value['state']=='ready' and value['persistence']['state']=='error'
 
 
+def test_a_full_disk_during_history_does_not_stop_the_inventory_loop(topology):
+    import sqlite3
+    from threading import Thread
+    from megalodon.storage import StorageCapacityError
+    assert issubclass(StorageCapacityError, sqlite3.Error)
+    def full(*args):raise StorageCapacityError('Insufficient disk reserve')
+    topology.evidence=SimpleNamespace(enabled=True,append_records=full)
+    topology._persist_observations()
+    assert topology.snapshot()['persistence']['state']=='error'
+    # Even an unexpected failure in one pass keeps the loop alive.
+    calls=[]
+    def broken():
+        calls.append(1)
+        if len(calls)==1:raise KeyError('unexpected')
+        topology._cancel.set()
+    topology._refresh_passive=broken
+    thread=Thread(target=topology._loop,daemon=True);thread.start()
+    topology._wake.set();thread.join(5)
+    assert len(calls)==2 and topology.snapshot()['state']=='partial'
+
+
 def test_persistence_saves_every_device_when_snapshot_pages_are_trimmed(tmp_path):
     # Large sensor context makes a 200-node snapshot page exceed its response
     # bound; trimming a page must never drop devices from history.
