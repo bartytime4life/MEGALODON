@@ -179,3 +179,34 @@ def test_unfinished_summary_does_not_exempt_its_source_from_age_expiry(manager):
     assert source not in manager._catalog['entries'] and target not in manager._catalog['entries']
     assert not manager._path(source).exists() and not manager._path(target).exists()
     assert manager.compact_step() is False
+
+
+def test_subsecond_packet_bounds_follow_time_not_text_order(manager):
+    start=int(manager.clock())-120
+    writer=manager.packet_writer();run=writer.start_ingestion_run('jsonl')
+    # A whole-second stamp must not sort after one half a second later.
+    for value in (start, start+0.5):
+        writer.record_event_bundle(PacketEvent(datetime.fromtimestamp(value,timezone.utc),'10.0.0.2','1.1.1.1','TCP',1,443,byte_count=10),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    entry=next(e for e in manager._catalog['entries'] if e['category']=='packets')
+    assert entry['first_at'] < entry['last_at']
+    service=ReportService(manager,clock=manager.clock)
+    assert service._aggregate('later',start+0.25,start+60)['summary']['packet_records']==1
+    assert service._aggregate('earlier',start-60,start+0.25)['summary']['packet_records']==1
+
+
+def test_compact_conversation_crossing_a_report_start_is_disclosed(manager):
+    begin=(int(manager.clock())//300+2)*300
+    writer=manager.packet_writer();run=writer.start_ingestion_run('jsonl')
+    for index in range(201):
+        event=PacketEvent(datetime.fromtimestamp(begin+index,timezone.utc),'10.0.0.2','1.1.1.1','TCP',50000,443,byte_count=100,interface='eth0')
+        writer.record_event_bundle(event,[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    manager.test_clock[0]=begin+400
+    _compact(manager)
+    rollup=next(e for e in manager._catalog['entries'] if e['category']=='packet_rollups')
+    # A summary row carries its first packet's time; the segment keeps the last.
+    assert rollup['last_at']==utc(begin+200)
+    report=ReportService(manager,clock=manager.clock)._aggregate('crossing',begin+100,begin+400)
+    assert not report['coverage']['aggregation_complete']
+    assert any('crossed the requested interval' in gap for gap in report['coverage']['gaps'])
