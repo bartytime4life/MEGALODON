@@ -83,7 +83,9 @@ def read_eve(path=Path('/var/log/suricata/eve.json')):
             if kind in {'alert','flow','dns','http','tls','stats','anomaly','ssh','quic'}:
                 kinds[kind] += 1
                 timestamps.append(stamp)
-        except (ValueError,KeyError,TypeError,AttributeError):
+        # A deeply nested line raises RecursionError; skip it like any other
+        # malformed line rather than ending the summary thread.
+        except (ValueError,KeyError,TypeError,AttributeError,RecursionError):
             continue
     return (max(timestamps).astimezone(timezone.utc).isoformat().replace('+00:00','Z') if timestamps else None,
             [metric('Recent log records',sum(kinds.values())),metric('Alert records',kinds['alert']),
