@@ -6,6 +6,15 @@ security and threat context contains four explicit, fixed actions. Existing
 loopback sign-in, Origin, configuration nonce and serialized job checks apply.
 No new listener, model permission or privileged response path is added.
 
+The inspected Ubuntu `lynis` 3.1.6-1 package also installs and enables its own
+`lynis.timer` (daily, with a randomized delay) and may immediately start its
+system audit during package configuration. That native audit runs as a system
+service and writes its own reports; it is separate from the unprivileged HUD
+workflow and its coverage. Inspect it with `systemctl status lynis.timer`.
+The fixed `aide` recipe excludes recommended packages such as `aide-common`;
+its HUD baseline and checks remain explicit. Package installation still uses
+the normal OS authorization dialog. No MEGALODON feed-refresh timer is created.
+
 ## Checks and scope
 
 - **Run Lynis audit** runs the packaged auditor as the HUD user, with plugins
