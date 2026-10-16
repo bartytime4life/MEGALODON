@@ -71,6 +71,24 @@ class DetectorTests(unittest.TestCase):
         other = Detector(DetectionSettings(syn_flood_threshold=1), (ipaddress.ip_network("8.8.8.8/32"),))
         self.assertIsNone(other.analyze(event(0, src_ip="::ffff:8.8.4.4"))[0].suppressed_reason)
 
+    def test_well_known_nat64_form_of_an_allowlisted_source_is_suppressed(self):
+        allowlist = (ipaddress.ip_network("8.8.8.8/32"),)
+        detector = Detector(DetectionSettings(syn_flood_threshold=1), allowlist)
+        result = detector.analyze(event(0, src_ip="64:ff9b::808:808"))[0]
+        self.assertEqual(result.suppressed_reason, "source_allowlisted")
+        other = Detector(DetectionSettings(syn_flood_threshold=1), allowlist)
+        self.assertIsNone(other.analyze(event(0, src_ip="64:ff9b::808:404"))[0].suppressed_reason)
+
+    def test_ipv4_mapped_allowlist_entry_protects_the_ipv4_host(self):
+        from megalodon.validation import parse_network
+
+        detector = Detector(
+            DetectionSettings(syn_flood_threshold=1),
+            (parse_network("::ffff:8.8.8.0/120"),),
+        )
+        result = detector.analyze(event(0))[0]
+        self.assertEqual(result.suppressed_reason, "source_allowlisted")
+
     def test_eviction_drops_cooldowns_without_scanning_every_source(self):
         class NoScan(dict):
             def __iter__(self):

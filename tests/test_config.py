@@ -32,6 +32,19 @@ class ConfigTests(unittest.TestCase):
             ),
         )
 
+    def test_ipv4_mapped_allowlist_entries_load_as_ipv4_networks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "settings.toml"
+            config.write_text(
+                '[blocking]\nallowlist = ["::ffff:8.8.8.0/120", "::ffff:1.1.1.1", "2001:db8::/32"]\n',
+                encoding="utf-8",
+            )
+            settings = load_settings(config)
+        self.assertEqual(
+            tuple(str(network) for network in settings.blocking.allowlist),
+            ("8.8.8.0/24", "1.1.1.1/32", "2001:db8::/32"),
+        )
+
     def test_automatic_live_firewall_configuration_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "settings.toml"

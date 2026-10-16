@@ -14,6 +14,9 @@ from .models import DetectionResult, PacketEvent
 from .validation import ValidationError
 
 
+# The local-use 64:ff9b:1::/48 prefix embeds IPv4 at an operator-chosen
+# length, so only the well-known prefix is unwrapped for allowlist checks.
+_NAT64_WELL_KNOWN = ipaddress.ip_network("64:ff9b::/96")
 SEVERITY_RANK = {"LOW": 10, "MEDIUM": 20, "HIGH": 30, "CRITICAL": 40}
 MAX_FUTURE_SKEW_SECONDS = 60
 _MISSING = object()
@@ -478,8 +481,14 @@ class Detector:
     ) -> DetectionResult:
         suppressed_reason = None
         source = ipaddress.ip_address(event.src_ip)
-        # An IPv4-mapped source (::ffff:a.b.c.d) is the same IPv4 host.
-        forms = (source, source.ipv4_mapped) if source.version == 6 and source.ipv4_mapped else (source,)
+        forms = [source]
+        if source.version == 6:
+            if source.ipv4_mapped:
+                # An IPv4-mapped source (::ffff:a.b.c.d) is the same IPv4 host.
+                forms.append(source.ipv4_mapped)
+            elif source in _NAT64_WELL_KNOWN:
+                # RFC 6052 well-known prefix: the low 32 bits are the IPv4 host.
+                forms.append(ipaddress.IPv4Address(int(source) & 0xFFFFFFFF))
         if any(form in network for form in forms for network in self.allowlist):
             suppressed_reason = "source_allowlisted"
         return DetectionResult(

@@ -392,8 +392,13 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
             query_length = None
             if DNS in packet and DNSQR in packet:
                 protocol = "DNS"
-                query = packet[DNSQR].qname
-                query_length = len(query) if query is not None else None
+                # A response (qr=1) echoes the client's question; measuring it
+                # would attribute the client's name to the resolver.
+                query = packet[DNSQR].qname if packet[DNS].qr == 0 else None
+                if query is not None:
+                    # Scapy keeps the root label's trailing dot; other adapters
+                    # report the name without it.
+                    query_length = len(query.rstrip(b"." if isinstance(query, bytes) else "."))
 
             last_observed = max(last_observed, datetime.now(timezone.utc))
             events.offer(
