@@ -6,7 +6,8 @@ case "${PKEXEC_UID:-}" in ''|*[!0-9]*) exit 2;; esac
 [ "$PKEXEC_UID" -gt 0 ]
 write_dropin() {
   directory="$1"; destination="$2"
-  [ ! -L "$directory" ] && [ ! -L "$destination" ]
+  [ ! -L "$directory" ]
+  [ ! -L "$destination" ]
   [ ! -e "$destination" ] || [ -f "$destination" ]
   /usr/bin/install -d -m 755 -o root -g root "$directory"
   [ "$(/usr/bin/stat -c %u "$directory")" = 0 ]
@@ -33,11 +34,14 @@ CONFIG
 
 SURICATA_SCRIPT = _PRELUDE + r'''
 case "$1" in ''|*[!a-zA-Z0-9_.:@-]*) exit 2;; esac
-[ "${#1}" -le 15 ] && [ -e "/sys/class/net/$1" ]
-[ -f /usr/bin/suricata ] && [ ! -L /usr/bin/suricata ]
+[ "${#1}" -le 15 ]
+[ -e "/sys/class/net/$1" ]
+[ -f /usr/bin/suricata ]
+[ ! -L /usr/bin/suricata ]
 [ "$(/usr/bin/stat -c %u /usr/bin/suricata)" = 0 ]
 [ -z "$(/usr/bin/find /usr/bin/suricata -maxdepth 0 -perm /022 -print)" ]
-[ -d /var/log/suricata ] && [ ! -L /var/log/suricata ]
+[ -d /var/log/suricata ]
+[ ! -L /var/log/suricata ]
 /usr/bin/setfacl -m "u:${PKEXEC_UID}:r-x,d:u:${PKEXEC_UID}:r-x" /var/log/suricata
 if [ -f /var/log/suricata/eve.json ] && [ ! -L /var/log/suricata/eve.json ]; then
   /usr/bin/setfacl -m "u:${PKEXEC_UID}:r--" /var/log/suricata/eve.json
