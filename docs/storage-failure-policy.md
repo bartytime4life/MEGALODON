@@ -77,13 +77,17 @@ POSIX creation uses mode 0600. Writer and reader startup require a stable
 descriptor-backed SQLite path through `/proc/self/fd` or `/dev/fd`; absence is a
 fixed refusal. That path does not pin what SQLite opens: SQLite reads the link
 and reopens the pathname it names, so an ancestor directory swapped in between
-could substitute another same-owner file under the expected name. Every
-connection that can write (`Store`, the AI receipt store and managed-evidence
+could substitute another same-owner file under the expected name. On POSIX,
+every connection that can write (`Store`, the AI receipt store and managed-evidence
 segment writers) therefore proves after connecting that SQLite opened the
 admitted inode, repeating the whole check a bounded number of times before
-refusing `DATABASE_CHANGED`. Read-only `DashboardStore` and evidence segment
-readers keep the unverified connect, because they open per request and
-cannot write; a substituted reader can show another file's rows. Path ancestors must be owned by root or the runtime user and must
+refusing `DATABASE_CHANGED`. Descriptor enumeration uses `/proc/self/fd` if
+`/dev/fd` is unavailable, refusing if neither can be listed. When SQLite reuses
+a descriptor, the verifier checks the admitted directory's generation as well
+as its ancestors, including for receipt and evidence writers. Read-only
+`DashboardStore` and evidence segment readers keep the unverified connect,
+because they open per request and cannot write; a substituted reader can show
+another file's rows. Path ancestors must be owned by root or the runtime user and must
 not be group/world-writable unless a trusted sticky directory prevents another
 user from renaming the next entry. Windows confidentiality and replacement
 resistance remain part of the separately unverified private-directory/NTFS ACL
