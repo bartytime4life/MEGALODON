@@ -54,10 +54,11 @@ are not real UTC calendar times.
 retains evidence-origin authentication, loaded-runtime-byte attestation,
 runtime provider wiring, independent security currentness, owner final
 acceptance, and release/deployment HOLDs. Every authority flag is fixed to
-`false`. `RUNTIME_PROVIDER_WIRING` stays held because the live advisory
-transport does not yet send the request contract's `num_ctx`, `seed`, or
-`format` controls, so a consistent request contract does not describe what a
-provider call would carry.
+`false`. The live advisory transport now imports the canonical request builder
+and carries the request contract's `num_ctx`, `seed`, and mode-specific
+`format` controls. `RUNTIME_PROVIDER_WIRING` stays held until exact-head
+independent security review and owner acceptance record that integration; a
+consistent code path alone does not retire an acceptance gate.
 
 ## Operator commands
 

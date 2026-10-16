@@ -22,6 +22,10 @@ from megalodon.advisory import AirlockDecision
 import megalodon.cli as cli
 import megalodon.firewall as firewall
 import megalodon.qwen_advisory as qwen
+from megalodon.ollama_generate_contract import (
+    INPUT_SCHEMA as GENERATE_INPUT_SCHEMA,
+    build_generate_request,
+)
 from megalodon.qwen_advisory import QwenAdvisoryResult, invoke_qwen_advisory
 
 
@@ -201,7 +205,12 @@ def test_one_exact_qwen_request_returns_closed_advisory_result(monkeypatch) -> N
     assert provider_request == {
         "keep_alive": 0,
         "model": MODEL_ID,
-        "options": {"num_predict": 512, "temperature": 0},
+        "options": {
+            "num_ctx": 4096,
+            "num_predict": 512,
+            "seed": 0,
+            "temperature": 0,
+        },
         "prompt": provider_request["prompt"],
         "raw": True,
         "stream": False,
@@ -211,6 +220,61 @@ def test_one_exact_qwen_request_returns_closed_advisory_result(monkeypatch) -> N
     assert "tools" not in provider_request
     assert DIGEST not in body.decode("ascii")
     assert "198.51.100.10" not in body.decode("ascii")
+
+    expected = build_generate_request(
+        {
+            "schema": GENERATE_INPUT_SCHEMA,
+            "mode": "generic_advisory",
+            "model_id": MODEL_ID,
+            "prompt": provider_request["prompt"],
+            "candidate_ids": [],
+        }
+    )
+    assert body == expected.request_bytes
+    assert json.loads(body) == expected.request
+
+
+def test_runtime_anomaly_body_is_the_canonical_closed_request_contract() -> None:
+    candidate_ids = ("a01", "a02")
+    prompt = "MEGALODON_LOCAL_ANOMALY_ADVISORY_V1\nPURPOSE=explain_candidates"
+
+    first = qwen._request_bytes(MODEL_ID, prompt, candidate_ids)
+    second = qwen._request_bytes(MODEL_ID, prompt, candidate_ids)
+    expected = build_generate_request(
+        {
+            "schema": GENERATE_INPUT_SCHEMA,
+            "mode": "anomaly_advisory",
+            "model_id": MODEL_ID,
+            "prompt": prompt,
+            "candidate_ids": list(candidate_ids),
+        }
+    )
+
+    assert first == second == expected.request_bytes
+    request = json.loads(first)
+    assert set(request) == {
+        "format",
+        "keep_alive",
+        "model",
+        "options",
+        "prompt",
+        "raw",
+        "stream",
+        "think",
+    }
+    assert request["options"] == {
+        "num_ctx": 4096,
+        "num_predict": 512,
+        "seed": 0,
+        "temperature": 0,
+    }
+    assert request["format"]["properties"]["candidate_ids"] == {
+        "type": "array",
+        "const": ["a01", "a02"],
+        "minItems": 2,
+        "maxItems": 2,
+    }
+    assert not {"tools", "tool_choice", "messages", "memory"} & set(request)
 
 
 def test_oversized_canonical_request_fails_before_http(monkeypatch) -> None:
@@ -234,8 +298,10 @@ def test_cancellation_during_request_construction_performs_zero_http(monkeypatch
     cancellation = threading.Event()
     real_request_bytes = qwen._request_bytes
 
-    def build_then_cancel(model_id: str, prompt: str) -> bytes:
-        body = real_request_bytes(model_id, prompt)
+    def build_then_cancel(
+        model_id: str, prompt: str, candidate_ids: tuple[str, ...]
+    ) -> bytes:
+        body = real_request_bytes(model_id, prompt, candidate_ids)
         cancellation.set()
         return body
 
@@ -499,6 +565,13 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
 @pytest.mark.parametrize(
     ("response", "reason_code"),
     (
+        (
+            FakeResponse(
+                payload={"model": MODEL_ID, "response": "SECRET partial", "done": True},
+                status=500,
+            ),
+            "PROVIDER_RESPONSE_INVALID",
+        ),
         (FakeResponse(status=302), "PROVIDER_RESPONSE_INVALID"),
         (
             FakeResponse(headers={"Content-Type": "text/plain"}),
@@ -589,6 +662,7 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
         ),
     ),
     ids=(
+        "post-inference-http-500",
         "redirect",
         "content-type",
         "content-encoding",

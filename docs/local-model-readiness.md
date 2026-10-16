@@ -57,9 +57,12 @@ execute the signed corpus on the owner's machine, or provide independent
 security acceptance.
 
 The strongest offline state is therefore `CANDIDATE_PACKET_CONSISTENT`, not
-`ACCEPTED`, `READY`, `RELEASED`, or `DEPLOYED`. Every packet also keeps the
-`RUNTIME_PROVIDER_WIRING` HOLD: the live advisory transport does not yet send
-the request contract's `num_ctx`, `seed`, or `format` controls.
+`ACCEPTED`, `READY`, `RELEASED`, or `DEPLOYED`. The live advisory transport now
+uses the canonical request builder and therefore carries the request contract's
+`num_ctx`, `seed`, and mode-specific `format` controls. Every packet still
+keeps the `RUNTIME_PROVIDER_WIRING` HOLD until exact-head independent security
+review and owner acceptance record that integration; code parity alone cannot
+retire an acceptance gate.
 
 ## Next native evidence sequence
 

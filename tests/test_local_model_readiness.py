@@ -262,8 +262,8 @@ def test_complete_packet_is_consistent_not_accepted():
 
 
 def test_runtime_provider_wiring_remains_a_hold_in_every_packet():
-    # The live advisory transport does not send num_ctx, seed, or format, so
-    # request-contract consistency cannot retire provider wiring.
+    # Canonical construction is wired into the transport, but exact-head
+    # independent acceptance is still required to retire provider wiring.
     schema = readiness_schema()
     for result in (assess(), assess_readiness(binding(status="UNBOUND"))):
         assert "RUNTIME_PROVIDER_WIRING" in result["remaining_holds"]

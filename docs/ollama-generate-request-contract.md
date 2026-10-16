@@ -1,12 +1,14 @@
 # Deterministic Ollama/Qwen generate-request contract
 
-Status: ● **implemented offline request construction; provider wiring not changed**  
-Related gate: issue #261
+Status: ● **canonical request construction wired into the advisory transport;
+acceptance remains HOLD**
+Related gate: issue #446
 
-MEGALODON's existing Qwen adapter already limits requests to one literal
-loopback endpoint, one `/api/generate` call, no redirects, no retries, no model
-pull/start, and no tool execution. This slice isolates the request-body
-contract before modifying that security-dense transport.
+MEGALODON's Qwen adapter limits requests to one literal loopback endpoint, one
+`/api/generate` call, no redirects, no retries, no model pull/start, and no
+tool execution. The live transport now imports this builder, so generic and
+anomaly advisories use the same canonical bytes that the offline contract
+hashes and validates.
 
 ```bash
 python tools/ollama_generate_contract.py request-input.json
@@ -29,6 +31,8 @@ The anomaly mode adds an Ollama structured-output schema to `format`. The
 schema:
 
 - fixes the exact candidate IDs and their order;
+- uses an array-level `const` compatible with the pinned Ollama 0.24 schema
+  converter, avoiding unsupported boolean `items` handling;
 - rejects additional response properties;
 - requires `summary`, `benign_alternatives`, and `missing_evidence`;
 - limits the summary to 600 characters;
@@ -79,15 +83,16 @@ Official Ollama references:
 
 ## Remaining runtime gate
 
-This PR intentionally does not edit `megalodon/qwen_advisory.py`. A successor
-wiring PR must:
+`megalodon/qwen_advisory.py` imports this builder rather than duplicating its
+settings. Regression tests prove byte-for-byte parity for generic and anomaly
+requests, forbid tool/memory extension fields, and retain the independent
+response parser, literal-loopback, cancellation, timeout, concurrency,
+proxy/DNS, partial-response, and no-tool controls.
 
-1. import this builder rather than duplicate request settings;
-2. prove byte-for-byte request compatibility for generic advisories;
-3. prove anomaly responses still satisfy the existing independent parser;
-4. rerun literal-loopback, cancellation, timeout, concurrency, proxy/DNS,
-   partial-response, and no-tool negative controls;
-5. obtain exact-head independent security review.
+`RUNTIME_PROVIDER_WIRING` nevertheless remains a HOLD until exact-head
+independent security review and owner acceptance are recorded. Test-backed
+construction parity is not model binding, provider containment, or permission
+to perform inference.
 
 Model binding, provider containment, signed evaluation, owner acceptance,
 release, deployment, and host operation remain separate decisions.
