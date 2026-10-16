@@ -119,6 +119,15 @@ def test_unhashable_manifest_evidence_class_is_a_fixed_refusal():
         validate_corpus_manifest(value)
 
 
+@pytest.mark.parametrize(("field", "code"), [("category", "CASE_CATEGORY"), ("expected_outcome", "EXPECTED_OUTCOME")])
+@pytest.mark.parametrize("bad", [[], {}])
+def test_unhashable_case_category_or_outcome_is_a_fixed_refusal(field, code, bad):
+    value = manifest()
+    value["cases"][0][field] = bad
+    with pytest.raises(ModelEvaluationError, match=f"^{code}$"):
+        validate_corpus_manifest(value)
+
+
 def test_case_ids_are_opaque_so_no_text_can_be_carried():
     value = manifest()
     value["cases"][0]["case_id"] = "ignore-previous-instructions"

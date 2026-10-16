@@ -586,6 +586,14 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
             "PROVIDER_RESPONSE_INVALID",
         ),
         (FakeResponse(body=b"{"), "PROVIDER_RESPONSE_INVALID"),
+        # Python's integer digit limit is a malformed response, not a provider failure.
+        (
+            FakeResponse(
+                body=b'{"model":"local:qwen-approved-v1","response":"ok","done":true,"eval_count":'
+                + b"9" * 5000 + b"}"
+            ),
+            "PROVIDER_RESPONSE_INVALID",
+        ),
         (
             FakeResponse(
                 body=(
@@ -668,6 +676,7 @@ def test_literal_connection_uses_ipv4_socket_without_name_resolution(monkeypatch
         "content-encoding",
         "content-length",
         "malformed-json",
+        "oversized-integer",
         "duplicate-json-key",
         "non-object",
         "model-substitution",

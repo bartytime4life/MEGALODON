@@ -556,7 +556,7 @@ def validate_corpus_manifest(value: object) -> dict[str, Any]:
             raise ModelEvaluationError("CASE_ORDER")
         previous_case_number = case_number
         category = case["category"]
-        if category not in category_totals:
+        if type(category) is not str or category not in category_totals:
             raise ModelEvaluationError("CASE_CATEGORY")
         position = CATEGORIES.index(category)
         if position < previous_category:
@@ -567,7 +567,7 @@ def validate_corpus_manifest(value: object) -> dict[str, Any]:
             raise ModelEvaluationError("DUPLICATE_FIXTURE")
         fixtures.add(fixture)
         expected = case["expected_outcome"]
-        if expected not in expected_totals:
+        if type(expected) is not str or expected not in expected_totals:
             raise ModelEvaluationError("EXPECTED_OUTCOME")
         if type(case["unknown_evidence_id"]) is not bool:
             raise ModelEvaluationError("UNKNOWN_EVIDENCE_ID")

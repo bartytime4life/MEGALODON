@@ -309,6 +309,14 @@ def test_unbound_posture_is_a_named_hold():
     assert result["gate_failures"] == ["OWNER_MODEL_BINDING_NOT_RECORDED"]
 
 
+@pytest.mark.parametrize("status", [[], {}, None, 1])
+def test_non_string_binding_status_is_a_fixed_refusal(status):
+    value = binding()
+    value["status"] = status
+    with pytest.raises(LocalModelReadinessError, match="^BINDING_STATUS$"):
+        assess_readiness(value)
+
+
 def test_unbound_refuses_smuggled_evidence():
     with pytest.raises(
         LocalModelReadinessError, match="EVIDENCE_WITH_UNBOUND_BINDING"
