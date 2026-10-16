@@ -72,6 +72,15 @@ def _apt_script(recipe: Recipe) -> str:
     return "\n".join(lines)
 
 
+def _authorized(which: Callable[[str], str | None], name: str) -> str | None:
+    """A program run through pkexec comes from /usr/bin, never a PATH entry."""
+    # A user-writable PATH entry could otherwise fake the authorization
+    # prompt or run its own program as root once the operator approves.
+    path, fixed = which(name), f"/usr/bin/{name}"
+    # /bin may be a merged-/usr alias of /usr/bin; the fixed path is returned.
+    return fixed if path is not None and os.path.realpath(path) == os.path.realpath(fixed) else None
+
+
 def install_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.which,
                     is_root: bool | None = None) -> list[str] | None:
     """Return the fixed argv for one tool, or None when it cannot run here."""
@@ -88,7 +97,7 @@ def install_command(tool_id: str, *, which: Callable[[str], str | None] = shutil
         script = _apt_script(recipe)
         if root:
             return ["/bin/sh", "-c", script]
-        pkexec = which("pkexec")
+        pkexec = _authorized(which, "pkexec")
         return [pkexec, "/bin/sh", "-c", script] if pkexec else None
     return None
 
@@ -123,8 +132,8 @@ def start_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.w
     root = (os.geteuid() == 0) if is_root is None else is_root
     if root:
         return [systemctl, "start", f"{unit}.service"]
-    pkexec = which("pkexec")
-    return [pkexec, systemctl, "start", f"{unit}.service"] if pkexec else None
+    pkexec, systemctl = _authorized(which, "pkexec"), _authorized(which, "systemctl")
+    return [pkexec, systemctl, "start", f"{unit}.service"] if pkexec and systemctl else None
 
 
 def terminal_command(tool_id: str, action: str = "install") -> str | None:

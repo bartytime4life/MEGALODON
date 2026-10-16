@@ -91,6 +91,12 @@ def test_recipes_are_closed_and_never_interpolate_requests(monkeypatch):
     assert command[3].endswith("apt-get install -y --no-install-recommends tshark")
     assert install_command("tshark", which=which, is_root=True)[0] == "/bin/sh"
     assert install_command("tshark", which={}.get, is_root=False) is None
+    # A pkexec found elsewhere on PATH is never used.
+    shadowed = {"apt-get": "/usr/bin/apt-get", "pkexec": "/home/user/.local/bin/pkexec"}.get
+    assert install_command("tshark", which=shadowed, is_root=False) is None
+    if os.path.realpath("/bin") == "/usr/bin":
+        merged = {"apt-get": "/usr/bin/apt-get", "pkexec": "/bin/pkexec"}.get
+        assert install_command("tshark", which=merged, is_root=False)[0] == "/usr/bin/pkexec"
     for guided in ("core", "zeek", "osquery"):
         assert install_command(guided, which=which) is None
     assert install_command("qwen", which={}.get) is None
@@ -362,6 +368,9 @@ def test_start_command_uses_only_fixed_existing_units(tmp_path, monkeypatch):
     assert tool_installer.start_command("suricata", which=which, is_root=True, directories=dirs)[0] == "/usr/bin/systemctl"
     # No unit file, no systemctl, or a standalone tool: no command at all.
     assert tool_installer.start_command("suricata", which={}.get, directories=dirs) is None
+    for name in ("pkexec", "systemctl"):
+        shadowed = {"systemctl": "/usr/bin/systemctl", "pkexec": "/usr/bin/pkexec", name: f"/home/user/.local/bin/{name}"}.get
+        assert tool_installer.start_command("suricata", which=shadowed, is_root=False, directories=dirs) is None
     assert tool_installer.start_command("zabbix", which=which, directories=dirs) is None
     assert tool_installer.start_command("nmap", which=which, directories=dirs) is None
 
