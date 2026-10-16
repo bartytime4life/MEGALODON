@@ -13,7 +13,7 @@ const parse = value => validateReadinessReport(JSON.stringify(value), now);
 
 test('accepts a complete presence-only report without promoting claims', () => {
   const result = parse(report());
-  assert.equal(result.tools.length, 10);
+  assert.equal(result.tools.length, 12);
   assert.equal(result.tools.find(tool => tool.id === 'qwen-ollama').status, 'executable_found');
   assert.equal(result.probe_mode, 'path_presence_only');
 });
@@ -23,7 +23,7 @@ test('v1 reports require regeneration and retired tool IDs fail closed', () => {
   assert.throws(() => parse(old), /Run python -m megalodon readiness again/);
   for (const id of ['ossec', 'zabbix']) {
     const retired = report(); retired.tools[9].id = id;
-    assert.throws(() => parse(retired), /exact 10-tool/);
+    assert.throws(() => parse(retired), /exact current tool/);
   }
 });
 
@@ -70,3 +70,10 @@ test('bounded input rejects oversized, deeply nested and malformed JSON', () => 
   assert.throws(() => validateReadinessReport(null, now));
 });
 
+
+
+test('archived ten-tool receipts retain time and mark newly added tools unknown',()=>{
+ const old=report();old.tools=old.tools.slice(0,10);
+ const value=parse(old);assert.equal(value.checked_at,old.checked_at);assert.equal(value.tools.length,12);
+ assert.equal(value.tools[10].status,'not_checked');assert.equal(value.tools[11].status,'not_checked');
+});

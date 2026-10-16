@@ -65,7 +65,7 @@ def test_critical_boundaries_are_explicit():
     assert "no CLI or tool authority for that policy" in items["qwen-ollama"]["boundary"]
     assert "installed-provider acceptance remains unproved" in items["qwen-ollama"]["boundary"]
     assert items["nmap"]["selected_status"] == "evaluation_only"
-    assert len(items) == 10
+    assert len(items) == 12
     assert {"ossec", "zabbix"}.isdisjoint(items)
     assert value["excluded"] == [
         {

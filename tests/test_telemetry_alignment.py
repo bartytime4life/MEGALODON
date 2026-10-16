@@ -13,7 +13,7 @@ def test_packaged_coverage_map_and_snapshot_validator():
     assert COVERAGE_CSS in DASHBOARD_CSS
     for _,_,_,_,target in FEATURES:
         assert f'id="{target}"' in INDEX_HTML
-    assert 'All 10 companions: telemetry support' in coverage_html()
+    assert 'All 12 companions: telemetry support' in coverage_html()
     assert coverage_html().count('<th scope="row">') == len(FEATURES) + len(TOOLS)
 
 

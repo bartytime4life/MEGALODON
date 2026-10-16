@@ -748,7 +748,8 @@ const workspaceTargets = {
   'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'action-plane-title': 'setup', 'app-service-start-title': 'setup', 'app-viewer-title': 'setup', 'analysis-window-title': 'analysis',
-  ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'].map(id=>['setup-app-'+id,'setup'])),
+  ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'].map(id=>['setup-app-'+id,'setup'])),
+  'support-host-security':'setup',
   ...Object.fromEntries(['zeek','suricata-setup','clamav-save','osquery','qwen-setup','nmap-save'].map(id=>['support-config-'+id,'setup'])),
   'help-language': 'help', 'status-glossary': 'help'
 };

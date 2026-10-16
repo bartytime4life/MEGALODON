@@ -59,6 +59,8 @@ RECIPES: dict[str, Recipe] = {
     "qwen": Recipe("ollama", "Downloads the example qwen2.5:7b model into the local Ollama provider (several GB).",
                    ("qwen2.5:7b",), requires="ollama"),
     "nmap": Recipe("apt", "Installs the Ubuntu nmap package. No scan is started.", ("nmap",)),
+    "lynis": Recipe("apt", "Installs the free Ubuntu Lynis auditor; audits and configuration changes remain separate.", ("lynis",)),
+    "aide": Recipe("apt", "Installs the free Ubuntu AIDE checker without recommended services; baseline creation is separate.", ("aide",)),
 }
 
 

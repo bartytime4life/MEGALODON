@@ -32,6 +32,13 @@ SUPPORT_CONFIG_HTML = r'''
     <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
     <section><h5>Suricata</h5><p>Configure the passive sensor on the selected network interface.</p><div class="support-config-actions"><button type="button" id="support-config-suricata-setup" disabled>Configure background Suricata</button><button type="button" id="support-config-suricata" disabled>Check configuration</button></div><p class="support-config-note">A one-time system prompt configures the service and access to its local logs.</p></section>
   </div></details>
+  <section id="support-host-security" class="support-capture" aria-labelledby="host-security-title">
+    <h5 id="host-security-title">Host security and threat context</h5>
+    <p>Audit Linux configuration, compare critical files with an initial AIDE baseline, and match observed IPs against dated public references.</p>
+    <div class="support-config-actions"><button type="button" id="host-security-audit" disabled>Run Lynis audit</button><button type="button" id="host-security-baseline" disabled>Create initial AIDE baseline</button><button type="button" id="host-security-check" disabled>Check file changes</button><button type="button" id="host-security-refresh" disabled>Refresh threat references</button></div>
+    <p id="host-security-status" role="status">Host security results have not been checked.</p><ul id="host-security-results"></ul>
+    <p class="support-config-note">Audits run as your user and cover readable files only. The initial baseline is an observation, not a clean-system certificate. Checks preserve that baseline. Refresh downloads fixed Spamhaus DROP and IPsum references at most once per day; IP observations stay on this PC. Stale references stop matching. A match supplies context and never authorizes blocking or identifies an attacker.</p>
+  </section>
   <details class="support-config-locations"><summary>Installed tool directories</summary>
     <p>When a tool is outside the HUD service's PATH, select its executable directory here. Only the fixed executable name for that tool is checked. Saving a directory does not start a program. Other service and adapter workflows may still need their packaged location.</p>
     <label for="support-config-tool-id">Tool</label><select id="support-config-tool-id" disabled><option value="zeek">Zeek</option><option value="tshark">TShark</option><option value="suricata">Suricata</option><option value="nftables">nftables</option><option value="clamav">ClamAV</option><option value="osquery">osquery</option><option value="qwen">Ollama</option><option value="nmap">Nmap</option></select>
@@ -88,13 +95,14 @@ SUPPORT_CONFIG_JS = r'''
   if(!el('support-config-tool-id').value)el('support-config-tool-id').value='zeek';
   const state={configVisible:false,globeVisible:false,liveAction:false,open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
   const actions={
+    'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh',
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
     'support-config-tool-directory-save':'tool_directory_set','support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
-  const actionNames={tool_directory_set:'Saving tool directory',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
+  const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',tool_directory_set:'Saving tool directory',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
@@ -142,6 +150,17 @@ SUPPORT_CONFIG_JS = r'''
     el('support-config').setAttribute('aria-busy',state.pending?'true':'false');
   }
   function render(v){
+    const h=v.host_security;
+    if(h&&h.schema==='megalodon-host-security-v1'&&Array.isArray(h.feeds)&&h.feeds.length<=3){
+      el('host-security-status').textContent=typeof h.message==='string'?h.message:'Host security unavailable.';
+      const rows=[];
+      for(const [key,name] of [['audit','Lynis'],['integrity','AIDE']])if(h[key]&&typeof h[key].message==='string'){
+        const row=document.createElement('li');row.textContent=name+': '+h[key].message+' · '+time(h[key].checked_at);rows.push(row);
+      }
+      for(const feed of h.feeds){const row=document.createElement('li');row.textContent=feed.source+': '+feed.indicators+' indicators · publisher '+time(feed.publisher_at)+' · expires '+time(feed.expires_at)+' · '+h.feed_state;rows.push(row);}
+      el('host-security-results').replaceChildren(...rows);
+    }
+
     if(v.model){
       const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')?select.value:model.model;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});

@@ -178,3 +178,11 @@ The catalog and plan tests must continue to prove unique component/workflow
 coverage, closed fields, exact status derivation, `action_status=not_attempted`,
 and false performed flags. Output is descriptive evidence, not a compatibility
 receipt or execution authorization.
+
+## Local host security additions
+
+Lynis configuration audits and AIDE file comparisons have fixed operator-invoked
+lanes in `megalodon.host_security`. The static hub command still executes
+nothing. [Host security](host-security.md) owns their fixed scopes, private
+summaries and baseline preservation rules, plus the separate local threat-feed
+cache. Feed matches are context, not admitted detections or action authority.

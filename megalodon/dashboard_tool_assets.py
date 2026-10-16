@@ -42,7 +42,9 @@ const lifecycleCommands = (() => {
       labels: {verify: "Check example model tag", uninstall: "Remove example model", reinstall: "Download example model"},
       note: "Example tag only: all three operations target qwen2.5:7b. This mutable tag is not the approved registry or an artifact digest. Commands contact the local provider; pull can download from the Internet. They neither install/remove Ollama nor establish model containment."
     },
-    nmap: apt("nmap", "command -v nmap >/dev/null && nmap --version", "No scan is launched by the diagnostic.")
+    lynis: apt("lynis", "command -v lynis", "Audits run only after an explicit request."),
+  aide: apt("aide", "command -v aide", "Installation does not create or approve a baseline."),
+  nmap: apt("nmap", "command -v nmap >/dev/null && nmap --version", "No scan is launched by the diagnostic.")
   };
 })();
 
@@ -59,7 +61,7 @@ if (typeof module !== "undefined") module.exports = {lifecycleCommands, resolveL
 """
 
 READINESS_JS = r"""/* Closed, bounded display schema. A report is an unauthenticated self-report. */
-const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap"];
+const readinessToolIds = ["python-sqlite", "wireshark-tshark", "zeek", "suricata", "scapy", "nftables", "clamav", "osquery", "qwen-ollama", "nmap", "lynis", "aide"];
 const readinessBoundaries = [
   "Executable presence only; installation, version, compatibility, trust and running state are not verified.",
   "Python/SQLite and Scapy availability are not checked by this executable-only report.",
@@ -103,7 +105,9 @@ function validateReadinessReport(text, now = Date.now()) {
   if (typeof data.checked_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(data.checked_at)) throw new Error("Report requires a UTC checked_at timestamp.");
   const checkedAt = Date.parse(data.checked_at);
   if (!Number.isFinite(checkedAt) || new Date(checkedAt).toISOString().replace(".000Z", "Z") !== data.checked_at || checkedAt > now + 300000) throw new Error("Invalid or future readiness timestamp.");
-  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact 10-tool presence-only registry.");
+  // Archived ten-tool receipts keep their observation time; new tools are unknown.
+  if(Array.isArray(data.tools)&&data.tools.length===10&&data.tools.every((tool,index)=>tool&&tool.id===readinessToolIds[index]))data.tools.push({id:'lynis',status:'not_checked'},{id:'aide',status:'not_checked'});
+  if (!Array.isArray(data.tools) || data.tools.length !== readinessToolIds.length || !data.tools.every((tool, index) => exactKeys(tool, ["id", "status"]) && tool.id === readinessToolIds[index] && ["executable_found", "not_found", "not_checked"].includes(tool.status) && ((data.platform === "linux" && !["python-sqlite", "scapy"].includes(tool.id)) || tool.status === "not_checked"))) throw new Error("Expected the exact current tool presence-only registry.");
   const boundaries = known ? [...readinessBoundaries.slice(0,-1), 'Linux PATH, bounded known prefixes and owner-selected directories are checked; presence does not establish accepted telemetry.'] : readinessBoundaries;
   if (!Array.isArray(data.boundaries) || data.boundaries.length !== boundaries.length || !data.boundaries.every((value, index) => value === boundaries[index])) throw new Error("Report boundary statements do not match this schema.");
   return data;
@@ -114,6 +118,8 @@ if (typeof module !== "undefined") module.exports = { validateReadinessReport, r
 
 CONTROLS_JS = r"""const localCompanionCommand = null;
 const toolAcquisition = {
+  lynis:{source:'CISOfy',url:'https://cisofy.com/lynis/',linkLabel:'Lynis publisher guide',platforms:['Linux'],commandLabel:null,command:null,verificationLabel:'Executable observation',note:'Free GPL software. Use Host security for an unprivileged audit; Enterprise is optional.'},
+  aide:{source:'AIDE Project',url:'https://aide.github.io/',linkLabel:'AIDE publisher guide',platforms:['Linux'],commandLabel:null,command:null,verificationLabel:'Executable observation',note:'Free GPL software. Baseline creation is a separate explicit observation, not approval of system safety.'},
   core: {
     source: "MEGALODON repository",
     url: "https://github.com/bartytime4life/MEGALODON#ubuntu-2404-companion-tool-setup",
@@ -270,7 +276,7 @@ const companionSetupGuides = {
 
 /* Shared local/hosted companion controls. Text copying and explicit navigation only. */
 const MegalodonControls = (() => {
-  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap'];
+  const ids = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'lynis', 'aide'];
   const localConsoleSuggestions = Object.freeze({});
   const storageKey = 'megalodon-console-links-v1';
   let memory = null;

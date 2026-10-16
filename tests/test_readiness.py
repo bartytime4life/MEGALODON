@@ -43,7 +43,7 @@ def test_receipt_is_closed_bounded_catalog_aligned_and_has_no_host_details(monke
     assert report["boundaries"] == list(readiness.BOUNDARIES)
     expected_ids = [item["id"] for item in catalog("linux")["components"]]
     assert [item["id"] for item in report["tools"]] == expected_ids
-    assert len(report["tools"]) == 10
+    assert len(report["tools"]) == 12
     assert {"ossec", "zabbix"}.isdisjoint(expected_ids)
     assert all(set(item) == {"id", "status"} for item in report["tools"])
     assert {item["status"] for item in report["tools"]} <= readiness.STATUSES
@@ -153,7 +153,7 @@ def test_probe_count_is_fixed_and_never_enumerates_directories(monkeypatch):
         guard.setattr(os, "scandir", denied)
         report = readiness.readiness_report()
     binaries = {name for _, name in readiness.TOOL_EXECUTABLES if name is not None}
-    assert len(binaries) == 8
+    assert len(binaries) == 10
     assert len(visited) == len(binaries) * readiness.MAX_PATH_ENTRIES
     assert accessed == visited
     assert {Path(candidate).name for candidate in visited} == binaries

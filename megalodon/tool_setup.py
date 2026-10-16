@@ -11,6 +11,8 @@ from .tool_heartbeat import heartbeat_report
 
 # Role, scope and credentials remain operator choices; never guess or enable capture.
 CONFIGURATION = {
+    'lynis': ('Run python -m megalodon.host_security audit, or Run Lynis audit in Setup.', 'The fixed audit runs as your user, saves a private report and never changes hardening settings.'),
+    'aide': ('Create an observed initial baseline with python -m megalodon.host_security baseline, then use check to compare.', 'Checks never replace the baseline. Readable fixed scope only; an initial baseline does not certify a clean system.'),
     'core': ('Run ./scripts/install-local.sh from a reviewed checkout, then open the MEGALODON application.', 'Before startup: python -m megalodon.config_check < config/settings.toml (substitute your actual settings file). Exit 0 validates configuration only; then check your private database and availability in the HUD.'),
     'tshark': ('For offline review: tshark -r /absolute/path/to/capture.pcap -c 100', 'Live capture needs an explicitly selected interface and separately approved permissions. No permissions are granted by this script.'),
     'zeek': ('Use the pinned private-prefix build guide in README.md, "3. Build Zeek as a private, non-service producer".', 'Run zeek -r /absolute/path/to/capture.pcap inside a new private output directory; it creates logs there.'),

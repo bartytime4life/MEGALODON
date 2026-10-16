@@ -617,7 +617,7 @@ def test_workflow_endpoint_observes_without_model_or_service_execution(endpoint,
     monkeypatch.setattr(endpoint[1].sensors,'snapshot',lambda:dict(zeek=idle,suricata=idle))
     code,value=request(endpoint,method='GET',body=b'',path='/api/support-workflows')
     assert code==200 and value['schema']=='megalodon-support-workflows-v1'
-    assert len(value['tools'])==10 and endpoint[2]==[]
+    assert len(value['tools'])==12 and endpoint[2]==[]
     assert request(endpoint,method='GET',body=b'',path='/api/support-workflows?start=true')[0]==400
     assert request(endpoint,method='GET',body=b'',path='/api/support-workflows',omit=('X-Megalodon-Check',))[0]==403
 
@@ -652,3 +652,16 @@ def test_setup_action_refuses_while_a_tool_install_runs(manager):
     with pytest.raises(config.ConfigBusy):
         manager.start({'action':'signature_update'})
     assert calls==[] and manager.snapshot()['job']['state']!='running'
+
+
+def test_host_security_controls_reach_fixed_actions_and_finish_in_existing_lane(manager,monkeypatch):
+    seen=[]
+    monkeypatch.setattr(manager.host_security,'execute',lambda action:seen.append(action) or 'Fixed local check completed.')
+    monkeypatch.setattr(manager,'_execute',lambda *a:pytest.fail('generic command runner called'))
+    for action in ('audit','baseline','check','refresh'):
+        manager._work({'action':'security_'+action})
+        value=manager.snapshot()
+        assert value['job']['state']=='finished'
+        assert value['job']['message']=='Fixed local check completed.'
+        assert next(row for row in value['tools'] if row['id']=='security')['state']=='ready'
+    assert seen==['audit','baseline','check','refresh']

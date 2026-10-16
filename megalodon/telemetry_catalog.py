@@ -25,6 +25,8 @@ FEATURES = (
  ('exchange','Threat context / SIEM / SOAR','Offline STIX reader, local SIEM exporter; SOAR contract only','Explicit offline operations; no remote feed or delivery','integrations-title'),
 )
 TOOLS = (
+ ('lynis','Lynis','Explicit unprivileged configuration audit and private report','Suggestions only; root-only checks are outside coverage'),
+ ('aide','AIDE','Observed initial critical-file baseline and explicit comparisons','Never replaces its baseline or certifies system safety'),
  ('core','Python + SQLite','Qualified core traffic and finding projection','Refreshing stored metadata'),
  ('tshark','TShark / Wireshark','Background header-only packet metadata and optional offline analysis','Configured interface and permissions; capture state and accepted data are separate'),
  ('zeek','Zeek','Managed background conn.log summaries or selected offline log','Source-qualified flow updates; not added to packet counts'),
@@ -59,7 +61,7 @@ def coverage_html(hosted=False):
     return f'''<section class="telemetry-coverage" aria-labelledby="telemetry-coverage-title">
 <h3 id="telemetry-coverage-title">Data connections and coverage</h3><p>{note}</p>
 <details><summary>Feature data sources and refresh</summary><div class="telemetry-table" tabindex="0" role="region" aria-label="Feature data connections"><table><thead><tr><th>Feature</th><th>Data source</th><th>Update behavior</th></tr></thead><tbody>{rows}</tbody></table></div></details>
-<details><summary>All 10 companions: telemetry support</summary><p>These tools run locally without a vendor account. The built-in PC resource collector uses Linux counters and needs no extra install. <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer">Wireshark / TShark</a>, <a href="https://suricata.io/our-story/suricata/" target="_blank" rel="noopener noreferrer">Suricata</a> and <a href="https://www.clamav.net/" target="_blank" rel="noopener noreferrer">ClamAV</a> are free local software; optional commercial services are not required.</p><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody>{tool_rows}</tbody></table></div></details>
+<details><summary>All 12 companions: telemetry support</summary><p>These tools run locally without a vendor account. The built-in PC resource collector uses Linux counters and needs no extra install. <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer">Wireshark / TShark</a>, <a href="https://suricata.io/our-story/suricata/" target="_blank" rel="noopener noreferrer">Suricata</a> and <a href="https://www.clamav.net/" target="_blank" rel="noopener noreferrer">ClamAV</a> are free local software; optional commercial services are not required.</p><p>Installation, an observed process or a saved console link does not establish a working data adapter.</p><div class="telemetry-table" tabindex="0" role="region" aria-label="Companion telemetry coverage"><table><thead><tr><th>Companion</th><th>Available data path</th><th>Scope / remaining gap</th></tr></thead><tbody>{tool_rows}</tbody></table></div></details>
 </section>'''
 
 COVERAGE_CSS = r'''

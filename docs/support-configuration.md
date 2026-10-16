@@ -105,3 +105,10 @@ Each action accepts only its documented interface, private target, folder
 choice or exact installed model identity and compute mode. Duplicate keys/headers, encodings, query aliases, paths, commands,
 services, arbitrary URLs and extra fields are rejected. Responses stay below
 64 KiB. No CORS access is granted. Host and optional HTTP sign-in apply first.
+
+## Host security and threat context
+
+The [host security panel](host-security.md) adds explicit Lynis audits, initial
+AIDE baseline creation, AIDE comparisons and dated public-reference refreshes.
+These use the existing authenticated configuration action lane. File-change
+checks preserve the initial baseline; threat matches never execute responses.
