@@ -597,7 +597,9 @@ function globeHourModel(page, start, end, selectedAt, live) {
   return {bins, index, peak: Math.max(0, ...bins.map(bin => bin.count)), latest,
     traffic: {status: 'available', events: displayed, signalByEvent}};
 }
-function globeHourTime(at) { return new Date(at).toISOString().slice(11, 16) + ' UTC'; }
+// Rolling bins rarely start on a whole minute; seconds keep each label exact
+// (12:00:30 must not appear under "11:59–12:00").
+function globeHourTime(at) { const text = new Date(at).toISOString(); return text.slice(11, text.slice(17, 23) === '00.000' ? 16 : 19) + ' UTC'; }
 function globeMinuteDetail(at, bin) {
   const signal = bin.count ? globeSignalLabel(bin.signal) : 'No returned records (safety unknown)';
   return `${globeHourTime(at)}–${globeHourTime(at + 60000)} · ${bin.count} returned record${bin.count === 1 ? '' : 's'} · ${signal}`;

@@ -72,6 +72,11 @@ def _sum_known(values):
     return round(sum(values), 3) if all(value is not None for value in values) else None
 
 
+def _percent(value):
+    """Process ticks are read after /proc/stat; a sum above 100 is unmeasured."""
+    return value if value is None or value <= 100 else None
+
+
 def _address(value: str) -> str:
     if len(value) == 8:
         return socket.inet_ntop(socket.AF_INET, struct.pack("=I", int(value, 16)))
@@ -256,7 +261,7 @@ class HostTelemetry:
                     old_io = old.get("io")
                     values.append(_delta(item["io"][offset], old_io[offset], elapsed) if item["io"] and old_io and same_process else None)
             apps.append({"id": key, "name": name, "process_count": len(matches),
-                         "cpu_percent": _sum_known(cpu_values) if valid_interval else None,
+                         "cpu_percent": _percent(_sum_known(cpu_values)) if valid_interval else None,
                          "rss_bytes": sum(item["rss"] for _, item in matches),
                          "read_bps": _sum_known(reads) if valid_interval else None,
                          "write_bps": _sum_known(writes) if valid_interval else None,
@@ -269,6 +274,8 @@ class HostTelemetry:
                 name, values = line.rsplit(":", 1)
                 name = name.strip()
                 if not re.fullmatch(r"[\w.:-]{1,64}", name, re.ASCII):
+                    # A legal name outside this set is omitted, so coverage is partial.
+                    network_status = "partial"
                     continue
                 counters = [int(value) for value in values.split()]
                 if len(counters) != 16 or any(value < 0 for value in counters):
@@ -288,10 +295,14 @@ class HostTelemetry:
         except (OSError, ValueError, IndexError, UnicodeError):
             network_status, interfaces, network_raw = "unavailable", [], {}
         rss = sum(app["rss_bytes"] for app in apps)
-        suite_cpu = _sum_known(app["cpu_percent"] for app in apps)
+        suite_cpu = _percent(_sum_known(app["cpu_percent"] for app in apps))
         point = {"observed_at": observed_at, "system_cpu_percent": system_cpu,
                  "suite_cpu_percent": suite_cpu, "suite_rss_bytes": rss,
                  "interfaces": [{key: row[key] for key in ("name", "rx_bps", "tx_bps")} for row in interfaces]}
+        # A wall-clock step back would leave history out of order, which the
+        # HUD refuses until it ages out; restart the chart instead.
+        if self._history and self._history[-1]["observed_at"] >= observed_at:
+            self._history.clear()
         self._history.append(point)
         self._previous = {"now": now, "total": total, "idle": idle, "processes": processes, "network": network_raw}
         sockets = _sockets(self.root)

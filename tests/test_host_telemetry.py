@@ -171,7 +171,19 @@ def test_truncated_comm_and_long_argv_keep_process_coverage(tmp_path):
     assert value['suite']['rss_bytes'] == 2 * 100 * os.sysconf('SC_PAGE_SIZE')  # long argv is still classified
 
 
-def test_history_bound_and_snapshot_isolation(tmp_path):
+def test_history_bound_and_snapshot_isolation(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import megalodon.host_telemetry as module
+    wall = [datetime(2026, 10, 16, 12, tzinfo=timezone.utc)]
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            # Real samples are two seconds apart; the HUD refuses equal stamps.
+            wall[0] += timedelta(seconds=2)
+            return wall[0]
+
+    monkeypatch.setattr(module, 'datetime', Clock)
     root = tmp_path / 'proc'
     write_proc(root)
     sampler = HostTelemetry(root, own_pid=42)
@@ -218,3 +230,59 @@ def test_http_requires_local_host_header_and_no_query(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_summed_process_cpu_above_the_machine_total_is_unmeasured(tmp_path):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    process(root, 43, 'python', 10, parent=42)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    # /proc/stat is read before each process: two processes can each report
+    # most of a 200-tick interval, summing past 100 % of the machine.
+    write_proc(root, total=1200, idle=800, ticks=111)
+    process(root, 43, 'python', 110, parent=42)
+    value = sampler.sample(12)
+    assert value['system']['cpu_percent'] == 100
+    assert value['suite']['cpu_percent'] is None
+    assert all(app['cpu_percent'] is None or app['cpu_percent'] <= 100 for app in value['apps'])
+
+
+def test_wall_clock_step_back_restarts_ordered_history(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import megalodon.host_telemetry as module
+    wall = [datetime(2026, 10, 16, 12, tzinfo=timezone.utc)]
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return wall[0]
+
+    monkeypatch.setattr(module, 'datetime', Clock)
+    root = tmp_path / 'proc'
+    write_proc(root)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    wall[0] -= timedelta(seconds=30)
+    write_proc(root, total=1200, idle=900, ticks=30)
+    history = [point['observed_at'] for point in sampler.sample(12)['history']]
+    assert history == ['2026-10-16T11:59:30.000Z']
+
+
+def test_an_omitted_interface_name_makes_network_coverage_partial(tmp_path):
+    root = tmp_path / 'proc'
+
+    def counters(received):
+        row = lambda name, value: f' {name}: ' + ' '.join(map(str, [value, 5, 0, 1, 0, 0, 0, 0, 50, 3, 0, 0, 0, 0, 0, 0]))
+        (root / 'net/dev').write_text('h\nh\n' + row('eth0', received) + '\n' + row('wg+home', received) + '\n')
+
+    write_proc(root)
+    counters(100)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    write_proc(root, total=1200, idle=900, ticks=30)
+    counters(600)
+    value = sampler.sample(12)
+    assert [row['name'] for row in value['network']['interfaces']] == ['eth0']
+    assert value['network']['status'] == 'partial' and value['status'] == 'partial'
+

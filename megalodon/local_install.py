@@ -726,7 +726,9 @@ def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) ->
             service_action('start')
             identity = json.loads(_regular_owned_file(selected.releases / release_id / 'release.json', maximum=4096))
             verify_running(selected, identity['package_sha256'])
-    except Exception:
+    except BaseException:
+        # Ctrl-C during the stop, swap or manifest write must roll back too;
+        # otherwise the selector and manifest disagree and repair refuses.
         if was_running and activated:
             # Never remove code from a process whose stop could not be confirmed.
             service_action('stop')
@@ -745,9 +747,11 @@ def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) ->
             _atomic_write(selected.manifest, previous_manifest, 0o600)
         elif previous_manifest is None and selected.manifest.exists():
             selected.manifest.unlink()
+        # The selector no longer names the new release; remove it before a
+        # restart that can fail, so no unlisted release is left behind.
+        shutil.rmtree(_expected_release(selected, release_id), ignore_errors=True)
         if was_running:
             service_action('start')
-        shutil.rmtree(_expected_release(selected, release_id), ignore_errors=True)
         raise
     try:
         return retire_releases(selected, manifest)

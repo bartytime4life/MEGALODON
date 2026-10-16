@@ -546,7 +546,10 @@ def _parse_provider_output(body: bytes, model_id: str) -> tuple[str, int]:
             object_pairs_hook=_strict_object,
             parse_constant=reject_constant,
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+    except _ProviderResponseInvalid:
+        raise
+    # ValueError also covers an integer beyond Python's digit limit.
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise _ProviderResponseInvalid("provider body is not valid UTF-8 JSON") from exc
     if type(value) is not dict:
         raise _ProviderResponseInvalid("provider response is not an object")

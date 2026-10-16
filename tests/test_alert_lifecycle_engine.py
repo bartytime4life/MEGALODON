@@ -196,6 +196,28 @@ def test_not_attempted_receipt_refuses_a_configured_outbox() -> None:
         )
 
 
+@pytest.mark.parametrize("change", [
+    {"max_attempts": False}, {"max_attempts": 0.0}, {"destination_class": "webhook"},
+    {"status": "sent"}, {"endpoint": "https://example.test/hook"},
+])
+def test_not_attempted_receipt_requires_an_inert_v1_outbox(change) -> None:
+    outbox = dict(outbox_intent(id="outbox-1", alert_id="alert-1", transition_id="t1",
+                                policy_version="alert-policy-v1", created_at="2026-09-19T00:00:00Z"))
+    assert not_attempted_receipt(id="receipt-1", outbox=outbox, occurred_at="2026-09-19T00:00:00Z")
+    outbox.update(change)
+    with pytest.raises(AlertLifecycleError):
+        not_attempted_receipt(id="receipt-1", outbox=outbox, occurred_at="2026-09-19T00:00:00Z")
+
+
+def test_ledger_refuses_unhashable_ids_with_its_fixed_code() -> None:
+    ledger = AlertLifecycleLedger()
+    with pytest.raises(AlertLifecycleError):
+        ledger.open_alert(id=[], detection_id="d-1", policy_version="p1", opened_at="2026-09-19T00:00:00Z")
+    for read in (ledger.projection, ledger.history):
+        with pytest.raises(AlertLifecycleError):
+            read([])
+
+
 def test_engine_exposes_no_delivery_attempt_or_notifier_surface() -> None:
     import megalodon.alert_lifecycle as module
 

@@ -118,6 +118,11 @@ def _sha256_manifest(manifest: Mapping[str, Any]) -> str:
     return _sha256_hex_prefixed(hashlib.sha256(encoded).hexdigest())
 
 
+def _generation(descriptor: int) -> tuple[int, ...]:
+    info = os.fstat(descriptor)
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
 def _read_all(descriptor: int, ceiling: int) -> bytes:
     os.lseek(descriptor, 0, os.SEEK_SET)
     chunks = bytearray()
@@ -351,6 +356,7 @@ def _run(
     try:
         source_descriptor, source_verified, artifact_digest = admit_source()
         source_state = "admitted"
+        source_generation = _generation(source_descriptor)
 
         destination_descriptor = _create_destination(
             destination_path, source_verified["logical_bytes"],
@@ -367,6 +373,18 @@ def _run(
         destination_size = os.fstat(destination_descriptor).st_size
         if destination_size > MAX_ARTIFACT_BYTES:
             raise _Halt("ARTIFACT_LIMIT_EXCEEDED", source_state=source_state)
+        # The copy reopens the source by path. A restore must have copied the
+        # exact bytes it hashed: an in-place rewrite changes the generation or
+        # the digest, and is never reported as a completed restore.
+        if operation == "restore" and (
+            _generation(source_descriptor) != source_generation
+            or _sha256_hex_prefixed(hashlib.sha256(
+                _read_all(source_descriptor, MAX_ARTIFACT_BYTES)).hexdigest()) != artifact_digest
+        ):
+            raise _Halt("SOURCE_IDENTITY_CHANGED", source_state=source_state)
+        # Rereading a large artifact must not carry a restore past its budget.
+        if monotonic() > deadline:
+            raise _Halt("DEADLINE_EXCEEDED", source_state=source_state)
 
         destination_verified = _verify_database(destination_descriptor, read_only=False)
         if (

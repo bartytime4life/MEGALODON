@@ -14,5 +14,11 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  get('operations-history').open=false;get('operations-history').events.toggle();assert.ok(![...timers.values()].some(v=>v.ms===5000),'closing outer stored-evidence disclosure stops history');get('operations-history').open=true;get('operations-history').events.toggle();await new Promise(resolve=>setImmediate(resolve));
  // Closing during a history request cannot restart the stopped history timer chain.
  let release;held=new Promise(resolve=>release=resolve);const tick=[...timers].find(([,v])=>v.ms===5000);timers.delete(tick[0]);const pending=tick[1].fn();get('live-globe-history').open=false;get('live-globe-history').events.toggle();release();await pending;assert.ok(![...timers.values()].some(v=>v.ms===5000));assert.equal(context.globeState.hour.started,false);
+ // Closing and reopening during a request leaves exactly one history chain.
+ get('live-globe-history').open=true;get('live-globe-history').events.toggle();await new Promise(resolve=>setImmediate(resolve));
+ held=new Promise(resolve=>release=resolve);const again=[...timers].find(([,v])=>v.ms===5000);timers.delete(again[0]);const inFlight=again[1].fn();
+ get('live-globe-history').open=false;get('live-globe-history').events.toggle();get('live-globe-history').open=true;get('live-globe-history').events.toggle();
+ release();held=null;await inFlight;await new Promise(resolve=>setImmediate(resolve));
+ assert.equal([...timers.values()].filter(v=>v.ms===5000).length,1,'a reopened history keeps one polling chain');
  console.log('offscreen live reads and collapsed history stop independently');
 }).on('error',e=>{console.error(e);process.exitCode=1;});process.on('unhandledRejection',e=>{console.error(e);process.exitCode=1;});

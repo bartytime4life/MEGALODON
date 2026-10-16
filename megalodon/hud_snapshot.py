@@ -19,9 +19,12 @@ def snapshot_from_projection(projection: dict) -> dict:
     events, findings = projection['events'], projection['findings']
     times = [datetime.fromisoformat(e['observed_at'].replace('Z', '+00:00')).timestamp() for e in events]
     first, last = min(times), max(times)
+    span = last - first
     timeline = [0] * 12
     for timestamp in times:
-        timeline[min(11, int((timestamp-first) / max(last-first, 1) * 12))] += 1
+        # The twelve intervals divide the observed span itself, even when it is
+        # under a second; a one-second floor would leave later intervals empty.
+        timeline[0 if span <= 0 else min(11, int((timestamp-first) / span * 12))] += 1
     ranks = {name: index+1 for index, name in enumerate(SEVERITIES)}
     highest = {}
     for finding in findings:

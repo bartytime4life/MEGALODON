@@ -152,7 +152,7 @@ def assess_readiness(
     if binding_map.get("repository") != "bartytime4life/MEGALODON":
         raise LocalModelReadinessError("BINDING_REPOSITORY")
     status = binding_map.get("status")
-    if status not in {"UNBOUND", "BOUND"}:
+    if type(status) is not str or status not in {"UNBOUND", "BOUND"}:
         raise LocalModelReadinessError("BINDING_STATUS")
 
     binding_sha256 = _digest(binding_map)

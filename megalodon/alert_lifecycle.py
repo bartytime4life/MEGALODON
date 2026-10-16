@@ -171,6 +171,12 @@ def transition(
     })
 
 
+_OUTBOX_KEYS = frozenset({
+    "id", "alert_id", "transition_id", "policy_version",
+    "destination_class", "max_attempts", "status", "created_at",
+})
+
+
 def outbox_intent(
     *, id: str, alert_id: str, transition_id: str, policy_version: str, created_at: str,
 ) -> Mapping[str, Any]:
@@ -191,7 +197,10 @@ def not_attempted_receipt(
     *, id: str, outbox: Mapping[str, Any], occurred_at: str,
 ) -> Mapping[str, Any]:
     """The only receipt v1 authorizes: this outbox intent was never attempted."""
-    if not isinstance(outbox, Mapping) or outbox.get("max_attempts") != 0:
+    # Only an inert v1 intent qualifies: never sent, never configured.
+    if (not isinstance(outbox, Mapping) or set(outbox) != _OUTBOX_KEYS
+            or type(outbox["max_attempts"]) is not int or outbox["max_attempts"] != 0
+            or outbox["destination_class"] != "not_configured" or outbox["status"] != "pending"):
         _fail("SCHEMA")
     return MappingProxyType({
         "id": _logical_id(id),
@@ -285,7 +294,7 @@ class AlertLifecycleLedger:
     def open_alert(
         self, *, id: str, detection_id: str, policy_version: str, opened_at: str,
     ) -> Mapping[str, Any]:
-        if id in self._projections:
+        if _logical_id(id) in self._projections:
             _fail("SCHEMA")
         projection = open_alert(
             id=id, detection_id=detection_id, policy_version=policy_version, opened_at=opened_at,
@@ -297,13 +306,13 @@ class AlertLifecycleLedger:
     def projection(self, alert_id: str) -> Mapping[str, Any]:
         try:
             return self._projections[alert_id]
-        except KeyError:
+        except (KeyError, TypeError):
             _fail("SCHEMA")
 
     def history(self, alert_id: str) -> tuple[Mapping[str, Any], ...]:
         try:
             return tuple(self._transitions[alert_id])
-        except KeyError:
+        except (KeyError, TypeError):
             _fail("SCHEMA")
 
     def apply(self, candidate: Mapping[str, Any]) -> str:

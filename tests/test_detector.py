@@ -71,6 +71,19 @@ class DetectorTests(unittest.TestCase):
         other = Detector(DetectionSettings(syn_flood_threshold=1), (ipaddress.ip_network("8.8.8.8/32"),))
         self.assertIsNone(other.analyze(event(0, src_ip="::ffff:8.8.4.4"))[0].suppressed_reason)
 
+    def test_mapped_and_plain_spellings_of_one_host_share_detector_state(self):
+        detector = Detector(DetectionSettings(syn_flood_threshold=4, alert_cooldown_seconds=30))
+        spellings = ("203.0.113.5", "::ffff:203.0.113.5")
+        results = [detector.analyze(event(n, src_ip=spellings[n % 2])) for n in range(4)]
+        self.assertEqual([len(r) for r in results], [0, 0, 0, 1])
+        self.assertEqual(results[3][0].src_ip, "::ffff:203.0.113.5", "the observed spelling is reported")
+        # The shared cooldown also holds across spellings.
+        self.assertEqual(detector.analyze(event(4, src_ip="203.0.113.5")), [])
+        # And the shared watermark refuses a reordered record in either spelling.
+        with self.assertRaises(ValidationError):
+            detector.analyze(event(0, src_ip="203.0.113.5"))
+        self.assertEqual(list(detector.source_order), ["203.0.113.5"])
+
     def test_well_known_nat64_form_of_an_allowlisted_source_is_suppressed(self):
         allowlist = (ipaddress.ip_network("8.8.8.8/32"),)
         detector = Detector(DetectionSettings(syn_flood_threshold=1), allowlist)

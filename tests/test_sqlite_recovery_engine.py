@@ -306,6 +306,60 @@ def test_restore_never_reads_a_wal_created_after_the_sidecar_check(tmp_path, mon
     _assert_valid(receipt)
 
 
+def test_restore_refuses_an_artifact_rewritten_in_place_after_its_digest(tmp_path, monkeypatch) -> None:
+    artifact, other = tmp_path / "a.sqlite3", tmp_path / "other.sqlite3"
+    _make_database(artifact, rows=200)
+    _make_database(other, rows=7)
+    for path in (artifact, other):
+        connection = sqlite3.connect(str(path))
+        connection.execute("PRAGMA journal_mode=DELETE")
+        connection.close()
+    digest = "sha256:" + _sha256_of(artifact)
+    real_copy = sr._copy_via_backup_api
+
+    def rewrite_then_copy(source, destination, deadline, **options):
+        # A same-user writer replaces the bytes on the same inode after the
+        # digest and integrity check; the copy reopens the path.
+        with open(artifact, "r+b") as handle:
+            handle.write(other.read_bytes())
+            handle.truncate()
+        return real_copy(source, destination, deadline, **options)
+
+    monkeypatch.setattr(sr, "_copy_via_backup_api", rewrite_then_copy)
+    receipt = sr.restore_backup(
+        operation_id="op-rewrite", artifact_path=artifact, expected_artifact_sha256=digest,
+        destination_path=tmp_path / "restored.sqlite3",
+    )
+    assert (receipt["status"], receipt["reason"]) == ("failed", "SOURCE_IDENTITY_CHANGED")
+    _assert_valid(receipt)
+
+
+def test_restore_that_finishes_its_copy_past_the_deadline_is_not_completed(tmp_path, monkeypatch) -> None:
+    artifact = tmp_path / "a.sqlite3"
+    _make_database(artifact)
+    connection = sqlite3.connect(str(artifact))
+    connection.execute("PRAGMA journal_mode=DELETE")
+    connection.close()
+    clock = [1000.0]
+    monkeypatch.setattr(sr, "monotonic", lambda: clock[0])
+    real_copy = sr._copy_via_backup_api
+
+    def slow_copy(source, destination, deadline, **options):
+        result = real_copy(source, destination, deadline, **options)
+        # The post-copy source reread lands after the whole-operation budget.
+        clock[0] = deadline + 1
+        return result
+
+    monkeypatch.setattr(sr, "_copy_via_backup_api", slow_copy)
+    receipt = sr.restore_backup(
+        operation_id="op-late", artifact_path=artifact,
+        expected_artifact_sha256="sha256:" + _sha256_of(artifact),
+        destination_path=tmp_path / "restored.sqlite3",
+    )
+    assert (receipt["status"], receipt["reason"]) == ("failed", "DEADLINE_EXCEEDED")
+    _assert_valid(receipt)
+
+
 def test_restore_in_place_is_refused_by_destination_must_not_exist(tmp_path) -> None:
     artifact = tmp_path / "a.sqlite3"
     _make_database(artifact)

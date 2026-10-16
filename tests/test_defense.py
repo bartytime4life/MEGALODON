@@ -129,6 +129,21 @@ def test_expired_preview_cannot_mutate(manager):
     assert calls==[]
 
 
+def test_subsecond_preview_expiry_is_compared_by_time(manager, monkeypatch):
+    import megalodon.defense as module
+    defense,calls,_=manager
+    plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']
+    # Whole-second "now" sorts after a later fractional expiry as text.
+    defense._plans[plan['id']]['expires_at']='2099-01-01T00:00:00.500000Z'
+    monkeypatch.setattr(module,'now',lambda:'2099-01-01T00:00:00Z')
+    assert [p['id'] for p in defense.snapshot()['plans']]==[plan['id']]
+    assert perform(defense,dict(action='apply_containment',plan_id=plan['id']))['state']=='finished'
+    monkeypatch.setattr(module,'now',lambda:'2099-01-01T00:00:01Z')
+    entry=dict(defense._active['1.1.1.1'],expires_at='2099-01-01T00:00:01.500000Z')
+    defense._active['1.1.1.1']=entry
+    assert defense.snapshot()['active'][0]['state']=='applied'
+
+
 def test_ambiguous_host_action_retains_release_path_after_restart(manager):
     defense,calls,_=manager
     plan=perform(defense,dict(action='plan_containment',ip='1.1.1.1'))['result']

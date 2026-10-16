@@ -132,13 +132,15 @@ def local_readiness_report():
     run, and the environment/package and process checks keep separate meanings.
     """
     from pathlib import Path
-    from .tool_heartbeat import PROBES, _installed
+    from .tool_heartbeat import PROBES, _installed, _path_directories as heartbeat_directories
     from .tool_locations import load_directories
     result = readiness_report()
     result['schema'] = 'megalodon-tool-readiness-v3'
     result['probe_mode'] = 'known_install_presence'
     result['boundaries'][-1] = 'Linux PATH, bounded known prefixes and owner-selected directories are checked; presence does not establish accepted telemetry.'
-    directories = _path_directories(os.environ.get('PATH'))
+    # The heartbeat's bounded PATH skips empty or relative entries; the strict
+    # v2 parser rejects the whole PATH, which would read as "not found".
+    directories = heartbeat_directories()
     try:
         configured = load_directories(Path.home()) if result['platform'] == 'linux' else {}
     except ValueError:
@@ -149,6 +151,6 @@ def local_readiness_report():
             if row['id'] in {'python-sqlite', 'scapy'}:
                 continue
             tool_id = names.get(row['id'], row['id'])
-            presence, _ = _installed(PROBES[tool_id], directories or (), Path.home(), configured.get(tool_id))
+            presence, _ = _installed(PROBES[tool_id], directories, Path.home(), configured.get(tool_id))
             row['status'] = {'yes':'executable_found','no':'not_found','unknown':'not_checked'}[presence]
     return result

@@ -27,6 +27,13 @@ NAT64=(ip_network('64:ff9b::/96'),ip_network('64:ff9b:1::/48'))
 BLOCK_LIFETIME=timedelta(seconds=390)
 
 
+def _before(earlier,later):
+    """Compare UTC stamps by time; text order differs across precisions."""
+    # "...:00.500000Z" sorts before "...:00Z" although it is later.
+    parse=lambda value:datetime.fromisoformat(value.replace('Z','+00:00'))
+    return parse(earlier)<parse(later)
+
+
 class DefenseBusy(ValueError):
     pass
 
@@ -130,8 +137,8 @@ class Defense:
                     and not intelligence.endpoint_result_valid(result)):
                 self._job.update(result=None,message='Review evidence or model selection changed; request a fresh analysis.')
             value=dict(schema='megalodon-defense-v1',job=deepcopy(self._job),
-                plans=[deepcopy(p) for p in self._plans.values() if p['expires_at']>stamp],recent=list(self._recent),
-                active=[dict(v,state='needs_review' if not v['verified'] else 'expiry_elapsed' if v['expires_at']<=stamp else 'applied') for v in self._active.values()],
+                plans=[deepcopy(p) for p in self._plans.values() if _before(stamp,p['expires_at'])],recent=list(self._recent),
+                active=[dict(v,state='needs_review' if not v['verified'] else 'expiry_elapsed' if not _before(stamp,v['expires_at']) else 'applied') for v in self._active.values()],
                 audit_ready=self._audit_ready,
                 scope=dict(nmap_target=self.configuration.companions.config.nmap_target if self.configuration.companions else None,
                            scan_folders=[p.name for p in self.configuration.companions.config.clamav_paths] if self.configuration.companions else []))
@@ -237,13 +244,13 @@ class Defense:
                             effect='Drop packets to and from this single public address on this PC for five minutes.',
                             impact='All applications using this address may lose connectivity, including shared cloud services. Kernel timeout restores access; Release removes this managed block early.')
                 with self._lock:
-                    self._plans={k:v for k,v in self._plans.items() if v['expires_at']>now()}
+                    self._plans={k:v for k,v in self._plans.items() if _before(now(),v['expires_at'])}
                     if len(self._plans)>=8:raise ValueError('Too many pending previews; wait for expiry.')
                     self._plans[result['id']]=result
                 message='Preview ready. Apply requires a separate operator action and OS authorization.'
             elif action=='apply_containment':
                 with self._lock:plan=self._plans.pop(request['plan_id'],None)
-                if plan is None or plan['expires_at']<=now():raise ValueError('Preview expired; create a fresh preview.')
+                if plan is None or not _before(now(),plan['expires_at']):raise ValueError('Preview expired; create a fresh preview.')
                 self._target(plan['ip'])
                 attempted_host=True
                 result=self._guard('apply',plan['ip']);changed=True
