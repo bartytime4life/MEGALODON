@@ -2057,6 +2057,11 @@ def serve(
                 handler.local_checks = LocalChecks(handler.store, source_available=True)
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
+            if installer is not None:
+                setup = handler.support_config
+                installer.busy = lambda: (setup._job['state'] == 'running'
+                                          or (support_startup is not None
+                                              and support_startup.snapshot()['state'] == 'running'))
             # Setup can pin a local model after launch; the AI panel needs a
             # per-launch token even when the configuration file kept AI off.
             if handler.ai_operator_token is None:

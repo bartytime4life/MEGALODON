@@ -269,6 +269,9 @@ async function pollHeartbeat(force = false) {
   window.clearTimeout(heartbeatState.timer);
   if (document.visibilityState === 'hidden') return;
   heartbeatState.polling = true;
+  // An install started while this poll was in flight is newer than its
+  // /api/install answer; that answer must not erase the running job.
+  const jobSeq = heartbeatState.jobSeq || 0;
   const [reportResult, installResult, supportAppsResult] = await Promise.allSettled([
     heartbeatFetch('/api/heartbeat', force === true ? {headers: {'X-Megalodon-Refresh': '1'}} : {}),
     heartbeatFetch('/api/install'), heartbeatFetch('/api/support-apps')]);
@@ -288,15 +291,17 @@ async function pollHeartbeat(force = false) {
     if (!install || !Array.isArray(install.tools)) throw new Error('Invalid catalog');
     heartbeatState.catalog = install.tools;
     heartbeatState.managementEnabled = Boolean(install.management && install.management.enabled === true);
-    const previous = heartbeatState.job;
-    heartbeatState.job = install.job && install.job.state !== 'idle' ? install.job : null;
-    if (previous && previous.state === 'running') showInstallCompletion(heartbeatState.job);
+    if ((heartbeatState.jobSeq || 0) === jobSeq) {
+      const previous = heartbeatState.job;
+      heartbeatState.job = install.job && install.job.state !== 'idle' ? install.job : null;
+      if (previous && previous.state === 'running') showInstallCompletion(heartbeatState.job);
+    }
     heartbeatState.catalogFailed = false;
   } catch (_) {
     heartbeatState.catalogFailed = true;
     heartbeatState.managementEnabled = false;
     heartbeatState.catalog = null;
-    heartbeatState.job = null;
+    if ((heartbeatState.jobSeq || 0) === jobSeq) heartbeatState.job = null;
   }
   try {
     if (supportAppsResult.status !== 'fulfilled') throw new Error('Support-app status unavailable');
@@ -337,6 +342,7 @@ async function startInstall(toolId, name, entry, action = 'install') {
     const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId, action}),
       headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1', 'X-Megalodon-Install-Token': token}});
     heartbeatState.job = job;
+    heartbeatState.jobSeq = (heartbeatState.jobSeq || 0) + 1;
     if (!showInstallCompletion(job)) toolManagementFeedback(`${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`);
   } catch (error) {
     if (error.status === 403) byId('tool-management-token').value = '';

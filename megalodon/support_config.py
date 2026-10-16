@@ -348,6 +348,9 @@ class SupportConfiguration:
             from .ai_provider import cancel_current
             cancel_current()
             return self.snapshot()
+        installer = getattr(self.startup, 'installer', None)
+        if installer is not None and installer.status()['state'] == 'running':
+            raise ConfigBusy('Another support action is running.')
         with self._lock:
             if self._job['state'] == 'running' or (self.startup and self.startup.snapshot()['state'] == 'running'):
                 raise ConfigBusy('Another support action is running.')

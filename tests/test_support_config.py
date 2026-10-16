@@ -642,3 +642,13 @@ def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,
     monkeypatch.setattr(config,'HTTPConnection',Connection)
     assert config.main(['qwen_check'])==0
     assert requests==[('GET',None),('POST',f'http://{expected}:8787')]
+
+
+def test_setup_action_refuses_while_a_tool_install_runs(manager):
+    calls=[]
+    manager.run=lambda argv,*a:calls.append(argv) or (b'',0)
+    installer=SimpleNamespace(status=lambda:{'state':'running'})
+    manager.startup=SimpleNamespace(installer=installer,snapshot=lambda:{'state':'idle'})
+    with pytest.raises(config.ConfigBusy):
+        manager.start({'action':'signature_update'})
+    assert calls==[] and manager.snapshot()['job']['state']!='running'
