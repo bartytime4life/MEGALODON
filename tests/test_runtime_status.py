@@ -33,6 +33,14 @@ def test_runtime_report_matches_only_known_process_names(tmp_path, monkeypatch):
     assert "pid" not in serialized.lower()
 
 
+def test_running_suricata_main_thread_is_recognized(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime_status, "runtime_platform", lambda: "linux")
+    # Suricata renames its main thread, so comm reads Suricata-Main.
+    _process(tmp_path, 12, "Suricata-Main")
+    statuses = {item["id"]: item["status"] for item in runtime_status.runtime_report(tmp_path)["tools"]}
+    assert statuses["suricata"] == "running"
+
+
 def test_runtime_report_fails_closed_when_process_snapshot_is_excessive(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_status, "runtime_platform", lambda: "linux")
     monkeypatch.setattr(runtime_status, "MAX_PROCESS_ENTRIES", 1)

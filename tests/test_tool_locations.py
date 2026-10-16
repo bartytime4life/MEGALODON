@@ -43,6 +43,22 @@ def test_selected_zeek_directory_is_used_by_setup_heartbeat_and_sampler(private_
     assert next(row for row in readiness.local_readiness_report()['tools'] if row['id'] == 'nmap')['status'] == 'executable_found'
 
 
+def test_a_path_with_an_empty_entry_still_finds_listed_tools(private_tmp_path, monkeypatch):
+    home = private_tmp_path / 'home'
+    home.mkdir(mode=0o700)
+    directory = private_tmp_path / 'bin'
+    directory.mkdir()
+    (directory / 'nmap').write_text('inert', encoding='utf-8')
+    (directory / 'nmap').chmod(0o700)
+    monkeypatch.setenv('HOME', str(home))
+    # A trailing colon is a legal PATH; the strict v2 parser rejects it.
+    monkeypatch.setenv('PATH', f'{directory}:')
+    monkeypatch.setattr(readiness, 'runtime_platform', lambda: 'linux')
+    monkeypatch.setattr(tool_heartbeat, 'runtime_platform', lambda: 'linux')
+    row = next(row for row in readiness.local_readiness_report()['tools'] if row['id'] == 'nmap')
+    assert row['status'] == 'executable_found'
+
+
 @pytest.mark.parametrize('directory', ['relative/bin', '/tmp/../bin', '//remote/bin', '/tmp/\n/bin', '/' + 'x' * 1025])
 def test_invalid_selected_directory_is_rejected(tmp_path, directory):
     home = tmp_path / 'home'

@@ -25,7 +25,8 @@ _PROCESS_NAMES: dict[str, frozenset[str] | None] = {
     "python-sqlite": frozenset(),  # The serving MEGALODON process is running.
     "wireshark-tshark": frozenset({"tshark"}),
     "zeek": frozenset({"zeek"}),
-    "suricata": frozenset({"suricata"}),
+    # Suricata renames its main thread; comm then reads Suricata-Main.
+    "suricata": frozenset({"suricata", "Suricata-Main"}),
     "scapy": None,
     "nftables": None,
     "clamav": frozenset({"clamd", "freshclam"}),
