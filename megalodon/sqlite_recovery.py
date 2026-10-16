@@ -382,6 +382,9 @@ def _run(
                 _read_all(source_descriptor, MAX_ARTIFACT_BYTES)).hexdigest()) != artifact_digest
         ):
             raise _Halt("SOURCE_IDENTITY_CHANGED", source_state=source_state)
+        # Rereading a large artifact must not carry a restore past its budget.
+        if monotonic() > deadline:
+            raise _Halt("DEADLINE_EXCEEDED", source_state=source_state)
 
         destination_verified = _verify_database(destination_descriptor, read_only=False)
         if (
