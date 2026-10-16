@@ -925,3 +925,21 @@ def test_purge_rolls_back_every_table_when_one_delete_fails(tmp_path):
 
         assert store.connection.in_transaction is False
         assert store.summary() == before
+
+
+def test_verified_connect_keeps_the_plain_connect_without_posix_descriptors(
+    tmp_path, monkeypatch
+):
+    # Windows has neither /dev/fd enumeration nor a descriptor pathname
+    # anchor; its replacement resistance is the separate NTFS ACL control.
+    # Descriptors are never consulted there, so these invalid ones are unused.
+    database = tmp_path / "plain.db"
+    sqlite3.connect(database).close()
+    monkeypatch.setattr(storage.os, "name", "nt")
+    connection = storage._connect_verified_sqlite(
+        f"{database.as_uri()}?mode=rw", database, -1, -1, "STORAGE_PATH"
+    )
+    try:
+        assert connection.execute("PRAGMA schema_version").fetchone() == (0,)
+    finally:
+        connection.close()

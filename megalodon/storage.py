@@ -616,6 +616,11 @@ def _connect_verified_sqlite(
     Every other refusal is definitive and is not retried.
     """
 
+    if os.name != "posix":
+        # No descriptor enumeration or pathname anchor exists here; Windows
+        # replacement resistance is the separate private-directory/NTFS ACL
+        # control (docs/storage-failure-policy.md).
+        return sqlite3.connect(uri, uri=True, **kwargs)
     with _DATABASE_OPEN_LOCK:
         for _ in range(_VERIFIED_CONNECT_ATTEMPTS):
             connection = _connect_verified_sqlite_attempt(
