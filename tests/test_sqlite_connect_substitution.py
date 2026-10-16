@@ -146,3 +146,70 @@ def test_evidence_segment_writer_refuses_a_substituted_segment(tmp_path, monkeyp
     finally:
         monkeypatch.undo()
         manager.close()
+
+
+def test_receipt_store_refuses_an_entry_swap_hidden_by_descriptor_reuse(
+    tmp_path, monkeypatch
+):
+    # An idle WAL connection keeps a lock on the foreign file, so closing a
+    # second connection to it parks that descriptor for SQLite to reuse. A
+    # later open of the foreign inode then opens no new descriptor, and an
+    # entry swap inside the admitted directory changes no ancestor.
+    tmp_path.chmod(0o700)
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    database = private / "receipts.db"
+    foreign = private / "foreign.db"
+    ReceiptStore(database).close()
+    ReceiptStore(foreign).close()
+    holder = sqlite3.connect(foreign)
+    try:
+        holder.execute("SELECT COUNT(*) FROM ai_receipt_events").fetchone()
+        parked = sqlite3.connect(foreign)
+        parked.execute("SELECT COUNT(*) FROM ai_receipt_events").fetchone()
+        parked.close()
+        before = _digest(foreign)
+        real_connect = sqlite3.connect
+        held = private / "held.db"
+        calls = []
+
+        def swapping_connect(target, *args, **kwargs):
+            text = str(target)
+            if "/proc/self/fd/" not in text and "/dev/fd/" not in text:
+                return real_connect(target, *args, **kwargs)
+            calls.append(text)
+            database.rename(held)
+            foreign.rename(database)
+            try:
+                return real_connect(
+                    f"{database.as_uri()}?{text.partition('?')[2]}", *args, **kwargs
+                )
+            finally:
+                database.rename(foreign)
+                held.rename(database)
+
+        monkeypatch.setattr(sqlite3, "connect", swapping_connect)
+        with pytest.raises(StorageSchemaError, match="^AI_RECEIPT:DATABASE_CHANGED$"):
+            ReceiptStore(database)
+        monkeypatch.undo()
+        assert calls
+        assert _digest(foreign) == before
+    finally:
+        holder.close()
+
+
+def test_writers_enumerate_proc_descriptors_without_dev_fd(tmp_path, monkeypatch):
+    tmp_path.chmod(0o700)
+    (tmp_path / "private").mkdir(mode=0o700)
+    database = tmp_path / "private" / "audit.db"
+    real_listdir = os.listdir
+
+    def without_dev_fd(target="."):
+        if os.fspath(target) == "/dev/fd":
+            raise FileNotFoundError(2, "no /dev/fd in this container", "/dev/fd")
+        return real_listdir(target)
+
+    monkeypatch.setattr(os, "listdir", without_dev_fd)
+    with Store(database) as store:
+        store.record_action(ActionRecord(STAMP, "x", "192.0.2.1", "not_attempted", "x"))
+    ReceiptStore(database.with_name("receipts.db")).close()

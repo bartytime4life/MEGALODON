@@ -526,11 +526,20 @@ _DATABASE_OPEN_LOCK = RLock()
 
 
 def _open_regular_file_identities() -> dict[int, tuple[int, int]] | None:
-    """Map this process's open regular-file descriptors to (st_dev, st_ino)."""
+    """Map this process's open regular-file descriptors to (st_dev, st_ino).
 
-    try:
-        names = os.listdir("/dev/fd")
-    except OSError:
+    Lists /proc/self/fd first, as _descriptor_database_path does: a Linux
+    system may lack /dev/fd, or mount a placeholder there that would hide the
+    descriptor SQLite opens. Darwin has only /dev/fd.
+    """
+
+    for directory in ("/proc/self/fd", "/dev/fd"):
+        try:
+            names = os.listdir(directory)
+        except OSError:
+            continue
+        break
+    else:
         return None
     identities: dict[int, tuple[int, int]] = {}
     for name in names:
@@ -580,6 +589,8 @@ def _connect_verified_sqlite(
     descriptor: int,
     directory_descriptor: int,
     prefix: str,
+    *,
+    caller_checks_directory: bool = False,
     **kwargs: Any,
 ) -> sqlite3.Connection:
     """Connect by pathname, then prove SQLite opened the admitted inode.
@@ -596,8 +607,10 @@ def _connect_verified_sqlite(
     WAL mode while one stays open), so no new descriptor appears. A reused
     descriptor can only name a file this process already holds open, and
     redirecting the pathname to it needs an entry change in the admitted
-    directory (checked by the caller) or an ancestor, which updates that
-    directory's generation. Only in that case are unchanged ancestor
+    directory or an ancestor, which updates that directory's generation. The
+    admitted directory is compared here unless ``caller_checks_directory``
+    (Store re-checks it after every connect and waits out ordinary sidecar
+    churn instead of refusing). Only in that case are unchanged ancestor
     generations accepted, after proving, once they are sampled, that the
     pathname resolves through the admitted directory to the admitted file.
     Other threads' concurrent opens of this database's own sidecars are set
@@ -624,7 +637,8 @@ def _connect_verified_sqlite(
     with _DATABASE_OPEN_LOCK:
         for _ in range(_VERIFIED_CONNECT_ATTEMPTS):
             connection = _connect_verified_sqlite_attempt(
-                uri, path, descriptor, directory_descriptor, prefix, **kwargs
+                uri, path, descriptor, directory_descriptor, prefix,
+                caller_checks_directory=caller_checks_directory, **kwargs
             )
             if connection is not None:
                 return connection
@@ -637,6 +651,8 @@ def _connect_verified_sqlite_attempt(
     descriptor: int,
     directory_descriptor: int,
     prefix: str,
+    *,
+    caller_checks_directory: bool,
     **kwargs: Any,
 ) -> sqlite3.Connection | None:
     """Make one verified connect; ``None`` means an unproven descriptor reuse.
@@ -647,6 +663,7 @@ def _connect_verified_sqlite_attempt(
 
     before = _open_regular_file_identities()
     ancestors = _ancestor_generations(path.parent)
+    directory = _directory_generation(directory_descriptor)
     if before is None:
         _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
     if ancestors is None:
@@ -665,6 +682,7 @@ def _connect_verified_sqlite_attempt(
         # cannot restore the generations it changed); sampling first keeps
         # the window that unrelated ancestor activity can hit short.
         ancestors_after = _ancestor_generations(path.parent)
+        directory_after = _directory_generation(directory_descriptor)
         after = _open_regular_file_identities()
         if after is None:
             _raise_path_error(prefix, "DESCRIPTOR_PATH_UNAVAILABLE")
@@ -677,7 +695,9 @@ def _connect_verified_sqlite_attempt(
         }
         unattributed = opened - _sidecar_identities(path, directory_descriptor)
         reused_unproven = admitted not in opened and bool(
-            unattributed or ancestors_after != ancestors
+            unattributed
+            or ancestors_after != ancestors
+            or (not caller_checks_directory and directory_after != directory)
         )
     except BaseException:
         try:
@@ -1658,6 +1678,7 @@ class Store:
                     self._database_descriptor,
                     self._directory_descriptor,
                     "STORAGE_PATH",
+                    caller_checks_directory=True,
                     timeout=10,
                     check_same_thread=False,
                 )
