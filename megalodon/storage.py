@@ -889,7 +889,8 @@ def _stat_for_identity(
     closing *any* descriptor for an inode releases all of the process's fcntl
     locks on it, so even a read-only open of -shm would drop that connection's
     dead-man-switch lock. It refuses with the errno the replaced open would
-    have raised, so callers keep their error codes.
+    have raised, so callers keep their error codes. A name that changed
+    during the inspection raises EAGAIN.
     """
 
     info = os.stat(target, follow_symlinks=False, **kwargs)
@@ -907,7 +908,13 @@ def _stat_for_identity(
             **kwargs,
         ),
     )
-    return info
+    # The access check resolved the name again. Like an unlinked descriptor,
+    # a name that changed in between describes no single file: report it so
+    # the caller looks the name up again rather than mix two inodes.
+    current = os.stat(target, follow_symlinks=False, **kwargs)
+    if not os.path.samestat(info, current):
+        raise OSError(errno.EAGAIN, "changed during inspection", os.fspath(target))
+    return current
 
 
 def _reopen_for_identity(descriptor: int) -> int:
@@ -1256,6 +1263,8 @@ def _validate_sqlite_sidecars(
                 except FileNotFoundError:
                     break
                 except OSError as exc:
+                    if exc.errno == errno.EAGAIN:
+                        continue
                     code = (
                         "SYMLINK_REFUSED"
                         if getattr(exc, "errno", None) == errno.ELOOP

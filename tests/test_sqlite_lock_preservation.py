@@ -706,3 +706,52 @@ def test_capacity_sidecar_refusals_match_with_and_without_o_path(
             path.name + "-wal"
         ).stat().st_size
         _assert_sqlite_locks_held(path)
+
+
+@pytest.mark.parametrize("replacement", ["private", "hard_linked"])
+def test_stat_inspection_relooks_up_a_sidecar_replaced_mid_check(
+    tmp_path, monkeypatch, replacement
+):
+    # The stat-only counterpart of the descriptor re-lookup: a name replaced
+    # between the stat and the access check must not be admitted on the
+    # earlier inode's validation.
+    _without_o_path(monkeypatch)
+    path = _private(tmp_path)
+    connection = _wal_connection(path)
+    sidecar = path.with_name(path.name + "-journal")
+    sidecar.write_bytes(b"")
+    sidecar.chmod(0o600)
+    real_access = os.access
+    journal_checks = []
+
+    def access_then_replace(target, *args, **kwargs):
+        if str(target).endswith("-journal"):
+            journal_checks.append(target)
+            if len(journal_checks) == 1:
+                sidecar.rename(path.parent / "admitted")
+                other = path.parent / "replacement"
+                other.write_bytes(b"")
+                other.chmod(0o600)
+                os.link(other, sidecar)
+                if replacement == "private":
+                    other.unlink()
+        return real_access(target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "access", access_then_replace)
+    try:
+        if replacement == "hard_linked":
+            with pytest.raises(
+                StorageSchemaError, match="^STORAGE_PATH:UNSAFE_DATABASE$"
+            ):
+                storage_module._validate_sqlite_sidecars(
+                    path, None, writable=True, prefix="STORAGE_PATH"
+                )
+        else:
+            present = storage_module._validate_sqlite_sidecars(
+                path, None, writable=True, prefix="STORAGE_PATH"
+            )
+            assert "-journal" in present
+        assert len(journal_checks) == 2
+        _assert_sqlite_locks_held(path)
+    finally:
+        connection.close()

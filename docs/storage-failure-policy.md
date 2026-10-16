@@ -107,7 +107,8 @@ and the capacity check's sidecar sizing hold no descriptor at all, because
 every write's capacity check would otherwise release the writing `Store`'s own
 `-shm` locks. They inspect each sidecar with a no-follow `stat` and an access
 check that refuse where the replaced open would (`ELOOP`, `ENXIO`, `EISDIR`,
-`EACCES`), with the same error codes. A non-`0600` mode is tightened with a
+`EACCES`), with the same error codes; a name replaced during that inspection
+is looked up again, as an unlinked descriptor is. A non-`0600` mode is tightened with a
 no-follow `chmod` by name, refused as `UNSAFE_SIDECAR` unless the name still
 holds the inspected inode afterwards. Database descriptors there remain
 ordinary ones, so the hazard remains while two connections to one database
