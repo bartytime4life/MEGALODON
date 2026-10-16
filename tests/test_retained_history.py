@@ -105,6 +105,27 @@ def test_history_http_qualifies_rows_and_refuses_paths(manager):
         server.shutdown();server.server_close();worker.join(2)
 
 
+def test_raw_packet_history_page_passes_the_real_hud_timestamp_check(manager):
+    import json,shutil,subprocess
+    from datetime import datetime,timezone
+    from megalodon.control_room_assets import ROOM_JS
+    from megalodon.dashboard_history import HISTORY_JS
+    node=shutil.which('node')
+    if not node:pytest.skip('Node required for retained history behavior')
+    _source(manager,count=3,with_finding=False)
+    now=int(manager.clock())
+    start=datetime.fromtimestamp(now-60,timezone.utc);end=datetime.fromtimestamp(now+1,timezone.utc)
+    page=RetainedEvidenceReader(manager).history_page(start.strftime('%Y-%m-%dT%H:%M:%S.000Z'),end.strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+    # Raw packets are stored with "+00:00"; the HUD accepts only a trailing Z.
+    assert page['records'] and all(r['observed_at'].endswith('Z') for r in page['records'])
+    stamp_check=ROOM_JS[ROOM_JS.index('function roomStamp(value)'):ROOM_JS.index('function validateTraffic')]
+    validator=HISTORY_JS[HISTORY_JS.index('function validateManagedHistory'):HISTORY_JS.index('function renderManagedHistory')]
+    script=stamp_check+validator+"\nconst p=JSON.parse(require('fs').readFileSync(0,'utf8'));validateManagedHistory(p.page,p.request);"
+    request=dict(start=int(start.timestamp()*1000),end=int(end.timestamp()*1000))
+    result=subprocess.run([node,'-e',script],input=json.dumps(dict(page=page,request=request)),capture_output=True,text=True,timeout=10)
+    assert result.returncode==0,result.stderr
+
+
 def test_history_browser_uses_retained_data_and_clears_old_findings():
     import json,shutil,subprocess
     from megalodon.dashboard_history import HISTORY_JS
