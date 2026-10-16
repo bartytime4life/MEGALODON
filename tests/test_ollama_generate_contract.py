@@ -93,11 +93,11 @@ def test_anomaly_request_enforces_exact_candidate_bound_json_schema():
     candidate_schema = schema["properties"]["candidate_ids"]
     assert candidate_schema == {
         "type": "array",
-        "prefixItems": [{"const": "a01"}, {"const": "a02"}],
-        "items": False,
+        "const": ["a01", "a02"],
         "minItems": 2,
         "maxItems": 2,
     }
+    assert "prefixItems" not in candidate_schema and "items" not in candidate_schema
     assert schema["properties"]["summary"]["maxLength"] == 600
     assert schema["properties"]["benign_alternatives"]["uniqueItems"] is True
     assert schema["properties"]["missing_evidence"]["uniqueItems"] is True

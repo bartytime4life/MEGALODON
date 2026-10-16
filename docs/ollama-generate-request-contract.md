@@ -31,6 +31,8 @@ The anomaly mode adds an Ollama structured-output schema to `format`. The
 schema:
 
 - fixes the exact candidate IDs and their order;
+- uses an array-level `const` compatible with the pinned Ollama 0.24 schema
+  converter, avoiding unsupported boolean `items` handling;
 - rejects additional response properties;
 - requires `summary`, `benign_alternatives`, and `missing_evidence`;
 - limits the summary to 600 characters;

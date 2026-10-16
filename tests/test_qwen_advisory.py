@@ -270,8 +270,7 @@ def test_runtime_anomaly_body_is_the_canonical_closed_request_contract() -> None
     }
     assert request["format"]["properties"]["candidate_ids"] == {
         "type": "array",
-        "prefixItems": [{"const": "a01"}, {"const": "a02"}],
-        "items": False,
+        "const": ["a01", "a02"],
         "minItems": 2,
         "maxItems": 2,
     }

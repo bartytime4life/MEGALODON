@@ -159,8 +159,10 @@ def anomaly_format_schema(candidate_ids: tuple[str, ...]) -> dict[str, object]:
         "properties": {
             "candidate_ids": {
                 "type": "array",
-                "prefixItems": [{"const": item} for item in candidate_ids],
-                "items": False,
+                # Array-level const preserves exact values and order while
+                # remaining compatible with the pinned Ollama 0.24 schema
+                # converter, which cannot compile ``items: false`` here.
+                "const": list(candidate_ids),
                 "minItems": len(candidate_ids),
                 "maxItems": len(candidate_ids),
             },
