@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import os
 import shutil
@@ -12,7 +13,7 @@ import warnings
 
 import pytest
 
-from megalodon import __version__, hud_autostart, local_install
+from megalodon import __version__, hud_autostart, install_lifecycle, local_install
 
 
 def test_chosen_hud_password_is_private_rotatable_and_resettable(layout):
@@ -255,8 +256,12 @@ def test_install_repair_status_and_uninstall_preserve_data_and_settings(
     assert layout.hud_password.read_bytes() == password_before
 
 
+# Ctrl-C during the manifest fsync must roll back like an I/O error;
+# otherwise selector and manifest disagree and repair refuses.
+@pytest.mark.parametrize("failure", [OSError("synthetic manifest failure"), KeyboardInterrupt()],
+                         ids=["os-error", "interrupt"])
 def test_upgrade_rolls_back_selection_and_artifacts_if_manifest_write_fails(
-    layout, source, monkeypatch
+    layout, source, monkeypatch, failure
 ):
     ids = iter([
         "1.0-20260920T120000Z-a1b2c3d4",
@@ -270,16 +275,49 @@ def test_upgrade_rolls_back_selection_and_artifacts_if_manifest_write_fails(
 
     def fail_manifest(path, value, mode):
         if path == layout.manifest:
-            raise OSError("synthetic manifest failure")
+            raise failure
         return real_write(path, value, mode)
 
     monkeypatch.setattr(local_install, "_atomic_write", fail_manifest)
-    with pytest.raises(OSError, match="synthetic"):
+    with pytest.raises(type(failure)):
         local_install.install(source, layout)
     assert layout.manifest.read_bytes() == first_manifest
     assert layout.hud_launcher.read_bytes() == first_launcher
     assert Path(layout.current.readlink()) == layout.releases / first["active_release"]
     assert not (layout.releases / "1.0-20260920T120100Z-e5f6a7b8").exists()
+
+
+def test_failed_restart_during_rollback_still_removes_the_new_release(layout, source, monkeypatch):
+    ids = iter(["1.0-20260920T120000Z-a1b2c3d4", "1.0-20260920T120100Z-e5f6a7b8"])
+    factory = release_factory(layout, ids)
+
+    def create(paths, checkout):
+        identifier, value = factory(paths, checkout)
+        (paths.releases / identifier / "release.json").write_text(json.dumps({"package_sha256": "a" * 64}))
+        return identifier, value
+
+    monkeypatch.setattr(local_install, "_create_release", create)
+    monkeypatch.setattr(install_lifecycle, "retire_releases", lambda paths, manifest: manifest)
+    first = local_install.install(source, layout)
+    monkeypatch.setattr(install_lifecycle, "service_running", lambda paths: True)
+    calls = []
+
+    def action(name):
+        calls.append(name)
+        if calls == ["stop", "start", "stop", "start"]:
+            raise local_install.InstallError("synthetic restart failure")
+
+    monkeypatch.setattr(install_lifecycle, "service_action", action)
+
+    def verify(paths, digest):
+        raise local_install.InstallError("synthetic readiness failure")
+
+    monkeypatch.setattr(install_lifecycle, "verify_running", verify)
+    with pytest.raises(local_install.InstallError, match="restart"):
+        local_install.install(source, layout)
+    assert Path(layout.current.readlink()) == layout.releases / first["active_release"]
+    # No release outside the manifest is left for uninstall to miss.
+    assert sorted(p.name for p in layout.releases.iterdir()) == [first["active_release"]]
 
 
 def test_upgrade_replaces_legacy_reopen_launcher_without_changing_service_or_data(layout, source, monkeypatch):
