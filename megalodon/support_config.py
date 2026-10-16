@@ -65,7 +65,8 @@ PERMISSION_SCRIPT = r'''set -eu
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 case "${PKEXEC_UID:-}" in ''|*[!0-9]*) exit 2;; esac
 [ "$PKEXEC_UID" -gt 0 ]
-[ -f /usr/bin/dumpcap ] && [ ! -L /usr/bin/dumpcap ]
+[ -f /usr/bin/dumpcap ]
+[ ! -L /usr/bin/dumpcap ]
 [ "$(stat -c %u /usr/bin/dumpcap)" = 0 ]
 [ -z "$(find /usr/bin/dumpcap -maxdepth 0 -perm /022 -print)" ]
 dpkg-query -S /usr/bin/dumpcap | /usr/bin/grep -q '^wireshark-common:'
@@ -477,7 +478,7 @@ class SupportConfiguration:
                 states = self.companions.request_collection({tool})
                 message = f'Configuration saved. Collector {states[tool]}; results appear in its HUD panel.'
             elif action == 'signature_update':
-                self._execute(['pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
+                self._execute(['/usr/bin/pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
                 message = 'ClamAV signature updater is active. Signature download completion and database freshness have not been verified.'
             elif action == 'qwen_configure':

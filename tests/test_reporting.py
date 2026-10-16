@@ -283,7 +283,25 @@ def test_weekly_and_clock_backwards_do_not_duplicate(report_service):
     assert report_service.settings['completed_slot']==saved
 
 
-@pytest.mark.parametrize('value',[{}, {'enabled':1,'time':'09:00','frequency':'daily'}, {'enabled':True,'time':'25:00','frequency':'daily'}, {'enabled':True,'time':'09:00','frequency':'hourly'}, {'enabled':True,'time':'09:00','frequency':'weekly','weekday':True}])
+def test_new_report_survives_expiry_of_an_older_report_saved_beside_it(report_service):
+    from uuid import uuid4
+    manager=report_service.evidence
+    now=manager.clock();day=86400
+    old,new=uuid4().hex,uuid4().hex
+    report_service._run(old,now-13.5*day,now-13*day,None)
+    report_service._run(new,now-3600,now,None)
+    assert report_service.report(new)['id']==new
+    report_service.test_clock[0]+=0.6*day
+    manager.monotonic=lambda:report_service.test_clock[0]
+    for key,entry in list(manager._generic.items()):
+        manager._seal(entry);manager._generic.pop(key)
+    manager._ensure_space()
+    with pytest.raises(ValueError):report_service.report(old)
+    # The recent report's own sources keep it for about 13 more days.
+    assert report_service.report(new)['id']==new
+
+
+@pytest.mark.parametrize('value',[{}, {'enabled':1,'time':'09:00','frequency':'daily'}, {'enabled':True,'time':'25:00','frequency':'daily'}, {'enabled':True,'time':'09:00','frequency':'hourly'}, {'enabled':True,'time':'09:00','frequency':'weekly','weekday':True}, {'enabled':True,'time':'09:00','frequency':[]}, {'enabled':True,'time':'09:00','frequency':{}}])
 def test_schedule_validation(value):
     with pytest.raises(ValueError):schedule_value(value)
 

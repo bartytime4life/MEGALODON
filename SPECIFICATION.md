@@ -190,6 +190,13 @@ bounded message and recommendation; bounded JSON evidence; optional bounded supp
 Detection is evidence, not proof of malicious intent. In particular, a long DNS
 name can be legitimate and a high SYN count can be a load test.
 
+The Scapy adapter sets `dns_query_length` only for a DNS query (`qr=0`),
+measured without the root label's trailing dot. A response echoes the client's
+question, so it keeps protocol `DNS` without a length and is never measured as a
+query from the resolver. An allowlist entry written as `::ffff:a.b.c.d/N` loads
+as the IPv4 network it names; the detector also suppresses a well-known NAT64
+(`64:ff9b::/96`) source whose embedded IPv4 host is allowlisted.
+
 ### ActionRecord
 
 ```text

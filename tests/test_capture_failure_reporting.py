@@ -187,6 +187,34 @@ class CaptureFailureReportingTests(unittest.TestCase):
         # A backward step repeats the run's last stamp instead of reordering it.
         self.assertEqual(observed, [10, 10, 11])
 
+    def test_dns_response_is_not_measured_as_a_resolver_query(self):
+        scapy = sys.modules["scapy.all"]
+        name = b"a" * 60 + b".example.com."
+
+        def packet(src, dst, qr):
+            layers = {
+                scapy.IP: SimpleNamespace(src=src, dst=dst),
+                scapy.UDP: SimpleNamespace(sport=53 if qr else 53000, dport=53000 if qr else 53),
+                scapy.DNS: SimpleNamespace(qr=qr),
+                scapy.DNSQR: SimpleNamespace(qname=name),
+            }
+            return Mock(__contains__=lambda _, key: key in layers,
+                        __getitem__=lambda _, key: layers[key], __len__=lambda _: 120)
+
+        source = capture.iter_scapy("synthetic")
+        next(source)
+        callback = self.factory.call_args.kwargs["prn"]
+        callback(packet("192.0.2.10", "198.51.100.53", 0))
+        callback(packet("198.51.100.53", "192.0.2.10", 1))
+        source.close()
+        query, response = [call.args[0] for call in self.queue.offer.call_args_list]
+        # The query length excludes the root label's trailing dot.
+        self.assertEqual((query.src_ip, query.protocol, query.dns_query_length),
+                         ("192.0.2.10", "DNS", len(name) - 1))
+        # The echoed question is not the resolver's own query.
+        self.assertEqual((response.src_ip, response.protocol, response.dns_query_length),
+                         ("198.51.100.53", "DNS", None))
+
     def test_queue_telemetry_counts_accepted_and_dropped_events(self):
         events = _BoundedCaptureQueue(maximum=2)
         self.assertTrue(events.offer(object()))

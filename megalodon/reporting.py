@@ -63,7 +63,7 @@ def schedule_value(value):
         raise ValueError('Choose automatic reports, a time, and daily or weekly.')
     if (type(value.get('enabled')) is not bool or type(value.get('time')) is not str
             or not re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]', value['time'])
-            or value.get('frequency') not in {'daily', 'weekly'}
+            or type(value.get('frequency')) is not str or value['frequency'] not in {'daily', 'weekly'}
             or type(value.get('weekday', 0)) is not int or not 0 <= value.get('weekday', 0) <= 6):
         raise ValueError('Invalid report schedule.')
     return dict(enabled=value['enabled'], time=value['time'], frequency=value['frequency'], weekday=value.get('weekday', 0))
@@ -541,6 +541,12 @@ class ReportService(RetainedEvidenceReader):
                 checkpoint = ('reports_schedule', dict(slot=scheduled['slot'], at=scheduled['at'], report_id=identifier)) if scheduled else ('reports_last_completed', dict(report_id=identifier))
                 self._check()
                 self.evidence.append_records('reports', [dict(observed_at=source_at, source='report-manifest', data=manifest)], checkpoint=checkpoint,dependencies=manifest['derived_dependencies'])
+                # Each report gets its own expiry unit, as saved cases do: an
+                # older report's sources must not retire a newer report with it.
+                with self.evidence.lock:
+                    entry = self.evidence._generic.get('reports')
+                    if entry is not None and not entry.get('pending_receipts'):
+                        self.evidence._seal(entry);self.evidence._generic.pop('reports', None)
             with self.lock:
                 if scheduled:
                     self.settings.update(completed_slot=scheduled['slot'], completed_at=scheduled['at'], pending=None, last_error=None)

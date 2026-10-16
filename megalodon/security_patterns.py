@@ -164,6 +164,10 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
         else:group['timing_limited']=True
     if len(rows)>MAX_RECORDS:all_gaps.append('Hourly read limit reached.')
     all_gaps=list(dict.fromkeys(all_gaps))[:16]
+    # Read gaps affect every group in this hour; a group's own work or size
+    # limit below must not change another group's eligibility by row order.
+    # Every baseline still discloses all of the hour's gaps.
+    hour_gaps=tuple(all_gaps)
     baselines=[];results=findings[:64]
     affected={key[0] for key,g in groups.items() if g['finding']}|{f['device'] for f in findings}
     for key,group in groups.items():
@@ -175,7 +179,7 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
         samples=len(compatible)
         count=sum(group['protocols'].values())
         contaminated=key[0] in affected
-        eligible=not all_gaps and not contaminated and count>=20 and max(group['times'])-min(group['times'])>=3000
+        eligible=not hour_gaps and not contaminated and count>=20 and max(group['times'])-min(group['times'])>=3000
         baseline=dict(id=stable([key,start]),key=key,start=start,end=end,eligible=eligible,
             count=count,protocols=dict(group['protocols']),ports=dict(group['ports']),services=dict(group['services']),
             source_segments=sorted(group['segments']),gaps=all_gaps,

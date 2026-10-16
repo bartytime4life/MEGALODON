@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from megalodon import dashboard, support_config as config
+from megalodon import dashboard, support_config as config, support_services
 from megalodon.config import Settings, AISettings, DashboardSettings
 from megalodon.companion_automation import CompanionAutomation, local_default_config
 from megalodon.managed_capture import ManagedCapture, capture_commands
@@ -186,6 +186,31 @@ def test_permissions_only_target_packaged_dumpcap(manager):
     assert 'dpkg-query -S /usr/bin/dumpcap' in config.PERMISSION_SCRIPT
     assert 'python' not in config.PERMISSION_SCRIPT and '777' not in config.PERMISSION_SCRIPT
     assert 'sudoers' not in config.PERMISSION_SCRIPT and 'chmod +s' not in config.PERMISSION_SCRIPT
+
+
+def test_signature_update_uses_the_pinned_pkexec(manager):
+    calls=[]
+    manager.run=lambda argv,*a:calls.append(argv) or (b'',0)
+    manager.start({'action':'signature_update'})
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='finished'
+    # A PATH lookup could select a user-writable pkexec that fakes the prompt.
+    assert calls[0]==['/usr/bin/pkexec','/usr/bin/systemctl','start','clamav-freshclam.service']
+
+
+@pytest.mark.parametrize('script',[config.PERMISSION_SCRIPT,support_services.QWEN_LOCAL_SCRIPT,support_services.SURICATA_SCRIPT],ids=['permission','qwen','suricata'])
+def test_root_script_guards_are_enforced_by_set_e(script, tmp_path):
+    # set -e ignores a failure before the final && of a list, so a guard
+    # written as "[ A ] && [ B ]" would let a failed A continue as root.
+    import re
+    guards=[line for line in script.splitlines() if re.match(r'\s*\[ .*\] && ',line)]
+    assert guards==[]
+    shell='/bin/sh'
+    if not os.path.exists(shell):
+        pytest.skip('POSIX shell unavailable')
+    probe=tmp_path/'probe.sh'
+    probe.write_text('set -eu\n[ -e /nonexistent-megalodon ] && [ -e / ]\necho REACHED\n')
+    assert subprocess.run([shell,str(probe)],capture_output=True,text=True).stdout=='REACHED\n'
 
 
 def test_cancelled_authorization_is_not_success(manager):

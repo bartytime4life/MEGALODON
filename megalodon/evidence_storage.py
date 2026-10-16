@@ -860,7 +860,7 @@ class EvidenceStorage:
                 starts=[e['first_at'] for e in rows if e['first_at']];ends=[e['last_at'] for e in rows if e['last_at']]
                 first+=starts;last+=ends
                 categories.append(dict(id=key,label=label,bytes=sum(self._size(e) for e in rows),records=sum(e['records'] for e in rows),
-                    oldest_at=min(starts) if starts else None,newest_at=max(ends) if ends else None))
+                    oldest_at=min(starts,key=epoch) if starts else None,newest_at=max(ends,key=epoch) if ends else None))
             if not self.enabled and Path(self.settings.db_path).exists():
                 legacy=sum(Path(str(self.settings.db_path)+s).stat().st_size for s in ('','-wal','-shm') if Path(str(self.settings.db_path)+s).exists())
                 used+=legacy;categories[0]['bytes']+=legacy
@@ -881,10 +881,10 @@ class EvidenceStorage:
                             represented_packet_records=sum(e.get('records',0) for e in complete),
                             reclaimable_detail_bytes=sum(self._size(e) for e in complete),
                             reclaimed_detail_bytes=self._catalog.get('compacted_reclaimed_bytes',0),
-                            raw_oldest_at=min(raw_times) if raw_times else None,
-                            raw_newest_at=max(raw_ends) if raw_ends else None,
-                            summary_oldest_at=min(compact_times) if compact_times else None,
-                            summary_newest_at=max(compact_ends) if compact_ends else None,
+                            raw_oldest_at=min(raw_times,key=epoch) if raw_times else None,
+                            raw_newest_at=max(raw_ends,key=epoch) if raw_ends else None,
+                            summary_oldest_at=min(compact_times,key=epoch) if compact_times else None,
+                            summary_newest_at=max(compact_ends,key=epoch) if compact_ends else None,
                             note='Compacted conversations preserve direction, addresses, ports, counts, findings and action receipts. Individual packet detail expires under the shared age and capacity limits.')
             if self.enabled:self._sample_growth(used)
             samples=self._catalog.get('growth_samples',[])
@@ -896,12 +896,12 @@ class EvidenceStorage:
             if estimate is not None and estimate<policy['retention_days']:
                 warnings.append(dict(level='critical' if estimate<7 else 'warning',message=f'Current gross write growth would fill this cap in about {estimate:.1f} days. Compact summaries may extend useful history; measured coverage by detail tier is authoritative.'))
             if self._error:warnings.append(dict(level='critical',message=self._error))
-            actual=(epoch(max(last))-epoch(min(first)))/86400 if first and last else None
+            actual=(epoch(max(last,key=epoch))-epoch(min(first,key=epoch)))/86400 if first and last else None
             if actual is not None and self._catalog['evicted_records'] and actual<7:
                 warnings.append(dict(level='critical',message='Oldest-first cleanup has reduced retained coverage below seven days.'))
             result=dict(schema='megalodon-storage-v1',enabled=self.enabled,policy=deepcopy(policy),profiles=deepcopy(PROFILES),
                 used_bytes=used,free_disk_bytes=shutil.disk_usage(self.root if self.root.exists() else self.home).free,
-                percent=round(used/policy['cap_bytes']*100,2),oldest_at=min(first) if first else None,newest_at=max(last) if last else None,
+                percent=round(used/policy['cap_bytes']*100,2),oldest_at=min(first,key=epoch) if first else None,newest_at=max(last,key=epoch) if last else None,
                 actual_days=actual,estimated_days=estimate,required_bytes=int(rate*policy['retention_days']*1.3+WORK_RESERVE) if rate else None,
                 estimate_provisional=duration<86400,growth_bytes_per_day=rate,categories=categories,warnings=warnings,
                 state='needs_review' if self._error else 'managed' if self.enabled else 'not_enabled',
@@ -932,6 +932,7 @@ class EvidenceStorage:
                 match=re.fullmatch(r'([a-f0-9]{32}):([0-9]{1,19})',cursor)
                 if not match:raise ValueError('Invalid history cursor.')
                 start_id,before=match[1],int(match[2])
+                if before>2**63-1:raise ValueError('Invalid history cursor.')
                 if start_id not in {e['id'] for e in entries}:
                     return dict(schema='megalodon-history-v1',records=[],total=total,offset=offset,limit=limit,truncated=True,next_cursor=None,gaps=['The requested segment expired; start a new history page.'])
                 entries=entries[next(i for i,e in enumerate(entries) if e['id']==start_id):]
@@ -993,7 +994,7 @@ class EvidenceStorage:
                         truncated=bool(next_cursor or gaps),next_cursor=next_cursor,gaps=gaps)
 
     def save_case(self,ids):
-        if not self.enabled or type(ids) is not list or not 1<=len(ids)<=50 or any(type(v) is not str or not re.fullmatch(r'[a-f0-9]{32}:[1-9][0-9]{0,18}',v) for v in ids):
+        if not self.enabled or type(ids) is not list or not 1<=len(ids)<=50 or any(type(v) is not str or not re.fullmatch(r'[a-f0-9]{32}:[1-9][0-9]{0,18}',v) or int(v[33:])>=2**63-1 for v in ids):
             raise ValueError('Select up to 50 retained evidence records.')
         with self.lock:
             rows=[];dependencies=set()
@@ -1063,7 +1064,10 @@ class EvidenceStorage:
                     row=db.execute('SELECT COUNT(*),MIN(observed_at),MAX(observed_at) FROM records').fetchone()
                 with self._db(source) as db:
                     incomplete=db.execute("SELECT COUNT(*) FROM ingestion_runs WHERE status!='completed'").fetchone()[0]
-                target.update(records=row[0],first_at=row[1],last_at=row[2],source_incomplete=bool(incomplete or source.get('recovered_incomplete')),
+                # A conversation summary is stamped with its first packet, so
+                # the source's own bound keeps a later last packet in range.
+                last=max((v for v in (row[2],source.get('last_at')) if v),key=epoch,default=None)
+                target.update(records=row[0],first_at=row[1],last_at=last,source_incomplete=bool(incomplete or source.get('recovered_incomplete')),
                               source_created_at=source['created_at'])
                 source.update(compaction_state='complete',compacted_to=target['id'])
                 self._save()
@@ -1164,7 +1168,9 @@ class SegmentedPacketWriter:
                 result=self.store.record_event_bundles(bundles,run_id=self.run_id)
                 self.manager._write_metrics['commits'] += 1
                 self.entry['records']+=len(bundles)
-                stamps=[event.observed_at.isoformat().replace('+00:00','Z') for event,_,_ in bundles]
+                # Fixed precision keeps text order equal to time order: a
+                # whole-second "...:38Z" would otherwise sort after "...:38.5Z".
+                stamps=[event.observed_at.astimezone(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z') for event,_,_ in bundles]
                 self.entry['first_at']=min([self.entry['first_at'],*stamps]) if self.entry['first_at'] else min(stamps)
                 self.entry['last_at']=max([self.entry['last_at'],*stamps]) if self.entry['last_at'] else max(stamps)
                 self.manager._save(force=any(detections or actions for _,detections,actions in bundles))

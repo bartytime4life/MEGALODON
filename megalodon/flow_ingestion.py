@@ -93,6 +93,8 @@ def normalize_suricata(value):
     stamp=utc(epoch(value['timestamp']))
     if type(value.get('proto','OTHER')) is not str:raise ValueError('Invalid protocol label.')
     proto=value.get('proto','OTHER').upper()
+    # Suricata names protocol 58 "IPv6-ICMP".
+    proto={'IPV6-ICMP':'ICMPV6'}.get(proto,proto)
     if proto not in {'TCP','UDP','ICMP','ICMPV6','SCTP'}:proto='OTHER'
     data=dict(src_ip=address(value['src_ip']),dst_ip=address(value['dest_ip']),src_port=port(value.get('src_port')),
               dst_port=port(value.get('dest_port')),protocol=proto,source_id=flow_identity(value['flow_id']))

@@ -59,6 +59,26 @@ def test_packet_cadence_not_labelled_connection_beacon_and_gaps_block_baselines(
     assert 'REGULAR_INTERVAL' not in {c['rule'] for c in checks}
 
 
+def test_one_busy_device_does_not_set_other_devices_eligibility_by_row_order():
+    # 258 peers contacted every 10 s exceed one group's heuristic work limit.
+    busy=[]
+    for peer in range(258):
+        for repeat in range(5):
+            at=START+peer*0.01+repeat*10;n=len(busy)+1
+            busy.append(dict(id=f'{SEGMENT}:b{n}',observed_at=utc(at),source='zeek-conn',category='flows',
+                data=dict(src_ip='192.168.1.5',dst_ip=f'10.{peer//200}.{peer%200}.9',src_port=40000,dst_port=443,
+                          protocol='TCP',interface='eth0',source_id=f'b{n}',first_seen=utc(at))))
+    busy.append(dict(busy[-1],id=f'{SEGMENT}:bz',observed_at=utc(START+3500),
+                     data=dict(busy[-1]['data'],source_id='bz',first_seen=utc(START+3500))))
+    first,last=rows(ip='192.168.1.4'),rows(ip='192.168.1.6')
+    for ordered in (first+busy+last,last+busy+first):
+        baselines,_,gaps=analyze_hour(ordered,START,START+3600,[])
+        eligible={b['key'][0]:b['eligible'] for b in baselines}
+        assert eligible=={'192.168.1.4':True,'192.168.1.5':False,'192.168.1.6':True}
+        assert any('Heuristic candidate limit' in gap for gap in gaps)
+        assert next(b for b in baselines if not b['eligible'])['exclusion']=='Heuristic work limit'
+
+
 def test_ordinary_recurring_tasks_remain_review_only():
     _,checks,_=analyze_hour(rows(),START,START+3600,[])
     cadence=next(c for c in checks if c['rule']=='REGULAR_INTERVAL')

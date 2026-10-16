@@ -37,9 +37,16 @@ def parse_ip(value: Any) -> str:
 
 def parse_network(value: str) -> ipaddress._BaseNetwork:
     try:
-        return ipaddress.ip_network(value, strict=False)
+        network = ipaddress.ip_network(value, strict=False)
     except ValueError as exc:
         raise ValidationError("invalid network") from exc
+    # ::ffff:a.b.c.d/N names the IPv4 hosts a.b.c.d/(N-96). Keeping the IPv6
+    # spelling would leave the IPv4 address itself outside a protected network.
+    if network.version == 6 and network.prefixlen >= 96:
+        mapped = network.network_address.ipv4_mapped
+        if mapped is not None:
+            return ipaddress.ip_network((mapped, network.prefixlen - 96))
+    return network
 
 
 def _parse_integer(

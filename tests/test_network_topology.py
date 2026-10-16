@@ -221,6 +221,11 @@ def test_native_nmap_declaration_does_not_enable_dtd_or_entities():
         with pytest.raises(ValueError):parse_discovery(declaration+b'<nmaprun/>','192.168.2.0/24','eth0',STAMP)
 
 
+def test_unknown_declared_encoding_is_an_invalid_discovery_report():
+    with pytest.raises(ValueError):
+        parse_discovery(b'<?xml version="1.0" encoding="UTF-9"?><nmaprun/>','192.168.2.0/24','eth0',STAMP)
+
+
 def test_per_device_history_is_bounded_saved_and_survives_a_new_reader(topology,tmp_path):
     from megalodon.config import Settings
     from megalodon.evidence_storage import EvidenceStorage,GIB

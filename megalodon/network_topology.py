@@ -192,7 +192,8 @@ def parse_discovery(raw, target, interface, stamp):
     if len(raw)>2*1024*1024 or b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():
         raise ValueError('Discovery report exceeds bounds')
     try: root=ET.fromstring(raw)
-    except ET.ParseError: raise ValueError('Discovery report is invalid') from None
+    # An unknown declared encoding raises LookupError, not a ParseError.
+    except (ET.ParseError, LookupError): raise ValueError('Discovery report is invalid') from None
     if root.tag!='nmaprun': raise ValueError('Discovery report is invalid')
     hosts=root.findall('host')
     if len(hosts)>256: raise ValueError('Discovery report exceeds host bound')
