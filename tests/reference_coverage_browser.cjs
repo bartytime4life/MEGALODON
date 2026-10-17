@@ -37,6 +37,10 @@ let input='';process.stdin.on('data',x=>input+=x);process.stdin.on('end',async()
   payload.reference_context={...payload.reference_context,state:'ready',feeds:feeds.map(f=>({...f,state:'ready',expires_at:stamp(current+5000)}))};
   payload.endpoints[1].threat_context=[{ip:payload.endpoints[0].ip,source:'drop-v4',indicator:'wrong-selection',publisher_at:feeds[0].publisher_at,expires_at:stamp(current+5000),status:'context_match',action_status:'not_attempted'}];
   await poll();assert.doesNotMatch(details(),/wrong-selection/);assert.match(details(),/No match in current cached references/);
+  context.window.MegalodonOperations.selectEndpoint('8.8.4.4',{ip:'8.8.4.4',observed:true,last_seen:fixture.observed_at});
+  assert.match(details(),/Reference coverage unavailable/,'previously observed but unretained endpoint was not matched');
+  assert.doesNotMatch(details(),/No match in current cached references/);
+  context.window.MegalodonOperations.selectEndpoint(payload.endpoints[1].ip);await settle();
   failure=true;await poll();assert.match(details(),/Reference coverage unavailable/);assert.doesNotMatch(details(),/Current cached references/);
   assert.equal(requests.filter(r=>r.opts.method==='POST').length,0,'coverage reads and selection never execute an action');
   console.log('reference coverage states, expiry, selection and read-only behavior passed');

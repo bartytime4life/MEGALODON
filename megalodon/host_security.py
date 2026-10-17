@@ -382,10 +382,12 @@ class HostSecurity:
                     for a in canonical:
                         if a.max_prefixlen != bits:
                             continue
-                        for prefix, networks in index.items():
+                        for prefix in sorted(index, reverse=True):
+                            networks = index[prefix]
                             key = int(a) >> (bits-prefix) << (bits-prefix)
                             if key in networks:
                                 selected.append((a, *networks[key]))
+                                break  # One most-specific match per endpoint/source.
                 for a, value, reference in selected:
                     matches.append(dict(ip=str(a), source=row['source'], indicator=value, reference=reference,
                                         publisher_at=row['publisher_at'], expires_at=row['expires_at'], sha256=row['sha256'],
@@ -393,7 +395,7 @@ class HostSecurity:
         active = sum(row['state'] == 'ready' for row in feeds)
         state = 'missing' if not feeds else 'ready' if active == len(feeds) else 'partial' if active else 'stale'
         return dict(schema='megalodon-reference-context-v1', checked_at=stamp(checked), state=state,
-                    feeds=feeds, matches=matches[:768])
+                    feeds=feeds, matches=matches)
 
     def execute(self, action):
         if sys.platform != 'linux':
@@ -417,7 +419,7 @@ class HostSecurity:
                 value = dict(schema=CACHE_SCHEMA, feeds=feeds)
                 try:
                     old = self._cache()
-                except (ValueError, TypeError, KeyError, RecursionError):
+                except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
                     # Only a validated old cache is an archival candidate.
                     # A completed explicit refresh can replace obsolete data;
                     # private-file/ownership admission still runs in write().

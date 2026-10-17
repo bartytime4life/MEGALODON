@@ -115,7 +115,7 @@ def test_public_reference_feed_still_admits_and_matches_without_io(source, monke
     assert all(row['ip'] != 'ff02::1' and row['action_status'] == 'not_attempted' for row in rows)
 
 
-@pytest.mark.parametrize('old_value', ['newly_excluded', 'invalid_schema', 'bad_json'])
+@pytest.mark.parametrize('old_value', ['newly_excluded', 'invalid_schema', 'bad_json', 'overflow_date'])
 def test_explicit_refresh_replaces_unusable_cache_without_archiving_it(monkeypatch, old_value):
     from contextlib import nullcontext
     from copy import deepcopy
@@ -124,7 +124,11 @@ def test_explicit_refresh_replaces_unusable_cache_without_archiving_it(monkeypat
     previous=dict(schema=CACHE_SCHEMA,feeds=deepcopy(feeds))
     invalid=dict(schema=CACHE_SCHEMA,feeds=deepcopy(feeds))
     invalid['feeds'][0]['entries']=[['8.0.0.0/5','SBL1']]
+    if old_value=='overflow_date':
+        invalid=deepcopy(previous)
+        invalid['feeds'][0]['publisher_at']='9999-12-31T23:59:59Z'
     saved={'feeds.json':invalid if old_value=='newly_excluded' else {},'feeds.previous.json':previous}
+    if old_value=='overflow_date':saved['feeds.json']=invalid
     manager=HostSecurity(now=lambda:NOW,downloader=source_body)
     def load(name,*args):
         if name=='feeds.json' and old_value=='bad_json' and saved.get(name)=={}:

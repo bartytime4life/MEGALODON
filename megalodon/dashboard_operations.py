@@ -174,7 +174,7 @@ OPERATIONS_JS = r'''
         state=active===3?'ready':active?'partial':'stale';
       }else if(value.feeds.length===0&&['missing','unavailable'].includes(value.state))state=value.state;
     }
-    if(endpoint.discovery_only){state='unavailable';feeds=[];}
+    if(endpoint.discovery_only||!selected()||selected().ip!==endpoint.ip){state='unavailable';feeds=[];}
     panel.dataset.state=state;
     const labels={ready:'Current cached references',partial:'Partial reference coverage',stale:'References expired',missing:'References not loaded',unavailable:'Reference coverage unavailable'};
     panel.append(node('h4','Threat reference coverage'),node('p',labels[state],'ops-reference-status'));

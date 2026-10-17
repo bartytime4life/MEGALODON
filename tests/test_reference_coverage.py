@@ -45,6 +45,25 @@ def test_missing_cache_is_explicit_and_read_only(monkeypatch):
     assert context['state']=='missing' and context['matches']==[] and context['feeds']==[]
 
 
+def test_overlapping_prefixes_preserve_later_endpoint_match_parity(monkeypatch):
+    from ipaddress import ip_network
+    addresses=['8.8.8.'+str(n) for n in range(1,65)]
+    ranges=sorted({str(ip_network(address+'/'+str(prefix),strict=False))
+        for address in addresses for prefix in range(8,33)})
+    rows=[dict(cidr=cidr,sblid='SBL1') for cidr in ranges]
+    rows.append(dict(type='metadata',timestamp=int(NOW.timestamp()),records=len(ranges)))
+    raw=('\n'.join(json.dumps(row) for row in rows)+'\n').encode()
+    feeds=[parse_feed(source,raw if source=='drop-v4' else source_body(source),NOW) for source in SOURCES]
+    manager=HostSecurity(now=lambda:NOW)
+    monkeypatch.setattr(manager,'_json',lambda *_:dict(schema=CACHE_SCHEMA,feeds=feeds))
+    context=manager.reference_context(addresses)
+    matches=[r for r in context['matches'] if r['source']=='drop-v4']
+    assert len(matches)==64
+    assert {r['ip'] for r in matches}==set(addresses)
+    assert all(r['indicator']==r['ip']+'/32' for r in matches)
+    assert len(context['matches'])<=len(addresses)*3
+
+
 @pytest.mark.parametrize('failure',[None,ValueError('PRIVATE_DETAIL')])
 def test_operations_exposes_unavailability_without_error_text_or_side_effects(tmp_path,failure):
     cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda _:None))
