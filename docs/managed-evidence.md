@@ -42,6 +42,33 @@ Generic imports commit source checkpoints in the same transaction as their recor
 
 Receipt chains have explicit retained boundary anchors when completed ledger units expire. A committed unfinished workflow is protected. On exclusive startup, it receives an `unknown_after_restart` terminal receipt; no host action is retried or claimed rolled back. Its original attempt remains available for review. As with the previous receipt implementation, local hashes detect corruption against a trusted head; they are not signatures against an owner who can rewrite both files and anchors.
 
+Audit recovery distinguishes record schemas by source. Only `qwen` and `defense`
+use the hash-linked action receipt envelope. `local-model-observation-v1` records
+share audit storage but contain model-observation facts, without `state` or
+`receipt_id`; they remain unchanged and do not participate in action recovery.
+Their presence alone does not establish a verified action or model operation.
+
+Incomplete or invalid catalog entries stop startup with a review-required error
+before any entry recovery, deletion completion or catalog save. Version 1's
+existing optional defaults (`audit_boundaries`, `started_at` and
+`checkpoint_generation`) remain supported; a missing entry state is not inferred
+as open or closed. A malformed action receipt or checkpoint protects its segment
+as `needs_review`, without rewriting database records or partially promoting that
+segment's checkpoints. Managed receipt reads/reconciliation refuse an unreadable
+audit segment with `AUDIT_INTEGRITY`, even when its checkpoint is absent; skipping
+the segment cannot manufacture a verified empty chain. Hash, sequence, transition
+and anchor checks still run before appending an interrupted-outcome receipt.
+
+`AUDIT_INTEGRITY` means the action history cannot be verified, not that recovery
+succeeded. Preserve the private evidence directory and seek recovery review;
+do not delete the catalog, invent missing states, regenerate hashes or retry a
+possibly attempted host action to clear the error. The correction has synthetic
+restart coverage in `tests/test_audit_recovery.py`, including the existing model
+observation writer, both action channels, retained bytes and no-action tripwires.
+It does not establish the exact cause of an installed HUD failure without that
+installation's traceback, nor does it repair an installed store, install packages,
+start services or constitute native acceptance.
+
 ## Migration and rollback boundary
 
 Before apply, legacy databases stay at their original paths and are readable by the previous release. Preview is read-only. Apply first drains the HUD capture/flow workers, serializes local mutation requests, checks receipt/integrity readiness, and enrolls the original files without rewriting their event relationships. Future writes use new segments. Validation failure preserves the prior policy and original files. The command line (`megalodon run`, firewall action records and `megalodon ai`) still writes to the original paths; before cleanup removes an enrolled file it compares the file's per-table row counts with those recorded at enrollment, and a file that gained rows is kept and marked for review instead of being deleted.

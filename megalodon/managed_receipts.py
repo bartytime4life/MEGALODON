@@ -13,10 +13,44 @@ import sqlite3
 from .ai_broker import BrokerError, STATES, MAX_RESULT_BYTES
 from .evidence_storage import utc
 
+AUDIT_CHANNELS = ('qwen','defense')
+
+
+def validate_anchor(value):
+    if (type(value) is not dict
+            or type(value.get('head')) is not str or not re.fullmatch(r'[a-f0-9]{64}',value['head'])
+            or type(value.get('sequence')) is not int or value['sequence']<0
+            or type(value.get('generation',0)) is not int or value.get('generation',0)<0
+            or type(value.get('pending',[])) is not list
+            or any(type(identifier) is not str or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}',identifier)
+                   for identifier in value.get('pending',[]))
+            or len(value.get('pending',[]))!=len(set(value.get('pending',[])))):
+        raise BrokerError('AUDIT_INTEGRITY')
+
+
+def decode_receipt(raw):
+    """Read the action envelope without guessing states or repairing evidence.
+
+    This is structural admission only; verify_chain still checks hashes,
+    sequence, transitions and the durable anchor before reconciliation.
+    """
+    try:
+        row=json.loads(raw)
+        if (type(row) is not dict or type(row.get('state')) is not str or row['state'] not in STATES
+                or type(row.get('receipt_id')) is not str or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}',row['receipt_id'])
+                or type(row.get('timestamp')) is not str
+                or type(row.get('sequence')) is not int or row['sequence']<1
+                or any(type(row.get(key)) is not str or not re.fullmatch(r'[a-f0-9]{64}',row[key])
+                       for key in ('previous_hash','event_hash'))):
+            raise BrokerError('AUDIT_INTEGRITY')
+        return row
+    except (TypeError,ValueError,RecursionError):
+        raise BrokerError('AUDIT_INTEGRITY') from None
+
 
 class ManagedReceipts:
     def __init__(self,manager,channel='qwen'):
-        if channel not in {'qwen','defense'}:raise ValueError('Invalid receipt channel.')
+        if channel not in AUDIT_CHANNELS:raise ValueError('Invalid receipt channel.')
         self.manager,self.channel=manager,channel
 
     def __enter__(self):return self
@@ -24,12 +58,21 @@ class ManagedReceipts:
 
     def _rows(self):
         """Stream retained units; memory is independent of retained ledger size."""
-        entries=sorted((e for e in self.manager._catalog['entries'] if e['category']=='audit'
-            and e['kind']=='generic' and e['state'] in {'open','closed'}),key=lambda e:e['created_at'])
-        for entry in entries:
-            with self.manager._db(entry) as db:
-                for row in db.execute('SELECT data FROM records WHERE source=? ORDER BY id',(self.channel,)):
-                    yield json.loads(row[0])
+        try:
+            entries=[]
+            for entry in self.manager._catalog['entries']:
+                self.manager._validate_entry(entry)
+                if entry['category']!='audit' or entry['kind']!='generic':continue
+                # A protected/unreadable audit unit cannot prove an empty
+                # ledger, even when no checkpoint survived the interruption.
+                if entry['state'] not in {'open','closed'}:raise BrokerError('AUDIT_INTEGRITY')
+                entries.append(entry)
+            for entry in sorted(entries,key=lambda e:e['created_at']):
+                with self.manager._db(entry) as db:
+                    for row in db.execute('SELECT data FROM records WHERE source=? ORDER BY id',(self.channel,)):
+                        yield decode_receipt(row[0])
+        except (KeyError,TypeError,ValueError,OSError,sqlite3.Error):
+            raise BrokerError('AUDIT_INTEGRITY') from None
 
     def recent(self,limit=64):
         if type(limit) is not int or not 1<=limit<=256:raise ValueError('Invalid receipt page.')
@@ -44,10 +87,13 @@ class ManagedReceipts:
 
     def verify_chain(self,*,expected_head=None):
         with self.manager.lock:
-            boundary=self.manager._catalog['audit_boundaries'].get('audit_'+self.channel,{})
-            previous=boundary.get('head','0'*64);sequence=boundary.get('sequence',0)
-            pending={};seen=set()
             try:
+                boundaries=self.manager._catalog['audit_boundaries']
+                if type(boundaries) is not dict:raise BrokerError('AUDIT_INTEGRITY')
+                boundary=boundaries.get('audit_'+self.channel,dict(head='0'*64,sequence=0))
+                validate_anchor(boundary)
+                previous=boundary['head'];sequence=boundary['sequence']
+                pending={};seen=set()
                 for row in self._rows():
                     payload={k:v for k,v in row.items() if k not in {'receipt_id','timestamp','previous_hash','event_hash','sequence'}}
                     raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
@@ -63,7 +109,11 @@ class ManagedReceipts:
                     # Actions are low-frequency, bounded workflows. Refuse a
                     # ledger requiring excessive replay rather than trust it.
                     if len(seen)>100000:raise BrokerError('AUDIT_UNAVAILABLE')
-                anchor=self.manager.checkpoint('audit_'+self.channel) or dict(head='0'*64,sequence=0,pending=[])
+                checkpoints=self.manager._catalog['checkpoints']
+                if type(checkpoints) is not dict:raise BrokerError('AUDIT_INTEGRITY')
+                key='audit_'+self.channel
+                anchor=self.manager.checkpoint(key) if key in checkpoints else dict(head='0'*64,sequence=0,pending=[])
+                validate_anchor(anchor)
                 if anchor['head']!=previous or anchor['sequence']!=sequence or set(anchor.get('pending',[]))!=set(pending):
                     raise BrokerError('AUDIT_INTEGRITY')
                 if expected_head is not None and expected_head!=previous:raise BrokerError('AUDIT_INTEGRITY')
