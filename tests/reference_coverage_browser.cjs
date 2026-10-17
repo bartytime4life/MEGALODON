@@ -23,9 +23,12 @@ let input='';process.stdin.on('data',x=>input+=x);process.stdin.on('end',async()
   payload.reference_context={schema:'megalodon-reference-context-v1',checked_at:stamp(current),state:'missing',feeds:[]};
   await poll();assert.match(details(),/References not loaded/);assert.match(details(),/no reference comparison/i);
   const feeds=['drop-v4','drop-v6','ipsum'].map(source=>({source,state:'ready',indicators:1,publisher_at:stamp(current-3600000),expires_at:stamp(current+1000)}));
-  payload.reference_context={...payload.reference_context,state:'ready',feeds};
+  payload.reference_context={...payload.reference_context,state:'ready',feeds,checked_addresses:[payload.endpoints[1].ip]};
   payload.endpoints[1].threat_context=[{ip:payload.endpoints[1].ip,source:'drop-v4',indicator:'203.0.113.0/24',publisher_at:feeds[0].publisher_at,expires_at:feeds[0].expires_at,status:'context_match',action_status:'not_attempted'}];
   await poll();assert.match(details(),/Current cached references/);assert.match(details(),/drop-v4 match/);assert.match(details(),/No live reputation lookup/);
+  context.window.MegalodonOperations.selectEndpoint(payload.endpoints[0].ip);await settle();
+  assert.match(details(),/Reference coverage unavailable/,'retained but policy-ineligible private IP was not checked');
+  context.window.MegalodonOperations.selectEndpoint(payload.endpoints[1].ip);await settle();
   current+=1000;await poll();assert.match(details(),/References expired/);assert.doesNotMatch(details(),/drop-v4 match/,'expiry removes a formerly shown match');
   payload.reference_context.checked_at=stamp(current);
   payload.reference_context.feeds[0].expires_at=stamp(current+5000);

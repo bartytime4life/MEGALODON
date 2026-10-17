@@ -29,12 +29,13 @@ def test_coverage_and_matching_share_one_read_and_expiry_instant(monkeypatch, ag
         calls.append(name)
         return dict(schema=CACHE_SCHEMA, feeds=feeds)
     monkeypatch.setattr(manager,'_json',saved)
-    context=manager.reference_context(['8.8.8.8','2606:4700:4700::1111'])
+    context=manager.reference_context(['8.8.8.8','2606:4700:4700::1111','127.0.0.1'])
     assert calls == ['feeds.json']
     assert context['state']==state
     assert len(context['matches'])==active
     assert sum(row['state']=='ready' for row in context['feeds'])==active
     assert all(row['action_status']=='not_attempted' for row in context['matches'])
+    assert context['checked_addresses']==['8.8.8.8','2606:4700:4700::1111']
 
 
 def test_missing_cache_is_explicit_and_read_only(monkeypatch):
@@ -43,6 +44,7 @@ def test_missing_cache_is_explicit_and_read_only(monkeypatch):
     monkeypatch.setattr(manager,'_save',lambda *_:pytest.fail('Read wrote state'))
     context=manager.reference_context(['8.8.8.8'])
     assert context['state']=='missing' and context['matches']==[] and context['feeds']==[]
+    assert context['checked_addresses']==[]
 
 
 def test_maximum_cache_date_is_unavailable_on_both_read_projections(monkeypatch,tmp_path):

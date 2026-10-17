@@ -395,7 +395,8 @@ class HostSecurity:
         active = sum(row['state'] == 'ready' for row in feeds)
         state = 'missing' if not feeds else 'ready' if active == len(feeds) else 'partial' if active else 'stale'
         return dict(schema='megalodon-reference-context-v1', checked_at=stamp(checked), state=state,
-                    feeds=feeds, matches=matches)
+                    feeds=feeds, checked_addresses=list(dict.fromkeys(str(a) for a in canonical)) if cache else [],
+                    matches=matches)
 
     def execute(self, action):
         if sys.platform != 'linux':

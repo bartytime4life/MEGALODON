@@ -83,6 +83,8 @@ and current cached references. The operations GET projection validates and reads
 one cache for both coverage and matching, limited to its retained endpoint list.
 It exposes fixed source IDs, publisher/expiry times, indicator counts and the
 local check time. It does not expose raw feed bodies or perform a refresh.
+The coverage projection identifies the public-unicast addresses actually checked.
+Private and other policy-excluded selections cannot display a no-match result.
 Expiry is exclusive: a source expiring at the current instant supplies no match.
 Each endpoint retains one representative match per source: for overlapping DROP
 prefixes, the most-specific matching range and its SBL references are shown.
