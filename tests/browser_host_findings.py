@@ -116,8 +116,11 @@ async def exercise_host_findings(browser, port, password, passed):
         for width in (1440, 390):
             await page.set_viewport_size(dict(width=width, height=1000))
             await panel.scroll_into_view_if_needed()
-            fits = await panel.evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
-            passed('native host findings reflow '+str(width), fits)
+            metrics = await panel.evaluate('''n => ({client:n.clientWidth, scroll:n.scrollWidth,
+                overflow:Array.from(n.querySelectorAll('*')).filter(e=>e.clientWidth>0 && e.scrollWidth>e.clientWidth+1)
+                    .slice(0,16).map(e=>({tag:e.tagName,display:getComputedStyle(e).display,client:e.clientWidth,scroll:e.scrollWidth}))})''')
+            print('MEGALODON_HOST_FINDINGS_REFLOW '+json.dumps(dict(viewport=width, **metrics)), flush=True)
+            passed('native host findings reflow '+str(width), metrics['scroll']<=metrics['client']+1)
 
         for mode, expected in (('stale', 'older than 7 days'), ('legacy', 'legacy aggregate only'),
                                ('baseline', 'initial baseline recorded'), ('missing', 'no saved observation'),
