@@ -170,15 +170,17 @@ class Operations:
                                 if row['ports'][index]['port'] not in PROTECTED_SERVICE_PORTS:
                                     row['ports'][index]=item
                                     break
+            endpoints = sorted(peers.values(),key=lambda r:(not r['local'],-r['bytes']))[:64]
+            references = dict(schema='megalodon-reference-context-v1', checked_at=now(), state='unavailable', feeds=[])
             host_security = getattr(self.configuration, 'host_security', None)
             if host_security is not None:
                 try:
-                    matches = host_security.matches(list(peers)[:256])
-                    for match in matches:
+                    context_result = host_security.reference_context([row['ip'] for row in endpoints])
+                    for match in context_result['matches']:
                         peers[match['ip']].setdefault('threat_context', []).append(match)
-                except (OSError, ValueError, KeyError, TypeError, RecursionError):
-                    pass  # Unavailable/stale context never becomes a clean verdict.
-            endpoints = sorted(peers.values(),key=lambda r:(not r['local'],-r['bytes']))[:64]
+                    references = {key:value for key,value in context_result.items() if key != 'matches'}
+                except (OSError, ValueError, KeyError, TypeError, RecursionError, OverflowError):
+                    pass  # A failed read remains explicit, without a clean verdict.
             settings = self.configuration.settings
             storage = dict(status='unavailable',used_bytes=None,limit_bytes=settings.storage.max_database_bytes,percent=None)
             try:
@@ -199,6 +201,7 @@ class Operations:
                              bytes=total_bytes,sent_bytes=sent,received_bytes=received,unattributed_bytes=unattributed),
                 sensor_endpoints=[dict(ip=ip,**value) for ip,value in list(context.items())[:128]],
                 timeline=live.get('timeline',[]),protocols=sorted(protocols.values(),key=lambda r:-r['bytes']),endpoints=endpoints,storage=storage,
+                reference_context=references,
                 coverage=dict(window_seconds=60,max_endpoints=64,unmapped=live['totals']['unmapped'],truncated=live['totals']['truncated'] or len(peers)>64,
                     notes=['Retained observed connections, up to 60 seconds; capture gaps and drops are unknown.',
                            'The timeline uses five-second bins of accepted packet metadata. Endpoint sent/received is relative to that IP.',
