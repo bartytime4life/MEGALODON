@@ -405,7 +405,7 @@ class HostSecurity:
                 value = dict(schema=CACHE_SCHEMA, feeds=feeds)
                 try:
                     old = self._cache()
-                except (ValueError, TypeError, KeyError, RecursionError):
+                except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
                     # Only a validated old cache is an archival candidate.
                     # A completed explicit refresh can replace obsolete data;
                     # private-file/ownership admission still runs in write().
