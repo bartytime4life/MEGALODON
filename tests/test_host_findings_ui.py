@@ -11,18 +11,23 @@ from megalodon.dashboard_host_findings import HOST_FINDINGS_HTML, HOST_FINDINGS_
 from megalodon.host_findings import aide_review, lynis_review
 
 
+def host_findings_fixture(observed_at='2026-10-17T12:00:00Z'):
+    """Fabricated source observations shared by inert and rendered rehearsals."""
+    raw = (b'report_version_major=1\nreport_version_minor=0\nhostname=private-host\nsuggestion[]=AUTH-9262|Review policy|private-detail|text:never run me|\n'
+           b'warning[]=SSH-7408|Review SSH settings|private-detail|url:https://invalid.test|\n')
+    metrics, review = lynis_review(raw)
+    return dict(schema='megalodon-host-security-v1', action_authority='none', audit_state='available', integrity_state='available',
+        audit=dict(checked_at=observed_at, message='Unprivileged audit completed.', metrics=metrics, review=review),
+        integrity=dict(checked_at=observed_at, message='Review private file changes.',
+            metrics=dict(added_detected=1, removed_detected=0, changed_detected=1),
+            review=aide_review(b'AIDE synthetic report', 'check', dict(created_at='2026-10-01T12:00:00Z', sha256='a'*64), 5)))
+
+
 def test_host_findings_browser_behavior():
     node = shutil.which('node')
     if node is None:
         pytest.skip('Node unavailable')
-    raw = (b'report_version_major=1\nreport_version_minor=0\nhostname=private-host\nsuggestion[]=AUTH-9262|Review policy|private-detail|text:never run me|\n'
-           b'warning[]=SSH-7408|Review SSH settings|private-detail|url:https://invalid.test|\n')
-    metrics, review = lynis_review(raw)
-    fixture = dict(schema='megalodon-host-security-v1', action_authority='none', audit_state='available', integrity_state='available',
-        audit=dict(checked_at='2026-10-17T12:00:00Z', message='Unprivileged audit completed.', metrics=metrics, review=review),
-        integrity=dict(checked_at='2026-10-17T12:00:00Z', message='Review private file changes.',
-            metrics=dict(added_detected=1, removed_detected=0, changed_detected=1),
-            review=aide_review(b'AIDE synthetic report', 'check', dict(created_at='2026-10-01T12:00:00Z', sha256='a'*64), 5)))
+    fixture = host_findings_fixture()
     result = subprocess.run([node, str(Path(__file__).with_name('host_findings_browser.cjs'))],
         input=json.dumps(dict(code=HOST_FINDINGS_JS, fixture=fixture)), text=True, capture_output=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
