@@ -110,6 +110,9 @@ class EvidenceStorage:
                     raise ValueError('Managed evidence catalog requires review.')
                 if value.get('policy'):
                     policy_value({k:value['policy'][k] for k in ('profile','retention_days','cap_bytes')})
+                # Validate every entry before recovery can complete a deletion
+                # or save metadata. Missing states are not a legacy default.
+                for entry in value['entries']:self._validate_entry(entry)
                 self._catalog = value
                 self._catalog.setdefault('audit_boundaries',{})
                 self._catalog.setdefault('started_at',utc(self.clock()))
@@ -158,6 +161,17 @@ class EvidenceStorage:
         finally:os.close(descriptor)
         self._last_catalog_raw = raw
         self._last_save = self.clock()
+
+    def _validate_entry(self,entry):
+        if (type(entry) is not dict
+                or type(entry.get('category')) is not str or entry['category'] not in CATEGORIES
+                or entry.get('kind') not in ('core','generic','receipt')
+                or entry.get('state') not in ('open','closed','building','needs_review','deleting','deleted')
+                or type(entry.get('id')) is not str or type(entry.get('path')) is not str
+                or any(type(entry.get(key)) is not int or entry[key]<0 for key in ('dev','ino','records'))):
+            raise ValueError('Managed evidence catalog entry is incomplete or invalid; recovery requires review.')
+        epoch(entry.get('created_at'))
+        self._path(entry)
 
     def _path(self,entry):
         if not re.fullmatch(r'[a-f0-9]{32}',entry.get('id','')):
@@ -330,21 +344,39 @@ class EvidenceStorage:
                     if db.execute('PRAGMA foreign_key_check').fetchone():raise ValueError('Interrupted relationships require review.')
                 else:
                     row = db.execute('SELECT COUNT(*), MIN(observed_at), MAX(observed_at) FROM records').fetchone()
-                    entry.update(records=row[0],first_at=row[1],last_at=row[2])
-                    for saved in db.execute('SELECT key,value FROM checkpoints'):
-                        candidate=json.loads(saved[1]);current=self._catalog['checkpoints'].get(saved[0],{})
-                        if saved[0]=='derived_sources':
-                            entry['derived_sources']=candidate['sources'];continue
-                        if saved[0].startswith('audit_'):
-                            if candidate.get('sequence',0)>=current.get('sequence',0):self._catalog['checkpoints'][saved[0]]=candidate
-                        elif candidate.get('generation',0)>=current.get('generation',0):
-                            self._catalog['checkpoints'][saved[0]]=candidate
-                        self._catalog['checkpoint_generation']=max(self._catalog.get('checkpoint_generation',0),candidate.get('generation',0))
                     if entry['category']=='audit':
+                        from .managed_receipts import AUDIT_CHANNELS, decode_receipt, validate_anchor
                         states={}
-                        for r in db.execute('SELECT source,data FROM records ORDER BY id'):
-                            data=json.loads(r[1]);states[(r[0],data['receipt_id'])]=data['state']
-                        entry['pending_receipts']=sum(v=='not_attempted' for v in states.values())
+                        # The audit category also holds model observations.
+                        # Only these two sources use action receipt states.
+                        for r in db.execute('SELECT source,data FROM records WHERE source IN (?,?) ORDER BY id',AUDIT_CHANNELS):
+                            data=decode_receipt(r[1]);states[(r[0],data['receipt_id'])]=data['state']
+                        pending_receipts=sum(v=='not_attempted' for v in states.values())
+                    recovered=dict(records=row[0],first_at=row[1],last_at=row[2])
+                    if type(self._catalog['checkpoints']) is not dict:
+                        raise ValueError('Evidence checkpoints require review.')
+                    checkpoints=dict(self._catalog['checkpoints'])
+                    generation=self._catalog.get('checkpoint_generation',0)
+                    for saved in db.execute('SELECT key,value FROM checkpoints'):
+                        candidate=json.loads(saved[1]);current=checkpoints.get(saved[0],{})
+                        if type(candidate) is not dict or type(current) is not dict:
+                            raise ValueError('Evidence checkpoint requires review.')
+                        if entry['category']=='audit' and saved[0] in ('audit_qwen','audit_defense'):
+                            validate_anchor(candidate)
+                            if saved[0] in checkpoints:validate_anchor(current)
+                        if saved[0]=='derived_sources':
+                            recovered['derived_sources']=candidate['sources'];continue
+                        if saved[0].startswith('audit_'):
+                            if candidate.get('sequence',0)>=current.get('sequence',0):checkpoints[saved[0]]=candidate
+                        elif candidate.get('generation',0)>=current.get('generation',0):
+                            checkpoints[saved[0]]=candidate
+                        generation=max(generation,candidate.get('generation',0))
+                    if entry['category']=='audit':
+                        recovered['pending_receipts']=pending_receipts
+                    # A later malformed checkpoint must not partially promote
+                    # recovery metadata from this unit.
+                    entry.update(recovered)
+                    self._catalog.update(checkpoints=checkpoints,checkpoint_generation=generation)
             if entry['kind']=='core' and pending:
                 if any(row['status']!='running' for row in pending):raise ValueError('Interrupted ingestion requires reconciliation.')
                 # The exclusive owner lease proves no managed segment writer
@@ -357,7 +389,7 @@ class EvidenceStorage:
                 entry['recovered_incomplete']=True
             entry['state']='open' if entry.get('pending_receipts') else 'closed'
             if entry.get('pending_receipts'):self._generic['audit']=entry
-        except (OSError,ValueError,sqlite3.Error):
+        except (KeyError,TypeError,RecursionError,OSError,ValueError,sqlite3.Error):
             entry['state']='needs_review'
             self._error='An interrupted segment needs review; it will not be silently removed.'
 
