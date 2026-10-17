@@ -41,6 +41,30 @@ TERMS = {'drop-v4': 'https://www.spamhaus.org/blocklists/drop-fair-use-policy/',
          'drop-v6': 'https://www.spamhaus.org/blocklists/drop-fair-use-policy/',
          'ipsum': 'https://github.com/stamparm/ipsum/blob/master/LICENSE'}
 AIDE_SCOPE = ('/usr/bin', '/usr/sbin', '/etc/ssh', '/etc/systemd/system')
+# Conservative reference admission, not a routing/reachability assertion.
+# Reject entire ranges overlapping special space, including interior addresses
+# that ipaddress's endpoint-based network properties do not inspect.
+_NONPUBLIC_V4 = tuple(ip_network(value) for value in (
+    '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8',
+    '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24',
+    '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15',
+    '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/3'))
+_UNICAST_V6 = ip_network('2000::/3')
+_SPECIAL_V6 = tuple(ip_network(value) for value in (
+    '2001::/23', '2001:db8::/32', '2002::/16', '3ffe::/16', '3fff::/20'))
+
+
+def public_unicast(value):
+    """Admit ordinary public unicast only, identically on ingest and reload."""
+    if '%' in str(value):
+        return False
+    network = ip_network(str(value), strict=True)
+    if not network.is_global:
+        return False
+    if network.version == 4:
+        return not any(network.overlaps(special) for special in _NONPUBLIC_V4)
+    return (network.subnet_of(_UNICAST_V6)
+            and not any(network.overlaps(special) for special in _SPECIAL_V6))
 
 
 def clock():
@@ -135,7 +159,7 @@ def parse_feed(source, raw, now):
                 metadata = row
                 continue
             network = ip_network(row['cidr'], strict=True)
-            if network.version != (4 if source == 'drop-v4' else 6) or not network.is_global:
+            if network.version != (4 if source == 'drop-v4' else 6) or not public_unicast(network):
                 raise ValueError('Nonpublic or wrong-family DROP range.')
             if not re.fullmatch(r'SBL\d{1,12}', row['sblid']):
                 raise ValueError('Invalid DROP reference.')
@@ -162,7 +186,7 @@ def parse_feed(source, raw, now):
             elif line and not line.startswith('#'):
                 address, score = line.split()
                 address = ip_address(address)
-                if not address.is_global or not score.isdecimal() or not 1 <= int(score) <= 1000:
+                if not public_unicast(address) or not score.isdecimal() or not 1 <= int(score) <= 1000:
                     raise ValueError('Invalid IPsum record.')
                 # Count is source-list occurrence, never an independent confidence score.
                 if int(score) >= 3:
@@ -275,7 +299,7 @@ class HostSecurity:
                     raise ValueError('Invalid cached indicator.')
                 seen.add(entry[0])
                 address = ip_network(entry[0], strict=True) if source.startswith('drop-') else ip_address(entry[0])
-                if not address.is_global or str(address) != entry[0]:
+                if not public_unicast(address) or str(address) != entry[0]:
                     raise ValueError('Invalid cached address.')
                 if source.startswith('drop-'):
                     if address.version != (4 if source == 'drop-v4' else 6) or type(entry[1]) is not str or not re.fullmatch(r'SBL\d{1,12}(?:, SBL\d{1,12}){0,7}',entry[1]):
@@ -326,7 +350,7 @@ class HostSecurity:
         canonical = []
         for value in addresses:
             address = ip_address(value)
-            if address.is_global:
+            if public_unicast(address):
                 canonical.append(address)
         cache = self._cache()
         matches = []
