@@ -67,6 +67,53 @@ def test_reject_missing_metadata_duplicates_and_broad_nonpublic_ranges(bad):
     with pytest.raises((ValueError,KeyError)):parse_feed('drop-v4',bad,NOW)
 
 
+UNSAFE_RANGES = ('0.0.0.0/0', '224.0.0.0/4', '240.0.0.0/4',
+    '8.0.0.0/5', '100.0.0.0/8', '192.0.0.0/16', '::/0', 'ff00::/8',
+    'fc00::/7', 'fe80::/10', '2000::/3', '2001::/16', '2002::/16',
+    '2001:db8::/32', '3ffe::/16', '3fff::/20')
+
+
+@pytest.mark.parametrize('cidr', UNSAFE_RANGES)
+def test_complete_drop_feed_rejects_nonunicast_or_mixed_scope_ranges(cidr):
+    source = 'drop-v6' if ':' in cidr else 'drop-v4'
+    body = (json.dumps(dict(cidr=cidr, sblid='SBL1'))+'\n'
+            +json.dumps(dict(type='metadata', timestamp=int(NOW.timestamp()), records=1))+'\n').encode()
+    with pytest.raises(ValueError, match='Nonpublic'):
+        parse_feed(source, body, NOW)
+
+
+@pytest.mark.parametrize('cidr', UNSAFE_RANGES)
+def test_preexisting_unsafe_cache_is_refused_before_matching(cidr, monkeypatch):
+    manager = HostSecurity(now=lambda: NOW)
+    feeds = [parse_feed(source, source_body(source), NOW) for source in SOURCES]
+    source = 'drop-v6' if ':' in cidr else 'drop-v4'
+    next(row for row in feeds if row['source'] == source)['entries'] = [[cidr, 'SBL1']]
+    cache = dict(schema=CACHE_SCHEMA, feeds=feeds)
+    monkeypatch.setattr(manager, '_json', lambda name, *args: cache if name == 'feeds.json' else None)
+    with pytest.raises(ValueError, match='cached address'):
+        manager.matches(['8.8.8.8', '2606:4700:4700::1111'])
+    assert manager.snapshot()['feed_state'] == 'unavailable'
+
+
+@pytest.mark.parametrize('address', ['224.0.0.1', '255.255.255.255', 'ff02::1',
+    '::ffff:8.8.8.8', '2606:4700::1%eth0'])
+def test_ipsum_rejects_nonunicast_or_ambiguous_addresses(address):
+    body = ('# Last update: '+NOW.strftime('%a, %d %b %Y %H:%M:%S +0000')
+            +'\n'+address+' 4\n').encode()
+    with pytest.raises(ValueError, match='Invalid IPsum'):
+        parse_feed('ipsum', body, NOW)
+
+
+@pytest.mark.parametrize('source', SOURCES)
+def test_public_reference_feed_still_admits_and_matches_without_io(source, monkeypatch):
+    feeds = [parse_feed(key, source_body(key), NOW) for key in SOURCES]
+    manager = HostSecurity(now=lambda: NOW, downloader=lambda *_: pytest.fail('Unexpected download'))
+    monkeypatch.setattr(manager, '_json', lambda *_: dict(schema=CACHE_SCHEMA, feeds=feeds))
+    rows = manager.matches(['8.8.8.8', '2606:4700:4700::1111', 'ff02::1'])
+    assert any(row['source'] == source for row in rows)
+    assert all(row['ip'] != 'ff02::1' and row['action_status'] == 'not_attempted' for row in rows)
+
+
 def test_reject_symlink_and_broadly_readable_cache(manager,tmp_path):
     manager.execute('refresh');path=manager.root/'feeds.json'
     path.chmod(0o644)

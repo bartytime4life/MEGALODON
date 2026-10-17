@@ -54,6 +54,20 @@ Expired sources stop supplying matches. The endpoint inspector displays matches
 separately from sensor findings, with source and expiry. A match does not prove
 compromise or identify an actor. No match does not establish safety.
 
+Reference admission rejects catch-all, multicast, private, reserved and mixed-scope
+ranges both on download and when reloading an existing cache. The same policy
+excludes scoped/mapped addresses and IPsum non-unicast entries. It conservatively
+excludes IPv4 special-purpose blocks (including their public exceptions), and
+limits IPv6 to ordinary `2000::/3` unicast outside special-purpose, documentation
+and retired transition/test space. A supernet overlapping excluded space is
+refused as a whole; it is never silently split or partially accepted. This is
+input admission, not proof that an address is reachable or hostile. An unsafe
+previously saved cache becomes unavailable without being rewritten or deleted.
+The closed policy needs review if IANA allocations change; no runtime lookup is
+performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/assignments/iana-ipv4-special-registry/),
+[IANA IPv6 address space](https://www.iana.org/assignments/ipv6-address-space/), and
+[IANA IPv6 special-purpose registry](https://www.iana.org/assignments/iana-ipv6-special-registry/).
+
 ## Command line
 
 Use the Python environment containing this release:
