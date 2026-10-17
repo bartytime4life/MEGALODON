@@ -52,5 +52,11 @@ def snapshot(configuration, companions):
     summary=security.snapshot() if security is not None else {}
     for key,label,field in [('lynis','Lynis','audit'),('aide','AIDE','integrity')]:
         saved=summary.get(field)
-        add(key,label,'connected' if saved else 'needs_setup',saved['message'] if saved else 'Use Host security in Setup to run an explicit local check.',saved['checked_at'] if saved else None)
+        unavailable=summary.get(field+'_state')=='unavailable'
+        metrics=([metric('Configuration warnings',saved['metrics']['warnings']),metric('Hardening suggestions',saved['metrics']['suggestions'])]
+                 if saved and field=='audit' else [])
+        add(key,label,'error' if unavailable else 'connected' if saved else 'needs_setup',
+            'Saved host evidence is unavailable; review Host findings in Setup.' if unavailable else
+            saved['message'] if saved else 'Use Host security in Setup to run an explicit local check.',
+            saved['checked_at'] if saved else None,metrics)
     return dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)

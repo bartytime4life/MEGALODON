@@ -25,6 +25,8 @@ import tempfile
 import sys
 import time
 
+from .host_findings import REPORTS, aide_review, lynis_review, validate_summary
+
 SCHEMA = 'megalodon-host-security-v1'
 CACHE_SCHEMA = 'megalodon-threat-cache-v1'
 ACTIONS = ('audit', 'baseline', 'check', 'refresh')
@@ -322,17 +324,27 @@ class HostSecurity:
     def snapshot(self):
         result = dict(schema=SCHEMA, audit=None, integrity=None, feeds=[], feed_state='unavailable',
                       baseline_present=False, message='Run a host audit or refresh threat context.', action_authority='none')
-        try:
-            for name in ('audit', 'integrity'):
+        for name in ('audit', 'integrity'):
+            result[name+'_state'] = 'missing'
+            try:
                 value = self._json(name+'.json', 32768)
-                # Display only fields produced by our fixed summaries, never raw tool text.
                 if value is not None:
-                    if type(value) is not dict or set(value) != {'checked_at','message','metrics'} or type(value['metrics']) is not dict or any(type(v) is not int or v < 0 for v in value['metrics'].values()):
-                        raise ValueError('Invalid host summary.')
-                    date(value['checked_at'])
-                    if type(value['message']) is not str or len(value['message']) > 512 or not value['message'].isprintable():
-                        raise ValueError('Invalid host summary text.')
+                    validate_summary(name, value, self.now())
+                    if 'review' in value:
+                        # Publishing the summary is last. A partial write or later
+                        # report replacement must not present mismatched evidence.
+                        report = read(self.root/REPORTS[name])
+                        if hashlib.sha256(report).hexdigest() != value['review']['report_sha256']:
+                            raise ValueError('Host report identity changed.')
+                        if name == 'audit':
+                            metrics, review = lynis_review(report)
+                            if metrics != value['metrics'] or review != value['review']:
+                                raise ValueError('Host findings disagree with their report.')
                     result[name] = value
+                    result[name+'_state'] = 'available' if 'review' in value else 'legacy'
+            except (OSError, ValueError, TypeError, KeyError, RecursionError, OverflowError):
+                result[name+'_state'] = 'unavailable'
+        try:
             result['baseline_present'] = self._baseline() is not None
             cache = self._cache()
             if cache:
@@ -447,18 +459,15 @@ class HostSecurity:
                     report = _read_bounded(work/'lynis.dat', MAX_FILE)
                     if not 0 < len(report) <= MAX_FILE:
                         raise ValueError('Lynis report exceeded its bound.')
-                    metrics = {'warnings':0, 'suggestions':0}
-                    for line in report.decode('utf-8').splitlines():
-                        if line.startswith('warning[]='): metrics['warnings'] += 1
-                        if line.startswith('suggestion[]='): metrics['suggestions'] += 1
+                    metrics, review = lynis_review(report)
                     message = 'Unprivileged host audit completed; unreadable/root-only checks are outside coverage. Suggestions are not confirmed threats.'
-                    self._save('audit.json', dict(checked_at=stamp(self.now()), message=message, metrics=metrics))
                     write(self.root/'lynis-report.dat', report)
+                    self._save('audit.json', dict(checked_at=stamp(self.now()), message=message, metrics=metrics, review=review))
                     return message
                 database = self.root/'aide.db.gz'
                 rules = '\n'.join(path + r'(/.*)?$ MEGALODON' for path in AIDE_SCOPE)
                 config = ('database_in=file:'+str(database)+'\ndatabase_out=file:'+str(work/'new.db.gz')+
-                          '\ngzip_dbout=yes\nreport_url=stdout\nreport_level=summary\nnum_workers=2\n'
+                          '\ngzip_dbout=yes\nreport_level=list_entries\nreport_url=stdout\nnum_workers=2\n'
                           'MEGALODON = p+u+g+s+m+sha256\n'+rules+'\n')
                 if action == 'check':
                     baseline = self._baseline()
@@ -475,13 +484,15 @@ class HostSecurity:
                     if os.path.lexists(database):
                         raise ValueError('AIDE database already exists; preserve it before creating a new baseline.')
                     write(database, body)
-                    self._save('baseline.json', dict(created_at=stamp(self.now()), scope=list(AIDE_SCOPE), sha256=hashlib.sha256(body).hexdigest(), trust='observed_not_known_clean'))
+                    baseline = dict(created_at=stamp(self.now()), scope=list(AIDE_SCOPE), sha256=hashlib.sha256(body).hexdigest(), trust='observed_not_known_clean')
+                    self._save('baseline.json', baseline)
                 metrics = dict(added_detected=int(bool(code&1)), removed_detected=int(bool(code&2)), changed_detected=int(bool(code&4)))
                 message = ('Initial AIDE comparison baseline recorded; this does not certify a clean system.' if action == 'baseline' else
                            'AIDE found file changes; review the private report before accepting any new baseline.' if code else
                            'AIDE found no differences in its readable fixed scope; this does not prove the system is safe.')
                 write(self.root/'aide-report.txt', raw)
-                self._save('integrity.json', dict(checked_at=stamp(self.now()), message=message, metrics=metrics))
+                self._save('integrity.json', dict(checked_at=stamp(self.now()), message=message, metrics=metrics,
+                                                review=aide_review(raw, action, baseline, code)))
                 return message
 
 

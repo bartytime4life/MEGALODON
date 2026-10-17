@@ -28,7 +28,10 @@ the normal OS authorization dialog. No MEGALODON feed-refresh timer is created.
 - **Check file changes** verifies the baseline digest, checks the same scope and
   saves a report without updating the baseline. Result metrics ending in
   `_detected` are boolean change-category flags, not file counts. Package
-  upgrades and administrator changes can produce legitimate differences.
+  upgrades and administrator changes can produce legitimate differences. New
+  reports request `list_entries` before `report_url`, so the bounded private
+  report can identify added, removed and changed paths for operator review;
+  these paths are not returned by the dashboard projection.
 - **Refresh threat references** downloads only the fixed Spamhaus DROP v4/v6
   and IPsum HTTPS resources. There are no redirects, proxies, credentials,
   uploads, arbitrary URLs or automatic response actions. Each source is bounded
@@ -75,6 +78,69 @@ performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/as
 [IANA IPv6 special-purpose registry](https://www.iana.org/assignments/iana-ipv6-special-registry/).
 
 ## Command line
+
+### Host findings to review
+
+Setup → Host security and threat context → **Host findings to review** presents
+saved local observations separately from admitted detector findings and the
+network inspector's dated reputation context. This adds no incident-confirmation
+authority. Significance comes from the source's warning/suggestion or change
+category; no CVSS score, inferred incident severity or compromise verdict is
+assigned.
+
+| Observation | Evidence shown | Operator follow-up |
+| --- | --- | --- |
+| Lynis configuration warning | Test ID, bounded description, original report line, observation time and report SHA-256 | Review the named rule and intended configuration in the private report; use Review audit controls to reach the existing explicit audit button |
+| Lynis hardening suggestion | The same identity fields, labeled advisory | Assess whether the suggestion fits this host; independently review any proposed configuration change |
+| AIDE file-change categories | Actual exit status and its boolean added/removed/changed flags, report identity, baseline time/SHA-256 and fixed readable scope | Inspect the private report's paths and compare with expected package/operator changes; use Review comparison controls for an explicit recheck |
+| Initial AIDE baseline | Labeled baseline creation, with baseline/report identity | Preserve it as an observation, not a clean-system certificate; choose a later explicit comparison |
+| Reputation match | Existing network inspector, publisher and expiry dates | Review related network evidence under the existing separate defense workflow; a match does not authorize a block |
+
+Every saved result retains its own UTC observation time. A result older than
+seven days carries a recheck reminder; this is a presentation threshold, not a
+security assurance or a freshness guarantee for newer results. The view does not
+monitor the host continuously or claim that any observation verifies an incident.
+Its follow-up links only navigate to existing controls. Viewing, expanding or
+refreshing findings cannot run tools, modify the baseline, quarantine/delete
+files, refresh feeds, invoke a model or apply a firewall action. Host changes
+still require the separate explicit operator-reviewed workflow and authorization.
+
+New summaries add `review` with schema `megalodon-host-review-v1` to the existing
+private `audit.json` / `integrity.json` files. The outer host-security snapshot
+stays v1 and adds per-source `audit_state` / `integrity_state`: `missing`,
+`unavailable`, `legacy` or `available`. Missing or invalid data never becomes a
+zero-findings result. Legacy aggregates remain readable but cannot establish
+report identity, rule detail, or whether AIDE created a baseline or compared it.
+Run a new explicit check to obtain those fields. Earlier releases may refuse
+extended summaries on rollback; preserve the private evidence rather than
+editing it to satisfy an older reader.
+
+The Lynis parser accepts report format 1.0 and four pipe-delimited finding fields
+(with or without a terminal separator). It retains only the rule ID and
+description, never the tool's details, solution command or external URL fields.
+Descriptions are limited to 240 UTF-8 bytes, lines to 4,096 characters and totals
+to 10,000 observations. The view retains at most 16 entries, warnings first,
+and explicitly reports omitted entries. Unknown versions, duplicate version
+fields, invalid/control text, excessive observations and unsupported finding
+formats refuse the run before replacing its previous result.
+
+Reports are written before their summaries. Each read revalidates the private
+report identity; Lynis findings/counts are recomputed against the same report.
+Partial replacement, malformed summaries or a later report mismatch makes that
+source unavailable, independently of the other source or feed cache. A SHA-256
+binds local file identity; it is not a publisher signature, authenticated host
+attestation or proof that a recommendation is correct. The existing private-file,
+ownership, size, fixed executable, deadline and output bounds remain in force.
+Raw reports, file contents and AIDE entry paths are not served to the browser.
+
+Repository regressions use fabricated reports, fake tool runners and inert DOM
+execution. They cover source separation, validation, missing/legacy/stale states,
+report mismatch, AIDE exit flags, preserved baselines and zero rendering effects.
+They do not prove installed Lynis/AIDE compatibility, actual host posture, native
+scan success, rendered-browser acceptance or recovery of the installed audit
+store. These require a separate controlled Linux workstation acceptance after
+exact-head review and repository checks. No trial, subscription, cloud service
+or new runtime dependency is added.
 
 ### Read-only reference coverage
 
@@ -152,6 +218,12 @@ needed to stop using these checks. Feed refresh has no scheduler by default.
 
 - [Lynis](https://cisofy.com/lynis/), GPL, local audit; Enterprise is optional.
 - [AIDE](https://aide.github.io/), GPL-2.0 file integrity checker.
+- [Ubuntu AIDE report options](https://manpages.ubuntu.com/manpages/jammy/man5/aide.conf.5.html):
+  report levels and the required placement before `report_url`; native acceptance
+  of the installed package remains separate.
+- [Lynis report writer](https://github.com/CISOfy/lynis/blob/master/lynis) and
+  [finding helpers](https://github.com/CISOfy/lynis/blob/master/include/functions):
+  upstream format references inspected 2026-10-17, not pinned runtime dependencies.
 - [Spamhaus DROP terms](https://www.spamhaus.org/blocklists/drop-fair-use-policy/):
   free under terms, including retained rights and currentness obligations;
   do not use the publisher name for commercial promotion.
