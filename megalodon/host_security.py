@@ -338,7 +338,7 @@ class HostSecurity:
             if cache:
                 for row in cache['feeds']:
                     result['feeds'].append({k:v for k,v in row.items() if k != 'entries'} | {'indicators':len(row['entries'])})
-                result['feed_state'] = 'ready' if all(date(r['expires_at']) >= self.now() for r in cache['feeds']) else 'stale'
+                result['feed_state'] = 'ready' if all(date(r['expires_at']) > self.now() for r in cache['feeds']) else 'stale'
                 result['message'] = 'Dated reference context only. A match is not proof of compromise or actor identity.'
         except (OSError, ValueError, TypeError, KeyError, RecursionError):
             result['feed_state'] = 'unavailable'
@@ -346,6 +346,10 @@ class HostSecurity:
         return result
 
     def matches(self, addresses):
+        return self.reference_context(addresses)['matches']
+
+    def reference_context(self, addresses):
+        """Read one validated cache for matching and its explicit coverage state."""
         if type(addresses) is not list or len(addresses) > 256:
             raise ValueError('Match at most 256 observed IPs.')
         canonical = []
@@ -354,10 +358,15 @@ class HostSecurity:
             if public_unicast(address):
                 canonical.append(address)
         cache = self._cache()
+        checked = self.now()
+        feeds = []
         matches = []
         if cache:
             for row in cache['feeds']:
-                if date(row['expires_at']) < self.now():
+                fresh = date(row['expires_at']) > checked
+                feeds.append(dict(source=row['source'], publisher_at=row['publisher_at'],
+                    expires_at=row['expires_at'], indicators=len(row['entries']), state='ready' if fresh else 'stale'))
+                if not fresh:
                     continue
                 if row['source'] == 'ipsum':
                     index = dict(row['entries'])
@@ -381,7 +390,10 @@ class HostSecurity:
                     matches.append(dict(ip=str(a), source=row['source'], indicator=value, reference=reference,
                                         publisher_at=row['publisher_at'], expires_at=row['expires_at'], sha256=row['sha256'],
                                         status='context_match', action_status='not_attempted'))
-        return matches[:768]
+        active = sum(row['state'] == 'ready' for row in feeds)
+        state = 'missing' if not feeds else 'ready' if active == len(feeds) else 'partial' if active else 'stale'
+        return dict(schema='megalodon-reference-context-v1', checked_at=stamp(checked), state=state,
+                    feeds=feeds, matches=matches[:768])
 
     def execute(self, action):
         if sys.platform != 'linux':

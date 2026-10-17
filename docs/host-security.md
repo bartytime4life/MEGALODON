@@ -76,6 +76,24 @@ performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/as
 
 ## Command line
 
+### Read-only reference coverage
+
+The endpoint inspector separates missing, unavailable, expired, partially current
+and current cached references. The operations GET projection validates and reads
+one cache for both coverage and matching, limited to its retained endpoint list.
+It exposes fixed source IDs, publisher/expiry times, indicator counts and the
+local check time. It does not expose raw feed bodies or perform a refresh.
+Expiry is exclusive: a source expiring at the current instant supplies no match.
+
+The browser rejects malformed or contradictory source summaries independently
+of packet telemetry, rechecks freshness/expiry against its clock, and binds a
+displayed match to the selected IP and the same source dates. A stale telemetry
+snapshot or discovery-only selection cannot present current matching coverage.
+No match is always scoped to the available cached sources; incomplete coverage
+is visibly unknown. No new browser action, model request or host effect is added.
+Synthetic backend and inert-DOM tests cover these states; rendered-browser and
+installed-host acceptance remain separate gates.
+
 Use the Python environment containing this release:
 
 ```bash
