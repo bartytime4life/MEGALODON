@@ -7,10 +7,11 @@ HOST_FINDINGS_HTML = r'''
 '''
 
 HOST_FINDINGS_CSS = r'''
+#host-findings { min-width:0; overflow-wrap:anywhere; }
 #host-findings > details { border-top:1px solid #3e6877; padding:.8rem 0; }
 #host-findings summary { cursor:pointer; min-height:44px; line-height:1.6; color:#edf7fa; }
 #host-findings summary:focus-visible,#host-findings a:focus-visible { outline:3px solid #e9bc6b; outline-offset:3px; }
-#host-findings li { margin:.75rem 0; line-height:1.6; overflow-wrap:anywhere; }
+#host-findings li { display:block; margin:.75rem 0; line-height:1.6; overflow-wrap:anywhere; }
 #host-findings code { overflow-wrap:anywhere; white-space:normal; font-size:.85rem; }
 #host-findings a { color:#a9ece5; display:inline-block; min-height:44px; line-height:44px; }
 '''

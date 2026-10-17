@@ -726,6 +726,8 @@ async def run() -> None:
                             await exercise(browser, port, password, nonempty)
                             if nonempty:
                                 await exercise_endpoint_facts(browser,port,password)
+                                from browser_host_findings import exercise_host_findings
+                                await exercise_host_findings(browser,port,password,passed)
                         passed("main database bytes unchanged " + str(nonempty),
                                hashlib.sha256(db.read_bytes()).hexdigest() == original)
                 finally:

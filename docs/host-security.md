@@ -136,9 +136,16 @@ Raw reports, file contents and AIDE entry paths are not served to the browser.
 Repository regressions use fabricated reports, fake tool runners and inert DOM
 execution. They cover source separation, validation, missing/legacy/stale states,
 report mismatch, AIDE exit flags, preserved baselines and zero rendering effects.
-They do not prove installed Lynis/AIDE compatibility, actual host posture, native
-scan success, rendered-browser acceptance or recovery of the installed audit
-store. These require a separate controlled Linux workstation acceptance after
+The opt-in `tests/browser_acceptance.py` suite also calls the findings journey
+in `tests/browser_host_findings.py` through the existing Linux browser workflow.
+It serves synthetic configuration GET responses to the shipped page, exercises
+keyboard disclosure, navigation, reflow, state transitions and failed-read
+clearing, and refuses any browser action request after sign-in. Passing this
+journey establishes rendered fixture behavior only; it does not exercise the
+host-summary filesystem reader or run a native audit.
+These checks do not prove installed Lynis/AIDE compatibility, actual host posture,
+native scan success or recovery of the installed audit store. Those require a
+separate controlled Linux workstation acceptance after
 exact-head review and repository checks. No trial, subscription, cloud service
 or new runtime dependency is added.
 
