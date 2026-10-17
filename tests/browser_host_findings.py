@@ -52,8 +52,10 @@ async def exercise_host_findings(browser, port, password, passed):
         if target.scheme != 'http' or target.netloc != f'127.0.0.1:{port}':
             violations.append('nonlocal request')
             await route.abort()
-        elif method not in ('GET', 'HEAD') and scenario['signed_in']:
-            # Do not let a regression reach a real host/model/configuration POST.
+        elif method not in ('GET', 'HEAD') and not (
+                method == 'POST' and target.path == '/sign-in' and not scenario['signed_in']):
+            # Only the one explicit login may write, including during bootstrap.
+            # A regression cannot reach a real host/model/configuration POST.
             violations.append('unexpected action request')
             await route.abort()
         elif target.path == '/api/support-config':
@@ -66,6 +68,8 @@ async def exercise_host_findings(browser, port, password, passed):
                 await route.fulfill(status=200, content_type='application/json',
                     body=json.dumps(configuration_fixture(scenario['mode'], observed)))
         else:
+            if method == 'POST':
+                scenario['signed_in'] = True
             await route.continue_()
 
     await context.route('**/*', local_only)
