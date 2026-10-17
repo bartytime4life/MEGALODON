@@ -68,7 +68,8 @@ def test_reject_missing_metadata_duplicates_and_broad_nonpublic_ranges(bad):
 
 
 UNSAFE_RANGES = ('0.0.0.0/0', '224.0.0.0/4', '240.0.0.0/4',
-    '8.0.0.0/5', '100.0.0.0/8', '192.0.0.0/16', '::/0', 'ff00::/8',
+    '8.0.0.0/5', '100.0.0.0/8', '192.0.0.0/16', '192.31.196.0/24',
+    '192.52.193.0/24', '192.175.48.0/24', '::/0', 'ff00::/8',
     'fc00::/7', 'fe80::/10', '2000::/3', '2001::/16', '2002::/16',
     '2001:db8::/32', '3ffe::/16', '3fff::/20')
 
@@ -112,6 +113,47 @@ def test_public_reference_feed_still_admits_and_matches_without_io(source, monke
     rows = manager.matches(['8.8.8.8', '2606:4700:4700::1111', 'ff02::1'])
     assert any(row['source'] == source for row in rows)
     assert all(row['ip'] != 'ff02::1' and row['action_status'] == 'not_attempted' for row in rows)
+
+
+@pytest.mark.parametrize('old_value', ['newly_excluded', 'invalid_schema', 'bad_json'])
+def test_explicit_refresh_replaces_unusable_cache_without_archiving_it(monkeypatch, old_value):
+    from contextlib import nullcontext
+    from copy import deepcopy
+    from megalodon import host_security as module
+    feeds=[parse_feed(source,source_body(source),NOW) for source in SOURCES]
+    previous=dict(schema=CACHE_SCHEMA,feeds=deepcopy(feeds))
+    invalid=dict(schema=CACHE_SCHEMA,feeds=deepcopy(feeds))
+    invalid['feeds'][0]['entries']=[['8.0.0.0/5','SBL1']]
+    saved={'feeds.json':invalid if old_value=='newly_excluded' else {},'feeds.previous.json':previous}
+    manager=HostSecurity(now=lambda:NOW,downloader=source_body)
+    def load(name,*args):
+        if name=='feeds.json' and old_value=='bad_json' and saved.get(name)=={}:
+            raise json.JSONDecodeError('Invalid old JSON','{',0)
+        return deepcopy(saved.get(name))
+    monkeypatch.setattr(manager,'locked',nullcontext)
+    monkeypatch.setattr(manager,'_json',load)
+    monkeypatch.setattr(manager,'_save',lambda name,value:saved.update({name:deepcopy(value)}))
+    monkeypatch.setattr(module,'write',lambda *_:None)  # In-memory refresh transaction; no filesystem bypass claim.
+    assert 'refreshed' in manager.execute('refresh')
+    assert saved['feeds.previous.json']==previous
+    assert manager._cache()==dict(schema=CACHE_SCHEMA,feeds=feeds)
+    assert manager.matches(['8.8.8.8'])
+
+
+def test_refresh_does_not_ignore_old_cache_io_failure(monkeypatch):
+    from contextlib import nullcontext
+    from megalodon import host_security as module
+    manager=HostSecurity(now=lambda:NOW,downloader=source_body)
+    saved=[]
+    def load(name,*args):
+        if name=='feeds.json':raise PermissionError('Unsafe or inaccessible file')
+        return None
+    monkeypatch.setattr(manager,'locked',nullcontext)
+    monkeypatch.setattr(manager,'_json',load)
+    monkeypatch.setattr(manager,'_save',lambda name,value:saved.append(name))
+    monkeypatch.setattr(module,'write',lambda *_:None)
+    with pytest.raises(PermissionError):manager.execute('refresh')
+    assert saved==['refresh.json']
 
 
 def test_reject_symlink_and_broadly_readable_cache(manager,tmp_path):
