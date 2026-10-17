@@ -86,7 +86,7 @@ def test_workflow_read_is_passive_and_separates_readiness_from_data():
         sensors=SimpleNamespace(snapshot=lambda:dict(zeek=idle,suricata=idle)),qwen_status=dict(idle))
     v=snapshot(config,None)
     rows={r['id']:r for r in v['tools']}
-    assert len(rows)==10 and rows['tshark']['state']=='collecting'
+    assert len(rows)==12 and rows['tshark']['state']=='collecting'
     assert rows['scapy']['state']==rows['nftables']['state']=='standby'
     assert rows['qwen']['state']=='stopped'
     assert 'token' not in json.dumps(v)

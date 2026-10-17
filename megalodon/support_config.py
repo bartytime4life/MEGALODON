@@ -23,6 +23,7 @@ from .live_connections import LiveConnections
 from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
+from .host_security import HostSecurity
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -43,6 +44,7 @@ def _atomic_write(path, value, mode):
 SCHEMA = 'megalodon-support-config-v1'
 COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config'
 ACTION_FIELDS = {
+    'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
     'capture_permissions': {'interface'}, 'capture_start': {'interface'}, 'capture_stop': set(),
     'wireshark_open': {'interface'}, 'wireshark_stop': set(),
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
@@ -54,7 +56,7 @@ ACTION_FIELDS = {
     'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
-TOOL_NAMES = {'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
+TOOL_NAMES = {'security':'Host security and threat context', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
               'qwen':'Local AI / Ollama', 'zeek':'Zeek', 'suricata':'Suricata',
               'background':'Background traffic', 'geography':'IP geography'}
@@ -197,6 +199,7 @@ class SupportConfiguration:
         self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready, connections=self.connections)
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
+        self.host_security = HostSecurity(self.home)
         self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
@@ -314,6 +317,7 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
+                         host_security=self.host_security.snapshot(),
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -406,7 +410,9 @@ class SupportConfiguration:
                 with self._lock:
                     settings = dict(self._settings, interface=request['interface'])
                 self._save(settings=settings)
-            if action == 'capture_permissions':
+            if action.startswith('security_'):
+                message = self.host_security.execute(action.removeprefix('security_'))
+            elif action == 'capture_permissions':
                 self._execute(['/usr/bin/pkexec','/bin/sh','-c',PERMISSION_SCRIPT], 90)
                 self._execute(['/usr/bin/dumpcap','-i',request['interface'],'-L'], 10)
                 message = 'Capture permissions configured for this user and interface access verified. Wireshark and the HUD run as your normal user.'

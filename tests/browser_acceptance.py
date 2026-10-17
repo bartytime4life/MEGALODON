@@ -446,7 +446,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         profile = await (await map_response.value).json()
         await expect(page.locator("#workflow-reference-status")).to_contain_text("loaded linux documentation profile")
         passed("real static capability profile recovers independently in Setup",
-               profile["selected_platform"] == "linux" and len(profile["workflows"]) == 10)
+               profile["selected_platform"] == "linux" and len(profile["workflows"]) == 12)
         legend = await page.locator("#ops-advanced-setup .app-state-legend").inner_text()
         passed("presence legend explains bounded green red and gray states",
                all(label in legend for label in ("Found candidate", "Not found", "Not checked")))

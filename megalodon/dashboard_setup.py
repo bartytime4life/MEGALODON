@@ -122,8 +122,8 @@ SETUP_HTML = """
 
 SETUP_JS = r"""
 const setupState = {readiness: null, runtime: null, sourceStatus: null, loadFailed: false};
-const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap'];
-const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap'];
+const workflowToolIds = ['core', 'tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen', 'nmap', 'lynis', 'aide'];
+const startupToolIds = ['python-sqlite', 'wireshark-tshark', 'zeek', 'suricata', 'scapy', 'nftables', 'clamav', 'osquery', 'qwen-ollama', 'nmap', 'lynis', 'aide'];
 function toolPresenceText(index) {
   const report = setupState.readiness;
   if (!report) return 'Tool presence not checked';
@@ -151,7 +151,8 @@ function validatedRuntimeReport(value) {
       || typeof value.checked_at !== 'string' || typeof value.platform !== 'string'
       || !Array.isArray(value.boundaries) || value.boundaries.length !== 4
       || !value.boundaries.every(item => typeof item === 'string' && item.length > 0 && item.length <= 240)
-      || !Array.isArray(value.tools) || value.tools.length !== startupToolIds.length) throw new Error('Invalid runtime receipt');
+      || !Array.isArray(value.tools) || ![10,startupToolIds.length].includes(value.tools.length)) throw new Error('Invalid runtime receipt');
+  if(value.tools.length===10)value.tools.push({id:'lynis',status:'not_checked'},{id:'aide',status:'not_checked'});
   value.tools.forEach((tool, index) => {
     if (!tool || typeof tool !== 'object' || Array.isArray(tool)
         || !referenceExactKeys(tool, ['id', 'status']) || tool.id !== startupToolIds[index]
@@ -166,7 +167,7 @@ function renderToolStatus() {
   const names = {
     'python-sqlite': 'MEGALODON core', 'wireshark-tshark': 'Wireshark / TShark', zeek: 'Zeek', suricata: 'Suricata',
     scapy: 'Scapy', nftables: 'nftables', clamav: 'ClamAV', osquery: 'osquery', 'qwen-ollama': 'Local AI / Ollama',
-    nmap: 'Nmap'
+    nmap: 'Nmap', lynis:'Lynis', aide:'AIDE'
   };
   const installedCount = readiness ? readiness.tools.filter(tool => tool.status === 'executable_found').length : null;
   const runningCount = runtime ? runtime.tools.filter(tool => tool.status === 'running').length : null;
@@ -232,6 +233,8 @@ async function loadSetup() {
 }
 const localCheckState = {snapshot: null, busy: false, failed: false, focusTool: null, retryAt: 0};
 const softwareCatalog = [
+  {url:'https://cisofy.com/lynis/',link:'Lynis publisher guide',id:'lynis',name:'Lynis',mark:'Ly',group:'host',requirement:'Optional · free local audit',purpose:'Review Linux configuration weaknesses.',note:'Run a bounded unprivileged audit in Host security. It reports suggestions and does not apply hardening changes.'},
+  {url:'https://aide.github.io/',link:'AIDE publisher guide',id:'aide',name:'AIDE',mark:'Ai',group:'host',requirement:'Optional · free file integrity',purpose:'Compare critical files with a recorded initial baseline.',note:'Record an observed baseline and explicitly check for changes. The baseline does not certify a clean system and is never replaced automatically.'},
   {id: 'python', name: 'Python', mark: 'Py', group: 'start', requirement: 'Required · 3.11+', purpose: 'The runtime that powers MEGALODON.', note: 'This HUD already runs in Python. Check its version here before installing another copy.', url: 'https://www.python.org/downloads/', link: 'Python downloads'},
   {id: 'git', name: 'Git', mark: 'Git', group: 'start', requirement: 'Optional · source checkout', purpose: 'Download and update a copy of the repository.', note: 'Needed for the clone workflow. A packaged installation or downloaded source archive does not require Git. Git presence is not included in these checks.', url: 'https://git-scm.com/install/', link: 'Git downloads'},
   {id: 'tshark', name: 'Wireshark / TShark', mark: 'Ws', group: 'network', requirement: 'Optional · packet metadata', purpose: 'Inspect packet captures and extract metadata.', note: 'Configure capture access and select an interface here. Start background tools runs TShark without opening Wireshark; accepted packet metadata feeds the HUD.', url: 'https://www.wireshark.org/download.html', link: 'Wireshark downloads'},

@@ -48,4 +48,9 @@ def snapshot(configuration, companions):
         # An available answer reflects past use, not current provider readiness.
         qwen['metrics']=[*qwen.get('metrics',[]),metric('Available summaries with advice',len(good))]
     add('qwen','Local AI via Ollama',**qwen)
+    security=getattr(configuration,'host_security',None)
+    summary=security.snapshot() if security is not None else {}
+    for key,label,field in [('lynis','Lynis','audit'),('aide','AIDE','integrity')]:
+        saved=summary.get(field)
+        add(key,label,'connected' if saved else 'needs_setup',saved['message'] if saved else 'Use Host security in Setup to run an explicit local check.',saved['checked_at'] if saved else None)
     return dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)

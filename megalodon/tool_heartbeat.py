@@ -72,6 +72,8 @@ PROBES: dict[str, ToolProbe] = {
     "qwen": ToolProbe(("ollama",), ("/usr/local/bin/ollama", "/usr/bin/ollama"), processes=frozenset({"ollama"}),
                       service=True),
     "nmap": ToolProbe(("nmap",)),
+    "lynis": ToolProbe(("lynis",), ("/usr/sbin/lynis", "/usr/bin/lynis")),
+    "aide": ToolProbe(("aide",), ("/usr/bin/aide", "/usr/sbin/aide")),
 }
 TOOL_IDS = tuple(PROBES)
 

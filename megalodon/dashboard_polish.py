@@ -12,7 +12,7 @@ and validation rule stays the single source of truth.
 APP_RAIL_TOOLS = (
     ("core", "MEGALODON"), ("tshark", "TShark"), ("zeek", "Zeek"), ("suricata", "Suricata"),
     ("scapy", "Scapy"), ("nftables", "nftables"), ("clamav", "ClamAV"), ("osquery", "osquery"),
-    ("qwen", "Ollama"), ("nmap", "Nmap"),
+    ("qwen", "Ollama"), ("nmap", "Nmap"), ("lynis", "Lynis"), ("aide", "AIDE"),
 )
 
 

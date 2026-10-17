@@ -256,7 +256,7 @@ const integrationStatuses = {
 const integrationIds = [
   'core-metadata', 'offline-packet-metadata', 'offline-flow-metadata', 'alert-metadata',
   'live-metadata-capture', 'time-limited-response', 'manual-file-scan', 'endpoint-inventory',
-  'local-ai-advisory', 'network-inventory-import'
+  'local-ai-advisory', 'network-inventory-import', 'host-configuration-audit', 'file-integrity-comparison'
 ];
 const integrationPresenceStates = {
   executable_found: {filter: 'found', className: 'state-found', label: 'Installed candidate found', detail: 'Executable found in the bounded PATH or known installation locations; installation method and compatibility remain unverified.'},
@@ -278,7 +278,7 @@ const integrationZones = {
   'offline-flow-metadata': 'Flow data', 'alert-metadata': 'Detection data',
   'live-metadata-capture': 'Capture source', 'time-limited-response': 'Response review',
   'manual-file-scan': 'Endpoint data', 'endpoint-inventory': 'Endpoint data',
-  'local-ai-advisory': 'Advisory context', 'network-inventory-import': 'Discovery data'
+  'local-ai-advisory': 'Advisory context', 'network-inventory-import': 'Discovery data', 'host-configuration-audit':'Host audit', 'file-integrity-comparison':'File changes'
 };
 const integrationFields = [
   'id', 'component', 'software', 'selected_status', 'source_kind', 'integration_owner',
@@ -475,8 +475,8 @@ APPS_SETUP_HTML = r'''
 APPS_SETUP_JS = r'''
 (() => {
  const root=byId('apps-setup-cards');if(!root||typeof window.addEventListener!=='function')return;
- const names={core:'Python and SQLite',tshark:'Wireshark and TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI via Ollama',nmap:'Nmap'};
- const settings={tshark:'support-capture-title',scapy:'support-capture-title',zeek:'support-config-zeek',suricata:'support-config-suricata-setup',clamav:'support-config-clamav-save',osquery:'support-config-osquery',qwen:'support-config-qwen-setup',nmap:'support-config-nmap-save'};
+ const names={core:'Python and SQLite',tshark:'Wireshark and TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI via Ollama',nmap:'Nmap',lynis:'Lynis',aide:'AIDE'};
+ const settings={tshark:'support-capture-title',scapy:'support-capture-title',zeek:'support-config-zeek',suricata:'support-config-suricata-setup',clamav:'support-config-clamav-save',osquery:'support-config-osquery',qwen:'support-config-qwen-setup',nmap:'support-config-nmap-save',lynis:'support-host-security',aide:'support-host-security'};
  const cards=[];
  for(const id of MegalodonControls.ids){
   const card=textNode('details','','apps-setup-card');card.id='setup-app-'+id;

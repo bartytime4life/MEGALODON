@@ -142,6 +142,20 @@ _WORKFLOWS = (
         "action_boundary": "no scan launch, target selection, NSE execution, or network activity",
         "next_gate": "independent producer-profile, privacy and native-platform acceptance; no live adapter",
     },
+    {"id":"host-configuration-audit", "component":"lynis", "source_kind":"local_host_security_summary",
+     "integration_owner":"megalodon.host_security", "input_contract":"Fixed Linux lynis scope; explicit operator action",
+     "output_contract":"megalodon-host-security-v1 private summary",
+     "entry_point":"python -m megalodon.host_security audit",
+     "launch_policy":"operator_invoked_fixed_action", "data_boundary":"Local private reports; unprivileged readable scope only",
+     "action_boundary":"No automatic hardening, quarantine, baseline replacement, upload or firewall change",
+     "next_gate":"Native host scope and independent operator acceptance"},
+    {"id":"file-integrity-comparison", "component":"aide", "source_kind":"local_host_security_summary",
+     "integration_owner":"megalodon.host_security", "input_contract":"Fixed Linux aide scope; explicit operator action",
+     "output_contract":"megalodon-host-security-v1 private summary",
+     "entry_point":"python -m megalodon.host_security check",
+     "launch_policy":"operator_invoked_fixed_action", "data_boundary":"Local private reports; unprivileged readable scope only",
+     "action_boundary":"No automatic hardening, quarantine, baseline replacement, upload or firewall change",
+     "next_gate":"Native host scope and independent operator acceptance"},
 )
 
 WORKFLOW_IDS = tuple(item["id"] for item in _WORKFLOWS)

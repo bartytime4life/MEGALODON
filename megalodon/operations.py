@@ -170,6 +170,14 @@ class Operations:
                                 if row['ports'][index]['port'] not in PROTECTED_SERVICE_PORTS:
                                     row['ports'][index]=item
                                     break
+            host_security = getattr(self.configuration, 'host_security', None)
+            if host_security is not None:
+                try:
+                    matches = host_security.matches(list(peers)[:256])
+                    for match in matches:
+                        peers[match['ip']].setdefault('threat_context', []).append(match)
+                except (OSError, ValueError, KeyError, TypeError, RecursionError):
+                    pass  # Unavailable/stale context never becomes a clean verdict.
             endpoints = sorted(peers.values(),key=lambda r:(not r['local'],-r['bytes']))[:64]
             settings = self.configuration.settings
             storage = dict(status='unavailable',used_bytes=None,limit_bytes=settings.storage.max_database_bytes,percent=None)

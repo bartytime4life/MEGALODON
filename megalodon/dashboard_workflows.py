@@ -81,8 +81,8 @@ WORKFLOWS_CSS = r'''
 WORKFLOWS_JS = r'''
 (() => {
   if(typeof localHudLaunch==='undefined'||!byId('workflows-refresh'))return;
-  const ids=['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'];
-  const names={core:'MEGALODON',tshark:'TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI',nmap:'Nmap'};
+  const ids=['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'];
+  const names={core:'MEGALODON',tshark:'TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI',nmap:'Nmap',lynis:'Lynis',aide:'AIDE'};
   const labels={connected:'Data connected',saved_result:'Saved result available',collecting:'Collecting',ready:'Ready',stopped:'Configured · stopped',standby:'Standby alternative',needs_setup:'Needs setup',unavailable:'Unavailable',error:'Error'};
   const view={payload:null,failed:false,pending:false,visible:false,timer:null,lastAt:0,open:new Set(),reference:new Set()};
   const workspace=byId('workspace-interfaces');
@@ -92,11 +92,11 @@ WORKFLOWS_JS = r'''
   const stamp=value=>text(value,40)&&/Z$/.test(value)&&Number.isFinite(Date.parse(value));
   const time=value=>new Date(value).toISOString().replace('T',' ').replace('.000Z',' UTC');
   function checked(value){
-    if(!value||value.schema!=='megalodon-support-workflows-v1'||value.mode!=='background'||!stamp(value.observed_at)||Date.parse(value.observed_at)>Date.now()+5000||!Array.isArray(value.tools)||value.tools.length>10)throw Error('Invalid workflow status');
+    if(!value||value.schema!=='megalodon-support-workflows-v1'||value.mode!=='background'||!stamp(value.observed_at)||Date.parse(value.observed_at)>Date.now()+5000||!Array.isArray(value.tools)||value.tools.length>12)throw Error('Invalid workflow status');
     const seen=new Set();for(const row of value.tools){if(!row||!ids.includes(row.id)||seen.has(row.id)||!text(row.name,80)||!row.name.length||(!Object.hasOwn(labels,row.state)||row.state==='saved_result')||!text(row.message,512)||(row.updated_at!==null&&!stamp(row.updated_at))||!Array.isArray(row.metrics)||row.metrics.length>6||!row.metrics.every(metric=>metric&&text(metric.label,64)&&metric.label.length>0&&Number.isFinite(metric.value)&&text(metric.unit,32)))throw Error('Invalid workflow row');seen.add(row.id);}
     return value;
   }
-  const periodic=new Set(['clamav','osquery','nmap']);
+  const periodic=new Set(['clamav','osquery','nmap','lynis','aide']);
   const displayState=row=>!fresh()?'unavailable':periodic.has(row.id)&&row.state==='connected'?'saved_result':row.state;
   const aiLabels={connected:'Recent AI response',ready:'Model available',collecting:'Checking or working',needs_setup:'AI setup needed',error:'AI unavailable'};
   const displayLabel=row=>fresh()?(row.id==='qwen'&&Object.hasOwn(aiLabels,displayState(row))?aiLabels[displayState(row)]:labels[displayState(row)]):'Status unavailable';

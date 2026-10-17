@@ -32,6 +32,8 @@ TOOL_EXECUTABLES = (
     ("osquery", "osqueryi"),
     ("qwen-ollama", "ollama"),
     ("nmap", "nmap"),
+    ("lynis", "lynis"),
+    ("aide", "aide"),
 )
 TOOL_IDS = tuple(tool_id for tool_id, _ in TOOL_EXECUTABLES)
 BOUNDARIES = (

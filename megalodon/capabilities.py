@@ -132,6 +132,12 @@ _COMPONENTS = (
         },
         "boundary": "Linux schedules fixed Nmap CLI inventory of one configured private target/range and watches completed reports. No arbitrary NSE or commands; aggregate counts retain no identifiers or banners. Native Windows acceptance remains unproved.",
     },
+    {"id": "lynis", "software": "Lynis", "integration": "local_host_security",
+     "platforms": {"linux": "optional", "windows": "unsupported", "other": "unsupported"},
+     "boundary": "Bounded unprivileged Linux configuration audit; no automatic hardening, root audit or remote upload."},
+    {"id": "aide", "software": "AIDE", "integration": "local_host_security",
+     "platforms": {"linux": "optional", "windows": "unsupported", "other": "unsupported"},
+     "boundary": "Fixed readable critical-file scope, observed initial baseline and explicit comparisons; no automatic baseline replacement, quarantine or clean-system certification."},
 )
 
 _EXCLUDED = (
