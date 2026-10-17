@@ -45,6 +45,20 @@ def test_missing_cache_is_explicit_and_read_only(monkeypatch):
     assert context['state']=='missing' and context['matches']==[] and context['feeds']==[]
 
 
+def test_maximum_cache_date_is_unavailable_on_both_read_projections(monkeypatch,tmp_path):
+    feeds=[parse_feed(source,source_body(source),NOW) for source in SOURCES]
+    feeds[0]['publisher_at']='9999-12-31T23:59:59Z'
+    manager=HostSecurity(now=lambda:NOW)
+    monkeypatch.setattr(manager,'_json',lambda name,*_:dict(schema=CACHE_SCHEMA,feeds=feeds) if name=='feeds.json' else None)
+    assert manager.snapshot()['feed_state']=='unavailable'
+    cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda _:None))
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),
+        live_snapshot=lambda:cache.snapshot({'state':'stopped'},{}),host_security=manager)
+    value=Operations(config,context_reader=lambda:{}).snapshot()
+    assert value['reference_context']['state']=='unavailable'
+    assert value['schema']=='megalodon-operations-v1'
+
+
 def test_overlapping_prefixes_preserve_later_endpoint_match_parity(monkeypatch):
     from ipaddress import ip_network
     addresses=['8.8.8.'+str(n) for n in range(1,65)]

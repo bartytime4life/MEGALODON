@@ -179,7 +179,7 @@ class Operations:
                     for match in context_result['matches']:
                         peers[match['ip']].setdefault('threat_context', []).append(match)
                     references = {key:value for key,value in context_result.items() if key != 'matches'}
-                except (OSError, ValueError, KeyError, TypeError, RecursionError):
+                except (OSError, ValueError, KeyError, TypeError, RecursionError, OverflowError):
                     pass  # A failed read remains explicit, without a clean verdict.
             settings = self.configuration.settings
             storage = dict(status='unavailable',used_bytes=None,limit_bytes=settings.storage.max_database_bytes,percent=None)

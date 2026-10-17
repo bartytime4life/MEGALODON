@@ -340,7 +340,7 @@ class HostSecurity:
                     result['feeds'].append({k:v for k,v in row.items() if k != 'entries'} | {'indicators':len(row['entries'])})
                 result['feed_state'] = 'ready' if all(date(r['expires_at']) > self.now() for r in cache['feeds']) else 'stale'
                 result['message'] = 'Dated reference context only. A match is not proof of compromise or actor identity.'
-        except (OSError, ValueError, TypeError, KeyError, RecursionError):
+        except (OSError, ValueError, TypeError, KeyError, RecursionError, OverflowError):
             result['feed_state'] = 'unavailable'
             result['message'] = 'Saved host security state could not be validated; review is required.'
         return result
