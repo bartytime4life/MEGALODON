@@ -63,6 +63,12 @@ and retired transition/test space. A supernet overlapping excluded space is
 refused as a whole; it is never silently split or partially accepted. This is
 input admission, not proof that an address is reachable or hostile. An unsafe
 previously saved cache becomes unavailable without being rewritten or deleted.
+An explicit successful refresh may replace semantically invalid/obsolete cache
+content after all replacement sources validate. That invalid content is not
+promoted to the previous-valid slot; an existing previous-valid cache is retained.
+Filesystem/ownership failures remain refusals, and a failed replacement-source
+validation still leaves the active cache untouched. This does not repair or
+rewrite an audit/evidence store.
 The closed policy needs review if IANA allocations change; no runtime lookup is
 performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/assignments/iana-ipv4-special-registry/),
 [IANA IPv6 address space](https://www.iana.org/assignments/ipv6-address-space/), and

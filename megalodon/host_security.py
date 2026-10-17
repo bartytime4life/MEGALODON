@@ -47,7 +47,8 @@ AIDE_SCOPE = ('/usr/bin', '/usr/sbin', '/etc/ssh', '/etc/systemd/system')
 _NONPUBLIC_V4 = tuple(ip_network(value) for value in (
     '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8',
     '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24',
-    '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15',
+    '192.31.196.0/24', '192.52.193.0/24', '192.88.99.0/24',
+    '192.168.0.0/16', '192.175.48.0/24', '198.18.0.0/15',
     '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/3'))
 _UNICAST_V6 = ip_network('2000::/3')
 _SPECIAL_V6 = tuple(ip_network(value) for value in (
@@ -402,7 +403,13 @@ class HostSecurity:
                     except (ValueError, KeyError, TypeError) as exc:
                         raise ValueError(source+': '+str(exc)[:160]) from None
                 value = dict(schema=CACHE_SCHEMA, feeds=feeds)
-                old = self._cache()
+                try:
+                    old = self._cache()
+                except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
+                    # Only a validated old cache is an archival candidate.
+                    # A completed explicit refresh can replace obsolete data;
+                    # private-file/ownership admission still runs in write().
+                    old = None
                 if old:
                     self._save('feeds.previous.json', old)
                 self._save('feeds.json', value)
