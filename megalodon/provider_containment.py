@@ -33,6 +33,7 @@ import ipaddress
 import math
 import os
 import socket
+import sys
 import time
 from types import MappingProxyType
 from typing import Any
@@ -53,6 +54,9 @@ _TCP_TABLES = (("ipv4", "/proc/net/tcp", 4), ("ipv6", "/proc/net/tcp6", 16))
 # missing, can an empty IPv6 table be known rather than assumed.
 _IPV6_STACK_MARKERS = ("/proc/net/if_inet6", "/proc/sys/net/ipv6")
 _LISTEN_STATE = "0A"
+# The kernel prints each network-order 32-bit address word with `%08X`, i.e.
+# as a host-order number, so decoding depends on this host's byte order.
+_BYTE_ORDER = sys.byteorder
 # Table statuses that mean every listener in that family was examined.
 _COMPLETE_TABLE_STATUSES = frozenset({"complete", "ipv6_stack_absent"})
 
@@ -80,11 +84,13 @@ def _parse_address(hex_addr: str, byte_length: int) -> str | None:
         return None
     if len(raw) != byte_length:
         return None
+    packed = b"".join(
+        int.from_bytes(raw[index:index + 4], "big").to_bytes(4, _BYTE_ORDER)
+        for index in range(0, byte_length, 4)
+    )
     try:
-        if byte_length == 4:
-            return socket.inet_ntop(socket.AF_INET, raw[::-1])
-        words = (raw[index:index + 4][::-1] for index in range(0, 16, 4))
-        return socket.inet_ntop(socket.AF_INET6, b"".join(words))
+        family = socket.AF_INET if byte_length == 4 else socket.AF_INET6
+        return socket.inet_ntop(family, packed)
     except (OSError, ValueError):
         return None
 
