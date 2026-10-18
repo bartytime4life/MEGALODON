@@ -11,7 +11,7 @@ import stat
 from threading import Lock
 import time
 
-from .domain_signals import MAX_SNAPSHOT_RECORDS, review as name_review
+from .domain_signals import cap as cap_name_review, review as name_review
 from .managed_capture import now
 
 PORT_HINTS = {22:'SSH',25:'SMTP',53:'DNS',80:'HTTP',123:'NTP',443:'HTTPS',445:'SMB',
@@ -172,11 +172,9 @@ class Operations:
                                     row['ports'][index]=item
                                     break
             endpoints = sorted(peers.values(),key=lambda r:(not r['local'],-r['bytes']))[:64]
-            budget=MAX_SNAPSHOT_RECORDS
-            for row in endpoints:
-                # Separate from names so defense/AI evidence keeps its fixed inputs.
-                row['name_review']=name_review(row['names'])[:budget]
-                budget-=len(row['name_review'])
+            # Separate from names so defense/AI evidence keeps its fixed inputs.
+            for row,records in zip(endpoints,cap_name_review([name_review(row['names']) for row in endpoints])):
+                row['name_review']=records
             references = dict(schema='megalodon-reference-context-v1', checked_at=now(), state='unavailable', feeds=[])
             host_security = getattr(self.configuration, 'host_security', None)
             if host_security is not None:
