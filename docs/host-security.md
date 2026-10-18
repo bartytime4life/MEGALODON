@@ -455,6 +455,8 @@ renders text nodes only and has no buttons.
 
 Each listed program's executable is hashed with SHA-256 by opening
 `/proc/<pid>/exe`, so a deleted or `memfd:` executable is hashed as it runs.
+Up to four of the row's processes are kept as sources, so if one exits or calls
+`exec` before hashing, another running the same file is used.
 A hash is remembered by file identity (device, inode, size, modification and
 change time) for up to 512 files, so an unchanged executable is read once. Files over
 256 MiB are `too_large`, and one review reads at most 512 MiB for at most 20

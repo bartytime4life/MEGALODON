@@ -45,6 +45,8 @@ MAX_HASH_REVIEW = 512 * 1024 * 1024
 MAX_HASH_CACHE = 512
 # A stalled network or FUSE file can block a read indefinitely, so hashing has a wall-clock limit per review.
 MAX_HASH_SECONDS = 20
+# Processes per row kept as hash sources, in case the first exits or calls exec before hashing.
+MAX_HASH_SOURCES = 4
 HASH_STATUSES = ('hashed', 'too_large', 'unreadable', 'deferred', 'changed')
 # (protocol, family, table name, address bytes)
 TABLES = (('tcp', 'ipv4', 'tcp', 4), ('tcp', 'ipv6', 'tcp6', 16),
@@ -253,11 +255,15 @@ def _hash_rows(jobs):
     results, done = {}, Lock()
     def work():
         budget = MAX_HASH_REVIEW
-        for index, (_, proc, identity) in enumerate(jobs):
-            value = _executable_hash(proc, budget, identity)
+        for index, (_, procs, identity) in enumerate(jobs):
+            # Any member of the group runs the same file; try the next if one has exited or exec'd.
+            for proc in procs:
+                value = _executable_hash(proc, budget, identity)
+                budget -= value[2]
+                if value[1] not in ('unreadable', 'changed'):
+                    break
             with done:
                 results[index] = value
-            budget -= value[2]
     thread = Thread(target=work, daemon=True, name='megalodon-executable-hash')
     with _hashes_lock:
         _hasher = thread
@@ -393,8 +399,10 @@ def review(root='/', *, uid=None, now=_now):
             row = programs[group] = dict(program=_comm(proc/'comm'), executable=_short(path),
                                         parent=_comm(base/str(parent)/'comm') if parent else '?',
                                         processes=0, established=0, listening=0, other=0, remotes=[], remotes_total=0,
-                                        flags=flags, _remotes=set(), _inodes=set(), _proc=proc, _identity=identity)
+                                        flags=flags, _remotes=set(), _inodes=set(), _procs=[], _identity=identity)
         row['processes'] += 1
+        if len(row['_procs']) < MAX_HASH_SOURCES:
+            row['_procs'].append(proc)
         # A socket shared by duplicated descriptors or worker processes is counted once.
         for inode, item in held:
             if inode in row['_inodes']:
@@ -415,9 +423,9 @@ def review(root='/', *, uid=None, now=_now):
     listed = {id(row) for row in shown}
     jobs = []
     for row in rows:
-        proc, identity = row.pop('_proc'), row.pop('_identity')
+        procs, identity = row.pop('_procs'), row.pop('_identity')
         if id(row) in listed:
-            jobs.append((row, proc, identity))
+            jobs.append((row, procs, identity))
     hash_limit = _hash_rows(jobs)
     deferred = sum(1 for row in shown if row['hash_status'] == 'deferred')
     tables_complete = all(complete for _, complete in tables.values()) and not unread_namespaces
