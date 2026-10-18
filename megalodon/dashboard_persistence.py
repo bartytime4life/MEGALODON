@@ -1,7 +1,8 @@
 """Review-only presentation for the persistence location review."""
 import json
 
-from .persistence_review import LOCATIONS, MAX_ITEMS, SUMMARY_FINDINGS, SUMMARY_GAPS, SUMMARY_SCHEMA, TRUST
+from .persistence_review import (LOCATIONS, MAX_FINDINGS, MAX_GAPS, MAX_ITEMS, SUMMARY_FINDINGS, SUMMARY_GAPS,
+                                 SUMMARY_SCHEMA, TRUST)
 
 PERSISTENCE_HTML = r'''
     <h6 id="persistence-title">Persistence locations</h6>
@@ -60,11 +61,11 @@ function renderPersistence(panel, payload) {
     for(const [label,value] of [['Detail',f.detail],['Location type',f.category],['ATT&CK technique',f.attack]])facts.append(node('dt',label),node('dd',value));
     item.append(facts);children.push(item);
   }
-  if(payload.findings_total>payload.findings.length)children.push(node('p',`Showing the first ${payload.findings.length} of ${payload.findings_total} review items. The full list is in python -m megalodon.persistence_review review.`));
+  if(payload.findings_total>payload.findings.length)children.push(node('p',`Showing the first ${payload.findings.length} of ${payload.findings_total} review items. python -m megalodon.persistence_review review lists up to the first ${__CLI_FINDINGS__}.`));
   if(payload.gaps.length){
     const item=document.createElement('details');item.append(node('summary',`Coverage gaps (${payload.gaps_total})`));
     const list=document.createElement('ul');for(const gap of payload.gaps)list.append(node('li',gap));
-    if(payload.gaps_total>payload.gaps.length)list.append(node('li',`${payload.gaps_total-payload.gaps.length} more gaps are listed by the command-line review.`));
+    if(payload.gaps_total>payload.gaps.length)list.append(node('li',`${payload.gaps_total-payload.gaps.length} more gaps; the command-line review lists up to ${__CLI_GAPS__}.`));
     item.append(list);children.push(item);
   }
   panel.replaceChildren(...children);
@@ -73,5 +74,6 @@ function renderPersistence(panel, payload) {
 # Each location category carries one ATT&CK technique; a finding must name its category's.
 TECHNIQUES = {category: technique for category, technique, _location, _kind in LOCATIONS}
 for _name, _value in (('__TECHNIQUES__', TECHNIQUES), ('__SCHEMA__', SUMMARY_SCHEMA), ('__TRUST__', TRUST),
-                      ('__MAX_ITEMS__', MAX_ITEMS), ('__FINDINGS__', SUMMARY_FINDINGS), ('__GAPS__', SUMMARY_GAPS)):
+                      ('__MAX_ITEMS__', MAX_ITEMS), ('__FINDINGS__', SUMMARY_FINDINGS), ('__GAPS__', SUMMARY_GAPS),
+                      ('__CLI_FINDINGS__', MAX_FINDINGS), ('__CLI_GAPS__', MAX_GAPS)):
     PERSISTENCE_JS = PERSISTENCE_JS.replace(_name, json.dumps(_value))

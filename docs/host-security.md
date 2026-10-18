@@ -270,8 +270,9 @@ Persistence locations**. The protected `/api/support-config` snapshot carries
 it as `persistence` (`megalodon-persistence-summary-v1`), recomputed at most
 once every five minutes and copied per response. To stay inside the 64 KiB
 response bound it carries counts, the first 16 findings and the first 8 gaps,
-with no inventory rows; `findings_total` and `gaps_total` disclose the rest,
-and the command-line review lists them all. A review that cannot run, for
+with no inventory rows; `findings_total` and `gaps_total` disclose the rest.
+The command-line review lists up to 64 findings and 32 gaps, under the bounds
+below, and the panel names those bounds rather than promising a full list. A review that cannot run, for
 example over a tampered baseline, is reported as `state: unavailable` instead
 of failing the snapshot. The panel validates every field against the closed
 schema (exact keys, the six rules, each category's own ATT&CK technique,
@@ -281,7 +282,9 @@ only, and shows nothing for any other payload.
 **Record initial persistence baseline** is the panel's one action. It uses the
 token-protected configuration action lane (`persistence_baseline`, no fields)
 and is enabled only when the validated summary shows no baseline. The server
-refuses it when a baseline file already exists, so the HUD never replaces a
+refuses it when a baseline file already exists, and creates the file with an
+atomic create-if-absent link, so a baseline recorded from the command line
+while the HUD was still reviewing is kept. The HUD never replaces a
 baseline and cannot hide a pending change by accepting it. Replacing a
 baseline stays the deliberate command-line step `... baseline`, taken after
 reviewing its changes. The snapshot cache is refreshed after a recording.

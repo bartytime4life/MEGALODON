@@ -16,7 +16,8 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  assert.equal(context.persistenceAllowsBaseline(changed),false);
  // A truncated list says so.
  const full={...changed,findings:Array(16).fill(changed.findings[0]),findings_total:56};
- assert.match(text(render(full)),/Showing the first 16 of 56 review items/);
+ assert.match(text(render(full)),/Showing the first 16 of 56 review items\. .* lists up to the first 64\./);
+ assert.match(text(render({...changed,gaps:['a'],gaps_total:40})),/39 more gaps; the command-line review lists up to 32\./);
  // Hostile text renders as text, never markup.
  const hostile=JSON.parse(JSON.stringify(changed));hostile.findings[0].path='<img src=x onerror=alert(1)>';
  assert.match(text(render(hostile)),/<img src=x/);

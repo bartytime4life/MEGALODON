@@ -300,6 +300,32 @@ def compare(items, baseline, *, uid=None, incomplete=()):
     return findings, total
 
 
+_EXISTS = 'A persistence baseline already exists. Review its changes, then replace it from the command line if they are expected.'
+
+
+def _create(path, value):
+    """Create a private file only if absent, atomically, so a baseline recorded meanwhile is never replaced."""
+    from .host_security import MAX_FILE
+    from .local_install import _owned_directory
+    _owned_directory(path.parent, private=True)
+    if len(value) > MAX_FILE:
+        raise ValueError('Persistence baseline exceeds its bound.')
+    temporary = path.parent/f'.{path.name}.new-{os.getpid()}-{os.urandom(4).hex()}'
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(descriptor, 'wb') as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)  # fails, rather than replacing, when the baseline exists
+        except FileExistsError:
+            raise ValueError(_EXISTS) from None
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 class PersistenceReview:
     def __init__(self, home=None, *, root='/', now=_now):
         self.home = Path(home or Path.home())
@@ -323,11 +349,16 @@ class PersistenceReview:
     def record_baseline(self, *, initial=False):
         """Record what is present now. An initial recording never replaces a baseline."""
         from .host_security import write
-        if initial and os.path.lexists(self.state/'baseline.json'):
-            raise ValueError('A persistence baseline already exists. Review its changes, then replace it from the command line if they are expected.')
+        path = self.state/'baseline.json'
+        if initial and os.path.lexists(path):
+            raise ValueError(_EXISTS)
         items, gaps, coverage = inventory(self.home, self.root)
-        write(self.state/'baseline.json', json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
-                                                     sort_keys=True, separators=(',', ':')).encode())
+        value = json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
+                           sort_keys=True, separators=(',', ':')).encode()
+        if initial:
+            _create(path, value)
+        else:
+            write(path, value)
         gaps, gap_total = _bounded(gaps)
         return dict(schema=SCHEMA, state='baseline_recorded', items=len(items), gaps=gaps, gaps_total=gap_total, trust=TRUST,
                     inventory_truncated=coverage['stopped'],

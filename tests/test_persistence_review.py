@@ -319,3 +319,19 @@ def test_initial_baseline_never_replaces_a_recorded_one(tree):
     (home/'.bashrc').write_text('changed\n')
     review.record_baseline()  # the command-line baseline still replaces it deliberately
     assert (review.state/'baseline.json').read_bytes() != recorded
+
+
+def test_initial_baseline_does_not_replace_one_recorded_during_its_inventory(tree, monkeypatch):
+    review = manager(tree)
+    original, raced = persistence_review.inventory, []
+    def racing(home, root):
+        result = original(home, root)
+        if not raced:
+            raced.append(1)  # the CLI records its baseline while the HUD is still reviewing
+            PersistenceReview(home, root=root, now=lambda: '2026-10-18T03:00:00Z').record_baseline()
+        return result
+    monkeypatch.setattr(persistence_review, 'inventory', racing)
+    with pytest.raises(ValueError, match='already exists'):
+        review.record_baseline(initial=True)
+    assert json.loads((review.state/'baseline.json').read_bytes())['created_at'] == '2026-10-18T03:00:00Z'
+    assert sorted(p.name for p in review.state.iterdir()) == ['baseline.json']  # no temporary file left behind
