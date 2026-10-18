@@ -54,6 +54,25 @@ def test_qwen_advisory_module_does_not_import_this_one() -> None:
     assert "provider_containment" not in source
 
 
+# --- /proc/net address decoding follows host byte order ----------------------
+
+def test_little_endian_host_reverses_each_address_word(monkeypatch) -> None:
+    monkeypatch.setattr(pc, "_BYTE_ORDER", "little")
+    assert pc._parse_address("0101A8C0", 4) == "192.168.1.1"
+    assert pc._parse_address("B80D0120000000000000000001000000", 16) == "2001:db8::1"
+
+
+def test_big_endian_host_reads_address_words_in_network_order(monkeypatch) -> None:
+    monkeypatch.setattr(pc, "_BYTE_ORDER", "big")
+    assert pc._parse_address("C0A80101", 4) == "192.168.1.1"
+    assert pc._parse_address("20010DB8000000000000000000000001", 16) == "2001:db8::1"
+
+
+@pytest.mark.parametrize("hex_addr, length", [("0101A8", 4), ("zz01A8C0", 4), ("00" * 15, 16)])
+def test_malformed_addresses_are_rejected(hex_addr, length) -> None:
+    assert pc._parse_address(hex_addr, length) is None
+
+
 # --- observational behavior against real sockets ---------------------------
 
 def test_nothing_listening_is_reported_as_no() -> None:
