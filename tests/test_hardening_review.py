@@ -33,7 +33,6 @@ def no_execution(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def little_endian_tables(monkeypatch):
-    # row() takes little-endian /proc/net words; the listener decoder is provider_containment's.
     monkeypatch.setattr(provider_containment, '_BYTE_ORDER', 'little')
 
 

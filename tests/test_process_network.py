@@ -169,3 +169,61 @@ def test_signed_or_non_hex_endpoints_are_skipped(tmp_path, field):
     (tmp_path/'proc/net/tcp').write_text(HEAD + good + bad)
     found, _ = sockets(tmp_path)
     assert set(found) == {9}
+
+
+def namespace(root, pid, name, rows=()):
+    (root/'proc'/str(pid)/'ns').mkdir(parents=True, exist_ok=True)
+    os.symlink(f'net:[{name}]', root/'proc'/str(pid)/'ns/net')
+    if rows is not None:
+        (root/'proc'/str(pid)/'net').mkdir(parents=True, exist_ok=True)
+        (root/'proc'/str(pid)/'net/tcp').write_text(HEAD + ''.join(rows))
+        (root/'proc'/str(pid)/'net/udp').write_text(HEAD)
+
+
+def test_processes_in_another_network_namespace_use_its_tables(host):
+    (host/'proc/self/ns').mkdir(parents=True)
+    os.symlink('net:[1]', host/'proc/self/ns/net')
+    proc(host, 700, '/usr/bin/podman-app', [900], comm='app')
+    namespace(host, 700, 2, [row(('10.88.0.5', 40000), ('198.51.100.20', 443), '01', 900)])
+    proc(host, 701, '/usr/bin/curl', [101], comm='curl')
+    namespace(host, 701, 1, rows=None)  # the HUD's own namespace reads /proc/net
+    result = review(host, uid=UID, now=lambda: NOW)
+    rows = by_exe(result)
+    assert rows['/usr/bin/podman-app']['remotes'] == ['198.51.100.20:443']
+    assert rows['/usr/bin/curl']['processes'] == 3 and result['tables_complete'] is True
+
+
+def test_namespaces_beyond_the_limit_are_disclosed(host, monkeypatch):
+    monkeypatch.setattr(process_network, 'MAX_NAMESPACES', 1)
+    for index in range(3):
+        proc(host, 710 + index, f'/usr/bin/ns{index}', [910 + index])
+        namespace(host, 710 + index, 10 + index, [row(('10.88.0.5', 40000), ('198.51.100.20', 443), '01', 910 + index)])
+    result = review(host, uid=UID, now=lambda: NOW)
+    assert '/usr/bin/ns0' in by_exe(result) and '/usr/bin/ns2' not in by_exe(result)
+    assert result['tables_complete'] is False
+    assert any(gap.startswith('2 more network namespaces were not read') for gap in result['gaps'])
+
+
+def test_shared_sockets_are_counted_once_per_program(tmp_path):
+    tables(tmp_path, tcp=[row(('0.0.0.0', 8080), ('0.0.0.0', 0), '0A', 1), row(('192.168.1.5', 2), ('203.0.113.9', 443), '01', 2)])
+    proc(tmp_path, 800, '/usr/sbin/server', [1, 1, 2], comm='server')  # a duplicated descriptor
+    proc(tmp_path, 801, '/usr/sbin/server', [1], comm='server')        # a worker inheriting the listener
+    server = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert server['processes'] == 2 and server['listening'] == 1 and server['established'] == 1
+
+
+def test_proc_entries_are_chosen_in_bounded_memory(host, monkeypatch):
+    monkeypatch.setattr(process_network, 'MAX_PROC_ENTRIES', 3)
+    result = review(host, uid=UID, now=lambda: NOW)
+    assert result['scan_complete'] is False and result['processes_reviewed'] <= 3
+    assert any(gap.startswith('The process scan stopped at 3 process entries') for gap in result['gaps'])
+
+
+def test_a_socket_from_another_namespace_is_still_matched(host):
+    # Socket activation: a PrivateNetwork= service holds a listener created in the host namespace.
+    (host/'proc/self/ns').mkdir(parents=True)
+    os.symlink('net:[1]', host/'proc/self/ns/net')
+    proc(host, 720, '/usr/lib/activated', [102, 920], comm='activated')
+    namespace(host, 720, 3, [row(('10.0.3.2', 41000), ('198.51.100.30', 443), '01', 920)])
+    rows = by_exe(review(host, uid=UID, now=lambda: NOW))
+    assert rows['/usr/lib/activated']['listening'] == 1 and rows['/usr/lib/activated']['established'] == 1

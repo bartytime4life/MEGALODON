@@ -19,7 +19,6 @@ def unprivileged(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def little_endian_tables(monkeypatch):
-    # The /proc/net fixtures below are little-endian; pin the decoder to match on any runner.
     monkeypatch.setattr(pc, "_BYTE_ORDER", "little")
 
 
