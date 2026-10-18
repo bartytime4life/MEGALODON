@@ -270,7 +270,8 @@ Persistence locations**. The protected `/api/support-config` snapshot carries
 it as `persistence` (`megalodon-persistence-summary-v1`), recomputed at most
 once every five minutes and copied per response. The review never runs on the
 request path: a stale summary is served while one background refresh runs, and
-the first request returns `state: pending`. Each directory is counted to at
+the first request returns `state: pending`, which the Setup view re-checks every
+two seconds until the summary arrives. Each directory is counted to at
 most 65,536 entries, and a larger one is named in the gaps and treated as
 incompletely reviewed. To stay inside the 64 KiB
 response bound it carries counts, the first 16 findings and the first 8 gaps,

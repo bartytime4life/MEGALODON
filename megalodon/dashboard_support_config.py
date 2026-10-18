@@ -216,7 +216,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + PERSISTENCE_JS + r'''
     if(!viewVisible())feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');
   }
   function cancel(){if(state.timer!==null)clearTimeout(state.timer);state.timer=null;}
-  function schedule(){cancel();if(!viewVisible()||!state.valid)return;const active=working()||capturing()||state.payload?.background?.enabled;if(active||state.open)state.timer=setTimeout(read,active?2000:10000);}
+  function schedule(){cancel();if(!viewVisible()||!state.valid)return;const active=working()||capturing()||state.payload?.background?.enabled||state.payload?.persistence?.state==='pending';if(active||state.open)state.timer=setTimeout(read,active?2000:10000);}
   async function body(response){
     if(Number(response.headers.get('content-length'))>65536)throw Error('Response too large');
     if(response.body&&response.body.getReader){const reader=response.body.getReader(),parts=[];let size=0;try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>65536)throw Error('Response too large');parts.push(part.value);}}catch(error){await reader.cancel();throw error;}
