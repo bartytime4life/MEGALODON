@@ -130,8 +130,10 @@ def observe(root='/'):
     groups = {}
     for row in resolved:
         groups.setdefault((row['interface'], row['mac']), set()).add(row['ip'])
+    # The gateway's own group sorts first, so the bound below never hides the strongest signal.
+    own = (gateway['interface'], gateway['mac']) if gateway and gateway['mac'] else None
     shared = sorted(((interface, mac, sorted(ips, key=ipaddress.IPv4Address)) for (interface, mac), ips in groups.items() if len(ips) > 1),
-                    key=lambda g: (-len(g[2]), g[0], g[1]))
+                    key=lambda g: ((g[0], g[1]) != own, -len(g[2]), g[0], g[1]))
     return dict(gateway=gateway, other_default_routes=max(0, len(routes) - 1), neighbors=len(resolved),
                 shared=[dict(interface=i, mac=m, addresses=ips[:MAX_GROUP_ADDRESSES], count=len(ips)) for i, m, ips in shared[:MAX_GROUPS]],
                 shared_total=len(shared), tables_complete=routes_complete and neighbors_complete)

@@ -167,3 +167,12 @@ def test_review_shape_is_closed(tmp_path):
                            'tables_complete', 'compared_with', 'findings', 'gaps', 'trust', 'action_authority'}
     assert result['schema'] == SCHEMA and result['action_authority'] == 'none'
     json.dumps(result)
+
+
+def test_the_gateway_group_survives_the_group_bound(tmp_path):
+    entries = [arp(f'192.168.{g}.{i}', f'aa:bb:cc:00:{g:02x}:00') for g in range(10, 10 + MAX_GROUPS) for i in (1, 2, 3)]
+    root = tree(tmp_path, [route('eth0', GW)], entries + [arp(GW, GW_MAC), arp('192.168.1.66', GW_MAC)])
+    observation = observe(root)
+    assert observation['shared_total'] == MAX_GROUPS + 1 and len(observation['shared']) == MAX_GROUPS
+    assert observation['shared'][0]['mac'] == GW_MAC
+    assert [f['rule'] for f in assess(observation)][0] == 'GATEWAY_MAC_SHARED'
