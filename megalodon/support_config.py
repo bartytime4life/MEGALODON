@@ -24,7 +24,7 @@ from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .host_security import HostSecurity
-from . import gateway_review, hardening_review, persistence_review
+from . import gateway_review, hardening_review, persistence_review, process_network
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -49,6 +49,8 @@ HARDENING_TTL = 60
 PERSISTENCE_TTL = 300
 # The gateway review reads two small kernel tables, so it can follow the setup view's polling.
 GATEWAY_TTL = 10
+# The process review walks this account's open files, so it also refreshes off the request path.
+PROCESS_TTL = 15
 ACTION_FIELDS = {
     'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
     'persistence_baseline':set(),
@@ -209,12 +211,12 @@ class SupportConfiguration:
         self.host_security = HostSecurity(self.home)
         # Cached read-only reviews; one run per TTL window, even when several HUD requests arrive together.
         self._reviews = {}
-        self._review_locks = dict(hardening=Lock(), persistence=Lock(), gateway=Lock())
+        self._review_locks = dict(hardening=Lock(), persistence=Lock(), gateway=Lock(), process=Lock())
         # First MAC address seen for each gateway in this HUD session; never written to disk.
         self._gateway_session = {}
-        # The persistence review reads files, so it refreshes off the request path. A
-        # generation bump discards a refresh that started before a baseline was recorded.
-        self._persistence_refreshing, self._persistence_generation = False, 0
+        # Reviews that read many files refresh off the request path. A generation bump
+        # discards a refresh that started before a newer value was stored.
+        self._refreshing, self._generations = {}, {}
         self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
@@ -342,38 +344,51 @@ class SupportConfiguration:
         return self._cached('gateway', GATEWAY_TTL, lambda: gateway_review.GatewayReview(self.home).review(self._gateway_session),
                             dict(schema=gateway_review.SCHEMA))
 
-    def _persistence_snapshot(self):
-        """The last persistence summary, or a pending state; a stale one is refreshed in the background."""
-        with self._review_locks['persistence']:
-            entry = self._reviews.get('persistence')
-            if (entry is None or time.monotonic() - entry[1] >= PERSISTENCE_TTL) and not self._persistence_refreshing:
-                self._persistence_refreshing = True
-                Thread(target=self._refresh_persistence, args=(self._persistence_generation,), daemon=True,
-                       name='megalodon-persistence-review').start()
+    def _background(self, name, ttl, compute, schema):
+        """The last value, or a pending state; a stale value is refreshed by one background thread."""
+        with self._review_locks[name]:
+            entry = self._reviews.get(name)
+            if (entry is None or time.monotonic() - entry[1] >= ttl) and not self._refreshing.get(name):
+                self._refreshing[name] = True
+                Thread(target=self._refresh, args=(name, compute, schema, self._generations.get(name, 0)), daemon=True,
+                       name=f'megalodon-{name}-review').start()
             if entry is None:
-                return dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
+                return dict(schema=schema, state='pending', action_authority='none')
             return deepcopy(entry[0])
 
-    def _review_persistence(self):
+    @staticmethod
+    def _computed(compute, schema):
         try:
-            return persistence_review.summary(persistence_review.PersistenceReview(self.home).review())
+            return compute()
         except (OSError, ValueError, TypeError, KeyError, RecursionError):
-            return dict(schema=persistence_review.SUMMARY_SCHEMA, state='unavailable', action_authority='none')
+            return dict(schema=schema, state='unavailable', action_authority='none')
 
-    def _refresh_persistence(self, generation):
+    def _refresh(self, name, compute, schema, generation):
         value = None
         try:
-            value = self._review_persistence()
+            value = self._computed(compute, schema)
         finally:
-            with self._review_locks['persistence']:
-                self._persistence_refreshing = False
-                if value is not None and generation == self._persistence_generation:
-                    self._reviews['persistence'] = (value, time.monotonic())
+            with self._review_locks[name]:
+                self._refreshing[name] = False
+                if value is not None and generation == self._generations.get(name, 0):
+                    self._reviews[name] = (value, time.monotonic())
+
+    def _review_persistence(self):
+        return persistence_review.summary(persistence_review.PersistenceReview(self.home).review())
+
+    def _persistence_snapshot(self):
+        """The persistence summary, refreshed at most once per PERSISTENCE_TTL seconds in the background."""
+        return self._background('persistence', PERSISTENCE_TTL, self._review_persistence, persistence_review.SUMMARY_SCHEMA)
+
+    def _process_snapshot(self):
+        """This account's programs with network sockets, refreshed at most once per PROCESS_TTL seconds in the background."""
+        return self._background('process', PROCESS_TTL, process_network.review, process_network.SCHEMA)
 
     def snapshot(self, include_token=False):
         hardening = self._hardening_snapshot()
         persistence = self._persistence_snapshot()
         gateway = self._gateway_snapshot()
+        process = self._process_snapshot()
         try:
             tool_directories = load_directories(self.home)
             tool_directories_status = 'ready'
@@ -385,7 +400,7 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
-                         host_security=self.host_security.snapshot(), hardening=hardening, persistence=persistence, gateway=gateway,
+                         host_security=self.host_security.snapshot(), hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -483,9 +498,9 @@ class SupportConfiguration:
             elif action == 'persistence_baseline':
                 result = persistence_review.PersistenceReview(self.home).record_baseline(initial=True)
                 # This job thread is already off the request path; a refresh begun earlier is discarded.
-                value = self._review_persistence()
+                value = self._computed(self._review_persistence, persistence_review.SUMMARY_SCHEMA)
                 with self._review_locks['persistence']:
-                    self._persistence_generation += 1
+                    self._generations['persistence'] = self._generations.get('persistence', 0) + 1
                     self._reviews['persistence'] = (value, time.monotonic())
                 message = (f"Initial persistence baseline recorded from {result['items']} items present now. "
                            'It is not a known-clean state; later additions, changes and removals appear as review items.')
