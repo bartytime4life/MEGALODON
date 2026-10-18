@@ -352,6 +352,58 @@ accounts' homes, and in-memory or kernel persistence are not reviewed. Package
 unit files under `/usr/lib/systemd` belong to the AIDE and package-manager
 lanes, not to this review.
 
+## Local gateway review
+
+`python -m megalodon.gateway_review review` reads the kernel's IPv4 routing
+table (`/proc/net/route`) and ARP cache (`/proc/net/arp`), both world-readable,
+and `... baseline` records the default gateway's interface, IP and MAC address
+as what is expected. Nothing is sent, no neighbor is probed and no cache entry
+or route is changed; the review is passive by construction and has no network
+or subprocess path.
+
+The default gateway is the lowest-metric IPv4 default route that is up and
+goes through a gateway; a device-only default such as a VPN tunnel is not one,
+and a gap names any other default routes that were not reviewed.
+Its ARP entry is `complete`, `permanent` (a static entry), `incomplete` or
+`absent`, and only the first two carry a MAC address. Each table is read
+without following a final symlink, up to 1 MiB and 8,192 rows; a cut-off read
+sets `tables_complete: false` and a gap says so. Rows with an invalid address,
+MAC or interface name are skipped.
+
+| Finding | Level | Meaning |
+| --- | --- | --- |
+| `GATEWAY_MAC_CHANGED` | review | Same interface and gateway IP, different MAC from the comparison |
+| `GATEWAY_MAC_SHARED` | review | Another IPv4 neighbor on the gateway's interface claims the gateway's MAC |
+| `GATEWAY_CHANGED` | note | The gateway IP or interface differs from the recorded baseline |
+| `SHARED_MAC` | note | Two or more other neighbors on one interface share a MAC |
+
+Every finding carries ATT&CK `T1557.002` (ARP cache poisoning) and
+`action_status: not_attempted`, and the result carries
+`action_authority: none`. At most 8 shared-MAC groups of 8 addresses are
+listed; `shared_total` and a gap disclose more. A replaced router, a failover
+pair, proxy ARP, virtual machines, repeaters and multi-address hosts produce
+the same signals, so a finding is a reason to look, not proof of spoofing.
+
+The comparison is the recorded baseline when one exists. Without one, the HUD
+compares with the first MAC it saw for the same interface and gateway IP in
+this HUD session (at most 16 gateways, in memory only), so joining another
+network starts a new comparison instead of reporting a change, and a MAC that
+was already different when the session began cannot be noticed. The baseline
+is a private `0600` file at
+`~/.local/share/megalodon/support/gateway-review/baseline.json`, read and
+written through the host security private-file checks, with
+`trust: observed_not_known_clean`; a tampered, broadly readable or symlinked
+baseline fails closed. Recording one needs a resolved gateway and replaces the
+previous baseline.
+
+The HUD shows the review under **Setup → Host security and threat context →
+Local gateway**, carried as `gateway` in the protected `/api/support-config`
+snapshot and recomputed at most every 10 seconds. A review that cannot run is
+`state: unavailable`. The panel validates the closed schema (exact keys, IPv4,
+MAC and interface formats, each rule's fixed level and technique), renders
+text nodes only and has no buttons. IPv6 neighbors, rogue DHCP servers and new
+devices are not reviewed.
+
 ## Placement, compatibility and rollback
 
 Implementation stays in the existing `megalodon/` package; behavior tests stay

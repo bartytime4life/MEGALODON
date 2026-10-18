@@ -825,5 +825,42 @@ def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager,
     assert all(len(json.dumps(text)) <= persistence_review.SUMMARY_TEXT_BYTES
                for text in [*worst['gaps'], *(f[k] for f in worst['findings'] for k in ('path', 'detail'))])
     monkeypatch.setattr(manager, '_persistence_snapshot', lambda: worst)
+    monkeypatch.setattr(manager, '_gateway_snapshot', lambda: worst_gateway(manager.home.parent))
     size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
     assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB
+
+
+def worst_gateway(tmp_path):
+    from megalodon import gateway_review
+    from test_gateway_review import arp, route, tree
+    iface, gateway = 'abcdefghijklmno', '192.168.255.254'
+    entries = [arp(f'192.168.{g}.{i}', f'aa:bb:cc:00:{g:02x}:00', device=iface)
+               for g in range(gateway_review.MAX_GROUPS + 2) for i in range(100, 120)]
+    root = tree(tmp_path/'gateway-root', [route(iface, gateway)], [arp(gateway, 'aa:bb:cc:00:00:00', device=iface)] + entries)
+    session = {f'{iface} {gateway}': dict(mac='aa:bb:cc:ff:ff:ff', seen_at='2026-10-18T06:00:00Z')}
+    worst = gateway_review.GatewayReview(tmp_path/'gateway-home', root=root).review(session)
+    assert len(worst['findings']) == gateway_review.MAX_GROUPS + 1 and len(worst['shared']) == gateway_review.MAX_GROUPS
+    return worst
+
+
+def test_snapshot_carries_the_gateway_review_with_session_memory(manager, monkeypatch, tmp_path):
+    from megalodon import gateway_review
+    from test_gateway_review import GW, GW_MAC, OTHER_MAC, arp, route, tree
+    from functools import partial
+    root = tree(tmp_path/'net', [route('eth0', GW)], [arp(GW, GW_MAC)])
+    monkeypatch.setattr(gateway_review, 'GatewayReview', partial(gateway_review.GatewayReview, root=root))
+    clock = [1000.0]
+    monkeypatch.setattr(config.time, 'monotonic', lambda: clock[0])
+    value = manager.snapshot()['gateway']
+    assert value['gateway']['mac'] == GW_MAC and value['compared_with'] is None and value['findings'] == []
+    tree(tmp_path/'net', [route('eth0', GW)], [arp(GW, OTHER_MAC)])
+    assert manager.snapshot()['gateway']['findings'] == []  # cached for GATEWAY_TTL
+    clock[0] += config.GATEWAY_TTL
+    value = manager.snapshot()['gateway']
+    assert [f['rule'] for f in value['findings']] == ['GATEWAY_MAC_CHANGED'] and value['compared_with']['source'] == 'session'
+    state = manager.home/'.local/share/megalodon/support/gateway-review'
+    state.mkdir(parents=True, mode=0o700)
+    (state/'baseline.json').write_text('{"schema":"forged"}')
+    (state/'baseline.json').chmod(0o600)
+    clock[0] += config.GATEWAY_TTL
+    assert manager.snapshot()['gateway'] == dict(schema=gateway_review.SCHEMA, state='unavailable', action_authority='none')
