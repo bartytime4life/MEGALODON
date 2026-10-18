@@ -417,7 +417,9 @@ accounts and of root are not visible without privilege, and sockets whose
 local and remote ends are both loopback, or that listen only on loopback, are
 left out.
 
-Programs are grouped by executable path, with the number of processes, the
+Programs are grouped by executable path and the identity of the running file,
+so during an update an old process still running the replaced (deleted) file
+is its own row, with the number of processes, the
 first process's parent name, connected, listening and other sockets, and up to
 three remote peers (`remotes_total` counts all). A socket shared by duplicated
 descriptors or worker processes is counted once per program. Socket tables are
@@ -449,7 +451,24 @@ on the network**, carried as `process_network` in the protected
 `/api/support-config` snapshot. The review runs off the request path, at most
 every 15 seconds, and the first request returns `state: pending`, which the
 Setup view re-checks every two seconds. The panel validates the closed schema,
-renders text nodes only and has no buttons. Executables are not hashed yet.
+renders text nodes only and has no buttons.
+
+Each listed program's executable is hashed with SHA-256 by opening
+`/proc/<pid>/exe`, so a deleted or `memfd:` executable is hashed as it runs.
+A hash is remembered by file identity (device, inode, size, modification and
+change time) for up to 512 files, so an unchanged executable is read once. Files over
+256 MiB are `too_large`, and one review reads at most 512 MiB for at most 20
+seconds, in one separate thread, so a read blocked on a stalled network or FUSE
+mount cannot hold the review; programs beyond either limit are `deferred`,
+named in a gap, and hashed by a later review. While a blocked read has not
+finished, no new hashing starts. The path is read before and after the file
+identity is taken, so a process that calls `exec` in between is dropped rather
+than paired with the wrong file. A file whose
+size, modification or change time differs after it is read, or that is no
+longer the file seen during the scan (the process called `exec`, or its PID was
+reused), is `changed`, and one that cannot be opened is
+`unreadable`; none of these carry a hash. A hash identifies the file that ran;
+it is not a reputation verdict.
 
 ## Placement, compatibility and rollback
 

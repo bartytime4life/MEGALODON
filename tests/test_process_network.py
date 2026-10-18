@@ -227,3 +227,196 @@ def test_a_socket_from_another_namespace_is_still_matched(host):
     namespace(host, 720, 3, [row(('10.0.3.2', 41000), ('198.51.100.30', 443), '01', 920)])
     rows = by_exe(review(host, uid=UID, now=lambda: NOW))
     assert rows['/usr/lib/activated']['listening'] == 1 and rows['/usr/lib/activated']['established'] == 1
+
+
+def hashed_host(tmp_path, content=b'\x7fELF fake program'):
+    binary = tmp_path/'bin-store'/'tool'
+    binary.parent.mkdir()
+    binary.write_bytes(content)
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7)])
+    proc(tmp_path, 500, str(binary), [7], comm='tool')
+    return binary
+
+
+@pytest.fixture(autouse=True)
+def fresh_hash_cache(monkeypatch):
+    process_network._hashes.clear()
+    monkeypatch.setattr(process_network, '_hasher', None)
+    yield
+    process_network._hashes.clear()
+
+
+def test_listed_executables_are_hashed_once_per_file_identity(tmp_path, monkeypatch):
+    import hashlib
+    binary = hashed_host(tmp_path)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['hash_status'] == 'hashed' and shown['sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest()
+    hashing = []
+    original = hashlib.sha256
+    monkeypatch.setattr(process_network.hashlib, 'sha256', lambda *a: hashing.append(1) or original(*a))
+    again = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert again['sha256'] == shown['sha256'] and hashing == []  # served from the identity cache, not re-read
+    binary.write_bytes(b'\x7fELF a different program')  # a new identity is hashed again
+    same_size = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['sha256']
+    stamp = binary.stat()
+    binary.write_bytes(b'\x7fELF a sneakier program!')  # same size, modification time set back
+    os.utime(binary, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['sha256'] != same_size
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['sha256'] != shown['sha256']
+
+
+@pytest.mark.parametrize('setting, value, status', [('MAX_HASH_FILE', 4, 'too_large'), ('MAX_HASH_REVIEW', 4, 'deferred')])
+def test_hash_bounds_are_reported(tmp_path, monkeypatch, setting, value, status):
+    hashed_host(tmp_path)
+    monkeypatch.setattr(process_network, setting, value)
+    result = review(tmp_path, uid=UID, now=lambda: NOW)
+    assert result['programs'][0]['hash_status'] == status and result['programs'][0]['sha256'] is None
+    assert any('were not hashed in this review' in gap for gap in result['gaps']) == (status == 'deferred')
+
+
+def test_unreadable_and_changing_executables_are_not_hashed(tmp_path, monkeypatch):
+    binary = hashed_host(tmp_path)
+    original = os.read
+    def growing(fd, n):
+        data = original(fd, n)
+        if data:
+            with open(binary, 'ab') as handle:
+                handle.write(b'more')
+        return data
+    monkeypatch.setattr(os, 'read', growing)
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['hash_status'] == 'changed'
+    monkeypatch.setattr(os, 'read', original)
+    binary.unlink()
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['hash_status'] == 'unreadable' and shown['sha256'] is None
+
+
+def test_processes_running_different_files_at_one_path_get_separate_rows(tmp_path, monkeypatch):
+    # A rolling update: the old process still runs the replaced file at the same path.
+    old, new = hashed_host(tmp_path, b'\x7fELF old build'), tmp_path/'bin-store'/'tool-new'
+    new.write_bytes(b'\x7fELF new build!')
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7),
+                          row(('192.168.1.5', 2), ('203.0.113.9', 443), '01', 8)])
+    proc(tmp_path, 501, str(old), [8], comm='tool')
+    (tmp_path/'proc/501/exe').unlink()
+    os.symlink(str(old), tmp_path/'proc/501/exe')
+    real_stat = os.stat
+    def stat(path, *a, **k):
+        # Same path text for both, but process 501 runs the new file.
+        return real_stat(new if str(path).endswith('/501/exe') else path, *a, **k)
+    monkeypatch.setattr(process_network.os, 'stat', stat)
+    monkeypatch.setattr(process_network, '_executable_hash',
+                        lambda proc, budget, identity: (('b' if proc.name == '501' else 'a') * 64, 'hashed', 0))
+    rows = review(tmp_path, uid=UID, now=lambda: NOW)['programs']
+    assert [(r['executable'], r['processes'], r['sha256'][0]) for r in sorted(rows, key=lambda r: r['sha256'])] == [
+        (str(old), 1, 'a'), (str(old), 1, 'b')]
+
+
+def test_a_same_size_rewrite_during_hashing_is_changed(tmp_path, monkeypatch):
+    binary = hashed_host(tmp_path)
+    stamp, original, done = binary.stat(), os.read, []
+    def rewriting(fd, n):
+        data = original(fd, n)
+        if data and not done and os.fstat(fd).st_ino == stamp.st_ino:
+            done.append(1)
+            binary.write_bytes(b'X' * stamp.st_size)  # same size, then the modification time set back
+            os.utime(binary, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        return data
+    monkeypatch.setattr(os, 'read', rewriting)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['hash_status'] == 'changed' and shown['sha256'] is None and not process_network._hashes
+
+
+def test_every_coverage_gap_at_once_stays_within_the_bound(host, monkeypatch):
+    for index in range(2):  # two extra namespaces, one beyond the limit
+        proc(host, 205 + index, f'/usr/bin/ns{index}', [930 + index])
+        namespace(host, 205 + index, 30 + index, [row(('10.88.0.5', 40000), ('198.51.100.20', 443), '01', 930 + index)])
+    binary = host/'bin-store'/'tool'  # a real, temporary-folder executable that sorts first and is deferred
+    binary.parent.mkdir()
+    binary.write_bytes(b'\x7fELF tool')
+    tcp = (host/'proc/net/tcp').read_text() + ''.join(row(('192.168.1.5', 60000 + i), ('203.0.113.50', 443), '01', 960 + i) for i in range(4))
+    (host/'proc/net/tcp').write_text(tcp)
+    proc(host, 210, str(binary), [960, 961, 962, 963], comm='tool')
+    (host/'proc/2').mkdir()  # a process of this account whose descriptors cannot be listed
+    (host/'proc/net/udp6').unlink()
+    (host/'proc/net/udp6').mkdir()  # an unreadable table
+    entries = sum(1 for name in os.listdir(host/'proc') if name.isdigit())
+    for name, value in (('MAX_NAMESPACES', 1), ('MAX_PROGRAMS', 1), ('MAX_HASH_REVIEW', 0), ('MAX_PROC_ENTRIES', entries - 1)):
+        monkeypatch.setattr(process_network, name, value)
+    result = review(host, uid=UID, now=lambda: NOW)
+    assert result['programs'][0]['hash_status'] == 'deferred'
+    assert len(result['gaps']) == 7 <= process_network.MAX_GAPS, result['gaps']
+
+
+def test_an_executable_replaced_after_the_scan_is_not_hashed(tmp_path, monkeypatch):
+    # The process calls exec (or its PID is reused) between the scan and hashing.
+    binary = hashed_host(tmp_path)
+    other = tmp_path/'bin-store'/'other'
+    other.write_bytes(b'\x7fELF a different program')
+    original = process_network.review.__globals__['_executable_hash']
+    def swapped(proc, budget, identity):
+        (proc/'exe').unlink()
+        os.symlink(str(other), proc/'exe')
+        return original(proc, budget, identity)
+    monkeypatch.setattr(process_network, '_executable_hash', swapped)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['executable'] == str(binary) and shown['hash_status'] == 'changed' and shown['sha256'] is None
+
+
+def test_bytes_read_before_a_failure_count_against_the_budget(tmp_path, monkeypatch):
+    first = hashed_host(tmp_path, b'A' * 100)
+    second = tmp_path/'bin-store'/'second'
+    second.write_bytes(b'B' * 100)
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7),
+                          row(('192.168.1.5', 2), ('203.0.113.9', 443), '01', 8)])
+    proc(tmp_path, 501, str(second), [8], comm='second')
+    original, failing = os.read, second.stat().st_ino  # 'second' sorts, and is hashed, first
+    calls = []
+    def flaky(fd, n):
+        if os.fstat(fd).st_ino == failing:
+            calls.append(1)
+            if len(calls) > 1:
+                raise OSError(5, 'I/O error')
+        return original(fd, n)
+    monkeypatch.setattr(os, 'read', flaky)
+    monkeypatch.setattr(process_network, 'MAX_HASH_REVIEW', 150)
+    rows = {r['executable']: r for r in review(tmp_path, uid=UID, now=lambda: NOW)['programs']}
+    assert rows[str(second)]['hash_status'] == 'unreadable'
+    assert rows[str(first)]['hash_status'] == 'deferred'  # the failed read's 100 bytes were charged
+
+
+def test_an_exec_between_reading_the_path_and_the_stat_drops_the_row(tmp_path, monkeypatch):
+    hashed_host(tmp_path)
+    real_readlink, calls = os.readlink, []
+    def readlink(path, *a, **k):
+        if str(path).endswith('/500/exe'):
+            calls.append(1)
+            if len(calls) == 2:  # the re-read after the stat sees the new program
+                return '/usr/bin/other'
+        return real_readlink(path, *a, **k)
+    monkeypatch.setattr(process_network.os, 'readlink', readlink)
+    result = review(tmp_path, uid=UID, now=lambda: NOW)
+    # The old path is never paired with the new file's identity.
+    assert result['programs'] == [] and any('exited or could not be read' in gap for gap in result['gaps'])
+
+
+def test_a_stalled_read_is_bounded_by_time_and_never_stacks_threads(tmp_path, monkeypatch):
+    from threading import Event
+    import threading
+    hashed_host(tmp_path)
+    release = Event()
+    original = process_network._executable_hash
+    def stalled(proc, budget, identity):
+        assert release.wait(10)  # a read blocked on a stalled network or FUSE mount
+        return original(proc, budget, identity)
+    monkeypatch.setattr(process_network, '_executable_hash', stalled)
+    monkeypatch.setattr(process_network, 'MAX_HASH_SECONDS', 0.2)
+    first = review(tmp_path, uid=UID, now=lambda: NOW)
+    assert first['programs'][0]['hash_status'] == 'deferred'
+    assert any('hashing limit was reached' in gap for gap in first['gaps'])
+    second = review(tmp_path, uid=UID, now=lambda: NOW)
+    assert any('an earlier executable read has not finished' in gap for gap in second['gaps'])
+    assert sum(1 for t in threading.enumerate() if t.name == 'megalodon-executable-hash') == 1
+    release.set()
+    process_network._hasher.join(10)
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['hash_status'] == 'hashed'

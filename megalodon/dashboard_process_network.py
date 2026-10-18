@@ -1,7 +1,7 @@
 """Review-only presentation for this account's programs that hold network sockets."""
 import json
 
-from .process_network import MAX_PROGRAMS, MAX_REMOTES, RULES, SCHEMA
+from .process_network import HASH_STATUSES, MAX_GAPS, MAX_HASH_FILE, MAX_PROGRAMS, MAX_REMOTES, RULES, SCHEMA
 
 PROCESS_NETWORK_HTML = r'''
     <h6 id="process-network-title">Programs on the network</h6>
@@ -30,7 +30,8 @@ function validProcessNetwork(p) {
   const keys=(o,names)=>!!o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join()===[...names].sort().join();
   const endpoint=s=>typeof s==='string'&&s.length<=64&&/^((\d{1,3}\.){3}\d{1,3}|\[[0-9a-f:.]+\]):\d{1,5}$/.test(s);
   const rules=__RULES__;
-  const program=r=>keys(r,['program','executable','parent','processes','established','listening','other','remotes','remotes_total','flags'])
+  const program=r=>keys(r,['program','executable','parent','processes','established','listening','other','remotes','remotes_total','flags','sha256','hash_status'])
+    &&__HASH_STATUSES__.includes(r.hash_status)&&(r.hash_status==='hashed'?/^[0-9a-f]{64}$/.test(r.sha256):r.sha256===null)
     &&text(r.program,256)&&text(r.executable,256)&&text(r.parent,256)&&count(r.processes)&&r.processes>0
     &&count(r.established)&&count(r.listening)&&count(r.other)&&r.established+r.listening+r.other>0
     &&Array.isArray(r.remotes)&&r.remotes.length<=__REMOTES__&&r.remotes.every(endpoint)&&new Set(r.remotes).size===r.remotes.length
@@ -42,7 +43,7 @@ function validProcessNetwork(p) {
     &&count(p.programs_total)&&p.programs_total>=p.programs.length&&count(p.flagged_total)&&p.flagged_total<=p.programs_total
     &&p.flagged_total>=p.programs.filter(r=>r.flags.length).length&&count(p.processes_reviewed)
     &&typeof p.tables_complete==='boolean'&&typeof p.scan_complete==='boolean'
-    &&Array.isArray(p.gaps)&&p.gaps.length<=6&&p.gaps.every(g=>text(g,256));
+    &&Array.isArray(p.gaps)&&p.gaps.length<=__GAPS__&&p.gaps.every(g=>text(g,256));
 }
 function renderProcessNetwork(panel, payload) {
   if(!panel)return;
@@ -65,7 +66,8 @@ function renderProcessNetwork(panel, payload) {
     item.append(node('summary',(r.flags.length?'Review · ':'')+`${r.program} · ${r.executable}`));
     const facts=document.createElement('dl');
     const remotes=r.remotes.length?r.remotes.join(', ')+(r.remotes_total>r.remotes.length?` and ${r.remotes_total-r.remotes.length} more`:''):'none';
-    for(const [label,value] of [['Executable',r.executable],['Parent process',r.parent],['Processes',String(r.processes)],
+    const hashes={hashed:r.sha256,too_large:'not hashed: larger than __HASH_MIB__ MiB',unreadable:'not hashed: the file could not be read',deferred:'not hashed yet: this review reached its read or time limit',changed:'not hashed: the file changed while it was read'};
+    for(const [label,value] of [['Executable',r.executable],['SHA-256',hashes[r.hash_status]],['Parent process',r.parent],['Processes',String(r.processes)],
       ['Sockets',`${r.established} connected · ${r.listening} listening · ${r.other} other`],['Remote peers',remotes]])facts.append(node('dt',label),node('dd',value));
     for(const flag of r.flags)facts.append(node('dt',`${labels[flag]} · ATT&CK ${rules[flag][0]}`),node('dd',rules[flag][1]));
     item.append(facts);children.push(item);
@@ -79,5 +81,5 @@ function renderProcessNetwork(panel, payload) {
   panel.replaceChildren(...children);
 }
 '''
-for _name, _value in (('__RULES__', RULES), ('__SCHEMA__', SCHEMA), ('__PROGRAMS__', MAX_PROGRAMS), ('__REMOTES__', MAX_REMOTES)):
+for _name, _value in (('__GAPS__', MAX_GAPS), ('__HASH_MIB__', MAX_HASH_FILE // 1048576), ('__HASH_STATUSES__', list(HASH_STATUSES)), ('__RULES__', RULES), ('__SCHEMA__', SCHEMA), ('__PROGRAMS__', MAX_PROGRAMS), ('__REMOTES__', MAX_REMOTES)):
     PROCESS_NETWORK_JS = PROCESS_NETWORK_JS.replace(_name, json.dumps(_value))

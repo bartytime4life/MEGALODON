@@ -117,11 +117,11 @@ slice. Later slices can deepen it.
 5. **Process-to-connection correlation.** *First slice delivered:*
    `megalodon/process_network.py` maps this account's TCP and UDP sockets to
    the executables holding them (path, name, parent; never PIDs or command
-   lines), flags deleted, in-memory and temporary-folder executables, and the
-   HUD shows it read-only under Setup → Host security. See
-   `docs/host-security.md`. Next slices: executable hashes cached by file
-   identity, and linking a program to its connections in the endpoint
-   inspector.
+   lines), flags deleted, in-memory and temporary-folder executables, hashes
+   each listed executable (cached by file identity), and the HUD shows it
+   read-only under Setup → Host security. See `docs/host-security.md`. Next
+   slices: matching hashes against an offline, checksum-bound hash list, and
+   linking a program to its connections in the endpoint inspector.
 
 #### G: Gateway (network edge and egress defense)
 
