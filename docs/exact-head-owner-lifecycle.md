@@ -32,6 +32,12 @@ scope: ready-and-merge
 state: authorized
 ```
 
+A comment the GitHub API reports as `performed_via_github_app` was posted by
+an app acting with the owner's token, not typed by the owner. Such a record can
+revoke but never authorizes. GitHub cannot attribute comments made with a
+personal access token or an OAuth app this way, nor app edits or deletions of
+existing comments, so treat those tokens as able to authorize.
+
 A later exact-head owner record with `state: revoked` supersedes an earlier
 authorization. Synchronizing the branch changes the head and invalidates the
 old record automatically.

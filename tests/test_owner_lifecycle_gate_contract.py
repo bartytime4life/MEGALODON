@@ -19,5 +19,6 @@ def test_owner_lifecycle_workflow_is_read_only_and_exact_head_bound() -> None:
     assert "MEGALODON-OWNER-AUTHORIZATION-V1" in text
     assert 'fields.get("head") != head' in text
     assert 'author_association") != "OWNER"' in text
+    assert 'if comment["via_app"] and state != "revoked":' in text
     assert 'state not in {"authorized", "revoked"}' in text
     assert "release, deployment, installation" in text
