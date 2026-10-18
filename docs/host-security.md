@@ -110,8 +110,13 @@ when any of these limits applied, and the listener check sets
 Incomplete evidence never produces a pass. A missing IPv4 socket table, or a
 missing IPv6 table while `/proc/net/if_inet6` exists, makes the listener check
 `unknown`. An unavailable `ip_forward` is reported as `unknown` rather than
-omitted. When an SSH file was truncated or an include was not read, a keyword
-not found in what was read is `unknown` instead of its OpenSSH default. Automatic
+omitted. sshd reads includes in place and keeps the first value, so the review
+tracks where any SSH text was skipped: a truncated file, a refused or
+unreadable include, an include outside `/etc/ssh`, or an include pattern
+matching more than 32 files. A truncated file is parsed only up to its last
+complete line. A value found before the first skip is evaluated; a value found after one is `unknown`, because the skipped text
+could set it first; and a keyword not found at all after a skip is `unknown`
+instead of its OpenSSH default. Automatic
 updates enabled in the files that were read are `unknown` when any APT file was
 unreadable, truncated or past the 256-file bound, since a later file could
 disable them. A listening socket is not proof of

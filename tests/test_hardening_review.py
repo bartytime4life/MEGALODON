@@ -98,7 +98,9 @@ def test_ssh_failures_and_symlinked_include(root, tmp_path_factory):
     (ssh/'sshd_config.d/link.conf').symlink_to(outside)
     (ssh/'sshd_config').write_text('Include sshd_config.d/*.conf\nPermitRootLogin yes\nPermitEmptyPasswords yes\n')
     checks = by_id(review(root))
-    assert checks['ssh_root_login']['state'] == 'fail' and checks['ssh_empty_passwords']['state'] == 'fail'
+    # The refused include comes first, so it could set an earlier, winning value.
+    assert checks['ssh_root_login']['state'] == 'unknown'
+    assert checks['ssh_root_login']['observed'] == 'yes (an earlier unread section may set it first)'
     # The refused include might set it, so the OpenSSH default is not assumed.
     assert checks['ssh_password_auth']['state'] == 'unknown'
     assert 'could not be read' in checks['ssh_password_auth']['note']
@@ -231,3 +233,40 @@ def test_apt_pass_needs_every_file_read(root, monkeypatch):
     monkeypatch.setattr(hardening_review, 'MAX_APT_FILES', 1)
     (root/'etc/apt/apt.conf.d/99-later').write_text('APT::Periodic::Unattended-Upgrade "0";\n')
     assert by_id(review(root))['auto_updates']['state'] == 'unknown'
+
+
+def test_values_after_an_unread_include_are_not_certain(root, tmp_path_factory):
+    ssh = root/'etc/ssh'
+    (ssh/'sshd_config.d').mkdir(parents=True)
+    outside = tmp_path_factory.mktemp('outside')/'x.conf'
+    outside.write_text('PermitRootLogin yes\n')
+    (ssh/'sshd_config.d/00-link.conf').symlink_to(outside)
+    (ssh/'sshd_config').write_text('PermitEmptyPasswords no\nInclude sshd_config.d/*.conf\nPermitRootLogin no\n')
+    checks = by_id(review(root))
+    assert checks['ssh_empty_passwords']['state'] == 'pass'  # read before the gap
+    assert checks['ssh_root_login']['state'] == 'unknown'
+
+
+def test_include_glob_overflow_marks_the_read_incomplete(root, monkeypatch):
+    monkeypatch.setattr(hardening_review, 'MAX_SSH_INCLUDES', 2)
+    ssh = root/'etc/ssh'
+    (ssh/'sshd_config.d').mkdir(parents=True)
+    for name in ('a', 'b'):
+        (ssh/'sshd_config.d'/f'{name}.conf').write_text('# nothing\n')
+    (ssh/'sshd_config.d/z.conf').write_text('PermitRootLogin yes\n')
+    (ssh/'sshd_config').write_text('Include sshd_config.d/*.conf\n')
+    check = by_id(review(root))['ssh_root_login']
+    assert check['state'] == 'unknown' and 'matched more than 2 files' in check['note']
+
+
+def test_partial_final_line_of_a_truncated_ssh_file_is_not_parsed(root, monkeypatch):
+    ssh = root/'etc/ssh'
+    (ssh/'sshd_config.d').mkdir(parents=True)
+    (ssh/'sshd_config.d/10-safe').write_text('PasswordAuthentication no\n')
+    head = 'PermitRootLogin no\nInclude /etc/ssh/sshd_config.d/10-safe'
+    (ssh/'sshd_config').write_text(head + '-extra\n')
+    monkeypatch.setattr(hardening_review, 'MAX_READ', len(head))
+    checks = by_id(review(root))
+    assert checks['ssh_root_login']['state'] == 'pass'  # a complete line before the cut
+    # The cut-off Include is not mistaken for the existing 10-safe file.
+    assert checks['ssh_password_auth']['state'] == 'unknown'
