@@ -113,8 +113,8 @@ missing IPv6 table while `/proc/net/if_inet6` exists, makes the listener check
 omitted. sshd reads includes in place and keeps the first value, so the review
 tracks where any SSH text was skipped: a truncated file, a refused or
 unreadable include, an include outside `/etc/ssh`, or an include pattern
-matching more than 32 files. A value found before the first skip is
-evaluated; a value found after one is `unknown`, because the skipped text
+matching more than 32 files. A truncated file is parsed only up to its last
+complete line. A value found before the first skip is evaluated; a value found after one is `unknown`, because the skipped text
 could set it first; and a keyword not found at all after a skip is `unknown`
 instead of its OpenSSH default. Automatic
 updates enabled in the files that were read are `unknown` when any APT file was

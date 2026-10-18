@@ -153,6 +153,9 @@ def _ssh_settings(root):
             gap('Some SSH include files were not read.'); return False
         seen.add(path)
         text, truncated = _read(path)
+        if truncated:
+            # The cut can land inside a directive; only complete lines are parsed.
+            text = text.rpartition('\n')[0]
         for raw in text.splitlines():
             line = raw.strip()
             if not line or line.startswith('#'):

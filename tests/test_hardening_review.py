@@ -257,3 +257,16 @@ def test_include_glob_overflow_marks_the_read_incomplete(root, monkeypatch):
     (ssh/'sshd_config').write_text('Include sshd_config.d/*.conf\n')
     check = by_id(review(root))['ssh_root_login']
     assert check['state'] == 'unknown' and 'matched more than 2 files' in check['note']
+
+
+def test_partial_final_line_of_a_truncated_ssh_file_is_not_parsed(root, monkeypatch):
+    ssh = root/'etc/ssh'
+    (ssh/'sshd_config.d').mkdir(parents=True)
+    (ssh/'sshd_config.d/10-safe').write_text('PasswordAuthentication no\n')
+    head = 'PermitRootLogin no\nInclude /etc/ssh/sshd_config.d/10-safe'
+    (ssh/'sshd_config').write_text(head + '-extra\n')
+    monkeypatch.setattr(hardening_review, 'MAX_READ', len(head))
+    checks = by_id(review(root))
+    assert checks['ssh_root_login']['state'] == 'pass'  # a complete line before the cut
+    # The cut-off Include is not mistaken for the existing 10-safe file.
+    assert checks['ssh_password_auth']['state'] == 'unknown'
