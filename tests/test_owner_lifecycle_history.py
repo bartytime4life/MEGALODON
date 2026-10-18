@@ -33,7 +33,7 @@ def comment(identity, state=None, **changes):
 
 def run_gate(monkeypatch, tmp_path, history, *, second=None, pull_changes=None,
              page_transform=None, event_name="pull_request", clock=None,
-             statuses=None, head_repo="owner/project", status_failure=None):
+             statuses=None, head_repo="owner/project", status_failure=None, open_pulls=None):
     text = WORKFLOW.read_text(encoding="utf-8")
     source = textwrap.dedent(text.split("python - <<'PY'\n", 1)[1].rsplit("          PY", 1)[0])
     compile(source, str(WORKFLOW), "exec")
@@ -50,6 +50,7 @@ def run_gate(monkeypatch, tmp_path, history, *, second=None, pull_changes=None,
     }.items():
         monkeypatch.setenv(key, value)
     calls = []
+    listing = []
     pulls = 0
     scan = -1
 
@@ -65,6 +66,13 @@ def run_gate(monkeypatch, tmp_path, history, *, second=None, pull_changes=None,
             if statuses is not None:
                 statuses.append((url.rsplit("/", 1)[1], json.loads(request.data)))
             return io.BytesIO(b"{}")
+        open_prefix = "https://api.github.test/repos/owner/project/pulls?state=open&per_page=100&page="
+        if url.startswith(open_prefix):
+            page = int(url[len(open_prefix):])
+            listing.append(page)
+            result = (open_pulls or (lambda _check, _page: [{"number": 1, "head": {"sha": HEAD}}] if _page == 1 else []))(
+                listing.count(1) - 1, page)
+            return io.BytesIO(result if isinstance(result, bytes) else json.dumps(result).encode())
         calls.append(url)
         if url.endswith("/pulls/1"):
             result = {"head": {"sha": HEAD}, "draft": False, "comments": len(history)}
@@ -280,3 +288,54 @@ def test_app_posted_owner_comment_can_still_revoke(monkeypatch, tmp_path, capsys
 
 def test_missing_app_attribution_holds(monkeypatch, tmp_path):
     assert run_gate(monkeypatch, tmp_path, [without_app_field(1, "authorized")])[0] == 3
+
+
+def shared_with(number, *, on_check=None):
+    """Open PRs: this one, plus PR `number` on the same head during the given check (0 before, 1 after posting)."""
+    def listing(check, page):
+        if page != 1:
+            return []
+        pulls = [{"number": 1, "head": {"sha": HEAD}}, {"number": 9, "head": {"sha": "b" * 40}}]
+        if on_check is None or check == on_check:
+            pulls.append({"number": number, "head": {"sha": HEAD}})
+        return pulls
+    return listing
+
+
+def test_head_shared_with_another_open_pull_never_posts_success(monkeypatch, tmp_path, capsys):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    open_pulls=shared_with(2), statuses=posted)[0] == 3
+    assert posted == [status("failure", "Hold: head is also the head of open PR #2")]
+    assert "OWNER_LIFECYCLE_AUTHORIZED" not in capsys.readouterr().out
+
+
+def test_pull_opened_on_the_head_while_posting_reverts_success(monkeypatch, tmp_path):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    open_pulls=shared_with(2, on_check=1), statuses=posted)[0] == 3
+    assert posted == [status("success", "Authorized by owner record #1 for ready and merge only"),
+                      status("failure", "Hold: head is also the head of open PR #2")]
+
+
+@pytest.mark.parametrize("listing", [
+    lambda check, page: [{"number": 100 + page * 100 + i, "head": {"sha": "b" * 40}} for i in range(100)],
+    lambda check, page: [{"number": "1", "head": {"sha": HEAD}}],
+    lambda check, page: {},
+    lambda check, page: b"invalid JSON",
+])
+def test_unconfirmed_open_pull_list_holds(monkeypatch, tmp_path, listing):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    open_pulls=listing, statuses=posted)[0] == 3
+    assert [entry["state"] for _, entry in posted] == ["failure"]
+    assert posted[0][1]["description"].startswith("Hold: unable to confirm complete GitHub state")
+
+
+def test_full_open_pull_pages_are_followed(monkeypatch, tmp_path):
+    def listing(check, page):
+        if page == 1:
+            return [{"number": 1, "head": {"sha": HEAD}}] + [
+                {"number": 100 + i, "head": {"sha": "b" * 40}} for i in range(99)]
+        return [{"number": 2, "head": {"sha": HEAD}}] if page == 2 else []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")], open_pulls=listing)[0] == 3

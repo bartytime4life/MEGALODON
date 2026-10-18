@@ -80,6 +80,20 @@ read the pull request at all, it has no head to post to: the job fails, and an
 earlier `success` stands until a run completes. Re-run the job after posting a
 revocation if that run failed.
 
+A status belongs to a commit, not a pull request, so every open PR whose head
+is that commit would share it. `success` is therefore posted only while no other
+open PR has the same head, checked before posting and again right after; if one
+appears, the run replaces `success` with `failure`. Its own run also posts
+`failure`. Two open PRs on one head both hold until one closes. Closing does not
+trigger this workflow, so re-run the job on the remaining PR. A complete scan
+covers up to 1,100 open PRs; more is a HOLD.
+
+Two limits remain. A same-repository `pull_request` run uses the workflow file
+from the pull request itself, so anyone who can push a branch, including an app
+with `workflows: write`, can change the gate on their own PR and post its
+status. The job's check had the same exposure. And if the run for a newly
+opened PR on a shared head fails to post, an earlier `success` stands.
+
 Require `owner-lifecycle-gate/exact-head`, not the job's check name, so an
 owner comment alone can satisfy the gate.
 
