@@ -191,3 +191,9 @@ lanes in `megalodon.host_security`. The static hub command still executes
 nothing. [Host security](host-security.md) owns their fixed scopes, private
 summaries and baseline preservation rules, plus the separate local threat-feed
 cache. Feed matches are context, not admitted detections or action authority.
+
+The separate `megalodon.persistence_review` command reads a fixed set of
+autostart, systemd, cron, shell-startup, SSH and loader-preload locations and
+compares them with an operator-recorded private baseline. It runs nothing and
+changes nothing; [host security](host-security.md#persistence-location-review)
+owns its scope and limits.
