@@ -705,3 +705,125 @@ def test_concurrent_snapshots_share_one_hardening_review(manager, monkeypatch):
     for thread in threads:
         thread.join(10)
     assert len(calls) == 1
+
+
+@pytest.fixture
+def persistence_tree(tmp_path, monkeypatch):
+    from functools import partial
+    from megalodon import persistence_review
+    root = tmp_path/'root'
+    (root/'etc/cron.d').mkdir(parents=True)
+    (root/'etc/cron.d/job').write_text('* * * * * root /bin/true\n')
+    monkeypatch.setattr(persistence_review, 'PersistenceReview',
+                        partial(persistence_review.PersistenceReview, root=root, now=lambda: '2026-10-18T06:30:00Z'))
+    return root
+
+
+def settle(manager):
+    import threading
+    for thread in threading.enumerate():
+        if thread.name == 'megalodon-persistence-review':
+            thread.join(10)
+
+
+def test_snapshot_carries_cached_persistence_summary(manager, persistence_tree, monkeypatch):
+    from megalodon import persistence_review
+    calls = []
+    original = persistence_review.summary
+    monkeypatch.setattr(persistence_review, 'summary', lambda result: calls.append(1) or original(result))
+    clock = [1000.0]
+    monkeypatch.setattr(config.time, 'monotonic', lambda: clock[0])
+    pending = manager.snapshot()['persistence']
+    assert pending == dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
+    settle(manager)
+    value = manager.snapshot()['persistence']
+    assert value['schema'] == persistence_review.SUMMARY_SCHEMA and value['baseline_at'] is None and value['items'] >= 1
+    manager.snapshot()
+    assert len(calls) == 1
+    clock[0] += config.PERSISTENCE_TTL
+    assert manager.snapshot()['persistence'] == value  # a stale summary is served while it refreshes
+    settle(manager)
+    assert len(calls) == 2
+    review = persistence_review.PersistenceReview(manager.home)
+    review.state.mkdir(parents=True, mode=0o700)
+    (review.state/'baseline.json').write_text('{"schema":"forged"}')
+    (review.state/'baseline.json').chmod(0o600)
+    clock[0] += config.PERSISTENCE_TTL
+    manager.snapshot()
+    settle(manager)
+    value = manager.snapshot()['persistence']
+    assert value == dict(schema=persistence_review.SUMMARY_SCHEMA, state='unavailable', action_authority='none')
+
+
+def test_persistence_review_never_runs_on_the_request_path(manager, persistence_tree, monkeypatch):
+    from threading import Event
+    from megalodon import persistence_review
+    release, calls = Event(), []
+    original = persistence_review.summary
+    def slow(result):
+        calls.append(1)
+        assert release.wait(10)
+        return original(result)
+    monkeypatch.setattr(persistence_review, 'summary', slow)
+    for _ in range(3):  # each request returns at once and starts no second review
+        assert manager.snapshot()['persistence']['state'] == 'pending'
+    release.set()
+    settle(manager)
+    assert len(calls) == 1 and 'state' not in manager.snapshot()['persistence']
+
+
+def test_a_refresh_begun_before_a_baseline_does_not_overwrite_it(manager, persistence_tree, monkeypatch):
+    from threading import Event
+    from megalodon import persistence_review
+    release, started = Event(), Event()
+    original = persistence_review.summary
+    def stale(result):
+        if not started.is_set():
+            started.set()
+            assert release.wait(10)
+        return original(result)
+    monkeypatch.setattr(persistence_review, 'summary', stale)
+    manager.snapshot()
+    assert started.wait(10)
+    manager._work({'action':'persistence_baseline'})
+    assert manager.snapshot()['persistence']['baseline_at'] == '2026-10-18T06:30:00Z'
+    release.set()
+    settle(manager)
+    assert manager.snapshot()['persistence']['baseline_at'] == '2026-10-18T06:30:00Z'
+
+
+def test_persistence_baseline_action_records_only_an_initial_baseline(manager, persistence_tree):
+    from megalodon import persistence_review
+    assert config.validate_action({'action':'persistence_baseline'}) == {'action':'persistence_baseline'}
+    for extra in ({'replace':True}, {'path':'/etc'}):
+        with pytest.raises(ValueError):
+            config.validate_action({'action':'persistence_baseline', **extra})
+    manager.snapshot()
+    settle(manager)
+    assert manager.snapshot()['persistence']['baseline_at'] is None
+    manager._work({'action':'persistence_baseline'})
+    value = manager.snapshot()
+    assert value['job']['state'] == 'finished' and 'not a known-clean state' in value['job']['message']
+    assert next(row for row in value['tools'] if row['id']=='persistence')['state'] == 'ready'
+    assert value['persistence']['baseline_at'] == '2026-10-18T06:30:00Z'  # the cache was refreshed
+    path = persistence_review.PersistenceReview(manager.home).state/'baseline.json'
+    recorded = path.read_bytes()
+    manager._work({'action':'persistence_baseline'})
+    value = manager.snapshot()
+    assert value['job']['state'] == 'failed' and 'already exists' in value['job']['message']
+    assert path.read_bytes() == recorded
+
+
+def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager, monkeypatch):
+    from megalodon import persistence_review
+    wide = '\U0001F600' * 400  # each escapes to 12 bytes, the costliest character in a JSON response
+    result = dict(reviewed_at='2026-10-18T06:30:00Z', baseline_at='2026-10-18T06:00:00Z', items=[{}] * persistence_review.MAX_ITEMS,
+                  findings=[dict(rule='CHANGED', path=wide, category='systemd', attack='T1543.002', detail=wide)] * persistence_review.MAX_FINDINGS,
+                  findings_total=10**6, gaps=[wide] * persistence_review.MAX_GAPS, gaps_total=10**6, inventory_truncated=True,
+                  incomplete_locations=['/x'] * len(persistence_review.LOCATIONS))
+    worst = persistence_review.summary(result)
+    assert all(len(json.dumps(text)) <= persistence_review.SUMMARY_TEXT_BYTES
+               for text in [*worst['gaps'], *(f[k] for f in worst['findings'] for k in ('path', 'detail'))])
+    monkeypatch.setattr(manager, '_persistence_snapshot', lambda: worst)
+    size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
+    assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB

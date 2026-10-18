@@ -195,5 +195,6 @@ cache. Feed matches are context, not admitted detections or action authority.
 The separate `megalodon.persistence_review` command reads a fixed set of
 autostart, systemd, cron, shell-startup, SSH and loader-preload locations and
 compares them with an operator-recorded private baseline. It runs nothing and
-changes nothing; [host security](host-security.md#persistence-location-review)
+changes nothing. The HUD shows a bounded summary under Setup and can record
+only a first baseline; [host security](host-security.md#persistence-location-review)
 owns its scope and limits.

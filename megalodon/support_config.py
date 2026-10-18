@@ -24,7 +24,7 @@ from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .host_security import HostSecurity
-from . import hardening_review
+from . import hardening_review, persistence_review
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -45,8 +45,11 @@ def _atomic_write(path, value, mode):
 SCHEMA = 'megalodon-support-config-v1'
 COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config'
 HARDENING_TTL = 60
+# A persistence review reads and hashes up to its item bound, so it refreshes less often.
+PERSISTENCE_TTL = 300
 ACTION_FIELDS = {
     'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
+    'persistence_baseline':set(),
     'capture_permissions': {'interface'}, 'capture_start': {'interface'}, 'capture_stop': set(),
     'wireshark_open': {'interface'}, 'wireshark_stop': set(),
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
@@ -58,7 +61,7 @@ ACTION_FIELDS = {
     'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
-TOOL_NAMES = {'security':'Host security and threat context', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
+TOOL_NAMES = {'security':'Host security and threat context', 'persistence':'Persistence review', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
               'qwen':'Local AI / Ollama', 'zeek':'Zeek', 'suricata':'Suricata',
               'background':'Background traffic', 'geography':'IP geography'}
@@ -202,9 +205,12 @@ class SupportConfiguration:
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
         self.host_security = HostSecurity(self.home)
-        self._hardening, self._hardening_at = None, None
-        # One review per TTL window, even when several HUD requests arrive together.
-        self._hardening_lock = Lock()
+        # Cached read-only reviews; one run per TTL window, even when several HUD requests arrive together.
+        self._reviews = {}
+        self._review_locks = dict(hardening=Lock(), persistence=Lock())
+        # The persistence review reads files, so it refreshes off the request path. A
+        # generation bump discards a refresh that started before a baseline was recorded.
+        self._persistence_refreshing, self._persistence_generation = False, 0
         self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
@@ -310,20 +316,54 @@ class SupportConfiguration:
                 for name, item in changes.items():
                     setattr(self, '_' + name, dict(item) if name == 'settings' else set(item) if name == 'configured' else item)
 
+    def _cached(self, name, ttl, compute, unavailable):
+        with self._review_locks[name]:
+            moment = time.monotonic()
+            entry = self._reviews.get(name)
+            if entry is None or moment - entry[1] >= ttl:
+                try:
+                    value = compute()
+                except (OSError, ValueError, TypeError, KeyError, RecursionError):
+                    value = dict(unavailable, state='unavailable', action_authority='none')
+                entry = self._reviews[name] = (value, moment)
+            return deepcopy(entry[0])
+
     def _hardening_snapshot(self):
         """Read-only posture checks, run at most once per HARDENING_TTL seconds."""
-        with self._hardening_lock:
-            moment = time.monotonic()
-            if self._hardening_at is None or moment - self._hardening_at >= HARDENING_TTL:
-                try:
-                    value = hardening_review.review()
-                except (OSError, ValueError, TypeError, KeyError, RecursionError):
-                    value = dict(schema=hardening_review.SCHEMA, state='unavailable', checks=[], action_authority='none')
-                self._hardening, self._hardening_at = value, moment
-            return deepcopy(self._hardening)
+        return self._cached('hardening', HARDENING_TTL, hardening_review.review,
+                            dict(schema=hardening_review.SCHEMA, checks=[]))
+
+    def _persistence_snapshot(self):
+        """The last persistence summary, or a pending state; a stale one is refreshed in the background."""
+        with self._review_locks['persistence']:
+            entry = self._reviews.get('persistence')
+            if (entry is None or time.monotonic() - entry[1] >= PERSISTENCE_TTL) and not self._persistence_refreshing:
+                self._persistence_refreshing = True
+                Thread(target=self._refresh_persistence, args=(self._persistence_generation,), daemon=True,
+                       name='megalodon-persistence-review').start()
+            if entry is None:
+                return dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
+            return deepcopy(entry[0])
+
+    def _review_persistence(self):
+        try:
+            return persistence_review.summary(persistence_review.PersistenceReview(self.home).review())
+        except (OSError, ValueError, TypeError, KeyError, RecursionError):
+            return dict(schema=persistence_review.SUMMARY_SCHEMA, state='unavailable', action_authority='none')
+
+    def _refresh_persistence(self, generation):
+        value = None
+        try:
+            value = self._review_persistence()
+        finally:
+            with self._review_locks['persistence']:
+                self._persistence_refreshing = False
+                if value is not None and generation == self._persistence_generation:
+                    self._reviews['persistence'] = (value, time.monotonic())
 
     def snapshot(self, include_token=False):
         hardening = self._hardening_snapshot()
+        persistence = self._persistence_snapshot()
         try:
             tool_directories = load_directories(self.home)
             tool_directories_status = 'ready'
@@ -335,7 +375,7 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
-                         host_security=self.host_security.snapshot(), hardening=hardening,
+                         host_security=self.host_security.snapshot(), hardening=hardening, persistence=persistence,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
@@ -430,6 +470,15 @@ class SupportConfiguration:
                 self._save(settings=settings)
             if action.startswith('security_'):
                 message = self.host_security.execute(action.removeprefix('security_'))
+            elif action == 'persistence_baseline':
+                result = persistence_review.PersistenceReview(self.home).record_baseline(initial=True)
+                # This job thread is already off the request path; a refresh begun earlier is discarded.
+                value = self._review_persistence()
+                with self._review_locks['persistence']:
+                    self._persistence_generation += 1
+                    self._reviews['persistence'] = (value, time.monotonic())
+                message = (f"Initial persistence baseline recorded from {result['items']} items present now. "
+                           'It is not a known-clean state; later additions, changes and removals appear as review items.')
             elif action == 'capture_permissions':
                 self._execute(['/usr/bin/pkexec','/bin/sh','-c',PERMISSION_SCRIPT], 90)
                 self._execute(['/usr/bin/dumpcap','-i',request['interface'],'-L'], 10)

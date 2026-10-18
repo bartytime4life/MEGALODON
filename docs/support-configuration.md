@@ -112,3 +112,7 @@ The [host security panel](host-security.md) adds explicit Lynis audits, initial
 AIDE baseline creation, AIDE comparisons and dated public-reference refreshes.
 These use the existing authenticated configuration action lane. File-change
 checks preserve the initial baseline; threat matches never execute responses.
+The same panel shows the read-only hardening posture and the
+[persistence location review](host-security.md#persistence-location-review),
+whose one action records an initial persistence baseline and is refused once
+a baseline exists.

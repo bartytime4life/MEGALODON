@@ -22,15 +22,24 @@ import re
 import stat
 
 SCHEMA = 'megalodon-persistence-review-v1'
+SUMMARY_SCHEMA = 'megalodon-persistence-summary-v1'
 BASELINE_SCHEMA = 'megalodon-persistence-baseline-v1'
 MAX_READ = 256 * 1024
 MAX_DIR_ENTRIES = 128
+# Counting stops here, so one huge directory cannot stall a review.
+MAX_DIR_SCAN = 65536
 MAX_ITEMS = 512
 MAX_FINDINGS = 64
 MAX_GAPS = 32
 MAX_KEYS = 64
 MAX_TEXT = 240
 TRUST = 'observed_not_known_clean'
+# The HUD summary keeps the first findings and gaps so the setup snapshot stays small.
+SUMMARY_FINDINGS = 16
+SUMMARY_GAPS = 8
+# Each summary text fits this many bytes once JSON-escaped, as the HUD sends it. That bounds
+# the response whatever the characters, and the browser's UTF-16 length never exceeds it.
+SUMMARY_TEXT_BYTES = 256
 # (category, ATT&CK technique, location, kind). Paths starting with ~ are
 # relative to the reviewed home. Locations are code, never operator input.
 LOCATIONS = (
@@ -160,15 +169,19 @@ def _item(path, category, technique, kind):
 
 
 def _names(path):
-    """Return the MAX_DIR_ENTRIES smallest names and the total, in bounded memory."""
-    total = 0
+    """Return the MAX_DIR_ENTRIES smallest of at most MAX_DIR_SCAN names, the count, and whether it stopped."""
+    total, stopped = 0, False
     def walk(entries):
-        nonlocal total
+        nonlocal total, stopped
         for entry in entries:
+            if total == MAX_DIR_SCAN:
+                stopped = True
+                return
             total += 1
             yield entry.name
     with os.scandir(path) as entries:
-        return heapq.nsmallest(MAX_DIR_ENTRIES, walk(entries)), total
+        names = heapq.nsmallest(MAX_DIR_ENTRIES, walk(entries))
+    return names, total, stopped
 
 
 def inventory(home=None, root='/'):
@@ -189,8 +202,11 @@ def inventory(home=None, root='/'):
             items.append(row)
         return True
     def listed(path, label):
-        names, total = _names(path)
-        if total > MAX_DIR_ENTRIES:
+        names, total, stopped = _names(path)
+        if stopped:
+            gaps.append(f'{label} has more than {MAX_DIR_SCAN} entries; only {len(names)} were reviewed.')
+            incomplete.append(str(path))
+        elif total > MAX_DIR_ENTRIES:
             gaps.append(f'{label} has {total} entries; only the first {MAX_DIR_ENTRIES} were reviewed.')
             incomplete.append(str(path))
         return names
@@ -296,6 +312,32 @@ def compare(items, baseline, *, uid=None, incomplete=()):
     return findings, total
 
 
+_EXISTS = 'A persistence baseline already exists. Review its changes, then replace it from the command line if they are expected.'
+
+
+def _create(path, value):
+    """Create a private file only if absent, atomically, so a baseline recorded meanwhile is never replaced."""
+    from .host_security import MAX_FILE
+    from .local_install import _owned_directory
+    _owned_directory(path.parent, private=True)
+    if len(value) > MAX_FILE:
+        raise ValueError('Persistence baseline exceeds its bound.')
+    temporary = path.parent/f'.{path.name}.new-{os.getpid()}-{os.urandom(4).hex()}'
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(descriptor, 'wb') as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)  # fails, rather than replacing, when the baseline exists
+        except FileExistsError:
+            raise ValueError(_EXISTS) from None
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 class PersistenceReview:
     def __init__(self, home=None, *, root='/', now=_now):
         self.home = Path(home or Path.home())
@@ -316,11 +358,19 @@ class PersistenceReview:
             raise ValueError('Invalid persistence baseline.')
         return value
 
-    def record_baseline(self):
+    def record_baseline(self, *, initial=False):
+        """Record what is present now. An initial recording never replaces a baseline."""
         from .host_security import write
+        path = self.state/'baseline.json'
+        if initial and os.path.lexists(path):
+            raise ValueError(_EXISTS)
         items, gaps, coverage = inventory(self.home, self.root)
-        write(self.state/'baseline.json', json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
-                                                     sort_keys=True, separators=(',', ':')).encode())
+        value = json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
+                           sort_keys=True, separators=(',', ':')).encode()
+        if initial:
+            _create(path, value)
+        else:
+            write(path, value)
         gaps, gap_total = _bounded(gaps)
         return dict(schema=SCHEMA, state='baseline_recorded', items=len(items), gaps=gaps, gaps_total=gap_total, trust=TRUST,
                     inventory_truncated=coverage['stopped'],
@@ -349,6 +399,30 @@ class PersistenceReview:
                     limitations=['Findings describe observed files, not intent or compromise.',
                                  'Root-only locations, other accounts and in-memory persistence are not reviewed.',
                                  'Package updates and your own edits also add and change these files.'])
+
+
+def _short(value):
+    value = _text(value)
+    if len(json.dumps(value)) <= SUMMARY_TEXT_BYTES:
+        return value
+    kept, size = [], len('"..."')
+    for char in value:
+        size += len(json.dumps(char)) - 2
+        if size > SUMMARY_TEXT_BYTES:
+            break
+        kept.append(char)
+    return ''.join(kept)+'...'
+
+
+def summary(result):
+    """Compact HUD form of a review: counts and the first findings and gaps, no inventory rows."""
+    findings = [dict(rule=f['rule'], path=_short(f['path']), category=f['category'], attack=f['attack'],
+                     detail=_short(f['detail']), action_status='not_attempted') for f in result['findings'][:SUMMARY_FINDINGS]]
+    return dict(schema=SUMMARY_SCHEMA, reviewed_at=result['reviewed_at'], baseline_at=result['baseline_at'], trust=TRUST,
+                items=len(result['items']), findings=findings, findings_total=result['findings_total'],
+                gaps=[_short(gap) for gap in result['gaps'][:SUMMARY_GAPS]], gaps_total=result['gaps_total'],
+                inventory_truncated=result['inventory_truncated'],
+                incomplete_locations=len(result['incomplete_locations']), action_authority='none')
 
 
 def main(argv=None):

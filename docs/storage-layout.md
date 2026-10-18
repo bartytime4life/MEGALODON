@@ -101,7 +101,7 @@ existing installation merely because a later shell changes an XDG variable.
 | `<XDG_CONFIG_HOME>/megalodon/settings.toml` | Generated mode-`0600` settings, created only when absent; existing valid settings are preserved. |
 | `$HOME/.local/bin/megalodon-hud`, `$HOME/.local/bin/megalodon-manage` | Generated launchers for the selected private release; these paths do not follow `XDG_DATA_HOME`. |
 | `<XDG_DATA_HOME>/applications/megalodon.desktop`, `<XDG_DATA_HOME>/icons/hicolor/scalable/apps/megalodon.svg` | Application-menu entry and icon. |
-| `$HOME/.local/share/megalodon/support/persistence-review/baseline.json` | Mode-`0600` persistence-location baseline, written only by `python -m megalodon.persistence_review baseline` and replaced on each explicit run; it does not follow `XDG_DATA_HOME`. See [host security](host-security.md#persistence-location-review). |
+| `$HOME/.local/share/megalodon/support/persistence-review/baseline.json` | Mode-`0600` persistence-location baseline, written by `python -m megalodon.persistence_review baseline` (replaced on each explicit run) or once by the HUD's **Record initial persistence baseline**, which never replaces it; it does not follow `XDG_DATA_HOME`. See [host security](host-security.md#persistence-location-review). |
 
 The manager's uninstall removes validated managed releases, selectors,
 manifest and desktop/launcher artifacts, while preserving data and settings;

@@ -214,8 +214,23 @@ def test_directory_listing_keeps_bounded_smallest_names(tmp_path, monkeypatch):
     for index in range(50):
         (tmp_path/f'{49 - index:02d}').write_text('')
     monkeypatch.setattr(persistence_review, 'MAX_DIR_ENTRIES', 5)
-    names, total = persistence_review._names(tmp_path)
-    assert names == ['00', '01', '02', '03', '04'] and total == 50
+    names, total, stopped = persistence_review._names(tmp_path)
+    assert names == ['00', '01', '02', '03', '04'] and total == 50 and stopped is False
+
+
+def test_directory_counting_stops_at_the_scan_bound_and_says_so(tree, monkeypatch):
+    home, root = tree
+    folder = home/'.config/autostart'
+    for index in range(30):
+        (folder/f'{index:02d}.desktop').write_text('')
+    monkeypatch.setattr(persistence_review, 'MAX_DIR_SCAN', 31)  # 31 entries exist with updater.desktop
+    assert persistence_review._names(folder)[1:] == (31, False)
+    monkeypatch.setattr(persistence_review, 'MAX_DIR_SCAN', 20)
+    names, total, stopped = persistence_review._names(folder)
+    assert total == 20 and stopped is True and len(names) == 20
+    items, gaps, coverage = inventory(home, root)
+    assert '~/.config/autostart has more than 20 entries; only 20 were reviewed.' in gaps
+    assert str(folder) in coverage['incomplete']  # baseline entries there are unconfirmed, not removed
 
 
 def test_findings_beyond_the_cap_are_counted_and_disclosed(tree, monkeypatch):
@@ -288,3 +303,50 @@ def test_changes_past_the_hashed_prefix_are_reported(tree):
     os.utime(profile, (stamp + 120, stamp + 120))
     detail = next(f['detail'] for f in review.review()['findings'] if f['path'] == str(profile))
     assert detail == 'Changed since the recorded baseline: modified_at.'
+
+
+def test_summary_is_bounded_and_carries_no_inventory_rows(tree):
+    home, root = tree
+    folder = home/'.config/autostart'
+    for index in range(persistence_review.SUMMARY_FINDINGS + 4):
+        path = folder/(f'{index:02d}-' + 'x' * 200 + '.desktop')
+        path.write_text('[Desktop Entry]\n')
+        path.chmod(0o666)
+    value = persistence_review.summary(manager(tree).review())
+    assert set(value) == {'schema', 'reviewed_at', 'baseline_at', 'trust', 'items', 'findings', 'findings_total', 'gaps',
+                          'gaps_total', 'inventory_truncated', 'incomplete_locations', 'action_authority'}
+    assert value['schema'] == persistence_review.SUMMARY_SCHEMA and value['action_authority'] == 'none'
+    assert len(value['findings']) == persistence_review.SUMMARY_FINDINGS < value['findings_total']
+    assert all(set(f) == {'rule', 'path', 'category', 'attack', 'detail', 'action_status'} and len(f['path']) <= 243
+               for f in value['findings'])
+    assert type(value['items']) is int and type(value['incomplete_locations']) is int
+    assert 'SECRET-VALUE' not in json.dumps(value) and len(value['gaps']) <= persistence_review.SUMMARY_GAPS
+
+
+def test_initial_baseline_never_replaces_a_recorded_one(tree):
+    review = manager(tree)
+    review.record_baseline(initial=True)
+    recorded = (review.state/'baseline.json').read_bytes()
+    with pytest.raises(ValueError, match='already exists'):
+        review.record_baseline(initial=True)
+    assert (review.state/'baseline.json').read_bytes() == recorded
+    home, _ = tree
+    (home/'.bashrc').write_text('changed\n')
+    review.record_baseline()  # the command-line baseline still replaces it deliberately
+    assert (review.state/'baseline.json').read_bytes() != recorded
+
+
+def test_initial_baseline_does_not_replace_one_recorded_during_its_inventory(tree, monkeypatch):
+    review = manager(tree)
+    original, raced = persistence_review.inventory, []
+    def racing(home, root):
+        result = original(home, root)
+        if not raced:
+            raced.append(1)  # the CLI records its baseline while the HUD is still reviewing
+            PersistenceReview(home, root=root, now=lambda: '2026-10-18T03:00:00Z').record_baseline()
+        return result
+    monkeypatch.setattr(persistence_review, 'inventory', racing)
+    with pytest.raises(ValueError, match='already exists'):
+        review.record_baseline(initial=True)
+    assert json.loads((review.state/'baseline.json').read_bytes())['created_at'] == '2026-10-18T03:00:00Z'
+    assert sorted(p.name for p in review.state.iterdir()) == ['baseline.json']  # no temporary file left behind
