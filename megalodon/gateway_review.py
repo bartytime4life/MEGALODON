@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 
 SCHEMA = 'megalodon-gateway-review-v1'
 BASELINE_SCHEMA = 'megalodon-gateway-baseline-v1'
@@ -35,6 +36,8 @@ _INTERFACE = re.compile(r'[A-Za-z0-9_.:@-]{1,15}')
 _MAC = re.compile(r'[0-9a-f]{2}(?::[0-9a-f]{2}){5}')
 _STAMP = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z')
 _UNUSABLE_MACS = {'00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff'}
+# /proc/net/route prints each network-order address as a host-order number.
+_BYTE_ORDER = sys.byteorder
 RULES = {
     'GATEWAY_MAC_CHANGED': 'review',
     'GATEWAY_MAC_SHARED': 'review',
@@ -87,7 +90,9 @@ def default_gateways(root='/'):
             continue
         try:
             flags, metric = int(fields[3], 16), int(fields[6])
-            gateway = str(ipaddress.IPv4Address(bytes.fromhex(fields[2])[::-1]))
+            if len(fields[2]) != 8:
+                continue
+            gateway = str(ipaddress.IPv4Address(int(fields[2], 16).to_bytes(4, _BYTE_ORDER)))
         except ValueError:
             continue
         if flags & (RTF_UP | RTF_GATEWAY) != RTF_UP | RTF_GATEWAY or not _INTERFACE.fullmatch(fields[0]):
@@ -130,8 +135,10 @@ def observe(root='/'):
     groups = {}
     for row in resolved:
         groups.setdefault((row['interface'], row['mac']), set()).add(row['ip'])
+    # The gateway's own group sorts first, so the bound below never hides the strongest signal.
+    own = (gateway['interface'], gateway['mac']) if gateway and gateway['mac'] else None
     shared = sorted(((interface, mac, sorted(ips, key=ipaddress.IPv4Address)) for (interface, mac), ips in groups.items() if len(ips) > 1),
-                    key=lambda g: (-len(g[2]), g[0], g[1]))
+                    key=lambda g: ((g[0], g[1]) != own, -len(g[2]), g[0], g[1]))
     return dict(gateway=gateway, other_default_routes=max(0, len(routes) - 1), neighbors=len(resolved),
                 shared=[dict(interface=i, mac=m, addresses=ips[:MAX_GROUP_ADDRESSES], count=len(ips)) for i, m, ips in shared[:MAX_GROUPS]],
                 shared_total=len(shared), tables_complete=routes_complete and neighbors_complete)
