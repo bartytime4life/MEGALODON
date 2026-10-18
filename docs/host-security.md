@@ -77,6 +77,42 @@ performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/as
 [IANA IPv6 address space](https://www.iana.org/assignments/ipv6-address-space/), and
 [IANA IPv6 special-purpose registry](https://www.iana.org/assignments/iana-ipv6-special-registry/).
 
+## Hardening posture review
+
+`python -m megalodon.hardening_review` reads a fixed set of live settings and
+reports each as `pass`, `fail`, `review`, `unknown` or `not_applicable`, with
+the observed value, the expected value, an ATT&CK mitigation ID and a
+remediation note. It runs as the HUD user, executes nothing and changes
+nothing; applying a remediation is a separate operator decision. This lane is
+command-line only for now.
+
+| Area | Checks | ATT&CK mitigation |
+| --- | --- | --- |
+| Kernel | `kernel.randomize_va_space = 2`, `kptr_restrict`, `dmesg_restrict`, `yama.ptrace_scope`, `fs.suid_dumpable = 0` | M1050, M1028 |
+| Filesystem | `fs.protected_symlinks`, `fs.protected_hardlinks` | M1028 |
+| Network stack | `tcp_syncookies`, `rp_filter`, IPv4 and IPv6 `accept_redirects`, `accept_source_route`; `ip_forward` is `review`, not `fail`, because container runtimes, VPNs and routers enable it on purpose | M1037 |
+| OpenSSH server | `PermitRootLogin`, `PasswordAuthentication`, `PermitEmptyPasswords`, using OpenSSH defaults when unset | M1026, M1032, M1027 |
+| Updates | APT `Unattended-Upgrade`, last setting in `/etc/apt/apt.conf.d` wins; other package managers are `not_applicable` | M1051 |
+| Listeners | Non-loopback TCP listeners from `/proc/net/tcp` and `tcp6`, at most 64, reported as `review` | M1042 |
+
+Kernel values come from `/proc/sys`, so they are what is running now, which
+can differ from boot configuration. Every file is opened without following a
+final symlink. Settings files are read to at most 64 KiB and the socket tables
+to at most 16 MiB; a cut-off read is never treated as complete. The SSH reader
+accepts space, tab or `=` separators, applies the first value of each keyword,
+follows `Include` only for paths that stay under `/etc/ssh`, refuses symlinked
+include files, and stops at the first `Match` block because conditional
+settings are not evaluated. At most 256 APT configuration files are read in
+name order. Each check's note says when any of these limits applied, and the
+listener check sets `listeners_complete`. A listening socket is not proof of
+exposure, since a firewall may still block it, and process names need root,
+so they are not shown.
+
+A pass does not establish that the host is secure, and a fail does not
+establish compromise. Firewall rules, root-only files and per-interface
+sysctl overrides are not evaluated. Each check carries
+`action_status: not_attempted`, and the result carries `action_authority: none`.
+
 ## Command line
 
 ### Host findings to review

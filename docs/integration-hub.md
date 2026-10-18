@@ -181,6 +181,11 @@ receipt or execution authorization.
 
 ## Local host security additions
 
+The `megalodon.hardening_review` command reads fixed kernel, OpenSSH,
+automatic-update and listening-socket settings and reports each against its
+expected value with a remediation note. It runs nothing and changes nothing;
+[host security](host-security.md#hardening-posture-review) owns its scope.
+
 Lynis configuration audits and AIDE file comparisons have fixed operator-invoked
 lanes in `megalodon.host_security`. The static hub command still executes
 nothing. [Host security](host-security.md) owns their fixed scopes, private
