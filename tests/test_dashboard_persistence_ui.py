@@ -55,3 +55,22 @@ def test_each_category_has_one_technique_and_the_panel_is_wired_with_one_action(
     assert "'persistence-baseline':'persistence_baseline'" in SUPPORT_CONFIG_JS
     assert "persistenceAllowsBaseline(state.payload?.persistence)" in SUPPORT_CONFIG_JS
     assert 'innerHTML' not in PERSISTENCE_JS and 'fetch(' not in PERSISTENCE_JS and '__' not in PERSISTENCE_JS.replace('__proto__', '')
+
+
+def test_setup_polls_a_pending_summary_until_it_completes(tmp_path):
+    if not shutil.which('node'):
+        pytest.skip('Node unavailable')
+    fresh, _, _ = summaries(tmp_path)
+    fixture = dict(schema='megalodon-support-config-v1', token='b' * 32, interfaces=[dict(name='eth0', default=True, up=True)],
+                   settings=dict(interface='eth0', nmap_target='127.0.0.1/32', scan_folder='Downloads'),
+                   tool_directories={}, tool_directories_status='ready',
+                   job=dict(state='idle', action=None, message='Ready.', started_at=None, finished_at=None),
+                   capture=dict(state='idle', interface='', received=0, accepted=0, skipped=0, started_at=None, finished_at=None,
+                                message='Not capturing.'), tools=[],
+                   background=dict(enabled=False, state='stopped', message='Background off.', session_count=0),
+                   geography_enabled=False, command='~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config')
+    pending = dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
+    result = subprocess.run([shutil.which('node'), str(Path(__file__).with_name('support_persistence_poll.cjs'))],
+                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, pending=pending, ready=fresh)),
+                            text=True, capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
