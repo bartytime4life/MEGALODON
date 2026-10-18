@@ -380,7 +380,8 @@ MAC or interface name are skipped.
 Every finding carries ATT&CK `T1557.002` (ARP cache poisoning) and
 `action_status: not_attempted`, and the result carries
 `action_authority: none`. At most 8 shared-MAC groups of 8 addresses are
-listed; `shared_total` and a gap disclose more. A replaced router, a failover
+listed, the gateway's own group always first; `shared_total` and a gap
+disclose more. A replaced router, a failover
 pair, proxy ARP, virtual machines, repeaters and multi-address hosts produce
 the same signals, so a finding is a reason to look, not proof of spoofing.
 
