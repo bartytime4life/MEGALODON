@@ -764,13 +764,14 @@ def test_persistence_baseline_action_records_only_an_initial_baseline(manager, p
 
 def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager, monkeypatch):
     from megalodon import persistence_review
-    long = 'x' * 243
-    worst = dict(schema=persistence_review.SUMMARY_SCHEMA, reviewed_at='2026-10-18T06:30:00Z', baseline_at='2026-10-18T06:00:00Z',
-                 trust=persistence_review.TRUST, items=persistence_review.MAX_ITEMS,
-                 findings=[dict(rule='CHANGED', path=long, category='systemd', attack='T1543.002', detail=long,
-                                action_status='not_attempted')] * persistence_review.SUMMARY_FINDINGS,
-                 findings_total=10**6, gaps=[long] * persistence_review.SUMMARY_GAPS, gaps_total=10**6,
-                 inventory_truncated=True, incomplete_locations=len(persistence_review.LOCATIONS), action_authority='none')
+    wide = '\U0001F600' * 400  # each escapes to 12 bytes, the costliest character in a JSON response
+    result = dict(reviewed_at='2026-10-18T06:30:00Z', baseline_at='2026-10-18T06:00:00Z', items=[{}] * persistence_review.MAX_ITEMS,
+                  findings=[dict(rule='CHANGED', path=wide, category='systemd', attack='T1543.002', detail=wide)] * persistence_review.MAX_FINDINGS,
+                  findings_total=10**6, gaps=[wide] * persistence_review.MAX_GAPS, gaps_total=10**6, inventory_truncated=True,
+                  incomplete_locations=['/x'] * len(persistence_review.LOCATIONS))
+    worst = persistence_review.summary(result)
+    assert all(len(json.dumps(text)) <= persistence_review.SUMMARY_TEXT_BYTES
+               for text in [*worst['gaps'], *(f[k] for f in worst['findings'] for k in ('path', 'detail'))])
     monkeypatch.setattr(manager, '_persistence_snapshot', lambda: worst)
-    size = len(json.dumps(manager.snapshot(include_token=True)).encode())
+    size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
     assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB

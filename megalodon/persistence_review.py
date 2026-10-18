@@ -35,6 +35,9 @@ TRUST = 'observed_not_known_clean'
 # The HUD summary keeps the first findings and gaps so the setup snapshot stays small.
 SUMMARY_FINDINGS = 16
 SUMMARY_GAPS = 8
+# Each summary text fits this many bytes once JSON-escaped, as the HUD sends it. That bounds
+# the response whatever the characters, and the browser's UTF-16 length never exceeds it.
+SUMMARY_TEXT_BYTES = 256
 # (category, ATT&CK technique, location, kind). Paths starting with ~ are
 # relative to the reviewed home. Locations are code, never operator input.
 LOCATIONS = (
@@ -389,13 +392,26 @@ class PersistenceReview:
                                  'Package updates and your own edits also add and change these files.'])
 
 
+def _short(value):
+    value = _text(value)
+    if len(json.dumps(value)) <= SUMMARY_TEXT_BYTES:
+        return value
+    kept, size = [], len('"..."')
+    for char in value:
+        size += len(json.dumps(char)) - 2
+        if size > SUMMARY_TEXT_BYTES:
+            break
+        kept.append(char)
+    return ''.join(kept)+'...'
+
+
 def summary(result):
     """Compact HUD form of a review: counts and the first findings and gaps, no inventory rows."""
-    findings = [dict(rule=f['rule'], path=_text(f['path']), category=f['category'], attack=f['attack'],
-                     detail=_text(f['detail']), action_status='not_attempted') for f in result['findings'][:SUMMARY_FINDINGS]]
+    findings = [dict(rule=f['rule'], path=_short(f['path']), category=f['category'], attack=f['attack'],
+                     detail=_short(f['detail']), action_status='not_attempted') for f in result['findings'][:SUMMARY_FINDINGS]]
     return dict(schema=SUMMARY_SCHEMA, reviewed_at=result['reviewed_at'], baseline_at=result['baseline_at'], trust=TRUST,
                 items=len(result['items']), findings=findings, findings_total=result['findings_total'],
-                gaps=[_text(gap) for gap in result['gaps'][:SUMMARY_GAPS]], gaps_total=result['gaps_total'],
+                gaps=[_short(gap) for gap in result['gaps'][:SUMMARY_GAPS]], gaps_total=result['gaps_total'],
                 inventory_truncated=result['inventory_truncated'],
                 incomplete_locations=len(result['incomplete_locations']), action_authority='none')
 

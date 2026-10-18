@@ -271,6 +271,9 @@ it as `persistence` (`megalodon-persistence-summary-v1`), recomputed at most
 once every five minutes and copied per response. To stay inside the 64 KiB
 response bound it carries counts, the first 16 findings and the first 8 gaps,
 with no inventory rows; `findings_total` and `gaps_total` disclose the rest.
+Each path, detail and gap is shortened, with a trailing `...`, to at most 256
+bytes as JSON-escaped in the response, so non-ASCII names neither exceed the
+response bound nor fail the browser's length check.
 The command-line review lists up to 64 findings and 32 gaps, under the bounds
 below, and the panel names those bounds rather than promising a full list. A review that cannot run, for
 example over a tampered baseline, is reported as `state: unavailable` instead
