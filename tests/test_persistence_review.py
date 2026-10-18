@@ -288,3 +288,34 @@ def test_changes_past_the_hashed_prefix_are_reported(tree):
     os.utime(profile, (stamp + 120, stamp + 120))
     detail = next(f['detail'] for f in review.review()['findings'] if f['path'] == str(profile))
     assert detail == 'Changed since the recorded baseline: modified_at.'
+
+
+def test_summary_is_bounded_and_carries_no_inventory_rows(tree):
+    home, root = tree
+    folder = home/'.config/autostart'
+    for index in range(persistence_review.SUMMARY_FINDINGS + 4):
+        path = folder/(f'{index:02d}-' + 'x' * 200 + '.desktop')
+        path.write_text('[Desktop Entry]\n')
+        path.chmod(0o666)
+    value = persistence_review.summary(manager(tree).review())
+    assert set(value) == {'schema', 'reviewed_at', 'baseline_at', 'trust', 'items', 'findings', 'findings_total', 'gaps',
+                          'gaps_total', 'inventory_truncated', 'incomplete_locations', 'action_authority'}
+    assert value['schema'] == persistence_review.SUMMARY_SCHEMA and value['action_authority'] == 'none'
+    assert len(value['findings']) == persistence_review.SUMMARY_FINDINGS < value['findings_total']
+    assert all(set(f) == {'rule', 'path', 'category', 'attack', 'detail', 'action_status'} and len(f['path']) <= 243
+               for f in value['findings'])
+    assert type(value['items']) is int and type(value['incomplete_locations']) is int
+    assert 'SECRET-VALUE' not in json.dumps(value) and len(value['gaps']) <= persistence_review.SUMMARY_GAPS
+
+
+def test_initial_baseline_never_replaces_a_recorded_one(tree):
+    review = manager(tree)
+    review.record_baseline(initial=True)
+    recorded = (review.state/'baseline.json').read_bytes()
+    with pytest.raises(ValueError, match='already exists'):
+        review.record_baseline(initial=True)
+    assert (review.state/'baseline.json').read_bytes() == recorded
+    home, _ = tree
+    (home/'.bashrc').write_text('changed\n')
+    review.record_baseline()  # the command-line baseline still replaces it deliberately
+    assert (review.state/'baseline.json').read_bytes() != recorded

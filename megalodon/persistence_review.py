@@ -22,6 +22,7 @@ import re
 import stat
 
 SCHEMA = 'megalodon-persistence-review-v1'
+SUMMARY_SCHEMA = 'megalodon-persistence-summary-v1'
 BASELINE_SCHEMA = 'megalodon-persistence-baseline-v1'
 MAX_READ = 256 * 1024
 MAX_DIR_ENTRIES = 128
@@ -31,6 +32,9 @@ MAX_GAPS = 32
 MAX_KEYS = 64
 MAX_TEXT = 240
 TRUST = 'observed_not_known_clean'
+# The HUD summary keeps the first findings and gaps so the setup snapshot stays small.
+SUMMARY_FINDINGS = 16
+SUMMARY_GAPS = 8
 # (category, ATT&CK technique, location, kind). Paths starting with ~ are
 # relative to the reviewed home. Locations are code, never operator input.
 LOCATIONS = (
@@ -316,8 +320,11 @@ class PersistenceReview:
             raise ValueError('Invalid persistence baseline.')
         return value
 
-    def record_baseline(self):
+    def record_baseline(self, *, initial=False):
+        """Record what is present now. An initial recording never replaces a baseline."""
         from .host_security import write
+        if initial and os.path.lexists(self.state/'baseline.json'):
+            raise ValueError('A persistence baseline already exists. Review its changes, then replace it from the command line if they are expected.')
         items, gaps, coverage = inventory(self.home, self.root)
         write(self.state/'baseline.json', json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
                                                      sort_keys=True, separators=(',', ':')).encode())
@@ -349,6 +356,17 @@ class PersistenceReview:
                     limitations=['Findings describe observed files, not intent or compromise.',
                                  'Root-only locations, other accounts and in-memory persistence are not reviewed.',
                                  'Package updates and your own edits also add and change these files.'])
+
+
+def summary(result):
+    """Compact HUD form of a review: counts and the first findings and gaps, no inventory rows."""
+    findings = [dict(rule=f['rule'], path=_text(f['path']), category=f['category'], attack=f['attack'],
+                     detail=_text(f['detail']), action_status='not_attempted') for f in result['findings'][:SUMMARY_FINDINGS]]
+    return dict(schema=SUMMARY_SCHEMA, reviewed_at=result['reviewed_at'], baseline_at=result['baseline_at'], trust=TRUST,
+                items=len(result['items']), findings=findings, findings_total=result['findings_total'],
+                gaps=[_text(gap) for gap in result['gaps'][:SUMMARY_GAPS]], gaps_total=result['gaps_total'],
+                inventory_truncated=result['inventory_truncated'],
+                incomplete_locations=len(result['incomplete_locations']), action_authority='none')
 
 
 def main(argv=None):

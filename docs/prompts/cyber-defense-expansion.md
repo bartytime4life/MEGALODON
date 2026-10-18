@@ -109,9 +109,11 @@ slice. Later slices can deepen it.
    `megalodon/persistence_review.py` inventories fixed autostart, systemd,
    cron, shell-startup, session, SSH and loader-preload locations read-only,
    and compares them with a private operator-recorded baseline. See
-   `docs/host-security.md`. Next slices: a HUD Setup or host-findings view
-   with an approval-gated "record baseline" action, and new SUID binaries,
-   which need a bounded filesystem walk and an owner decision on scope.
+   `docs/host-security.md`. The HUD shows a bounded summary under Setup →
+   Host security, and its one action records only an initial baseline.
+   Next slices: replacing a baseline from the HUD after review (an owner
+   decision, since accepting a change hides it), and new SUID binaries, which
+   need a bounded filesystem walk and an owner decision on scope.
 5. **Process-to-connection correlation.** Link a live connection to its owning
    process (PID, executable path, hash, parent) using fixed `/proc` reads, so
    an unexpected outbound connection names its binary. Store no command-line

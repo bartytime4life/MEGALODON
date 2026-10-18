@@ -1,6 +1,7 @@
 """Explicit local support-tool setup and bounded capture controls."""
 from .dashboard_hardening import HARDENING_HTML, HARDENING_CSS, HARDENING_JS
 from .dashboard_host_findings import HOST_FINDINGS_HTML, HOST_FINDINGS_CSS, HOST_FINDINGS_JS
+from .dashboard_persistence import PERSISTENCE_HTML, PERSISTENCE_CSS, PERSISTENCE_JS
 
 SUPPORT_CONFIG_HTML = r'''
 <section class="support-config" id="support-config" aria-labelledby="support-config-title" hidden>
@@ -41,6 +42,7 @@ SUPPORT_CONFIG_HTML = r'''
     <p id="host-security-status" role="status">Host security results have not been checked.</p><ul id="host-security-results"></ul>
     <!-- HOST_FINDINGS -->
     <!-- HARDENING -->
+    <!-- PERSISTENCE -->
     <p class="support-config-note">Audits run as your user and cover readable files only. The initial baseline is an observation, not a clean-system certificate. Checks preserve that baseline. Refresh downloads fixed Spamhaus DROP and IPsum references at most once per day; IP observations stay on this PC. Stale references stop matching. A match supplies context and never authorizes blocking or identifies an attacker.</p>
   </section>
   <details class="support-config-locations"><summary>Installed tool directories</summary>
@@ -53,9 +55,9 @@ SUPPORT_CONFIG_HTML = r'''
   </details>
   <details class="support-config-results"><summary>Latest tool results</summary><p class="support-config-note">Each result keeps its own check time. Setup and availability do not prove a tool is feeding the HUD.</p><ul id="support-config-tools"><li>No tool checks returned yet.</li></ul></details>
 </section>
-'''.replace('    <!-- HOST_FINDINGS -->', HOST_FINDINGS_HTML).replace('    <!-- HARDENING -->', HARDENING_HTML)
+'''.replace('    <!-- HOST_FINDINGS -->', HOST_FINDINGS_HTML).replace('    <!-- HARDENING -->', HARDENING_HTML).replace('    <!-- PERSISTENCE -->', PERSISTENCE_HTML)
 
-SUPPORT_CONFIG_CSS = HOST_FINDINGS_CSS + HARDENING_CSS + r'''
+SUPPORT_CONFIG_CSS = HOST_FINDINGS_CSS + HARDENING_CSS + PERSISTENCE_CSS + r'''
 .support-apps #support-apps-configure { border-color:#75e6e1; box-shadow:inset 0 0 0 1px #75e6e1; }
 .support-apps #support-apps-configure[aria-expanded="true"] { background:#244955; }
 .support-config { border-top:1px solid #4b6b79; margin-top:1rem; padding-top:1.25rem; }
@@ -87,7 +89,7 @@ SUPPORT_CONFIG_CSS = HOST_FINDINGS_CSS + HARDENING_CSS + r'''
 @media(max-width:640px) { .support-capture-steps,.support-capture-destinations { grid-template-columns:1fr; gap:1rem; } .support-capture { padding:.9rem; } .support-config-actions button { flex:1 1 12rem; } .support-config select,.support-config input { max-width:none; } .support-config-results li { grid-template-columns:minmax(0,1fr) auto; } }
 '''
 
-SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + r'''
+SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + PERSISTENCE_JS + r'''
 (() => {
   const el=id=>document.getElementById(id);
   if(typeof localHudLaunch==='undefined' || !el('support-config') || !el('support-apps-configure'))return;
@@ -99,14 +101,14 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + r'''
   if(!el('support-config-tool-id').value)el('support-config-tool-id').value='zeek';
   const state={configVisible:false,globeVisible:false,liveAction:false,open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
   const actions={
-    'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh',
+    'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh','persistence-baseline':'persistence_baseline',
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
     'support-config-tool-directory-save':'tool_directory_set','support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
-  const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',tool_directory_set:'Saving tool directory',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
+  const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
@@ -146,7 +148,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + r'''
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
         || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
-        || (action==='geography_disable'&&!state.payload?.geography_enabled);
+        || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
     }
     el('support-model-adopt').disabled=blocked||!!working();
     for(const id of inputIds)el(id).disabled=blocked||!!working();
@@ -157,6 +159,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + r'''
     const h=v.host_security;
     renderHostFindings(el('host-findings'),h);
     renderHardening(el('hardening-review'),v.hardening);
+    renderPersistence(el('persistence-review'),v.persistence);
     el('host-security-status').textContent='Host security status unavailable.';
     el('host-security-results').replaceChildren();
     if(h&&h.schema==='megalodon-host-security-v1'&&Array.isArray(h.feeds)&&h.feeds.length<=3){
@@ -230,7 +233,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + HARDENING_JS + r'''
     }finally{clearTimeout(timer);}
   }
   function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
-  function fail(error){renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
+  function fail(error){renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
   async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
   function payloadFor(action){
     const value={action};

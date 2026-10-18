@@ -705,3 +705,72 @@ def test_concurrent_snapshots_share_one_hardening_review(manager, monkeypatch):
     for thread in threads:
         thread.join(10)
     assert len(calls) == 1
+
+
+@pytest.fixture
+def persistence_tree(tmp_path, monkeypatch):
+    from functools import partial
+    from megalodon import persistence_review
+    root = tmp_path/'root'
+    (root/'etc/cron.d').mkdir(parents=True)
+    (root/'etc/cron.d/job').write_text('* * * * * root /bin/true\n')
+    monkeypatch.setattr(persistence_review, 'PersistenceReview',
+                        partial(persistence_review.PersistenceReview, root=root, now=lambda: '2026-10-18T06:30:00Z'))
+    return root
+
+
+def test_snapshot_carries_cached_persistence_summary(manager, persistence_tree, monkeypatch):
+    from megalodon import persistence_review
+    calls = []
+    original = persistence_review.summary
+    monkeypatch.setattr(persistence_review, 'summary', lambda result: calls.append(1) or original(result))
+    clock = [1000.0]
+    monkeypatch.setattr(config.time, 'monotonic', lambda: clock[0])
+    value = manager.snapshot()['persistence']
+    assert value['schema'] == persistence_review.SUMMARY_SCHEMA and value['baseline_at'] is None and value['items'] >= 1
+    manager.snapshot()
+    assert len(calls) == 1
+    clock[0] += config.PERSISTENCE_TTL
+    manager.snapshot()
+    assert len(calls) == 2
+    review = persistence_review.PersistenceReview(manager.home)
+    review.state.mkdir(parents=True, mode=0o700)
+    (review.state/'baseline.json').write_text('{"schema":"forged"}')
+    (review.state/'baseline.json').chmod(0o600)
+    clock[0] += config.PERSISTENCE_TTL
+    value = manager.snapshot()['persistence']
+    assert value == dict(schema=persistence_review.SUMMARY_SCHEMA, state='unavailable', action_authority='none')
+
+
+def test_persistence_baseline_action_records_only_an_initial_baseline(manager, persistence_tree):
+    from megalodon import persistence_review
+    assert config.validate_action({'action':'persistence_baseline'}) == {'action':'persistence_baseline'}
+    for extra in ({'replace':True}, {'path':'/etc'}):
+        with pytest.raises(ValueError):
+            config.validate_action({'action':'persistence_baseline', **extra})
+    assert manager.snapshot()['persistence']['baseline_at'] is None
+    manager._work({'action':'persistence_baseline'})
+    value = manager.snapshot()
+    assert value['job']['state'] == 'finished' and 'not a known-clean state' in value['job']['message']
+    assert next(row for row in value['tools'] if row['id']=='persistence')['state'] == 'ready'
+    assert value['persistence']['baseline_at'] == '2026-10-18T06:30:00Z'  # the cache was refreshed
+    path = persistence_review.PersistenceReview(manager.home).state/'baseline.json'
+    recorded = path.read_bytes()
+    manager._work({'action':'persistence_baseline'})
+    value = manager.snapshot()
+    assert value['job']['state'] == 'failed' and 'already exists' in value['job']['message']
+    assert path.read_bytes() == recorded
+
+
+def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager, monkeypatch):
+    from megalodon import persistence_review
+    long = 'x' * 243
+    worst = dict(schema=persistence_review.SUMMARY_SCHEMA, reviewed_at='2026-10-18T06:30:00Z', baseline_at='2026-10-18T06:00:00Z',
+                 trust=persistence_review.TRUST, items=persistence_review.MAX_ITEMS,
+                 findings=[dict(rule='CHANGED', path=long, category='systemd', attack='T1543.002', detail=long,
+                                action_status='not_attempted')] * persistence_review.SUMMARY_FINDINGS,
+                 findings_total=10**6, gaps=[long] * persistence_review.SUMMARY_GAPS, gaps_total=10**6,
+                 inventory_truncated=True, incomplete_locations=len(persistence_review.LOCATIONS), action_authority='none')
+    monkeypatch.setattr(manager, '_persistence_snapshot', lambda: worst)
+    size = len(json.dumps(manager.snapshot(include_token=True)).encode())
+    assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB

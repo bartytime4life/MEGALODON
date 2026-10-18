@@ -263,7 +263,28 @@ containment workflow still requires its separate operator review and OS action.
 `python -m megalodon.persistence_review review` inventories a fixed set of
 common Linux persistence locations, and `... baseline` records what is present
 now for later comparison. Both run as the HUD user, read only, and execute
-nothing. This lane is command-line only for now; it has no HUD route.
+nothing.
+
+The HUD shows a summary under **Setup → Host security and threat context →
+Persistence locations**. The protected `/api/support-config` snapshot carries
+it as `persistence` (`megalodon-persistence-summary-v1`), recomputed at most
+once every five minutes and copied per response. To stay inside the 64 KiB
+response bound it carries counts, the first 16 findings and the first 8 gaps,
+with no inventory rows; `findings_total` and `gaps_total` disclose the rest,
+and the command-line review lists them all. A review that cannot run, for
+example over a tampered baseline, is reported as `state: unavailable` instead
+of failing the snapshot. The panel validates every field against the closed
+schema (exact keys, the six rules, each category's own ATT&CK technique,
+`action_status: not_attempted`, `action_authority: none`), renders text nodes
+only, and shows nothing for any other payload.
+
+**Record initial persistence baseline** is the panel's one action. It uses the
+token-protected configuration action lane (`persistence_baseline`, no fields)
+and is enabled only when the validated summary shows no baseline. The server
+refuses it when a baseline file already exists, so the HUD never replaces a
+baseline and cannot hide a pending change by accepting it. Replacing a
+baseline stays the deliberate command-line step `... baseline`, taken after
+reviewing its changes. The snapshot cache is refreshed after a recording.
 
 | Category | Locations | ATT&CK |
 | --- | --- | --- |
@@ -311,8 +332,9 @@ The baseline is a private `0600` file at
 `~/.local/share/megalodon/support/persistence-review/baseline.json`, read and
 written through the same private-file checks as the host security files. It
 records `trust: observed_not_known_clean`. A tampered, broadly readable or
-symlinked baseline fails closed. Recording a new baseline replaces the old one,
-so archive a baseline you want to keep first.
+symlinked baseline fails closed. Recording a new baseline from the command line
+replaces the old one, so archive a baseline you want to keep first; the HUD
+records only a first baseline.
 
 Coverage limits: user crontabs in the system spool, root-only files, other
 accounts' homes, and in-memory or kernel persistence are not reviewed. Package
