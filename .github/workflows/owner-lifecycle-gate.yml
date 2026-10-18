@@ -1,17 +1,14 @@
 name: owner-lifecycle-gate
 
 on:
-  pull_request:
+  # Authorization code must come from the trusted default branch, never the PR.
+  pull_request_target:
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
   issue_comment:
     types: [created, edited, deleted]
 
-permissions:
-  contents: read
-  issues: read
-  pull-requests: read
-  # Only to post the verdict as a commit status on the exact PR head.
-  statuses: write
+permissions: {}
 
 concurrency:
   group: owner-lifecycle-gate-${{ github.event.pull_request.number || github.event.issue.number }}
@@ -20,8 +17,13 @@ concurrency:
 jobs:
   exact-head-owner-authorization:
     if: >-
-      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_target' ||
       github.event.issue.pull_request != null
+    permissions:
+      issues: read
+      pull-requests: read
+      # Advisory status only: this token is not a workflow-specific identity.
+      statuses: write
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -35,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python -I - <<'PY'
           from __future__ import annotations
 
           import json
@@ -55,10 +57,27 @@ jobs:
               Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8")
           )
 
-          if os.environ["GH_EVENT_NAME"] == "pull_request":
-              pr_number = int(event["pull_request"]["number"])
-          else:
-              pr_number = int(event["issue"]["number"])
+          event_name = os.environ["GH_EVENT_NAME"]
+          # Defense in depth; the event trigger, not this check alone, establishes
+          # code provenance. No head ref, checkout, artifact, or PR script is used.
+          if (
+              event_name not in {"pull_request_target", "issue_comment"}
+              or os.environ.get("GITHUB_REF") != "refs/heads/main"
+              or os.environ.get("GITHUB_WORKFLOW_REF") != (
+                  f"{repository}/.github/workflows/owner-lifecycle-gate.yml@refs/heads/main"
+              )
+          ):
+              print("OWNER_LIFECYCLE_HOLD: untrusted workflow execution context")
+              raise SystemExit(3)
+          subject = event.get("pull_request" if event_name == "pull_request_target" else "issue")
+          if (
+              not isinstance(subject, dict)
+              or type(subject.get("number")) is not int or subject["number"] <= 0
+              or (event_name == "issue_comment" and not isinstance(subject.get("pull_request"), dict))
+          ):
+              print("OWNER_LIFECYCLE_HOLD: event is not a valid pull request")
+              raise SystemExit(3)
+          pr_number = subject["number"]
 
           # Comment-triggered runs execute on the default branch, so their own
           # check lands there; the commit status carries the verdict to the PR head.
@@ -67,13 +86,10 @@ jobs:
               f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{repository}"
               f"/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"
           )
-          event_pull = event.get("pull_request") if os.environ["GH_EVENT_NAME"] == "pull_request" else None
+          event_pull = event.get("pull_request") if event_name == "pull_request_target" else None
           event_head = ((event_pull or {}).get("head") or {}).get("sha")
           if not isinstance(event_head, str) or not re.fullmatch(r"[0-9a-f]{40}", event_head):
               event_head = None
-          # Fork pull_request runs get a read-only token; their comment-triggered runs post instead.
-          head_repo = ((event_pull or {}).get("head") or {}).get("repo") or {}
-          read_only_token = event_pull is not None and head_repo.get("full_name") != repository
 
           class IncompleteState(Exception):
               pass
@@ -125,13 +141,22 @@ jobs:
               sha = pull["head"].get("sha")
               draft = pull.get("draft")
               count = pull.get("comments")
+              base = pull.get("base")
+              state = pull.get("state")
               if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
                   raise IncompleteState("non-canonical head SHA")
               if type(draft) is not bool or type(count) is not int or count < 0:
                   raise IncompleteState("malformed pull state")
               if count > MAX_COMMENTS:
                   raise IncompleteState("comment history exceeds 1000-comment bound")
-              return sha, draft, count
+              if (
+                  not isinstance(base, dict) or not isinstance(base.get("repo"), dict)
+                  or not isinstance(base.get("ref"), str)
+                  or not isinstance(base["repo"].get("full_name"), str)
+                  or not isinstance(state, str) or state not in {"open", "closed"}
+              ):
+                  raise IncompleteState("malformed pull base or state")
+              return sha, draft, count, base["ref"], base["repo"]["full_name"], state
 
           def scan_comments(count):
               comments = []
@@ -230,8 +255,16 @@ jobs:
               )
               try:
                   with urllib.request.urlopen(request, timeout=20) as response:
-                      response.read(65536)
-              except OSError as exc:
+                      raw = response.read(65537)
+                      if response.status != 201 or len(raw) > 65536:
+                          raise IncompleteState("unconfirmed status publication")
+                      published = json.loads(raw)
+                      expected = json.loads(request.data)
+                      if not isinstance(published, dict) or any(
+                          published.get(key) != value for key, value in expected.items()
+                      ):
+                          raise IncompleteState("status publication response mismatch")
+              except (OSError, ValueError, IncompleteState) as exc:
                   print(f"Unable to post {STATUS_CONTEXT} status on {sha}: {exc}")
                   raise SystemExit(code or 1)
               print(f"Posted {STATUS_CONTEXT}={state} on {sha}")
@@ -240,9 +273,6 @@ jobs:
               # Only an exact-head authorization (code 0) ever posts success.
               if sha is None:
                   print(f"No verified PR head; {STATUS_CONTEXT} status not posted.")
-                  raise SystemExit(code)
-              if read_only_token:
-                  print(f"Fork pull request token is read-only; {STATUS_CONTEXT} status not posted.")
                   raise SystemExit(code)
               post_status(code, sha, "success" if code == 0 else "failure", description)
               if code == 0:
@@ -257,7 +287,9 @@ jobs:
           head = None
           try:
               initial = pull_state()
-              head, draft, count = initial
+              head, draft, count, base_ref, base_repo, state = initial
+              if base_ref != "main" or base_repo != repository or state != "open":
+                  raise IncompleteState("pull request must be open against this repository's main")
               if draft:
                   raise IncompleteState("pull request is draft")
               comments = scan_comments(count)
