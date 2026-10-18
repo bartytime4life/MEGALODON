@@ -159,3 +159,13 @@ def test_text_is_bounded_by_escaped_size(tmp_path):
     shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
     assert all(len(json.dumps(shown[k])) <= process_network.MAX_TEXT_BYTES for k in ('program', 'executable', 'parent'))
     assert shown['executable'].endswith('...')
+
+
+@pytest.mark.parametrize('field', ['-0000001:01BB', '0000_001:01BB', '0A00000+:01BB', 'C0A80105:-001', 'zzzzzzzz:01BB'])
+def test_signed_or_non_hex_endpoints_are_skipped(tmp_path, field):
+    (tmp_path/'proc/net').mkdir(parents=True)
+    good = f"   0: {endpoint('192.168.1.5', 1)} {endpoint('203.0.113.9', 443)} 01 0:0 0:0 0 0 0 9 1\n"
+    bad = f"   1: {field} {endpoint('203.0.113.9', 443)} 01 0:0 0:0 0 0 0 10 1\n"
+    (tmp_path/'proc/net/tcp').write_text(HEAD + good + bad)
+    found, _ = sockets(tmp_path)
+    assert set(found) == {9}

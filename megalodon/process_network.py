@@ -17,6 +17,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import sys
 
@@ -42,6 +43,7 @@ RULES = {
                                          'placed. Installers and developer tools also run there.'),
 }
 # /proc/net prints each network-order address word as a host-order number.
+_HEX = re.compile(r'[0-9A-Fa-f]+')
 _BYTE_ORDER = sys.byteorder
 
 
@@ -88,7 +90,8 @@ def _read_table(path):
 
 def _endpoint(value, length):
     address, _, port = value.partition(':')
-    if len(address) != length * 2 or len(port) != 4:
+    # Only plain hex digits: int() also accepts signs and underscores, which would not round-trip.
+    if len(address) != length * 2 or len(port) != 4 or not _HEX.fullmatch(address) or not _HEX.fullmatch(port):
         return None
     try:
         raw = b''.join(int(address[i:i + 8], 16).to_bytes(4, _BYTE_ORDER) for i in range(0, len(address), 8))
