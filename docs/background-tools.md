@@ -12,6 +12,18 @@ result. Normal startup never opens Wireshark, Zenmap or ClamTk windows. Those
 remain explicit optional controls under Advanced in Setup. Sensors shows current
 workflow status; a saved inventory result is distinct from an active feed.
 
+Sensors opens with an activity overview: **All tools**, **Needs review**,
+**Collecting**, and **Saved results**. Select a count to filter the same tool
+list; search text is preserved and these controls never start a tool. Counts
+cover the returned tools, not threats or a safety score. If the status refresh
+fails or expires, current activity counts become unavailable rather than zero.
+
+Each tool shows its contribution, source timestamp and age, and the latest
+bounded status message before expansion. A saved result can be old even when
+the status view was just refreshed. Expand a tool to navigate to its existing
+result, evidence or setup view. These links do not run checks, open companion
+GUI windows, invoke AI or apply containment.
+
 | Tool | Background role |
 | --- | --- |
 | Python / SQLite | HUD, resource sampling, validated metadata and storage |

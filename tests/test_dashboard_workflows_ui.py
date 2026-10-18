@@ -41,6 +41,10 @@ def test_workflow_local_composition_preserves_hosted_reference():
     assert 'id="support-config-qwen-setup"' in INDEX_HTML
     assert 'id="support-config-suricata-setup"' in INDEX_HTML
     assert 'Optional desktop inspection' in INDEX_HTML
+    assert 'Tool counts are not threat counts or a safety score.' in INDEX_HTML
+    for group in ('ALL', 'attention', 'collecting', 'saved_result'):
+        assert f'id="workflows-show-{group}"' in INDEX_HTML
+    assert '@media(max-width:760px)' in WORKFLOWS_CSS
     class Ids(HTMLParser):
         def __init__(self):
             super().__init__()
