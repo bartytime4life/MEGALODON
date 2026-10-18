@@ -72,9 +72,28 @@ def test_listener_requires_exact_address_and_service_socket(tmp_path,monkeypatch
     realpath=install_lifecycle.Path
     monkeypatch.setattr(install_lifecycle,'Path',lambda p:root if str(p)=='/proc' else realpath(p))
     monkeypatch.setattr(install_lifecycle.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout='501\n',returncode=0))
+    monkeypatch.setattr(install_lifecycle,'_BYTE_ORDER','little')  # the row above is little-endian
     assert install_lifecycle._listener_pid(8787,'127.0.0.1')==501
     assert install_lifecycle._listener_pid(8787,'127.0.0.2') is None
     (process/'fd/4').unlink()
+    assert install_lifecycle._listener_pid(8787,'127.0.0.1') is None
+
+
+@pytest.mark.parametrize('order,address',[('little','0100007F'),('big','7F000001')])
+def test_listener_address_decodes_in_host_byte_order(tmp_path,monkeypatch,order,address):
+    from types import SimpleNamespace
+    root=tmp_path/'proc';process=root/'501';(process/'fd').mkdir(parents=True);(process/'net').mkdir()
+    (process/'fd/4').symlink_to('socket:[200]')
+    (process/'net/tcp').write_text(f'header\n 0: {address}:2253 00000000:0000 0A 0 0 0 0 0 200\n')
+    realpath=install_lifecycle.Path
+    monkeypatch.setattr(install_lifecycle,'Path',lambda p:root if str(p)=='/proc' else realpath(p))
+    monkeypatch.setattr(install_lifecycle.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout='501\n',returncode=0))
+    monkeypatch.setattr(install_lifecycle,'_BYTE_ORDER',order)
+    assert install_lifecycle._listener_pid(8787,'127.0.0.1')==501
+    monkeypatch.setattr(install_lifecycle,'_BYTE_ORDER','big' if order=='little' else 'little')
+    assert install_lifecycle._listener_pid(8787,'127.0.0.1') is None
+    # A 16-byte tcp6-shaped address is never an IPv4 loopback listener.
+    (process/'net/tcp').write_text('header\n 0: 0000000000000000FFFF00000100007F:2253 00000000:0000 0A 0 0 0 0 0 200\n')
     assert install_lifecycle._listener_pid(8787,'127.0.0.1') is None
 
 
