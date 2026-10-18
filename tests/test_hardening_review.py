@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from megalodon import hardening_review
+from megalodon import hardening_review, provider_containment
 from megalodon.hardening_review import SCHEMA, STATES, listeners, main, review
 
 NOW = '2026-10-18T05:00:00Z'
@@ -29,6 +29,12 @@ def no_execution(monkeypatch):
     for name in ('run', 'Popen', 'call', 'check_call', 'check_output'):
         monkeypatch.setattr(subprocess, name, refuse)
     monkeypatch.setattr(os, 'system', refuse)
+
+
+@pytest.fixture(autouse=True)
+def little_endian_tables(monkeypatch):
+    # row() fixtures write little-endian address words; listeners() decodes through provider_containment.
+    monkeypatch.setattr(provider_containment, '_BYTE_ORDER', 'little')
 
 
 @pytest.fixture
