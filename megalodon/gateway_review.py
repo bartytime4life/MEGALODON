@@ -34,6 +34,9 @@ RTF_UP, RTF_GATEWAY = 0x1, 0x2
 ATF_COM, ATF_PERM = 0x2, 0x4
 _INTERFACE = re.compile(r'[A-Za-z0-9_.:@-]{1,15}')
 _MAC = re.compile(r'[0-9a-f]{2}(?::[0-9a-f]{2}){5}')
+# Plain hex only: int(..., 16) also accepts signs and underscores, which would not round-trip.
+_HEX8 = re.compile(r'[0-9A-Fa-f]{8}')
+_FLAGS = re.compile(r'[0-9A-Fa-f]{1,8}')
 _STAMP = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z')
 _UNUSABLE_MACS = {'00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff'}
 # /proc/net/route prints each network-order address as a host-order number.
@@ -88,10 +91,10 @@ def default_gateways(root='/'):
         fields = line.split()
         if len(fields) < 8 or fields[1] != '00000000' or fields[7] != '00000000':
             continue
+        if not _HEX8.fullmatch(fields[2]) or not _FLAGS.fullmatch(fields[3]) or not fields[6].isdigit():
+            continue
         try:
             flags, metric = int(fields[3], 16), int(fields[6])
-            if len(fields[2]) != 8:
-                continue
             gateway = str(ipaddress.IPv4Address(int(fields[2], 16).to_bytes(4, _BYTE_ORDER)))
         except ValueError:
             continue
