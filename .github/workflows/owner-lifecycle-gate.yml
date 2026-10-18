@@ -179,24 +179,30 @@ jobs:
 
           def other_open_pulls(sha: str):
               # Statuses are per commit: another open PR on this head would share the verdict.
-              others = []
+              others, total = [], 0
+              # Ten full pages still need an empty eleventh page to prove exhaustion.
               for page_number in range(1, 12):
                   page = get_json(
                       f"/repos/{repository}/pulls?state=open&per_page=100&page={page_number}"
                   )
                   if not isinstance(page, list) or len(page) > 100:
                       raise IncompleteState("malformed open pull page")
+                  total += len(page)
+                  if total > 1000:
+                      raise IncompleteState("open pull requests exceed 1000-pull bound")
                   for pull in page:
                       if (
                           not isinstance(pull, dict) or type(pull.get("number")) is not int
                           or not isinstance(pull.get("head"), dict)
+                          or not isinstance(pull["head"].get("sha"), str)
+                          or not re.fullmatch(r"[0-9a-f]{40}", pull["head"]["sha"])
                       ):
                           raise IncompleteState("malformed open pull")
-                      if pull["head"].get("sha") == sha and pull["number"] != pr_number:
+                      if pull["head"]["sha"] == sha and pull["number"] != pr_number:
                           others.append(pull["number"])
                   if len(page) < 100:
                       return others
-              raise IncompleteState("open pull requests exceed 1100-pull bound")
+              raise IncompleteState("open pull requests exceed 1000-pull bound")
 
           def shared_head_hold(sha: str):
               try:

@@ -86,7 +86,8 @@ open PR has the same head, checked before posting and again right after; if one
 appears, the run replaces `success` with `failure`. Its own run also posts
 `failure`. Two open PRs on one head both hold until one closes. Closing does not
 trigger this workflow, so re-run the job on the remaining PR. A complete scan
-covers up to 1,100 open PRs; more is a HOLD.
+covers up to 1,000 open PRs, confirmed by an empty sentinel page; more, or a
+malformed entry, is a HOLD.
 
 Two limits remain. A same-repository `pull_request` run uses the workflow file
 from the pull request itself, so anyone who can push a branch, including an app
