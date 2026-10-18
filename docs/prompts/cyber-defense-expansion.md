@@ -105,11 +105,13 @@ slice. Later slices can deepen it.
    rules over an operator-selected file or directory with fixed limits on
    files, bytes and time. Store the rule ID, file hash and path only.
    Rule text is untrusted input and needs a timeout and a crash boundary.
-4. **Persistence review.** Add read-only fixed checks for common Linux
-   persistence locations: systemd units and timers, cron, `~/.config/autostart`,
-   shell rc files, `ld.so.preload`, `authorized_keys` and new SUID binaries.
-   Compare each run with a stored baseline and flag the drift. Map the findings
-   to ATT&CK T1053, T1543, T1546, T1098 and T1574.
+4. **Persistence review.** *First slice delivered:*
+   `megalodon/persistence_review.py` inventories fixed autostart, systemd,
+   cron, shell-startup, session, SSH and loader-preload locations read-only,
+   and compares them with a private operator-recorded baseline. See
+   `docs/host-security.md`. Next slices: a HUD Setup or host-findings view
+   with an approval-gated "record baseline" action, and new SUID binaries,
+   which need a bounded filesystem walk and an owner decision on scope.
 5. **Process-to-connection correlation.** Link a live connection to its owning
    process (PID, executable path, hash, parent) using fixed `/proc` reads, so
    an unexpected outbound connection names its binary. Store no command-line

@@ -195,6 +195,53 @@ cannot invoke containment, quarantine/delete files, replace a baseline, submit
 reports to a publisher or execute model output. The existing five-minute
 containment workflow still requires its separate operator review and OS action.
 
+## Persistence location review
+
+`python -m megalodon.persistence_review review` inventories a fixed set of
+common Linux persistence locations, and `... baseline` records what is present
+now for later comparison. Both run as the HUD user, read only, and execute
+nothing. This lane is command-line only for now; it has no HUD route.
+
+| Category | Locations | ATT&CK |
+| --- | --- | --- |
+| Autostart | `~/.config/autostart`, `/etc/xdg/autostart` | T1547.013 |
+| systemd units | `~/.config/systemd/user`, `~/.local/share/systemd/user`, `/etc/systemd/system`, `/etc/systemd/user` (one level of `.wants` and drop-in directories) | T1543.002 |
+| cron | `/etc/crontab`, `/etc/cron.d`, `/etc/cron.{hourly,daily,weekly,monthly}` | T1053.003 |
+| Shell startup | `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.bash_logout`, `~/.profile`, `~/.zshrc`, `~/.zprofile`, `/etc/profile`, `/etc/bash.bashrc`, `/etc/profile.d` | T1546.004 |
+| Session scripts | `~/.xprofile`, `~/.xsessionrc`, `/etc/rc.local` | T1037.004 |
+| SSH | `~/.ssh/authorized_keys`, `~/.ssh/authorized_keys2`, `~/.ssh/rc` | T1098.004 |
+| Loader preload | `/etc/ld.so.preload` | T1574.006 |
+
+Locations are code constants, never operator or browser input. Each regular
+file is opened without following a final symlink and without blocking on a
+FIFO or device, and is hashed over at most its first 256 KiB. A symlink records
+its target without being followed. Directories list at most 128 entries.
+Desktop `Exec` and systemd `ExecStart*` lines keep only the executable and an
+argument count, because arguments can carry tokens or passwords.
+`authorized_keys` keeps each key's type and `ssh-keygen`-style SHA-256
+fingerprint; key comments and options are dropped.
+
+Review findings are `ADDED`, `CHANGED` and `REMOVED` against the baseline, plus
+three checks that need no baseline: `PRELOAD_PRESENT` (a non-empty loader
+preload list), `WORLD_WRITABLE` (a startup file any account can change) and
+`UNEXPECTED_OWNER` (owned by neither root nor this account). Each finding
+carries `action_status: not_attempted`, and the result carries
+`action_authority: none`. Package updates and the operator's own edits also
+add and change these files, so a finding is a reason to look, not proof of
+compromise.
+
+The baseline is a private `0600` file at
+`~/.local/share/megalodon/support/persistence-review/baseline.json`, read and
+written through the same private-file checks as the host security files. It
+records `trust: observed_not_known_clean`. A tampered, broadly readable or
+symlinked baseline fails closed. Recording a new baseline replaces the old one,
+so archive a baseline you want to keep first.
+
+Coverage limits: user crontabs in the system spool, root-only files, other
+accounts' homes, and in-memory or kernel persistence are not reviewed. Package
+unit files under `/usr/lib/systemd` belong to the AIDE and package-manager
+lanes, not to this review.
+
 ## Placement, compatibility and rollback
 
 Implementation stays in the existing `megalodon/` package; behavior tests stay
