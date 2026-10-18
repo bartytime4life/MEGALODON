@@ -203,6 +203,8 @@ class SupportConfiguration:
         self.sensors = SupportSensors(self.home)
         self.host_security = HostSecurity(self.home)
         self._hardening, self._hardening_at = None, None
+        # One review per TTL window, even when several HUD requests arrive together.
+        self._hardening_lock = Lock()
         self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
@@ -310,14 +312,15 @@ class SupportConfiguration:
 
     def _hardening_snapshot(self):
         """Read-only posture checks, run at most once per HARDENING_TTL seconds."""
-        moment = time.monotonic()
-        if self._hardening_at is None or moment - self._hardening_at >= HARDENING_TTL:
-            try:
-                value = hardening_review.review()
-            except (OSError, ValueError, TypeError, KeyError, RecursionError):
-                value = dict(schema=hardening_review.SCHEMA, state='unavailable', checks=[], action_authority='none')
-            self._hardening, self._hardening_at = value, moment
-        return deepcopy(self._hardening)
+        with self._hardening_lock:
+            moment = time.monotonic()
+            if self._hardening_at is None or moment - self._hardening_at >= HARDENING_TTL:
+                try:
+                    value = hardening_review.review()
+                except (OSError, ValueError, TypeError, KeyError, RecursionError):
+                    value = dict(schema=hardening_review.SCHEMA, state='unavailable', checks=[], action_authority='none')
+                self._hardening, self._hardening_at = value, moment
+            return deepcopy(self._hardening)
 
     def snapshot(self, include_token=False):
         hardening = self._hardening_snapshot()

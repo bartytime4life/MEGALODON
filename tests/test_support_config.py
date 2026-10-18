@@ -688,3 +688,20 @@ def test_snapshot_carries_cached_read_only_hardening_review(manager, monkeypatch
     clock[0] += config.HARDENING_TTL
     value = manager.snapshot()['hardening']
     assert value['state'] == 'unavailable' and value['action_authority'] == 'none' and value['checks'] == []
+
+
+def test_concurrent_snapshots_share_one_hardening_review(manager, monkeypatch):
+    import time
+    from megalodon import hardening_review
+    calls = []
+    def slow_review():
+        calls.append(1)
+        time.sleep(0.2)  # long enough for an unserialized second caller to start its own review
+        return dict(schema=hardening_review.SCHEMA, reviewed_at='2026-10-18T06:30:00Z', checks=[], summary={}, action_authority='none')
+    monkeypatch.setattr(hardening_review, 'review', slow_review)
+    threads = [Thread(target=manager._hardening_snapshot) for _ in range(3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(10)
+    assert len(calls) == 1

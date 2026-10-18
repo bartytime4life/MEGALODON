@@ -30,7 +30,7 @@ function renderHardening(panel, payload) {
   if(!payload||payload.schema!=='megalodon-hardening-review-v1'||payload.action_authority!=='none'){
     panel.replaceChildren(node('p','Hardening posture is unavailable.'));return;
   }
-  if(payload.state==='unavailable'||!stamp(payload.reviewed_at)||!Array.isArray(payload.checks)||payload.checks.length>32||!payload.checks.every(valid)){
+  if(payload.state!==undefined||!stamp(payload.reviewed_at)||!Array.isArray(payload.checks)||payload.checks.length>32||!payload.checks.every(valid)){
     panel.replaceChildren(node('p','Hardening posture could not be read on this PC.'));return;
   }
   const order=['fail','review','unknown','pass','not_applicable'];

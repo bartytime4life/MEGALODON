@@ -15,7 +15,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  const hostile=JSON.parse(JSON.stringify(payload));hostile.checks[0].observed='<img src=x onerror=alert(1)>';
  assert.match(text(render(hostile)),/<img src=x/);
  // Forged authority, unknown states, bad shapes and unavailable reviews never render checks.
- for(const bad of [null,{...payload,action_authority:'apply'},{...payload,schema:'x'},{...payload,state:'unavailable'},
+ for(const bad of [null,{...payload,action_authority:'apply'},{...payload,schema:'x'},{...payload,state:'unavailable'},{...payload,state:'running'},
    {...payload,checks:[{...payload.checks[0],state:'fixed'}]},{...payload,checks:[{...payload.checks[0],action_status:'applied'}]},
    {...payload,checks:[{...payload.checks[0],mitigation:'T1059'}]},{...payload,checks:Array(33).fill(payload.checks[0])},{...payload,reviewed_at:'yesterday'}]){
    const out=text(render(bad));assert.match(out,/unavailable|could not be read/);assert.doesNotMatch(out,/Suggested remediation/);
