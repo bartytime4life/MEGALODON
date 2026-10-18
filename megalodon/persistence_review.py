@@ -172,10 +172,14 @@ def _names(path):
 
 
 def inventory(home=None, root='/'):
-    """Return the bounded inventory, the gaps that limit it, and whether it stopped early."""
+    """Return the bounded inventory, its gaps, and coverage.
+
+    coverage['incomplete'] lists every path that was not fully enumerated, so
+    a baseline entry under it is unconfirmed rather than removed.
+    """
     home = Path(home or Path.home())
     base = Path(root)
-    items, gaps = [], []
+    items, gaps, incomplete = [], [], []
     def take(path, category, technique, kind):
         # The item bound also bounds file reads, so check it before each one.
         if len(items) >= MAX_ITEMS:
@@ -188,10 +192,13 @@ def inventory(home=None, root='/'):
         names, total = _names(path)
         if total > MAX_DIR_ENTRIES:
             gaps.append(f'{label} has {total} entries; only the first {MAX_DIR_ENTRIES} were reviewed.')
+            incomplete.append(str(path))
         return names
+    def resolve(location):
+        return home/location[2:] if location.startswith('~/') else base/location.lstrip('/')
     stopped = False
-    for category, technique, location, kind in LOCATIONS:
-        path = home/location[2:] if location.startswith('~/') else base/location.lstrip('/')
+    for position, (category, technique, location, kind) in enumerate(LOCATIONS):
+        path = resolve(location)
         if kind != 'dir':
             stopped = not take(path, category, technique, kind)
         else:
@@ -203,7 +210,7 @@ def inventory(home=None, root='/'):
                 stopped = not take(path, category, technique, 'file')
                 names = []
             except OSError:
-                gaps.append(f'{location} could not be listed.'); continue
+                gaps.append(f'{location} could not be listed.'); incomplete.append(str(path)); continue
             for name in names:
                 # Unit drop-in and .wants directories are listed one level deep.
                 child = path/name
@@ -211,7 +218,7 @@ def inventory(home=None, root='/'):
                     try:
                         nested = listed(child, f'{location}/{name}')
                     except OSError:
-                        gaps.append(f'{location}/{name} could not be listed.'); continue
+                        gaps.append(f'{location}/{name} could not be listed.'); incomplete.append(str(child)); continue
                     paths = [child/n for n in nested if not (child/n).is_dir() or (child/n).is_symlink()]
                 else:
                     paths = [child]
@@ -219,18 +226,40 @@ def inventory(home=None, root='/'):
                     stopped = True
                     break
         if stopped:
+            # This location and every later one are unconfirmed, not empty.
+            incomplete.extend(str(resolve(row[2])) for row in LOCATIONS[position:])
             break
     if stopped:
         gaps.insert(0, f'Review stopped at {MAX_ITEMS} items; later locations were not reviewed.')
     gaps.append('User crontabs in the system spool need root to read and were not reviewed.')
-    return items, gaps, stopped
+    return items, gaps, dict(stopped=stopped, incomplete=sorted(set(incomplete)))
+
+
+def _covered(path, incomplete):
+    return any(path == prefix or path.startswith(prefix+'/') for prefix in incomplete)
+
+
+def _bounded(gaps):
+    """Deduplicate gaps and disclose, rather than drop, any beyond MAX_GAPS."""
+    gaps = list(dict.fromkeys(gaps))
+    if len(gaps) <= MAX_GAPS:
+        return gaps, len(gaps)
+    return gaps[:MAX_GAPS-1]+[f'{len(gaps)-MAX_GAPS+1} more coverage gaps were not listed.'], len(gaps)
+
+
+IDENTITY = ('state', 'sha256', 'bytes', 'mode', 'uid', 'target', 'keys')
 
 
 def _identity(row):
-    return {k: row.get(k) for k in ('state', 'sha256', 'mode', 'uid', 'target', 'keys')}
+    # The hash covers at most MAX_READ bytes; a truncated file also compares
+    # its modification time so a change past the prefix is not missed.
+    value = {k: row.get(k) for k in IDENTITY}
+    if row.get('truncated'):
+        value['modified_at'] = row.get('modified_at')
+    return value
 
 
-def compare(items, baseline, *, uid=None):
+def compare(items, baseline, *, uid=None, incomplete=()):
     """Return bounded review findings and the uncapped total; never an action or verdict."""
     uid = os.getuid() if uid is None else uid
     findings = []
@@ -257,9 +286,12 @@ def compare(items, baseline, *, uid=None):
         add('ADDED', now[path], 'Present now but not in the recorded baseline.')
     for path in sorted(before.keys() & now.keys()):
         if _identity(before[path]) != _identity(now[path]):
-            changed = [k for k in ('state', 'sha256', 'mode', 'uid', 'target', 'keys') if before[path].get(k) != now[path].get(k)]
+            old, new = _identity(before[path]), _identity(now[path])
+            changed = [k for k in dict.fromkeys([*old, *new]) if old.get(k) != new.get(k)]
             add('CHANGED', now[path], 'Changed since the recorded baseline: '+', '.join(changed)+'.')
     for path in sorted(before.keys() - now.keys()):
+        if _covered(path, incomplete):
+            continue
         add('REMOVED', before[path], 'In the recorded baseline but no longer present.')
     return findings, total
 
@@ -286,25 +318,34 @@ class PersistenceReview:
 
     def record_baseline(self):
         from .host_security import write
-        items, gaps, stopped = inventory(self.home, self.root)
+        items, gaps, coverage = inventory(self.home, self.root)
         write(self.state/'baseline.json', json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
                                                      sort_keys=True, separators=(',', ':')).encode())
-        return dict(schema=SCHEMA, state='baseline_recorded', items=len(items), gaps=gaps, trust=TRUST,
-                    inventory_truncated=stopped,
+        gaps, gap_total = _bounded(gaps)
+        return dict(schema=SCHEMA, state='baseline_recorded', items=len(items), gaps=gaps, gaps_total=gap_total, trust=TRUST,
+                    inventory_truncated=coverage['stopped'],
                     message='Baseline recorded from what is present now. It is not a known-clean state.')
 
     def review(self):
         baseline = self._baseline()
-        items, gaps, stopped = inventory(self.home, self.root)
-        findings, total = compare(items, baseline)
+        items, gaps, coverage = inventory(self.home, self.root)
+        findings, total = compare(items, baseline, incomplete=coverage['incomplete'])
+        first = []
         if total > len(findings):
-            gaps.insert(0, f'{total} findings were found; only the first {len(findings)} are listed.')
+            first.append(f'{total} findings were found; only the first {len(findings)} are listed.')
         if baseline is None:
-            gaps.append('No baseline is recorded, so additions, changes and removals cannot be reported.')
+            first.append('No baseline is recorded, so additions, changes and removals cannot be reported.')
+        else:
+            present = {row['path'] for row in items}
+            unconfirmed = sum(1 for row in baseline['items'] if row['path'] not in present and _covered(row['path'], coverage['incomplete']))
+            if unconfirmed:
+                first.append(f'{unconfirmed} baseline paths are in locations that were not fully reviewed; they are not reported as removed.')
+        gaps, gap_total = _bounded(first+gaps)
         return dict(schema=SCHEMA, reviewed_at=self.now(), baseline_at=baseline and baseline['created_at'],
                     trust=TRUST, items=items, findings=findings, findings_total=total,
-                    findings_truncated=total > len(findings), inventory_truncated=stopped,
-                    gaps=list(dict.fromkeys(gaps))[:MAX_GAPS], action_authority='none',
+                    findings_truncated=total > len(findings), inventory_truncated=coverage['stopped'],
+                    incomplete_locations=coverage['incomplete'], gaps=gaps, gaps_total=gap_total,
+                    gaps_truncated=gap_total > len(gaps), action_authority='none',
                     limitations=['Findings describe observed files, not intent or compromise.',
                                  'Root-only locations, other accounts and in-memory persistence are not reviewed.',
                                  'Package updates and your own edits also add and change these files.'])

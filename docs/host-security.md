@@ -232,7 +232,15 @@ preload list), `WORLD_WRITABLE` (a startup file any account can change) and
 carries `action_status: not_attempted`, and the result carries
 `action_authority: none`. At most 64 findings are listed; `findings_total`
 counts all of them, and `findings_truncated` plus the first gap disclose any
-that were not listed. Package updates and the operator's own edits also
+that were not listed.
+`REMOVED` is reported only for locations that were fully enumerated. A path
+under a truncated, unlistable or never-reached location is listed in
+`incomplete_locations`, and the gaps count such baseline entries as
+unconfirmed instead of removed. Change identity compares state, SHA-256,
+size, mode, owner, symlink target and SSH key fingerprints; for a file larger
+than the 256 KiB hashed prefix it also compares the modification time. At most
+32 gaps are listed; `gaps_total` and `gaps_truncated` report any beyond that,
+and the missing-baseline and truncation notices always come first. Package updates and the operator's own edits also
 add and change these files, so a finding is a reason to look, not proof of
 compromise.
 
