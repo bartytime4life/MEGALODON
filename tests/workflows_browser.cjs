@@ -11,7 +11,7 @@ process.stdin.on('end',async()=>{
  const clock=class extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};
  const context={document,Date:clock,localHudLaunch:{},window:{},Intl,TextEncoder,TextDecoder,Uint8Array,AbortController,byId:get,textNode:text,
   setupState:{readiness:null},workflowToolIds:['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'],appsPresenceFreshnessNote:()=> 'Old startup check.',toolPresenceText:()=> 'Not checked',heartbeatLight:()=>text('i',''),heartbeatDetail:()=>text('span',''),installControl:()=>text('span',''),MegalodonControls:{mount(){}},
-  IntersectionObserver:class{constructor(fn){intersection=fn;}observe(){}},MutationObserver:class{constructor(fn){mutation=fn;}observe(){}},
+  IntersectionObserver:class{constructor(fn){intersection=fn;}observe(target){assert.equal(target,get('workspace-interfaces'),'the visible overview must load even when tool cards are below the fold');}},MutationObserver:class{constructor(fn){mutation=fn;}observe(){}},
   setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,options)=>{requests.push({path,options});if(fail)throw Error('PRIVATE_BACKEND_DIAGNOSTIC');return {ok:true,headers:{get:()=>large?'65537':null},text:async()=>JSON.stringify(payload)};}};
  get('integrations-status-filter').value='ALL';get('integrations-presence-filter').value='ALL';get('integrations-platform').value='linux';
  vm.createContext(context);vm.runInContext(code,context);await settle();assert.equal(requests.length,0,'offscreen tool list does not poll');

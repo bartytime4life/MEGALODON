@@ -173,7 +173,7 @@ WORKFLOWS_JS = r'''
   byId('workflows-configure').addEventListener('click',()=>{if(window.megalodonSupportConfiguration)window.megalodonSupportConfiguration.open();});
   document.addEventListener('visibilitychange',sync);
   if(typeof MutationObserver!=='undefined'&&workspace)new MutationObserver(sync).observe(workspace,{attributes:true,attributeFilter:['hidden']});
-  if(typeof IntersectionObserver!=='undefined')new IntersectionObserver(entries=>{view.visible=entries.some(entry=>entry.isIntersecting);sync();},{root:byId('workspace-content'),rootMargin:'80px'}).observe(byId('integrations-cards'));
+  if(typeof IntersectionObserver!=='undefined')new IntersectionObserver(entries=>{view.visible=entries.some(entry=>entry.isIntersecting);sync();},{root:byId('workspace-content'),rootMargin:'80px'}).observe(workspace||byId('integrations-cards'));
   renderIntegrationMap();if(typeof IntersectionObserver==='undefined')read();
 })();
 '''

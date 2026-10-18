@@ -9,7 +9,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
     from test_dashboard_workflows_ui import workflow_fixture
 
     context = await browser.new_context(
-        viewport={"width": 1440, "height": 1000}, reduced_motion="reduce",
+        viewport={"width": 320, "height": 812}, reduced_motion="reduce",
         service_workers="block")
     unavailable = False
     requests, errors, violations = [], [], []
@@ -47,6 +47,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
         await expect(page.locator("#workflows-count-ALL")).to_have_text("10")
         await expect(page.locator("#workflows-count-attention")).to_have_text("2")
         await expect(page.locator("#workflows-count-saved_result")).to_have_text("3")
+        passed("native Sensors overview loads on a cold 320px view before scrolling to cards")
         await page.locator("#workflows-show-attention").click()
         await expect(page.locator("#integrations-cards .workflow-card")).to_have_count(2)
         await page.locator("#workflows-show-saved_result").focus()
