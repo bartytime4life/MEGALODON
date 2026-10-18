@@ -457,8 +457,13 @@ Each listed program's executable is hashed with SHA-256 by opening
 `/proc/<pid>/exe`, so a deleted or `memfd:` executable is hashed as it runs.
 A hash is remembered by file identity (device, inode, size, modification and
 change time) for up to 512 files, so an unchanged executable is read once. Files over
-256 MiB are `too_large`, and one review reads at most 512 MiB; programs beyond
-that are `deferred`, named in a gap, and hashed by a later review. A file whose
+256 MiB are `too_large`, and one review reads at most 512 MiB for at most 20
+seconds, in one separate thread, so a read blocked on a stalled network or FUSE
+mount cannot hold the review; programs beyond either limit are `deferred`,
+named in a gap, and hashed by a later review. While a blocked read has not
+finished, no new hashing starts. The path is read before and after the file
+identity is taken, so a process that calls `exec` in between is dropped rather
+than paired with the wrong file. A file whose
 size, modification or change time differs after it is read, or that is no
 longer the file seen during the scan (the process called `exec`, or its PID was
 reused), is `changed`, and one that cannot be opened is

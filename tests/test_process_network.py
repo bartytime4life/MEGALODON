@@ -239,8 +239,9 @@ def hashed_host(tmp_path, content=b'\x7fELF fake program'):
 
 
 @pytest.fixture(autouse=True)
-def fresh_hash_cache():
+def fresh_hash_cache(monkeypatch):
     process_network._hashes.clear()
+    monkeypatch.setattr(process_network, '_hasher', None)
     yield
     process_network._hashes.clear()
 
@@ -382,3 +383,40 @@ def test_bytes_read_before_a_failure_count_against_the_budget(tmp_path, monkeypa
     rows = {r['executable']: r for r in review(tmp_path, uid=UID, now=lambda: NOW)['programs']}
     assert rows[str(second)]['hash_status'] == 'unreadable'
     assert rows[str(first)]['hash_status'] == 'deferred'  # the failed read's 100 bytes were charged
+
+
+def test_an_exec_between_reading_the_path_and_the_stat_drops_the_row(tmp_path, monkeypatch):
+    hashed_host(tmp_path)
+    real_readlink, calls = os.readlink, []
+    def readlink(path, *a, **k):
+        if str(path).endswith('/500/exe'):
+            calls.append(1)
+            if len(calls) == 2:  # the re-read after the stat sees the new program
+                return '/usr/bin/other'
+        return real_readlink(path, *a, **k)
+    monkeypatch.setattr(process_network.os, 'readlink', readlink)
+    result = review(tmp_path, uid=UID, now=lambda: NOW)
+    # The old path is never paired with the new file's identity.
+    assert result['programs'] == [] and any('exited or could not be read' in gap for gap in result['gaps'])
+
+
+def test_a_stalled_read_is_bounded_by_time_and_never_stacks_threads(tmp_path, monkeypatch):
+    from threading import Event
+    import threading
+    hashed_host(tmp_path)
+    release = Event()
+    original = process_network._executable_hash
+    def stalled(proc, budget, identity):
+        assert release.wait(10)  # a read blocked on a stalled network or FUSE mount
+        return original(proc, budget, identity)
+    monkeypatch.setattr(process_network, '_executable_hash', stalled)
+    monkeypatch.setattr(process_network, 'MAX_HASH_SECONDS', 0.2)
+    first = review(tmp_path, uid=UID, now=lambda: NOW)
+    assert first['programs'][0]['hash_status'] == 'deferred'
+    assert any('hashing limit was reached' in gap for gap in first['gaps'])
+    second = review(tmp_path, uid=UID, now=lambda: NOW)
+    assert any('an earlier executable read has not finished' in gap for gap in second['gaps'])
+    assert sum(1 for t in threading.enumerate() if t.name == 'megalodon-executable-hash') == 1
+    release.set()
+    process_network._hasher.join(10)
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['hash_status'] == 'hashed'

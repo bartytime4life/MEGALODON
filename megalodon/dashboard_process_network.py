@@ -66,7 +66,7 @@ function renderProcessNetwork(panel, payload) {
     item.append(node('summary',(r.flags.length?'Review · ':'')+`${r.program} · ${r.executable}`));
     const facts=document.createElement('dl');
     const remotes=r.remotes.length?r.remotes.join(', ')+(r.remotes_total>r.remotes.length?` and ${r.remotes_total-r.remotes.length} more`:''):'none';
-    const hashes={hashed:r.sha256,too_large:'not hashed: larger than __HASH_MIB__ MiB',unreadable:'not hashed: the file could not be read',deferred:'not hashed yet: this review reached its read limit',changed:'not hashed: the file changed while it was read'};
+    const hashes={hashed:r.sha256,too_large:'not hashed: larger than __HASH_MIB__ MiB',unreadable:'not hashed: the file could not be read',deferred:'not hashed yet: this review reached its read or time limit',changed:'not hashed: the file changed while it was read'};
     for(const [label,value] of [['Executable',r.executable],['SHA-256',hashes[r.hash_status]],['Parent process',r.parent],['Processes',String(r.processes)],
       ['Sockets',`${r.established} connected · ${r.listening} listening · ${r.other} other`],['Remote peers',remotes]])facts.append(node('dt',label),node('dd',value));
     for(const flag of r.flags)facts.append(node('dt',`${labels[flag]} · ATT&CK ${rules[flag][0]}`),node('dd',rules[flag][1]));

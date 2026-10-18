@@ -23,7 +23,7 @@ from pathlib import Path
 import re
 import stat
 import sys
-from threading import Lock
+from threading import Lock, Thread
 
 SCHEMA = 'megalodon-process-network-v1'
 MAX_TABLE_READ = 16 * 1024 * 1024
@@ -43,6 +43,8 @@ MAX_GAPS = 8
 MAX_HASH_FILE = 256 * 1024 * 1024
 MAX_HASH_REVIEW = 512 * 1024 * 1024
 MAX_HASH_CACHE = 512
+# A stalled network or FUSE file can block a read indefinitely, so hashing has a wall-clock limit per review.
+MAX_HASH_SECONDS = 20
 HASH_STATUSES = ('hashed', 'too_large', 'unreadable', 'deferred', 'changed')
 # (protocol, family, table name, address bytes)
 TABLES = (('tcp', 'ipv4', 'tcp', 4), ('tcp', 'ipv6', 'tcp6', 16),
@@ -229,6 +231,48 @@ def _executable_hash(proc, budget, identity):
         os.close(fd)
 
 
+# The thread hashing the last review's executables, if one is still blocked on a read.
+_hasher = None
+
+
+def _hash_rows(jobs):
+    """Hash each job's executable within the read budget and MAX_HASH_SECONDS.
+
+    Returns None, 'time' when the limit stopped hashing, or 'busy' when an
+    earlier review's read is still blocked; at most one hashing thread runs.
+    Rows not reached are `deferred`.
+    """
+    global _hasher
+    for row, _, _ in jobs:
+        row['sha256'], row['hash_status'] = None, 'deferred'
+    if not jobs:
+        return None
+    with _hashes_lock:
+        if _hasher is not None and _hasher.is_alive():
+            return 'busy'
+    results, done = {}, Lock()
+    def work():
+        budget = MAX_HASH_REVIEW
+        for index, (_, proc, identity) in enumerate(jobs):
+            value = _executable_hash(proc, budget, identity)
+            with done:
+                results[index] = value
+            budget -= value[2]
+    thread = Thread(target=work, daemon=True, name='megalodon-executable-hash')
+    with _hashes_lock:
+        _hasher = thread
+    thread.start()
+    thread.join(MAX_HASH_SECONDS)
+    with done:
+        finished = dict(results)
+    for index, (row, _, _) in enumerate(jobs):
+        if index in finished:
+            row['sha256'], row['hash_status'] = finished[index][:2]
+    if thread.is_alive():
+        return 'time'
+    return 'budget' if any(row['hash_status'] == 'deferred' for row, _, _ in jobs) else None
+
+
 def _parent(proc):
     try:
         text = (proc/'stat').read_text('utf-8', 'replace')
@@ -326,6 +370,15 @@ def review(root='/', *, uid=None, now=_now):
             identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
         except OSError:
             identity = None
+        # Read the path again: an exec between the first readlink and the stat would otherwise pair the
+        # old path with the new file. Later execs are caught when the file is opened for hashing.
+        try:
+            if os.readlink(proc/'exe') != executable:
+                vanished += 1
+                continue
+        except OSError:
+            vanished += 1
+            continue
         group = (path, deleted, identity)
         row = programs.get(group)
         if row is None:
@@ -359,12 +412,13 @@ def review(root='/', *, uid=None, now=_now):
     rows.sort(key=lambda r: (not r['flags'], -(r['established'] + r['listening'] + r['other']), r['executable']))
     shown = rows[:MAX_PROGRAMS]
     # Only listed programs are hashed, within one review's read budget; later reviews continue from the cache.
-    budget, listed = MAX_HASH_REVIEW, {id(row) for row in shown}
+    listed = {id(row) for row in shown}
+    jobs = []
     for row in rows:
         proc, identity = row.pop('_proc'), row.pop('_identity')
         if id(row) in listed:
-            row['sha256'], row['hash_status'], read = _executable_hash(proc, budget, identity)
-            budget -= read
+            jobs.append((row, proc, identity))
+    hash_limit = _hash_rows(jobs)
     deferred = sum(1 for row in shown if row['hash_status'] == 'deferred')
     tables_complete = all(complete for _, complete in tables.values()) and not unread_namespaces
     gaps = []
@@ -381,7 +435,9 @@ def review(root='/', *, uid=None, now=_now):
     if vanished:
         gaps.append(f'{vanished} processes of this account exited or could not be read during the scan.')
     if deferred:
-        gaps.append(f'{deferred} executables were not hashed in this review ({MAX_HASH_REVIEW // 1048576} MiB read limit); a later review continues.')
+        reason = {'busy': 'an earlier executable read has not finished',
+                  'time': f'the {MAX_HASH_SECONDS} s hashing limit was reached'}.get(hash_limit, f'the {MAX_HASH_REVIEW // 1048576} MiB read limit was reached')
+        gaps.append(f'{deferred} executables were not hashed in this review ({reason}); a later review continues.')
     gaps.append('Processes of other accounts and of root are not visible without privilege, and loopback-only sockets are left out.')
     # Each flag is a review item: its ATT&CK technique and meaning are fixed in RULES, not repeated per row.
     return dict(schema=SCHEMA, reviewed_at=now(), programs=shown, programs_total=len(rows),
