@@ -71,7 +71,8 @@ async def exercise_workflow_overview(browser, port, password, passed):
         unavailable = True
         await page.locator("#workspace-tab-interfaces").click()
         await page.locator("#workflows-refresh").click()
-        await expect(page.locator("#workflows-count-saved_result")).to_have_text("—")
+        for key in ("ALL", "attention", "collecting", "saved_result"):
+            await expect(page.locator("#workflows-count-" + key)).to_have_text("—")
         await expect(page.locator("#workflows-show-saved_result")).to_be_disabled()
         await expect(page.locator("#integrations-cards .workflow-metrics")).to_have_count(0)
         await expect(page.locator("#workflows-overview-note")).to_contain_text("unavailable")
