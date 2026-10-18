@@ -190,9 +190,13 @@ slice. Later slices can deepen it.
     operator notes and actions into a signed local report in Markdown or PDF,
     plus ECS/OCSF records through `siem_export.py`. Deliver nothing over the
     network.
-20. **Encrypted-traffic metadata.** Import JA3/JA4, SNI and certificate issuer
-    and expiry fields from Suricata or Zeek output to flag self-signed,
-    expired or rare-fingerprint TLS sessions, without decrypting anything.
+20. **Encrypted-traffic metadata.** *First slice delivered:*
+    `megalodon/tls_signals.py` flags legacy protocols, expired or
+    not-yet-valid certificates and self-signed certificates from the Suricata
+    TLS metadata the HUD already reads, shown as review-only records in the
+    endpoint inspector. See `docs/visual-operations-defense.md`. Next slices:
+    JA3/JA4 fingerprint rarity against a learned local baseline, and
+    certificate checks from Zeek `ssl.log`/`x509.log`.
 
 ### What every slice must deliver
 
