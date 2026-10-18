@@ -26,6 +26,12 @@ def passive(monkeypatch):
     monkeypatch.setattr(os, 'system', refuse)
 
 
+@pytest.fixture(autouse=True)
+def little_endian_tables(monkeypatch):
+    # hexip writes little-endian route words; pin the decoder to match on any runner.
+    monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')
+
+
 def hexip(address):
     return bytes(int(part) for part in address.split('.'))[::-1].hex().upper()
 

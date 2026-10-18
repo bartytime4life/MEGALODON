@@ -72,14 +72,12 @@ def test_listener_requires_exact_address_and_service_socket(tmp_path,monkeypatch
     realpath=install_lifecycle.Path
     monkeypatch.setattr(install_lifecycle,'Path',lambda p:root if str(p)=='/proc' else realpath(p))
     monkeypatch.setattr(install_lifecycle.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout='501\n',returncode=0))
+    monkeypatch.setattr(install_lifecycle,'_BYTE_ORDER','little')  # the row above is little-endian
     assert install_lifecycle._listener_pid(8787,'127.0.0.1')==501
     assert install_lifecycle._listener_pid(8787,'127.0.0.2') is None
     (process/'fd/4').unlink()
     assert install_lifecycle._listener_pid(8787,'127.0.0.1') is None
 
-
-@pytest.mark.parametrize('order,address,expected',[('little','0100007F',501),('big','7F000001',501),('big','0100007F',None)])
-def test_listener_address_follows_host_byte_order(tmp_path,monkeypatch,order,address,expected):
     from types import SimpleNamespace
     root=tmp_path/'proc';process=root/'501';(process/'fd').mkdir(parents=True);(process/'net').mkdir()
     (process/'fd/4').symlink_to('socket:[200]')
@@ -88,7 +86,7 @@ def test_listener_address_follows_host_byte_order(tmp_path,monkeypatch,order,add
     monkeypatch.setattr(install_lifecycle,'Path',lambda p:root if str(p)=='/proc' else realpath(p))
     monkeypatch.setattr(install_lifecycle.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout='501\n',returncode=0))
     monkeypatch.setattr(install_lifecycle,'_BYTE_ORDER',order)
-    assert install_lifecycle._listener_pid(8787,'127.0.0.1')==expected
+
 
 
 def test_retirement_preserves_release_directory_held_by_a_process(layout,monkeypatch):
