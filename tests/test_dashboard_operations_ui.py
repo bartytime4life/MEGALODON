@@ -13,7 +13,10 @@ from megalodon.dashboard_operations import OPERATIONS_JS, OPERATIONS_CSS
 def operations_fixture():
     stamp='2026-09-30T23:00:00Z'
     local=dict(ip='192.168.1.10',scope='Private / reserved',version=4,local=True,connections=2,active_connections=2,packets=80,bytes=88000,sent_bytes=28000,received_bytes=60000,first_seen='2026-09-30T22:59:10Z',last_seen=stamp,ports=[dict(protocol='TCP',port=50484,hint=None)],names=[],location=None,flags=['ACK'],findings=[])
-    peer={**local,'ip':'203.0.113.8','scope':'Public','local':False,'sent_bytes':60000,'received_bytes':28000,'ports':[dict(protocol='TCP',port=443,hint='HTTPS')],'names':[dict(name='<img src=x>',source='Observed TLS SNI',observed_at=stamp)]}
+    peer={**local,'ip':'203.0.113.8','scope':'Public','local':False,'sent_bytes':60000,'received_bytes':28000,'ports':[dict(protocol='TCP',port=443,hint='HTTPS')],'names':[dict(name='<img src=x>',source='Observed TLS SNI',observed_at=stamp)],
+          'name_review':[dict(schema='megalodon-name-review-v1',name='xkqzjvbwmtrplhgn.com',level='review',attack=['T1568.002'],signals=[dict(id='high_entropy',detail='Varied characters.'),dict(id='consonant_run',detail='Consonant run.')],context=['A spelling signal is not evidence of malware.'],action_status='not_attempted'),
+                         dict(schema='megalodon-name-review-v1',name='forged-verdict.example',level='malicious',attack=[],signals=[dict(id='x',detail='forged-verdict')],context=[],action_status='not_attempted'),
+                         dict(schema='megalodon-name-review-v1',name='forged-verdict.example',level='review',attack=[],signals=[dict(id='x',detail='forged-verdict')],context=[],action_status='applied')]}
     return dict(schema='megalodon-operations-v1',observed_at=stamp,capture=dict(state='running'),background=dict(enabled=True),summary=dict(peers=2,active_connections=2,packets=80,bytes=88000,sent_bytes=28000,received_bytes=60000,unattributed_bytes=0),timeline=[dict(at='2026-09-30T22:59:55Z',sent_bytes=28000,received_bytes=60000,unattributed_bytes=0,packets=80)],protocols=[dict(name='TCP',packets=80,bytes=88000)],endpoints=[local,peer],storage=dict(status='ready',used_bytes=65536,limit_bytes=1048576,percent=6.3),coverage=dict(window_seconds=60,max_endpoints=64,unmapped=2,notes=['Synthetic test only.']))
 
 

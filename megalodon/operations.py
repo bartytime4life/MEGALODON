@@ -11,6 +11,7 @@ import stat
 from threading import Lock
 import time
 
+from .domain_signals import MAX_SNAPSHOT_RECORDS, review as name_review
 from .managed_capture import now
 
 PORT_HINTS = {22:'SSH',25:'SMTP',53:'DNS',80:'HTTP',123:'NTP',443:'HTTPS',445:'SMB',
@@ -171,6 +172,11 @@ class Operations:
                                     row['ports'][index]=item
                                     break
             endpoints = sorted(peers.values(),key=lambda r:(not r['local'],-r['bytes']))[:64]
+            budget=MAX_SNAPSHOT_RECORDS
+            for row in endpoints:
+                # Separate from names so defense/AI evidence keeps its fixed inputs.
+                row['name_review']=name_review(row['names'])[:budget]
+                budget-=len(row['name_review'])
             references = dict(schema='megalodon-reference-context-v1', checked_at=now(), state='unavailable', feeds=[])
             host_security = getattr(self.configuration, 'host_security', None)
             if host_security is not None:
@@ -205,7 +211,8 @@ class Operations:
                 coverage=dict(window_seconds=60,max_endpoints=64,unmapped=live['totals']['unmapped'],truncated=live['totals']['truncated'] or len(peers)>64,
                     notes=['Retained observed connections, up to 60 seconds; capture gaps and drops are unknown.',
                            'The timeline uses five-second bins of accepted packet metadata. Endpoint sent/received is relative to that IP.',
-                           'Port names are registry hints, not identified applications. Observed hostnames do not establish ownership or safety.',sensor]))
+                           'Port names are registry hints, not identified applications. Observed hostnames do not establish ownership or safety.',
+                           'Hostname naming signals describe spelling only; generated-looking names are common for cloud and CDN services.',sensor]))
             evidence=getattr(self.configuration,'evidence',None)
             if evidence is not None:
                 result['recording_mode']=evidence.recording_mode

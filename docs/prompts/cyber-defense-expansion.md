@@ -117,15 +117,22 @@ slice. Later slices can deepen it.
 
 #### G: Gateway (network edge and egress defense)
 
-6. **Beaconing detector.** Add a new fixed rule that flags periodic outbound
-   connections, meaning a low jitter in the intervals between connections from
-   one source to one destination. Add it to `detector_registry.py` with
-   thresholds kept in code, synthetic positive and negative fixtures, and a
-   bounded per-pair state.
-7. **DGA and suspicious-domain scoring.** Score DNS query names for entropy,
-   n-gram rarity and label length. Expose the score as a review-only
-   enrichment, and let the existing `DNS_TUNNELING` alert carry it as context.
-   Fixtures cover real benign long domains such as CDN hostnames.
+6. **Beaconing detector.** A review-only `REGULAR_INTERVAL` cadence check
+   already exists in `security_patterns.py` for connection summaries. Extend
+   that check rather than adding a parallel rule: for example, per-destination
+   jitter statistics, a payload-size regularity signal, or HUD presentation.
+   Promote it to a fixed detector in `detector_registry.py` only with
+   thresholds kept in code, synthetic positive and negative fixtures, a bounded
+   per-pair state, and an owner decision to change the three fixed rules.
+7. **DGA and suspicious-domain scoring.** *First slice delivered:*
+   `megalodon/domain_signals.py` scores the hostnames the HUD already observes
+   (DNS answers, TLS SNI, HTTP Host) for spelling signals and shows them as
+   review-only `name_review` records in the endpoint inspector. See
+   `docs/visual-operations-defense.md`. Next slices: n-gram rarity from a
+   pinned offline corpus, and carrying the signal as context on the existing
+   `DNS_TUNNELING` alert. That alert needs a decision first: the core event
+   stores only the DNS query length, so retaining names is a privacy and
+   data-model change.
 8. **Egress policy plan.** Generate a reviewable nftables egress allowlist or
    denylist from observed destinations, with a dry run and a diff against
    current rules. It stays plan-only unless it goes through the existing
