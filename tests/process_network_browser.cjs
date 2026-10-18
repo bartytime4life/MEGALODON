@@ -19,7 +19,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  const first=patch=>({...result,programs:[{...result.programs[0],...patch},...result.programs.slice(1)]});
  for(const bad of [null,{...result,action_authority:'kill'},{...result,action_status:'stopped'},{...result,schema:'x'},{...result,extra:1},
    {...pending,extra:1},first({flags:['KILLED']}),first({flags:['EXECUTABLE_DELETED','EXECUTABLE_DELETED']}),first({pid:42}),first({processes:0}),
-   first({established:0,listening:0,other:0}),first({remotes:['example.com:443']}),first({remotes_total:0}),first({executable:''}),
+   first({established:0,listening:0,other:0}),first({hash_status:'hashed',sha256:null}),first({hash_status:'hashed',sha256:'A'.repeat(64)}),first({hash_status:'skipped'}),first({hash_status:'too_large',sha256:'a'.repeat(64)}),first({remotes:['example.com:443']}),first({remotes_total:0}),first({executable:''}),
    {...result,programs_total:1},{...result,flagged_total:0},{...result,programs:Array(17).fill(result.programs[3])},{...result,scan_complete:'yes'},
    {...result,gaps:Array(7).fill('gap')},{...result,reviewed_at:'yesterday'}]){
    const out=text(render(bad));assert.match(out,/unavailable|could not be read/);assert.doesNotMatch(out,/Review ·|Remote peers/);

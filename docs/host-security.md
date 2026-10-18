@@ -449,7 +449,17 @@ on the network**, carried as `process_network` in the protected
 `/api/support-config` snapshot. The review runs off the request path, at most
 every 15 seconds, and the first request returns `state: pending`, which the
 Setup view re-checks every two seconds. The panel validates the closed schema,
-renders text nodes only and has no buttons. Executables are not hashed yet.
+renders text nodes only and has no buttons.
+
+Each listed program's executable is hashed with SHA-256 by opening
+`/proc/<pid>/exe`, so a deleted or `memfd:` executable is hashed as it runs.
+A hash is remembered by file identity (device, inode, size, modification and
+change time) for up to 512 files, so an unchanged executable is read once. Files over
+256 MiB are `too_large`, and one review reads at most 512 MiB; programs beyond
+that are `deferred`, named in a gap, and hashed by a later review. A file that
+changes while it is read is `changed`, and one that cannot be opened is
+`unreadable`; none of these carry a hash. A hash identifies the file that ran;
+it is not a reputation verdict.
 
 ## Placement, compatibility and rollback
 

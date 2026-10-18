@@ -227,3 +227,64 @@ def test_a_socket_from_another_namespace_is_still_matched(host):
     namespace(host, 720, 3, [row(('10.0.3.2', 41000), ('198.51.100.30', 443), '01', 920)])
     rows = by_exe(review(host, uid=UID, now=lambda: NOW))
     assert rows['/usr/lib/activated']['listening'] == 1 and rows['/usr/lib/activated']['established'] == 1
+
+
+def hashed_host(tmp_path, content=b'\x7fELF fake program'):
+    binary = tmp_path/'bin-store'/'tool'
+    binary.parent.mkdir()
+    binary.write_bytes(content)
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7)])
+    proc(tmp_path, 500, str(binary), [7], comm='tool')
+    return binary
+
+
+@pytest.fixture(autouse=True)
+def fresh_hash_cache():
+    process_network._hashes.clear()
+    yield
+    process_network._hashes.clear()
+
+
+def test_listed_executables_are_hashed_once_per_file_identity(tmp_path, monkeypatch):
+    import hashlib
+    binary = hashed_host(tmp_path)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['hash_status'] == 'hashed' and shown['sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest()
+    hashing = []
+    original = hashlib.sha256
+    monkeypatch.setattr(process_network.hashlib, 'sha256', lambda *a: hashing.append(1) or original(*a))
+    again = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert again['sha256'] == shown['sha256'] and hashing == []  # served from the identity cache, not re-read
+    binary.write_bytes(b'\x7fELF a different program')  # a new identity is hashed again
+    same_size = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['sha256']
+    stamp = binary.stat()
+    binary.write_bytes(b'\x7fELF a sneakier program!')  # same size, modification time set back
+    os.utime(binary, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['sha256'] != same_size
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['sha256'] != shown['sha256']
+
+
+@pytest.mark.parametrize('setting, value, status', [('MAX_HASH_FILE', 4, 'too_large'), ('MAX_HASH_REVIEW', 4, 'deferred')])
+def test_hash_bounds_are_reported(tmp_path, monkeypatch, setting, value, status):
+    hashed_host(tmp_path)
+    monkeypatch.setattr(process_network, setting, value)
+    result = review(tmp_path, uid=UID, now=lambda: NOW)
+    assert result['programs'][0]['hash_status'] == status and result['programs'][0]['sha256'] is None
+    assert any('were not hashed in this review' in gap for gap in result['gaps']) == (status == 'deferred')
+
+
+def test_unreadable_and_changing_executables_are_not_hashed(tmp_path, monkeypatch):
+    binary = hashed_host(tmp_path)
+    original = os.read
+    def growing(fd, n):
+        data = original(fd, n)
+        if data:
+            with open(binary, 'ab') as handle:
+                handle.write(b'more')
+        return data
+    monkeypatch.setattr(os, 'read', growing)
+    assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['hash_status'] == 'changed'
+    monkeypatch.setattr(os, 'read', original)
+    binary.unlink()
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['hash_status'] == 'unreadable' and shown['sha256'] is None
