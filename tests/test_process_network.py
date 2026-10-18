@@ -305,7 +305,7 @@ def test_processes_running_different_files_at_one_path_get_separate_rows(tmp_pat
         return real_stat(new if str(path).endswith('/501/exe') else path, *a, **k)
     monkeypatch.setattr(process_network.os, 'stat', stat)
     monkeypatch.setattr(process_network, '_executable_hash',
-                        lambda proc, budget: (('b' if proc.name == '501' else 'a') * 64, 'hashed', 0))
+                        lambda proc, budget, identity: (('b' if proc.name == '501' else 'a') * 64, 'hashed', 0))
     rows = review(tmp_path, uid=UID, now=lambda: NOW)['programs']
     assert [(r['executable'], r['processes'], r['sha256'][0]) for r in sorted(rows, key=lambda r: r['sha256'])] == [
         (str(old), 1, 'a'), (str(old), 1, 'b')]
@@ -345,3 +345,40 @@ def test_every_coverage_gap_at_once_stays_within_the_bound(host, monkeypatch):
     result = review(host, uid=UID, now=lambda: NOW)
     assert result['programs'][0]['hash_status'] == 'deferred'
     assert len(result['gaps']) == 7 <= process_network.MAX_GAPS, result['gaps']
+
+
+def test_an_executable_replaced_after_the_scan_is_not_hashed(tmp_path, monkeypatch):
+    # The process calls exec (or its PID is reused) between the scan and hashing.
+    binary = hashed_host(tmp_path)
+    other = tmp_path/'bin-store'/'other'
+    other.write_bytes(b'\x7fELF a different program')
+    original = process_network.review.__globals__['_executable_hash']
+    def swapped(proc, budget, identity):
+        (proc/'exe').unlink()
+        os.symlink(str(other), proc/'exe')
+        return original(proc, budget, identity)
+    monkeypatch.setattr(process_network, '_executable_hash', swapped)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['executable'] == str(binary) and shown['hash_status'] == 'changed' and shown['sha256'] is None
+
+
+def test_bytes_read_before_a_failure_count_against_the_budget(tmp_path, monkeypatch):
+    first = hashed_host(tmp_path, b'A' * 100)
+    second = tmp_path/'bin-store'/'second'
+    second.write_bytes(b'B' * 100)
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7),
+                          row(('192.168.1.5', 2), ('203.0.113.9', 443), '01', 8)])
+    proc(tmp_path, 501, str(second), [8], comm='second')
+    original, failing = os.read, second.stat().st_ino  # 'second' sorts, and is hashed, first
+    calls = []
+    def flaky(fd, n):
+        if os.fstat(fd).st_ino == failing:
+            calls.append(1)
+            if len(calls) > 1:
+                raise OSError(5, 'I/O error')
+        return original(fd, n)
+    monkeypatch.setattr(os, 'read', flaky)
+    monkeypatch.setattr(process_network, 'MAX_HASH_REVIEW', 150)
+    rows = {r['executable']: r for r in review(tmp_path, uid=UID, now=lambda: NOW)['programs']}
+    assert rows[str(second)]['hash_status'] == 'unreadable'
+    assert rows[str(first)]['hash_status'] == 'deferred'  # the failed read's 100 bytes were charged

@@ -177,12 +177,17 @@ _hashes = OrderedDict()
 _hashes_lock = Lock()
 
 
-def _executable_hash(proc, budget):
+def _executable_hash(proc, budget, identity):
     """Return (sha256 or None, status, bytes read) for the file behind /proc/<pid>/exe.
 
     The link is opened rather than its path, so a deleted or memfd executable
-    is hashed as it runs. A file that changes while it is read is not hashed.
+    is hashed as it runs. `identity` is the file seen when the process was
+    scanned; a different file now (the process called exec, or its PID was
+    reused) or one that changes while it is read is not hashed.
     """
+    if identity is None:
+        return None, 'unreadable', 0
+    read = 0
     try:
         fd = os.open(proc/'exe', os.O_RDONLY | os.O_NONBLOCK | getattr(os, 'O_CLOEXEC', 0))
     except OSError:
@@ -192,6 +197,8 @@ def _executable_hash(proc, budget):
         if not stat.S_ISREG(info.st_mode):
             return None, 'unreadable', 0
         key = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        if key != identity:
+            return None, 'changed', 0
         with _hashes_lock:
             if key in _hashes:
                 _hashes.move_to_end(key)
@@ -200,7 +207,7 @@ def _executable_hash(proc, budget):
             return None, 'too_large', 0
         if info.st_size > budget:
             return None, 'deferred', 0
-        digest, read = hashlib.sha256(), 0
+        digest = hashlib.sha256()
         while read <= info.st_size:
             chunk = os.read(fd, min(1024 * 1024, info.st_size + 1 - read))
             if not chunk:
@@ -216,7 +223,8 @@ def _executable_hash(proc, budget):
                 _hashes.popitem(last=False)
         return value, 'hashed', read
     except OSError:
-        return None, 'unreadable', 0
+        # Bytes read before a failure still count against the review's budget.
+        return None, 'unreadable', read
     finally:
         os.close(fd)
 
@@ -332,7 +340,7 @@ def review(root='/', *, uid=None, now=_now):
             row = programs[group] = dict(program=_comm(proc/'comm'), executable=_short(path),
                                         parent=_comm(base/str(parent)/'comm') if parent else '?',
                                         processes=0, established=0, listening=0, other=0, remotes=[], remotes_total=0,
-                                        flags=flags, _remotes=set(), _inodes=set(), _proc=proc)
+                                        flags=flags, _remotes=set(), _inodes=set(), _proc=proc, _identity=identity)
         row['processes'] += 1
         # A socket shared by duplicated descriptors or worker processes is counted once.
         for inode, item in held:
@@ -353,9 +361,9 @@ def review(root='/', *, uid=None, now=_now):
     # Only listed programs are hashed, within one review's read budget; later reviews continue from the cache.
     budget, listed = MAX_HASH_REVIEW, {id(row) for row in shown}
     for row in rows:
-        proc = row.pop('_proc')
+        proc, identity = row.pop('_proc'), row.pop('_identity')
         if id(row) in listed:
-            row['sha256'], row['hash_status'], read = _executable_hash(proc, budget)
+            row['sha256'], row['hash_status'], read = _executable_hash(proc, budget, identity)
             budget -= read
     deferred = sum(1 for row in shown if row['hash_status'] == 'deferred')
     tables_complete = all(complete for _, complete in tables.values()) and not unread_namespaces

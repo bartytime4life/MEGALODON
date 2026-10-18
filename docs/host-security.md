@@ -459,7 +459,9 @@ A hash is remembered by file identity (device, inode, size, modification and
 change time) for up to 512 files, so an unchanged executable is read once. Files over
 256 MiB are `too_large`, and one review reads at most 512 MiB; programs beyond
 that are `deferred`, named in a gap, and hashed by a later review. A file whose
-size, modification or change time differs after it is read is `changed`, and one that cannot be opened is
+size, modification or change time differs after it is read, or that is no
+longer the file seen during the scan (the process called `exec`, or its PID was
+reused), is `changed`, and one that cannot be opened is
 `unreadable`; none of these carry a hash. A hash identifies the file that ran;
 it is not a reputation verdict.
 
