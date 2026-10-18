@@ -162,11 +162,13 @@ slice. Later slices can deepen it.
     check, what evidence to keep, which approved action applies), shown in the
     HUD next to each finding. Playbooks can link only to existing approved
     actions.
-15. **Hardening posture checks.** Add read-only, CIS-style checks covering sshd
-    settings, the firewall default policy, unexpected listening sockets,
-    unattended upgrades, and kernel parameters such as `rp_filter`,
-    `tcp_syncookies` and ASLR. Give each check a pass, fail or unknown result
-    with a remediation note and no automatic fix.
+15. **Hardening posture checks.** *First slice delivered:*
+   `megalodon/hardening_review.py` reports read-only pass, fail, review,
+   unknown or not-applicable results for fixed kernel, OpenSSH, APT
+   automatic-update and listening-socket settings, each with an ATT&CK
+   mitigation and a remediation note. See `docs/host-security.md`. Next
+   slices: a HUD view, firewall default-policy checks (which need a
+   privileged read), and non-APT update services.
 
 #### ON: Online network (visibility, intelligence and exposure)
 
