@@ -190,3 +190,13 @@ def test_route_gateways_decode_in_host_byte_order(tmp_path, monkeypatch):
     (tmp_path/'proc/net/route').write_text(ROUTE_HEAD + 'eth0\t00000000\tC0A80101\t0003\t0\t0\t100\t00000000\t0\t0\t0\n')
     monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'big')
     assert default_gateways(root)[0][0]['ip'] == GW  # a big-endian kernel prints network order
+
+
+@pytest.mark.parametrize('gateway, flags, metric', [('-0000001', '0003', '100'), ('0101_8C0', '0003', '100'),
+                                                     ('0101A8C0', '-003', '100'), ('0101A8C0', '0003', '-100')])
+def test_signed_or_non_hex_route_fields_are_skipped(tmp_path, gateway, flags, metric):
+    root = tree(tmp_path, [], [])
+    bad = f'eth1\t00000000\t{gateway}\t{flags}\t0\t0\t{metric}\t00000000\t0\t0\t0\n'
+    (root/'proc/net/route').write_text(ROUTE_HEAD + bad + route('eth0', GW))
+    routes, _ = default_gateways(root)
+    assert [(r['interface'], r['ip']) for r in routes] == [('eth0', GW)]
