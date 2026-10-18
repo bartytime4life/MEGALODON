@@ -825,6 +825,8 @@ def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager,
     assert all(len(json.dumps(text)) <= persistence_review.SUMMARY_TEXT_BYTES
                for text in [*worst['gaps'], *(f[k] for f in worst['findings'] for k in ('path', 'detail'))])
     monkeypatch.setattr(manager, '_persistence_snapshot', lambda: worst)
+    from megalodon import gateway_review
+    monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')  # test_gateway_review.route() is little-endian
     monkeypatch.setattr(manager, '_gateway_snapshot', lambda: worst_gateway(manager.home.parent))
     monkeypatch.setattr(manager, '_process_snapshot', lambda: worst_process(manager.home.parent))
     size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
@@ -848,6 +850,7 @@ def test_snapshot_carries_the_gateway_review_with_session_memory(manager, monkey
     from megalodon import gateway_review
     from test_gateway_review import GW, GW_MAC, OTHER_MAC, arp, route, tree
     from functools import partial
+    monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')  # test_gateway_review.route() is little-endian
     root = tree(tmp_path/'net', [route('eth0', GW)], [arp(GW, GW_MAC)])
     monkeypatch.setattr(gateway_review, 'GatewayReview', partial(gateway_review.GatewayReview, root=root))
     clock = [1000.0]

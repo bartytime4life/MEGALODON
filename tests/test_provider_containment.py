@@ -17,6 +17,12 @@ def unprivileged(monkeypatch):
     monkeypatch.setattr(pc, "require_unprivileged_linux", lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def little_endian_tables(monkeypatch):
+    # The /proc/net fixtures below are little-endian; pin the decoder to match on any runner.
+    monkeypatch.setattr(pc, "_BYTE_ORDER", "little")
+
+
 def _as_plain(value):
     if isinstance(value, Mapping):
         return {key: _as_plain(item) for key, item in value.items()}
