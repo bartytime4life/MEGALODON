@@ -83,8 +83,20 @@ performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/as
 reports each as `pass`, `fail`, `review`, `unknown` or `not_applicable`, with
 the observed value, the expected value, an ATT&CK mitigation ID and a
 remediation note. It runs as the HUD user, executes nothing and changes
-nothing; applying a remediation is a separate operator decision. This lane is
-command-line only for now.
+nothing; applying a remediation is a separate operator decision.
+
+The HUD shows the same review under **Setup → Host security and threat
+context → Hardening posture**. The protected `/api/support-config` snapshot
+carries it as `hardening`, computed at most once every 60 seconds and copied
+per response; a review that cannot run is reported as `state: unavailable`
+instead of failing the snapshot. The panel lists `fail`, `review` and
+`unknown` checks first with their observed and expected values, mitigation
+and remediation, and folds passing and not-applicable checks into one list. It
+validates every check, renders text nodes only, and shows nothing when the
+payload carries an unknown state, an action status other than
+`not_attempted`, any action authority, or a check set that is not exactly the
+one every review emits (a missing or repeated check could hide a failure). The panel has no buttons; nothing in
+it starts, stops or changes a setting.
 
 | Area | Checks | ATT&CK mitigation |
 | --- | --- | --- |
