@@ -268,7 +268,11 @@ nothing.
 The HUD shows a summary under **Setup → Host security and threat context →
 Persistence locations**. The protected `/api/support-config` snapshot carries
 it as `persistence` (`megalodon-persistence-summary-v1`), recomputed at most
-once every five minutes and copied per response. To stay inside the 64 KiB
+once every five minutes and copied per response. The review never runs on the
+request path: a stale summary is served while one background refresh runs, and
+the first request returns `state: pending`. Each directory is counted to at
+most 65,536 entries, and a larger one is named in the gaps and treated as
+incompletely reviewed. To stay inside the 64 KiB
 response bound it carries counts, the first 16 findings and the first 8 gaps,
 with no inventory rows; `findings_total` and `gaps_total` disclose the rest.
 Each path, detail and gap is shortened, with a trailing `...`, to at most 256

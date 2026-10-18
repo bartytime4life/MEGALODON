@@ -208,6 +208,9 @@ class SupportConfiguration:
         # Cached read-only reviews; one run per TTL window, even when several HUD requests arrive together.
         self._reviews = {}
         self._review_locks = dict(hardening=Lock(), persistence=Lock())
+        # The persistence review reads files, so it refreshes off the request path. A
+        # generation bump discards a refresh that started before a baseline was recorded.
+        self._persistence_refreshing, self._persistence_generation = False, 0
         self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
@@ -331,10 +334,32 @@ class SupportConfiguration:
                             dict(schema=hardening_review.SCHEMA, checks=[]))
 
     def _persistence_snapshot(self):
-        """Read-only persistence summary, run at most once per PERSISTENCE_TTL seconds."""
-        return self._cached('persistence', PERSISTENCE_TTL,
-                            lambda: persistence_review.summary(persistence_review.PersistenceReview(self.home).review()),
-                            dict(schema=persistence_review.SUMMARY_SCHEMA))
+        """The last persistence summary, or a pending state; a stale one is refreshed in the background."""
+        with self._review_locks['persistence']:
+            entry = self._reviews.get('persistence')
+            if (entry is None or time.monotonic() - entry[1] >= PERSISTENCE_TTL) and not self._persistence_refreshing:
+                self._persistence_refreshing = True
+                Thread(target=self._refresh_persistence, args=(self._persistence_generation,), daemon=True,
+                       name='megalodon-persistence-review').start()
+            if entry is None:
+                return dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
+            return deepcopy(entry[0])
+
+    def _review_persistence(self):
+        try:
+            return persistence_review.summary(persistence_review.PersistenceReview(self.home).review())
+        except (OSError, ValueError, TypeError, KeyError, RecursionError):
+            return dict(schema=persistence_review.SUMMARY_SCHEMA, state='unavailable', action_authority='none')
+
+    def _refresh_persistence(self, generation):
+        value = None
+        try:
+            value = self._review_persistence()
+        finally:
+            with self._review_locks['persistence']:
+                self._persistence_refreshing = False
+                if value is not None and generation == self._persistence_generation:
+                    self._reviews['persistence'] = (value, time.monotonic())
 
     def snapshot(self, include_token=False):
         hardening = self._hardening_snapshot()
@@ -447,8 +472,11 @@ class SupportConfiguration:
                 message = self.host_security.execute(action.removeprefix('security_'))
             elif action == 'persistence_baseline':
                 result = persistence_review.PersistenceReview(self.home).record_baseline(initial=True)
+                # This job thread is already off the request path; a refresh begun earlier is discarded.
+                value = self._review_persistence()
                 with self._review_locks['persistence']:
-                    self._reviews.pop('persistence', None)
+                    self._persistence_generation += 1
+                    self._reviews['persistence'] = (value, time.monotonic())
                 message = (f"Initial persistence baseline recorded from {result['items']} items present now. "
                            'It is not a known-clean state; later additions, changes and removals appear as review items.')
             elif action == 'capture_permissions':

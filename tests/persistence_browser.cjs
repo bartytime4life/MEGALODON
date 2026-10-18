@@ -16,6 +16,10 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  assert.equal(context.persistenceAllowsBaseline(changed),false);
  // Non-BMP paths the server produced validate and render.
  assert.equal(context.validPersistence(wide),true);assert.match(text(render(wide)),/Added since baseline · .*\u{1F600}+\.\.\./u);
+ // The first request returns while the review runs in the background.
+ const pending={schema:fresh.schema,state:'pending',action_authority:'none'};
+ assert.match(text(render(pending)),/Reviewing persistence locations/);assert.equal(context.persistenceAllowsBaseline(pending),false);
+ assert.match(text(render({...pending,findings:[]})),/could not be read/);
  // A truncated list says so.
  const full={...changed,findings:Array(16).fill(changed.findings[0]),findings_total:56};
  assert.match(text(render(full)),/Showing the first 16 of 56 review items\. .* lists up to the first 64\./);

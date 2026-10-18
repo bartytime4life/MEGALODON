@@ -26,6 +26,8 @@ SUMMARY_SCHEMA = 'megalodon-persistence-summary-v1'
 BASELINE_SCHEMA = 'megalodon-persistence-baseline-v1'
 MAX_READ = 256 * 1024
 MAX_DIR_ENTRIES = 128
+# Counting stops here, so one huge directory cannot stall a review.
+MAX_DIR_SCAN = 65536
 MAX_ITEMS = 512
 MAX_FINDINGS = 64
 MAX_GAPS = 32
@@ -167,15 +169,19 @@ def _item(path, category, technique, kind):
 
 
 def _names(path):
-    """Return the MAX_DIR_ENTRIES smallest names and the total, in bounded memory."""
-    total = 0
+    """Return the MAX_DIR_ENTRIES smallest of at most MAX_DIR_SCAN names, the count, and whether it stopped."""
+    total, stopped = 0, False
     def walk(entries):
-        nonlocal total
+        nonlocal total, stopped
         for entry in entries:
+            if total == MAX_DIR_SCAN:
+                stopped = True
+                return
             total += 1
             yield entry.name
     with os.scandir(path) as entries:
-        return heapq.nsmallest(MAX_DIR_ENTRIES, walk(entries)), total
+        names = heapq.nsmallest(MAX_DIR_ENTRIES, walk(entries))
+    return names, total, stopped
 
 
 def inventory(home=None, root='/'):
@@ -196,8 +202,11 @@ def inventory(home=None, root='/'):
             items.append(row)
         return True
     def listed(path, label):
-        names, total = _names(path)
-        if total > MAX_DIR_ENTRIES:
+        names, total, stopped = _names(path)
+        if stopped:
+            gaps.append(f'{label} has more than {MAX_DIR_SCAN} entries; only {len(names)} were reviewed.')
+            incomplete.append(str(path))
+        elif total > MAX_DIR_ENTRIES:
             gaps.append(f'{label} has {total} entries; only the first {MAX_DIR_ENTRIES} were reviewed.')
             incomplete.append(str(path))
         return names

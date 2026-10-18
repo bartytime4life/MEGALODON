@@ -214,8 +214,23 @@ def test_directory_listing_keeps_bounded_smallest_names(tmp_path, monkeypatch):
     for index in range(50):
         (tmp_path/f'{49 - index:02d}').write_text('')
     monkeypatch.setattr(persistence_review, 'MAX_DIR_ENTRIES', 5)
-    names, total = persistence_review._names(tmp_path)
-    assert names == ['00', '01', '02', '03', '04'] and total == 50
+    names, total, stopped = persistence_review._names(tmp_path)
+    assert names == ['00', '01', '02', '03', '04'] and total == 50 and stopped is False
+
+
+def test_directory_counting_stops_at_the_scan_bound_and_says_so(tree, monkeypatch):
+    home, root = tree
+    folder = home/'.config/autostart'
+    for index in range(30):
+        (folder/f'{index:02d}.desktop').write_text('')
+    monkeypatch.setattr(persistence_review, 'MAX_DIR_SCAN', 31)  # 31 entries exist with updater.desktop
+    assert persistence_review._names(folder)[1:] == (31, False)
+    monkeypatch.setattr(persistence_review, 'MAX_DIR_SCAN', 20)
+    names, total, stopped = persistence_review._names(folder)
+    assert total == 20 and stopped is True and len(names) == 20
+    items, gaps, coverage = inventory(home, root)
+    assert '~/.config/autostart has more than 20 entries; only 20 were reviewed.' in gaps
+    assert str(folder) in coverage['incomplete']  # baseline entries there are unconfirmed, not removed
 
 
 def test_findings_beyond_the_cap_are_counted_and_disclosed(tree, monkeypatch):

@@ -719,6 +719,13 @@ def persistence_tree(tmp_path, monkeypatch):
     return root
 
 
+def settle(manager):
+    import threading
+    for thread in threading.enumerate():
+        if thread.name == 'megalodon-persistence-review':
+            thread.join(10)
+
+
 def test_snapshot_carries_cached_persistence_summary(manager, persistence_tree, monkeypatch):
     from megalodon import persistence_review
     calls = []
@@ -726,20 +733,63 @@ def test_snapshot_carries_cached_persistence_summary(manager, persistence_tree, 
     monkeypatch.setattr(persistence_review, 'summary', lambda result: calls.append(1) or original(result))
     clock = [1000.0]
     monkeypatch.setattr(config.time, 'monotonic', lambda: clock[0])
+    pending = manager.snapshot()['persistence']
+    assert pending == dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
+    settle(manager)
     value = manager.snapshot()['persistence']
     assert value['schema'] == persistence_review.SUMMARY_SCHEMA and value['baseline_at'] is None and value['items'] >= 1
     manager.snapshot()
     assert len(calls) == 1
     clock[0] += config.PERSISTENCE_TTL
-    manager.snapshot()
+    assert manager.snapshot()['persistence'] == value  # a stale summary is served while it refreshes
+    settle(manager)
     assert len(calls) == 2
     review = persistence_review.PersistenceReview(manager.home)
     review.state.mkdir(parents=True, mode=0o700)
     (review.state/'baseline.json').write_text('{"schema":"forged"}')
     (review.state/'baseline.json').chmod(0o600)
     clock[0] += config.PERSISTENCE_TTL
+    manager.snapshot()
+    settle(manager)
     value = manager.snapshot()['persistence']
     assert value == dict(schema=persistence_review.SUMMARY_SCHEMA, state='unavailable', action_authority='none')
+
+
+def test_persistence_review_never_runs_on_the_request_path(manager, persistence_tree, monkeypatch):
+    from threading import Event
+    from megalodon import persistence_review
+    release, calls = Event(), []
+    original = persistence_review.summary
+    def slow(result):
+        calls.append(1)
+        assert release.wait(10)
+        return original(result)
+    monkeypatch.setattr(persistence_review, 'summary', slow)
+    for _ in range(3):  # each request returns at once and starts no second review
+        assert manager.snapshot()['persistence']['state'] == 'pending'
+    release.set()
+    settle(manager)
+    assert len(calls) == 1 and 'state' not in manager.snapshot()['persistence']
+
+
+def test_a_refresh_begun_before_a_baseline_does_not_overwrite_it(manager, persistence_tree, monkeypatch):
+    from threading import Event
+    from megalodon import persistence_review
+    release, started = Event(), Event()
+    original = persistence_review.summary
+    def stale(result):
+        if not started.is_set():
+            started.set()
+            assert release.wait(10)
+        return original(result)
+    monkeypatch.setattr(persistence_review, 'summary', stale)
+    manager.snapshot()
+    assert started.wait(10)
+    manager._work({'action':'persistence_baseline'})
+    assert manager.snapshot()['persistence']['baseline_at'] == '2026-10-18T06:30:00Z'
+    release.set()
+    settle(manager)
+    assert manager.snapshot()['persistence']['baseline_at'] == '2026-10-18T06:30:00Z'
 
 
 def test_persistence_baseline_action_records_only_an_initial_baseline(manager, persistence_tree):
@@ -748,6 +798,8 @@ def test_persistence_baseline_action_records_only_an_initial_baseline(manager, p
     for extra in ({'replace':True}, {'path':'/etc'}):
         with pytest.raises(ValueError):
             config.validate_action({'action':'persistence_baseline', **extra})
+    manager.snapshot()
+    settle(manager)
     assert manager.snapshot()['persistence']['baseline_at'] is None
     manager._work({'action':'persistence_baseline'})
     value = manager.snapshot()

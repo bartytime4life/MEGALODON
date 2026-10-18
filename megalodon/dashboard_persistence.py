@@ -48,6 +48,9 @@ function renderPersistence(panel, payload) {
   if(!payload||payload.schema!==__SCHEMA__||payload.action_authority!=='none'){
     panel.replaceChildren(node('p','Persistence review is unavailable.'));return;
   }
+  if(payload.state==='pending'&&Object.keys(payload).length===3){
+    panel.replaceChildren(node('p','Reviewing persistence locations. Results appear at the next status check.'));return;
+  }
   if(!validPersistence(payload)){
     panel.replaceChildren(node('p','Persistence locations could not be read on this PC.'));return;
   }
