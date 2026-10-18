@@ -43,7 +43,9 @@ History is held in memory for this HUD session, up to 300 points (ten minutes at
 two-second intervals). The browser pauses its requests when hidden; the shared
 sampler continues so reopening the tab retains recent history. Pausing the view
 does not stop running apps. Restarting the HUD clears this history. Process IDs,
-command lines and file paths are never returned. Interface names and remote IP
+command lines and file paths are never returned by Live PC; the separate,
+read-only [programs on the network](host-security.md#programs-on-the-network)
+review under Setup names this account's executables, never PIDs or command lines. Interface names and remote IP
 addresses remain inside the loopback HUD.
 
 ## Account-free tool choices

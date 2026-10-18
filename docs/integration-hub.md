@@ -204,3 +204,9 @@ and ARP cache, names the default gateway's MAC address and flags a changed or
 shared one against a recorded baseline or the HUD session's first observation.
 It sends nothing and changes nothing; the HUD shows it read-only under Setup,
 and [host security](host-security.md#local-gateway-review) owns its limits.
+
+The `megalodon.process_network` command maps this account's TCP and UDP
+sockets to the executables holding them, without command lines or process IDs,
+and flags deleted, in-memory and temporary-folder executables for review. It
+stops nothing; [host security](host-security.md#programs-on-the-network) owns
+its scope.

@@ -722,7 +722,7 @@ def persistence_tree(tmp_path, monkeypatch):
 def settle(manager):
     import threading
     for thread in threading.enumerate():
-        if thread.name == 'megalodon-persistence-review':
+        if thread.name in ('megalodon-persistence-review', 'megalodon-process-review'):
             thread.join(10)
 
 
@@ -826,6 +826,7 @@ def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager,
                for text in [*worst['gaps'], *(f[k] for f in worst['findings'] for k in ('path', 'detail'))])
     monkeypatch.setattr(manager, '_persistence_snapshot', lambda: worst)
     monkeypatch.setattr(manager, '_gateway_snapshot', lambda: worst_gateway(manager.home.parent))
+    monkeypatch.setattr(manager, '_process_snapshot', lambda: worst_process(manager.home.parent))
     size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
     assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB
 
@@ -864,3 +865,41 @@ def test_snapshot_carries_the_gateway_review_with_session_memory(manager, monkey
     (state/'baseline.json').chmod(0o600)
     clock[0] += config.GATEWAY_TTL
     assert manager.snapshot()['gateway'] == dict(schema=gateway_review.SCHEMA, state='unavailable', action_authority='none')
+
+
+def worst_process(tmp_path):
+    from megalodon import process_network
+    from test_process_network import UID, proc, row, tables
+    root = tmp_path/'process-root'
+    rows = [row(('2001:db8::5', 30000 + i * 4 + j), (f'2001:db8::{i:x}:{j:x}', 65535), '01', 5000 + i * 4 + j)
+            for i in range(process_network.MAX_PROGRAMS + 2) for j in range(4)]
+    tables(root, tcp6=rows)
+    for i in range(process_network.MAX_PROGRAMS + 2):
+        proc(root, 600 + i, '/tmp/' + '\U0001F600' * 200 + f'{i} (deleted)', [5000 + i * 4 + j for j in range(4)],
+             comm='\U0001F600' * 5)
+    worst = process_network.review(root, uid=UID)
+    assert len(worst['programs']) == process_network.MAX_PROGRAMS
+    assert all(len(r['flags']) == 2 and len(r['remotes']) == process_network.MAX_REMOTES for r in worst['programs'])
+    return worst
+
+
+def test_snapshot_carries_the_process_review_off_the_request_path(manager, monkeypatch, tmp_path):
+    from threading import Event
+    from megalodon import process_network
+    from test_process_network import UID, proc, row, tables
+    root = tmp_path/'process-host'
+    tables(root, tcp=[row(('192.168.1.5', 51000), ('203.0.113.9', 443), '01', 101)])
+    proc(root, 200, '/usr/bin/curl', [101], comm='curl')
+    release, calls = Event(), []
+    original = process_network.review
+    def slow():
+        calls.append(1)
+        assert release.wait(10)
+        return original(root, uid=UID)
+    monkeypatch.setattr(process_network, 'review', slow)
+    for _ in range(3):
+        assert manager.snapshot()['process_network'] == dict(schema=process_network.SCHEMA, state='pending', action_authority='none')
+    release.set()
+    settle(manager)
+    value = manager.snapshot()['process_network']
+    assert len(calls) == 1 and value['programs'][0]['executable'] == '/usr/bin/curl'
