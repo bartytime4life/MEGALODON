@@ -404,6 +404,44 @@ MAC and interface formats, each rule's fixed level and technique), renders
 text nodes only and has no buttons. IPv6 neighbors, rogue DHCP servers and new
 devices are not reviewed.
 
+## Programs on the network
+
+`python -m megalodon.process_network` maps this account's TCP and UDP sockets
+to the programs that hold them. It reads the kernel socket tables
+(`/proc/net/{tcp,tcp6,udp,udp6}`), then this account's own `/proc/<pid>/fd`
+links, `exe` link, `comm` name and parent from `stat`. Command lines are never
+read, so arguments that carry tokens or passwords stay unseen, and no process
+ID is returned. Nothing is stopped, signalled or changed. Processes of other
+accounts and of root are not visible without privilege, and sockets whose
+local and remote ends are both loopback, or that listen only on loopback, are
+left out.
+
+Programs are grouped by executable path, with the number of processes, the
+first process's parent name, connected, listening and other sockets, and up to
+three remote peers (`remotes_total` counts all). Three flags mark a program for
+review, each with a fixed ATT&CK technique:
+
+| Flag | ATT&CK | Meaning |
+| --- | --- | --- |
+| `EXECUTABLE_DELETED` | T1070.004 | The program file was deleted or replaced after it started; updates also do this |
+| `EXECUTABLE_IN_MEMORY` | T1620 | The program runs from an anonymous `memfd:` file with no path on disk |
+| `EXECUTABLE_IN_TEMPORARY` | T1105 | The program runs from `/tmp`, `/var/tmp` or `/dev/shm`; installers and developer tools also do |
+
+At most 16 programs are listed, flagged ones first; `programs_total` and
+`flagged_total` count all. Each socket table is read without following a final
+symlink, up to 16 MiB and 65,536 rows, and the scan stops at 2,048 processes or
+65,536 open files; each bound sets `tables_complete` or `scan_complete` to
+false with a gap. Addresses are decoded in the host's byte order. Names and
+paths are shortened to 256 JSON-escaped bytes. The result carries
+`action_status: not_attempted` and `action_authority: none`.
+
+The HUD shows it under **Setup → Host security and threat context → Programs
+on the network**, carried as `process_network` in the protected
+`/api/support-config` snapshot. The review runs off the request path, at most
+every 15 seconds, and the first request returns `state: pending`, which the
+Setup view re-checks every two seconds. The panel validates the closed schema,
+renders text nodes only and has no buttons. Executables are not hashed yet.
+
 ## Placement, compatibility and rollback
 
 Implementation stays in the existing `megalodon/` package; behavior tests stay
