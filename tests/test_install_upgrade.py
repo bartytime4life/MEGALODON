@@ -72,6 +72,7 @@ def test_listener_requires_exact_address_and_service_socket(tmp_path,monkeypatch
     realpath=install_lifecycle.Path
     monkeypatch.setattr(install_lifecycle,'Path',lambda p:root if str(p)=='/proc' else realpath(p))
     monkeypatch.setattr(install_lifecycle.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout='501\n',returncode=0))
+    monkeypatch.setattr(install_lifecycle,'_BYTE_ORDER','little')  # the row above is little-endian
     assert install_lifecycle._listener_pid(8787,'127.0.0.1')==501
     assert install_lifecycle._listener_pid(8787,'127.0.0.2') is None
     (process/'fd/4').unlink()

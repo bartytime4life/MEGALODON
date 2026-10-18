@@ -26,6 +26,12 @@ def passive(monkeypatch):
     monkeypatch.setattr(os, 'system', refuse)
 
 
+@pytest.fixture(autouse=True)
+def little_endian_tables(monkeypatch):
+    # hexip writes little-endian route words; pin the decoder to match on any runner.
+    monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')
+
+
 def hexip(address):
     return bytes(int(part) for part in address.split('.'))[::-1].hex().upper()
 
@@ -180,7 +186,6 @@ def test_the_gateway_group_survives_the_group_bound(tmp_path):
 
 def test_route_gateways_decode_in_host_byte_order(tmp_path, monkeypatch):
     root = tree(tmp_path, [route('eth0', GW)], [])
-    monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')
     assert default_gateways(root)[0][0]['ip'] == GW  # little-endian, as the fixture writes it
     (tmp_path/'proc/net/route').write_text(ROUTE_HEAD + 'eth0\t00000000\tC0A80101\t0003\t0\t0\t100\t00000000\t0\t0\t0\n')
     monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'big')
