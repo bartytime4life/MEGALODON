@@ -73,6 +73,33 @@ Every record carries `action_status: not_attempted`. The inspector shows valid
 records under **Hostname naming signals** as text nodes and drops any record
 with an unknown schema, level or action status.
 
+### TLS handshake signals
+
+For each Suricata `tls` event in the same bounded tail, `megalodon/tls_signals.py`
+checks the handshake metadata the sensor already reported and attaches any
+signals to the server address as `tls` records:
+
+- `legacy_protocol`: SSLv2, SSLv3, TLS 1.0 or TLS 1.1, deprecated by RFC 8996;
+- `expired_certificate` or `not_yet_valid_certificate`: the certificate's
+  validity dates, read as UTC, against the event time;
+- `self_signed_certificate`: the subject and issuer names are identical.
+
+A record is `review` for a legacy protocol or a validity problem and `note`
+for a self-signed certificate alone, which is routine for routers, printers
+and lab devices. Certificate subject and issuer names are compared and then
+discarded; they are never stored or displayed. The version string must match
+a fixed pattern before it is shown. Each IP keeps at most two distinct
+records, and one snapshot keeps at most 32, ranked with `review` first. The
+records are not included in `sensor_endpoints`.
+
+TLS 1.3 encrypts certificates, so a passive sensor cannot see validity dates
+or names for those handshakes; only the protocol version is checked. These
+records map to ATT&CK T1573 (encrypted channel) and T1557
+(adversary-in-the-middle) as review vocabulary. A signal is not evidence of
+interception, malware or intent. Nothing is decrypted, resolved or blocked,
+every record carries `action_status: not_attempted`, and the inspector shows
+valid records under **TLS handshake signals** as text nodes.
+
 EVE field semantics follow the [Suricata format documentation](https://docs.suricata.io/en/suricata-8.0.0/output/eve/eve-json-format.html).
 
 ## Qwen and fixed scripts

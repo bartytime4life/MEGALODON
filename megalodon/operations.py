@@ -13,6 +13,7 @@ import time
 
 from .domain_signals import cap as cap_name_review, review as name_review
 from .managed_capture import now
+from . import tls_signals
 
 PORT_HINTS = {22:'SSH',25:'SMTP',53:'DNS',80:'HTTP',123:'NTP',443:'HTTPS',445:'SMB',
               465:'SMTPS',587:'Submission',853:'DNS over TLS',993:'IMAPS',3389:'RDP',5353:'mDNS'}
@@ -54,7 +55,7 @@ def recent_context(path=Path('/var/log/suricata/eve.json')):
         key = str(ip_address(value))
         if key not in result and len(result)>=256:
             raise ValueError('Context address bound')
-        return result.setdefault(key,dict(names=[],findings=[],services=[]))
+        return result.setdefault(key,dict(names=[],findings=[],services=[],tls=[]))
     def name(address,value,source,stamp):
         if type(value) is not str or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,252}',value):
             return
@@ -73,6 +74,7 @@ def recent_context(path=Path('/var/log/suricata/eve.json')):
             stamp = datetime.fromisoformat(row['timestamp'].replace('Z','+00:00'))
             if stamp.tzinfo is None or not -5 <= (datetime.now(timezone.utc)-stamp).total_seconds() <= 120:
                 continue
+            moment = stamp
             stamp = stamp.astimezone(timezone.utc).isoformat().replace('+00:00','Z')
             kind = row.get('event_type')
             label=row.get('app_proto') or (kind if kind in {'tls','http','dns','ssh','smb','rdp','quic'} else None)
@@ -83,6 +85,9 @@ def recent_context(path=Path('/var/log/suricata/eve.json')):
                 except (ValueError,TypeError):pass
             if kind=='tls':
                 name(row.get('dest_ip'),row.get('tls',{}).get('sni'),'Observed TLS SNI',stamp)
+                record = tls_signals.assess(row.get('tls'),moment)
+                if record is not None:
+                    tls_signals.add(peer(row.get('dest_ip'))['tls'],record)
             elif kind=='http':
                 name(row.get('dest_ip'),row.get('http',{}).get('hostname'),'Observed HTTP hostname',stamp)
             elif kind=='dns':
@@ -145,7 +150,7 @@ class Operations:
                     row = peers.setdefault(key,dict(ip=key,scope=address_scope(key),version=ip_address(key).version,
                         local=endpoint['local'],connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
                         first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],names=list(context.get(key,{}).get('names',[])),
-                        findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),location=endpoint['location'],flags=[]))
+                        findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),tls=list(context.get(key,{}).get('tls',[])),location=endpoint['location'],flags=[]))
                     if once:
                         row['connections']+=1;row['active_connections']+=int(flow['active'])
                         row['packets']+=packets;row['bytes']+=size
@@ -175,6 +180,9 @@ class Operations:
             # Separate from names so defense/AI evidence keeps its fixed inputs.
             for row,records in zip(endpoints,cap_name_review([name_review(row['names']) for row in endpoints])):
                 row['name_review']=records
+            # Bounded like naming records; endpoints past the 64-row cut keep none.
+            for row,records in zip(endpoints,cap_name_review([row['tls'] for row in endpoints],tls_signals.MAX_SNAPSHOT_RECORDS)):
+                row['tls']=records
             references = dict(schema='megalodon-reference-context-v1', checked_at=now(), state='unavailable', feeds=[])
             host_security = getattr(self.configuration, 'host_security', None)
             if host_security is not None:
@@ -203,7 +211,7 @@ class Operations:
             result = dict(schema='megalodon-operations-v1',observed_at=now(),capture=live['capture'],background=live['background'],
                 summary=dict(peers=len(peers),active_connections=sum(r['active'] for r in live['connections']),packets=total_packets,
                              bytes=total_bytes,sent_bytes=sent,received_bytes=received,unattributed_bytes=unattributed),
-                sensor_endpoints=[dict(ip=ip,**value) for ip,value in list(context.items())[:128]],
+                sensor_endpoints=[dict(ip=ip,**{k:v for k,v in value.items() if k!='tls'}) for ip,value in list(context.items())[:128]],
                 timeline=live.get('timeline',[]),protocols=sorted(protocols.values(),key=lambda r:-r['bytes']),endpoints=endpoints,storage=storage,
                 reference_context=references,
                 coverage=dict(window_seconds=60,max_endpoints=64,unmapped=live['totals']['unmapped'],truncated=live['totals']['truncated'] or len(peers)>64,
