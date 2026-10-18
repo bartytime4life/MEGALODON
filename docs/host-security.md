@@ -421,10 +421,12 @@ Programs are grouped by executable path, with the number of processes, the
 first process's parent name, connected, listening and other sockets, and up to
 three remote peers (`remotes_total` counts all). A socket shared by duplicated
 descriptors or worker processes is counted once per program. Socket tables are
-per network namespace: a process in another one, such as a rootless container
-or a service with `PrivateNetwork=`, is matched against `/proc/<pid>/net`, for
-up to 16 namespaces beyond the HUD's own; more are named in a gap and make
-`tables_complete` false. Three flags mark a program for
+per network namespace: the tables of another one, such as a rootless
+container's or a `PrivateNetwork=` service's, are read from `/proc/<pid>/net`,
+for up to 16 namespaces beyond the HUD's own; more are named in a gap and make
+`tables_complete` false. Socket inodes are unique across namespaces, so each
+descriptor is matched against every table read, which keeps a socket a process
+received from another namespace (systemd socket activation) in the review. Three flags mark a program for
 review, each with a fixed ATT&CK technique:
 
 | Flag | ATT&CK | Meaning |

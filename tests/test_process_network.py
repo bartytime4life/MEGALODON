@@ -217,3 +217,13 @@ def test_proc_entries_are_chosen_in_bounded_memory(host, monkeypatch):
     result = review(host, uid=UID, now=lambda: NOW)
     assert result['scan_complete'] is False and result['processes_reviewed'] <= 3
     assert any(gap.startswith('The process scan stopped at 3 process entries') for gap in result['gaps'])
+
+
+def test_a_socket_from_another_namespace_is_still_matched(host):
+    # Socket activation: a PrivateNetwork= service holds a listener created in the host namespace.
+    (host/'proc/self/ns').mkdir(parents=True)
+    os.symlink('net:[1]', host/'proc/self/ns/net')
+    proc(host, 720, '/usr/lib/activated', [102, 920], comm='activated')
+    namespace(host, 720, 3, [row(('10.0.3.2', 41000), ('198.51.100.30', 443), '01', 920)])
+    rows = by_exe(review(host, uid=UID, now=lambda: NOW))
+    assert rows['/usr/lib/activated']['listening'] == 1 and rows['/usr/lib/activated']['established'] == 1

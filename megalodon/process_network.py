@@ -198,6 +198,8 @@ def review(root='/', *, uid=None, now=_now):
         pids = []
     if total > MAX_PROC_ENTRIES:
         stopped = True
+    # First pass: each process's socket inodes, loading each namespace's tables once.
+    candidates = []
     for pid in pids:
         if seen >= MAX_PROCESSES or links >= MAX_FD_LINKS:
             stopped = True
@@ -212,14 +214,12 @@ def review(root='/', *, uid=None, now=_now):
             continue
         seen += 1
         namespace = _namespace(proc/'ns/net')
-        if namespace is None or namespace not in tables and len(tables) > MAX_NAMESPACES:
-            if namespace is not None:
+        if namespace is not None and namespace not in tables:
+            if len(tables) > MAX_NAMESPACES:
                 unread_namespaces.add(namespace)
-            namespace = own if namespace is None else namespace
-        elif namespace not in tables:
-            tables[namespace] = sockets(root, f'proc/{pid}/net')
-        table = tables.get(namespace, ({}, False))[0]
-        held = []
+            else:
+                tables[namespace] = sockets(root, f'proc/{pid}/net')
+        inodes = []
         with fds:
             # Iterate rather than list, so a process with very many descriptors stays within the bound.
             for fd in fds:
@@ -231,8 +231,17 @@ def review(root='/', *, uid=None, now=_now):
                     target = os.readlink(fd.path)
                 except OSError:
                     continue
-                if target.startswith('socket:[') and target.endswith(']') and target[8:-1].isdigit() and int(target[8:-1]) in table:
-                    held.append((int(target[8:-1]), table[int(target[8:-1])]))
+                if target.startswith('socket:[') and target.endswith(']') and target[8:-1].isdigit():
+                    inodes.append(int(target[8:-1]))
+        if inodes:
+            candidates.append((proc, inodes))
+    # Socket inodes are unique across namespaces, and a process can hold a socket from a namespace
+    # it is not a member of (socket activation into PrivateNetwork=), so match against every table.
+    known = {}
+    for table, _ in tables.values():
+        known.update(table)
+    for proc, inodes in candidates:
+        held = [(inode, known[inode]) for inode in inodes if inode in known]
         if not held:
             continue
         try:
