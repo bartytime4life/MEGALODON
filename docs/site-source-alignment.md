@@ -1,6 +1,46 @@
 # Defense Console source alignment
 
-## Current publication — browser-only PC snapshot viewer, version 66
+## Current publication readback — version 67, October 17, 2026
+
+VERIFIED 2026-10-17 UTC through the native Sites tools and source readback:
+version 67 is the current owner-private publication at
+<https://megalodon-defense-console.blackbart-55.chatgpt.site>. The existing
+custom audience still contains one owner account. This is a read-only,
+browser-only viewer; the earlier explicit choice to keep imported telemetry
+off the hosting service remains in force.
+
+- Project: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3`.
+- Site source: `e07dca343fff4358982aa7b0ac6da815efbf7f83`.
+- Saved version: `appgprj_6aaa2be9d9288191a15a9c1d743af0b3~appgver_4a7b644126c4819180b87adbe670ddc8` (67).
+- Deployment: `appgdep_6ad1cbca690c8191b1e4035db2637afe`, native status
+  `succeeded`, updated `2026-10-16T07:03:42.384928+00:00`.
+- Versions 66 and 67 have the same normalized deployment artifact digest:
+  `sha256:f8299077ee58e07167d812da3620ce37e9dc903762a851f78151ce269fa68409`
+  (8 files, 204800 bytes). Direct Git comparison also found no changes in
+  `web/`, `dist/`, `scripts/`, `tests-current/` or `.openai/` between their
+  source commits. The newer source adds a historical application checkpoint;
+  it does not add a live PC connection or alter the viewer.
+- GitHub documentation PR #589 was merged on 2026-10-12 as
+  `e48e857a9d85fc8cdbf3558b89ed28a55fea90cb`. The earlier draft-PR handoff is
+  historical. Current-main basis for this readback is
+  `a39f29bc2a3b1e46ee3270420f52e0fccfa8889c`.
+
+The 15 current Site validator/import tests and 6 current-main Python snapshot
+export tests passed. A dated local summary was exported through the existing
+read-only projection and accepted by the current Site validator. The export
+remains outside both repositories and deployment output; earlier local exports
+were preserved. Export time is not observation time, and an old observation
+window must remain labeled as saved data. No capture, service, host settings,
+model or firewall changes were made.
+
+No site republishing was needed. Native deployment/source/audience verification
+does not establish authenticated production-browser rendering; that remains
+unverified after the previously recorded browser-policy block. The published
+viewer still starts empty and requires explicit local file import. Clear or
+reload removes imported state from tab memory. Prior receipts below retain
+their dated scope.
+
+## Historical publication — browser-only PC snapshot viewer, version 66
 
 VERIFIED 2026-10-12 UTC: the owner requested restoration of this Site and
 selected local snapshot import that keeps telemetry off the hosting service.
