@@ -50,7 +50,7 @@ def manager(tree):
 
 def test_inventory_hashes_files_redacts_arguments_and_drops_key_comments(tree):
     home, root = tree
-    items, gaps = inventory(home, root)
+    items, gaps, stopped = inventory(home, root)
     by_path = {row['path']: row for row in items}
     desktop = by_path[str(home/'.config/autostart/updater.desktop')]
     assert desktop['category'] == 'autostart' and desktop['attack'] == 'T1547.013'
@@ -84,7 +84,7 @@ def test_reads_and_listings_are_bounded(tree):
     (home/'.profile').write_bytes(b'x' * (MAX_READ + 10))
     for index in range(MAX_DIR_ENTRIES + 5):
         (root/'etc/cron.d'/f'job{index:04d}').write_text('')
-    items, gaps = inventory(home, root)
+    items, gaps, stopped = inventory(home, root)
     profile = next(r for r in items if r['path'] == str(home/'.profile'))
     assert profile['truncated'] is True and profile['bytes'] == MAX_READ + 10
     assert sum(r['path'].startswith(str(root/'etc/cron.d')) for r in items) == MAX_DIR_ENTRIES
@@ -101,9 +101,9 @@ def test_item_bound_stops_file_reads_inside_a_location(tree, monkeypatch):
     reads = []
     original = persistence_review._read
     monkeypatch.setattr(persistence_review, '_read', lambda path: reads.append(path) or original(path))
-    items, gaps = inventory(home, root)
-    assert len(items) == MAX_ITEMS and len(reads) <= MAX_ITEMS
-    assert any(f'stopped at {MAX_ITEMS}' in gap for gap in gaps)
+    items, gaps, stopped = inventory(home, root)
+    assert len(items) == MAX_ITEMS and len(reads) <= MAX_ITEMS and stopped is True
+    assert gaps[0].startswith(f'Review stopped at {MAX_ITEMS} items')
 
 
 def test_review_without_baseline_reports_only_unconditional_findings(tree):
@@ -141,9 +141,10 @@ def test_baseline_then_added_changed_and_removed(tree):
 
 def test_unexpected_owner_uses_the_reviewing_account():
     row = dict(path='/home/u/.bashrc', category='shell', attack='T1546.004', state='file', mode='0o644', uid=1234, bytes=1)
-    assert [f['rule'] for f in compare([row], None, uid=1000)] == ['UNEXPECTED_OWNER']
-    assert compare([row], None, uid=1234) == []
-    assert compare([dict(row, uid=0)], None, uid=1000) == []
+    findings, total = compare([row], None, uid=1000)
+    assert [f['rule'] for f in findings] == ['UNEXPECTED_OWNER'] and total == 1
+    assert compare([row], None, uid=1234) == ([], 0)
+    assert compare([dict(row, uid=0)], None, uid=1000) == ([], 0)
 
 
 @pytest.mark.parametrize('value', [
@@ -182,3 +183,47 @@ def test_cli_reports_unavailable_without_traceback(tree, monkeypatch, capsys):
     (state/'baseline.json').write_text('{}'); (state/'baseline.json').chmod(0o600)
     assert main(['review']) == 2
     assert capsys.readouterr().out.startswith('Persistence review unavailable: Invalid persistence baseline')
+
+
+def test_nested_unit_directory_overflow_is_reported(tree):
+    home, root = tree
+    wants = root/'etc/systemd/system/multi-user.target.wants'
+    for index in range(MAX_DIR_ENTRIES + 3):
+        (wants/f'z{index:04d}.service').write_text('')
+    items, gaps, stopped = inventory(home, root)
+    label = '/etc/systemd/system/multi-user.target.wants'
+    assert f'{label} has {MAX_DIR_ENTRIES + 4} entries; only the first {MAX_DIR_ENTRIES} were reviewed.' in gaps
+    assert sum(r['path'].startswith(str(wants)) for r in items) == MAX_DIR_ENTRIES and stopped is False
+
+
+def test_fixed_file_locations_respect_the_item_bound(tree, monkeypatch):
+    home, root = tree
+    (root/'etc/ld.so.preload').write_text('/x.so\n')
+    monkeypatch.setattr(persistence_review, 'MAX_ITEMS', 3)
+    reads = []
+    original = persistence_review._read
+    monkeypatch.setattr(persistence_review, '_read', lambda path: reads.append(path) or original(path))
+    items, gaps, stopped = inventory(home, root)
+    assert len(items) == 3 and len(reads) <= 3 and stopped is True
+    assert str(root/'etc/ld.so.preload') not in {r['path'] for r in items}
+    assert gaps[0].startswith('Review stopped at 3 items')
+
+
+def test_directory_listing_keeps_bounded_smallest_names(tmp_path, monkeypatch):
+    for index in range(50):
+        (tmp_path/f'{49 - index:02d}').write_text('')
+    monkeypatch.setattr(persistence_review, 'MAX_DIR_ENTRIES', 5)
+    names, total = persistence_review._names(tmp_path)
+    assert names == ['00', '01', '02', '03', '04'] and total == 50
+
+
+def test_findings_beyond_the_cap_are_counted_and_disclosed(tree, monkeypatch):
+    home, root = tree
+    review = manager(tree)
+    review.record_baseline()
+    for index in range(persistence_review.MAX_FINDINGS + 6):
+        (home/'.config/autostart'/f'n{index:03d}.desktop').write_text('')
+    result = review.review()
+    assert len(result['findings']) == persistence_review.MAX_FINDINGS
+    assert result['findings_total'] == persistence_review.MAX_FINDINGS + 6 and result['findings_truncated'] is True
+    assert result['gaps'][0] == f'{persistence_review.MAX_FINDINGS + 6} findings were found; only the first {persistence_review.MAX_FINDINGS} are listed.'

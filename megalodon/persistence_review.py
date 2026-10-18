@@ -14,6 +14,7 @@ import argparse
 import base64
 from datetime import datetime, timezone
 import hashlib
+import heapq
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ MAX_READ = 256 * 1024
 MAX_DIR_ENTRIES = 128
 MAX_ITEMS = 512
 MAX_FINDINGS = 64
+MAX_GAPS = 32
 MAX_KEYS = 64
 MAX_TEXT = 240
 TRUST = 'observed_not_known_clean'
@@ -157,55 +159,71 @@ def _item(path, category, technique, kind):
     return row
 
 
+def _names(path):
+    """Return the MAX_DIR_ENTRIES smallest names and the total, in bounded memory."""
+    total = 0
+    def walk(entries):
+        nonlocal total
+        for entry in entries:
+            total += 1
+            yield entry.name
+    with os.scandir(path) as entries:
+        return heapq.nsmallest(MAX_DIR_ENTRIES, walk(entries)), total
+
+
 def inventory(home=None, root='/'):
-    """Return the bounded inventory and the gaps that limit it."""
+    """Return the bounded inventory, the gaps that limit it, and whether it stopped early."""
     home = Path(home or Path.home())
     base = Path(root)
     items, gaps = [], []
+    def take(path, category, technique, kind):
+        # The item bound also bounds file reads, so check it before each one.
+        if len(items) >= MAX_ITEMS:
+            return False
+        row = _item(path, category, technique, kind)
+        if row is not None:
+            items.append(row)
+        return True
+    def listed(path, label):
+        names, total = _names(path)
+        if total > MAX_DIR_ENTRIES:
+            gaps.append(f'{label} has {total} entries; only the first {MAX_DIR_ENTRIES} were reviewed.')
+        return names
+    stopped = False
     for category, technique, location, kind in LOCATIONS:
         path = home/location[2:] if location.startswith('~/') else base/location.lstrip('/')
         if kind != 'dir':
-            row = _item(path, category, technique, kind)
-            if row is not None:
-                items.append(row)
-            continue
-        try:
-            with os.scandir(path) as entries:
-                names = sorted(entry.name for entry in entries)
-        except FileNotFoundError:
-            continue
-        except NotADirectoryError:
-            row = _item(path, category, technique, 'file')
-            items.extend([row] if row else []); continue
-        except OSError:
-            gaps.append(f'{location} could not be listed.'); continue
-        if len(names) > MAX_DIR_ENTRIES:
-            gaps.append(f'{location} has {len(names)} entries; only the first {MAX_DIR_ENTRIES} were reviewed.')
-        for name in names[:MAX_DIR_ENTRIES]:
-            # Unit drop-in and .wants directories are listed one level deep.
-            child = path/name
-            if child.is_dir() and not child.is_symlink():
-                try:
-                    with os.scandir(child) as entries:
-                        nested = sorted(entry.name for entry in entries)[:MAX_DIR_ENTRIES]
-                except OSError:
-                    gaps.append(f'{location}/{name} could not be listed.'); continue
-                paths = [child/n for n in nested if not (child/n).is_dir() or (child/n).is_symlink()]
-            else:
-                paths = [child]
-            # The item bound also bounds file reads, so check it before each one.
-            for candidate in paths:
-                if len(items) >= MAX_ITEMS:
+            stopped = not take(path, category, technique, kind)
+        else:
+            try:
+                names = listed(path, location)
+            except FileNotFoundError:
+                continue
+            except NotADirectoryError:
+                stopped = not take(path, category, technique, 'file')
+                names = []
+            except OSError:
+                gaps.append(f'{location} could not be listed.'); continue
+            for name in names:
+                # Unit drop-in and .wants directories are listed one level deep.
+                child = path/name
+                if child.is_dir() and not child.is_symlink():
+                    try:
+                        nested = listed(child, f'{location}/{name}')
+                    except OSError:
+                        gaps.append(f'{location}/{name} could not be listed.'); continue
+                    paths = [child/n for n in nested if not (child/n).is_dir() or (child/n).is_symlink()]
+                else:
+                    paths = [child]
+                if not all(take(candidate, category, technique, 'file') for candidate in paths):
+                    stopped = True
                     break
-                row = _item(candidate, category, technique, 'file')
-                if row:
-                    items.append(row)
-            if len(items) >= MAX_ITEMS:
-                break
-        if len(items) >= MAX_ITEMS:
-            gaps.append(f'Review stopped at {MAX_ITEMS} items.'); break
+        if stopped:
+            break
+    if stopped:
+        gaps.insert(0, f'Review stopped at {MAX_ITEMS} items; later locations were not reviewed.')
     gaps.append('User crontabs in the system spool need root to read and were not reviewed.')
-    return items[:MAX_ITEMS], gaps
+    return items, gaps, stopped
 
 
 def _identity(row):
@@ -213,10 +231,13 @@ def _identity(row):
 
 
 def compare(items, baseline, *, uid=None):
-    """Return bounded review findings; never an action or verdict."""
+    """Return bounded review findings and the uncapped total; never an action or verdict."""
     uid = os.getuid() if uid is None else uid
     findings = []
+    total = 0
     def add(rule, row, detail):
+        nonlocal total
+        total += 1
         if len(findings) < MAX_FINDINGS:
             findings.append(dict(rule=rule, path=row['path'], category=row['category'], attack=row['attack'],
                                  detail=detail, action_status='not_attempted'))
@@ -229,7 +250,7 @@ def compare(items, baseline, *, uid=None):
         if row.get('state') in {'file', 'symlink'} and row.get('uid') not in (0, uid):
             add('UNEXPECTED_OWNER', row, f'Owned by uid {row.get("uid")}, neither root nor this account.')
     if baseline is None:
-        return findings
+        return findings, total
     before = {row['path']: row for row in baseline['items']}
     now = {row['path']: row for row in items}
     for path in sorted(now.keys() - before.keys()):
@@ -240,7 +261,7 @@ def compare(items, baseline, *, uid=None):
             add('CHANGED', now[path], 'Changed since the recorded baseline: '+', '.join(changed)+'.')
     for path in sorted(before.keys() - now.keys()):
         add('REMOVED', before[path], 'In the recorded baseline but no longer present.')
-    return findings
+    return findings, total
 
 
 class PersistenceReview:
@@ -265,20 +286,25 @@ class PersistenceReview:
 
     def record_baseline(self):
         from .host_security import write
-        items, gaps = inventory(self.home, self.root)
+        items, gaps, stopped = inventory(self.home, self.root)
         write(self.state/'baseline.json', json.dumps(dict(schema=BASELINE_SCHEMA, created_at=self.now(), trust=TRUST, items=items),
                                                      sort_keys=True, separators=(',', ':')).encode())
         return dict(schema=SCHEMA, state='baseline_recorded', items=len(items), gaps=gaps, trust=TRUST,
+                    inventory_truncated=stopped,
                     message='Baseline recorded from what is present now. It is not a known-clean state.')
 
     def review(self):
         baseline = self._baseline()
-        items, gaps = inventory(self.home, self.root)
-        findings = compare(items, baseline)
+        items, gaps, stopped = inventory(self.home, self.root)
+        findings, total = compare(items, baseline)
+        if total > len(findings):
+            gaps.insert(0, f'{total} findings were found; only the first {len(findings)} are listed.')
         if baseline is None:
             gaps.append('No baseline is recorded, so additions, changes and removals cannot be reported.')
         return dict(schema=SCHEMA, reviewed_at=self.now(), baseline_at=baseline and baseline['created_at'],
-                    trust=TRUST, items=items, findings=findings, gaps=gaps[:16], action_authority='none',
+                    trust=TRUST, items=items, findings=findings, findings_total=total,
+                    findings_truncated=total > len(findings), inventory_truncated=stopped,
+                    gaps=list(dict.fromkeys(gaps))[:MAX_GAPS], action_authority='none',
                     limitations=['Findings describe observed files, not intent or compromise.',
                                  'Root-only locations, other accounts and in-memory persistence are not reviewed.',
                                  'Package updates and your own edits also add and change these files.'])

@@ -215,7 +215,11 @@ nothing. This lane is command-line only for now; it has no HUD route.
 Locations are code constants, never operator or browser input. Each regular
 file is opened without following a final symlink and without blocking on a
 FIFO or device, and is hashed over at most its first 256 KiB. A symlink records
-its target without being followed. Directories list at most 128 entries.
+its target without being followed. Directories, including nested `.wants` and
+drop-in directories, list at most their 128 smallest names in bounded memory,
+and any overflow is named in `gaps`. The 512-item bound is checked before every
+read; when it stops a review, `inventory_truncated` is true and the first gap
+says so.
 Desktop `Exec` and systemd `ExecStart*` lines keep only the executable and an
 argument count, because arguments can carry tokens or passwords.
 `authorized_keys` keeps each key's type and `ssh-keygen`-style SHA-256
@@ -226,7 +230,9 @@ three checks that need no baseline: `PRELOAD_PRESENT` (a non-empty loader
 preload list), `WORLD_WRITABLE` (a startup file any account can change) and
 `UNEXPECTED_OWNER` (owned by neither root nor this account). Each finding
 carries `action_status: not_attempted`, and the result carries
-`action_authority: none`. Package updates and the operator's own edits also
+`action_authority: none`. At most 64 findings are listed; `findings_total`
+counts all of them, and `findings_truncated` plus the first gap disclose any
+that were not listed. Package updates and the operator's own edits also
 add and change these files, so a finding is a reason to look, not proof of
 compromise.
 
