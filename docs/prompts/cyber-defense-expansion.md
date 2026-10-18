@@ -168,9 +168,10 @@ slice. Later slices can deepen it.
    `megalodon/hardening_review.py` reports read-only pass, fail, review,
    unknown or not-applicable results for fixed kernel, OpenSSH, APT
    automatic-update and listening-socket settings, each with an ATT&CK
-   mitigation and a remediation note. See `docs/host-security.md`. Next
-   slices: a HUD view, firewall default-policy checks (which need a
-   privileged read), and non-APT update services.
+   mitigation and a remediation note, and the HUD shows it read-only under
+   Setup → Host security. See `docs/host-security.md`. Next slices:
+   firewall default-policy checks (which need a privileged read) and non-APT
+   update services.
 
 #### ON: Online network (visibility, intelligence and exposure)
 

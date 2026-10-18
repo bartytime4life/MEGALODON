@@ -24,6 +24,7 @@ from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .host_security import HostSecurity
+from . import hardening_review
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -43,6 +44,7 @@ def _atomic_write(path, value, mode):
 
 SCHEMA = 'megalodon-support-config-v1'
 COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config'
+HARDENING_TTL = 60
 ACTION_FIELDS = {
     'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
     'capture_permissions': {'interface'}, 'capture_start': {'interface'}, 'capture_stop': set(),
@@ -200,6 +202,7 @@ class SupportConfiguration:
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
         self.host_security = HostSecurity(self.home)
+        self._hardening, self._hardening_at = None, None
         self.qwen_status = dict(state='needs_setup',message='Select a local model to enable bounded background advice.',updated_at=None,metrics=[])
         self.evidence = None
         self.flow_ingestor = None
@@ -305,7 +308,19 @@ class SupportConfiguration:
                 for name, item in changes.items():
                     setattr(self, '_' + name, dict(item) if name == 'settings' else set(item) if name == 'configured' else item)
 
+    def _hardening_snapshot(self):
+        """Read-only posture checks, run at most once per HARDENING_TTL seconds."""
+        moment = time.monotonic()
+        if self._hardening_at is None or moment - self._hardening_at >= HARDENING_TTL:
+            try:
+                value = hardening_review.review()
+            except (OSError, ValueError, TypeError, KeyError, RecursionError):
+                value = dict(schema=hardening_review.SCHEMA, state='unavailable', checks=[], action_authority='none')
+            self._hardening, self._hardening_at = value, moment
+        return deepcopy(self._hardening)
+
     def snapshot(self, include_token=False):
+        hardening = self._hardening_snapshot()
         try:
             tool_directories = load_directories(self.home)
             tool_directories_status = 'ready'
@@ -317,7 +332,7 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
-                         host_security=self.host_security.snapshot(),
+                         host_security=self.host_security.snapshot(), hardening=hardening,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token

@@ -665,3 +665,26 @@ def test_host_security_controls_reach_fixed_actions_and_finish_in_existing_lane(
         assert value['job']['message']=='Fixed local check completed.'
         assert next(row for row in value['tools'] if row['id']=='security')['state']=='ready'
     assert seen==['audit','baseline','check','refresh']
+
+
+def test_snapshot_carries_cached_read_only_hardening_review(manager, monkeypatch):
+    from megalodon import hardening_review
+    calls = []
+    def fake_review():
+        calls.append(1)
+        return dict(schema=hardening_review.SCHEMA, reviewed_at='2026-10-18T06:30:00Z', checks=[], summary={}, action_authority='none')
+    monkeypatch.setattr(hardening_review, 'review', fake_review)
+    clock = [1000.0]
+    monkeypatch.setattr(config.time, 'monotonic', lambda: clock[0])
+    first = manager.snapshot()['hardening']
+    first['checks'].append('mutated')  # callers get a copy, not the cache
+    assert manager.snapshot()['hardening']['checks'] == [] and len(calls) == 1
+    clock[0] += config.HARDENING_TTL
+    manager.snapshot()
+    assert len(calls) == 2
+    def broken():
+        raise OSError('procfs unavailable')
+    monkeypatch.setattr(hardening_review, 'review', broken)
+    clock[0] += config.HARDENING_TTL
+    value = manager.snapshot()['hardening']
+    assert value['state'] == 'unavailable' and value['action_authority'] == 'none' and value['checks'] == []
