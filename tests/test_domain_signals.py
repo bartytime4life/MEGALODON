@@ -55,7 +55,8 @@ def test_one_signal_is_a_note_and_hyphenated_words_are_not_random():
 def test_provider_generated_suffix_caps_level_without_claiming_safety():
     result = assess('d1a2b3c4d5e6f7a8b9.cloudfront.net')
     assert result['level'] == 'note' and len(result['signals']) >= 2
-    assert 'cloudfront.net' in result['context'][0] and 'does not establish safety' in result['context'][0]
+    assert result['context'][0] == ('Providers commonly generate names under cloudfront.net; '
+                                    'this spelling is expected there. That does not establish safety.')
     # A look-alike suffix is not the provider's own suffix.
     assert assess('xkqzjvbwmtrplhgn.evilcloudfront.net')['level'] == 'review'
 
