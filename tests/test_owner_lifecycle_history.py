@@ -21,6 +21,7 @@ def comment(identity, state=None, **changes):
         "user": {"login": "owner"},
         "author_association": "OWNER",
         "created_at": "2026-09-23T00:00:00Z",
+        "performed_via_github_app": None,
         "body": "unrelated" if state is None else (
             "MEGALODON-OWNER-AUTHORIZATION-V1\n"
             f"head: {HEAD}\nscope: ready-and-merge\nstate: {state}"
@@ -170,7 +171,7 @@ def test_full_last_page_requires_endpoint_exhaustion(monkeypatch, tmp_path, repo
 
 
 @pytest.mark.parametrize("bad", [[], {}, [comment(100)], [comment(101, id=True)],
-    [comment(101, body={})], [comment(101, user=None)], [comment(101, created_at="2026-99-23T00:00:00Z")],
+    [comment(101, body={})], [comment(101, user=None)], [comment(101, performed_via_github_app="claude")], [comment(101, created_at="2026-99-23T00:00:00Z")],
     b"invalid JSON", pytest.param(b" " * (8 * 1024 * 1024 + 1), id="oversized-page")])
 def test_incomplete_or_malformed_later_page_holds(monkeypatch, tmp_path, bad):
     history = [comment(1, "authorized")] + [comment(i) for i in range(2, 102)]
@@ -251,3 +252,31 @@ def test_failed_status_post_fails_the_job(monkeypatch, tmp_path, capsys):
     assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")], status_failure=failure)[0] == 1
     assert "Unable to post owner-lifecycle-gate/exact-head status" in capsys.readouterr().out
     assert run_gate(monkeypatch, tmp_path, [], status_failure=failure)[0] == 3
+
+
+APP = {"id": 1, "slug": "claude"}
+
+
+def without_app_field(identity, state=None):
+    result = comment(identity, state)
+    del result["performed_via_github_app"]
+    return result
+
+
+def test_app_posted_owner_comment_cannot_authorize(monkeypatch, tmp_path):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized", performed_via_github_app=APP)],
+                    statuses=posted)[0] == 3
+    assert posted == [status("failure", "Hold: no owner authorization for this exact head")]
+    history = [comment(1, "revoked"), comment(2, "authorized", performed_via_github_app=APP)]
+    assert run_gate(monkeypatch, tmp_path, history)[0] == 3
+
+
+def test_app_posted_owner_comment_can_still_revoke(monkeypatch, tmp_path, capsys):
+    history = [comment(1, "authorized"), comment(2, "revoked", performed_via_github_app=APP)]
+    assert run_gate(monkeypatch, tmp_path, history)[0] == 3
+    assert "#2 is revoked" in capsys.readouterr().out
+
+
+def test_missing_app_attribution_holds(monkeypatch, tmp_path):
+    assert run_gate(monkeypatch, tmp_path, [without_app_field(1, "authorized")])[0] == 3
