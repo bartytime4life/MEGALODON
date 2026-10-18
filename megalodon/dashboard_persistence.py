@@ -39,6 +39,9 @@ function validPersistence(p) {
     &&Array.isArray(p.gaps)&&p.gaps.length<=__GAPS__&&p.gaps.every(g=>text(g,256))&&count(p.gaps_total)&&p.gaps_total>=p.gaps.length
     &&typeof p.inventory_truncated==='boolean'&&count(p.incomplete_locations);
 }
+// The exact placeholder the server sends while its first background review runs.
+function persistencePending(p){return !!p&&typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).sort().join()==='action_authority,schema,state'
+  &&p.schema===__SCHEMA__&&p.state==='pending'&&p.action_authority==='none';}
 // The HUD may record only a first baseline; it never replaces one.
 function persistenceAllowsBaseline(p){return validPersistence(p)&&p.baseline_at===null;}
 function renderPersistence(panel, payload) {
@@ -48,7 +51,7 @@ function renderPersistence(panel, payload) {
   if(!payload||payload.schema!==__SCHEMA__||payload.action_authority!=='none'){
     panel.replaceChildren(node('p','Persistence review is unavailable.'));return;
   }
-  if(payload.state==='pending'&&Object.keys(payload).length===3){
+  if(persistencePending(payload)){
     panel.replaceChildren(node('p','Reviewing persistence locations. Results appear at the next status check.'));return;
   }
   if(!validPersistence(payload)){

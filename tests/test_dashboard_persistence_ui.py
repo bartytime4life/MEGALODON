@@ -70,7 +70,9 @@ def test_setup_polls_a_pending_summary_until_it_completes(tmp_path):
                    background=dict(enabled=False, state='stopped', message='Background off.', session_count=0),
                    geography_enabled=False, command='~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config')
     pending = dict(schema=persistence_review.SUMMARY_SCHEMA, state='pending', action_authority='none')
-    result = subprocess.run([shutil.which('node'), str(Path(__file__).with_name('support_persistence_poll.cjs'))],
-                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, pending=pending, ready=fresh)),
-                            text=True, capture_output=True, timeout=10)
-    assert result.returncode == 0, result.stderr
+    for case in (dict(pending=pending), *(dict(pending=bad, malformed=True) for bad in (
+            dict(pending, extra=1), dict(pending, schema='x'), dict(pending, action_authority='remove')))):
+        result = subprocess.run([shutil.which('node'), str(Path(__file__).with_name('support_persistence_poll.cjs'))],
+                                input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, ready=fresh, **case)),
+                                text=True, capture_output=True, timeout=10)
+        assert result.returncode == 0, (case, result.stderr)
