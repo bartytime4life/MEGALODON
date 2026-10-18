@@ -89,7 +89,8 @@ for a self-signed certificate alone, which is routine for routers, printers
 and lab devices. Certificate subject and issuer names are compared and then
 discarded; they are never stored or displayed. The version string must match
 a fixed pattern before it is shown. Each IP keeps at most two distinct
-records, and one snapshot keeps at most 32, ranked with `review` first. The
+records; when both slots are full, a `review` record replaces a kept `note`.
+One snapshot keeps at most 32, ranked with `review` first. The
 records are not included in `sensor_endpoints`.
 
 TLS 1.3 encrypts certificates, so a passive sensor cannot see validity dates

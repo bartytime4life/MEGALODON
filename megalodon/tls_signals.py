@@ -65,9 +65,19 @@ def assess(tls, observed):
 
 
 def add(records, record):
-    """Append a record unless the same signals were already kept for this peer."""
-    if record is None or len(records) >= MAX_PER_PEER:
+    """Keep a record unless its signals are already kept for this peer.
+
+    Events arrive newest first, so when the peer is full a review record
+    replaces a kept note rather than being dropped behind routine notes.
+    """
+    if record is None:
         return
     key = (record['version'], tuple(s['id'] for s in record['signals']))
-    if all((r['version'], tuple(s['id'] for s in r['signals'])) != key for r in records):
+    if any((r['version'], tuple(s['id'] for s in r['signals'])) == key for r in records):
+        return
+    if len(records) < MAX_PER_PEER:
         records.append(record)
+    elif record['level'] == 'review':
+        notes = [index for index, kept in enumerate(records) if kept['level'] == 'note']
+        if notes:
+            records[notes[-1]] = record

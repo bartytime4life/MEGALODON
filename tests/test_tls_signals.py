@@ -120,3 +120,16 @@ def test_snapshot_rows_carry_bounded_tls_records_outside_sensor_endpoints(tmp_pa
     assert review in ops.endpoint(peers[-1])['tls']  # review outranks earlier notes
     assert all('tls' not in row for row in result['sensor_endpoints'])
     json.dumps(result)
+
+
+def test_review_record_replaces_a_note_when_the_peer_is_full():
+    records = []
+    for version in ('TLS 1.2', 'TLS 1.3'):
+        add(records, assess(dict(version=version, subject='CN=x', issuerdn='CN=x'), NOW))
+    assert [r['level'] for r in records] == ['note', 'note']
+    add(records, assess(dict(version='TLS 1.0'), NOW))
+    assert [r['level'] for r in records] == ['note', 'review'] and records[1]['version'] == 'TLS 1.0'
+    add(records, assess(dict(version='TLS 1.1'), NOW))
+    assert [r['level'] for r in records] == ['review', 'review']
+    add(records, assess(dict(version='SSLv3'), NOW))  # full of reviews: newest kept
+    assert [r['version'] for r in records] == ['TLS 1.1', 'TLS 1.0']
