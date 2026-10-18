@@ -63,7 +63,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
             passed("native Sensors overview reflow " + str(width), fits)
         await page.set_viewport_size({"width": 1440, "height": 1000})
         result = page.locator("#integrations-cards .workflow-card").filter(has_text="Nmap")
-        await result.locator("summary").click()
+        await result.locator(":scope > summary").click()
         await result.locator('a[href="#inventory-title"]').click()
         await expect(page.locator("#workspace-live")).to_be_visible()
         await expect(page.locator("#inventory-title")).to_be_visible()

@@ -133,7 +133,7 @@ WORKFLOWS_JS = r'''
   function age(value){const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(value))/1000));return seconds<60?seconds+'s ago':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':Math.floor(seconds/86400)+'d ago';}
   function overview(filter){
     for(const key of overviewFilters){const button=byId('workflows-show-'+key);button.setAttribute('aria-pressed',String(filter===key));button.disabled=key!=='ALL'&&!fresh();byId('workflows-count-'+key).textContent=view.payload&&(key==='ALL'||fresh())?String(view.payload.tools.filter(row=>matches(row,key)).length):'—';}
-    byId('workflows-overview-note').textContent=fresh()?'Filter the tool list above its individual observations. Saved results can be old; inspect their source times. Tool counts are not threat counts or a safety score.':'Current activity counts are unavailable. Refresh status to check again; retained observations do not prove tools are running.';
+    byId('workflows-overview-note').textContent=fresh()?'Select a count to focus the list. Counts cover all tools; search narrows the matches. Saved results can be old; inspect their source times. Tool counts are not threat counts or a safety score.':'Current activity counts are unavailable. Refresh status to check again; retained observations do not prove tools are running.';
   }
   const originalCard=integrationCard;
   function card(row){
