@@ -339,3 +339,20 @@ def test_full_open_pull_pages_are_followed(monkeypatch, tmp_path):
                 {"number": 100 + i, "head": {"sha": "b" * 40}} for i in range(99)]
         return [{"number": 2, "head": {"sha": HEAD}}] if page == 2 else []
     assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")], open_pulls=listing)[0] == 3
+
+
+@pytest.mark.parametrize("open_count, code", [(1000, 0), (1001, 3)])
+def test_open_pull_bound_reads_a_sentinel_page(monkeypatch, tmp_path, open_count, code):
+    pulls = [{"number": 1, "head": {"sha": HEAD}}] + [
+        {"number": 100 + i, "head": {"sha": "b" * 40}} for i in range(open_count - 1)]
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    open_pulls=lambda check, page: pulls[(page - 1) * 100:page * 100])[0] == code
+
+
+@pytest.mark.parametrize("head", [{}, {"sha": None}, {"sha": HEAD.upper()}, {"sha": HEAD[:39]}])
+def test_malformed_open_pull_head_holds(monkeypatch, tmp_path, head):
+    posted = []
+    listing = [{"number": 1, "head": {"sha": HEAD}}, {"number": 2, "head": head}]
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    open_pulls=lambda check, page: listing if page == 1 else [], statuses=posted)[0] == 3
+    assert posted == [status("failure", "Hold: unable to confirm complete GitHub state: malformed open pull")]
