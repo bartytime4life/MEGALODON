@@ -103,8 +103,18 @@ accepts space, tab or `=` separators, applies the first value of each keyword,
 follows `Include` only for paths that stay under `/etc/ssh`, refuses symlinked
 include files, and stops at the first `Match` block because conditional
 settings are not evaluated. At most 256 APT configuration files are read in
-name order. Each check's note says when any of these limits applied, and the
-listener check sets `listeners_complete`. A listening socket is not proof of
+name order, ignoring `/* */`, `//` and `#` comments. Each check's note says
+when any of these limits applied, and the listener check sets
+`listeners_complete`.
+
+Incomplete evidence never produces a pass. A missing IPv4 socket table, or a
+missing IPv6 table while `/proc/net/if_inet6` exists, makes the listener check
+`unknown`. An unavailable `ip_forward` is reported as `unknown` rather than
+omitted. When an SSH file was truncated or an include was not read, a keyword
+not found in what was read is `unknown` instead of its OpenSSH default. Automatic
+updates enabled in the files that were read are `unknown` when any APT file was
+unreadable, truncated or past the 256-file bound, since a later file could
+disable them. A listening socket is not proof of
 exposure, since a firewall may still block it, and process names need root,
 so they are not shown.
 
