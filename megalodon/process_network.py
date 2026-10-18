@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import heapq
 import ipaddress
 import json
 import os
@@ -25,13 +26,17 @@ SCHEMA = 'megalodon-process-network-v1'
 MAX_TABLE_READ = 16 * 1024 * 1024
 MAX_TABLE_LINES = 65536
 MAX_PROCESSES = 2048
+# At most this many /proc entries are considered, chosen in bounded memory.
+MAX_PROC_ENTRIES = 65536
+# Network namespaces beyond the HUD's own whose socket tables are read.
+MAX_NAMESPACES = 16
 MAX_FD_LINKS = 65536
 MAX_PROGRAMS = 16
 MAX_REMOTES = 3
 MAX_TEXT_BYTES = 256
-# (protocol, family, path, address bytes)
-TABLES = (('tcp', 'ipv4', 'proc/net/tcp', 4), ('tcp', 'ipv6', 'proc/net/tcp6', 16),
-          ('udp', 'ipv4', 'proc/net/udp', 4), ('udp', 'ipv6', 'proc/net/udp6', 16))
+# (protocol, family, table name, address bytes)
+TABLES = (('tcp', 'ipv4', 'tcp', 4), ('tcp', 'ipv6', 'tcp6', 16),
+          ('udp', 'ipv4', 'udp', 4), ('udp', 'ipv6', 'udp6', 16))
 TCP_ESTABLISHED, TCP_LISTEN = '01', '0A'
 TEMPORARY = ('/tmp/', '/var/tmp/', '/dev/shm/')
 # rule: (ATT&CK technique, detail)
@@ -111,15 +116,19 @@ def _shown(address, port):
     return f'[{address}]:{port}' if address.version == 6 else f'{address}:{port}'
 
 
-def sockets(root='/'):
-    """Return {inode: socket} for non-loopback TCP and UDP sockets, and whether every table was fully read."""
+def sockets(root='/', net='proc/net'):
+    """Return {inode: socket} for non-loopback TCP and UDP sockets, and whether every table was fully read.
+
+    `net` is the network directory to read: `proc/net` for the HUD's own
+    namespace, or `proc/<pid>/net` for the namespace that process is in.
+    """
     found, complete = {}, True
-    for protocol, family, rel, length in TABLES:
+    for protocol, family, name, length in TABLES:
         try:
-            lines, whole = _read_table(Path(root, rel))
+            lines, whole = _read_table(Path(root, net, name))
         except FileNotFoundError:
             # Without an IPv6 stack the IPv6 tables do not exist; that is complete.
-            if family != 'ipv6' or os.path.lexists(Path(root, 'proc/net/if_inet6')):
+            if family != 'ipv6' or os.path.lexists(Path(root, net, 'if_inet6')):
                 complete = False
             continue
         except (OSError, ValueError):
@@ -160,29 +169,56 @@ def _parent(proc):
         return None
 
 
+def _namespace(path):
+    try:
+        return os.readlink(path)
+    except OSError:
+        return None
+
+
 def review(root='/', *, uid=None, now=_now):
     uid = os.getuid() if uid is None else uid
-    table, tables_complete = sockets(root)
     base = Path(root, 'proc')
-    programs, links, seen, stopped, vanished = {}, 0, 0, False, 0
+    # Socket tables are per network namespace. The HUD's own comes from /proc/net; a process in
+    # another one (a rootless container, PrivateNetwork=) is matched against /proc/<pid>/net.
+    own = _namespace(base/'self/ns/net')
+    tables = {own: sockets(root)}
+    unread_namespaces = set()
+    programs, links, seen, stopped, vanished, total = {}, 0, 0, False, 0, 0
+    def numbered(listing):
+        nonlocal total
+        for entry in listing:
+            if entry.name.isdigit():
+                total += 1
+                yield int(entry.name)
     try:
         with os.scandir(base) as listing:
-            entries = sorted((e for e in listing if e.name.isdigit()), key=lambda e: int(e.name))
+            pids = heapq.nsmallest(MAX_PROC_ENTRIES, numbered(listing))
     except OSError:
-        entries = []
-    for entry in entries:
+        pids = []
+    if total > MAX_PROC_ENTRIES:
+        stopped = True
+    for pid in pids:
         if seen >= MAX_PROCESSES or links >= MAX_FD_LINKS:
             stopped = True
             break
-        proc = Path(entry.path)
+        proc = base/str(pid)
         try:
-            if entry.stat(follow_symlinks=False).st_uid != uid:
+            if os.stat(proc, follow_symlinks=False).st_uid != uid:
                 continue
             fds = os.scandir(proc/'fd')
         except OSError:
             vanished += 1
             continue
         seen += 1
+        namespace = _namespace(proc/'ns/net')
+        if namespace is None or namespace not in tables and len(tables) > MAX_NAMESPACES:
+            if namespace is not None:
+                unread_namespaces.add(namespace)
+            namespace = own if namespace is None else namespace
+        elif namespace not in tables:
+            tables[namespace] = sockets(root, f'proc/{pid}/net')
+        table = tables.get(namespace, ({}, False))[0]
         held = []
         with fds:
             # Iterate rather than list, so a process with very many descriptors stays within the bound.
@@ -196,7 +232,7 @@ def review(root='/', *, uid=None, now=_now):
                 except OSError:
                     continue
                 if target.startswith('socket:[') and target.endswith(']') and target[8:-1].isdigit() and int(target[8:-1]) in table:
-                    held.append(table[int(target[8:-1])])
+                    held.append((int(target[8:-1]), table[int(target[8:-1])]))
         if not held:
             continue
         try:
@@ -219,24 +255,34 @@ def review(root='/', *, uid=None, now=_now):
             row = programs[path] = dict(program=_comm(proc/'comm'), executable=_short(path),
                                         parent=_comm(base/str(parent)/'comm') if parent else '?',
                                         processes=0, established=0, listening=0, other=0, remotes=[], remotes_total=0,
-                                        flags=flags, _remotes=set())
+                                        flags=flags, _remotes=set(), _inodes=set())
         row['processes'] += 1
-        for item in held:
+        # A socket shared by duplicated descriptors or worker processes is counted once.
+        for inode, item in held:
+            if inode in row['_inodes']:
+                continue
+            row['_inodes'].add(inode)
             row[item['kind']] += 1
             if item['remote']:
                 row['_remotes'].add(item['remote'])
     rows = []
     for row in programs.values():
         remotes = sorted(row.pop('_remotes'))
+        row.pop('_inodes')
         row.update(remotes=remotes[:MAX_REMOTES], remotes_total=len(remotes))
         rows.append(row)
     rows.sort(key=lambda r: (not r['flags'], -(r['established'] + r['listening'] + r['other']), r['executable']))
     shown = rows[:MAX_PROGRAMS]
+    tables_complete = all(complete for _, complete in tables.values()) and not unread_namespaces
     gaps = []
+    if unread_namespaces:
+        gaps.append(f'{len(unread_namespaces)} more network namespaces were not read (limit {MAX_NAMESPACES}); '
+                    'their processes\' sockets are not listed.')
     if not tables_complete:
         gaps.append('A socket table was not fully read; other connections may exist.')
     if stopped:
-        gaps.append(f'The process scan stopped at {MAX_PROCESSES} processes or {MAX_FD_LINKS} open files; later processes were not reviewed.')
+        gaps.append(f'The process scan stopped at {MAX_PROC_ENTRIES} process entries, {MAX_PROCESSES} processes of this account '
+                    f'or {MAX_FD_LINKS} open files; later processes were not reviewed.')
     if len(rows) > MAX_PROGRAMS:
         gaps.append(f'{len(rows)} programs hold network sockets; only the first {MAX_PROGRAMS} are listed.')
     if vanished:
