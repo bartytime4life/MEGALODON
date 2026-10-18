@@ -33,12 +33,21 @@ def compose_workflows(html: str) -> str:
         advanced = advanced.replace(match.group(), '')
     clear = '<button id="integrations-clear" type="button" class="button-secondary">Clear map filters</button>'
     advanced = advanced.replace(clear, '')
-    filters = moved[0] + '''<label class="field" for="integrations-status-filter"><span>Workflow status</span><select id="integrations-status-filter"><option value="ALL">All tools</option><option value="connected">Data connected</option><option value="saved_result">Saved result available</option><option value="collecting">Collecting</option><option value="ready">Ready</option><option value="stopped">Configured · stopped</option><option value="standby">Standby alternative</option><option value="needs_setup">Needs setup</option><option value="unavailable">Unavailable</option><option value="error">Error</option></select></label>''' + clear.replace('Clear map filters', 'Clear filters')
+    filters = moved[0] + '''<label class="field" for="integrations-status-filter"><span>Workflow status</span><select id="integrations-status-filter"><option value="ALL">All tools</option><option value="attention">Needs review</option><option value="connected">Data connected</option><option value="saved_result">Saved result available</option><option value="collecting">Collecting</option><option value="ready">Ready</option><option value="stopped">Configured · stopped</option><option value="standby">Standby alternative</option><option value="needs_setup">Needs setup</option><option value="unavailable">Unavailable</option><option value="error">Error</option></select></label>''' + clear.replace('Clear map filters', 'Clear filters')
     advanced = advanced.replace('id="integrations-status"', 'id="workflow-reference-status"')
     advanced = advanced.replace('<h3 id="support-app-launch-title">Open desktop support apps</h3>', '<h3 id="support-app-launch-title">Optional desktop apps</h3>')
     before = before.replace('Actions &amp; apps', 'Background tools').replace('No profile loaded', 'Local status · not checked')
     before = re.sub(r'(<h2 id="integrations-title".*?</h2>)<p>.*?</p>', r'\1<p>See what each local tool is doing and which data has reached MEGALODON.</p>', before, count=1, flags=re.S)
-    local = before + '''
+    overview = '''
+    <div class="workflow-overview" role="group" aria-label="Filter background tool activity" aria-describedby="workflows-overview-note">
+      <button id="workflows-show-ALL" class="workflow-overview-item" type="button" aria-pressed="true"><span>All tools</span><strong id="workflows-count-ALL">—</strong><small>Observed in this HUD</small></button>
+      <button id="workflows-show-attention" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Needs review</span><strong id="workflows-count-attention">—</strong><small>Errors, stopped or setup gaps</small></button>
+      <button id="workflows-show-collecting" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Collecting</span><strong id="workflows-count-collecting">—</strong><small>Work reported in progress</small></button>
+      <button id="workflows-show-saved_result" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Saved results</span><strong id="workflows-count-saved_result">—</strong><small>Completed checks to inspect</small></button>
+    </div>
+    <p id="workflows-overview-note" class="workflow-explainer">Waiting for local observations. Tool counts are not threat counts or a safety score.</p>
+    '''
+    local = before + overview + '''
     <nav class="workflow-actions" aria-label="Background tool controls"><a class="companion-button" href="#support-apps-title">Start background tools</a><a href="#support-config-title" id="workflows-configure">Configure apps</a><a href="#live-globe-title">Monitoring start / stop</a><button type="button" id="workflows-refresh">Refresh status</button></nav>
     <p class="workflow-explainer">Normal startup uses background commands. No Wireshark, Zenmap or ClamTk windows open.</p>
     <div class="integration-controls workflow-filters">''' + filters + '''</div>
@@ -57,10 +66,23 @@ WORKFLOWS_CSS = r'''
 .workflow-actions button { margin-left:auto; min-height:44px; }
 .workflow-explainer { padding:0 22px; color:#bdd0db; font-size:.875rem; line-height:1.6; }
 .workflow-status { min-height:1.6em; }
+.workflow-overview { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; margin:0 22px 1rem; border:1px solid #355361; background:#355361; }
+.workflow-overview-item { display:grid; gap:.45rem; min-width:0; padding:1rem 1.1rem; border:0; border-radius:0; background:#0b1e29; color:#c9d9e2; text-align:left; white-space:normal; font:inherit; }
+.workflow-overview-item > span { font-size:.875rem; font-weight:650; }
+.workflow-overview-item > strong { font-size:2rem; line-height:1.1; font-variant-numeric:tabular-nums; color:#edf7f7; }
+.workflow-overview-item > small { color:#a9becb; font-size:.8rem; line-height:1.4; }
+.workflow-overview-item[aria-pressed="true"] { background:#12323d; box-shadow:inset 0 -3px #a2efda; }
+.workflow-overview-item:not(:disabled):hover { background:#12323d; }
+.workflow-overview-item:focus-visible { outline:3px solid #e9bc6b; outline-offset:3px; position:relative; z-index:1; }
+.workflow-overview-item:disabled { opacity:.65; cursor:default; }
+#workflows-show-attention > strong { color:#f0cc8c; }
 .workflow-card { border-radius:5px; border-color:#355361; background:#0b1e29; }
 .workflow-card > summary { grid-template-columns:minmax(10rem,1fr) auto; padding:1rem; min-height:84px; }
 .workflow-card .integration-title { font-size:1rem; font-weight:650; }
 .workflow-card .integration-zone { color:#9bb7c5; font-size:.75rem; font-weight:500; letter-spacing:0; text-transform:none; }
+.workflow-role { display:block; color:#c6dce4; font-size:.825rem; line-height:1.5; }
+.workflow-preview { display:block; grid-column:1 / -1; font-size:.875rem; font-weight:400; color:#b5cbd7; line-height:1.5; overflow-wrap:anywhere; }
+.workflow-result-link { display:inline-block; min-height:44px; padding:.6rem 0; color:#a9ece5; text-underline-offset:3px; }
 .workflow-state { justify-self:end; border:1px solid #607b89; border-radius:3px; padding:.3rem .55rem; color:#c9d9e2; font-size:.85rem; }
 .workflow-card[data-state="connected"] .workflow-state { color:#a2efda; border-color:#559b85; }
 .workflow-card[data-state="collecting"] .workflow-state { color:#a5def1; border-color:#52879d; }
@@ -76,6 +98,8 @@ WORKFLOWS_CSS = r'''
 .workflow-advanced > summary { padding:1rem 0; cursor:pointer; color:#b6d1dc; font-size:.925rem; min-height:44px; }
 .workflow-actions :is(a,button):focus-visible,.workflow-card summary:focus-visible,.workflow-advanced > summary:focus-visible { outline:3px solid #e9bc6b; outline-offset:3px; }
 @media(max-width:600px) { .workflow-actions { padding:0 14px; gap:.65rem 1rem; } .workflow-actions button { margin-left:0; } .workflow-explainer { padding:0 14px; } .workflow-advanced { margin:1rem 14px; } .workflow-card > summary { grid-template-columns:1fr; gap:.65rem; } .workflow-state { justify-self:start; } }
+@media(max-width:760px) { .workflow-overview { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .workflow-overview { margin-inline:14px; } .workflow-overview-item { padding:.85rem; } }
 '''
 
 WORKFLOWS_JS = r'''
@@ -83,6 +107,10 @@ WORKFLOWS_JS = r'''
   if(typeof localHudLaunch==='undefined'||!byId('workflows-refresh'))return;
   const ids=['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'];
   const names={core:'MEGALODON',tshark:'TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI',nmap:'Nmap',lynis:'Lynis',aide:'AIDE'};
+  const roles={core:'Local evidence and storage',tshark:'Accepted packet metadata',zeek:'Sampled connection context',suricata:'Recent sensor context',scapy:'Alternative capture engine',nftables:'Operator-reviewed containment',clamav:'Completed file-scan summary',osquery:'Installed package inventory',qwen:'Local explanations · advisory',nmap:'Completed network inventory',lynis:'Host configuration review',aide:'File integrity comparison'};
+  const destinations={core:['storage-evidence-title','Inspect evidence store'],tshark:['room-traffic-title','Inspect packet observations'],zeek:['setup-app-zeek','Review Zeek setup'],suricata:['suricata-title','Inspect separate admitted alert store'],scapy:['setup-app-scapy','Review capture alternative'],nftables:['setup-app-nftables','Review containment setup'],clamav:['clamav-title','Inspect saved scan summary'],osquery:['osquery-title','Inspect saved package inventory'],qwen:['support-model-title','Review local model'],nmap:['inventory-title','Inspect saved network inventory'],lynis:['support-host-security','Inspect host findings'],aide:['support-host-security','Inspect host findings']};
+  const overviewFilters=['ALL','attention','collecting','saved_result'];
+  const attention=new Set(['error','needs_setup','unavailable','stopped']);
   const labels={connected:'Data connected',saved_result:'Saved result available',collecting:'Collecting',ready:'Ready',stopped:'Configured · stopped',standby:'Standby alternative',needs_setup:'Needs setup',unavailable:'Unavailable',error:'Error'};
   const view={payload:null,failed:false,pending:false,visible:false,timer:null,lastAt:0,open:new Set(),reference:new Set()};
   const workspace=byId('workspace-interfaces');
@@ -93,23 +121,31 @@ WORKFLOWS_JS = r'''
   const time=value=>new Date(value).toISOString().replace('T',' ').replace('.000Z',' UTC');
   function checked(value){
     if(!value||value.schema!=='megalodon-support-workflows-v1'||value.mode!=='background'||!stamp(value.observed_at)||Date.parse(value.observed_at)>Date.now()+5000||!Array.isArray(value.tools)||value.tools.length>12)throw Error('Invalid workflow status');
-    const seen=new Set();for(const row of value.tools){if(!row||!ids.includes(row.id)||seen.has(row.id)||!text(row.name,80)||!row.name.length||(!Object.hasOwn(labels,row.state)||row.state==='saved_result')||!text(row.message,512)||(row.updated_at!==null&&!stamp(row.updated_at))||!Array.isArray(row.metrics)||row.metrics.length>6||!row.metrics.every(metric=>metric&&text(metric.label,64)&&metric.label.length>0&&Number.isFinite(metric.value)&&text(metric.unit,32)))throw Error('Invalid workflow row');seen.add(row.id);}
+    const seen=new Set();for(const row of value.tools){if(!row||!ids.includes(row.id)||seen.has(row.id)||!text(row.name,80)||!row.name.length||(!Object.hasOwn(labels,row.state)||row.state==='saved_result')||!text(row.message,512)||(row.updated_at!==null&&(!stamp(row.updated_at)||Date.parse(row.updated_at)>Date.parse(value.observed_at)+5000))||!Array.isArray(row.metrics)||row.metrics.length>6||!row.metrics.every(metric=>metric&&text(metric.label,64)&&metric.label.length>0&&Number.isFinite(metric.value)&&text(metric.unit,32)))throw Error('Invalid workflow row');seen.add(row.id);}
     return value;
   }
   const periodic=new Set(['clamav','osquery','nmap','lynis','aide']);
   const displayState=row=>!fresh()?'unavailable':periodic.has(row.id)&&row.state==='connected'?'saved_result':row.state;
+  const matches=(row,filter)=>filter==='ALL'||(filter==='attention'?attention.has(displayState(row)):displayState(row)===filter);
   const aiLabels={connected:'Recent AI response',ready:'Model available',collecting:'Checking or working',needs_setup:'AI setup needed',error:'AI unavailable'};
   const displayLabel=row=>fresh()?(row.id==='qwen'&&Object.hasOwn(aiLabels,displayState(row))?aiLabels[displayState(row)]:labels[displayState(row)]):'Status unavailable';
   const timeLabel=row=>row.id==='tshark'?'Capture started':row.id==='clamav'?'Result saved':periodic.has(row.id)?'Result completed':row.id==='qwen'?'Model checked':'Source updated';
+  function age(value){const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(value))/1000));return seconds<60?seconds+'s ago':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':Math.floor(seconds/86400)+'d ago';}
+  function overview(filter){
+    for(const key of overviewFilters){const button=byId('workflows-show-'+key);button.setAttribute('aria-pressed',String(filter===key));button.disabled=key!=='ALL'&&!fresh();byId('workflows-count-'+key).textContent=fresh()?String(view.payload.tools.filter(row=>matches(row,key)).length):'—';}
+    byId('workflows-overview-note').textContent=fresh()?'Select a count to focus the list. Counts cover all tools; search narrows the matches. Saved results can be old; inspect their source times. Tool counts are not threat counts or a safety score.':'Current activity counts are unavailable. Refresh status to check again; retained observations do not prove tools are running.';
+  }
   const originalCard=integrationCard;
   function card(row){
     const item=document.createElement('details');item.className='integration-card workflow-card';item.dataset.state=displayState(row);item.open=view.open.has(row.id);
     item.addEventListener('toggle',()=>{if(item.open)view.open.add(row.id);else view.open.delete(row.id);});
     const summary=document.createElement('summary'),identity=textNode('span','','integration-identity');
-    identity.append(textNode('span',names[row.id],'integration-title'),textNode('span',row.updated_at?timeLabel(row)+' '+time(row.updated_at):timeLabel(row)+' · time unavailable','integration-zone'));
+    identity.append(textNode('span',names[row.id],'integration-title'),textNode('span',roles[row.id],'workflow-role'),textNode('span',row.updated_at?timeLabel(row)+' '+time(row.updated_at)+' · '+age(row.updated_at):timeLabel(row)+' · time unavailable','integration-zone'));
     summary.append(identity,textNode('span',displayLabel(row),'workflow-state'));
+    summary.append(textNode('span',(fresh()?'':'Last observation: ')+row.message,'workflow-preview'));
     if(fresh()&&row.metrics.length){const metrics=textNode('span','','workflow-metrics');if(periodic.has(row.id))metrics.append(textNode('span','Saved result'));for(const metric of row.metrics){const part=textNode('span',metric.label+' ');part.append(textNode('strong',new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(metric.value)+(metric.unit?' '+metric.unit:'')));metrics.append(part);}summary.append(metrics);}
     const body=textNode('div','','integration-card-body');body.append(textNode('p',(fresh()?'':'Last observation: ')+row.message,'workflow-message'));
+    const destination=destinations[row.id],link=textNode('a',destination[1],'workflow-result-link');link.href='#'+destination[0];body.append(link);
     const when=textNode('time','View checked '+time(view.payload.observed_at)+(fresh()?'':' · refresh needed'),'workflow-time');when.setAttribute('datetime',view.payload.observed_at);body.append(when);
     const index=ids.indexOf(row.id),reference=integrationState.snapshot?.workflows.find(entry=>entry.id===integrationIds[index]);
     if(reference){const detail=originalCard(reference);detail.className='workflow-reference';detail.open=view.reference.has(row.id);detail.firstElementChild.replaceChildren(textNode('span','Capability reference · '+integrationStatuses[reference.selected_status]));detail.addEventListener('toggle',()=>{if(detail.open)view.reference.add(row.id);else view.reference.delete(row.id);});body.append(detail);}
@@ -117,7 +153,8 @@ WORKFLOWS_JS = r'''
   }
   renderIntegrationMap=function(){
     const payload=view.payload,query=byId('integrations-query').value.slice(0,160).trim().toLowerCase(),filter=byId('integrations-status-filter').value;
-    const rows=payload?payload.tools.filter(row=>(filter==='ALL'||displayState(row)===filter)&&(!query||[names[row.id],row.name,row.message,displayLabel(row),...row.metrics.map(metric=>metric.label)].some(value=>value.toLowerCase().includes(query)))):[];
+    overview(filter);
+    const rows=payload?payload.tools.filter(row=>matches(row,filter)&&(!query||[names[row.id],roles[row.id],row.name,row.message,displayLabel(row),...row.metrics.map(metric=>metric.label)].some(value=>value.toLowerCase().includes(query)))):[];
     const children=rows.map(card);if(!children.length)children.push(textNode('p',payload?(payload.tools.length?'No tools match these filters.':'No tool observations were returned.'):(view.failed?'Local workflow status is unavailable. Refresh to try again.':'Checking local workflow status…'),'integration-empty'));
     byId('integrations-cards').replaceChildren(...children);byId('integrations-cards').setAttribute('aria-busy',view.pending?'true':'false');
     byId('integrations-profile').textContent=payload?'Local background view':'Local status · not checked';
@@ -132,10 +169,11 @@ WORKFLOWS_JS = r'''
   async function read(){if(view.pending||!visible())return;cancel();view.pending=true;renderIntegrationMap();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);try{const response=await fetch('/api/support-workflows',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'X-Megalodon-Check':'1'},signal:controller.signal});if(!response.ok)throw Error('Unavailable');view.payload=checked(await body(response));view.failed=false;view.lastAt=Date.now();}catch(_){view.failed=true;}finally{clearTimeout(timeout);view.pending=false;renderIntegrationMap();schedule();}}
   function sync(){cancel();if(visible())read();else renderIntegrationMap();}
   byId('workflows-refresh').addEventListener('click',read);
+  for(const key of overviewFilters)byId('workflows-show-'+key).addEventListener('click',()=>{if(byId('workflows-show-'+key).disabled)return;byId('integrations-status-filter').value=key;renderIntegrationMap();});
   byId('workflows-configure').addEventListener('click',()=>{if(window.megalodonSupportConfiguration)window.megalodonSupportConfiguration.open();});
   document.addEventListener('visibilitychange',sync);
   if(typeof MutationObserver!=='undefined'&&workspace)new MutationObserver(sync).observe(workspace,{attributes:true,attributeFilter:['hidden']});
-  if(typeof IntersectionObserver!=='undefined')new IntersectionObserver(entries=>{view.visible=entries.some(entry=>entry.isIntersecting);sync();},{root:byId('workspace-content'),rootMargin:'80px'}).observe(byId('integrations-cards'));
+  if(typeof IntersectionObserver!=='undefined')new IntersectionObserver(entries=>{view.visible=entries.some(entry=>entry.isIntersecting);sync();},{root:byId('workspace-content'),rootMargin:'80px'}).observe(workspace||byId('integrations-cards'));
   renderIntegrationMap();if(typeof IntersectionObserver==='undefined')read();
 })();
 '''
