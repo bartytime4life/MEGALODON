@@ -5,8 +5,12 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
+
+# /proc/net/tcp prints each network-order address as a host-order number.
+_BYTE_ORDER = sys.byteorder
 
 
 def selected_extras(paths):
@@ -62,7 +66,8 @@ def _listener_pid(port, host):
             fields=row.split()
             address,hexport=fields[1].split(':')
             if (fields[3]=='0A' and int(hexport,16)==port and fields[9] in sockets
-                    and str(ipaddress.ip_address(bytes.fromhex(address)[::-1]))==host):
+                    and len(address)==8
+                    and str(ipaddress.ip_address(int.from_bytes(bytes.fromhex(address),'big').to_bytes(4,_BYTE_ORDER)))==host):
                 return pid
     except (OSError,ValueError,IndexError,subprocess.SubprocessError):
         pass
