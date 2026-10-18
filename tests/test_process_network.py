@@ -288,3 +288,60 @@ def test_unreadable_and_changing_executables_are_not_hashed(tmp_path, monkeypatc
     binary.unlink()
     shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
     assert shown['hash_status'] == 'unreadable' and shown['sha256'] is None
+
+
+def test_processes_running_different_files_at_one_path_get_separate_rows(tmp_path, monkeypatch):
+    # A rolling update: the old process still runs the replaced file at the same path.
+    old, new = hashed_host(tmp_path, b'\x7fELF old build'), tmp_path/'bin-store'/'tool-new'
+    new.write_bytes(b'\x7fELF new build!')
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7),
+                          row(('192.168.1.5', 2), ('203.0.113.9', 443), '01', 8)])
+    proc(tmp_path, 501, str(old), [8], comm='tool')
+    (tmp_path/'proc/501/exe').unlink()
+    os.symlink(str(old), tmp_path/'proc/501/exe')
+    real_stat = os.stat
+    def stat(path, *a, **k):
+        # Same path text for both, but process 501 runs the new file.
+        return real_stat(new if str(path).endswith('/501/exe') else path, *a, **k)
+    monkeypatch.setattr(process_network.os, 'stat', stat)
+    monkeypatch.setattr(process_network, '_executable_hash',
+                        lambda proc, budget: (('b' if proc.name == '501' else 'a') * 64, 'hashed', 0))
+    rows = review(tmp_path, uid=UID, now=lambda: NOW)['programs']
+    assert [(r['executable'], r['processes'], r['sha256'][0]) for r in sorted(rows, key=lambda r: r['sha256'])] == [
+        (str(old), 1, 'a'), (str(old), 1, 'b')]
+
+
+def test_a_same_size_rewrite_during_hashing_is_changed(tmp_path, monkeypatch):
+    binary = hashed_host(tmp_path)
+    stamp, original, done = binary.stat(), os.read, []
+    def rewriting(fd, n):
+        data = original(fd, n)
+        if data and not done and os.fstat(fd).st_ino == stamp.st_ino:
+            done.append(1)
+            binary.write_bytes(b'X' * stamp.st_size)  # same size, then the modification time set back
+            os.utime(binary, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        return data
+    monkeypatch.setattr(os, 'read', rewriting)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['hash_status'] == 'changed' and shown['sha256'] is None and not process_network._hashes
+
+
+def test_every_coverage_gap_at_once_stays_within_the_bound(host, monkeypatch):
+    for index in range(2):  # two extra namespaces, one beyond the limit
+        proc(host, 205 + index, f'/usr/bin/ns{index}', [930 + index])
+        namespace(host, 205 + index, 30 + index, [row(('10.88.0.5', 40000), ('198.51.100.20', 443), '01', 930 + index)])
+    binary = host/'bin-store'/'tool'  # a real, temporary-folder executable that sorts first and is deferred
+    binary.parent.mkdir()
+    binary.write_bytes(b'\x7fELF tool')
+    tcp = (host/'proc/net/tcp').read_text() + ''.join(row(('192.168.1.5', 60000 + i), ('203.0.113.50', 443), '01', 960 + i) for i in range(4))
+    (host/'proc/net/tcp').write_text(tcp)
+    proc(host, 210, str(binary), [960, 961, 962, 963], comm='tool')
+    (host/'proc/2').mkdir()  # a process of this account whose descriptors cannot be listed
+    (host/'proc/net/udp6').unlink()
+    (host/'proc/net/udp6').mkdir()  # an unreadable table
+    entries = sum(1 for name in os.listdir(host/'proc') if name.isdigit())
+    for name, value in (('MAX_NAMESPACES', 1), ('MAX_PROGRAMS', 1), ('MAX_HASH_REVIEW', 0), ('MAX_PROC_ENTRIES', entries - 1)):
+        monkeypatch.setattr(process_network, name, value)
+    result = review(host, uid=UID, now=lambda: NOW)
+    assert result['programs'][0]['hash_status'] == 'deferred'
+    assert len(result['gaps']) == 7 <= process_network.MAX_GAPS, result['gaps']

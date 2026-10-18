@@ -1,7 +1,7 @@
 """Review-only presentation for this account's programs that hold network sockets."""
 import json
 
-from .process_network import HASH_STATUSES, MAX_HASH_FILE, MAX_PROGRAMS, MAX_REMOTES, RULES, SCHEMA
+from .process_network import HASH_STATUSES, MAX_GAPS, MAX_HASH_FILE, MAX_PROGRAMS, MAX_REMOTES, RULES, SCHEMA
 
 PROCESS_NETWORK_HTML = r'''
     <h6 id="process-network-title">Programs on the network</h6>
@@ -43,7 +43,7 @@ function validProcessNetwork(p) {
     &&count(p.programs_total)&&p.programs_total>=p.programs.length&&count(p.flagged_total)&&p.flagged_total<=p.programs_total
     &&p.flagged_total>=p.programs.filter(r=>r.flags.length).length&&count(p.processes_reviewed)
     &&typeof p.tables_complete==='boolean'&&typeof p.scan_complete==='boolean'
-    &&Array.isArray(p.gaps)&&p.gaps.length<=6&&p.gaps.every(g=>text(g,256));
+    &&Array.isArray(p.gaps)&&p.gaps.length<=__GAPS__&&p.gaps.every(g=>text(g,256));
 }
 function renderProcessNetwork(panel, payload) {
   if(!panel)return;
@@ -81,5 +81,5 @@ function renderProcessNetwork(panel, payload) {
   panel.replaceChildren(...children);
 }
 '''
-for _name, _value in (('__HASH_MIB__', MAX_HASH_FILE // 1048576), ('__HASH_STATUSES__', list(HASH_STATUSES)), ('__RULES__', RULES), ('__SCHEMA__', SCHEMA), ('__PROGRAMS__', MAX_PROGRAMS), ('__REMOTES__', MAX_REMOTES)):
+for _name, _value in (('__GAPS__', MAX_GAPS), ('__HASH_MIB__', MAX_HASH_FILE // 1048576), ('__HASH_STATUSES__', list(HASH_STATUSES)), ('__RULES__', RULES), ('__SCHEMA__', SCHEMA), ('__PROGRAMS__', MAX_PROGRAMS), ('__REMOTES__', MAX_REMOTES)):
     PROCESS_NETWORK_JS = PROCESS_NETWORK_JS.replace(_name, json.dumps(_value))

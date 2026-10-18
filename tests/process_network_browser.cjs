@@ -5,6 +5,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  const text=n=>n.textContent+' '+n.children.map(text).join(' ');
  const render=value=>{const panel=element('div');context.renderProcessNetwork(panel,value);return panel;};
  for(const value of [result,empty,wide])assert.equal(context.validProcessNetwork(value),true);
+ assert.equal(context.validProcessNetwork({...result,gaps:Array(7).fill('gap')}),true,'every gap the review can emit at once is accepted');
  const panel=render(result),body=text(panel);
  assert.match(body,/4 programs hold network sockets · 3 need review · \d+ of this account's processes reviewed · checked \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
  assert.match(body,/Review · x · \/home\/u\/\.cache\/x/);assert.match(body,/Program file deleted · ATT&CK T1070\.004/);
@@ -21,7 +22,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
    {...pending,extra:1},first({flags:['KILLED']}),first({flags:['EXECUTABLE_DELETED','EXECUTABLE_DELETED']}),first({pid:42}),first({processes:0}),
    first({established:0,listening:0,other:0}),first({hash_status:'hashed',sha256:null}),first({hash_status:'hashed',sha256:'A'.repeat(64)}),first({hash_status:'skipped'}),first({hash_status:'too_large',sha256:'a'.repeat(64)}),first({remotes:['example.com:443']}),first({remotes_total:0}),first({executable:''}),
    {...result,programs_total:1},{...result,flagged_total:0},{...result,programs:Array(17).fill(result.programs[3])},{...result,scan_complete:'yes'},
-   {...result,gaps:Array(7).fill('gap')},{...result,reviewed_at:'yesterday'}]){
+   {...result,gaps:Array(9).fill('gap')},{...result,reviewed_at:'yesterday'}]){
    const out=text(render(bad));assert.match(out,/unavailable|could not be read/);assert.doesNotMatch(out,/Review ·|Remote peers/);
    assert.equal(context.processPending(bad),false);
  }

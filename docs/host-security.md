@@ -417,7 +417,9 @@ accounts and of root are not visible without privilege, and sockets whose
 local and remote ends are both loopback, or that listen only on loopback, are
 left out.
 
-Programs are grouped by executable path, with the number of processes, the
+Programs are grouped by executable path and the identity of the running file,
+so during an update an old process still running the replaced (deleted) file
+is its own row, with the number of processes, the
 first process's parent name, connected, listening and other sockets, and up to
 three remote peers (`remotes_total` counts all). A socket shared by duplicated
 descriptors or worker processes is counted once per program. Socket tables are
@@ -456,8 +458,8 @@ Each listed program's executable is hashed with SHA-256 by opening
 A hash is remembered by file identity (device, inode, size, modification and
 change time) for up to 512 files, so an unchanged executable is read once. Files over
 256 MiB are `too_large`, and one review reads at most 512 MiB; programs beyond
-that are `deferred`, named in a gap, and hashed by a later review. A file that
-changes while it is read is `changed`, and one that cannot be opened is
+that are `deferred`, named in a gap, and hashed by a later review. A file whose
+size, modification or change time differs after it is read is `changed`, and one that cannot be opened is
 `unreadable`; none of these carry a hash. A hash identifies the file that ran;
 it is not a reputation verdict.
 

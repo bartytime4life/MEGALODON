@@ -37,6 +37,8 @@ MAX_FD_LINKS = 65536
 MAX_PROGRAMS = 16
 MAX_REMOTES = 3
 MAX_TEXT_BYTES = 256
+# Every coverage gap the review can emit fits this bound, which the HUD validator also uses.
+MAX_GAPS = 8
 # Executable hashing: per file, per review, and remembered file identities.
 MAX_HASH_FILE = 256 * 1024 * 1024
 MAX_HASH_REVIEW = 512 * 1024 * 1024
@@ -205,7 +207,7 @@ def _executable_hash(proc, budget):
                 break
             digest.update(chunk); read += len(chunk)
         after = os.fstat(fd)
-        if read != info.st_size or (after.st_size, after.st_mtime_ns) != (info.st_size, info.st_mtime_ns):
+        if read != info.st_size or (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != key[2:]:
             return None, 'changed', read
         value = digest.hexdigest()
         with _hashes_lock:
@@ -309,7 +311,15 @@ def review(root='/', *, uid=None, now=_now):
             continue
         deleted = executable.endswith(' (deleted)')
         path = executable[:-len(' (deleted)')] if deleted else executable
-        row = programs.get(path)
+        # Group by the running file, not only its path: during an update an old process can still run the
+        # replaced (deleted) file at the same path, and each file gets its own row and hash.
+        try:
+            info = os.stat(proc/'exe')
+            identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        except OSError:
+            identity = None
+        group = (path, deleted, identity)
+        row = programs.get(group)
         if row is None:
             parent = _parent(proc)
             flags = []
@@ -319,7 +329,7 @@ def review(root='/', *, uid=None, now=_now):
                 flags.append('EXECUTABLE_DELETED')
             if path.startswith(TEMPORARY):
                 flags.append('EXECUTABLE_IN_TEMPORARY')
-            row = programs[path] = dict(program=_comm(proc/'comm'), executable=_short(path),
+            row = programs[group] = dict(program=_comm(proc/'comm'), executable=_short(path),
                                         parent=_comm(base/str(parent)/'comm') if parent else '?',
                                         processes=0, established=0, listening=0, other=0, remotes=[], remotes_total=0,
                                         flags=flags, _remotes=set(), _inodes=set(), _proc=proc)
