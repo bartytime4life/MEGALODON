@@ -154,6 +154,8 @@ jobs:
                       created = comment.get("created_at")
                       association = comment.get("author_association")
                       body = comment.get("body")
+                      # GitHub always reports this key; null means not posted through an app.
+                      app = comment.get("performed_via_github_app", False)
                       if (
                           type(identity) is not int or identity <= previous_id
                           or not isinstance(user, dict)
@@ -162,6 +164,7 @@ jobs:
                           or not isinstance(created, str)
                           or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", created)
                           or (body is not None and not isinstance(body, str))
+                          or not (app is None or isinstance(app, dict))
                       ):
                           raise IncompleteState("malformed or unordered comment")
                       datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ")
@@ -170,7 +173,7 @@ jobs:
                       comments.append({
                           "id": identity, "user": {"login": user["login"]},
                           "author_association": association, "created_at": created,
-                          "body": body or "",
+                          "body": body or "", "via_app": app is not None,
                       })
               return comments
 
@@ -245,6 +248,9 @@ jobs:
                   continue
               state = fields.get("state")
               if state not in {"authorized", "revoked"}:
+                  continue
+              # An app acting with the owner's token may revoke, never authorize.
+              if comment["via_app"] and state != "revoked":
                   continue
               records.append((comment["created_at"], int(comment["id"]), state))
 
