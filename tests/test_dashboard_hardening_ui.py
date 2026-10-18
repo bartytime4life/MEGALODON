@@ -38,3 +38,11 @@ def test_panel_is_wired_into_setup_without_an_action():
     assert "renderHardening(el('hardening-review'),null)" in SUPPORT_CONFIG_JS
     assert 'innerHTML' not in HARDENING_JS and 'fetch(' not in HARDENING_JS
     assert 'hardening-review' not in INDEX_HTML or 'id="hardening-review"' in INDEX_HTML
+
+
+def test_every_review_emits_exactly_the_check_set_the_panel_requires(tmp_path):
+    empty = tmp_path/'empty'
+    empty.mkdir()
+    for payload in (synthetic_payload(tmp_path), hardening_review.review(empty), hardening_review.review()):
+        assert tuple(c['id'] for c in payload['checks']) == hardening_review.CHECK_IDS
+    assert json.dumps(list(hardening_review.CHECK_IDS)) in HARDENING_JS and '__CHECK_IDS__' not in HARDENING_JS

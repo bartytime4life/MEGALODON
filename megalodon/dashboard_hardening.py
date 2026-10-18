@@ -1,4 +1,7 @@
 """Review-only presentation for the live hardening posture checks."""
+import json
+
+from .hardening_review import CHECK_IDS
 
 HARDENING_HTML = r'''
     <h6 id="hardening-title">Hardening posture</h6>
@@ -23,6 +26,8 @@ function renderHardening(panel, payload) {
   const node=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};
   const text=(s,max)=>typeof s==='string'&&s.length>0&&s.length<=max&&!/[\x00-\x1f\x7f]/.test(s);
   const stamp=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(s)&&Number.isFinite(Date.parse(s));
+  // The complete check set; a missing or repeated check could hide a failure.
+  const ids=__CHECK_IDS__;
   const states={fail:'Fail',review:'Review',unknown:'Unknown',pass:'Pass',not_applicable:'Not applicable'};
   const valid=c=>c&&typeof c==='object'&&!Array.isArray(c)&&text(c.id,40)&&text(c.title,160)&&Object.hasOwn(states,c.state)
     &&text(c.observed,200)&&text(c.expected,64)&&/^M\d{4}$/.test(c.mitigation)&&text(c.remediation,256)&&c.action_status==='not_attempted'
@@ -30,7 +35,8 @@ function renderHardening(panel, payload) {
   if(!payload||payload.schema!=='megalodon-hardening-review-v1'||payload.action_authority!=='none'){
     panel.replaceChildren(node('p','Hardening posture is unavailable.'));return;
   }
-  if(payload.state!==undefined||!stamp(payload.reviewed_at)||!Array.isArray(payload.checks)||payload.checks.length>32||!payload.checks.every(valid)){
+  if(payload.state!==undefined||!stamp(payload.reviewed_at)||!Array.isArray(payload.checks)||payload.checks.length!==ids.length||!payload.checks.every(valid)
+    ||new Set(payload.checks.map(c=>c.id)).size!==ids.length||!payload.checks.every(c=>ids.includes(c.id))){
     panel.replaceChildren(node('p','Hardening posture could not be read on this PC.'));return;
   }
   const order=['fail','review','unknown','pass','not_applicable'];
@@ -52,3 +58,4 @@ function renderHardening(panel, payload) {
   panel.replaceChildren(...children);
 }
 '''
+HARDENING_JS = HARDENING_JS.replace('__CHECK_IDS__', json.dumps(list(CHECK_IDS)))

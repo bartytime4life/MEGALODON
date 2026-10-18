@@ -94,7 +94,8 @@ instead of failing the snapshot. The panel lists `fail`, `review` and
 and remediation, and folds passing and not-applicable checks into one list. It
 validates every check, renders text nodes only, and shows nothing when the
 payload carries an unknown state, an action status other than
-`not_attempted` or any action authority. The panel has no buttons; nothing in
+`not_attempted`, any action authority, or a check set that is not exactly the
+one every review emits (a missing or repeated check could hide a failure). The panel has no buttons; nothing in
 it starts, stops or changes a setting.
 
 | Area | Checks | ATT&CK mitigation |

@@ -67,6 +67,8 @@ SSH = (
     ('ssh_empty_passwords', 'permitemptypasswords', 'no', {'no'}, 'M1027',
      'SSH refuses accounts with empty passwords', 'Set PermitEmptyPasswords no.'),
 )
+# Every review emits exactly these checks, in this order; a reader can reject any other set.
+CHECK_IDS = tuple(c[0] for c in SYSCTL) + ('ip_forward',) + tuple(c[0] for c in SSH) + ('auto_updates', 'exposed_listeners')
 
 
 def _now():
