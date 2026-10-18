@@ -128,3 +128,29 @@ def test_worst_case_snapshot_review_stays_inside_hud_response_budget(tmp_path):
     assert len(records) == domain_signals.MAX_SNAPSHOT_RECORDS
     assert all(len(s['detail']) <= 160 for r in records for s in r['signals'])
     assert len(json.dumps(records).encode()) < 96 * 1024
+
+
+@pytest.mark.parametrize('value', ['x' * 64 + '.com', 'bad-.example', 'a.-bad.example', 'ok.x' + 'y' * 63 + '.net'])
+def test_invalid_dns_labels_produce_no_signal(value):
+    assert assess(value) is None
+
+
+def test_longest_valid_label_and_service_labels_are_still_scored():
+    assert [s['id'] for s in assess('ab' * 31 + 'a.com')['signals']] == ['long_label']
+    assert assess('ab' * 32 + '.com') is None
+    assert assess('_dmarc.example.com') is None
+
+
+def test_equivalent_spellings_count_once():
+    names = [dict(name='xkqzjvbwmtrplhgn.com'), dict(name='XKQZJVBWMTRPLHGN.COM.')]
+    assert [r['name'] for r in review(names)] == ['xkqzjvbwmtrplhgn.com']
+
+
+def test_snapshot_cap_keeps_review_records_ahead_of_earlier_notes():
+    note = assess('mxlqjrtwvb.ru')
+    flagged = assess('xkqzjvbwmtrplhgn.com')
+    groups = [[note] * 5 for _ in range(13)] + [[note, flagged]]
+    capped = domain_signals.cap(groups)
+    assert sum(len(group) for group in capped) == domain_signals.MAX_SNAPSHOT_RECORDS
+    assert flagged in capped[-1]
+    assert capped[0] == [note] * 5 and domain_signals.cap([[note, flagged]]) == [[note, flagged]]
