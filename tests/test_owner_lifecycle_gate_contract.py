@@ -20,5 +20,7 @@ def test_owner_lifecycle_workflow_is_read_only_and_exact_head_bound() -> None:
     assert 'fields.get("head") != head' in text
     assert 'author_association") != "OWNER"' in text
     assert 'if comment["via_app"] and state != "revoked":' in text
+    # Statuses are per commit, so success also requires no other open PR on the head.
+    assert text.count("shared_head_hold(") == 3
     assert 'state not in {"authorized", "revoked"}' in text
     assert "release, deployment, installation" in text

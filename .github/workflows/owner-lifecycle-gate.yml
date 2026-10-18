@@ -177,35 +177,75 @@ jobs:
                       })
               return comments
 
+          def other_open_pulls(sha: str):
+              # Statuses are per commit: another open PR on this head would share the verdict.
+              others = []
+              for page_number in range(1, 12):
+                  page = get_json(
+                      f"/repos/{repository}/pulls?state=open&per_page=100&page={page_number}"
+                  )
+                  if not isinstance(page, list) or len(page) > 100:
+                      raise IncompleteState("malformed open pull page")
+                  for pull in page:
+                      if (
+                          not isinstance(pull, dict) or type(pull.get("number")) is not int
+                          or not isinstance(pull.get("head"), dict)
+                      ):
+                          raise IncompleteState("malformed open pull")
+                      if pull["head"].get("sha") == sha and pull["number"] != pr_number:
+                          others.append(pull["number"])
+                  if len(page) < 100:
+                      return others
+              raise IncompleteState("open pull requests exceed 1100-pull bound")
+
+          def shared_head_hold(sha: str):
+              try:
+                  shared = other_open_pulls(sha)
+              except (IncompleteState, OSError, ValueError, urllib.error.URLError) as exc:
+                  return f"Hold: unable to confirm complete GitHub state: {exc}"
+              if shared:
+                  return f"Hold: head is also the head of open PR #{shared[0]}"
+              return None
+
+          def post_status(code: int, sha: str, state: str, description: str):
+              request = urllib.request.Request(
+                  f"{api}/repos/{repository}/statuses/{sha}",
+                  data=json.dumps({
+                      "state": state, "context": STATUS_CONTEXT,
+                      "description": description[:140], "target_url": run_url,
+                  }).encode(),
+                  method="POST",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "megalodon-owner-lifecycle-gate",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      response.read(65536)
+              except OSError as exc:
+                  print(f"Unable to post {STATUS_CONTEXT} status on {sha}: {exc}")
+                  raise SystemExit(code or 1)
+              print(f"Posted {STATUS_CONTEXT}={state} on {sha}")
+
           def finish(code: int, sha: str | None, description: str):
               # Only an exact-head authorization (code 0) ever posts success.
-              state = "success" if code == 0 else "failure"
               if sha is None:
                   print(f"No verified PR head; {STATUS_CONTEXT} status not posted.")
-              elif read_only_token:
+                  raise SystemExit(code)
+              if read_only_token:
                   print(f"Fork pull request token is read-only; {STATUS_CONTEXT} status not posted.")
-              else:
-                  request = urllib.request.Request(
-                      f"{api}/repos/{repository}/statuses/{sha}",
-                      data=json.dumps({
-                          "state": state, "context": STATUS_CONTEXT,
-                          "description": description[:140], "target_url": run_url,
-                      }).encode(),
-                      method="POST",
-                      headers={
-                          "Accept": "application/vnd.github+json",
-                          "Authorization": f"Bearer {token}",
-                          "X-GitHub-Api-Version": "2022-11-28",
-                          "User-Agent": "megalodon-owner-lifecycle-gate",
-                      },
-                  )
-                  try:
-                      with urllib.request.urlopen(request, timeout=20) as response:
-                          response.read(65536)
-                  except OSError as exc:
-                      print(f"Unable to post {STATUS_CONTEXT} status on {sha}: {exc}")
-                      raise SystemExit(code or 1)
-                  print(f"Posted {STATUS_CONTEXT}={state} on {sha}")
+                  raise SystemExit(code)
+              post_status(code, sha, "success" if code == 0 else "failure", description)
+              if code == 0:
+                  # A PR opened on this head before the post landed would inherit success.
+                  hold = shared_head_hold(sha)
+                  if hold:
+                      print(f"OWNER_LIFECYCLE_HOLD: {hold}")
+                      post_status(3, sha, "failure", hold)
+                      raise SystemExit(3)
               raise SystemExit(code)
 
           head = None
@@ -273,6 +313,11 @@ jobs:
                   f"#{comment_id} is revoked"
               )
               finish(3, head, f"Hold: latest owner record #{comment_id} is revoked")
+
+          hold = shared_head_hold(head)
+          if hold:
+              print(f"OWNER_LIFECYCLE_HOLD: {hold}")
+              finish(3, head, hold)
 
           print(
               "OWNER_LIFECYCLE_AUTHORIZED: "
