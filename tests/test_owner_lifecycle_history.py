@@ -31,16 +31,21 @@ def comment(identity, state=None, **changes):
 
 
 def run_gate(monkeypatch, tmp_path, history, *, second=None, pull_changes=None,
-             page_transform=None, event_name="pull_request", clock=None):
+             page_transform=None, event_name="pull_request", clock=None,
+             statuses=None, head_repo="owner/project", status_failure=None):
     text = WORKFLOW.read_text(encoding="utf-8")
     source = textwrap.dedent(text.split("python - <<'PY'\n", 1)[1].rsplit("          PY", 1)[0])
     compile(source, str(WORKFLOW), "exec")
     event = tmp_path / "event.json"
-    event.write_text(json.dumps({"pull_request": {"number": 1}, "issue": {"number": 1}}))
+    event.write_text(json.dumps({
+        "pull_request": {"number": 1, "head": {"sha": HEAD, "repo": head_repo and {"full_name": head_repo}}},
+        "issue": {"number": 1},
+    }))
     for key, value in {
         "GH_TOKEN": "synthetic-token", "GH_API_URL": "https://api.github.test",
         "GH_REPOSITORY": "owner/project", "GH_REPOSITORY_OWNER": "owner",
         "GH_EVENT_NAME": event_name, "GITHUB_EVENT_PATH": str(event),
+        "GITHUB_SERVER_URL": "https://github.test", "GITHUB_RUN_ID": "7",
     }.items():
         monkeypatch.setenv(key, value)
     calls = []
@@ -51,6 +56,14 @@ def run_gate(monkeypatch, tmp_path, history, *, second=None, pull_changes=None,
         nonlocal pulls, scan
         assert 0 < timeout <= 20
         url = request.full_url
+        if "/statuses/" in url:
+            assert request.get_method() == "POST"
+            assert url.startswith("https://api.github.test/repos/owner/project/statuses/")
+            if status_failure:
+                raise status_failure
+            if statuses is not None:
+                statuses.append((url.rsplit("/", 1)[1], json.loads(request.data)))
+            return io.BytesIO(b"{}")
         calls.append(url)
         if url.endswith("/pulls/1"):
             result = {"head": {"sha": HEAD}, "draft": False, "comments": len(history)}
@@ -178,3 +191,63 @@ def test_shared_deadline_holds(monkeypatch, tmp_path):
     ticks = iter([0, 1, 2, 181])
     assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
                     clock=lambda: next(ticks))[0] == 3
+
+
+def status(state, description):
+    return (HEAD, {"state": state, "context": "owner-lifecycle-gate/exact-head",
+                   "description": description, "target_url": "https://github.test/owner/project/actions/runs/7"})
+
+
+@pytest.mark.parametrize("event_name", ["pull_request", "issue_comment"])
+def test_verdict_is_posted_as_a_status_on_the_exact_head(monkeypatch, tmp_path, event_name):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    event_name=event_name, statuses=posted)[0] == 0
+    assert posted == [status("success", "Authorized by owner record #1 for ready and merge only")]
+    posted.clear()
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized"), comment(2, "revoked")],
+                    event_name=event_name, statuses=posted)[0] == 3
+    assert posted == [status("failure", "Hold: latest owner record #2 is revoked")]
+    posted.clear()
+    assert run_gate(monkeypatch, tmp_path, [], event_name=event_name, statuses=posted)[0] == 3
+    assert posted == [status("failure", "Hold: no owner authorization for this exact head")]
+
+
+def test_incomplete_state_posts_failure_never_success(monkeypatch, tmp_path):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    pull_changes=lambda _: {"draft": True}, statuses=posted)[0] == 3
+    assert posted == [status("failure", "Hold: unable to confirm complete GitHub state: pull request is draft")]
+    posted.clear()
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    pull_changes=lambda number: {"comments": 2} if number == 1 else {}, statuses=posted)[0] == 3
+    assert [entry["state"] for _, entry in posted] == ["failure"]
+
+
+def test_unreadable_pull_falls_back_to_the_event_head_only_for_failure(monkeypatch, tmp_path):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    pull_changes=lambda _: {"head": None}, statuses=posted)[0] == 3
+    assert [(sha, entry["state"]) for sha, entry in posted] == [(HEAD, "failure")]
+    posted.clear()
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")], event_name="issue_comment",
+                    pull_changes=lambda _: {"head": None}, statuses=posted)[0] == 3
+    assert posted == []  # a comment event carries no head to fall back to
+
+
+@pytest.mark.parametrize("head_repo", ["fork/project", None])
+def test_fork_pull_request_runs_do_not_post(monkeypatch, tmp_path, head_repo):
+    posted = []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")],
+                    head_repo=head_repo, statuses=posted)[0] == 0
+    assert posted == []
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")], event_name="issue_comment",
+                    head_repo=head_repo, statuses=posted)[0] == 0
+    assert [entry["state"] for _, entry in posted] == ["success"]
+
+
+def test_failed_status_post_fails_the_job(monkeypatch, tmp_path, capsys):
+    failure = urllib.error.HTTPError("https://api.github.test", 403, "Forbidden", None, None)
+    assert run_gate(monkeypatch, tmp_path, [comment(1, "authorized")], status_failure=failure)[0] == 1
+    assert "Unable to post owner-lifecycle-gate/exact-head status" in capsys.readouterr().out
+    assert run_gate(monkeypatch, tmp_path, [], status_failure=failure)[0] == 3
