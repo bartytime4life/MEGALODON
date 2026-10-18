@@ -144,9 +144,14 @@ slice. Later slices can deepen it.
 9. **DNS sinkhole plan.** Match observed domains against an offline,
    checksum-bound blocklist such as a fetched abuse feed. Produce a time-limited
    sinkhole plan for the operator to approve, with release and audit.
-10. **LAN gateway integrity.** Detect a change in the default gateway's MAC,
-    duplicate-IP or ARP spoofing indicators, a rogue DHCP server, and a new
-    unknown device on the local subnet, all from passive metadata only.
+10. **LAN gateway integrity.** *First slice delivered:*
+    `megalodon/gateway_review.py` passively reads the IPv4 routing table and
+    ARP cache, flags a changed gateway MAC (against a recorded baseline or the
+    HUD session's first observation) and MAC addresses shared by several
+    neighbors, and the HUD shows it read-only under Setup → Host security. See
+    `docs/host-security.md`. Next slices: a rogue DHCP server and new unknown
+    devices on the local subnet, which need passive packet metadata, and IPv6
+    neighbor review.
 
 #### LOD: Layered operations defense (detection engineering and response)
 
