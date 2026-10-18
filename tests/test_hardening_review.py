@@ -82,8 +82,12 @@ def test_ssh_defaults_includes_first_value_and_match(root):
     checks = by_id(review(root))
     assert checks['ssh_password_auth']['state'] == 'pass' and checks['ssh_password_auth']['observed'] == 'no'
     root_login = checks['ssh_root_login']
-    assert root_login['state'] == 'pass' and 'OpenSSH default' in root_login['observed']
+    # sshd would read the refused outside include, so the default is not assumed.
+    assert root_login['state'] == 'unknown'
     assert 'Match blocks' in root_login['note'] and 'outside /etc/ssh' in root_login['note']
+    (ssh/'sshd_config').write_text('Include /etc/ssh/sshd_config.d/*.conf\nMatch User backup\n  PermitRootLogin yes\n')
+    root_login = by_id(review(root))['ssh_root_login']
+    assert root_login['state'] == 'pass' and 'OpenSSH default' in root_login['observed']
 
 
 def test_ssh_failures_and_symlinked_include(root, tmp_path_factory):
@@ -95,7 +99,8 @@ def test_ssh_failures_and_symlinked_include(root, tmp_path_factory):
     (ssh/'sshd_config').write_text('Include sshd_config.d/*.conf\nPermitRootLogin yes\nPermitEmptyPasswords yes\n')
     checks = by_id(review(root))
     assert checks['ssh_root_login']['state'] == 'fail' and checks['ssh_empty_passwords']['state'] == 'fail'
-    assert checks['ssh_password_auth']['state'] == 'fail'  # the symlinked include was refused
+    # The refused include might set it, so the OpenSSH default is not assumed.
+    assert checks['ssh_password_auth']['state'] == 'unknown'
     assert 'could not be read' in checks['ssh_password_auth']['note']
 
 
@@ -179,3 +184,50 @@ def test_apt_file_bound_is_disclosed(root, monkeypatch):
         (root/'etc/apt/apt.conf.d'/f'{index:02d}-x').write_text('')
     check = by_id(review(root))['auto_updates']
     assert check['note'] == 'Only the first 2 of 5 APT configuration files were read.'
+
+
+def test_missing_socket_tables_are_never_a_pass(root):
+    (root/'proc/net/tcp').unlink()
+    check = by_id(review(root))['exposed_listeners']
+    assert check['state'] == 'unknown' and check['listeners_complete'] is False
+    (root/'proc/net/tcp').write_text(TCP_HEADER)
+    assert by_id(review(root))['exposed_listeners']['state'] == 'pass'  # IPv6 absent: no if_inet6
+    (root/'proc/net/if_inet6').write_text('')
+    check = by_id(review(root))['exposed_listeners']
+    assert check['state'] == 'unknown' and check['listeners_complete'] is False
+
+
+@pytest.mark.parametrize('make, observed', [(lambda p: p.unlink(), 'not present'),
+                                            (lambda p: (p.unlink(), p.mkdir()), 'unreadable')])
+def test_ip_forward_row_is_always_reported(root, make, observed):
+    make(root/'proc/sys/net/ipv4/ip_forward')
+    check = by_id(review(root))['ip_forward']
+    assert check['state'] == 'unknown' and check['observed'] == observed
+
+
+def test_truncated_ssh_config_does_not_assume_defaults(root, monkeypatch):
+    ssh = root/'etc/ssh'
+    ssh.mkdir(parents=True)
+    (ssh/'sshd_config').write_text('PermitRootLogin no\n' + '# padding\n' * 40 + 'PermitEmptyPasswords yes\n')
+    monkeypatch.setattr(hardening_review, 'MAX_READ', 64)
+    checks = by_id(review(root))
+    assert checks['ssh_root_login']['state'] == 'pass'  # established before the cut-off
+    assert checks['ssh_empty_passwords']['state'] == 'unknown'
+    assert checks['ssh_empty_passwords']['observed'] == 'not set in the configuration that was read'
+
+
+def test_apt_comments_are_ignored(root):
+    (root/'etc/apt/apt.conf.d/20auto-upgrades').write_text(
+        '/*\nAPT::Periodic::Unattended-Upgrade "1";\n*/\n# APT::Periodic::Unattended-Upgrade "1";\n')
+    check = by_id(review(root))['auto_updates']
+    assert check['state'] == 'fail' and check['observed'] == 'not configured'
+
+
+def test_apt_pass_needs_every_file_read(root, monkeypatch):
+    (root/'etc/apt/apt.conf.d/99-dir').mkdir()
+    check = by_id(review(root))['auto_updates']
+    assert check['state'] == 'unknown' and '1 APT configuration files could not be fully read.' in check['note']
+    (root/'etc/apt/apt.conf.d/99-dir').rmdir()
+    monkeypatch.setattr(hardening_review, 'MAX_APT_FILES', 1)
+    (root/'etc/apt/apt.conf.d/99-later').write_text('APT::Periodic::Unattended-Upgrade "0";\n')
+    assert by_id(review(root))['auto_updates']['state'] == 'unknown'

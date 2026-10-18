@@ -17,6 +17,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import stat
 
 from .provider_containment import _LISTEN_STATE, _TCP_TABLES, _parse_address
@@ -29,6 +30,7 @@ MAX_SSH_INCLUDES = 32
 MAX_LISTENERS = 64
 MAX_TABLE_LINES = 65536
 STATES = ('pass', 'fail', 'review', 'unknown', 'not_applicable')
+_APT_BLOCK_COMMENT = re.compile(r'/\*.*?\*/', re.S)
 # (id, path under /proc/sys, accepted values, ATT&CK mitigation, title, remediation)
 SYSCTL = (
     ('aslr', 'kernel/randomize_va_space', {'2'}, 'M1050', 'Full address space layout randomization',
@@ -119,9 +121,14 @@ def sysctl_checks(root):
         rows.append(_check(check_id, title, 'pass' if value in accepted else 'fail', value, expected, mitigation, remediation))
     try:
         forward = _read(Path(root, 'proc/sys/net/ipv4/ip_forward'))[0].strip()
+    except FileNotFoundError:
+        forward = 'not present'
     except (OSError, ValueError):
-        forward = None
-    if forward is not None:
+        forward = 'unreadable'
+    if forward in ('not present', 'unreadable'):
+        rows.append(_check('ip_forward', 'IPv4 packet forwarding', 'unknown', forward, '0', 'M1037',
+                           'Set net.ipv4.ip_forward = 0 unless this host routes for others.'))
+    else:
         rows.append(_check('ip_forward', 'IPv4 packet forwarding', 'pass' if forward == '0' else 'review', forward, '0', 'M1037',
                            'Set net.ipv4.ip_forward = 0 unless this host routes for others.',
                            None if forward == '0' else 'Container runtimes, VPNs and routers enable forwarding on purpose.'))
@@ -129,15 +136,22 @@ def sysctl_checks(root):
 
 
 def _ssh_settings(root):
-    """Return {keyword: value} for global sshd settings, first value wins, and a coverage note."""
+    """Return global sshd settings (first value wins), coverage notes, and whether all text was read.
+
+    When reading was incomplete, an unset keyword may be set in the unread
+    part, so its OpenSSH default must not be assumed.
+    """
     settings, notes, seen = {}, [], set()
+    complete = True
     def parse(path, depth):
+        nonlocal complete
         if depth > 2 or len(seen) > MAX_SSH_INCLUDES or path in seen:
-            notes.append('Some SSH include files were not read.'); return False
+            notes.append('Some SSH include files were not read.'); complete = False; return False
         seen.add(path)
         text, truncated = _read(path)
         if truncated:
             notes.append(f'An SSH configuration file is larger than {MAX_READ // 1024} KiB; only its start was read.')
+            complete = False
         for raw in text.splitlines():
             line = raw.strip()
             if not line or line.startswith('#'):
@@ -153,18 +167,18 @@ def _ssh_settings(root):
                     pattern = pattern if pattern.startswith('/') else '/etc/ssh/'+pattern
                     # Only follow includes that stay under /etc/ssh.
                     if not os.path.normpath(pattern).startswith('/etc/ssh/'):
-                        notes.append('An SSH include outside /etc/ssh was not read.'); continue
+                        notes.append('An SSH include outside /etc/ssh was not read.'); complete = False; continue
                     for match in sorted(glob.glob(str(Path(root, pattern.lstrip('/')))))[:MAX_SSH_INCLUDES]:
                         try:
                             if parse(match, depth+1):
                                 return True
                         except (OSError, ValueError):
-                            notes.append('An SSH include file could not be read.')
+                            notes.append('An SSH include file could not be read.'); complete = False
                 continue
             settings.setdefault(key, value.lower())
         return False
     parse(str(Path(root, 'etc/ssh/sshd_config')), 0)
-    return settings, list(dict.fromkeys(notes))
+    return settings, list(dict.fromkeys(notes)), complete
 
 
 def ssh_checks(root):
@@ -173,14 +187,19 @@ def ssh_checks(root):
         return [_check(c[0], c[5], 'not_applicable', 'no sshd_config', ' or '.join(sorted(c[3])), c[4], c[6],
                        'The OpenSSH server configuration is not present.') for c in SSH]
     try:
-        settings, notes = _ssh_settings(root)
+        settings, notes, complete = _ssh_settings(root)
     except (OSError, ValueError):
         return [_check(c[0], c[5], 'unknown', 'unreadable', ' or '.join(sorted(c[3])), c[4], c[6]) for c in SSH]
     rows = []
     for check_id, key, default, accepted, mitigation, title, remediation in SSH:
         value = settings.get(key)
-        observed = value if value is not None else f'{default} (OpenSSH default; not set)'
         note = ' '.join(notes) or None
+        if value is None and not complete:
+            # The keyword may be set in text that was not read; the default is not established.
+            rows.append(_check(check_id, title, 'unknown', 'not set in the configuration that was read',
+                               ' or '.join(sorted(accepted)), mitigation, remediation, note))
+            continue
+        observed = value if value is not None else f'{default} (OpenSSH default; not set)'
         rows.append(_check(check_id, title, 'pass' if (value or default) in accepted else 'fail', observed,
                            ' or '.join(sorted(accepted)), mitigation, remediation, note))
     return rows
@@ -199,17 +218,31 @@ def update_checks(root):
                 total += 1
                 yield entry.name
     # APT reads these files in name order, so the last setting wins.
+    unread = 0
     for name in heapq.nsmallest(MAX_APT_FILES, names()):
         try:
-            text = _read(directory/name)[0]
+            text, truncated = _read(directory/name)
         except (OSError, ValueError):
-            continue
+            unread += 1; continue
+        unread += truncated
+        # APT ignores /* */ blocks and // or # line comments.
+        text = _APT_BLOCK_COMMENT.sub(' ', text)
         for line in text.splitlines():
             line = line.split('//', 1)[0].strip()
+            if line.startswith('#'):
+                continue
             if line.startswith('APT::Periodic::Unattended-Upgrade'):
                 enabled = '"1"' in line or '"true"' in line.lower()
-    note = (f'Only the first {MAX_APT_FILES} of {total} APT configuration files were read.'
-            if total > MAX_APT_FILES else None)
+    notes = []
+    if total > MAX_APT_FILES:
+        notes.append(f'Only the first {MAX_APT_FILES} of {total} APT configuration files were read.')
+    if unread:
+        notes.append(f'{unread} APT configuration files could not be fully read.')
+    note = ' '.join(notes) or None
+    if enabled and notes:
+        # A later, unread file could still disable the setting.
+        return [_check('auto_updates', 'Automatic security updates', 'unknown', 'enabled in the files that were read', 'enabled',
+                       'M1051', 'Set APT::Periodic::Unattended-Upgrade "1".', note)]
     if enabled is None:
         return [_check('auto_updates', 'Automatic security updates', 'fail', 'not configured', 'enabled', 'M1051',
                        'Install unattended-upgrades and run "dpkg-reconfigure unattended-upgrades".', note)]
@@ -231,6 +264,10 @@ def listeners(root):
             # Busy hosts have large tables; a cut-off read is reported, never treated as complete.
             text, truncated = _read(Path(root, rel.lstrip('/')), MAX_TABLE_READ)
         except FileNotFoundError:
+            # A missing IPv4 table means procfs is unavailable; a missing IPv6
+            # table is complete only when IPv6 itself is absent.
+            if family != 'ipv6' or os.path.lexists(Path(root, 'proc/net/if_inet6')):
+                complete = False
             continue
         except (OSError, ValueError):
             complete = False; continue
