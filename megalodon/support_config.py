@@ -24,7 +24,7 @@ from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .host_security import HostSecurity
-from . import hardening_review, persistence_review
+from . import gateway_review, hardening_review, persistence_review
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -47,6 +47,8 @@ COMMAND = '~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.supp
 HARDENING_TTL = 60
 # A persistence review reads and hashes up to its item bound, so it refreshes less often.
 PERSISTENCE_TTL = 300
+# The gateway review reads two small kernel tables, so it can follow the setup view's polling.
+GATEWAY_TTL = 10
 ACTION_FIELDS = {
     'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
     'persistence_baseline':set(),
@@ -207,7 +209,9 @@ class SupportConfiguration:
         self.host_security = HostSecurity(self.home)
         # Cached read-only reviews; one run per TTL window, even when several HUD requests arrive together.
         self._reviews = {}
-        self._review_locks = dict(hardening=Lock(), persistence=Lock())
+        self._review_locks = dict(hardening=Lock(), persistence=Lock(), gateway=Lock())
+        # First MAC address seen for each gateway in this HUD session; never written to disk.
+        self._gateway_session = {}
         # The persistence review reads files, so it refreshes off the request path. A
         # generation bump discards a refresh that started before a baseline was recorded.
         self._persistence_refreshing, self._persistence_generation = False, 0
@@ -333,6 +337,11 @@ class SupportConfiguration:
         return self._cached('hardening', HARDENING_TTL, hardening_review.review,
                             dict(schema=hardening_review.SCHEMA, checks=[]))
 
+    def _gateway_snapshot(self):
+        """Read-only gateway review, against a recorded baseline or this session's first observation."""
+        return self._cached('gateway', GATEWAY_TTL, lambda: gateway_review.GatewayReview(self.home).review(self._gateway_session),
+                            dict(schema=gateway_review.SCHEMA))
+
     def _persistence_snapshot(self):
         """The last persistence summary, or a pending state; a stale one is refreshed in the background."""
         with self._review_locks['persistence']:
@@ -364,6 +373,7 @@ class SupportConfiguration:
     def snapshot(self, include_token=False):
         hardening = self._hardening_snapshot()
         persistence = self._persistence_snapshot()
+        gateway = self._gateway_snapshot()
         try:
             tool_directories = load_directories(self.home)
             tool_directories_status = 'ready'
@@ -375,7 +385,7 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
-                         host_security=self.host_security.snapshot(), hardening=hardening, persistence=persistence,
+                         host_security=self.host_security.snapshot(), hardening=hardening, persistence=persistence, gateway=gateway,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token

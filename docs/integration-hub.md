@@ -198,3 +198,9 @@ compares them with an operator-recorded private baseline. It runs nothing and
 changes nothing. The HUD shows a bounded summary under Setup and can record
 only a first baseline; [host security](host-security.md#persistence-location-review)
 owns its scope and limits.
+
+The `megalodon.gateway_review` command passively reads the IPv4 routing table
+and ARP cache, names the default gateway's MAC address and flags a changed or
+shared one against a recorded baseline or the HUD session's first observation.
+It sends nothing and changes nothing; the HUD shows it read-only under Setup,
+and [host security](host-security.md#local-gateway-review) owns its limits.
