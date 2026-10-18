@@ -53,10 +53,35 @@ read. Existing records retain creation-time and ID precedence when edited.
 An oversized or unstable thread requires a separately reviewed lifecycle
 decision; the workflow never silently uses a partial history.
 
-The workflow never checks out or executes pull-request code and has read-only
-permissions. It does not merge, modify the ruleset, create an independent-human
-approval floor, or authorize release, deployment, installation, model or sensor
-operation, firewall changes, or host control.
+## Commit status on the PR head
 
-The workflow is initially advisory. Making its stable check name required is a
+GitHub runs comment-triggered workflows on the default branch, so the
+`exact-head-owner-authorization` check from an owner comment lands on the
+default branch, not on the PR. Each run therefore also posts its verdict as the
+commit status `owner-lifecycle-gate/exact-head` on the PR head it evaluated:
+
+- `success` only for a confirmed, unrevoked owner record naming that exact head;
+- `failure` for every HOLD, including draft, incomplete or changing state.
+  When the pull request itself cannot be read, a `pull_request` run falls back
+  to the head SHA in its event, and only ever to post `failure`.
+
+A new push changes the head, which starts with no status until a run evaluates
+it. Fork `pull_request` runs have a read-only token and post nothing; the next
+comment-triggered run posts instead. If posting fails, the job fails.
+
+A status stays until a later run replaces it. If a comment-triggered run cannot
+read the pull request at all, it has no head to post to: the job fails, and an
+earlier `success` stands until a run completes. Re-run the job after posting a
+revocation if that run failed.
+
+Require `owner-lifecycle-gate/exact-head`, not the job's check name, so an
+owner comment alone can satisfy the gate.
+
+The workflow never checks out or executes pull-request code. Its only write
+permission is `statuses: write`, used for that one status. It does not merge,
+modify the ruleset, create an independent-human approval floor, or authorize
+release, deployment, installation, model or sensor operation, firewall changes,
+or host control.
+
+The workflow is initially advisory. Making its status context required is a
 separate owner repository-control decision after exact-head CI and review.
