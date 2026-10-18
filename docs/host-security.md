@@ -419,7 +419,14 @@ left out.
 
 Programs are grouped by executable path, with the number of processes, the
 first process's parent name, connected, listening and other sockets, and up to
-three remote peers (`remotes_total` counts all). Three flags mark a program for
+three remote peers (`remotes_total` counts all). A socket shared by duplicated
+descriptors or worker processes is counted once per program. Socket tables are
+per network namespace: the tables of another one, such as a rootless
+container's or a `PrivateNetwork=` service's, are read from `/proc/<pid>/net`,
+for up to 16 namespaces beyond the HUD's own; more are named in a gap and make
+`tables_complete` false. Socket inodes are unique across namespaces, so each
+descriptor is matched against every table read, which keeps a socket a process
+received from another namespace (systemd socket activation) in the review. Three flags mark a program for
 review, each with a fixed ATT&CK technique:
 
 | Flag | ATT&CK | Meaning |
@@ -430,8 +437,9 @@ review, each with a fixed ATT&CK technique:
 
 At most 16 programs are listed, flagged ones first; `programs_total` and
 `flagged_total` count all. Each socket table is read without following a final
-symlink, up to 16 MiB and 65,536 rows, and the scan stops at 2,048 processes or
-65,536 open files; each bound sets `tables_complete` or `scan_complete` to
+symlink, up to 16 MiB and 65,536 rows. The scan considers the 65,536
+lowest-numbered `/proc` entries, chosen in bounded memory, and stops at 2,048
+of this account's processes or 65,536 open files; each bound sets `tables_complete` or `scan_complete` to
 false with a gap. Addresses are decoded in the host's byte order. Names and
 paths are shortened to 256 JSON-escaped bytes. The result carries
 `action_status: not_attempted` and `action_authority: none`.
