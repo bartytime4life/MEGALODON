@@ -26,17 +26,6 @@ change. Every receipt therefore reports `action_status=not_attempted` and all
 three performed flags as false. An `entry_point` identifies the existing owner;
 it is descriptive data, not an argv builder or authorization to run it.
 
-## Optional HawkScan preparation
-
-[HawkScan setup](hawkscan-setup.md) is a separate commercial DAST preparation
-surface: `python -m megalodon.hawkscan_setup` prints a static plan, `check`
-inspects fixed-name executable metadata, and `config` prints a bounded
-literal-loopback lab profile. It has no scanner executor or result importer.
-Active scanning remains held for a disposable target and reviewed StackHawk
-data sharing. It is outside this free/open-source companion catalog and the
-existing readiness/heartbeat schemas; no installed or operational status is
-inferred from this guide. Its Setup card is informational only.
-
 ## Closed workflow map
 
 | Workflow | Utility | Current Linux relationship | Integration boundary |

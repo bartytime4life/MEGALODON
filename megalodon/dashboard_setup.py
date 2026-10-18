@@ -6,7 +6,7 @@ SETUP_HTML = """
   <section class="hud-start" aria-labelledby="setup-title">
     <header class="setup-heading">
       <div><p class="eyebrow">Set up with confidence</p><h2 id="setup-title" tabindex="-1">Data and tools</h2>
-      <p>Check this computer, then prepare the tools you need. Core telemetry runs locally. The optional HawkScan application scanner needs a separate StackHawk account and cloud-data approval.</p>
+      <p>Check this computer, then prepare the tools you need. Core telemetry runs locally.</p>
       <p><a href="#apps-connections-title">Install or configure an app →</a> · <a href="#support-config-title">Capture and collector settings →</a></p></div>
       <a class="setup-help-link" href="#room-help-title">How this works <span aria-hidden="true">↗</span></a>
     </header>
@@ -61,16 +61,6 @@ SETUP_HTML = """
         <p class="setup-download-note">After authorization, Install runs a fixed Ubuntu or Python package or downloads the example Qwen model; system packages and service starts use your computer's password prompt. Packages can start services. <a href="#apps-connections-title">Open app installation controls →</a></p>
       </section>
     </div>
-    <section class="setup-health" aria-labelledby="hawkscan-setup-title">
-      <h3 id="hawkscan-setup-title" tabindex="-1">HawkScan application scanner</h3>
-      <p><strong>Setup available · Scanning held</strong></p>
-      <p>HawkScan tests web applications for security issues. It can change application data and send findings to StackHawk. Use an approved disposable lab with synthetic data.</p>
-      <p>From a reviewed MEGALODON checkout and its Python environment, print the plan or check executable presence:</p>
-      <code>python -m megalodon.hawkscan_setup</code>
-      <code>python -m megalodon.hawkscan_setup check</code>
-      <p>These commands never run HawkScan. Presence does not mean ready to scan. No scan, install or cloud connection starts from this HUD.</p>
-      <p><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/hawkscan-setup.md" target="_blank" rel="noopener noreferrer">Read the HawkScan setup and approval guide ↗</a></p>
-    </section>
     <div class="setup-bottom">
       <section class="setup-account" aria-labelledby="setup-account-title">
         <h3 id="setup-account-title" tabindex="-1">Local sign-in</h3>

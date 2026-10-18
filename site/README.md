@@ -10,11 +10,6 @@ the local HUD's Advanced exports. Import keeps the data in tab memory; Clear
 or reload removes it. The Site starts empty, performs no local network requests,
 and cannot start sensors, services, models or firewall actions.
 
-The optional [HawkScan preparation guide](../docs/hawkscan-setup.md) belongs to
-the local application/reviewed checkout. This hosted viewer cannot configure
-or run HawkScan and is not an approved scan target. Scanner credentials,
-request/response evidence and logs are outside its snapshot import schema.
-
 The dated summary describes a bounded evidence window, not live PC activity
 or proof that a network is safe. IP addresses, ports, packet payloads, raw
 records, device names, account data and operator tokens are outside the import

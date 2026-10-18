@@ -63,18 +63,6 @@ contracts. Current installed-HUD behavior is specified in the
 [HTTP contract](docs/dashboard-http-contract.md), [managed history](docs/managed-evidence.md),
 [reports](docs/efficient-recording-reports.md), and [background tools](docs/background-tools.md).
 
-### Optional HawkScan application-security setup
-
-**Setup → HawkScan application scanner** explains the separate DAST workflow.
-From a reviewed checkout and its Python environment,
-`python -m megalodon.hawkscan_setup` prints an offline plan;
-`python -m megalodon.hawkscan_setup check` checks `hawk` executable metadata
-without running it. The [setup guide](docs/hawkscan-setup.md) covers the exact
-Linux artifact, loopback configuration and operator gates. Active scanning is
-held pending an owned disposable target and StackHawk cloud-data approval.
-This optional commercial companion has no MEGALODON scan runner, scheduler,
-result importer, model authority or firewall connection.
-
 ## Install on this Linux PC
 
 Open the repository folder and double-click **Start-MEGALODON.sh**. Choose
