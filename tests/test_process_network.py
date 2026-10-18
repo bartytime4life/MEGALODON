@@ -420,3 +420,20 @@ def test_a_stalled_read_is_bounded_by_time_and_never_stacks_threads(tmp_path, mo
     release.set()
     process_network._hasher.join(10)
     assert review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]['hash_status'] == 'hashed'
+
+
+def test_a_surviving_process_of_the_group_supplies_the_hash(tmp_path, monkeypatch):
+    import hashlib
+    binary = hashed_host(tmp_path)
+    tables(tmp_path, tcp=[row(('192.168.1.5', 1), ('203.0.113.9', 443), '01', 7),
+                          row(('192.168.1.5', 2), ('203.0.113.9', 443), '01', 8)])
+    proc(tmp_path, 501, str(binary), [8], comm='tool')
+    original = process_network._executable_hash
+    def first_exited(proc, budget, identity):
+        if proc.name == '500':  # the first member exits between the scan and hashing
+            return None, 'unreadable', 0
+        return original(proc, budget, identity)
+    monkeypatch.setattr(process_network, '_executable_hash', first_exited)
+    shown = review(tmp_path, uid=UID, now=lambda: NOW)['programs'][0]
+    assert shown['processes'] == 2 and shown['hash_status'] == 'hashed'
+    assert shown['sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest()
