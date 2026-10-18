@@ -115,5 +115,6 @@ checks preserve the initial baseline; threat matches never execute responses.
 The same panel shows the read-only hardening posture and the
 [persistence location review](host-security.md#persistence-location-review),
 whose one action records an initial persistence baseline and is refused once
-a baseline exists, and the passive [local gateway review](host-security.md#local-gateway-review),
-which has no action.
+a baseline exists, the passive [local gateway review](host-security.md#local-gateway-review),
+which has no action, and the read-only map of
+[programs on the network](host-security.md#programs-on-the-network).

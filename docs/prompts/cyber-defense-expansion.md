@@ -114,10 +114,14 @@ slice. Later slices can deepen it.
    Next slices: replacing a baseline from the HUD after review (an owner
    decision, since accepting a change hides it), and new SUID binaries, which
    need a bounded filesystem walk and an owner decision on scope.
-5. **Process-to-connection correlation.** Link a live connection to its owning
-   process (PID, executable path, hash, parent) using fixed `/proc` reads, so
-   an unexpected outbound connection names its binary. Store no command-line
-   secrets: redact arguments by default.
+5. **Process-to-connection correlation.** *First slice delivered:*
+   `megalodon/process_network.py` maps this account's TCP and UDP sockets to
+   the executables holding them (path, name, parent; never PIDs or command
+   lines), flags deleted, in-memory and temporary-folder executables, and the
+   HUD shows it read-only under Setup → Host security. See
+   `docs/host-security.md`. Next slices: executable hashes cached by file
+   identity, and linking a program to its connections in the endpoint
+   inspector.
 
 #### G: Gateway (network edge and egress defense)
 
