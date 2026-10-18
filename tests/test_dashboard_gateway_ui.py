@@ -8,8 +8,15 @@ import pytest
 
 from megalodon.dashboard_gateway import GATEWAY_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_JS
+from megalodon import gateway_review
 from megalodon.gateway_review import GatewayReview
 from test_gateway_review import GW, GW_MAC, OTHER_MAC, arp, route, tree
+
+
+@pytest.fixture(autouse=True)
+def little_endian_tables(monkeypatch):
+    # test_gateway_review.route() writes little-endian route words; pin the decoder to match on any runner.
+    monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')
 
 
 def reviews(tmp_path):

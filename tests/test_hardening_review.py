@@ -33,7 +33,6 @@ def no_execution(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def little_endian_tables(monkeypatch):
-    # row() fixtures write little-endian address words; listeners() decodes through provider_containment.
     monkeypatch.setattr(provider_containment, '_BYTE_ORDER', 'little')
 
 
