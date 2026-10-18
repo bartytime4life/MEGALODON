@@ -136,22 +136,26 @@ def sysctl_checks(root):
 
 
 def _ssh_settings(root):
-    """Return global sshd settings (first value wins), coverage notes, and whether all text was read.
+    """Return {keyword: (value, certain)}, coverage notes, and whether all text was read.
 
-    When reading was incomplete, an unset keyword may be set in the unread
-    part, so its OpenSSH default must not be assumed.
+    sshd reads includes in place and keeps the first value of each keyword,
+    so any text skipped before a keyword's first value could have set it
+    earlier. Such a value is not certain, and an unset keyword after any skip
+    has no established default.
     """
     settings, notes, seen = {}, [], set()
     complete = True
-    def parse(path, depth):
+    def gap(message):
         nonlocal complete
+        notes.append(message); complete = False
+    def parse(path, depth):
         if depth > 2 or len(seen) > MAX_SSH_INCLUDES or path in seen:
-            notes.append('Some SSH include files were not read.'); complete = False; return False
+            gap('Some SSH include files were not read.'); return False
         seen.add(path)
         text, truncated = _read(path)
         if truncated:
-            notes.append(f'An SSH configuration file is larger than {MAX_READ // 1024} KiB; only its start was read.')
-            complete = False
+            # The cut can land inside a directive; only complete lines are parsed.
+            text = text.rpartition('\n')[0]
         for raw in text.splitlines():
             line = raw.strip()
             if not line or line.startswith('#'):
@@ -167,15 +171,22 @@ def _ssh_settings(root):
                     pattern = pattern if pattern.startswith('/') else '/etc/ssh/'+pattern
                     # Only follow includes that stay under /etc/ssh.
                     if not os.path.normpath(pattern).startswith('/etc/ssh/'):
-                        notes.append('An SSH include outside /etc/ssh was not read.'); complete = False; continue
-                    for match in sorted(glob.glob(str(Path(root, pattern.lstrip('/')))))[:MAX_SSH_INCLUDES]:
+                        gap('An SSH include outside /etc/ssh was not read.'); continue
+                    matches = heapq.nsmallest(MAX_SSH_INCLUDES + 1, glob.iglob(str(Path(root, pattern.lstrip('/')))))
+                    for match in matches[:MAX_SSH_INCLUDES]:
                         try:
                             if parse(match, depth+1):
                                 return True
                         except (OSError, ValueError):
-                            notes.append('An SSH include file could not be read.'); complete = False
+                            gap('An SSH include file could not be read.')
+                    if len(matches) > MAX_SSH_INCLUDES:
+                        gap(f'An SSH include pattern matched more than {MAX_SSH_INCLUDES} files; the rest were not read.')
                 continue
-            settings.setdefault(key, value.lower())
+            if key not in settings:
+                settings[key] = (value.lower(), complete)
+        if truncated:
+            # The unread tail comes after everything parsed above.
+            gap(f'An SSH configuration file is larger than {MAX_READ // 1024} KiB; only its start was read.')
         return False
     parse(str(Path(root, 'etc/ssh/sshd_config')), 0)
     return settings, list(dict.fromkeys(notes)), complete
@@ -192,11 +203,16 @@ def ssh_checks(root):
         return [_check(c[0], c[5], 'unknown', 'unreadable', ' or '.join(sorted(c[3])), c[4], c[6]) for c in SSH]
     rows = []
     for check_id, key, default, accepted, mitigation, title, remediation in SSH:
-        value = settings.get(key)
+        value, certain = settings.get(key, (None, complete))
         note = ' '.join(notes) or None
         if value is None and not complete:
             # The keyword may be set in text that was not read; the default is not established.
             rows.append(_check(check_id, title, 'unknown', 'not set in the configuration that was read',
+                               ' or '.join(sorted(accepted)), mitigation, remediation, note))
+            continue
+        if not certain:
+            # Text skipped before this value could hold an earlier, winning value.
+            rows.append(_check(check_id, title, 'unknown', f'{value} (an earlier unread section may set it first)',
                                ' or '.join(sorted(accepted)), mitigation, remediation, note))
             continue
         observed = value if value is not None else f'{default} (OpenSSH default; not set)'
