@@ -664,7 +664,21 @@ def _connect_verified_sqlite_attempt(
         and _path_matches_descriptor(path.parent, directory_descriptor)
     ):
         _raise_path_error(prefix, "DATABASE_CHANGED")
-    connection = sqlite3.connect(uri, uri=True, **kwargs)
+    try:
+        connection = sqlite3.connect(uri, uri=True, **kwargs)
+    except sqlite3.Error as exc:
+        # SQLite reopens by pathname, so an ancestor swapped away during its
+        # resolution surfaces as "unable to open database file". Classify it:
+        # a changed pathname or generation is a substitution, anything else
+        # is an open failure of the admitted file.
+        changed = (
+            _ancestor_generations(path.parent) != ancestors
+            or _directory_generation(directory_descriptor) != directory_generation
+            or not _path_matches_descriptor(path, descriptor)
+        )
+        _raise_path_error(
+            prefix, "DATABASE_CHANGED" if changed else "OPEN_FAILED", exc
+        )
     try:
         # Any later sample still covers SQLite's path resolution (a rename
         # cannot restore the generations it changed); sampling first keeps

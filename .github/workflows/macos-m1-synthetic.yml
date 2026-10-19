@@ -451,6 +451,88 @@ jobs:
 
           print(json.dumps(results, sort_keys=True))
           PY
+      - name: Write AI receipts and an evidence segment natively
+        run: |
+          python - <<'PY'
+          # Darwin SQLite cannot create a rollback journal through /dev/fd/N
+          # (SQLITE_CANTOPEN on the first write). Store already connects by
+          # its admitted pathname; the AI receipt store and evidence segment
+          # writers must too, and still refuse a symlinked database.
+          from datetime import datetime, timezone
+          import json
+          import os
+          from pathlib import Path
+          import sys
+          import tempfile
+
+          from megalodon.ai_broker import ReceiptStore
+          from megalodon.config import Settings
+          from megalodon.evidence_storage import GIB, EvidenceStorage
+          from megalodon.models import PacketEvent
+          from megalodon.storage import StorageSchemaError
+
+          if sys.platform != "darwin":
+              raise SystemExit("MACOS_WRITERS:UNEXPECTED_PLATFORM")
+          results = {}
+          with tempfile.TemporaryDirectory(prefix="megalodon-m1-writers-") as root:
+              root = Path(root)
+              private = root / "receipts"
+              private.mkdir(mode=0o700)
+              receipts_path = private / "receipts.db"
+              with ReceiptStore(receipts_path) as receipts:
+                  for index in range(3):
+                      receipts.append(f"receipt-{index}", {"state": "not_attempted"})
+                  if receipts.verify_chain()["sequence"] != 3:
+                      raise SystemExit("MACOS_WRITERS:RECEIPT_COUNT")
+              results["receipt_store"] = "written"
+              with ReceiptStore(receipts_path) as receipts:
+                  if receipts.verify_chain()["sequence"] != 3:
+                      raise SystemExit("MACOS_WRITERS:RECEIPT_REOPEN")
+              linked = private / "linked.db"
+              linked.symlink_to(receipts_path.name)
+              before = receipts_path.read_bytes()
+              try:
+                  ReceiptStore(linked).close()
+              except StorageSchemaError as exc:
+                  if str(exc) != "AI_RECEIPT:SYMLINK_REFUSED":
+                      raise SystemExit(f"MACOS_WRITERS:RECEIPT_SYMLINK:{exc}")
+              else:
+                  raise SystemExit("MACOS_WRITERS:RECEIPT_SYMLINK_ACCEPTED")
+              if receipts_path.read_bytes() != before:
+                  raise SystemExit("MACOS_WRITERS:RECEIPT_SYMLINK_TARGET_CHANGED")
+              results["receipt_store_symlink"] = "refused"
+
+              home = root / "home"
+              home.mkdir(mode=0o700)
+              now = datetime.now(timezone.utc).timestamp()
+              manager = EvidenceStorage(
+                  Settings(db_path=home / "old.db"), home=home,
+                  clock=lambda: now, monotonic=lambda: now, segment_bytes=65536,
+              )
+              try:
+                  preview = manager.preview(
+                      dict(profile="home", retention_days=14, cap_bytes=20 * GIB)
+                  )
+                  manager.apply(preview["preview_id"])
+                  writer = manager.packet_writer()
+                  run = writer.start_ingestion_run("jsonl")
+                  writer.record_event_bundle(
+                      PacketEvent(datetime.fromtimestamp(now, timezone.utc),
+                                  "10.0.0.2", "1.1.1.1", "TCP", 50000, 443, byte_count=1),
+                      [], [], run_id=run,
+                  )
+                  writer.finish_ingestion_run(run, "source_exhausted")
+                  writer.close()
+                  entry = manager._catalog["entries"][0]
+                  with manager._db(entry) as reader:
+                      count = reader.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+                  if count != 1:
+                      raise SystemExit("MACOS_WRITERS:EVIDENCE_COUNT")
+              finally:
+                  manager.close()
+              results["evidence_segment_writer"] = "written"
+          print(json.dumps(results, sort_keys=True))
+          PY
       - name: Record bounded storage-admission diagnostic
         run: |
           set -euo pipefail

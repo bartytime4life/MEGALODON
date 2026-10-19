@@ -20,9 +20,9 @@ from .config import AISettings, BlockingSettings
 from .firewall import FirewallError, NftablesFirewall
 from .hub import integration_plan
 from .storage import (
-    StorageSchemaError, _absolute_database_path, _anchored_database_path, _connect_verified_sqlite,
-    _open_private_database, _open_private_directory, _validate_connection_path,
-    _validate_sqlite_sidecars,
+    StorageSchemaError, _absolute_database_path, _connect_verified_sqlite,
+    _open_private_database, _open_private_directory, _resolve_top_level_system_alias,
+    _validate_connection_path, _validate_sqlite_sidecars, _writable_sqlite_connection_path,
 )
 from .validation import parse_timestamp
 
@@ -155,7 +155,7 @@ class ReceiptStore:
     """
 
     def __init__(self, path: str | Path):
-        self.path = _absolute_database_path(path, "AI_RECEIPT")
+        self.path = _resolve_top_level_system_alias(_absolute_database_path(path, "AI_RECEIPT"))
         self._directory = _open_private_directory(self.path.parent, create=True, prefix="AI_RECEIPT")
         self._descriptor = None
         self.connection = None
@@ -164,15 +164,19 @@ class ReceiptStore:
                 self.path, self._directory, writable=True, create=True, prefix="AI_RECEIPT"
             )
             _validate_sqlite_sidecars(self.path, self._directory, writable=True, prefix="AI_RECEIPT")
-            anchored = _anchored_database_path(self._descriptor, self.path, "AI_RECEIPT")
-            # SQLite resolves the anchor to its pathname and reopens that, so
-            # prove the connection opened the admitted file.
+            # Darwin cannot create the rollback journal through /dev/fd/N, so
+            # use the same writable path choice as Store. SQLite resolves the
+            # chosen pathname and reopens it, so prove the connection opened
+            # the admitted file.
+            sqlite_path, anchor = _writable_sqlite_connection_path(
+                self._descriptor, self.path, "AI_RECEIPT"
+            )
             self.connection = _connect_verified_sqlite(
-                f"{anchored.as_uri()}?mode=rw&cache=private", self.path,
+                f"{sqlite_path.as_uri()}?mode=rw&cache=private", self.path,
                 self._descriptor, self._directory, "AI_RECEIPT", timeout=2,
                 check_same_thread=False,
             )
-            _validate_connection_path(self.connection, self.path, "AI_RECEIPT")
+            _validate_connection_path(self.connection, self.path, "AI_RECEIPT", anchor=anchor)
             self.connection.execute("PRAGMA journal_mode=WAL")
             self.connection.execute("""CREATE TABLE IF NOT EXISTS ai_receipt_events (
                 sequence INTEGER PRIMARY KEY, receipt_id TEXT NOT NULL,

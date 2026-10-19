@@ -246,3 +246,143 @@ def test_writer_descriptor_inventory_uses_available_alias(
             StorageSchemaError, match="^STORAGE_PATH:DESCRIPTOR_PATH_UNAVAILABLE$"
         ):
             Store(database)
+
+
+def test_store_classifies_an_ancestor_removed_while_sqlite_resolves_the_anchor(
+    tmp_path, monkeypatch
+):
+    # Review finding D3 on #345: an ancestor renamed away during SQLite's
+    # reopen made sqlite3.connect raise a raw "unable to open database file".
+    admitted, _ = _trees(tmp_path)
+    database = admitted / "private" / "audit.db"
+    with Store(database):
+        pass
+    held = admitted.with_name(admitted.name + "-held")
+    real_connect = sqlite3.connect
+    calls = []
+
+    def connect(database_uri, *args, **kwargs):
+        text = str(database_uri)
+        if "/proc/self/fd/" not in text and "/dev/fd/" not in text:
+            return real_connect(database_uri, *args, **kwargs)
+        calls.append(text)
+        admitted.rename(held)
+        try:
+            return real_connect(
+                f"{database.as_uri()}?{text.partition('?')[2]}", *args, **kwargs
+            )
+        finally:
+            held.rename(admitted)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:DATABASE_CHANGED$") as raised:
+        Store(database, create=False)
+    assert calls
+    assert isinstance(raised.value.__cause__, sqlite3.OperationalError)
+
+    monkeypatch.undo()
+    with Store(database, create=False) as store:
+        assert store.summary()["actions"] == 0
+
+
+def test_verified_connect_classifies_an_open_failure_without_a_change(
+    tmp_path, monkeypatch
+):
+    import megalodon.storage as storage
+
+    tmp_path.chmod(0o700)
+    database = tmp_path / "admitted.db"
+    sqlite3.connect(database).close()
+    database.chmod(0o600)
+    directory = storage._open_private_directory(tmp_path, create=False, prefix="PROBE")
+    descriptor, _ = storage._open_private_database(
+        database, directory, writable=True, create=False, prefix="PROBE"
+    )
+    anchor = storage._anchored_database_path(descriptor, database, "PROBE")
+
+    def refuse(*_args, **_kwargs):
+        raise sqlite3.OperationalError("unable to open database file")
+
+    monkeypatch.setattr(sqlite3, "connect", refuse)
+    try:
+        with pytest.raises(StorageSchemaError, match="^PROBE:OPEN_FAILED$") as raised:
+            storage._connect_verified_sqlite(
+                f"{anchor.as_uri()}?mode=rw", database, descriptor, directory, "PROBE"
+            )
+        assert isinstance(raised.value.__cause__, sqlite3.OperationalError)
+    finally:
+        os.close(descriptor)
+        os.close(directory)
+
+
+def _record_writer_uris(monkeypatch):
+    import megalodon.storage as storage
+
+    real_connect = sqlite3.connect
+    uris = []
+
+    def connect(database, *args, **kwargs):
+        uris.append(str(database))
+        return real_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(storage.sys, "platform", "darwin")
+    return uris
+
+
+def _descriptor_uris(uris, mode):
+    return [
+        uri for uri in uris
+        if f"mode={mode}" in uri and ("/proc/self/fd/" in uri or "/dev/fd/" in uri)
+    ]
+
+
+def test_darwin_receipt_store_writes_through_the_admitted_pathname(
+    tmp_path, monkeypatch
+):
+    # Native Darwin cannot create a rollback journal through /dev/fd/N
+    # (SQLITE_CANTOPEN on the first write), so writers must not connect there.
+    tmp_path.chmod(0o700)
+    database = tmp_path / "private" / "receipts.db"
+    database.parent.mkdir(mode=0o700)
+    uris = _record_writer_uris(monkeypatch)
+
+    with ReceiptStore(database) as receipts:
+        receipts.append("receipt-1", {"state": "not_attempted"})
+        assert receipts.verify_chain()["sequence"] == 1
+    assert any(database.as_uri() in uri and "mode=rw" in uri for uri in uris)
+    assert not _descriptor_uris(uris, "rw")
+
+
+def test_darwin_evidence_segment_writer_uses_the_admitted_pathname(
+    tmp_path, monkeypatch
+):
+    from megalodon.config import Settings
+    from megalodon.evidence_storage import GIB, EvidenceStorage
+    from megalodon.models import PacketEvent
+
+    tmp_path.chmod(0o700)
+    clock = [datetime.now(timezone.utc).timestamp()]
+    manager = EvidenceStorage(
+        Settings(db_path=tmp_path / "old.db"), home=tmp_path,
+        clock=lambda: clock[0], monotonic=lambda: clock[0], segment_bytes=65536,
+    )
+    try:
+        preview = manager.preview(dict(profile="home", retention_days=14, cap_bytes=20 * GIB))
+        manager.apply(preview["preview_id"])
+        uris = _record_writer_uris(monkeypatch)
+        writer = manager.packet_writer()
+        run = writer.start_ingestion_run("jsonl")
+        writer.record_event_bundle(
+            PacketEvent(datetime.fromtimestamp(clock[0], timezone.utc),
+                        "10.0.0.2", "1.1.1.1", "TCP", 50000, 443, byte_count=1),
+            [], [], run_id=run,
+        )
+        writer.finish_ingestion_run(run, "source_exhausted")
+        writer.close()
+        segment = manager._path(manager._catalog["entries"][0])
+        assert any(segment.as_uri() in uri and "mode=rw" in uri for uri in uris)
+        assert not _descriptor_uris(uris, "rw")
+    finally:
+        monkeypatch.undo()
+        manager.close()

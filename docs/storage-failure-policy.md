@@ -81,7 +81,14 @@ could substitute another same-owner file under the expected name. On POSIX,
 every connection that can write (`Store`, the AI receipt store and managed-evidence
 segment writers) therefore proves after connecting that SQLite opened the
 admitted inode, repeating the whole check a bounded number of times before
-refusing `DATABASE_CHANGED`. Descriptor enumeration uses `/proc/self/fd` if
+refusing `DATABASE_CHANGED`. If SQLite cannot open the pathname at all (for
+example, an ancestor renamed away during its resolution), the connect refuses
+`DATABASE_CHANGED` when the pathname, the admitted directory or an ancestor
+changed since the baseline, and `OPEN_FAILED` otherwise, instead of raising a
+raw `sqlite3.OperationalError`. On Darwin, where SQLite cannot create a
+rollback journal through `/dev/fd/N`, all three writers connect by the
+canonical admitted pathname after proving it names the admitted descriptor,
+as `Store` already did. Descriptor enumeration uses `/proc/self/fd` if
 `/dev/fd` is unavailable, refusing if neither can be listed. When SQLite reuses
 a descriptor, the verifier checks the admitted directory's generation as well
 as its ancestors, including for receipt and evidence writers. Read-only
