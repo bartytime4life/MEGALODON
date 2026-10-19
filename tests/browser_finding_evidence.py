@@ -78,12 +78,30 @@ async def exercise_finding_evidence(browser, port, password, passed):
     page.on("pageerror", lambda _: errors.append("uncaught inspector page error"))
     output = Path(__file__).resolve().parents[1] / "artifacts" / "finding-inspector"
 
-    async def capture(name, subject, width):
+    async def capture(name, target_id, width, alignment="start"):
         output.mkdir(parents=True, exist_ok=True)
         path = output / name
-        await subject.screenshot(path=str(path), animations="disabled")
+        # Capture the actual viewport, including its surrounding navigation.
+        # An element taller than a nested scrollport cannot be captured as one
+        # faithful image: use native scrolling and separate viewport views.
+        position = await page.evaluate("""({targetId,alignment}) => {
+            const target=document.getElementById(targetId);
+            const pageScroll=matchMedia('(max-width: 560px), (max-height: 500px)').matches;
+            const scroll=pageScroll?document.scrollingElement:document.getElementById('workspace-content');
+            const viewport=pageScroll?{top:0,bottom:innerHeight}:scroll.getBoundingClientRect();
+            const bounds=target.getBoundingClientRect();
+            const delta=alignment==='end'?bounds.bottom-viewport.bottom+12:bounds.top-viewport.top-12;
+            scroll.scrollTop=Math.max(0,scroll.scrollTop+delta);
+            return {surface:pageScroll?'document':'workspace-content',top:scroll.scrollTop,
+                left:scroll.scrollLeft,target:targetId,alignment};
+        }""", dict(targetId=target_id, alignment=alignment))
+        await page.screenshot(path=str(path), animations="disabled", full_page=False)
+        png = path.read_bytes()
+        dimensions = dict(width=int.from_bytes(png[16:20], "big"), height=int.from_bytes(png[20:24], "big"))
+        if dimensions != dict(width=width, height=1000):
+            raise AssertionError("inspector viewport capture dimensions differ")
         captures.append(dict(file=name, sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-            viewport=dict(width=width, height=1000),
+            viewport=dict(width=width, height=1000), image=dimensions, scroll=position,
             state="unselected candidate" if "unselected" in name else "selected candidate, metadata disclosure open",
             scope="Synthetic qualified finding view; not installed HUD or live PC telemetry"))
 
@@ -105,7 +123,7 @@ async def exercise_finding_evidence(browser, port, password, passed):
         await expect(buttons).to_have_count(2)
         await page.evaluate("if (!state.paused) togglePause()")
         requests.clear()  # The explicit login is outside passive review acceptance.
-        await capture("candidate-unselected-1440.png", page.locator("#workspace-findings"), 1440)
+        await capture("candidate-unselected-1440.png", "room-findings-title", 1440)
 
         first = buttons.first
         await first.focus()
@@ -168,7 +186,9 @@ async def exercise_finding_evidence(browser, port, password, passed):
             await panel.scroll_into_view_if_needed()
             fits = await panel.evaluate("n => n.scrollWidth<=n.clientWidth+1 && document.documentElement.scrollWidth<=innerWidth+1")
             passed("native finding inspector reflow " + str(width), fits)
-            await capture("candidate-selected-" + str(width) + ".png", panel, width)
+            await capture("candidate-selected-" + str(width) + "-top.png", "room-evidence-inspector", width)
+            await capture("candidate-selected-" + str(width) + "-metadata.png", "room-evidence-details", width)
+            await capture("candidate-selected-" + str(width) + "-end.png", "room-evidence-inspector", width, "end")
         passed("native finding inspector respects the reduced motion preference",
             await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches"))
         await page.set_viewport_size(dict(width=1440, height=1000))
