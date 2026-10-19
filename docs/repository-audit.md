@@ -1,5 +1,7 @@
 # Repository audit and correction — October 1, 2026
 
+> **Historical audit:** This October 1 record preserves its original findings and receipts. The Site was later restored as a separate snapshot viewer; its historical empty-410 description below is not the current publication. See [current state](current-state.md) and [Site scope](../site/README.md). Do not overwrite this audit to imply a new full audit occurred.
+
 ## Scope and preservation
 
 The supported application is the **local Linux HUD**. Double-click

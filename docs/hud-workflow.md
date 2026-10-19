@@ -31,8 +31,10 @@ local and downloads reuse completed results. See
 
 Advanced exports retain CSV, JSON and the address-free HUD summary. The summary
 is a compatibility export of the newest bounded window, independent of selected
-historical dates. It is not a complete report and has no hosted import workflow.
-The former large raw-JSON preview and hosted console are retired.
+historical dates. It is not a complete report. The separate
+[PC Snapshot Console](../site/README.md) accepts this address-free export in tab
+memory; it makes no local network requests and cannot control the host. The
+former large raw-JSON preview remains retired.
 
 ## One setup entry point for every companion
 

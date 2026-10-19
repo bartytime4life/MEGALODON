@@ -1,25 +1,51 @@
 # Roadmap and Current Limits
 
-## Implemented in the showcase baseline
+## Implemented source, separate acceptance
 
-At `main@4da7fae0d8df2d8cd6b3ff93964055f7e14972bb`, MEGALODON includes a local Linux visual HUD, metadata detection, bounded capture and companion workflows, managed evidence/history, local scheduled reports, explicit support setup, installed-model selection and operator-reviewed temporary containment. The legacy firewall CLI remains plan-only.
+Documentation basis: [`main@a380fe0d60f798106bf05c29729ca7cce91cca67`](https://github.com/bartytime4life/MEGALODON/commit/a380fe0d60f798106bf05c29729ca7cce91cca67),
+2026-10-19 UTC / October 18 in America/Chicago.
 
-[Engineering case studies](engineering-case-studies.md) and [the evidence index](evidence-index.md) link those statements to immutable source. The older September Wiki snapshot is superseded by this revision; historical receipts retain their own dates and scopes.
+The inspected source includes the local Linux HUD, bounded metadata detection,
+managed history and local reports, optional companion workflows and local-model
+selection, Lynis/AIDE host checks, dated threat-reference context, and a
+qualified finding → event → ingestion-run inspector. Core evidence reads,
+legacy plan-only firewall interfaces and separately protected HUD actions have
+different contracts. Implementation does not authorize operation.
 
-## Remaining acceptance work
+[Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
+maps these claims to source. [Case studies](engineering-case-studies.md) retain
+their historical October 11 source pin and October 1 benchmark.
 
-| Public issue at the October 11 UTC readback | What remains distinct |
+## The next evidence gates
+
+| Open issue at this readback | Gate to satisfy |
 | --- | --- |
-| [#345](https://github.com/bartytime4life/MEGALODON/issues/345) | Native macOS M1 storage admission/evidence; current fixes do not establish platform parity |
-| [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | Exact Zeek offline producer qualification; selecting a candidate and passing fixture checks do not complete producer acceptance |
-| [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen binding, scoped zero-effect acceptance, native containment and evaluation; record remains UNBOUND |
+| [#345](https://github.com/bartytime4life/MEGALODON/issues/345) | Native macOS M1 storage admission; synthetic CI does not establish native parity |
+| [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | One exact Zeek offline producer qualification; candidate selection is not acceptance |
+| [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen Airlock binding and zero-effect/containment/evaluation evidence; record remains UNBOUND |
 
-## Claims the evidence does not support
+## A useful forward path
 
-- A finished enterprise IDS/IPS, comprehensive network visibility or distributed sensor fleet.
-- Representative production detection accuracy, false-positive rate or independent security certification.
-- General model-generated execution, arbitrary scanners/queries, automatic retaliation or SOAR authority.
-- Accepted native Windows/macOS parity or long-running capacity across installations.
-- An active hosted MEGALODON application: the previous owner-private Sites console is retired.
+1. Verify the reviewed local installation and its evidence/recovery workflows.
+2. Complete one named producer or model acceptance gate at an exact revision.
+3. Retain results, failures, provenance and independent review before widening scope.
 
-A merged PR does not prove that its owner gate passed, a reviewed release was published, the installed host is current, or browser/print acceptance occurred. Synthetic benchmarks demonstrate their stated workloads only. Read [the repository README](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/README.md), [open controls](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SECURITY_REVIEW.md) and [the evidence vocabulary](evidence-index.md#status-words-carry-meaning) before expanding a claim.
+This sequence is **PROPOSED**, not approval to operate tools or alter the host.
+Free local capabilities do not remove package, signature, data-sharing or
+platform-acceptance obligations.
+
+## Limits that remain visible
+
+- No comprehensive malware elimination, attribution, whole-network visibility,
+  representative production accuracy, or independent security certification.
+- No model-generated execution, automatic retaliation, general SOAR executor,
+  or permission derived from an alert, cached match or model answer.
+- No native Windows/macOS parity or long-running capacity across installations
+  established by synthetic fixtures.
+- The separate **PC Snapshot Console** is an address-free browser import viewer,
+  not a live hosted defense service or a connection to the operator PC.
+
+Green CI, human approval, merge, release, installation and Wiki/Site publication
+are separate facts. [Owner lifecycle limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/exact-head-owner-lifecycle.md)
+also remain explicit. Read [security boundaries](security-boundaries.md) and
+[the evidence index](evidence-index.md) before expanding a claim.

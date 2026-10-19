@@ -1,5 +1,7 @@
 # Development and Validation
 
+> [Documentation field guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/README.md) · [Complete catalog](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-map.md). Preserve historical pins and counts; update maintained guides when behavior changes.
+
 Keep changes narrow, source-pinned, and reviewable. Documentation, plans, issue
 state, and model output are inputs; repository source, tests, and explicit human
 decisions determine implementation status.

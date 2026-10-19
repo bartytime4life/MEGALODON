@@ -1,5 +1,7 @@
 # Operator Guide
 
+> Documentation basis: `main@a380fe0d60f798106bf05c29729ca7cce91cca67` (2026-10-19 UTC). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance.
+
 The HUD combines evidence views with separately authorized local workflows. Read source, time, scope and action state before interpreting any display.
 
 ## Find the right workspace
@@ -32,4 +34,16 @@ See [visual operations and defense](https://github.com/bartytime4life/MEGALODON/
 
 Companion console navigation keeps the other application’s permissions and network behavior. Viewing a UI does not admit its telemetry. Never store credentials in a console URL.
 
-The complete [dashboard operations runbook](../dashboard-operations.md) remains the detailed authority for endpoint behavior, storage admission and troubleshooting. The former hosted Sites console is retired.
+The complete [dashboard operations runbook](../dashboard-operations.md) remains the detailed authority for endpoint behavior, storage admission and troubleshooting. The separate [PC Snapshot Console](https://github.com/bartytime4life/MEGALODON/blob/main/site/README.md) imports an address-free summary in tab memory and cannot operate this PC.
+
+## Trace evidence before choosing a response
+
+Open a qualified finding to inspect its linked stored event and ingestion run.
+Read event time, detection time and projection time separately; a completed run
+does not establish a live sensor. The inspector is bounded to linked records
+in the returned page.
+
+Setup’s **Host security and threat context** offers explicit Lynis/AIDE and
+reference-refresh workflows. Audit suggestions, changed files, baseline state
+and cached indicator matches remain separate from qualified network findings.
+See [the current host-security guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/host-security.md).

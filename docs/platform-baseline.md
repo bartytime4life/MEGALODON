@@ -1,5 +1,7 @@
 # Windows and Linux platform baseline
 
+> **Reading this baseline today:** The v1 tables below preserve their September source pin. For current Linux HUD behavior, twelve catalog entries, snapshot-viewer scope and platform gates, use [current state](current-state.md) and [local setup](local-pc-setup.md). Historical “no converter/watcher/scheduler” statements are not a description of all current interfaces.
+
 **Baseline v1 — immutable inspected configuration and delivery plan.**
 Repository state was observed at 2026-09-10T02:06:08Z against
 `adff346c55fb41be9e51be3cea0c7d8701175c2f` on `main` (tree

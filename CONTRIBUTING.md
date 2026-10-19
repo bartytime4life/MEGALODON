@@ -1,5 +1,7 @@
 # Contributing to MEGALODON
 
+> Start with the [field guide](docs/README.md), [current evidence boundaries](docs/current-state.md), and [complete documentation catalog](docs/documentation-map.md). Edit Wiki source in `docs/wiki/`; preserve dated evidence and distinguish technical checks from human approval.
+
 MEGALODON is a local metadata-analysis application, not a remote administration
 console. A contribution must improve useful evidence without silently increasing
 execution authority. Start with the [README](README.md), the

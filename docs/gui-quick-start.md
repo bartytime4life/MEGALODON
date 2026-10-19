@@ -43,12 +43,12 @@ interface becomes available after the local server starts.
 Open **Setup**, then **Data and tools**. Every optional tool has a status light
 next to its name, refreshed in the background while the tab is visible:
 
-| Light | Meaning | Next step |
+| Displayed state | Meaning | Next step |
 | --- | --- | --- |
-| Green | Installed; a service tool is also running (the detail line shows uptime) | Nothing to do |
-| Amber | Installed, but its service is stopped (for Qwen, possibly the model is not downloaded yet) | Select **Start service** or **Download Qwen model** |
-| Red | Not installed | Select **Install**, or open the official guide for tools without a one-click package |
-| Grey | Unknown on this computer | Use the official guide or the terminal checks under Apps |
+| Installed / running | Presence or process observations, as described in the detail text | Check configuration and data freshness; this is not proof of health or connected telemetry |
+| Installed / idle | An executable is present but the named service or workflow is idle | Review its scope before a separate Start action |
+| Not found | The bounded check did not find the expected executable | Use the official setup guide; private/container installs may be outside the check |
+| Unknown / stale | The check cannot establish a fresh observation | Refresh the check and inspect the explanation; do not infer success |
 
 This table and the one below cover the most common statuses. For every status
 word MEGALODON shows, anywhere in the HUD, open **Help → Full status
