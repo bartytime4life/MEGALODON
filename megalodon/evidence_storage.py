@@ -208,22 +208,26 @@ class EvidenceStorage:
     def _db(self,entry,*,write=False):
         # Reuse descriptor-anchored storage admission for generic segments.
         from .storage import (_open_private_directory,_open_private_database,_validate_sqlite_sidecars,
-                              _anchored_database_path,_validate_connection_path,_connect_verified_sqlite)
-        path = self._path(entry)
+                              _anchored_database_path,_validate_connection_path,_connect_verified_sqlite,
+                              _resolve_top_level_system_alias,_writable_sqlite_connection_path)
+        path = _resolve_top_level_system_alias(self._path(entry))
         directory = _open_private_directory(path.parent,create=False,prefix='EVIDENCE')
         descriptor = None; connection = None
         try:
             self._size(entry)
             descriptor,_ = _open_private_database(path,directory,writable=write,create=False,prefix='EVIDENCE')
             _validate_sqlite_sidecars(path,directory,writable=write,prefix='EVIDENCE')
-            anchor = _anchored_database_path(descriptor,path,'EVIDENCE')
-            uri = f'{anchor.as_uri()}?mode={"rw" if write else "ro"}&cache=private'
-            # SQLite resolves the anchor to its pathname and reopens that; a
-            # writer must prove it opened the admitted segment. Read-only
-            # segment readers keep the cheaper connect (see storage policy).
+            # Darwin cannot create a writer's rollback journal through
+            # /dev/fd/N, so a writer uses Store's writable path choice.
+            sqlite_path,anchor = (_writable_sqlite_connection_path(descriptor,path,'EVIDENCE') if write
+                                  else (_anchored_database_path(descriptor,path,'EVIDENCE'),None))
+            uri = f'{sqlite_path.as_uri()}?mode={"rw" if write else "ro"}&cache=private'
+            # SQLite resolves the chosen pathname and reopens that; a writer
+            # must prove it opened the admitted segment. Read-only segment
+            # readers keep the cheaper connect (see storage policy).
             connection = (_connect_verified_sqlite(uri,path,descriptor,directory,'EVIDENCE',timeout=.25,check_same_thread=False)
                           if write else sqlite3.connect(uri,uri=True,timeout=.25,check_same_thread=False))
-            _validate_connection_path(connection,path,'EVIDENCE')
+            _validate_connection_path(connection,path,'EVIDENCE',anchor=anchor)
             connection.row_factory = sqlite3.Row
             if not write: connection.execute('PRAGMA query_only=ON')
             deadline = time.monotonic()+2
