@@ -1,0 +1,63 @@
+{
+  "schema": "finding-inspector-browser-captures-v1",
+  "status": "passed",
+  "fixture": "synthetic-documentation-addresses-v1",
+  "browser": "155.0.8059.39",
+  "candidate_sha": "424d957472ad121becec635171bc281bec2de995",
+  "run_id": "39180659477",
+  "run_attempt": "1",
+  "dashboard_html_sha256": "a114304a795de44e8f0daf999328d1f1f3d088cb2bb98e08b7b5e409f7d78c12",
+  "limits": [
+    "Candidate unselected/selected comparison; no base-version screenshot",
+    "No screen-reader acceptance",
+    "Viewport reflow is not native browser zoom acceptance",
+    "Synthetic test server; no installation or hosted Site parity claim",
+    "Request monitoring does not prove OS-level egress containment"
+  ],
+  "captures": [
+    {
+      "file": "finding-inspector-desktop.png",
+      "sha256": "da6bd1a7ad79e5b3adee6852df0aaf925265aef12419690c32d9594caef665ce",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "image": {
+        "width": 1440,
+        "height": 1000
+      },
+      "scroll": {
+        "surface": "workspace-content",
+        "top": 525,
+        "left": 0,
+        "target": "room-evidence-inspector",
+        "alignment": "start"
+      },
+      "state": "selected candidate, metadata disclosure open",
+      "scope": "Synthetic qualified finding view; not installed HUD or live PC telemetry",
+      "original_file": "candidate-selected-1440-top.png"
+    },
+    {
+      "file": "finding-inspector-mobile.png",
+      "sha256": "ae9cf8dae1a57c6fcdd94cf84cb59e3755de789f960278cfa07044b1eb960572",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "image": {
+        "width": 390,
+        "height": 1000
+      },
+      "scroll": {
+        "surface": "document",
+        "top": 1234,
+        "left": 0,
+        "target": "room-evidence-inspector",
+        "alignment": "start"
+      },
+      "state": "selected candidate, metadata disclosure open",
+      "scope": "Synthetic qualified finding view; not installed HUD or live PC telemetry",
+      "original_file": "candidate-selected-390-top.png"
+    }
+  ]
+}
