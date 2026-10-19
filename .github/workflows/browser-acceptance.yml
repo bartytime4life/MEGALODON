@@ -97,3 +97,11 @@ jobs:
             done
             xprop -root _NET_SUPPORTING_WM_CHECK
             python tests/browser_native_profile.py'
+      - name: Retain synthetic finding inspector screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: finding-inspector-synthetic-${{ github.sha }}
+          path: artifacts/finding-inspector/
+          if-no-files-found: warn
+          retention-days: 7

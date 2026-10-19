@@ -139,10 +139,14 @@ function roomStamp(v){return Number.isFinite(Date.parse(v))}
 function roomBars(panel,rows,unit){panel.append({rows,unit})}
 function roomVisual(parent,title){const p=textNode('article',title);parent.append(p);return p}
 function roomCounts(values){return values.map(x=>[x,1])}function renderRoomControls(){}
+const roomEvidenceState={key:'selected',signature:'prior-page',context:'latest',buttons:new Map()};
+let evidenceMessage='';function clearRoomEvidence(message){roomEvidenceState.key=null;evidenceMessage=message;}
 const stamp='2026-09-30T10:00:00Z',start=Date.parse(stamp),end=start+60000;
 const page={schema:'megalodon-traffic-history-v2',records:[{id:'a'.repeat(32)+':1',observed_at:stamp,source:'capture',category:'packets',data:{kind:'packet_v1',packet_count:1,byte_count:90,protocol:'TCP',src_ip:'192.0.2.1',dst_ip:'198.51.100.1',findings:[]}}],range:{start:stamp,end:new Date(end).toISOString()},candidate_count:1,source_segments:['a'.repeat(32)],next_cursor:null,truncated:false,gaps:[]};
 const roomState={managedHistory:validateManagedHistory(page,{start,end}),history:{start,end,previous:[]}};
 byId('room-findings-table').append(textNode('p','stale old finding'));renderManagedHistory();
+assert.equal(roomEvidenceState.key,null);assert.match(evidenceMessage,/Retained history/);
+assert.equal(roomEvidenceState.signature,null);assert.equal(roomEvidenceState.buttons.size,0);
 assert.equal(byId('hud-records').textContent,'1');assert.equal(byId('hud-bytes').textContent,'90');
 assert.equal(byId('room-findings-table').children[0].tag,'table');
 assert.equal(byId('room-activity-table').children[0].children[1].tag,'thead');
