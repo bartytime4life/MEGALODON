@@ -52,6 +52,7 @@ eve.json
 /logs/
 /reports/
 /offline-runs/
+/artifacts/finding-inspector/
 
 # Local secrets and credentials
 .env

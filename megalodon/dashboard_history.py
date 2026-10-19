@@ -12,6 +12,8 @@ function validateManagedHistory(value,request) {
   return value;
 }
 function renderManagedHistory() {
+  clearRoomEvidence('Retained history uses separate evidence references. This inspector is available for qualified findings in the latest metadata view.');
+  roomEvidenceState.signature=null;roomEvidenceState.context='managed-history';roomEvidenceState.buttons=new Map();
   const page=roomState.managedHistory, h=roomState.history;
   const packets=page.records.filter(r=>r.category==='packets'||(r.category==='packet_rollups'&&r.data.kind==='conversation_v1'));
   const counts=new Map(), peers=new Map(), bins=new Map(), sensors=new Map(), findings=[];

@@ -730,6 +730,8 @@ async def run() -> None:
                                 await exercise_workflow_overview(browser,port,password,passed)
                                 from browser_host_findings import exercise_host_findings
                                 await exercise_host_findings(browser,port,password,passed)
+                                from browser_finding_evidence import exercise_finding_evidence
+                                await exercise_finding_evidence(browser,port,password,passed)
                         passed("main database bytes unchanged " + str(nonempty),
                                hashlib.sha256(db.read_bytes()).hexdigest() == original)
                 finally:

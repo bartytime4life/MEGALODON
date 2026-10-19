@@ -81,6 +81,47 @@ production charts or the hosted reference console. Accessibility checks do not
 by themselves certify WCAG conformance or a physical screen-reader experience.
 
 
+## Qualified finding evidence inspector
+
+The Findings view offers an explicit inspection step for findings admitted by
+the closed traffic-v1 projection. It joins the selected finding to its already
+validated event and ingestion run. It does not read additional records, run a
+detector, or infer incident severity beyond the stored label. A linked event is
+not the full evidence window that caused the detector to fire.
+
+Observation time, detection time, and projection generation time remain
+separate. The displayed time range is a browsing filter, not a detector window.
+Historical detector version and evaluation-window provenance remain unknown;
+the current package version and current rule thresholds cannot fill those gaps.
+Run status describes a recorded ingestion attempt, not a running process.
+JSONL provenance identifies operator-supplied input, not authenticated capture.
+
+The inspector keeps an unchanged selection and its controls stable during
+refresh. A failed read preserves admitted metadata with an explicit stale
+warning. A selection no longer present in the selected range or page becomes
+unavailable; it is not silently rebound to another event. Managed history-v2
+uses separate evidence references and clears the traffic-v1 inspector.
+
+Fixed links lead to ingestion receipts, retained evidence, and Reports. They
+browse those existing views; they do not select a matching receipt, generate a
+report, start tools, or authorize any operation. The hosted Site remains an
+aggregate-only saved-summary viewer and does not receive these event/run IDs.
+
+This slice follows the Sensors activity overview delivered in PR #653. Three
+opportunities were compared against the main tree at `4dc08723aa52eb92ba88f4847affcf9089e8021c`:
+
+| Priority | Opportunity | Value and available data | Effort / security / cost |
+| --- | --- | --- | --- |
+| 1 | Qualified finding inspector | Completes finding-to-source review using existing validated links | Small read-only UI slice; bounded at 200 findings / 500 events; no dependencies or paid service |
+| 2 | Independent source-state matrix | Clarifies installation, configuration, process and data freshness; #653 already supplies activity summaries | Requires reconciliation of differently timed snapshots; avoid one misleading health verdict |
+| 3 | Unified saved-results desk | Makes tool results and receipts easier to find | Requires distinct identity and retention contracts; larger normalization and paging work |
+
+Synthetic browser acceptance captures the unselected and selected candidate at
+desktop and narrow widths. These are candidate interaction states, not a
+before/after comparison with a deployed release. Screenshots, DOM assertions,
+keyboard checks, and screen-reader acceptance are distinct evidence. No full
+WCAG conformance or installed-host acceptance is implied.
+
 ## App capability truth matrix (third reviewed slice)
 
 The Apps view keeps four different claims separate for every supported tool.

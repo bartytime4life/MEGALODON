@@ -5,6 +5,7 @@ from .dashboard_clamav import CLAMAV_HTML
 from .dashboard_osquery import OSQUERY_HTML
 from .dashboard_setup import SETUP_HTML
 from .dashboard_reports import REPORTS_HTML
+from .dashboard_finding_evidence import FINDING_EVIDENCE_HTML, FINDING_EVIDENCE_CSS, FINDING_EVIDENCE_JS
 from .telemetry_catalog import coverage_html, COVERAGE_CSS
 from .status_glossary import STATUS_GLOSSARY_CSS, STATUS_GLOSSARY_HTML
 
@@ -92,6 +93,7 @@ TRAFFIC_HTML = """
 <section class="workspace-view" id="workspace-findings" role="tabpanel" aria-labelledby="workspace-tab-findings" hidden>
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
   <a class="hud-return" href="#room-home-title">Return to visual HUD →</a><div id="room-findings-table" class="room-table"></div>
+__FINDING_EVIDENCE__
 </section>
 """ + REPORTS_HTML + """
 <section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
@@ -126,7 +128,7 @@ TRAFFIC_HTML = """
 """
 if "__STATUS_GLOSSARY__" not in TRAFFIC_HTML:
     raise AssertionError("status glossary placeholder missing from TRAFFIC_HTML")
-TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML)
+TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML).replace("__FINDING_EVIDENCE__", FINDING_EVIDENCE_HTML)
 
 
 def compose_control_room(html: str) -> str:
@@ -364,7 +366,7 @@ ROOM_CSS += r"""
 @media(max-width:700px) { .hud-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 """
 
-ROOM_CSS += COVERAGE_CSS
+ROOM_CSS += COVERAGE_CSS + FINDING_EVIDENCE_CSS
 
 ROOM_JS = r"""
 const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, history:null};
@@ -533,8 +535,7 @@ function renderRoom() {
   panel=roomVisual(grid,'Source → destination → protocol / port',selected,has?'Top returned paths':'No returned data',has?'data':'unavailable');const flow=textNode('div','','room-flow');roomCounts(selected.events.map(e=>`${roomEndpoint(e.src_ip,e.src_port)} → ${roomEndpoint(e.dst_ip,e.dst_port)} → ${e.protocol}`)).slice(0,8).forEach(([label,count])=>flow.append(textNode('p',`${label} · ${count} events`)));panel.append(flow);if(!has)roomEmptyPlot(panel,'No paths returned');
   panel=roomVisual(grid,'Coverage and gaps',selected,snapshot?.status==='available'?'Bounded read':'Unavailable',snapshot?.status==='available'?'data':'unavailable');panel.append(textNode('p',`Candidate window limited: ${snapshot?.truncated?'Yes':'Unknown beyond returned window'}. Excluded sample/unlinked/legacy/held event candidates: ${snapshot?snapshot.excluded_event_candidates:'Unknown'}. Drops: Unknown. Rejected records: Unknown. Missing intervals: Unknown. Clock accuracy: Unknown.`,'room-meta'));
   const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected,selected.findings.length?`${selected.findings.length} linked findings`:'No linked findings',selected.findings.length?'data':'unavailable');roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected,selected.findings.length?'Recorded labels':'No linked findings',selected.findings.length?'data':'unavailable');roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings','No linked finding labels returned');
-  const tableRoot=byId('room-findings-table');tableRoot.replaceChildren();tableRoot.setAttribute('tabindex','0');tableRoot.setAttribute('role','region');tableRoot.setAttribute('aria-label','Scrollable qualified findings');
-  const table=textNode('table'),caption=textNode('caption','Qualified findings in the shared time range');table.append(caption);const head=textNode('tr');['Time','Detector','Severity','Finding / event ID','Detector version'].forEach(label=>{const th=textNode('th',label);th.scope='col';head.append(th);});const thead=textNode('thead');thead.append(head);table.append(thead);const body=textNode('tbody');selected.findings.forEach(f=>{const row=textNode('tr');[f.detected_at,f.rule_id,f.severity,`${f.id} / ${f.event_id}`,f.detector_version].forEach((value,index)=>{const cell=textNode('td',index===2?'':value);if(index===2){const level=['CRITICAL','HIGH','MEDIUM','LOW'].includes(value)?value:'UNKNOWN';cell.append(textNode('span',value,`severity ${level}`));}row.append(cell);});body.append(row);});table.append(body);tableRoot.append(table);if(!selected.findings.length)tableRoot.append(textNode('p',has?'No linked findings in this bounded set. This does not prove no threat.':'No qualified data available.','room-empty'));
+  renderRoomFindings(selected,stale,has);
   if(typeof renderTelemetryConnections==='function')renderTelemetryConnections();
 }
 const roomRequests=new Map();
@@ -617,4 +618,4 @@ byId('room-refresh').addEventListener('click',refreshRoom);
 """
 
 from .dashboard_history import HISTORY_JS
-ROOM_JS += HISTORY_JS
+ROOM_JS += FINDING_EVIDENCE_JS + HISTORY_JS
