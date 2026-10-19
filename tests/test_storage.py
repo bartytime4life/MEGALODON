@@ -733,8 +733,10 @@ def test_new_database_is_kept_once_a_connection_opened(tmp_path, monkeypatch):
         raise sqlite3.OperationalError("unable to open database file")
 
     monkeypatch.setattr(storage.sqlite3, "connect", churn_then_fail)
-    with pytest.raises(sqlite3.OperationalError):
+    # The open failure is classified, not raised raw (#345 review D3).
+    with pytest.raises(StorageSchemaError, match="^STORAGE_PATH:OPEN_FAILED$") as raised:
         Store(database)
+    assert isinstance(raised.value.__cause__, sqlite3.OperationalError)
     assert len(connects) == 2
     assert database.exists()
 
