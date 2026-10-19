@@ -1,5 +1,7 @@
 # Engineering Case Studies
 
+> **Historical case studies:** The four studies retain their October 11 source revision and recorded measurement scope. [Current documentation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) and [the new visual tour](visual-tour.md) cover later additions without rewriting these results.
+
 Four examples show how MEGALODON connects product choices to implementation and evidence. Source links below are pinned to `4da7fae0d8df2d8cd6b3ff93964055f7e14972bb`. Linked tests describe regression protection; their existence alone is not a claim that every check passed or that a host was accepted.
 
 ## 1. Recording efficiency with a visible tradeoff

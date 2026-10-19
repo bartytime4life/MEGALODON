@@ -10,9 +10,9 @@ The useful hiring question is **how the builder directs and evaluates complex wo
 
 | Capability | Concrete project decision | Inspect it |
 | --- | --- | --- |
-| Product direction | Keep primary monitoring controls near the network view; put configuration and detailed setup in Setup | [Workspace design](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/visual-operations-defense.md) |
-| Systems thinking | Separate packet observations, sensor flow summaries, model advice and action receipts rather than combine incompatible evidence | [Managed evidence](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/managed-evidence.md) |
-| Visual communication | Use motion for observed direction, retain a text roster, and label approximate or unavailable geography | [Atlas design](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/live-connection-globe.md) |
+| Product direction | Keep primary monitoring controls near the network view; put configuration and detailed setup in Setup | [Workspace design](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/visual-operations-defense.md) |
+| Systems thinking | Separate packet observations, sensor flow summaries, model advice and action receipts rather than combine incompatible evidence | [Managed evidence](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/managed-evidence.md) |
+| Visual communication | Use motion for observed direction, retain a text roster, and label approximate or unavailable geography | [Atlas design](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/live-connection-globe.md) |
 | Engineering tradeoffs | Measure batching savings alongside retention and query latency | [Recording case study](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff) |
 | Security judgment | Treat local browser requests, file identity, model text and OS authorization as distinct trust boundaries | [Security case study](engineering-case-studies.md#3-security-at-the-point-of-use) |
 | AI orchestration | Use AI for design, implementation and review support; constrain in-product AI to evidence-linked advice | [AI case study](engineering-case-studies.md#4-ai-advice-without-transferring-authority) |

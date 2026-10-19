@@ -14,9 +14,11 @@ loopback HUD, and work with local data. No vendor, cloud, hosted Site, or
 companion-console account is required. The HUD opens without sign-in by default
 on this computer. If you want local sign-in, launch it with `--require-sign-in`.
 That mode prints a random password in its terminal, or uses a reusable password
-you set for the installed HUD. Neither mode creates a user account. The hosted reference dashboard is retired.
-OSSEC and Zabbix are retired from current
-support; the optional catalog contains ten tools including the core.
+you set for the installed HUD. Neither mode creates a user account. The separate
+[PC Snapshot Console](../site/README.md) imports an address-free summary and
+cannot operate this PC. OSSEC and Zabbix are retired from current support.
+The static catalog contains twelve entries including the core, Lynis and AIDE.
+See [current state](current-state.md) for the documentation basis and open gates.
 
 ## Recommended: install for this user
 

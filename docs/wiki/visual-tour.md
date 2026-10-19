@@ -1,39 +1,82 @@
 # Visual Tour
 
-## A visual language for evidence
+## Understand the signal. Inspect the evidence.
 
-MEGALODON uses a dark technical palette, luminous directional traffic, compact resource displays, and progressively disclosed detail. The goal is a workspace an operator can read, with uncertainty visible in the same interface as the attractive graphics.
+Deep blue surfaces, cyan highlights and restrained amber accents connect the
+workspace to MEGALODON’s identity. Text labels carry meaning alongside color.
+Progressive disclosure keeps source, timestamps, scope and uncertainty close
+to the finding being reviewed.
 
-The graphics on this Wiki are original architecture and benchmark illustrations. **They are not application screenshots or live telemetry.** The source-linked tour below describes implemented UI behavior without displaying private network records.
+## Actual interface, synthetic evidence
 
-![Architecture illustration with observe, qualify, explain, local advice, and operator authority.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/3c81889ba37953e997620c8bf15b3c1239bfc103/assets/wiki/evidence-architecture.png)
+![Desktop synthetic Findings inspector: selected PORT_SCAN finding, linked event, ingestion-run receipt, three timestamps and metadata disclosure.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/finding-inspector-desktop.png)
 
-## 01 — Read the network, then inspect an endpoint
+This is an **actual browser capture**, not a concept mockup. It shows synthetic
+documentation addresses in the candidate tested for [PR #654](https://github.com/bartytime4life/MEGALODON/pull/654).
+Candidate `424d957472ad121becec635171bc281bec2de995`; workflow run
+[39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
+The capture is historical evidence from that run, not a fresh run of this
+documentation head or evidence that the installed host works.
 
-The full-width connection atlas presents recent accepted metadata at approximate IP locations. Directional light follows observed send/receive activity; incoming rings mark observed sources, without turning them into attack verdicts. The network directory below it separates interface groups and retains a searchable text roster.
+| In the picture | Why it matters |
+| --- | --- |
+| Finding → metadata event → ingestion run | The reader can inspect the recorded chain instead of accepting a severity label alone |
+| Event, detection and projection timestamps | A refreshed screen cannot make an old observation new |
+| “Historical metadata” and “sensor activity unknown” | Stored evidence is distinct from a working live source |
+| Metadata and provenance disclosure | The bounded record and its acquisition limits are inspectable |
+| Return to finding | Investigation retains a way back to the selected result |
 
-Camera follow, rotation, drag and keyboard controls support exploration. Pause, reduced motion, hidden views and stale data suppress animation. Unmapped endpoints remain in the details. Geographic arcs are a presentation of endpoints, not measured packet routes.
+### The narrow view keeps the same questions
 
-Inspect [the atlas contract](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/live-connection-globe.md), [globe implementation](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/megalodon/dashboard_globe.py), and [UI contract tests](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/tests/test_dashboard_live_globe.py).
+<img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/finding-inspector-mobile.png" alt="Actual 390-pixel synthetic inspector capture, reflowed to show the finding and recorded evidence without a desktop table." width="390">
 
-## 02 — Give the operator a clear next action
+The same run captured a 390 × 1000 viewport. This demonstrates that candidate’s
+rendered reflow, not native browser zoom or screen-reader acceptance.
+Captures use documentation addresses and contain no live host records.
+Exact hashes and capture details are in [the asset record](https://github.com/bartytime4life/MEGALODON/blob/main/assets/docs/README.md).
 
-HUD keeps the resource strip, network view and background-tools action close together. Findings separates detection results from advice. Sensors describes what tools are doing; Setup contains capture scope, storage, installed models and sign-in. Reports and Evidence provide deeper inspection without filling the main view with setup details.
+## Architecture, with authority kept separate
 
-Status must survive without color. The [merged status/accessibility repair #522](https://github.com/bartytime4life/MEGALODON/pull/522) adds visible distinctions, while [#523](https://github.com/bartytime4life/MEGALODON/pull/523) gives installed-but-idle apps a half-filled status dot. Labels still determine meaning; a green light alone cannot establish connected data or security.
+![Architecture illustration: bounded inputs feed a deterministic evidence core and local visual HUD; local advice and operator authority remain separate.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/3c81889ba37953e997620c8bf15b3c1239bfc103/assets/wiki/evidence-architecture.png)
 
-Inspect [workspace behavior](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/visual-operations-defense.md) and [the shared UI assets](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/megalodon/dashboard_assets.py).
+This image is an **architecture illustration**, not a screenshot. Bounded inputs
+pass validation and fixed rules before private storage. Views read qualified
+evidence. Optional local models explain bounded context; they do not authorize
+host actions. Fixed operator workflows have separate checks and outcomes.
 
-## 03 — Turn observations into a shareable local report
+## Explore the network without inventing certainty
 
-Reports aggregate retained evidence across bounded source pages, identify gaps, and keep packet and sensor-flow units separate. The operator can save self-contained HTML or use the browser’s print dialog. Technical exports live under Advanced exports. Local daily/weekly scheduling runs with the HUD service and handles daylight-saving intervals.
+The local connection atlas presents recent accepted metadata at approximate IP
+locations. Direction follows observed send/receive activity. Unmapped endpoints
+remain in the text roster; arcs do not measure physical packet routes. Pause,
+reduced motion, hidden views and stale data constrain animation.
 
-Inspect [report rendering and scheduling](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/megalodon/reporting.py), [report and DST tests](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/tests/test_reporting.py), and [report evidence and limitations](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/efficient-recording-reports.md). This tour does not claim native print pagination or fresh browser acceptance of the application.
+Inspect [the atlas contract](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/live-connection-globe.md),
+[implementation](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/megalodon/dashboard_globe.py) and
+[UI tests](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/tests/test_dashboard_live_globe.py). These links identify
+source and test assertions; their existence is not an exact-head test result.
 
-## 04 — Show the cost of a design choice
+## Give each kind of evidence its own place
 
-![Benchmark illustration: OS-written bytes fell from 400,125,952 to 7,479,296, with 10,000 retained records in both runs and query p95 increasing from 4.21 to 27.06 ms.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/3c81889ba37953e997620c8bf15b3c1239bfc103/assets/wiki/recording-result.png)
+| Surface | What the operator reads | What remains separate |
+| --- | --- | --- |
+| HUD | Atlas, resources, source status and network directory | Geographic approximation and collection completeness |
+| Findings | Fixed-rule findings and their event/run inspector | Advice, contextual reference hits and host observations |
+| Setup / Sensors | Installed tools, configured scope and workflow status | Presence, health and admitted data |
+| Host security | Lynis audit, AIDE changes and dated reference matches | Confirmed vulnerability, malware verdict or permission to act |
+| Reports / Evidence | Local reports and bounded retained records | Missing intervals and incompatible packet/flow units |
 
-The chart uses one shared bar scale and names its workload and date. A matched text table and the full limitations appear in the [case study](engineering-case-studies.md). The design shows the tradeoff alongside the headline result.
+See [host security](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/host-security.md),
+[workspace behavior](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/visual-operations-defense.md), and
+[the HTTP contract](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/dashboard-http-contract.md).
 
-[Meet the builder](builder-profile.md) · [Inspect the engineering](engineering-case-studies.md) · [Verify the evidence](evidence-index.md)
+## Show the engineering cost alongside the win
+
+![Historical synthetic benchmark: 98.1 percent fewer OS-written bytes with 10,000 records retained in both runs; history-query p95 increased from 4.21 to 27.06 milliseconds.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/3c81889ba37953e997620c8bf15b3c1239bfc103/assets/wiki/recording-result.png)
+
+This is a **historical benchmark illustration**, not a current health display.
+Read the [measurement and tradeoff](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff).
+No production accuracy, SSD lifetime, live PC state, or independent certification
+is claimed by these visuals.
+
+[Quick start](quick-start.md) · [Case studies](engineering-case-studies.md) · [Evidence index](evidence-index.md)

@@ -1,39 +1,103 @@
 <p align="center">
-  <img src="assets/megalodon-github-hero-compact.png" alt="MEGALODON defensive network telemetry shark and shield emblem" width="760">
+  <img src="assets/docs/field-guide-cover.png" alt="MEGALODON — understand the signal, inspect the evidence, keep authority explicit" width="1000">
 </p>
 
-# MEGALODON Defense MVP
+# MEGALODON
 
-**MEGALODON** = **M**alware **E**limination **G**ateway **A**nd **L**ayered
-**O**perations **D**efense **O**nline **N**etwork.
+**A local Linux defense workspace built around inspectable evidence.**
 
-> **For recruiters: [Take the two-minute MEGALODON portfolio tour →](https://github.com/bartytime4life/MEGALODON/wiki)**
->
-> Explore how Andy directs AI-assisted development across product design,
-> systems engineering, security judgment, and visual communication. The Wiki
-> connects those capabilities to original graphics, four engineering case
-> studies, and source-linked evidence.
+**M**alware **E**limination **G**ateway **A**nd **L**ayered **O**perations
+**D**efense **O**nline **N**etwork.
 
-MEGALODON is a local-first defensive network telemetry MVP with a Python
-metadata core and separately scoped tool integrations. It validates bounded
-network metadata, applies three fixed detection heuristics, stores an SQLite
-audit trail, and offers a local Linux HUD with visual telemetry, managed history,
-automatic local reports and separately authorized Setup actions. Live capture, offline
-analysis, and firewall planning are separate choices, not mandatory parts of
-every configuration. Legacy firewall CLI routes remain plan-only. The separate
-Linux HUD [local defense workflow](docs/visual-operations-defense.md) supports
-operator-reviewed five-minute containment of one observed public IP on this PC,
-with OS authorization, audit records, readback and release. Qwen cannot apply it.
+<p>
+  <a href="docs/README.md"><strong>Field guide</strong></a> ·
+  <a href="https://github.com/bartytime4life/MEGALODON/wiki"><strong>Visual Wiki</strong></a> ·
+  <a href="docs/gui-quick-start.md"><strong>Get started</strong></a> ·
+  <a href="docs/current-state.md"><strong>Current state & limits</strong></a> ·
+  <a href="CONTRIBUTING.md"><strong>Contribute</strong></a>
+</p>
 
-Linux is the current implementation and CI reference, not a claim that every
-workflow requires Ubuntu or every platform has equal support. Native Windows
-core use is an unverified evaluation target; Linux-specific adapters remain
-Linux-specific. Choose a workflow and then check its platform boundary below.
+Turn bounded network metadata into a workspace you can understand: inspect
+sources, follow a finding to its recorded evidence, review retained history,
+and build local visual reports. Python and SQLite form the metadata core;
+optional Linux tools and local-model advice have separate scopes.
 
-MEGALODON is not an autonomous antivirus, malware-attribution engine,
-threat-intelligence service, packet-forensics suite, or authorization to change
-a host. A detection or offline candidate is evidence for review, not proof of
-malicious activity.
+**Linux reference · Python 3.11+ · Apache-2.0 · No core subscription or cloud account**
+
+## See the evidence
+
+![Actual Findings inspector with synthetic documentation addresses: finding, linked event, ingestion receipt, timestamps and limitations.](assets/docs/finding-inspector-desktop.png)
+
+*Synthetic browser capture from PR #654, candidate `424d957`, run
+[39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
+This shows a rendered candidate interface, not live PC telemetry or a new
+acceptance run. [Visual tour and provenance](docs/wiki/visual-tour.md).*
+
+| Understand | Investigate | Decide |
+| --- | --- | --- |
+| Atlas, resource views and source status explain the observation window. | Findings link to bounded event metadata and ingestion-run receipts. | Separate operator workflows disclose scope, outcome and remaining uncertainty. |
+| [Network view](docs/live-connection-globe.md) | [Evidence inspector](docs/control-room-contract.md#qualified-finding-evidence-inspector) | [Security boundaries](docs/wiki/security-boundaries.md) |
+
+## Choose your path
+
+| You are here to… | Open this |
+| --- | --- |
+| Try the Linux workspace | [Visual quick start](docs/gui-quick-start.md) and [installation guide](docs/local-pc-setup.md) |
+| Evaluate the product or the builder | [Two-minute Wiki tour](https://github.com/bartytime4life/MEGALODON/wiki), [builder profile](docs/wiki/builder-profile.md), [engineering case studies](docs/wiki/engineering-case-studies.md) |
+| Audit or compare local host state | [Lynis, AIDE and dated threat context](docs/host-security.md) |
+| Understand what AI can do | [Local model integration and its limits](docs/wiki/integrations-and-qwen.md) |
+| Inspect every document and contract | [Documentation catalog](docs/documentation-map.md) |
+| Review safety or contribute | [Specification](SPECIFICATION.md), [security review](SECURITY_REVIEW.md), [contribution guide](CONTRIBUTING.md) |
+
+## Open it locally
+
+From the root of a **reviewed Linux checkout**, as your ordinary user:
+
+```bash
+./scripts/start-local.sh --check
+./scripts/start-local.sh
+```
+
+The first command performs a preflight; the second opens the checkout workflow
+at the printed loopback address. It does not install packages, invent sample
+data, or enable capture. Keep its foreground terminal open. For the separate
+per-user installation workflow, use `./Start-MEGALODON.sh` after reading
+[what it installs](docs/local-pc-setup.md). Python 3.11+ with SQLite is required;
+optional tools, models and capture are separate choices.
+
+## Architecture with visible boundaries
+
+```mermaid
+flowchart TD
+    Input["Bounded metadata"] --> Validate["Typed admission and source qualification"]
+    Validate --> Store["Private SQLite evidence"]
+    Store --> Review["HUD, inspector and reports"]
+    Store -. "bounded context" .-> AI["Optional local advice"]
+    AI -. "untrusted explanation" .-> Review
+    Operator["Explicit operator decision"] --> Fixed["Separate fixed Linux workflow"]
+    Fixed --> Outcome["Receipt and readback"]
+```
+
+Observation is the default. Packet payloads and payload-derived hashes are
+outside the core event model. The three fixed heuristics identify patterns for
+review; a finding, feed match or model explanation is not proof of malware.
+Model output never authorizes an action. The core telemetry reader is read-only;
+the current Linux HUD also has separately protected setup and host workflows.
+Legacy firewall CLI apply routes remain plan-only. See
+[current interface boundaries](docs/current-state.md) before using any control.
+
+The host application stays local. The separate
+[PC Snapshot Console](site/README.md) imports an address-free summary in tab
+memory and has no live connection to this PC. Windows/macOS parity, operational
+detection accuracy, provider containment and independent acceptance remain
+separate evidence gates.
+
+*Documentation reconciled against `main@a380fe0d60f798106bf05c29729ca7cce91cca67`
+(2026-10-19 UTC). [Evidence basis and open gates](docs/current-state.md).
+Historical benchmarks and receipts keep their own dates and revisions.*
+
+<details>
+<summary><strong>Detailed operator and CLI reference</strong> — installation, safety defaults, recipes, contracts and platform notes</summary>
 
 ## Current local application
 
@@ -238,9 +302,10 @@ records the operator's current Ollama exposure and GPU uncertainty.
   package/model downloads and service starts can change the host; package
   installation can start services. These actions do not expand telemetry or
   firewall authority;
-- no telemetry egress: there are no threat-feed, cloud analytics, SIEM, or SOAR calls;
-  bundled reference verification and synthetic evaluation perform no runtime
-  download or update;
+- no private telemetry upload to cloud analytics, SIEM or SOAR; explicit public
+  reference refreshes, opted-in location lookups, support downloads and external
+  companion consoles have separately documented egress. Bundled reference
+  verification and synthetic evaluation perform no runtime download or update;
 - no shell interpolation: untrusted event values never become shell code;
 - finite response: block plans require validated global targets and an expiry;
 - contained application: retained firewall `--apply` options explicitly refuse
@@ -253,8 +318,8 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 production-readiness gaps.
 
 The local HUD at **http://127.0.0.1:8787/** is MEGALODON's application.
-The former hosted reference dashboard is retired. Its historical source and
-publication record remain under [`site/`](site/README.md) and
+The separate hosted PC Snapshot Console imports an address-free summary in tab
+memory; it has no live host connection. Its source and publication history remain under [`site/`](site/README.md) and
 [`docs/site-source-alignment.md`](docs/site-source-alignment.md).
 
 ## Documentation map
@@ -1564,3 +1629,5 @@ its separate `CC0-1.0` source and license record in
 
 This repository record is not legal advice and does not publish a package or
 release.
+
+</details>

@@ -1,38 +1,57 @@
 # MEGALODON Documentation Wiki
 
-## From complex telemetry to a useful local workspace
+![MEGALODON field guide: understand the signal, inspect the evidence, keep authority explicit.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/field-guide-cover.png)
 
-**A portfolio of AI-assisted product direction, systems engineering, security design, and visual communication.** Built under [Andy’s project direction](https://github.com/bartytime4life), MEGALODON brings a Python metadata core, private SQLite evidence, a visual Linux HUD, and bounded local-model advice into one inspectable project.
+## A defense workspace you can inspect
 
-![MEGALODON architecture: bounded inputs feed a deterministic core and local HUD; model advice and operator authority are separate.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/3c81889ba37953e997620c8bf15b3c1239bfc103/assets/wiki/evidence-architecture.png)
+MEGALODON connects bounded network metadata, a private SQLite evidence trail,
+visual Linux investigation, and separately scoped local workflows. Its design
+keeps three questions visible: **What was observed? What supports this finding?
+Who authorizes the next step?**
 
-The design challenge is to make a complex security workspace understandable while keeping evidence, uncertainty, and authority visible. Explore the decisions and their implementation below.
+Built under [Andy’s project direction](https://github.com/bartytime4life), this
+is an inspectable portfolio of AI-assisted product design, systems engineering,
+security judgment and evidence-led delivery.
 
-## The two-minute recruiter tour
+## Take the two-minute tour
 
-1. **[Meet the builder](builder-profile.md)** — product judgment, AI collaboration, and how to assess the work.
-2. **[See the visual design](visual-tour.md)** — the atlas, workspace hierarchy, motion, status, and reports.
-3. **[Inspect four engineering case studies](engineering-case-studies.md)** — concrete problems, choices, results, tradeoffs, and tests.
-4. **[Follow the evidence](evidence-index.md)** — immutable source links and the limits behind each claim.
+| Explore | What you will find |
+| --- | --- |
+| [Visual tour](visual-tour.md) | Actual synthetic desktop/mobile captures, architecture and readable limits |
+| [Engineering case studies](engineering-case-studies.md) | Concrete problems, decisions, tradeoffs and source evidence |
+| [Builder profile](builder-profile.md) | Product direction, collaboration method and technical interview prompts |
+| [Evidence index](evidence-index.md) | Exact revisions, capture provenance, historical measurements and open gates |
 
-## A result you can inspect
+## Follow a finding all the way back
 
-The saved October 1 benchmark records **98.1% fewer OS-written bytes** for 10,000 synthetic packet records, with all 10,000 retained in both runs. History-query p95 increased from 4.21 ms to 27.06 ms. This is a finite workstation measurement, with its tradeoff disclosed; it is not a production-capacity or SSD-lifetime claim. Read the [storage case study](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff) and [raw measurements](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/benchmarks/efficient-recording-comparison.json).
+![Synthetic Findings inspector showing one finding, linked event, ingestion receipt and separate timestamps.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/finding-inspector-desktop.png)
 
-## What the project brings together
+*Actual rendered synthetic candidate, PR #654 / `424d957` / run
+[39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
+No live PC telemetry is shown. [Read the capture scope](visual-tour.md#actual-interface-synthetic-evidence).*
 
-| Layer | Implemented scope | Evidence to inspect |
-| --- | --- | --- |
-| Product and graphics | Local connection atlas, resource strip, findings, source status, topology and visual reports | [Visual tour](visual-tour.md) |
-| Systems engineering | Typed metadata, three fixed detection heuristics, segmented storage, bounded history, scheduled local reports and Linux installation | [Case studies](engineering-case-studies.md) |
-| Security judgment | Local request controls, private storage admission, bounded collectors, explicit operator actions and expiring containment | [Security boundaries](security-boundaries.md) |
-| Applied AI | Digest-pinned installed local models, bounded explanations, closed proposals and failure states | [Integrations and local AI](integrations-and-qwen.md) |
-| Delivery discipline | Versioned contracts, negative tests, reproducible measurements and separate acceptance gates | [Evidence index](evidence-index.md) |
+## Choose your next step
 
-## Use or contribute
+| Task | Guide |
+| --- | --- |
+| Open the local Linux app | [Quick start](quick-start.md) |
+| Understand sources, findings and reports | [Operator guide](operator-guide.md) |
+| Understand what local AI and tools can do | [Integrations and local AI](integrations-and-qwen.md) |
+| Review trust and authority | [Security boundaries](security-boundaries.md) |
+| Inspect current capability limits | [Roadmap and current limits](roadmap-and-limits.md) |
+| Build or improve the project | [Development and validation](development-and-validation.md) |
+| Find every repository document | [Complete documentation catalog](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-map.md) |
 
-[Quick start](quick-start.md) · [Operator guide](operator-guide.md) · [Development and validation](development-and-validation.md) · [Roadmap and limits](roadmap-and-limits.md)
+## A measured tradeoff, openly reported
 
-The supported application is the **local Linux HUD**. The former hosted Sites console is retired; it is not a recruiter demo or a connection to this PC. Source and publication history remain in [the Site record](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/site-source-alignment.md).
+The October 1 synthetic benchmark recorded **98.1% fewer OS-written bytes** for
+10,000 retained packet records; history-query p95 rose from 4.21 ms to 27.06 ms.
+Both the result and cost are visible in the [storage case study](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff).
+It is a historical finite measurement, not a production-capacity promise.
 
-This showcase was checked against repository main at `4da7fae0d8df2d8cd6b3ff93964055f7e14972bb` (October 11, 2026 UTC / October 10 in America/Chicago). Case-study evidence is pinned to that revision. Guides link to current repository documentation. Code, tests, merges, host operation, release, and independent acceptance remain separate claims. Wiki source lives in `docs/wiki/`; this public projection does not replace the [specification](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SPECIFICATION.md) or [security review](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/SECURITY_REVIEW.md).
+**Documentation basis:** [`main@a380fe0d60f798106bf05c29729ca7cce91cca67`](https://github.com/bartytime4life/MEGALODON/commit/a380fe0d60f798106bf05c29729ca7cce91cca67),
+2026-10-19 UTC / October 18 in America/Chicago. Historical case studies and
+captures retain their own pins. [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
+explains what exists and what remains unproved. The host application is the
+local Linux HUD; the separate [PC Snapshot Console](https://github.com/bartytime4life/MEGALODON/blob/main/site/README.md)
+has no live host connection. This Wiki is generated from `docs/wiki/`.

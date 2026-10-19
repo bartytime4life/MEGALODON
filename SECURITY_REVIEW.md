@@ -1,5 +1,7 @@
 # MEGALODON architecture security review
 
+> **Documentation orientation — 2026-10-19:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+
 > **Scope note — 2026-10-01:** This document contains dated architecture and
 > acceptance records. The local Linux HUD is now the sole supported application.
 > Current installer, protected actions, managed storage and report behavior are
