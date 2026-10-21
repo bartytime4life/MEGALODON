@@ -172,7 +172,7 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
         "jsonschema==4.26.0",
         "jsonschema-specifications==2025.9.1",
         "packaging==26.3",
-        "pluggy==1.6.0",
+        "pluggy==1.7.0",
         "pygments==2.21.0",
         "pyproject-hooks==1.3.3",
         "pytest==9.1.1",
