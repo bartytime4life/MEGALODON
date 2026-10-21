@@ -74,43 +74,6 @@ jobs:
             --no-cache-dir --verbose -e ".[test]"
           python -m pip check
           python -m compileall -q megalodon tests
-      - name: Inspect independently verified Playwright wheel (qualification only)
-        run: |
-          python - <<'PYINSPECT'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import urllib.request
-          import zipfile
-
-          wheels = list((Path(os.environ["RUNNER_TEMP"]) / "browser-cp311-wheelhouse").glob("playwright-1.64.0-*.whl"))
-          assert len(wheels) == 1
-          wheel = wheels[0]
-          with urllib.request.urlopen("https://pypi.org/pypi/playwright/1.64.0/json", timeout=20) as response:
-              metadata = json.load(response)
-          published = [item for item in metadata["urls"] if item["filename"] == wheel.name]
-          assert len(published) == 1
-          digest = hashlib.file_digest(wheel.open("rb"), "sha256").hexdigest()
-          assert digest == published[0]["digests"]["sha256"]
-          with zipfile.ZipFile(wheel) as archive:
-              member = archive.getinfo("playwright/driver/package/lib/coreBundle.js")
-              assert member.file_size <= 4 * 1024 * 1024
-              data = archive.read(member)
-          call = b'promises2.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));'
-          patched = data.replace(call, call.replace(b"true", b"false"))
-          print("PLAYWRIGHT_WHEEL_INSPECTION " + json.dumps({
-              "wheel": wheel.name, "wheel_sha256": digest,
-              "source_sha256": hashlib.sha256(data).hexdigest(),
-              "candidate_sha256": hashlib.sha256(patched).hexdigest(),
-              "source_size": len(data), "exact_focus_call_count": data.count(call),
-          }, sort_keys=True))
-          lines = data.decode("utf-8").splitlines()
-          matches = [index for index, line in enumerate(lines) if "Emulation.setFocusEmulationEnabled" in line]
-          assert 0 < len(matches) <= 8
-          for index in matches:
-              print("PLAYWRIGHT_FOCUS_CONTEXT " + json.dumps(lines[max(0, index - 20):index + 21]))
-          PYINSPECT
       - name: Exercise real CLI SQLite HTTP and browser
         run: |
           set -euo pipefail
