@@ -92,9 +92,9 @@
           "version": "26.3"
         },
         {
-          "declared_sha256": "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746",
+          "declared_sha256": "sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec",
           "name": "pluggy",
-          "version": "1.6.0"
+          "version": "1.7.0"
         },
         {
           "declared_sha256": "sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9",
@@ -138,7 +138,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "required test job",
-      "source_sha256": "cc188e9924b2b31a4ad69c874d16e0a0ba5341b16b0dc5b2c0b86d6c70c0f3db"
+      "source_sha256": "f464b05093451a03e7425a8f815fe6d1ec909c1cd2cebc8bd459ae735496facb"
     },
     {
       "direct_packages": [
@@ -168,9 +168,9 @@
           "version": "26.3"
         },
         {
-          "declared_sha256": "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746",
+          "declared_sha256": "sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec",
           "name": "pluggy",
-          "version": "1.6.0"
+          "version": "1.7.0"
         },
         {
           "declared_sha256": "sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9",
@@ -209,7 +209,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "wheel-smoke tests",
-      "source_sha256": "1628c4c3ab9eae439f4990246b7ab9623f2ff5e229516ea49b66f272a6a0f37c"
+      "source_sha256": "6061f71e8dc998be69990294402552e403b84de12a4b1ccc7e29e1446b8bb5d9"
     },
     {
       "direct_packages": [
