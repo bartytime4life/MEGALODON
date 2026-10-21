@@ -148,7 +148,7 @@ No Pluggy or general parser change belongs to this correction.
 The final candidate must pass the unchanged Linux browser workflow with both
 terminal receipts, including native hidden/visible polling suspension and
 recovery. Read PR #660's checks for the final candidate SHA and results.
-Historical 1.63 receipts below retain their original revision and scope.
+Historical 1.63 receipts linked earlier retain their original revision and scope.
 
 ## Exercised boundaries
 

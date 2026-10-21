@@ -112,7 +112,7 @@ def test_profile_and_closed_browser_lock_admit_the_same_version():
 @pytest.mark.parametrize("installed_version", ["1.63.0", "1.64.1", "1.65.0"])
 def test_other_versions_stop_before_copy_or_child(monkeypatch, installed_version):
     monkeypatch.setattr(profile.sys, "platform", "linux")
-    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(profile, "version", lambda name: installed_version)
     monkeypatch.setattr(profile, "prepare_profile", lambda *args: pytest.fail("unexpected copy"))
     monkeypatch.setattr(profile, "run_suite", lambda *args: pytest.fail("unexpected child"))
@@ -123,7 +123,7 @@ def test_other_versions_stop_before_copy_or_child(monkeypatch, installed_version
 @pytest.mark.parametrize("override", ["PLAYWRIGHT_NODEJS_PATH", "NODE_OPTIONS"])
 def test_driver_overrides_stop_before_copy_or_child(monkeypatch, override):
     monkeypatch.setattr(profile.sys, "platform", "linux")
-    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(profile, "version", lambda name: profile.PLAYWRIGHT_VERSION)
     monkeypatch.setenv(override, "synthetic-override")
     monkeypatch.setattr(profile, "prepare_profile", lambda *args: pytest.fail("unexpected copy"))
@@ -134,7 +134,7 @@ def test_driver_overrides_stop_before_copy_or_child(monkeypatch, override):
 
 def test_admitted_version_does_not_authorize_unknown_driver_bytes(monkeypatch, tmp_path):
     monkeypatch.setattr(profile.sys, "platform", "linux")
-    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(profile, "version", lambda name: profile.PLAYWRIGHT_VERSION)
     for key in ("PLAYWRIGHT_NODEJS_PATH", "NODE_OPTIONS"):
         monkeypatch.delenv(key, raising=False)
