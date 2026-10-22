@@ -55,11 +55,11 @@ def test_reader_accepts_only_its_verified_connection_anchor(manager,monkeypatch,
         def __getattr__(self,name):
             return getattr(self.connection,name)
 
-    def connect(uri,*args,**kwargs):
-        anchor=unquote(urlsplit(uri).path)
+    def connect(database,*args,**kwargs):
+        anchor=unquote(urlsplit(database).path)
         filename=(anchor if reported=='verified-anchor' else
                   '/dev/fd/999999' if reported=='other-anchor' else str(manager.root/'other.db'))
-        connection=ReportedPath(real_connect(uri,*args,**kwargs),filename)
+        connection=ReportedPath(real_connect(database,*args,**kwargs),filename)
         connections.append(connection)
         return connection
 
