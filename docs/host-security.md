@@ -77,6 +77,27 @@ performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/as
 [IANA IPv6 address space](https://www.iana.org/assignments/ipv6-address-space/), and
 [IANA IPv6 special-purpose registry](https://www.iana.org/assignments/iana-ipv6-special-registry/).
 
+## Recovery readiness in Setup
+
+The read-only **Recovery readiness** view derives a bounded projection from the
+same saved host-security snapshot already loaded by Setup. It shows validated
+baseline availability, distinguishes initial baseline creation from a completed
+AIDE comparison, and labels older observations. Change categories are boolean
+flags, not file counts or malware verdicts. A missing validated baseline does
+not establish that no baseline file exists.
+
+Host backups are not integrated, process-to-file attribution is unavailable, and
+conflicts with legitimate installs or user edits are not assessed. Restoration
+eligibility therefore remains unavailable, including when AIDE reports no
+differences. IP reputation and AI commentary cannot change that result. The
+projection does not inspect backup paths, start a scan, change a baseline, or
+restore, delete or contain anything. Missing, malformed or contradictory data
+clears observations instead of presenting partial success. A failed Setup read
+also clears the previously displayed recovery state.
+
+This is separate from MEGALODON audit-database recovery and knowledge-library
+generation rollback. Neither restores operating-system or user-file changes.
+
 ## Hardening posture review
 
 `python -m megalodon.hardening_review` reads a fixed set of live settings and

@@ -690,6 +690,35 @@ def test_snapshot_carries_cached_read_only_hardening_review(manager, monkeypatch
     assert value['state'] == 'unavailable' and value['action_authority'] == 'none' and value['checks'] == []
 
 
+def test_recovery_readiness_uses_the_same_host_snapshot_once(manager, monkeypatch):
+    from megalodon import recovery_readiness
+    source = dict(schema='megalodon-host-security-v1', audit=None, integrity=None,
+                  feeds=[], feed_state='unavailable', baseline_present=True,
+                  message='Context only.', action_authority='none',
+                  audit_state='missing', integrity_state='missing')
+    calls = []
+    def captured():
+        calls.append('host')
+        return source
+    original = recovery_readiness.review
+    def projected(value):
+        assert value is source
+        calls.append('recovery')
+        return original(value)
+    monkeypatch.setattr(manager.host_security, 'snapshot', captured)
+    monkeypatch.setattr(recovery_readiness, 'review', projected)
+    monkeypatch.setattr(manager, '_execute', lambda *_: pytest.fail('GET executed a workflow'))
+    value = manager.snapshot()
+    assert calls == ['host', 'recovery']
+    assert value['host_security'] is source
+    assert value['recovery_readiness']['baseline_state'] == 'present'
+    assert value['recovery_readiness']['restore_eligible'] is False
+    assert value['recovery_readiness']['action_authority'] == 'none'
+    for action in ('recovery_restore', 'recovery_scan', 'recovery_baseline'):
+        with pytest.raises(ValueError):
+            manager.start({'action': action})
+
+
 def test_concurrent_snapshots_share_one_hardening_review(manager, monkeypatch):
     import time
     from megalodon import hardening_review
