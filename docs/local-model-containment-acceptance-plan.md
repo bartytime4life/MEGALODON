@@ -1,11 +1,12 @@
 # Local-model containment acceptance plan (future gate)
 
 Status: ◇ adds the closed, machine-readable shape for the future
-operator-owned acceptance gate [issue #261](https://github.com/bartytime4life/MEGALODON/issues/261)
-asks for. It does not invoke a model, install or start Ollama, select an
+operator-owned acceptance gate now tracked in [issue #446](https://github.com/bartytime4life/MEGALODON/issues/446),
+successor to closed [#261](https://github.com/bartytime4life/MEGALODON/issues/261). It does not invoke a model, install or start Ollama, select an
 artifact, enable persistence, expose the dashboard remotely, run a host-level
 check, or authorize a release — none of which this change is permitted to do.
-Advances #261; keep it open as post-RC work.
+The original #261 contract delivery is historical; keep #446 held until its
+provider evidence and separately recorded acceptance are complete.
 
 ## Why this exists
 
@@ -70,7 +71,7 @@ bytes; it is not a signature, publisher verification, independent checkpoint,
 or proof that any observation occurred. Treat supplied packets as untrusted
 self-reports until a separately reviewed evidence-ingestion process verifies
 origin, exact candidate identities, corpus signatures, execution receipts and
-independently attributable owner/reviewer decisions. Do not close #261 from
+independently attributable owner/reviewer decisions. Do not close #446 from
 these fields alone or relabel a synthetic packet to satisfy a gate.
 
 `collect()` still emits only the fixed `unbound` packet. Validating or editing a
@@ -88,7 +89,7 @@ bindings and unrecorded review remain refused, and in-memory operations touch
 no monitored file, network, process or thread entry point. These tests do not
 inspect or certify the operator's host, provider, model or corpus.
 
-## What remains before #261 is addressed
+## What remains before provider acceptance under #446
 
 - An owner-approved exact local model alias and artifact digest (there is
   currently none; `collect()` can only report `unbound`).

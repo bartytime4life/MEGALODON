@@ -1,7 +1,8 @@
 # Local Ollama/Qwen readiness integration
 
 Status: ● **implemented offline evidence integration; provider acceptance remains HOLD**  
-Tracking issue: #261
+Tracking issue: [#446](https://github.com/bartytime4life/MEGALODON/issues/446)
+(successor to closed #261); canonical binding remains UNBOUND.
 
 MEGALODON now has separate contracts for binding, identity, candidate profiles,
 provider containment, adversarial evaluation, and deterministic request
@@ -47,7 +48,7 @@ A model may advertise a tools capability. The packet records that observation
 but fixes `tools_used_or_authorized` to `false`; capability discovery never
 becomes tool, shell, detector, firewall, or response authority.
 
-## Why issue #261 remains open
+## Why provider acceptance remains held under #446
 
 The repository's code and contracts can prove shape, bounded behavior, and
 cross-record consistency. They cannot manufacture an operator-owned artifact,
@@ -65,6 +66,9 @@ review and owner acceptance record that integration; code parity alone cannot
 retire an acceptance gate.
 
 ## Next native evidence sequence
+
+This is a proposed sequence. Steps involving the provider or host require
+separate explicit authorization; offline packet validation cannot satisfy them.
 
 1. Record the exact owner-selected binding and artifact component closure.
 2. Generate the operator-observed Ollama identity record.

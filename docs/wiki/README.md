@@ -49,8 +49,8 @@ The October 1 synthetic benchmark recorded **98.1% fewer OS-written bytes** for
 Both the result and cost are visible in the [storage case study](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff).
 It is a historical finite measurement, not a production-capacity promise.
 
-**Documentation basis:** [`main@a380fe0d60f798106bf05c29729ca7cce91cca67`](https://github.com/bartytime4life/MEGALODON/commit/a380fe0d60f798106bf05c29729ca7cce91cca67),
-2026-10-19 UTC / October 18 in America/Chicago. Historical case studies and
+**Documentation basis:** [`main@0acdf72663804c9ae8380522e344a515ac65978c`](https://github.com/bartytime4life/MEGALODON/commit/0acdf72663804c9ae8380522e344a515ac65978c),
+October 22, 2026 (America/Chicago). Historical case studies and
 captures retain their own pins. [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
 explains what exists and what remains unproved. The host application is the
 local Linux HUD; the separate [PC Snapshot Console](https://github.com/bartytime4life/MEGALODON/blob/main/site/README.md)

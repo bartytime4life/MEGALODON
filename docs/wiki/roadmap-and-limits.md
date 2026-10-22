@@ -2,8 +2,8 @@
 
 ## Implemented source, separate acceptance
 
-Documentation basis: [`main@a380fe0d60f798106bf05c29729ca7cce91cca67`](https://github.com/bartytime4life/MEGALODON/commit/a380fe0d60f798106bf05c29729ca7cce91cca67),
-2026-10-19 UTC / October 18 in America/Chicago.
+Documentation basis: [`main@0acdf72663804c9ae8380522e344a515ac65978c`](https://github.com/bartytime4life/MEGALODON/commit/0acdf72663804c9ae8380522e344a515ac65978c),
+October 22, 2026 (America/Chicago).
 
 The inspected source includes the local Linux HUD, bounded metadata detection,
 managed history and local reports, optional companion workflows and local-model
@@ -20,9 +20,15 @@ their historical October 11 source pin and October 1 benchmark.
 
 | Open issue at this readback | Gate to satisfy |
 | --- | --- |
-| [#345](https://github.com/bartytime4life/MEGALODON/issues/345) | Native macOS M1 storage admission; synthetic CI does not establish native parity |
 | [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | One exact Zeek offline producer qualification; candidate selection is not acceptance |
 | [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen Airlock binding and zero-effect/containment/evaluation evidence; record remains UNBOUND |
+
+Issue #345 closed after PR #656 on October 19. Native macOS JSONL, browser,
+Intel, second-major-version and operator acceptance remain separate. Open
+Playwright PRs #658/#660 do not change main's 1.63.0 profile. Main's October 22
+browser check timed out after driver preparation; core CI passed. Read the
+[exact checks](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#exact-source-head-checks-observed)
+before treating a historical passing receipt as current acceptance.
 
 ## A useful forward path
 

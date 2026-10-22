@@ -1,6 +1,6 @@
 # MEGALODON MVP specification and proposed platform extension
 
-> **Documentation orientation — 2026-10-19:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+> **Documentation orientation — 2026-10-22 / source `0acdf72663804c9ae8380522e344a515ac65978c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
 
 > **Scope note — 2026-10-01:** This document contains dated architecture and
 > acceptance records. The local Linux HUD is now the sole supported application.
@@ -22,10 +22,10 @@ configuration baseline is [docs/platform-baseline.md](docs/platform-baseline.md)
 
 ## Document status and authority
 
-The [2026-09-21 alignment record](docs/document-alignment-2026-09-21.md) pins
-the current local setup, hosted Console, telemetry verification limit, document
-ownership and remaining acceptance gates. Dated historical receipts retain
-their original scope.
+[Current state](docs/current-state.md) pins the maintained source orientation,
+check results and remaining gates. The [2026-09-21 alignment record](docs/document-alignment-2026-09-21.md)
+retains its historical local setup and Console observations; it does not describe
+today's deployment. Dated receipts retain their original scope.
 
 This specification describes behavior present in the repository unless a
 section is explicitly labeled proposed, contract-only, optional, or a future

@@ -16,9 +16,20 @@ temporary reviewed-checkout launch uses `./scripts/start-local.sh`. The local
 loopback HUD can open before evidence exists and reads configured stores through
 bounded, read-only projections.
 
-Opening the HUD does not start a sensor, create telemetry, prove source health,
-establish complete coverage, or show that a host is safe. The hosted Site does
-not read the local HUD or its stores.
+Opening a browser view does not authorize collection. A running installed HUD
+can resume collectors from saved monitoring settings, and its fixed companion
+worker has separate local defaults. Inspect [background workflows](background-tools.md)
+and [local startup](local-pc-setup.md) before launch. A listener or readable file
+does not prove source health, coverage or safety. The hosted Site does not read
+the local HUD or its stores.
+
+## Background startup and host review
+
+Use [login startup](local-pc-setup.md#optional-start-the-installed-hud-at-login)
+for the installed user service. Review [Lynis/AIDE and threat context](host-security.md)
+for explicit host checks, and [model selection](local-model-selection.md) for
+local advice. Service startup, saved collector preferences, tool presence,
+accepted evidence and model qualification remain separate states.
 
 ## Bounded JSONL replay
 

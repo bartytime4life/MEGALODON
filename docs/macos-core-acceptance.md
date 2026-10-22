@@ -1,5 +1,7 @@
 # macOS core acceptance
 
+> **Current disposition — October 22, 2026:** [#345](https://github.com/bartytime4life/MEGALODON/issues/345) closed as completed on October 19 after [PR #656](https://github.com/bartytime4life/MEGALODON/pull/656), merge `bb24d2c0fb97e2d4c4ca5c519521b21d6027bf09`. The repair classifies raced connection failures and uses the verified Darwin writable path for AI receipts and evidence-segment writers. Older statements below that the issue remains open are historical. No fresh native run was performed in this documentation pass; M1 scope and the unsupported catalog remain unchanged. [Current source and checks](current-state.md) govern present orientation.
+
 Status: ◐ **Proposed M-track. The implemented PR-only M1 sample receipt passed
 on one hosted arm64 runner; native macOS acceptance remains unproved.**
 
@@ -139,9 +141,9 @@ review.
 That exact-head result advances only the hosted arm64 sample portion of M1. It
 does not exercise JSONL replay, a dashboard listener or browser, x86_64, a
 second recent macOS major version, an operator-managed host, privacy review,
-M2/M3, release, or deployment. M1 therefore remains open, issue #345 remains
-open for maintainer disposition, and the unsupported platform catalog remains
-unchanged.
+M2/M3, release, or deployment. M1 therefore remains incomplete. At that historical receipt, #345 still
+awaited maintainer disposition; it has since closed after #656, as recorded
+above. The unsupported platform catalog remains unchanged.
 
 ## M2 — offline TShark adapter
 

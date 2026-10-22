@@ -30,6 +30,16 @@ sensitive telemetry as fixtures.
 - **Security boundaries:** add exact refusal assertions and demonstrate that the prohibited side effect did not occur.
 - **Documentation:** verify every command and link against the same revision; distinguish delivered code from operational acceptance.
 
+For documentation changes, run the existing currentness and static-catalog
+checks as well as Wiki projection; retain skipped/environment-only checks:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS='' PYTEST_ADDOPTS='' \
+  .venv/bin/python -m pytest -q tests/test_documentation_currentness.py \
+  tests/test_wiki_sync.py tests/test_capabilities.py tests/test_hub.py tests/test_readiness.py
+python tools/build_input_inventory.py --check
+```
+
 Useful focused Wiki checks:
 
 ```bash
