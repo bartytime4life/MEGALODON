@@ -468,6 +468,7 @@ jobs:
           from megalodon.ai_broker import ReceiptStore
           from megalodon.config import Settings
           from megalodon.evidence_storage import GIB, EvidenceStorage
+          from megalodon.local_install import InstallError
           from megalodon.models import PacketEvent
           from megalodon.storage import StorageSchemaError
 
@@ -475,7 +476,13 @@ jobs:
               raise SystemExit("MACOS_WRITERS:UNEXPECTED_PLATFORM")
           results = {}
           with tempfile.TemporaryDirectory(prefix="megalodon-m1-writers-") as root:
-              root = Path(root)
+              results["temporary_ancestor_symlink"] = any(
+                  parent.is_symlink() for parent in Path(root).parents
+              )
+              # macOS tempfile paths can start at the /var -> /private/var alias.
+              # Select the real newly-created fixture; keep production ancestry
+              # validation intact, including any symlink introduced below it.
+              root = Path(root).resolve(strict=True)
               private = root / "receipts"
               private.mkdir(mode=0o700)
               receipts_path = private / "receipts.db"
@@ -504,6 +511,18 @@ jobs:
 
               home = root / "home"
               home.mkdir(mode=0o700)
+              linked_home = root / "linked-home"
+              linked_home.symlink_to(home, target_is_directory=True)
+              try:
+                  EvidenceStorage(Settings(db_path=home / "old.db"), home=linked_home)
+              except InstallError as exc:
+                  if str(exc) != f"installation directory ancestry is unsafe: {linked_home}":
+                      raise SystemExit("MACOS_WRITERS:HOME_SYMLINK_UNEXPECTED_REFUSAL") from exc
+              else:
+                  raise SystemExit("MACOS_WRITERS:HOME_SYMLINK_ACCEPTED")
+              if (home / ".local").exists():
+                  raise SystemExit("MACOS_WRITERS:HOME_SYMLINK_TARGET_CHANGED")
+              results["evidence_home_symlink"] = "refused"
               now = datetime.now(timezone.utc).timestamp()
               manager = EvidenceStorage(
                   Settings(db_path=home / "old.db"), home=home,
@@ -524,7 +543,11 @@ jobs:
                   writer.finish_ingestion_run(run, "source_exhausted")
                   writer.close()
                   entry = manager._catalog["entries"][0]
-                  with manager._db(entry) as reader:
+                  # Qualify writer readback through the verified writable path.
+                  # Darwin's /dev/fd reader cannot resolve WAL sidecars; native
+                  # HUD segment-reader support is a separate, unqualified gate.
+                  with manager._db(entry, write=True) as reader:
+                      reader.execute("PRAGMA query_only=ON")
                       count = reader.execute("SELECT COUNT(*) FROM events").fetchone()[0]
                   if count != 1:
                       raise SystemExit("MACOS_WRITERS:EVIDENCE_COUNT")
