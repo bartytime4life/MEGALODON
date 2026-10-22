@@ -54,11 +54,25 @@ offline consistency reaches at most `CANDIDATE_PACKET_CONSISTENT`.
 ## Disabled / UNBOUND regression boundary
 
 The [October 7 current-main reconciliation](qwen-446-zero-effect-reconciliation-2026-10-07.md)
-adds bounded sentinel evidence and an entry-point/acceptance matrix. It preserves
-the issue-level HOLD: doctor has intentional diagnostic/audit effects, canonical
-UNBOUND is not an enabled runtime gate, and cached dashboard model telemetry can
-schedule and query the catalog while AI is disabled. It records no owner binding
-or acceptance decision.
+retains dated sentinel evidence and an entry-point/acceptance matrix. Its
+[passive telemetry follow-up](qwen-446-zero-effect-reconciliation-2026-10-07.md#follow-up-disabled-cached-telemetry-correction)
+records the later correction: passive disabled dashboard telemetry does not
+schedule catalog work, and a queued refresh rechecks current settings before
+provider access. The explicit **Refresh installed models** action remains a
+provider metadata read. The owner chose to retain canonical `UNBOUND` on
+[October 7](https://github.com/bartytime4life/MEGALODON/issues/446#issuecomment-6042784531);
+that disposition is not a model binding or acceptance decision.
+
+Enabled `ai_provider.inventory` also checks the shared listener admission verdict
+before requesting `/api/tags`. An absent listener returns `OLLAMA_UNAVAILABLE`;
+wildcard, inconclusive, or unavailable posture returns `POLICY_REJECTION` without
+provider I/O. Disabled inventory returns `DISABLED` before even reading posture.
+The mocked inventory and doctor regressions in `tests/test_ai_doctor_consent.py`
+cover those refusals and preserve admitted missing/mismatched-model diagnostics.
+This is a scoped metadata-request guard, not native containment acceptance or a
+canonical-binding gate. Doctor retains intentional diagnostic/audit effects,
+and canonical `UNBOUND` is still not an enabled runtime gate. The issue-level
+combined zero-effect HOLD therefore remains.
 
 At this exact head, `settings.toml` defaults AI to disabled. The doctor and
 inventory disabled tests in `tests/test_ai_doctor_consent.py` require no

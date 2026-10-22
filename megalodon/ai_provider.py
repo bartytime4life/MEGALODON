@@ -199,7 +199,7 @@ def _json(data: bytes) -> object:
 
 
 def _listener_admitted(deadline: float | None = None) -> None:
-    """One listener-posture verdict shared by admission and the model catalog."""
+    """One listener-posture verdict shared by admission and model metadata reads."""
     try:
         posture = qwen_provider_posture(deadline=deadline)
     except (OSError, ValueError):
@@ -274,10 +274,11 @@ def model_catalog() -> list[dict]:
 
 
 def inventory(settings: AISettings) -> dict[str, object]:
-    """Read the fixed local tag list only when AI is enabled; never infer."""
+    """Read the fixed tag list only when enabled and listener-admitted; never infer."""
     try:
         if not settings.enabled:
             raise AIProviderError("DISABLED")
+        _listener_admitted()
         tags = _json(_request("/api/tags", "GET", None, settings.timeout_seconds))
         if type(tags) is not dict or type(tags.get("models")) is not list or len(tags["models"]) > 256:
             raise AIProviderError("INVALID_RESPONSE")
