@@ -32,6 +32,49 @@ def row(manager,n=1):
     return dict(observed_at=utc(manager.clock()),source='fixture',data={'bytes':n})
 
 
+@pytest.mark.parametrize('reported', ['verified-anchor', 'other-anchor', 'other-path'])
+def test_reader_accepts_only_its_verified_connection_anchor(manager,monkeypatch,reported):
+    from urllib.parse import unquote, urlsplit
+    from megalodon.storage import StorageSchemaError
+
+    enable(manager)
+    manager.append_records('network',[row(manager)])
+    entry=manager._generic['network']
+    real_connect=sqlite3.connect
+    connections=[]
+
+    class ReportedPath:
+        def __init__(self,connection,filename):
+            self.connection=connection;self.filename=filename;self.closed=False
+        def execute(self,statement,*args,**kwargs):
+            if statement=='PRAGMA database_list':
+                return type('Rows',(),{'fetchall':lambda _: [(0,'main',self.filename)]})()
+            return self.connection.execute(statement,*args,**kwargs)
+        def close(self):
+            self.closed=True;self.connection.close()
+        def __getattr__(self,name):
+            return getattr(self.connection,name)
+
+    def connect(uri,*args,**kwargs):
+        anchor=unquote(urlsplit(uri).path)
+        filename=(anchor if reported=='verified-anchor' else
+                  '/dev/fd/999999' if reported=='other-anchor' else str(manager.root/'other.db'))
+        connection=ReportedPath(real_connect(uri,*args,**kwargs),filename)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3,'connect',connect)
+    if reported=='verified-anchor':
+        with manager._db(entry) as reader:
+            assert reader.execute('SELECT COUNT(*) FROM records').fetchone()[0]==1
+            assert reader.execute('PRAGMA query_only').fetchone()[0]==1
+    else:
+        with pytest.raises(StorageSchemaError,match='^EVIDENCE:DATABASE_CHANGED$'):
+            with manager._db(entry):
+                pytest.fail('Unrelated connection path was accepted')
+    assert len(connections)==1 and connections[0].closed
+
+
 def test_policy_is_reviewed_and_validated(manager):
     assert not manager.enabled
     assert manager.append_records('network',[row(manager)])==0

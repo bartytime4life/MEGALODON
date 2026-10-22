@@ -83,6 +83,22 @@ jobs:
               if (home / '.local').exists():
                   raise SystemExit('BASELINE_WRITER:UNEXPECTED_WRITE')
           PYCODE
+      - name: Apply exact candidate reader-anchor delta to pinned source
+        run: |
+          python - <<'PYCODE'
+          import hashlib
+          from pathlib import Path
+          p = Path('megalodon/evidence_storage.py')
+          before = p.read_bytes()
+          blob = lambda b: hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+          assert blob(before) == '2be40c8f8a4c92c222a84e0b6d90d98a41e1a262'
+          old = b"                                  else (_anchored_database_path(descriptor,path,'EVIDENCE'),None))"
+          new = b"                                  else (_anchored_database_path(descriptor,path,'EVIDENCE'),None))\n            # Darwin read-only SQLite may report this exact verified /dev/fd anchor.\n            if not write:anchor=sqlite_path"
+          assert before.count(old) == 1
+          after = before.replace(old, new)
+          p.write_bytes(after)
+          print('COMPATIBILITY_READER_DELTA:', blob(before), '->', blob(after))
+          PYCODE
       - name: Run native storage safety negatives
         run: |
           python - <<'PY'
