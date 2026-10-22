@@ -24,7 +24,7 @@ from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .host_security import HostSecurity
-from . import gateway_review, hardening_review, persistence_review, process_network
+from . import gateway_review, hardening_review, persistence_review, process_network, recovery_readiness
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -396,11 +396,13 @@ class SupportConfiguration:
             tool_directories = {}
             tool_directories_status = 'unavailable'
         with self._lock:
+            host_security = self.host_security.snapshot()
             value = dict(schema=SCHEMA, interfaces=interfaces(), settings=dict(self._settings),
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
-                         host_security=self.host_security.snapshot(), hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
+                         host_security=host_security, recovery_readiness=recovery_readiness.review(host_security),
+                         hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:
                 value['token'] = self.token
