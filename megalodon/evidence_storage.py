@@ -221,8 +221,6 @@ class EvidenceStorage:
             # /dev/fd/N, so a writer uses Store's writable path choice.
             sqlite_path,anchor = (_writable_sqlite_connection_path(descriptor,path,'EVIDENCE') if write
                                   else (_anchored_database_path(descriptor,path,'EVIDENCE'),None))
-            # Darwin read-only SQLite may report this exact verified /dev/fd anchor.
-            if not write:anchor=sqlite_path
             uri = f'{sqlite_path.as_uri()}?mode={"rw" if write else "ro"}&cache=private'
             # SQLite resolves the chosen pathname and reopens that; a writer
             # must prove it opened the admitted segment. Read-only segment

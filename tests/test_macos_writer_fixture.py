@@ -3,6 +3,7 @@
 import ast
 import os
 from pathlib import Path
+import tempfile
 
 import pytest
 import yaml
@@ -16,13 +17,17 @@ pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX ancestry contr
 WORKFLOW = Path(__file__).parents[1] / ".github/workflows/macos-m1-synthetic.yml"
 
 
-def writer_fixture_root(temporary_root):
-    """Execute the workflow's actual setup before it creates its first child."""
+def writer_probe():
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     step = next(step for step in workflow["jobs"]["macos-m1-sample"]["steps"]
                 if step.get("name") == "Write AI receipts and an evidence segment natively")
     script = step["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    fixture = next(node for node in ast.parse(script).body if isinstance(node, ast.With))
+    return ast.parse(script)
+
+
+def writer_fixture_root(temporary_root):
+    """Execute the workflow's actual setup before it creates its first child."""
+    fixture = next(node for node in writer_probe().body if isinstance(node, ast.With))
     setup = []
     for node in fixture.body:
         if isinstance(node, ast.Assign) and any(
@@ -38,7 +43,7 @@ def writer_fixture_root(temporary_root):
 
 @pytest.mark.parametrize("aliased", [False, True])
 def test_writer_fixture_accepts_real_and_aliased_temporary_parents(tmp_path, aliased):
-    real = tmp_path / "real"
+    real = tmp_path.resolve(strict=True) / "real"
     real.mkdir(mode=0o700)
     alias = tmp_path / "var"
     alias.symlink_to(real, target_is_directory=True)
@@ -46,6 +51,29 @@ def test_writer_fixture_accepts_real_and_aliased_temporary_parents(tmp_path, ali
     temporary.mkdir(mode=0o700)
     root = writer_fixture_root(temporary)
     assert root == real / "new-fixture"
+
+
+@pytest.mark.parametrize("aliased", [False, True])
+def test_complete_writer_fixture_and_readback(tmp_path, monkeypatch, aliased):
+    real = tmp_path.resolve(strict=True) / "real"
+    real.mkdir(mode=0o700)
+    alias = tmp_path / "var"
+    alias.symlink_to(real, target_is_directory=True)
+    monkeypatch.setattr(tempfile, "tempdir", str(alias if aliased else real))
+    tree = writer_probe()
+    # Exercise the actual synthetic body on this native runtime. Its top-level
+    # Darwin-only guard belongs to hosted qualification; do not emulate Darwin
+    # or replace any production storage/platform guard here.
+    body = [node for node in tree.body if not isinstance(node, ast.If)]
+    scope = {}
+    exec(compile(ast.Module(body=body, type_ignores=[]), str(WORKFLOW), "exec"), scope)
+    assert scope["results"] == {
+        "temporary_ancestor_symlink": aliased,
+        "receipt_store": "written",
+        "receipt_store_symlink": "refused",
+        "evidence_home_symlink": "refused",
+        "evidence_segment_writer": "written",
+    }
 
 
 @pytest.mark.parametrize("damage", ["symlink", "writable", "file"])
