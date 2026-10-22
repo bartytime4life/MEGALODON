@@ -15,8 +15,8 @@ jsonschema==4.26.0 --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb
 jsonschema-specifications==2025.9.1 --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe
 # packaging-26.3-py3-none-any.whl — https://pypi.org/project/packaging/26.3/#files
 packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
-# pluggy-1.6.0-py3-none-any.whl — https://pypi.org/project/pluggy/1.6.0/#files
-pluggy==1.6.0 --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+# pluggy-1.7.0-py3-none-any.whl — https://pypi.org/project/pluggy/1.7.0/#files (verified 2026-10-21 UTC)
+pluggy==1.7.0 --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec
 # pygments-2.21.0-py3-none-any.whl — https://pypi.org/project/pygments/2.21.0/#files
 pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
 # pytest-9.1.1-py3-none-any.whl — https://pypi.org/project/pytest/9.1.1/#files
