@@ -68,6 +68,8 @@ fixed `/usr/bin/tshark` path or installed-tool acceptance gate, and finding
 | `osquery` | `osqueryi` |
 | `qwen-ollama` | `ollama` |
 | `nmap` | `nmap` |
+| `lynis` | `lynis` |
+| `aide` | `aide` |
 
 For tools with multiple separately installed components, this checks only the
 named representative; it does not infer the other components' state. Neither
@@ -81,14 +83,15 @@ The closed object contains exactly `schema`, `checked_at`, `platform`,
 `megalodon-tool-readiness-v2`; `probe_mode` is `path_presence_only`;
 `checked_at` is the process clock's UTC `YYYY-MM-DDTHH:MM:SSZ` time; and
 `platform` is `linux`, `windows` or `other`. The clock is not independently
-authenticated. `tools` contains exactly the 10 capability IDs above, in that
+authenticated. `tools` contains exactly the 12 capability IDs above, in that
 order, each with only `id` and `status`. `boundaries` contains the five fixed
 strings in `megalodon.readiness.BOUNDARIES`. The serialized report including its
 stdout newline is at most 8,192 UTF-8 bytes.
 
-The hosted and local reference consoles reject v1 imports. Generate a fresh
-v2 report from this revision before importing; retired OSSEC and Zabbix IDs
-are not accepted.
+The local readiness parser rejects v1 imports. It accepts current twelve-ID
+v2/v3 receipts and normalizes historical ten-ID v2 receipts by adding Lynis and
+AIDE as `not_checked`; retired OSSEC and Zabbix IDs are not accepted. This is
+separate from the hosted viewer's `megalodon-hud-snapshot-v1` import contract.
 
 Before any filesystem lookup, the complete PATH must satisfy all limits:
 
@@ -99,9 +102,9 @@ Before any filesystem lookup, the complete PATH must satisfy all limits:
 
 Any failed PATH condition makes all executable probes `not_checked`; the
 command never falls back to a default PATH or the current directory. Duplicate
-directories are removed. At most 768 candidate `stat` calls and 768 executable
-access checks occur. Directories are never enumerated. Errors and paths do not
-appear in the output. No arbitrary executable, PATH or platform override is
+directories are removed. Ten executable probes across at most 64 directories
+permit at most 640 candidate `stat` calls and 640 executable access checks.
+Directories are never enumerated. Errors and paths do not appear in the output. No arbitrary executable, PATH or platform override is
 accepted by the CLI.
 
 These are input and operation-count bounds, not a wall-clock deadline: the

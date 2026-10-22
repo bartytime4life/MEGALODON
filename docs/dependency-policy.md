@@ -1,5 +1,7 @@
 # CI dependency and action policy
 
+> **Source qualification — October 22, 2026 / `0acdf72663804c9ae8380522e344a515ac65978c`:** #657 merged Pluggy 1.7.0 with closed Linux wheel hashes and the regenerated input inventory. Main retains Playwright 1.63.0 and its exact native-focus profile. #658 proposes 1.64.0; #660 proposes its driver/lock correction. They are open proposals at this readback. Core CI passed at the source pin; browser acceptance failed with a timeout after driver preparation. [Exact checks](current-state.md#exact-source-head-checks-observed) distinguish that failure from the proposed version bump. Historical dependency provenance below keeps its original pins.
+
 Status: ● implemented for the required pull-request validation inputs; the
 compatibility lane is non-required discovery work. This document does not change
 the runtime dependency boundary, add a vendor account, or authorize network

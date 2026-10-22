@@ -1,7 +1,7 @@
 # Complete documentation catalog
 
-**159 Markdown documents accounted for.** Basis: `main@a380fe0d60f798106bf05c29729ca7cce91cca67`
-(2026-10-19 UTC), plus the documentation additions in this candidate. This
+**160 Markdown documents accounted for.** Basis: `main@0acdf72663804c9ae8380522e344a515ac65978c`
+(October 22, 2026, America/Chicago), plus the documentation additions in this candidate. This
 catalog includes root documents, all `docs/` and versioned-contract guides, Wiki
 source, Site scope, templates, fixture notes, and visual provenance.
 
@@ -153,6 +153,7 @@ capability is accepted. Schema and code files are linked by their owning guides.
 | [Document and file alignment — 2026-09-20](document-alignment-2026-09-20.md) | `docs/document-alignment-2026-09-20.md` |
 | [Repository, Console, and telemetry alignment — 2026-09-21](document-alignment-2026-09-21.md) | `docs/document-alignment-2026-09-21.md` |
 | [Document review and selected engineering work](document-review-2026-09-15.md) | `docs/document-review-2026-09-15.md` |
+| [Documentation reconciliation — October 22, 2026](documentation-refresh-2026-10-22.md) | `docs/documentation-refresh-2026-10-22.md` |
 | [License decision — 2026-09-20](license-decision-2026-09-20.md) | `docs/license-decision-2026-09-20.md` |
 | [Issue #446 zero-effect reconciliation — 2026-10-07](qwen-446-zero-effect-reconciliation-2026-10-07.md) | `docs/qwen-446-zero-effect-reconciliation-2026-10-07.md` |
 | [Repository audit and correction — October 1, 2026](repository-audit.md) | `docs/repository-audit.md` |

@@ -1,5 +1,7 @@
 # System opportunity map
 
+> **Reading this historical ranking on October 22, 2026:** use [current state](current-state.md) for the source pin, two open acceptance issues and separate dependency PRs. #345 has closed; the September issue/Site counts below are historical. The [reconciliation](documentation-refresh-2026-10-22.md) retains the supplied planning inputs without adopting their schedules or host authority.
+
 Status: ◐ **Proposed sequencing, refreshed source dispositions below**. This is
 a design record, not an acceptance receipt. Original ranking basis: GitHub
 `main@97c5798f53b539bbcb487eaa7c8ff07ac0344041` (tree

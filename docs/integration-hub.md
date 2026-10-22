@@ -1,7 +1,9 @@
 # MEGALODON integration hub contract
 
-Status: ● **implemented static plan; no general runner, scheduler, installer, or
-external-tool activation**.
+Status: ● **implemented static plan; this command performs no execution**.
+The twelve workflow rows describe their named interfaces. Separately configured
+HUD collectors, support setup and host-security actions are implemented outside
+`hub-plan`; their existence does not change the plan command's inert boundary.
 
 Document role: this file owns the closed workflow vocabulary and its execution
 boundary. The platform baseline owns installation choices; the offline and
@@ -36,10 +38,12 @@ it is descriptive data, not an argv builder or authorization to run it.
 | `alert-metadata` | Suricata | Pinned 8.0.7 raw-EVE converter, contract-envelope reader, durable transaction, reconciliation, and startup evidence view implemented | One checksum-bound private alert-only EVE file or closed contract-envelope file can produce the same immutable publication, which can be explicitly written and exactly reconciled; the startup dashboard view remains read-only. No mixed firehose, watcher, dashboard control, sensor, or IPS |
 | `live-metadata-capture` | Scapy | Optional | Explicit capture extra; metadata only; no crafting or injection feature |
 | `time-limited-response` | nftables | Plan only | Deterministic review plan; every live-apply route is refused before host or process work |
-| `manual-file-scan` | ClamAV | Manual companion | No file, hash, scan-result, removal, quarantine, or updater integration |
-| `endpoint-inventory` | osquery | Proposed | No arbitrary SQL, daemon, scheduler, remote enrollment, or importer |
+| `manual-file-scan` | ClamAV | Implemented completed-summary converter | Fixed stdin converter produces counts; it does not scan, update signatures or quarantine. HUD scans/updater controls are separate workflows |
+| `endpoint-inventory` | osquery | Implemented bounded inventory path | Fixed package count/completed result in the local companion worker; no arbitrary SQL or remote enrollment. This hub entry launches nothing |
 | `local-ai-advisory` | Qwen via local Ollama | Original run-count advisory library call | One Airlock-admitted request to literal IPv4 loopback and an optional startup-supplied display receipt; this policy has no CLI invocation, traffic inspection, background analysis, tools, or action authority. Separate opt-in anomaly/AI paths are described below. |
-| `network-inventory-import` | Nmap | Optional aggregate importer | [Nmap 7.x XML 1.05 completed report](nmap-inventory-v1.md) on stdin to aggregate JSON; manual local/hosted HUD import; no scan launch, retained targets, scripts, banners, or network activity |
+| `network-inventory-import` | Nmap | Optional aggregate importer | [Nmap 7.x XML 1.05 completed report](nmap-inventory-v1.md) on stdin to aggregate JSON; importer never scans. The configured HUD private-target worker is a separate interface |
+| `host-configuration-audit` | Lynis | Optional fixed local audit | Explicit unprivileged audit with private reports; no automatic hardening |
+| `file-integrity-comparison` | AIDE | Optional fixed local comparison | Explicit baseline/check; comparison never replaces the baseline or quarantines files |
 
 The Suricata record and reader contract gates are closed as prerequisites
 ([#9](https://github.com/bartytime4life/MEGALODON/issues/9) and
@@ -49,8 +53,10 @@ the bounded envelope-reader API, an explicit transaction for the shared
 immutable publication, and explicit read-only unknown-commit reconciliation.
 An optional [read-only startup projection](suricata-evidence-projection.md) serves
 bounded stored external-alert evidence through the local dashboard. Windows
-remains `contract_only`; no platform gains producer management, mixed-firehose
-acceptance, background ingestion, dashboard control, or action authority.
+remains `contract_only`. This completed-publication workflow adds no sensor
+management or IPS. Separately configured Linux HUD service setup and recent-EVE
+counts are described in [support configuration](support-configuration.md); they
+are not admitted alerts in the durable store.
 `hub-plan` itself remains static and writes nothing.
 
 The `local-ai-advisory` workflow names only the original
@@ -58,11 +64,14 @@ The `local-ai-advisory` workflow names only the original
 inventory of every AI entry point. The separate [anomaly command](anomaly-triage.md)
 accepts explicit `--qwen`; the draft [AI control plane](ai-control-plane.md)
 adds operator-invoked CLI commands, token-gated HUD requests, closed broker tools
-and private receipts. Those paths do not promote the original workflow's
-`manual_only` status or establish installed-provider acceptance. Model
+and private receipts. The catalog now labels the local AI component `optional`; that describes its
+availability, not acceptance. These paths do not expand the original policy
+or establish installed-provider acceptance. Model
 provenance, containment, adversarial evaluation and independent disposition
-remain [separate readiness gates](local-model-readiness.md); firewall application
-is unsupported throughout.
+remain [separate readiness gates](local-model-readiness.md). These model paths
+authorize no firewall application. Legacy CLI apply refuses; the separately
+protected [HUD containment workflow](visual-operations-defense.md) has its own
+operator confirmation, OS authorization, expiry and readback.
 
 ## Threat context and SIEM/SOAR exchange
 

@@ -88,7 +88,12 @@ python -m compileall -q megalodon tests
 python -m pytest tests/test_community_id.py tests/test_offline.py
 ```
 
-## What remains before #258 is addressed
+## Remaining producer acceptance under #445
+
+The original #258 grouping delivery is closed. [#445](https://github.com/bartytime4life/MEGALODON/issues/445)
+tracks exact producer qualification; the [selection packet](zeek-producer-selection-packet-2026-10-04.md)
+records the owner's Zeek 8.0.10 choice. Selection does not replace the placeholder
+profile or complete native evidence.
 
 - Pin one or more owner-approved Zeek `conn.log` producer profiles (for
   example a qualified 8.0.10 build) as a closed, versioned schema-drift

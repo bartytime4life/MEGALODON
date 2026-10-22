@@ -1,6 +1,6 @@
 # Unified roadmap: repository reconciliation
 
-> **Latest orientation — 2026-10-19:** [Current state](current-state.md) supersedes the present-tense orientation below. This file preserves dated reconciliation records, proposal dispositions and lifecycle history. The current catalog has twelve entries including Lynis/AIDE; it excludes OSSEC/Zabbix. Open acceptance tracking remains #345, #445 and #446 at this pass.
+> **Latest orientation — October 22, 2026:** [Current state](current-state.md) and the [documentation reconciliation](documentation-refresh-2026-10-22.md) govern present-tense reading. This file preserves dated proposal dispositions and lifecycle history. The current catalog has twelve entries including Lynis/AIDE and excludes OSSEC/Zabbix. #345 is closed; #445 and #446 remain open. Old no-license, missing-converter, open-issue and Site-version statements below retain only their original dates and pins.
 
 > Historical snapshot: OSSEC and Zabbix references below describe the prior
 > twelve-tool catalog. The later ten-tool catalog excluded both;

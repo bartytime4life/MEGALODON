@@ -1,6 +1,6 @@
 # Operator Guide
 
-> Documentation basis: `main@a380fe0d60f798106bf05c29729ca7cce91cca67` (2026-10-19 UTC). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance.
+> Documentation basis: `main@0acdf72663804c9ae8380522e344a515ac65978c` (October 22, 2026). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance.
 
 The HUD combines evidence views with separately authorized local workflows. Read source, time, scope and action state before interpreting any display.
 

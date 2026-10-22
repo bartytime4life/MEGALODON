@@ -22,7 +22,9 @@ from any terminal folder. Removal still requires explicit terminal confirmation.
 Double-click **Start-MEGALODON.sh** in your reviewed Linux checkout and choose
 **Run in Terminal** if prompted. It installs once, starts the local background
 HUD, and opens your browser. Later you can use the same script or **MEGALODON**
-in the application menu. The launch terminal closes once the workspace opens.
+in the application menu. The launch terminal closes once the workspace opens. Login startup remains
+a separate opt-in; see [service and login startup](local-pc-setup.md#optional-start-the-installed-hud-at-login).
+Saved monitoring settings can resume collection when the service starts.
 If background services are unavailable, keep the foreground fallback terminal
 open; **Ctrl+C** there stops the HUD.
 

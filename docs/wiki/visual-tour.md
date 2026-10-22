@@ -51,9 +51,9 @@ locations. Direction follows observed send/receive activity. Unmapped endpoints
 remain in the text roster; arcs do not measure physical packet routes. Pause,
 reduced motion, hidden views and stale data constrain animation.
 
-Inspect [the atlas contract](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/live-connection-globe.md),
-[implementation](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/megalodon/dashboard_globe.py) and
-[UI tests](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/tests/test_dashboard_live_globe.py). These links identify
+Inspect [the atlas contract](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/live-connection-globe.md),
+[implementation](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/megalodon/dashboard_globe.py) and
+[UI tests](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/tests/test_dashboard_live_globe.py). These links identify
 source and test assertions; their existence is not an exact-head test result.
 
 ## Give each kind of evidence its own place
@@ -66,9 +66,9 @@ source and test assertions; their existence is not an exact-head test result.
 | Host security | Lynis audit, AIDE changes and dated reference matches | Confirmed vulnerability, malware verdict or permission to act |
 | Reports / Evidence | Local reports and bounded retained records | Missing intervals and incompatible packet/flow units |
 
-See [host security](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/host-security.md),
-[workspace behavior](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/visual-operations-defense.md), and
-[the HTTP contract](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/dashboard-http-contract.md).
+See [host security](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/host-security.md),
+[workspace behavior](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/visual-operations-defense.md), and
+[the HTTP contract](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/dashboard-http-contract.md).
 
 ## Show the engineering cost alongside the win
 

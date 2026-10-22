@@ -9,8 +9,9 @@ Upstream instructions were consulted on **2026-09-22**; package versions remain 
 that anything is installed or accepted on your computer. Do not run the whole
 page as one script. Stop at an error and use the troubleshooting table.
 
-In **Home → Data and tools**, open Scapy, then **Easy setup and
-verification**. The local HUD and repository Site mirror share these cards.
+In the local HUD, open **Setup → Apps & connections**, select Scapy, then
+**Easy setup and verification**. These cards belong to the local application;
+the separate hosted Site is a snapshot viewer.
 Copy buttons copy text only: they do not install, execute, probe, or mark a
 tool as verified. The hosted Site cannot inspect your computer.
 
@@ -37,8 +38,9 @@ Source: [Scapy installation documentation](https://scapy.readthedocs.io/en/lates
 ### 1. Check the existing environment first
 
 In the local HUD, the Scapy card's **Check HUD Python package** command uses
-the Python interpreter serving that HUD. On the hosted Site, activate your
-reviewed MEGALODON virtual environment before using its `python3` example.
+the Python interpreter serving that HUD. For a manual checkout command, use
+your reviewed MEGALODON virtual environment; a separate Scapy environment does
+not change the interpreter serving the installed HUD.
 
 For the standalone environment from the earlier setup instructions, run this
 from **any directory**:

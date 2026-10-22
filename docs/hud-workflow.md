@@ -61,7 +61,7 @@ can observe the Scapy Python module, an expected process, and the example
 Qwen model manifest without executing a companion. Neither result establishes
 service health, a valid configuration, version or integration. Python/SQLite
 and Scapy remain `not_checked` in the executable-only `presence` field; read
-the separate `heartbeat` field with its `observed_at` timestamp. All 10 cards
+the separate `heartbeat` field with its `observed_at` timestamp. All 12 cards
 offer the same copyable commands.
 
 The local HUD can prepare the exact command needed to reopen that HUD with its

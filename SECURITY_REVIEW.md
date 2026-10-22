@@ -1,6 +1,6 @@
 # MEGALODON architecture security review
 
-> **Documentation orientation — 2026-10-19:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+> **Documentation orientation — 2026-10-22 / source `0acdf72663804c9ae8380522e344a515ac65978c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
 
 > **Scope note — 2026-10-01:** This document contains dated architecture and
 > acceptance records. The local Linux HUD is now the sole supported application.
@@ -12,6 +12,11 @@
 > every current HUD action. Historical evidence below is preserved as recorded.
 
 ## Current alignment basis
+
+The October 22 [source orientation](docs/current-state.md) owns current interface
+and issue/check status. The September records below retain their original
+evidence. PR #656 closed the tracked macOS storage defect; native platform
+acceptance remains scoped by the [M-track](docs/macos-core-acceptance.md).
 
 The [2026-09-21 alignment record](docs/document-alignment-2026-09-21.md) binds
 the review's historical baseline to merged recovery, licensing, detector,
@@ -26,7 +31,8 @@ of a model or host.
 The source launcher selects an existing compatible Python environment. Its
 preflight opens the default store read-only; missing data stays absent. The
 separate Linux desktop installer refuses root, creates versioned releases under
-an owner-private user directory, installs only the core package, smoke-checks
+an owner-private user directory, installs the core with `geo`/`knowledge` extras
+(and preserves an existing supported capture extra on upgrade), smoke-checks
 the installed import before an atomic active-release switch, and refuses unsafe,
 modified, mode-changed, symlinked, or untracked managed artifacts. Directory
 ancestry must be root/current-user-owned and non-writable by group/other unless
@@ -96,8 +102,8 @@ The first-launch exception tolerates only a missing audit source, with 503
 telemetry responses. Unsafe or invalid existing stores remain refused.
 
 Companion-console bookmarks are explicit browser navigation. The local HUD can
-open a chosen HTTP(S) console in a sandboxed frame; the hosted reference Site
-retains external links. The fixed fourteen-tool registry accepts no userinfo,
+open a chosen HTTP(S) console in a sandboxed frame. The former hosted reference
+UI is historical; the separate snapshot viewer has no local action surface. The fixed twelve-tool registry accepts no userinfo,
 query strings or fragments. Values are revalidated when loaded and stay in this
 origin's localStorage, or page memory when storage is unavailable. No console
 loads on page startup or merely saving a link. URLs must not contain credentials.
