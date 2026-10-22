@@ -1,6 +1,7 @@
 """Driver-profile regressions require neither Playwright nor a browser."""
 import hashlib
 import importlib.util
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -39,12 +40,13 @@ def test_refuses_unknown_or_already_modified_driver(module_bytes, kind):
         profile.native_driver_bytes(invalid)
 
 
-def test_refuses_nonunique_call_even_with_matching_source_digest(monkeypatch, module_bytes):
+@pytest.mark.parametrize("kind", ["missing", "duplicate"])
+def test_refuses_nonunique_call_even_with_matching_source_digest(monkeypatch, module_bytes, kind):
     source, _ = module_bytes
-    duplicate = source + profile.FOCUS_CALL
-    monkeypatch.setattr(profile, "STOCK_SHA256", hashlib.sha256(duplicate).hexdigest())
+    invalid = source.replace(profile.FOCUS_CALL, b"") if kind == "missing" else source + profile.FOCUS_CALL
+    monkeypatch.setattr(profile, "STOCK_SHA256", hashlib.sha256(invalid).hexdigest())
     with pytest.raises(profile.ProfileError, match="DRIVER_CALL_MISMATCH"):
-        profile.native_driver_bytes(duplicate)
+        profile.native_driver_bytes(invalid)
 
 
 def test_refuses_unexpected_output_digest(monkeypatch, module_bytes):
@@ -97,3 +99,51 @@ def test_child_failure_is_not_converted_to_success(monkeypatch):
     assert len(calls) == 1
     assert Path(calls[0][0][1]).name == "browser_acceptance.py"
     assert calls[0][1]["start_new_session"] is True
+
+
+def test_profile_and_closed_browser_lock_admit_the_same_version():
+    lock = Path(__file__).resolve().parents[1] / "constraints/browser-linux-cp311.txt"
+    pins = [line for line in lock.read_text().splitlines() if line.startswith("playwright==")]
+    assert len(pins) == 1
+    assert pins[0].split()[0] == f"playwright=={profile.PLAYWRIGHT_VERSION}"
+    assert profile.PROFILE == f"playwright-{profile.PLAYWRIGHT_VERSION}-native-focus-v1"
+
+
+@pytest.mark.parametrize("installed_version", ["1.63.0", "1.64.1", "1.65.0"])
+def test_other_versions_stop_before_copy_or_child(monkeypatch, installed_version):
+    monkeypatch.setattr(profile.sys, "platform", "linux")
+    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(profile, "version", lambda name: installed_version)
+    monkeypatch.setattr(profile, "prepare_profile", lambda *args: pytest.fail("unexpected copy"))
+    monkeypatch.setattr(profile, "run_suite", lambda *args: pytest.fail("unexpected child"))
+    with pytest.raises(profile.ProfileError, match="DRIVER_VERSION_MISMATCH"):
+        profile.main()
+
+
+@pytest.mark.parametrize("override", ["PLAYWRIGHT_NODEJS_PATH", "NODE_OPTIONS"])
+def test_driver_overrides_stop_before_copy_or_child(monkeypatch, override):
+    monkeypatch.setattr(profile.sys, "platform", "linux")
+    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(profile, "version", lambda name: profile.PLAYWRIGHT_VERSION)
+    monkeypatch.setenv(override, "synthetic-override")
+    monkeypatch.setattr(profile, "prepare_profile", lambda *args: pytest.fail("unexpected copy"))
+    monkeypatch.setattr(profile, "run_suite", lambda *args: pytest.fail("unexpected child"))
+    with pytest.raises(profile.ProfileError, match="DRIVER_OVERRIDE_REFUSED"):
+        profile.main()
+
+
+def test_admitted_version_does_not_authorize_unknown_driver_bytes(monkeypatch, tmp_path):
+    monkeypatch.setattr(profile.sys, "platform", "linux")
+    monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(profile, "version", lambda name: profile.PLAYWRIGHT_VERSION)
+    for key in ("PLAYWRIGHT_NODEJS_PATH", "NODE_OPTIONS"):
+        monkeypatch.delenv(key, raising=False)
+    source = tmp_path / "playwright"
+    module = source / profile.DRIVER_MODULE
+    module.parent.mkdir(parents=True)
+    module.write_bytes(b"unknown driver with admitted package version")
+    monkeypatch.setitem(profile.sys.modules, "playwright",
+                        SimpleNamespace(__file__=str(source / "__init__.py")))
+    monkeypatch.setattr(profile, "run_suite", lambda *args: pytest.fail("unexpected child"))
+    with pytest.raises(profile.ProfileError, match="DRIVER_SOURCE_MISMATCH"):
+        profile.main()
