@@ -137,6 +137,7 @@ def test_enabled_doctor_preserves_explicit_probe_and_failure_semantics(
 
 
 def test_inventory_refuses_disabled_before_request(monkeypatch):
+    monkeypatch.setattr(ai_provider, "qwen_provider_posture", _forbidden_request)
     monkeypatch.setattr(ai_provider, "_request", _forbidden_request)
     assert ai_provider.inventory(AISettings()) == {
         "model_present": False, "digest_matches": False, "error_code": "DISABLED",
@@ -147,8 +148,80 @@ def test_inventory_refuses_disabled_before_request(monkeypatch):
 def test_enabled_inventory_retains_missing_and_mismatched_diagnostics(monkeypatch, present):
     settings = AISettings(enabled=True)
     models = [{"name": settings.model, "digest": "0" * 64}] if present else []
+    monkeypatch.setattr(ai_provider, "qwen_provider_posture",
+                        lambda **_: {"listening": "yes", "loopback_only": True})
     monkeypatch.setattr(ai_provider, "_request", lambda *_: json.dumps({"models": models}).encode())
     result = ai_provider.inventory(settings)
     assert result["model_present"] is present
     assert result["digest_matches"] is False
     assert result["observed_digest"] == ("0" * 64 if present else None)
+
+
+@pytest.mark.parametrize("listening,loopback,error", [
+    ("no", None, "OLLAMA_UNAVAILABLE"),
+    ("yes", False, "POLICY_REJECTION"),
+    ("yes", None, "POLICY_REJECTION"),
+    ("unknown", None, "POLICY_REJECTION"),
+])
+def test_enabled_doctor_and_inventory_refuse_unadmitted_listener(
+    doctor_environment, monkeypatch, capsys, listening, loopback, error,
+):
+    state = doctor_environment
+    state["settings"].ai = replace(state["settings"].ai, enabled=True)
+    state["posture"] = {"listening": listening, "loopback_only": loopback, "bindings": []}
+    calls = []
+
+    def forbidden_request(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("unadmitted listener reached provider I/O")
+
+    monkeypatch.setattr(ai_provider, "_request", forbidden_request)
+    expected = {"model_present": False, "digest_matches": False, "error_code": error}
+    assert ai_provider.inventory(state["settings"].ai) == expected
+    code, output = _doctor(capsys)
+    assert code == 1
+    assert output["model_inventory"] == expected
+    assert output["model_status"]["inference_verified"] is False
+    assert output["checks"]["qwen_model_installed"] is False
+    assert calls == []
+    assert len(state["receipts"]) == 1  # Doctor's diagnostic receipt is intentional.
+
+
+@pytest.mark.parametrize("error_type", [OSError, ValueError])
+def test_inventory_fails_closed_when_listener_observation_fails(monkeypatch, error_type):
+    calls = []
+
+    def unavailable(**kwargs):
+        raise error_type("synthetic posture failure")
+
+    def forbidden_request(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("unavailable posture reached provider I/O")
+
+    monkeypatch.setattr(ai_provider, "qwen_provider_posture", unavailable)
+    monkeypatch.setattr(ai_provider, "_request", forbidden_request)
+    assert ai_provider.inventory(AISettings(enabled=True)) == {
+        "model_present": False, "digest_matches": False, "error_code": "POLICY_REJECTION",
+    }
+    assert calls == []
+
+
+def test_admitted_inventory_reads_only_one_tag_catalog(monkeypatch):
+    settings = AISettings(enabled=True)
+    calls = []
+
+    def posture(**kwargs):
+        calls.append("posture")
+        return {"listening": "yes", "loopback_only": True}
+
+    def request(path, method, body, timeout):
+        calls.append((path, method, body, timeout))
+        return json.dumps({"models": [{"name": settings.model,
+                                       "digest": settings.model_digest}]}).encode()
+
+    monkeypatch.setattr(ai_provider, "qwen_provider_posture", posture)
+    monkeypatch.setattr(ai_provider, "_request", request)
+    assert ai_provider.inventory(settings) == {
+        "model_present": True, "digest_matches": True, "observed_digest": settings.model_digest,
+    }
+    assert calls == ["posture", ("/api/tags", "GET", None, settings.timeout_seconds)]
