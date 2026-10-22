@@ -39,6 +39,36 @@ Use `./Start-MEGALODON.sh --check` for status and `--update` to install the curr
 checkout again. The lower-level `./scripts/install-local.sh` remains available
 for installation without launching.
 
+### Optional: start the installed HUD at login
+
+From the root of the reviewed checkout, after installing for this Linux user:
+
+```bash
+./scripts/hud-autostart.sh start
+./scripts/hud-autostart.sh enable
+```
+
+`start` starts the managed service now. `enable` adds startup when this user
+signs in; `enable --start` combines both operations. To disable login startup
+and stop the managed HUD now:
+
+```bash
+./scripts/hud-autostart.sh disable
+```
+
+These commands require the installed release and the user's systemd manager.
+They verify the managed unit, reject unexpected overrides, and require an
+IPv4 loopback listener at `127.0.0.1`. They do not enable system-wide startup
+or user lingering. Stopping the HUD stops its in-process collectors; separately
+managed companion services retain their own lifecycle.
+
+Service startup does not create a new capture authorization. Previously saved
+monitoring choices can resume collection, while fixed companion/report jobs
+have their own defaults. Inspect Sensors and [background-tool scope](background-tools.md).
+The source preflight (`start-local.sh --check`) reads status without enabling
+login startup. This guide records commands, not an inspection of your installed
+service or autostart state.
+
 ### Open a separate session with explicit options
 
 The installed launcher reopens an active background HUD only when called
@@ -116,7 +146,10 @@ The installer:
 
 - refuses root and `sudo`;
 - builds a new private application release before selecting it;
-- installs only the MEGALODON core package, without capture or test extras;
+- installs the core plus the declared `geo` and `knowledge` extras; a fresh
+  install omits capture/test extras, while upgrades can preserve an existing
+  supported capture extra. The readers do not themselves download a location
+  database or connect a sensor;
 - creates a stable HUD launcher, maintenance launcher, desktop entry, and icon;
 - serializes install, repair, and uninstall actions with an owner-private lock;
 - requires root/current-user-owned directory ancestry, allowing writable

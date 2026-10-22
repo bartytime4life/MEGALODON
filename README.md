@@ -92,9 +92,13 @@ memory and has no live connection to this PC. Windows/macOS parity, operational
 detection accuracy, provider containment and independent acceptance remain
 separate evidence gates.
 
-*Documentation reconciled against `main@a380fe0d60f798106bf05c29729ca7cce91cca67`
-(2026-10-19 UTC). [Evidence basis and open gates](docs/current-state.md).
+*Documentation reconciled against `main@0acdf72663804c9ae8380522e344a515ac65978c`
+(October 22, 2026). [Evidence basis and open gates](docs/current-state.md).
 Historical benchmarks and receipts keep their own dates and revisions.*
+
+At that source pin, core CI passed and browser acceptance timed out; the source
+head is not wholly green. [Check identities and open dependency PRs](docs/current-state.md#exact-source-head-checks-observed)
+remain separate from documentation validation and installed-PC acceptance.
 
 <details>
 <summary><strong>Detailed operator and CLI reference</strong> — installation, safety defaults, recipes, contracts and platform notes</summary>
@@ -229,7 +233,7 @@ For a temporary source launch, run:
 ./scripts/start-local.sh
 ```
 
-Open the printed localhost address and go to **Home → Data and tools**. Each
+Open the printed localhost address and go to **Setup → Data and tools**. Each
 optional tool has a status light next to its name: green means presence observed,
 amber means setup incomplete, red means not found, and grey means unknown or
 stale. These observations do not prove health, a data connection, or configured
@@ -404,7 +408,7 @@ entry point, not a replacement platform contract.
 | A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
 | WSL2 | Development evaluation under the documented W2 limits | Not the hostile-capture isolation baseline or proof of Windows-host monitoring/enforcement |
 | macOS, BSD, and other native systems | Read the `other` catalog and identify future port/acceptance work | Core runtime and network adapters are **unsupported in the current catalog**; Python or upstream-tool availability alone does not establish support |
-| Containers or unattended services | Possible future packaging/operations work | No supported deployment profile is established here. Container privilege, mounts, networking, lifecycle, and isolation need separate review; no service or scheduler is installed by these instructions |
+| Containers and unattended operation | Installed Linux HUD has a managed per-user service and optional login startup | See [local startup](docs/local-pc-setup.md#optional-start-the-installed-hud-at-login). Container deployment, system-wide unattended services, privilege, mounts, networking and isolation require separate review |
 
 The catalog distinguishes `implemented`, `optional`, `evaluation_only`,
 `contract_only`, `manual_only`, `guest_only`, `proposed`, and `unsupported`.
@@ -439,7 +443,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Dashboard | Local loopback HUD with live traffic, connection globe, resources, IP inspection and historical traffic in the HUD; Sensors shows background workflows; Setup holds configuration and downloads. Explicit local actions use separate request checks and audit records. Completed offline and admitted Suricata evidence retains its separate projection contract; opening a companion window does not establish telemetry |
 | Firewall boundary | Legacy isolated `inet megalodon` plans remain inert. Separate HUD containment uses `inet megalodon_guard`, an exact preview, OS authorization, five-minute timeout, readback and release; model output cannot apply it |
 | Offline analysis | Separate, Linux-only non-root TShark PCAP/PCAPNG replay and Zeek JSON/TSV `conn.log` import with private redacted reports |
-| Capability catalog | Static, read-only Linux/Windows/other status for 14 selected free/open-source tools and planned interface slots; performs no host probe or installation |
+| Capability catalog | Static, read-only Linux/Windows/other status for 12 selected free/open-source tools and planned interface slots; performs no host probe or installation |
 | Local posture receipt | Bounded package-level profile and reference-data status; no host probe, database, capture, listener, or host mutation |
 | Integration hub | Closed, machine-readable workflow plans for every selected utility; plan-only and non-executing |
 | Suricata completed-file intake | Single-threaded Linux main-thread APIs for one checksum-bound private 8.0.7 alert-only EVE file or one closed-envelope file; both return the same consumer-compatible immutable batch and terminal receipt, with no mixed firehose, persistence, dashboard write, watcher, or sensor operation |
@@ -467,11 +471,11 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Optional offline `conn.log` producer and separate bounded background samples | The offline adapter never invokes Zeek. When background monitoring is enabled, the local HUD can run unprivileged, finite Zeek CLI samples; installation presence alone is not a live feed. |
 | Suricata | Optional external producer for the closed alert envelope | The Linux file reader and durable consumer never invoke or require the Suricata binary; they accept only the separately prepared contract envelope/publication |
-| ClamAV | Explicitly scoped local scans or completed-report watching | Optional automatic local HUD companion; aggregate counts only, no file-content intake, quarantine, signature update, or upload |
+| ClamAV | Explicitly scoped local scans or completed-report watching | Optional local HUD companion; aggregate counts only, no file-content intake, quarantine or upload. Fixed FreshClam setup/start controls are a separate explicit workflow |
 | osquery | Fixed local DEB package count or completed-result watching | Optional automatic local HUD companion; no package names, arbitrary query pack, daemon, or remote enrollment |
 | Nmap | Explicit private IPv4 target scan or completed XML watching | Optional automatic local HUD companion; defaults to loopback, with at most 256 addresses when explicitly configured, and aggregate host/port-state counts only |
 | nftables | Legacy plan review and separate HUD temporary containment | Plan mode needs no privilege. Optional HUD apply requires OS authorization and affects only its managed table |
-| pytest `>=8,<10` and jsonschema `>=4.23,<5` | Repository tests and automation-contract validation | Install with the `test` extra |
+| pytest `>=9.0.3,<10`, jsonschema `>=4.23,<5`, PyYAML `>=6.0.3,<7` | Repository tests and contract validation | Install with the `test` extra; reviewed CI currently pins pytest 9.1.1 and Pluggy 1.7.0 |
 
 The core Python package currently has no third-party runtime dependency. Git is
 needed for a source checkout; no analyzer, antivirus, capture driver, or firewall
@@ -490,10 +494,11 @@ python -m pip install -e ".[capture,test]" # both optional groups
 ## Ubuntu 24.04 companion-tool setup
 
 This is an **operator-managed installation guide**, not a MEGALODON installer.
-Install only what an approved workflow requires. The commands below do not
-start a capture, scanner, IDS/IPS sensor, service, scheduler, firewall rule,
-remote listener, rule download, or telemetry upload. They do not change
-MEGALODON's capability status.
+Install only what an approved workflow requires. These recipes do not explicitly start MEGALODON capture, scanning, sensor,
+scheduling or firewall workflows, add a remote listener, or upload telemetry.
+Package managers may start distribution services. Inspect their prompts and
+the separate [support configuration](docs/support-configuration.md) before
+proceeding. Installation does not promote a capability's acceptance status.
 
 | Tool | MEGALODON relationship after installation | Do not configure or start for MEGALODON |
 | --- | --- | --- |
@@ -676,8 +681,10 @@ zeek --version
 ~~~
 
 Persist a PATH change only after verifying the version and prefix. MEGALODON
-never launches Zeek: it imports a separately produced, closed-profile conn.log
-in offline analysis. Preserve original producer output; an unsupported record
+never launches Zeek through this offline importer: it imports a separately
+produced, closed-profile conn.log for offline analysis. The separately configured
+HUD sampler can invoke finite Zeek CLI samples. Preserve original producer
+output; an unsupported record
 must be treated as an input-contract problem, not silently altered in place.
 See [Zeek's 8.0.10 source-build documentation](https://docs.zeek.org/en/v8.0.10/building-from-source.html).
 
@@ -923,8 +930,8 @@ with the dashboard or hidden tab. The UI distinguishes the last successful
 refresh from the latest returned observation. Failed/old refreshes retain labeled
 previous readings; unavailable input shows no measurement. Historical selection
 changes both meters to that minute. This refreshes stored evidence only; it does
-not start a capture or establish sensor liveness. The retired hosted Console
-has disconnected meter tracks because it has no local telemetry connection.
+not start a capture or establish sensor liveness. The separate hosted snapshot
+viewer has no local telemetry connection; imported summaries describe their saved window, not live meter activity.
 
 To place public source IPs automatically on the globe, install the optional
 local reader (`python -m pip install '.[geo]'` from this checkout), obtain a

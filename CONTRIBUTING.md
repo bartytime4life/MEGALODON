@@ -8,6 +8,22 @@ execution authority. Start with the [README](README.md), the
 [integration contract](docs/integration-hub.md), and the
 [dashboard HTTP contract](docs/dashboard-http-contract.md).
 
+## Documentation maintenance
+
+Use [current state](docs/current-state.md) for the dated source orientation and
+[the complete catalog](docs/documentation-map.md) for all tracked Markdown.
+Correct maintained task guides, catalog counts, request/receipt descriptions and
+Wiki source together. Preserve original pins, hashes, counts and decisions in
+dated records; add a current pointer when their old queue or deployment claims
+could be mistaken for present state. Supplied plans are design input, never
+installation, model, sensor, firewall or release authority.
+
+For documentation-only work, validate local file links and heading anchors,
+run the existing documentation/Wiki tests and affected static command smokes,
+and record omissions. Do not regenerate historical audit or browser receipts
+as if a prose edit had rerun those experiments. Wiki publication on main is a
+separate workflow; a draft PR is not a published Wiki or an installed upgrade.
+
 ## Establish the exact baseline
 
 Record the current main commit, the working branch head, relevant open issues,

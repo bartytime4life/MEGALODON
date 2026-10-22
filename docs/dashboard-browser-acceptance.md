@@ -1,5 +1,7 @@
 # Linux dashboard browser acceptance
 
+> **Latest source-head observation — October 22, 2026:** main `0acdf72663804c9ae8380522e344a515ac65978c`, [run 39787193736 / job 119853424560](https://github.com/bartytime4life/MEGALODON/actions/runs/39787193736/job/119853424560), failed with `TimeoutError` at suite line 701 after four setup checks. Its Playwright 1.63.0 native-focus profile prepared successfully. This is an observed CI failure with unproved cause, not `DRIVER_VERSION_MISMATCH`. Open #658/#660 concern the proposed 1.64.0 upgrade. Older passing receipts below remain historical; no fresh browser run or installed-host acceptance is claimed by this documentation change.
+
 This opt-in test executes the actual CLI, ingestion/service code, SQLite writer,
 separate dashboard reader, HTTP handler, bundled assets, and a real browser.
 It does not replace the application with a component fixture. Ordinary pytest

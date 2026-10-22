@@ -17,8 +17,9 @@ schema. No telemetry is committed to Site source or deployment output.
 
 The separate Site source repository owns the current static viewer under
 `web/`, its tests under `tests-current/`, and generated `dist/` output.
-See [the source alignment record](../docs/site-source-alignment.md) for exact
-publication identity and validation. This repository's hosting manifest retains
+See [the source alignment record](../docs/site-source-alignment.md) for recorded
+publication identity and validation. The October 22 documentation pass did not
+re-read hosting or prove current source/deployment parity. This repository's hosting manifest retains
 the existing project identity; it does not build or deploy the separate viewer.
 
 `retired/worker.mjs` preserves the historical empty HTTP 410 handler. It is not

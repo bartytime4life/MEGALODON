@@ -3,8 +3,9 @@
 Status: 📜 contract only — the repository remains `UNBOUND`; no model or provider
 was inspected, pulled, installed, started, aliased, invoked, or approved.
 
-Issue #261 requires a completed identity chain before provider containment can
-advance. `megalodon.local-model-binding/v1` records that chain separately from
+Successor issue [#446](https://github.com/bartytime4life/MEGALODON/issues/446)
+retains the identity-chain requirement from closed #261. A completed identity
+chain is required before provider containment can advance. `megalodon.local-model-binding/v1` records that chain separately from
 the existing containment-observation packet:
 
 - logical `local:qwen-*` alias;

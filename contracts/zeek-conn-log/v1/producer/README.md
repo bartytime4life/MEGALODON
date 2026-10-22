@@ -75,7 +75,14 @@ a content change, not a new contract shape.
   for the pure, non-authoritative grouping hint; this scaffold does not
   change or depend on that code.
 
-## What remains before #327 can close
+## Remaining qualification under #445
+
+[#327](https://github.com/bartytime4life/MEGALODON/issues/327) is closed. Successor
+[#445](https://github.com/bartytime4life/MEGALODON/issues/445) retains the missing
+producer-evidence gate. The [selection packet](../../../../docs/zeek-producer-selection-packet-2026-10-04.md)
+records Zeek 8.0.10 as the owner-selected private candidate; this checked-in
+scaffold still has placeholder identity/version fields. The checklist below is
+qualification work, not an instruction to select a second producer.
 
 - An owner-selected exact Zeek producer version, build/package
   configuration, and field set — replacing every placeholder identifier in

@@ -1,6 +1,6 @@
 # Security Boundaries
 
-> Current source orientation: `main@a380fe0d60f798106bf05c29729ca7cce91cca67` (2026-10-19 UTC). This documents existing interfaces; it authorizes no model, sensor, service or firewall operation.
+> Current source orientation: `main@0acdf72663804c9ae8380522e344a515ac65978c` (October 22, 2026). This documents existing interfaces; it authorizes no model, sensor, service or firewall operation.
 
 The local HUD has real, scoped operator actions. Its safety depends on keeping evidence reads, model advice, configuration, privileged execution and acceptance distinct.
 
@@ -16,13 +16,13 @@ The local HUD has real, scoped operator actions. Its safety depends on keeping e
 
 A fresh configuration does not mutate the firewall. The installed launcher can start/reuse the local user HUD service; login autostart is separate. HUD companion jobs and report scheduling have documented local defaults. Saved monitoring choices can resume capture. Explicit support configuration may install fixed packages, start configured services, or invoke OS authorization. These effects must not be described as a universally read-only application.
 
-[Support configuration](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/support-configuration.md) and [companion collection](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/companion-automation.md) define the exact scope. The static workflow catalog remains non-executing.
+[Support configuration](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/support-configuration.md) and [companion collection](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/companion-automation.md) define the exact scope. The static workflow catalog remains non-executing.
 
 ## Temporary defense and recovery
 
 Legacy firewall CLI `--apply` flags refuse before host interaction. The separate HUD containment workflow supports a currently observed public endpoint through preview, operator confirmation and OS approval. It protects local/reserved/allowlisted and observed DNS/remote-access services, uses only its fixed managed nftables table, and gives each element a five-minute kernel timeout. Model proposals never authorize application.
 
-Audit admission precedes requested actions. Failed or ambiguous helper results retain review/release paths; a receipt hash chain is not protection against an owner rewriting the ledger. See [the defense contract](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/docs/visual-operations-defense.md) and [failure and refusal tests](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/tests/test_defense.py).
+Audit admission precedes requested actions. Failed or ambiguous helper results retain review/release paths; a receipt hash chain is not protection against an owner rewriting the ledger. See [the defense contract](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/visual-operations-defense.md) and [failure and refusal tests](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/tests/test_defense.py).
 
 Backup/restore uses explicit commands and new destinations. Restoring does not automatically activate the database or complete native recovery acceptance.
 
@@ -32,7 +32,7 @@ There is no core telemetry cloud-analytics/SIEM/SOAR upload path. Separately opt
 
 The model receives bounded evidence through the literal loopback provider. It can explain and return closed proposals; it cannot turn generated code into execution. The canonical Qwen record remains UNBOUND and [#446](https://github.com/bartytime4life/MEGALODON/issues/446) remains open. Runtime selection is not canonical acceptance.
 
-Read [the full security review](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/SECURITY_REVIEW.md) and [the specification](https://github.com/bartytime4life/MEGALODON/blob/a380fe0d60f798106bf05c29729ca7cce91cca67/SPECIFICATION.md) for the complete contracts and open controls. This Wiki renovation is documentation and graphics work; it does not operate a model, collector, service or firewall, and is not a security certification.
+Read [the full security review](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/SECURITY_REVIEW.md) and [the specification](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/SPECIFICATION.md) for the complete contracts and open controls. This Wiki renovation is documentation and graphics work; it does not operate a model, collector, service or firewall, and is not a security certification.
 
 ## Host references and publication
 

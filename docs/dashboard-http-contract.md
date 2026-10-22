@@ -157,7 +157,7 @@ production service.
 | `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, HUD mode | Availability of the fixed Linux desktop-app list in the current session |
 | `/api/support-start` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
 | `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state, the cached read-only hardening review, the cached bounded persistence summary, the passive local gateway review, this account's programs holding network sockets and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
-| `/api/support-workflows` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Passive, bounded status and aggregate metrics for ten background tools; never starts services, scans or model inference. See [background tools](background-tools.md). |
+| `/api/support-workflows` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Passive, bounded status and aggregate metrics for twelve background tools; never starts services, scans or model inference. See [background tools](background-tools.md). |
 | `/api/operations` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Bounded live traffic pulse, IP details, passive sensor context, review-only hostname naming and TLS handshake signals and storage counters; no network lookups or model call |
 | `/api/defense` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed workflow state, private audit summary, active/uncertain containment and separate POST nonce; [defense contract](visual-operations-defense.md) |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
@@ -311,9 +311,10 @@ does not establish adapter version, sensor liveness, completeness, or
 connectivity. An unavailable store returns 503, not an empty healthy result.
 
 The local HUD uses canonical controls, lifecycle text and parsers in
-`megalodon/dashboard_tool_assets.py`. The hosted application is retired; no
-asset mirror or synchronization script is used. Console bookmarks persist
-only explicit validated HTTP(S) addresses for fourteen fixed tools in browser
+`megalodon/dashboard_tool_assets.py`. The former hosted control application and
+asset mirror are retired; the separate [snapshot viewer](../site/README.md) has
+no local action routes. Console bookmarks persist
+only explicit validated HTTP(S) addresses for twelve fixed tools in browser
 localStorage; storage failure uses page memory and says so. Credentials, queries,
 fragments, executable protocols and malformed saved values are rejected. No
 telemetry, readiness report, command-builder path or filter is persisted there.
@@ -324,7 +325,7 @@ fallback message.
 
 Setup's software list separates runtime essentials from optional workflows. Its
 download buttons and Apps acquisition buttons open fixed publisher pages with
-no opener/referrer. They do not fetch or execute installers. The retired hosted site has no acquisition or local action surface.
+no opener/referrer. They do not fetch or execute installers. The separate hosted snapshot viewer has no acquisition or local action surface.
 
 ## Optional Suricata evidence snapshot
 
@@ -490,12 +491,12 @@ The existing `megalodon-integration-hub-v1` envelope and
 `megalodon-capability-catalog-v1` reference are preserved. Each workflow carries
 ID, component, software, selected status, source kind, owner, input/output,
 nullable entry point, launch policy, data/action boundaries, and next gate.
-The HTTP surface permits 14 workflows, string fields up to 512 characters,
+The HTTP surface permits exactly 12 workflows, string fields up to 512 characters,
 and encoded responses up to 32 KiB. A budget failure returns a fixed 503 with no
 partial map. Adding workflows requires a coordinated reviewed bound/contract/UI
 change, not silently dropping rows or broadening a generic plugin loader.
 
-The browser requires the complete 14-ID set, unique IDs, the exact envelope
+The browser requires the complete 12-ID set, unique IDs, the exact envelope
 and workflow keys, bounded field types, a known status, and a response matching
 the profile captured when the request began. It requires
 `hub_mode=static_plan_only`, `default_posture=observe_only`,

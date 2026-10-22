@@ -16,8 +16,9 @@ as a tool argument. Its text is advice, not evidence or authorization.
 
 This is separate from the original fingerprint-pinned run-count Qwen advisory
 and offline anomaly advisory. Those policies and their callers are unchanged.
-The acceptance requirements recorded in
-[#261](https://github.com/bartytime4life/MEGALODON/issues/261) cover exact provider
+The acceptance requirements originally recorded in closed
+[#261](https://github.com/bartytime4life/MEGALODON/issues/261), now held under
+[#446](https://github.com/bartytime4life/MEGALODON/issues/446), cover exact provider
 containment, model provenance, adversarial corpus and independent review.
 An issue closure or passing doctor output does not supply that evidence. The Ollama manifest digest
 below pins the locally observed tag, not publisher authenticity or the bytes

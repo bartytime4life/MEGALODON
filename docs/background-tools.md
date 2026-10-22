@@ -36,6 +36,18 @@ GUI windows, invoke AI or apply containment.
 | Qwen / Ollama | Bounded explanations of completed aggregate collector results and selected observed IPs; operator-reviewed proposals only |
 | Scapy | Alternative capture engine; not started alongside the TShark feed |
 | nftables | Operator-reviewed local containment from the IP inspector; startup does not change firewall rules |
+| Lynis | Explicit unprivileged host audit; saved summary and its source time |
+| AIDE | Explicit initial baseline and file-change comparison; no automatic baseline replacement |
+
+## Background startup and collector scope
+
+The installed launcher can keep the HUD running after its terminal closes.
+Starting its managed service and enabling startup at login are separate from
+enabling monitoring. [The startup guide](local-pc-setup.md#optional-start-the-installed-hud-at-login)
+provides start, enable and disable commands. Saved monitoring settings can
+resume collection; scheduled companion jobs retain their configured scopes.
+Lynis/AIDE HUD checks remain explicit. A distribution package can independently
+install a service or timer, as described in [host security](host-security.md).
 
 ## Status dots
 
