@@ -85,13 +85,17 @@ def test_canonical_fixture_still_refuses_unsafe_descendants(tmp_path, damage):
     outside.mkdir(mode=0o700)
     if damage == "symlink":
         (home / ".local").symlink_to(outside, target_is_directory=True)
+        expected = f"installation directory ancestry is unsafe: {home / '.local'}"
     elif damage == "writable":
         home.chmod(0o777)
+        expected = f"installation directory ancestry is group- or world-writable: {home}"
     else:
         (home / ".local").write_text("sentinel", encoding="utf-8")
+        expected = f"installation directory ancestry is unsafe: {home / '.local'}"
     try:
-        with pytest.raises(InstallError, match="ancestry is"):
+        with pytest.raises(InstallError) as refusal:
             EvidenceStorage(Settings(db_path=home / "old.db"), home=home)
+        assert str(refusal.value) == expected
         assert not (outside / "share").exists()
         assert not (home / ".local/share/megalodon/evidence").exists()
     finally:
