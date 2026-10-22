@@ -31,7 +31,7 @@ It complements the installed check and does not resolve print pagination.
 ## Prepared environment and execution
 
 From an installed repository checkout on non-root Linux, with Chrome stable,
-Xvfb/Openbox, and the test-only Playwright 1.63.0 package already installed,
+Xvfb/Openbox, and the test-only Playwright 1.64.0 package already installed,
 use an X display already managed by Openbox:
 
 ```bash
@@ -70,7 +70,7 @@ branch protection and does not supply an independent approval.
 ## Native-focus driver profile (issue #97)
 
 The test must remove automation's forced-visible behavior before measuring
-native visibility. The reviewed Playwright 1.63.0 driver core bundle sets
+native visibility. The reviewed Playwright 1.64.0 driver core bundle sets
 `Emulation.setFocusEmulationEnabled` to `true` on its own CDP session.
 [Chrome documents](https://developer.chrome.com/docs/devtools/rendering/apply-effects#emulate_a_focused_page)
 that focus emulation keeps visibility at `visible` and suppresses visibility
@@ -103,6 +103,52 @@ not MEGALODON acceptance; only the real-application lane establishes the latter.
 The profile still has to observe native hidden and visible states and demonstrate
 suspension/recovery through unchanged application logic. It never synthesizes
 visibility to make an assertion pass.
+
+## Playwright 1.64.0 qualification — October 21, 2026
+
+PR #658 changed the dependency without updating the native-focus profile or
+the closed browser-input policy. Its original Linux browser job
+[118453184738](https://github.com/bartytime4life/MEGALODON/actions/runs/39369267773/job/118453184738)
+refused `DRIVER_VERSION_MISMATCH`; that failure remains historical evidence.
+
+The inspection candidate for [PR #660](https://github.com/bartytime4life/MEGALODON/pull/660),
+`d4fe205058875f66f5f2831588572e39e16dd367`, downloaded through the existing
+hash-required wheel closure and independently compared the selected wheel
+against PyPI's exact-filename published digest in
+[job 119465372132](https://github.com/bartytime4life/MEGALODON/actions/runs/39670090565/job/119465372132).
+That inspection succeeded; the unchanged 1.63 profile then refused the new
+version as expected. Inspection alone is not browser acceptance.
+
+| Checked bytes | SHA-256 |
+| --- | --- |
+| `playwright-1.64.0-py3-none-manylinux1_x86_64.whl` | `5a59af1b230b234008524a5d42b613b233d4256f73bc1dd25bf3f11db0c81b75` |
+| Stock `driver/package/lib/coreBundle.js` (3,585,406 bytes) | `829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d` |
+| Copy with the single protected focus call changed to false | `a08fe18c02c46ef364029a72ee5299529cea7e093b21f9f8ce69c8be64e8a2e6` |
+
+The wheel contains exactly one copy of the protected initialization call.
+The upstream Chromium source at
+[v1.63.0](https://github.com/microsoft/playwright/blob/v1.63.0/packages/playwright-core/src/server/chromium/crPage.ts)
+and [v1.64.0](https://github.com/microsoft/playwright/blob/v1.64.0/packages/playwright-core/src/server/chromium/crPage.ts)
+keeps the normal-page main-frame focus condition and true-valued call.
+Version 1.64 adds a service-worker bypass branch for storage-state pages before
+that normal-page branch; the inspected bundle agrees. The transformation still
+changes only the same driver-owned call. No new focus option, broad replacement,
+dynamic digest admission, or fallback is introduced.
+
+The lock retains only the checked Linux wheel hash. Dependabot's other-platform
+hashes violated the existing single-hash inventory grammar; the grammar and
+integrity checks remain unchanged. The source inventory is regenerated with
+the reviewed browser pin. PR #657's Pluggy multi-hash lock failure is separate:
+[its current CI run](https://github.com/bartytime4life/MEGALODON/actions/runs/39644482194)
+reports `BUILD_INPUT_INVENTORY:INVALID_LOCK_ENTRY`, while
+[main at 64da4f0](https://github.com/bartytime4life/MEGALODON/actions/runs/39611215270)
+passes CI and [native browser acceptance](https://github.com/bartytime4life/MEGALODON/actions/runs/39611215256).
+No Pluggy or general parser change belongs to this correction.
+
+The final candidate must pass the unchanged Linux browser workflow with both
+terminal receipts, including native hidden/visible polling suspension and
+recovery. Read PR #660's checks for the final candidate SHA and results.
+Historical 1.63 receipts linked earlier retain their original revision and scope.
 
 ## Exercised boundaries
 
