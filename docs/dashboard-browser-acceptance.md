@@ -1,6 +1,6 @@
 # Linux dashboard browser acceptance
 
-> **Latest source-head observation — October 22, 2026:** main `0acdf72663804c9ae8380522e344a515ac65978c`, [run 39787193736 / job 119853424560](https://github.com/bartytime4life/MEGALODON/actions/runs/39787193736/job/119853424560), failed with `TimeoutError` at suite line 701 after four setup checks. Its Playwright 1.63.0 native-focus profile prepared successfully. This is an observed CI failure with unproved cause, not `DRIVER_VERSION_MISMATCH`. Open #658/#660 concern the proposed 1.64.0 upgrade. Older passing receipts below remain historical; no fresh browser run or installed-host acceptance is claimed by this documentation change.
+> **Latest source-head observation — October 22, 2026:** main `2cb706039724d9ea0bda09cbd3c17698b15ba55c`, [Linux browser run 39878396547](https://github.com/bartytime4life/MEGALODON/actions/runs/39878396547), succeeded with the merged Playwright 1.64.0 compatibility profile. CI and CodeQL also succeeded at that source pin. This is observed hosted evidence, not a documentation-candidate or installed-host run. The earlier `0acdf72` timeout, #660/#661 macOS failures and older passing receipts retain their own identities; #662 changes fixture qualification without relaxing production ancestry policy.
 
 This opt-in test executes the actual CLI, ingestion/service code, SQLite writer,
 separate dashboard reader, HTTP handler, bundled assets, and a real browser.

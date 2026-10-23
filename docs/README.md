@@ -14,6 +14,8 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | Open MEGALODON on Linux | [Visual quick start](gui-quick-start.md) | [Install, update, troubleshoot](local-pc-setup.md) |
 | Understand the interface | [Visual tour](wiki/visual-tour.md) | [Operator guide](wiki/operator-guide.md) |
 | Trace a finding to its evidence | [Findings and inspector](control-room-contract.md#qualified-finding-evidence-inspector) | [Control room contract](control-room-contract.md) |
+| Assess host recovery preparation | [Recovery readiness and external receipts](host-backup-evidence.md) | [Host-security limits](host-security.md#recovery-readiness-in-setup) |
+| Explore useful applications | [Practical walkthroughs](wiki/practical-applications.md) | [Technical deep dive](wiki/technical-deep-dive.md) |
 | Audit configuration or file changes | [Host security](host-security.md) | [Background tools](background-tools.md) |
 | Understand local AI | [Integrations and local AI](wiki/integrations-and-qwen.md) | [Model selection](local-model-selection.md) |
 | Make a report or recover data | [Recording and reports](efficient-recording-reports.md) | [Recovery contract](sqlite-recovery-contract.md) |
@@ -58,3 +60,5 @@ dates. A fresh repository checkout does not prove an installed PC is current.
 The [GitHub Wiki](https://github.com/bartytime4life/MEGALODON/wiki) is generated
 from `docs/wiki/`. The separate [PC Snapshot Console](../site/README.md) imports
 an address-free summary in browser tab memory; it is not a live host connection.
+
+[Animated technical tour](wiki/visual-tour.md#animated-technical-explainers) includes still alternatives and public-source provenance.

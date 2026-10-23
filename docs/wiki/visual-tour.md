@@ -51,9 +51,9 @@ locations. Direction follows observed send/receive activity. Unmapped endpoints
 remain in the text roster; arcs do not measure physical packet routes. Pause,
 reduced motion, hidden views and stale data constrain animation.
 
-Inspect [the atlas contract](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/live-connection-globe.md),
-[implementation](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/megalodon/dashboard_globe.py) and
-[UI tests](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/tests/test_dashboard_live_globe.py). These links identify
+Inspect [the atlas contract](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/live-connection-globe.md),
+[implementation](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/megalodon/dashboard_globe.py) and
+[UI tests](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/tests/test_dashboard_live_globe.py). These links identify
 source and test assertions; their existence is not an exact-head test result.
 
 ## Give each kind of evidence its own place
@@ -66,9 +66,9 @@ source and test assertions; their existence is not an exact-head test result.
 | Host security | Lynis audit, AIDE changes and dated reference matches | Confirmed vulnerability, malware verdict or permission to act |
 | Reports / Evidence | Local reports and bounded retained records | Missing intervals and incompatible packet/flow units |
 
-See [host security](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/host-security.md),
-[workspace behavior](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/visual-operations-defense.md), and
-[the HTTP contract](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/docs/dashboard-http-contract.md).
+See [host security](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/host-security.md),
+[workspace behavior](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/visual-operations-defense.md), and
+[the HTTP contract](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/dashboard-http-contract.md).
 
 ## Show the engineering cost alongside the win
 
@@ -80,3 +80,38 @@ No production accuracy, SSD lifetime, live PC state, or independent certificatio
 is claimed by these visuals.
 
 [Quick start](quick-start.md) · [Case studies](engineering-case-studies.md) · [Evidence index](evidence-index.md)
+
+## Animated technical explainers
+
+These finite diagrams explain source behavior; none is a live health display.
+Every label stays visible, motion stops after two brief plays, and each image
+has a no-motion alternative. [Asset record](https://github.com/bartytime4life/MEGALODON/blob/main/assets/docs/README.md).
+
+### Follow a recorded finding
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/finding-walkthrough.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/finding-walkthrough.gif" alt="Annotated historical synthetic still: finding, event, ingestion receipt and separate clocks. No live interaction." width="1200">
+</picture>
+
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/finding-walkthrough.png). Brief motion repeats twice and stops; all labels remain visible.
+
+### Separate advice from authority
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/model-authority.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/model-authority.gif" alt="Explanatory AI admission, bounded advice and separate operator authority; canonical Qwen acceptance remains held." width="1200">
+</picture>
+
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/model-authority.png). Brief motion repeats twice and stops; all labels remain visible.
+
+### Separate changes from recoverability
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/recovery-evidence.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/recovery-evidence.gif" alt="Explanatory recovery view separates integrity observations and external evidence from unavailable host restoration." width="1200">
+</picture>
+
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/recovery-evidence.png). Brief motion repeats twice and stops; all labels remain visible.
+
+[Technical contracts](technical-deep-dive.md) · [Practical applications](practical-applications.md)

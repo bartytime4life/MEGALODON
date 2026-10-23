@@ -62,3 +62,18 @@ later publication cannot reintroduce stale content.
 - Treat green CI as revision evidence, not independent review, release approval, or deployment authorization.
 
 The full contribution contract is in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+
+## Documentation visuals and privacy
+
+The finite explainers are reproduced with `python tools/render_documentation_motion.py`
+using Pillow and local DejaVu fonts. They import no application runtime, read no
+host telemetry and make no network requests. Confirm the byte manifest, dimensions,
+GIF duration/loop count, PNG alternatives and sub-1-MiB binary limit before review.
+Keep essential information in adjacent text and tables. Repository-relative README
+assets and immutable Wiki asset URLs serve different rendering contexts.
+
+Read every tracked Markdown document for inventory/link checks; reconcile current
+entry pages and changed source contracts; keep old acceptance receipts, research
+versions and original case-study pins intact. The complete catalog distinguishes
+historical/design material from maintained operator guidance. Never copy private
+coordination, real reports, credentials or workstation details into public examples.

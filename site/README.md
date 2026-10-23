@@ -18,9 +18,11 @@ schema. No telemetry is committed to Site source or deployment output.
 The separate Site source repository owns the current static viewer under
 `web/`, its tests under `tests-current/`, and generated `dist/` output.
 See [the source alignment record](../docs/site-source-alignment.md) for recorded
-publication identity and validation. The October 22 documentation pass did not
-re-read hosting or prove current source/deployment parity. This repository's hosting manifest retains
-the existing project identity; it does not build or deploy the separate viewer.
+publication identity and validation. The later October 22 documentation pass re-read Sites metadata: v67 and the
+existing owner-private audience were observed. It did not render the viewer,
+re-read its source or prove current source/deployment parity. The publication
+record retains the existing project identity; this repository does not build
+or deploy the separate viewer.
 
 `retired/worker.mjs` preserves the historical empty HTTP 410 handler. It is not
 the restored viewer's deployment entry point. The former static console and

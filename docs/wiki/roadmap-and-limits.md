@@ -2,7 +2,7 @@
 
 ## Implemented source, separate acceptance
 
-Documentation basis: [`main@0acdf72663804c9ae8380522e344a515ac65978c`](https://github.com/bartytime4life/MEGALODON/commit/0acdf72663804c9ae8380522e344a515ac65978c),
+Documentation basis: [`main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c),
 October 22, 2026 (America/Chicago).
 
 The inspected source includes the local Linux HUD, bounded metadata detection,
@@ -23,12 +23,16 @@ their historical October 11 source pin and October 1 benchmark.
 | [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | One exact Zeek offline producer qualification; candidate selection is not acceptance |
 | [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen Airlock binding and zero-effect/containment/evaluation evidence; record remains UNBOUND |
 
-Issue #345 closed after PR #656 on October 19. Native macOS JSONL, browser,
-Intel, second-major-version and operator acceptance remain separate. Open
-Playwright PRs #658/#660 do not change main's 1.63.0 profile. Main's October 22
-browser check timed out after driver preparation; core CI passed. Read the
-[exact checks](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#exact-source-head-checks-observed)
-before treating a historical passing receipt as current acceptance.
+Issue #345 closed after #656; #662 later qualified macOS writer fixtures without
+changing production ancestry checks. Native macOS/operator acceptance remains
+separate. Merged #660 supplies Playwright 1.64.0 and its exact native-focus
+profile. CI, Linux browser acceptance and CodeQL succeeded at the source basis;
+[exact run IDs](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#exact-source-head-checks-observed)
+do not establish installed-PC or cross-platform acceptance.
+
+Merged #664/#665 add read-only recovery readiness and external backup/test receipt
+admission. They add no host restoration. Merged #663 admits listener posture
+before model inventory, without completing canonical Qwen acceptance.
 
 ## A useful forward path
 

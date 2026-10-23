@@ -1,104 +1,190 @@
 <p align="center">
-  <img src="assets/docs/field-guide-cover.png" alt="MEGALODON — understand the signal, inspect the evidence, keep authority explicit" width="1000">
+  <img src="assets/docs/field-guide-cover.png" alt="MEGALODON — understand the signal, inspect the evidence, keep authority explicit" width="1200">
 </p>
 
 # MEGALODON
 
-**A local Linux defense workspace built around inspectable evidence.**
+### Local defense. Inspectable evidence. Human decisions.
 
 **M**alware **E**limination **G**ateway **A**nd **L**ayered **O**perations
 **D**efense **O**nline **N**etwork.
 
+MEGALODON turns bounded network metadata and separately scoped host observations
+into a local Linux investigation workspace. Follow a finding to its recorded
+event, inspect the ingestion receipt, compare retained history, and create a
+visual report. Optional local AI helps explain the evidence; explicit operator
+workflows keep action authority separate.
+
+**Linux reference · Python 3.11+ · SQLite · Apache-2.0**
+**Core use needs no subscription, cloud account, model or GPU.** Optional tools
+have their own dependencies, licenses and operational requirements.
+
 <p>
-  <a href="docs/README.md"><strong>Field guide</strong></a> ·
-  <a href="https://github.com/bartytime4life/MEGALODON/wiki"><strong>Visual Wiki</strong></a> ·
-  <a href="docs/gui-quick-start.md"><strong>Get started</strong></a> ·
-  <a href="docs/current-state.md"><strong>Current state & limits</strong></a> ·
-  <a href="CONTRIBUTING.md"><strong>Contribute</strong></a>
+  <a href="docs/gui-quick-start.md"><strong>Start on Linux</strong></a> ·
+  <a href="https://github.com/bartytime4life/MEGALODON/wiki"><strong>Explore the Wiki</strong></a> ·
+  <a href="docs/current-state.md"><strong>Capabilities & evidence</strong></a> ·
+  <a href="docs/wiki/technical-deep-dive.md"><strong>Technical deep dive</strong></a> ·
+  <a href="docs/documentation-map.md"><strong>Every document</strong></a>
 </p>
 
-Turn bounded network metadata into a workspace you can understand: inspect
-sources, follow a finding to its recorded evidence, review retained history,
-and build local visual reports. Python and SQLite form the metadata core;
-optional Linux tools and local-model advice have separate scopes.
+## Understand what happened
 
-**Linux reference · Python 3.11+ · Apache-2.0 · No core subscription or cloud account**
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/finding-walkthrough.png">
+  <img src="assets/docs/finding-walkthrough.gif" alt="Annotated historical synthetic Findings inspector: recorded finding, linked event, ingestion receipt and separate observation, detection and projection times." width="1200">
+</picture>
 
-## See the evidence
+[Still image](assets/docs/finding-walkthrough.png). Brief motion repeats twice and stops; all labels remain visible.
 
-![Actual Findings inspector with synthetic documentation addresses: finding, linked event, ingestion receipt, timestamps and limitations.](assets/docs/finding-inspector-desktop.png)
+This is an **annotated still capture**, with moving emphasis—not a live demo.
+The underlying rendered interface comes from PR #654, candidate
+`424d957472ad121becec635171bc281bec2de995`,
+[run 39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
+It contains documentation-only addresses.
+[Visual tour and capture provenance](docs/wiki/visual-tour.md).
 
-*Synthetic browser capture from PR #654, candidate `424d957`, run
-[39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
-This shows a rendered candidate interface, not live PC telemetry or a new
-acceptance run. [Visual tour and provenance](docs/wiki/visual-tour.md).*
-
-| Understand | Investigate | Decide |
+| See the situation | Inspect the evidence | Choose the next step |
 | --- | --- | --- |
-| Atlas, resource views and source status explain the observation window. | Findings link to bounded event metadata and ingestion-run receipts. | Separate operator workflows disclose scope, outcome and remaining uncertainty. |
-| [Network view](docs/live-connection-globe.md) | [Evidence inspector](docs/control-room-contract.md#qualified-finding-evidence-inspector) | [Security boundaries](docs/wiki/security-boundaries.md) |
+| Local resources, source status, connection atlas and retained history | Linked findings, event metadata, run receipts and recorded times | Source-specific reports, local advice and separately authorized fixed workflows |
+| [Monitoring guide](docs/live-connection-globe.md) | [Finding inspector](docs/control-room-contract.md#qualified-finding-evidence-inspector) | [Operator guide](docs/wiki/operator-guide.md) |
 
-## Choose your path
+## What works today
 
-| You are here to… | Open this |
-| --- | --- |
-| Try the Linux workspace | [Visual quick start](docs/gui-quick-start.md) and [installation guide](docs/local-pc-setup.md) |
-| Evaluate the product or the builder | [Two-minute Wiki tour](https://github.com/bartytime4life/MEGALODON/wiki), [builder profile](docs/wiki/builder-profile.md), [engineering case studies](docs/wiki/engineering-case-studies.md) |
-| Audit or compare local host state | [Lynis, AIDE and dated threat context](docs/host-security.md) |
-| Understand what AI can do | [Local model integration and its limits](docs/wiki/integrations-and-qwen.md) |
-| Inspect every document and contract | [Documentation catalog](docs/documentation-map.md) |
-| Review safety or contribute | [Specification](SPECIFICATION.md), [security review](SECURITY_REVIEW.md), [contribution guide](CONTRIBUTING.md) |
+**Source basis: [`main@2cb7060`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c), October 22, 2026.**
+Code presence and hosted checks do not establish the configuration, accuracy
+or recovery capability of a particular installed PC.
 
-## Open it locally
+| Capability | Implemented behavior | Meaningful boundary |
+| --- | --- | --- |
+| Metadata analysis | Typed admission, three fixed heuristics, private SQLite audit | Patterns for review; no payload inspection or malware verdict |
+| Visual investigation | HUD, Findings, Sensors, Setup, Reports, Evidence, Help | Source and time windows limit what can be concluded |
+| History and reporting | Segmented evidence, compact summaries, local visual reports and fixed schedules | Missing intervals remain missing; packet and flow units stay separate |
+| Optional sources | TShark, closed Zeek logs, strict Suricata admission and separate background observations | Importer, installed tool and qualified producer are distinct |
+| Host review | Lynis, AIDE, hardening posture, persistence, passive gateway review and own-account program/socket review | Scoped observations; root-only and unobserved activity can be missed |
+| Local AI | Installed-model selection, bounded explanations and closed proposals | Listener posture checked before inventory; model output grants no authority |
+| Recovery readiness | AIDE evidence gaps plus separately pinned external backup/isolated-test receipts | **No host-file restore; `restore_eligible` remains false** |
+| Explicit Linux workflows | Protected configuration, bounded scans and separate temporary containment workflow | Operator/OS authorization and documented scope; no automatic blocking |
+| Desktop lifecycle | Private per-user install, update/rollback and managed HUD service | Login startup is opt-in; saved monitoring has its own scope |
+| Hosted reference | Separate address-free snapshot viewer, held in tab memory | No live connection to the PC or host control |
 
-From the root of a **reviewed Linux checkout**, as your ordinary user:
+Read [the source-linked capability map](docs/current-state.md) for exact paths,
+check identities and open producer/model/platform gates.
+
+## Open it on Linux
+
+Run from the root of a **reviewed checkout**, as your ordinary user:
 
 ```bash
 ./scripts/start-local.sh --check
 ./scripts/start-local.sh
 ```
 
-The first command performs a preflight; the second opens the checkout workflow
-at the printed loopback address. It does not install packages, invent sample
-data, or enable capture. Keep its foreground terminal open. For the separate
-per-user installation workflow, use `./Start-MEGALODON.sh` after reading
-[what it installs](docs/local-pc-setup.md). Python 3.11+ with SQLite is required;
-optional tools, models and capture are separate choices.
+The first command performs preflight. The second serves the checkout at its
+printed loopback address; keep the foreground terminal open. It does not install
+packages, generate samples or enable capture. Python 3.11+ with SQLite is required.
 
-## Architecture with visible boundaries
+For a persistent per-user installation, read
+[what the installer changes](docs/local-pc-setup.md), then use
+`./Start-MEGALODON.sh`. Installed launches start or reuse the local user service;
+login autostart and optional supporting tools remain separate choices.
 
-```mermaid
-flowchart TD
-    Input["Bounded metadata"] --> Validate["Typed admission and source qualification"]
-    Validate --> Store["Private SQLite evidence"]
-    Store --> Review["HUD, inspector and reports"]
-    Store -. "bounded context" .-> AI["Optional local advice"]
-    AI -. "untrusted explanation" .-> Review
-    Operator["Explicit operator decision"] --> Fixed["Separate fixed Linux workflow"]
-    Fixed --> Outcome["Receipt and readback"]
-```
+[Visual quick start](docs/gui-quick-start.md) ·
+[Installation and troubleshooting](docs/local-pc-setup.md) ·
+[Synthetic learning recipes](#installation-and-first-run)
 
-Observation is the default. Packet payloads and payload-derived hashes are
-outside the core event model. The three fixed heuristics identify patterns for
-review; a finding, feed match or model explanation is not proof of malware.
-Model output never authorizes an action. The core telemetry reader is read-only;
-the current Linux HUD also has separately protected setup and host workflows.
-Legacy firewall CLI apply routes remain plan-only. See
-[current interface boundaries](docs/current-state.md) before using any control.
+## How evidence moves
 
-The host application stays local. The separate
-[PC Snapshot Console](site/README.md) imports an address-free summary in tab
-memory and has no live connection to this PC. Windows/macOS parity, operational
-detection accuracy, provider containment and independent acceptance remain
-separate evidence gates.
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/evidence-flow.png">
+  <img src="assets/docs/evidence-flow.gif" alt="Explanatory metadata path: bounded input, three fixed rules, private SQLite evidence, linked local inspection. Observation, detection and projection times remain separate." width="1200">
+</picture>
 
-*Documentation reconciled against `main@0acdf72663804c9ae8380522e344a515ac65978c`
-(October 22, 2026). [Evidence basis and open gates](docs/current-state.md).
-Historical benchmarks and receipts keep their own dates and revisions.*
+[Still image](assets/docs/evidence-flow.png). Brief motion repeats twice and stops; all labels remain visible.
 
-At that source pin, core CI passed and browser acceptance timed out; the source
-head is not wholly green. [Check identities and open dependency PRs](docs/current-state.md#exact-source-head-checks-observed)
-remain separate from documentation validation and installed-PC acceptance.
+`PacketEvent` validates timestamps, addresses, ports, flags, lengths and reviewed
+provenance before persistence. Fixed rules record reviewable patterns; event,
+detection and ingestion receipts link the observation to its source. Read
+projections use bounded queries; the core telemetry reader is read-only.
+Current Linux HUD setup and action routes have separate protections.
+
+| Rule | Default trigger | Interpretation |
+| --- | --- | --- |
+| `SYN_FLOOD` | 100 TCP SYN-without-ACK events from one source / 10 seconds | Burst pattern; not proof of a denial-of-service attack |
+| `PORT_SCAN` | 20 distinct TCP destination ports from one source / 5 seconds | Port-access pattern; authorized inventory can look similar |
+| `DNS_TUNNELING` | DNS/UDP query-length metadata ≥ 50 | Length heuristic; no query content or tunneling proof |
+
+These are the default specification thresholds, not calibrated production accuracy.
+Per-source bounds and cooldowns constrain the detector state.
+[Admission, atomicity, storage and read budgets](docs/wiki/technical-deep-dive.md).
+
+## Useful in the real world
+
+| Task | What MEGALODON contributes | What still needs judgment |
+| --- | --- | --- |
+| Investigate unexpected desktop connections | Approximate atlas, own-account program/socket context, linked historical metadata | A destination or executable hash alone cannot establish malicious intent |
+| Review changes after an update | AIDE and persistence differences, baseline identity and timestamps | Legitimate packages and edits can produce the same changes |
+| Learn network detection in an owned lab | Deterministic synthetic scenarios and inspectable rule behavior | Synthetic results do not predict operational precision or recall |
+| Prepare a local investigation handoff | Source-separated history and visual reports with coverage limits | Review exports for private data before sharing |
+| Assess recovery preparation | Visible gaps and admission of independently pinned external receipts | Receipts do not prove clean backups or make restoration safe |
+
+[Practical walkthroughs](docs/wiki/practical-applications.md) explain each task,
+the evidence to inspect and where to stop. These are applications of implemented
+features, not customer deployments or certifications.
+
+## AI that explains; an operator who decides
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/model-authority.png">
+  <img src="assets/docs/model-authority.gif" alt="Explanatory AI boundary: listener admission and model identity, bounded untrusted advice, separate explicit operator workflow. Canonical Qwen acceptance remains unbound." width="1200">
+</picture>
+
+[Still image](assets/docs/model-authority.png). Brief motion repeats twice and stops; all labels remain visible.
+
+The literal-loopback provider checks listener posture before inventory access,
+and selected-model identity is separate from a successful response. The model
+cannot select arbitrary commands, endpoints or tools. Its closed proposals do
+not execute themselves. The canonical Qwen Airlock record remains **UNBOUND /
+operator decision NOT_RECORDED**; runtime selection does not complete its
+containment and evaluation gates.
+[Local AI contracts and limits](docs/wiki/integrations-and-qwen.md).
+
+## Recovery evidence with honest limits
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/recovery-evidence.png">
+  <img src="assets/docs/recovery-evidence.gif" alt="Explanatory recovery boundary: AIDE change observations, independently pinned backup and isolated restore-test receipts, and host restoration held with restore eligibility false." width="1200">
+</picture>
+
+[Still image](assets/docs/recovery-evidence.png). Brief motion repeats twice and stops; all labels remain visible.
+
+The read-only Setup view distinguishes baseline/comparison observations from
+backup evidence. The external validator admits three private, separately pinned
+records only when identities, raw-byte hashes, chronology and expiry agree. It
+opens no backup and runs no restore test. Host recovery stays unavailable;
+causality and conflicts remain unresolved. The separate
+[audit-database recovery](docs/sqlite-recovery-contract.md) and
+[reference-library rollback](docs/reference-library-recovery.md) have their own scopes.
+[Full external-evidence contract](docs/host-backup-evidence.md).
+
+## Read deeper
+
+| For operators | For engineers and reviewers |
+| --- | --- |
+| [Field guide](docs/README.md) · [Host security](docs/host-security.md) | [Specification](SPECIFICATION.md) · [Security review](SECURITY_REVIEW.md) |
+| [Reporting](docs/efficient-recording-reports.md) · [Background tools](docs/background-tools.md) | [Technical deep dive](docs/wiki/technical-deep-dive.md) · [HTTP contract](docs/dashboard-http-contract.md) |
+| [Roadmap and limits](docs/wiki/roadmap-and-limits.md) | [Engineering case studies](docs/wiki/engineering-case-studies.md) · [Contribute](CONTRIBUTING.md) |
+
+Core CI, Linux browser acceptance and CodeQL succeeded at the source basis;
+[exact run IDs and limits](docs/current-state.md#exact-source-head-checks-observed)
+remain separate from checks on this documentation candidate or an installed PC.
+Native platform parity, operational detection accuracy and independent model
+acceptance remain open evidence gates. The name expresses the defensive mission;
+it is not a promise of comprehensive malware elimination.
+
+Visuals contain public source constants and a historical synthetic capture.
+[Still images and provenance](assets/docs/README.md) are available for every animation.
+No private coordination content or workstation observations are used as public
+examples. [Documentation scope and validation](docs/documentation-polish-2026-10-22.md).
 
 <details>
 <summary><strong>Detailed operator and CLI reference</strong> — installation, safety defaults, recipes, contracts and platform notes</summary>

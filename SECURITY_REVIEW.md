@@ -1,6 +1,18 @@
 # MEGALODON architecture security review
 
-> **Documentation orientation — 2026-10-22 / source `0acdf72663804c9ae8380522e344a515ac65978c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+> **Documentation orientation — 2026-10-22 / source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+
+
+## Current descriptive extensions — October 22, 2026
+
+At source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`, the protected Linux Setup response includes read-only
+recovery readiness and [external backup evidence admission](docs/host-backup-evidence.md).
+Neither opens a backup, performs a test or enables host restoration;
+`restore_eligible` stays false. Model inventory now applies listener-posture
+admission first ([#663](https://github.com/bartytime4life/MEGALODON/pull/663)). These are descriptive source additions,
+not changes to operator authority, the original advisory contracts or canonical
+Qwen acceptance. [Technical map](docs/wiki/technical-deep-dive.md) separates the
+interfaces and their evidence limits.
 
 > **Scope note — 2026-10-01:** This document contains dated architecture and
 > acceptance records. The local Linux HUD is now the sole supported application.

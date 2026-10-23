@@ -1,6 +1,6 @@
 # CI dependency and action policy
 
-> **Source qualification — October 22, 2026 / `0acdf72663804c9ae8380522e344a515ac65978c`:** #657 merged Pluggy 1.7.0 with closed Linux wheel hashes and the regenerated input inventory. Main retains Playwright 1.63.0 and its exact native-focus profile. #658 proposes 1.64.0; #660 proposes its driver/lock correction. They are open proposals at this readback. Core CI passed at the source pin; browser acceptance failed with a timeout after driver preparation. [Exact checks](current-state.md#exact-source-head-checks-observed) distinguish that failure from the proposed version bump. Historical dependency provenance below keeps its original pins.
+> **Source qualification — October 22, 2026 / `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** merged #660 supplies Playwright 1.64.0, its native-focus driver profile and composed wheel lock; #657 supplies Pluggy 1.7.0. CI, Linux browser acceptance and CodeQL succeeded at this source pin. [Exact results](current-state.md#exact-source-head-checks-observed) are separate from installed-host or native-platform acceptance. Earlier dependency receipts keep their historical pins.
 
 Status: ● implemented for the required pull-request validation inputs; the
 compatibility lane is non-required discovery work. This document does not change
@@ -232,7 +232,7 @@ The primary hash-policy reference remains
 
 `constraints/browser-linux-cp311.txt` composes the existing twelve-wheel
 `test-linux-cp311.txt` requirements through one fixed relative `-r` include, plus
-three exact browser wheels: Playwright 1.63.0, greenlet 3.5.6, and pyee 13.0.1.
+three exact browser wheels: Playwright 1.64.0, greenlet 3.5.6, and pyee 13.0.1.
 The Playwright wheel is admitted with an accompanying exact-byte native-focus
 driver-profile review; its hash and filename come from the exact PyPI page
 recorded beside the pin.
@@ -250,7 +250,7 @@ there is no source-build or index fallback. Both composition files are packaged
 and byte-compared in the sdist; CPython 3.12 does not install the browser profile.
 
 This lock verifies the distributed Playwright wheel before the version-pinned
-`playwright-1.63.0-native-focus-v1` helper checks and copies its driver module.
+`playwright-1.64.0-native-focus-v1` helper checks and copies its driver module.
 It does not replace that helper's exact-byte checks or modify its one-setting
 native-focus correction. The real application still must pass all browser
 assertions. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, the prepared Chrome binary,
