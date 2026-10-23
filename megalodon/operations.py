@@ -234,6 +234,16 @@ class Operations:
             self._cached=result;self._next=time.monotonic()+2
             return deepcopy(result)
 
+    def investigate(self, ip):
+        from .address_investigation import investigate
+        canonical = str(ip_address(ip))
+        value = self.snapshot()
+        row = next((r for r in value['endpoints'] if r['ip'] == canonical), None)
+        if row is None:
+            return None
+        return dict(investigate(row), snapshot_at=value['observed_at'],
+                    capture_state=value['capture']['state'])
+
     def endpoint(self,ip):
         canonical = str(ip_address(ip))
         value = self.snapshot()

@@ -15,6 +15,11 @@ process.stdin.on('end',async()=>{
  failure=true;await click('support-apps-configure');await settle();assert.match(get('live-interface-name').textContent,/unavailable/);assert.match(get('live-geography-opt-in').textContent,/unavailable/);failure=false;await click('support-config-retry');await settle();assert.equal(requests.length,2);assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');assert.equal(get('support-apps-configure').attributes['aria-expanded'],'true');assert.equal(get('support-config').hidden,false);
  assert.equal(get('support-config-interface').value,'eth0');assert.equal(get('support-config-nmap-target').value,'127.0.0.1/32');assert.equal(get('support-config-capture-stop').disabled,true);assert.equal(get('support-config-capture-start').disabled,false);
  assert.ok(!JSON.stringify([...nodes.values()]).includes(fixture.token),'configuration nonce never enters DOM');
+ // A diagnosed capture refusal is actionable, but never grants permissions automatically.
+ const beforeDiagnosticPosts=postCount();payload={...fixture,capture:{...fixture.capture,state:'failed',failure_reason:'permission_required',message:'Capture permission required. Configure capture access.'}};await poll(10000);
+ assert.equal(get('support-capture-state').textContent,'Capture permission required');assert.match(get('support-capture-message').textContent,/Configure capture access/);assert.equal(postCount(),beforeDiagnosticPosts);
+ payload={...fixture,capture:{...fixture.capture,state:'failed',failure_reason:'unrecognized'}};await poll(10000);assert.equal(get('support-capture-state').textContent,'Status unavailable');
+ payload=fixture;await click('support-config-retry');await settle();
  // Polling refreshes backend state without losing settings typed by the user.
  change('support-config-interface','wlan0');change('support-config-nmap-target','192.168.1.0/24');change('support-config-scan-folder','Documents');await poll(10000);
  assert.equal(get('support-config-interface').value,'wlan0');assert.equal(get('support-config-nmap-target').value,'192.168.1.0/24');assert.equal(get('support-config-scan-folder').value,'Documents');assert.equal(postCount(),0);
