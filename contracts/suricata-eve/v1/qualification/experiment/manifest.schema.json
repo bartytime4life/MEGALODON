@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/suricata-eve/v1/qualification/experiment/manifest.schema.json",
+  "title": "MEGALODON exact Suricata fixture-and-oracle packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "execution_status",
+    "producer_acceptance",
+    "provenance",
+    "artifacts",
+    "cases",
+    "limits",
+    "producer_requirements",
+    "candidate_evidence_for",
+    "effects",
+    "remaining_holds"
+  ],
+  "properties": {
+    "schema_version": {"const": "suricata-engine-fixture-oracle-v1"},
+    "status": {"const": "fixture_oracle_only"},
+    "execution_status": {"const": "not_run"},
+    "producer_acceptance": {"const": "not_established"},
+    "provenance": {
+      "const": {
+        "kind": "independently_authored_synthetic",
+        "license": "Apache-2.0",
+        "contains_external_capture": false,
+        "contains_personal_data": false,
+        "network_addresses": "RFC5737_TEST_NET_1_ONLY",
+        "generator": "fixture_source.py",
+        "upstream_references": [
+          "https://github.com/OISF/suricata/commit/bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+          "https://github.com/OISF/suricata/commit/f87b8e64a5fb80788897f7a9073c5407a2f5bc96",
+          "https://github.com/OISF/suricata/blob/bea218e7b1dd8ffb09f250e62c096c6b3da749b4/doc/userguide/rules/tls-keywords.rst"
+        ]
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "media_type", "bytes", "sha256"],
+        "properties": {
+          "path": {
+            "enum": [
+              "fixture_source.py",
+              "fixtures/fragmented-tls-handshake-header.pcap",
+              "fixtures/pcre-stream-32.pcap",
+              "fixtures/pcre-stream-64.pcap",
+              "fixtures/pcre-stream-128.pcap",
+              "receipt_validator.py",
+              "rules/local.rules",
+              "suricata.yaml"
+            ]
+          },
+          "role": {
+            "enum": [
+              "generator_source",
+              "synthetic_capture",
+              "receipt_validator_source",
+              "dedicated_rules",
+              "candidate_configuration"
+            ]
+          },
+          "media_type": {
+            "enum": [
+              "text/x-python",
+              "application/vnd.tcpdump.pcap",
+              "text/plain",
+              "application/yaml"
+            ]
+          },
+          "bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "cases": {
+      "const": [
+        {
+          "id": "fragmented_tls_handshake_header",
+          "capture": "fixtures/fragmented-tls-handshake-header.pcap",
+          "packet_count": 6,
+          "payload_bytes": 84,
+          "rule_sid": 9900001,
+          "oracle": {
+            "type": "exact_alert",
+            "required_app_proto": "tls",
+            "required_signature_id": 9900001,
+            "exact_alert_count": 1,
+            "meaning": "The complete SNI is available after the four-byte TLS handshake header is split across two records."
+          }
+        },
+        {
+          "id": "pcre_only_stream_progress",
+          "captures": [
+            {
+              "path": "fixtures/pcre-stream-32.pcap",
+              "stream_segments": 32,
+              "packet_count": 37,
+              "payload_bytes": 16384
+            },
+            {
+              "path": "fixtures/pcre-stream-64.pcap",
+              "stream_segments": 64,
+              "packet_count": 69,
+              "payload_bytes": 32768
+            },
+            {
+              "path": "fixtures/pcre-stream-128.pcap",
+              "stream_segments": 128,
+              "packet_count": 133,
+              "payload_bytes": 65536
+            }
+          ],
+          "rule_sid": 9900002,
+          "oracle": {
+            "type": "bounded_scaling",
+            "required_signature_id": 9900002,
+            "minimum_alert_count_per_run": 1,
+            "metric": "process_cpu_ns",
+            "aggregation": "median_of_three",
+            "max_32_to_64_ratio": 3.0,
+            "max_64_to_128_ratio": 3.0,
+            "meaning": "Doubling the completed synthetic stream must not exhibit the approximately four-times growth expected from repeated whole-stream rescans."
+          }
+        }
+      ]
+    },
+    "limits": {
+      "const": {
+        "max_fixture_bytes": 262144,
+        "max_packets": 512,
+        "max_output_bytes": 1048576,
+        "max_wall_seconds_per_run": 10,
+        "max_address_space_bytes": 536870912,
+        "threads": 1,
+        "repetitions_per_pcre_size": 3
+      }
+    },
+    "producer_requirements": {
+      "const": {
+        "baseline": {
+          "declared_version": "8.0.7",
+          "sha256": null,
+          "identity_status": "unbound"
+        },
+        "candidate": {
+          "required_ancestry": [
+            "bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+            "f87b8e64a5fb80788897f7a9073c5407a2f5bc96"
+          ],
+          "sha256": null,
+          "identity_status": "unbound"
+        }
+      }
+    },
+    "candidate_evidence_for": {
+      "const": [
+        "SYNTHETIC_FIXTURE_PROVENANCE",
+        "EXPECTED_OUTPUT_ORACLE"
+      ]
+    },
+    "effects": {
+      "const": {
+        "suricata_executed": false,
+        "network_used": false,
+        "live_capture_used": false,
+        "rules_updated": false,
+        "service_changed": false,
+        "host_changed": false,
+        "firewall_changed": false,
+        "shell_action_used": false,
+        "model_invoked": false
+      }
+    },
+    "remaining_holds": {
+      "const": [
+        "OWNER_AUTHORIZATION",
+        "SYNTHETIC_FIXTURE_PROVENANCE",
+        "EXACT_BINARY_IDENTITY",
+        "NATIVE_RESOURCE_CONTAINMENT",
+        "EXPECTED_OUTPUT_ORACLE",
+        "INDEPENDENT_REVIEW",
+        "INSTALLED_PRODUCER_ACCEPTANCE",
+        "OPERATIONAL_PRIVACY"
+      ]
+    }
+  }
+}

@@ -1,0 +1,62 @@
+%YAML 1.1
+---
+suricata-version: "8.0"
+runmode: single
+
+vars:
+  address-groups:
+    HOME_NET: "[192.0.2.0/24]"
+    EXTERNAL_NET: "any"
+  port-groups: {}
+
+default-log-dir: .
+
+stats:
+  enabled: no
+
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      threaded: false
+      pcap-file: false
+      community-id: false
+      types:
+        - alert:
+            payload: no
+            packet: no
+            metadata:
+              app-layer: false
+              flow: false
+              rule:
+                metadata: false
+                raw: false
+                reference: false
+
+logging:
+  default-log-level: notice
+  outputs:
+    - console:
+        enabled: no
+
+app-layer:
+  protocols:
+    tls:
+      enabled: yes
+      detection-ports:
+        dp: 443
+
+stream:
+  checksum-validation: yes
+  midstream: false
+  async-oneside: false
+  reassembly:
+    memcap: 64mb
+    depth: 256kb
+    toserver-chunk-size: 1024
+    toclient-chunk-size: 1024
+
+default-rule-path: rules
+rule-files:
+  - local.rules

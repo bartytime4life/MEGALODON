@@ -1,0 +1,176 @@
+{
+  "schema_version": "suricata-engine-fixture-oracle-v1",
+  "status": "fixture_oracle_only",
+  "execution_status": "not_run",
+  "producer_acceptance": "not_established",
+  "provenance": {
+    "kind": "independently_authored_synthetic",
+    "license": "Apache-2.0",
+    "contains_external_capture": false,
+    "contains_personal_data": false,
+    "network_addresses": "RFC5737_TEST_NET_1_ONLY",
+    "generator": "fixture_source.py",
+    "upstream_references": [
+      "https://github.com/OISF/suricata/commit/bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+      "https://github.com/OISF/suricata/commit/f87b8e64a5fb80788897f7a9073c5407a2f5bc96",
+      "https://github.com/OISF/suricata/blob/bea218e7b1dd8ffb09f250e62c096c6b3da749b4/doc/userguide/rules/tls-keywords.rst"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "fixture_source.py",
+      "role": "generator_source",
+      "media_type": "text/x-python",
+      "bytes": 6810,
+      "sha256": "8c54a93de7f9280b89bdf721864b19c4ba771ac488d19c1dee3b66d9bab08eff"
+    },
+    {
+      "path": "fixtures/fragmented-tls-handshake-header.pcap",
+      "role": "synthetic_capture",
+      "media_type": "application/vnd.tcpdump.pcap",
+      "bytes": 528,
+      "sha256": "61f4377cb320c9c5de0bd3e3fe33568916411560b405049fa5fd85f9f2547bd1"
+    },
+    {
+      "path": "fixtures/pcre-stream-32.pcap",
+      "role": "synthetic_capture",
+      "media_type": "application/vnd.tcpdump.pcap",
+      "bytes": 18998,
+      "sha256": "e7f8adf7c5b75183ba56a70a0562172fb596f01e8832ee2c1fdf84c23367a9a2"
+    },
+    {
+      "path": "fixtures/pcre-stream-64.pcap",
+      "role": "synthetic_capture",
+      "media_type": "application/vnd.tcpdump.pcap",
+      "bytes": 37622,
+      "sha256": "2a5e2af12a664d77b2b813cd7d44371c68af1325cbf78a6020848aa8a37d4a1d"
+    },
+    {
+      "path": "fixtures/pcre-stream-128.pcap",
+      "role": "synthetic_capture",
+      "media_type": "application/vnd.tcpdump.pcap",
+      "bytes": 74870,
+      "sha256": "0c788c12aa8f49cb72cca5c32d3bb5b1aff0eba26fd8582da9d231ee0087aa50"
+    },
+    {
+      "path": "receipt_validator.py",
+      "role": "receipt_validator_source",
+      "media_type": "text/x-python",
+      "bytes": 3067,
+      "sha256": "60c06b0b7cc5faa5ae5fafb3e9341193d1c4207e1d896acf4664a79ec8140e63"
+    },
+    {
+      "path": "rules/local.rules",
+      "role": "dedicated_rules",
+      "media_type": "text/plain",
+      "bytes": 342,
+      "sha256": "bbb8ba14c4769f90c61073008482341c2d30f890f43c316ae74d50d9dfd2ee01"
+    },
+    {
+      "path": "suricata.yaml",
+      "role": "candidate_configuration",
+      "media_type": "application/yaml",
+      "bytes": 1040,
+      "sha256": "d3c73203c2b1dabd814cf049effb5e1e35eb80db62fa42d5a0f728df2d37f834"
+    }
+  ],
+  "cases": [
+    {
+      "id": "fragmented_tls_handshake_header",
+      "capture": "fixtures/fragmented-tls-handshake-header.pcap",
+      "packet_count": 6,
+      "payload_bytes": 84,
+      "rule_sid": 9900001,
+      "oracle": {
+        "type": "exact_alert",
+        "required_app_proto": "tls",
+        "required_signature_id": 9900001,
+        "exact_alert_count": 1,
+        "meaning": "The complete SNI is available after the four-byte TLS handshake header is split across two records."
+      }
+    },
+    {
+      "id": "pcre_only_stream_progress",
+      "captures": [
+        {
+          "path": "fixtures/pcre-stream-32.pcap",
+          "stream_segments": 32,
+          "packet_count": 37,
+          "payload_bytes": 16384
+        },
+        {
+          "path": "fixtures/pcre-stream-64.pcap",
+          "stream_segments": 64,
+          "packet_count": 69,
+          "payload_bytes": 32768
+        },
+        {
+          "path": "fixtures/pcre-stream-128.pcap",
+          "stream_segments": 128,
+          "packet_count": 133,
+          "payload_bytes": 65536
+        }
+      ],
+      "rule_sid": 9900002,
+      "oracle": {
+        "type": "bounded_scaling",
+        "required_signature_id": 9900002,
+        "minimum_alert_count_per_run": 1,
+        "metric": "process_cpu_ns",
+        "aggregation": "median_of_three",
+        "max_32_to_64_ratio": 3.0,
+        "max_64_to_128_ratio": 3.0,
+        "meaning": "Doubling the completed synthetic stream must not exhibit the approximately four-times growth expected from repeated whole-stream rescans."
+      }
+    }
+  ],
+  "limits": {
+    "max_fixture_bytes": 262144,
+    "max_packets": 512,
+    "max_output_bytes": 1048576,
+    "max_wall_seconds_per_run": 10,
+    "max_address_space_bytes": 536870912,
+    "threads": 1,
+    "repetitions_per_pcre_size": 3
+  },
+  "producer_requirements": {
+    "baseline": {
+      "declared_version": "8.0.7",
+      "sha256": null,
+      "identity_status": "unbound"
+    },
+    "candidate": {
+      "required_ancestry": [
+        "bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+        "f87b8e64a5fb80788897f7a9073c5407a2f5bc96"
+      ],
+      "sha256": null,
+      "identity_status": "unbound"
+    }
+  },
+  "candidate_evidence_for": [
+    "SYNTHETIC_FIXTURE_PROVENANCE",
+    "EXPECTED_OUTPUT_ORACLE"
+  ],
+  "effects": {
+    "suricata_executed": false,
+    "network_used": false,
+    "live_capture_used": false,
+    "rules_updated": false,
+    "service_changed": false,
+    "host_changed": false,
+    "firewall_changed": false,
+    "shell_action_used": false,
+    "model_invoked": false
+  },
+  "remaining_holds": [
+    "OWNER_AUTHORIZATION",
+    "SYNTHETIC_FIXTURE_PROVENANCE",
+    "EXACT_BINARY_IDENTITY",
+    "NATIVE_RESOURCE_CONTAINMENT",
+    "EXPECTED_OUTPUT_ORACLE",
+    "INDEPENDENT_REVIEW",
+    "INSTALLED_PRODUCER_ACCEPTANCE",
+    "OPERATIONAL_PRIVACY"
+  ]
+}
