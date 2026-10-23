@@ -152,7 +152,8 @@ async def exercise_finding_evidence(browser, port, password, passed):
         await expect(page.locator("#room-evidence-bytes")).to_have_text("9223372036854775807 reported bytes")
         await expect(page.locator("#room-evidence-version")).to_have_text("unknown; not stored on historical finding")
         await expect(panel).to_contain_text("Detector evaluation window")
-        await expect(panel).to_contain_text("Unknown; not supplied by this projection.")
+        for field in ("measured", "threshold", "window"):
+            await expect(page.locator("#room-evidence-" + field)).to_have_text("Not recorded")
         focus_style = await summary.evaluate("n => ({visible:n.matches(':focus-visible'),width:getComputedStyle(n).outlineWidth,style:getComputedStyle(n).outlineStyle})")
         passed("native inspector keyboard focus has a visible outline", focus_style["visible"] and
             focus_style["style"] != "none" and float(focus_style["width"].removesuffix("px")) >= 2)
