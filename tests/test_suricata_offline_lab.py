@@ -138,7 +138,7 @@ def test_alert_identity_protocol_counts_and_negative_controls(lab):
     positive, _, negative, pcre_negative = lab.plan()[:4]
     assert lab.alert_oracle(encoded(event()), positive)["state"] == "oracle_satisfied"
     assert lab.alert_oracle(b"", positive)["state"] == "oracle_failed"
-    assert lab.alert_oracle(encoded(event()) * 2, positive)["state"] == "oracle_failed"
+    assert lab.alert_oracle(encoded(event()) * 2, positive)["state"] == "unexpected_result"
     assert lab.alert_oracle(b"", negative)["state"] == "oracle_satisfied"
     assert lab.alert_oracle(encoded(event()), negative)["state"] == "oracle_failed"
     assert lab.alert_oracle(encoded(event(9900002)), pcre_negative)["state"] == "oracle_failed"
@@ -162,6 +162,18 @@ def test_synthetic_timings_never_establish_complexity_pass(lab):
     assert summary["pcre_complexity_qualification"].startswith("inconclusive")
     assert lab.summarize(runs[:-1])["state"] == "incomplete"
     runs[1]["oracle"]["state"] = "incomplete_output"
+    assert lab.summarize(runs)["state"] == "non_pass"
+
+
+def test_fragmented_tls_duplicates_are_non_pass_but_zero_is_an_observation(lab):
+    runs = successful_runs(lab)
+    fragmented = lab.plan()[1]
+    runs[1]["oracle"] = lab.alert_oracle(b"", fragmented)
+    assert lab.summarize(runs)["state"] == "observations_only"
+    runs[1]["oracle"] = lab.alert_oracle(encoded(event()) * 2, fragmented)
+    assert lab.summarize(runs)["state"] == "non_pass"
+    # Also reject a manually mislabeled duplicate count at the summary boundary.
+    runs[1]["oracle"]["state"] = "oracle_failed"
     assert lab.summarize(runs)["state"] == "non_pass"
 
 

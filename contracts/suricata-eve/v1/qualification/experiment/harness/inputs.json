@@ -38,8 +38,8 @@
     },
     {
       "path": "harness/offline.py",
-      "bytes": 20587,
-      "sha256": "6adaa3729c1d85f61a9d55dfcf1df65bfd2946e3c09ebb7a982fb77d36bbe660"
+      "bytes": 20843,
+      "sha256": "9585e238c66e9e87ad158a96fc56d99dc0469422f7550c13b4945e7e7ab0a8b0"
     },
     {
       "path": "harness/pcre-mpm.rules",

@@ -251,7 +251,10 @@ def alert_oracle(raw: bytes, case: dict) -> dict:
         return {"state": "incomplete_output"}
     count = len(alerts)
     correct = count >= 1 if case["count"] == -1 else count == case["count"]
-    return {"state": "oracle_satisfied" if correct else "oracle_failed", "alert_count": count,
+    state = "oracle_satisfied" if correct else "oracle_failed"
+    if case["sid"] == 9900001 and count > 1:
+        state = "unexpected_result"
+    return {"state": state, "alert_count": count,
             "eve_sha256": digest(raw), "eve_bytes": len(raw)}
 
 
@@ -265,6 +268,9 @@ def summarize(runs: list[dict]) -> dict:
     controls = [r for r in runs if r["id"] != "tls-fragmented"]
     fragmented = next(r for r in runs if r["id"] == "tls-fragmented")
     if fragmented.get("oracle", {}).get("state") not in ("oracle_satisfied", "oracle_failed"):
+        return {"state": "non_pass"}
+    if (fragmented["oracle"]["state"] == "oracle_failed"
+            and fragmented["oracle"].get("alert_count") != 0):
         return {"state": "non_pass"}
     if any(r["state"] != "completed" or r.get("oracle", {}).get("state") != "oracle_satisfied"
            for r in controls):
