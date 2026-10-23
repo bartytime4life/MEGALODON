@@ -215,3 +215,27 @@ server endpoint, write through the MEGALODON process, upload data, send
 telemetry or grant package/process/firewall/model authority. Browser acceptance
 confirms that the downloaded bytes match the preview and that preview/download
 make no page request; it is not OS-level egress containment or release approval.
+
+
+## Automatic address case overview
+
+The local Findings workspace assembles a case overview from the already validated
+traffic projection and its shared time range. It initially selects the source
+address of the first linked finding, or the first event source when no finding
+is present. Advanced exposes the address selector. An address is not a verified
+host identity, and shared-address grouping does not establish a single incident.
+
+The summary and observation-ordered timeline update with the returned snapshot.
+Finding buttons open the existing finding/event/run inspector. The view makes
+no additional requests or writes and does not infer a learned baseline. It
+shows at most 100 matching event rows and labels that display limit separately
+from projection truncation and page-wide excluded candidates. Counts describe
+only the admitted returned set; sensor liveness, loss and completeness remain
+unknown. A missing selected address stays selected and is reported absent,
+never silently replaced. Stale snapshots retain a visible stale label. Managed
+history uses different references and clears this case view rather than mixing
+records between projections.
+
+This first integration does not persist case notes, export a case package, run
+an AI model, or operate the host. Flight Lab remains a separate synthetic
+prototype; its session notebook is not an installed-dashboard capability.
