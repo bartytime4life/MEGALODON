@@ -163,14 +163,14 @@ const copy = () => JSON.parse(JSON.stringify(payload));
   openFirst(); accept(empty);
   assert.equal(byId('room-evidence-content').hidden, true);
   assert.match(byId('room-findings-table').textContent, /No qualified data/);
-  for (const expression of ['p.events.push({...p.events[0]})', 'p.findings.push({...p.findings[0]})',
-    'p.findings[0].event_id="999"', 'p.events[0].byte_count="9223372036854775808"'])
-    assert.throws(() => run('{const p=JSON.parse(JSON.stringify(payload));' + expression + ';validateTraffic(p)}'));
   assert.equal(byId('room-case-timeline').children.length,0,'empty projection clears prior case');
   accept(payload);
   run(`{const selected={...roomState.selection,events:Array.from({length:101},(_,i)=>({...payload.events[0],id:String(i+1)})),findings:[]};renderRoomCase(selected,false);}`);
   assert.match(byId('room-case-coverage').textContent,/first 100 of 101/);
   assert.equal(byId('room-case-timeline').children[0].children[2].children.length,100);
+  for (const expression of ['p.events.push({...p.events[0]})', 'p.findings.push({...p.findings[0]})',
+    'p.findings[0].event_id="999"', 'p.events[0].byte_count="9223372036854775808"'])
+    assert.throws(() => run('{const p=JSON.parse(JSON.stringify(payload));' + expression + ';validateTraffic(p)}'));
   assert.ok(calls.every(call => call.options.method === 'GET' && call.path.startsWith('/api/traffic')
     && call.options.mode === 'same-origin' && call.options.redirect === 'error'));
   console.log('qualified finding lineage, identity, exact bytes, independent clocks, passive reads, stale/recovery and history transitions passed');
