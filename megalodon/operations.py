@@ -149,7 +149,7 @@ class Operations:
                     once = endpoint is a or b['ip']!=a['ip']  # one flow per IP even when both ends share it
                     row = peers.setdefault(key,dict(ip=key,scope=address_scope(key),version=ip_address(key).version,
                         local=endpoint['local'],connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
-                        first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],names=list(context.get(key,{}).get('names',[])),
+                        first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],protocols=[],measurement_sources=[],names=list(context.get(key,{}).get('names',[])),
                         findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),tls=list(context.get(key,{}).get('tls',[])),location=endpoint['location'],flags=[]))
                     if once:
                         row['connections']+=1;row['active_connections']+=int(flow['active'])
@@ -158,6 +158,13 @@ class Operations:
                     row['sent_bytes']+=outbound['bytes'];row['received_bytes']+=inbound['bytes']
                     row['first_seen']=min(row['first_seen'],flow['first_seen']);row['last_seen']=max(row['last_seen'],flow['last_seen'])
                     row['flags']=sorted(set(row['flags'])|set(flow.get('flags',[])))[:8]
+                    if flow['protocol'] not in row['protocols'] and len(row['protocols'])<16:
+                        row['protocols'].append(flow['protocol'])
+                    measurement = (dict(source=flow.get('source','Unknown sensor'),byte_basis=flow.get('byte_basis','unknown'))
+                                   if flow.get('observation')=='flow summary' else
+                                   dict(source='Accepted packet metadata',byte_basis='reported_bytes'))
+                    if measurement not in row['measurement_sources'] and len(row['measurement_sources'])<8:
+                        row['measurement_sources'].append(measurement)
                     for label in flow.get('services',[])[:8]:
                         if not isinstance(label,str) or not re.fullmatch(r'[A-Za-z0-9_.+-]{1,40}',label):continue
                         other=b if endpoint is a else a
@@ -219,6 +226,8 @@ class Operations:
                            'The timeline uses five-second bins of accepted packet metadata. Endpoint sent/received is relative to that IP.',
                            'Port names are registry hints, not identified applications. Observed hostnames do not establish ownership or safety.',
                            'Hostname naming signals describe spelling only; generated-looking names are common for cloud and CDN services.',sensor]))
+            if live.get('recording_mode') in {'packet_metadata','connection_summaries'}:
+                result['recording_mode']=live['recording_mode']
             evidence=getattr(self.configuration,'evidence',None)
             if evidence is not None:
                 result['recording_mode']=evidence.recording_mode
@@ -226,9 +235,9 @@ class Operations:
                 result['storage']=dict(storage,status='ready',used_bytes=managed['used_bytes'],limit_bytes=managed['policy']['cap_bytes'],percent=managed['percent'],
                     actual_days=managed['actual_days'],estimated_days=managed['estimated_days'],retention_days=managed['policy']['retention_days'],warnings=managed['warnings'])
                 result['coverage']['notes'].append('Live packet projections are bounded recent observations. Selected historical dates use retained segments and verified compact summaries with pagination and coverage limits.')
-                if evidence.recording_mode=='connection_summaries':
-                    result['coverage']['notes'][:2]=['Retained sensor connection summaries; counts are reported by the selected primary sensor.',
-                        'Timeline bins show flow-summary updates, not packet arrival times or wire speed. Use interface speeds for measured throughput.']
+            if result.get('recording_mode')=='connection_summaries':
+                result['coverage']['notes'][:2]=['Retained sensor connection summaries; counts are reported by the selected primary sensor.',
+                    'Timeline bins show flow-summary updates, not packet arrival times or wire speed. Use interface speeds for measured throughput.']
             flow_ingestor=getattr(self.configuration,'flow_ingestor',None)
             if flow_ingestor is not None:result['sensor_ingestion']=flow_ingestor.snapshot()
             self._cached=result;self._next=time.monotonic()+2
@@ -241,7 +250,7 @@ class Operations:
         row = next((r for r in value['endpoints'] if r['ip'] == canonical), None)
         if row is None:
             return None
-        return dict(investigate(row), snapshot_at=value['observed_at'],
+        return dict(investigate(row, recording_mode=value.get('recording_mode'), coverage=value.get('coverage')), snapshot_at=value['observed_at'],
                     capture_state=value['capture']['state'])
 
     def endpoint(self,ip):

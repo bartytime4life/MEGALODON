@@ -681,8 +681,18 @@ unknown, scoped, hostname and noncanonical address queries are refused. The
 projection admits only the bounded retained endpoint set; it does not scan,
 resolve DNS, query a registry or contact a model.
 
-The note keeps the observed address, recorded ports/names and observation times
-separate from relay clues. Known port associations can guide review but do not
+An unknown origin or missing geolocation does not suppress retained traffic.
+The note includes connection/active counts, packets, bytes, endpoint-relative
+sent/received bytes, protocols, TCP flags, ports/names and observation times.
+Unavailable counters stay null rather than becoming zero. Measurement sources
+and byte bases distinguish reported packet metadata from sensor IP/payload byte
+summaries; no wire-speed or packet-arrival claim is inferred. The recording mode,
+bounded window, projection truncation and coverage notes accompany the evidence;
+capture gaps/drops remain unknown. A stopped or failed capture can still expose
+retained observations; its state and snapshot time stay visible. The note is a
+bounded snapshot, not an archive of every historical packet.
+
+Traffic observations remain separate from relay clues. Known port associations can guide review but do not
 establish VPN/proxy use. Original source, person identity and network holder
 remain explicitly unestablished or unrecorded. Saved JSON notes are personal
 exports outside managed cleanup. Selection changes discard previous notes and

@@ -17,6 +17,9 @@ from megalodon.operations import Operations
 
 def endpoint(ip='8.8.8.8'):
     return dict(ip=ip, first_seen='2026-10-23T12:00:00Z', last_seen='2026-10-23T12:01:00Z',
+                location=None, connections=2, active_connections=0, packets=3, bytes=350,
+                sent_bytes=250, received_bytes=100, protocols=['UDP','TCP'], flags=['ACK'],
+                measurement_sources=[dict(source='Accepted packet metadata',byte_basis='reported_bytes')],
                 ports=[dict(protocol='UDP', port=51820), dict(protocol='TCP', port=443)],
                 names=[dict(name='<img src=x>', source='Observed TLS SNI', observed_at='2026-10-23T12:01:00Z')])
 
@@ -40,6 +43,29 @@ def test_port_clues_never_establish_relay_origin_or_person(monkeypatch):
 def test_private_reserved_and_shared_addresses_have_no_public_lookup(ip):
     value = investigate(endpoint(ip))
     assert value['public_address'] is False and value['registry_search_url'] is None
+    assert value['traffic']['packets'] == 3 and value['traffic']['bytes'] == 350
+    assert value['original_address'] is None  # Retention needs neither attribution nor a map point.
+
+
+def test_unknown_counts_remain_unknown_and_observed_zero_remains_zero():
+    value = investigate(dict(endpoint(), connections=None, packets=True, bytes=-1,
+                             sent_bytes=2**53, received_bytes=0))
+    assert all(value['traffic'][key] is None for key in ('connections','packets','bytes','sent_bytes'))
+    assert value['traffic']['received_bytes'] == value['traffic']['active_connections'] == 0
+    assert value['observation_context'] == dict(recording_mode='not_recorded',window_seconds=None,
+                                               truncated=None,capture_gaps='unknown',notes=[])
+
+
+def test_evidence_provenance_and_coverage_are_bounded_without_claiming_completeness():
+    value = investigate(dict(endpoint(), protocols=['ICMP']*30,flags=['SYN','ACK']*10,
+                             measurement_sources=[dict(source='zeek-conn',byte_basis='payload_bytes')]*30),
+                        recording_mode='connection_summaries',
+                        coverage=dict(window_seconds=60,truncated=True,notes=['Sensor coverage is partial.']*30))
+    assert value['traffic']['protocols'] == ['ICMP'] and value['traffic']['tcp_flags'] == ['ACK','SYN']
+    assert len(value['traffic']['measurement_sources']) == len(value['observation_context']['notes']) == 8
+    assert value['observation_context']['recording_mode'] == 'connection_summaries'
+    assert value['observation_context']['window_seconds'] == 60 and value['observation_context']['truncated'] is True
+    assert value['observation_context']['capture_gaps'] == 'unknown'
 
 
 def test_input_bounds_and_unknown_provenance_do_not_invent_facts():
@@ -52,8 +78,12 @@ def test_input_bounds_and_unknown_provenance_do_not_invent_facts():
 
 def test_retained_investigation_does_not_weaken_running_endpoint_action_gate():
     operations = Operations(None)
-    operations.snapshot = lambda: dict(capture=dict(state='failed'), observed_at='2026-10-23T12:02:00Z', endpoints=[endpoint()])
-    assert operations.investigate('8.8.8.8')['capture_state'] == 'failed'
+    operations.snapshot = lambda: dict(capture=dict(state='failed'), observed_at='2026-10-23T12:02:00Z', endpoints=[endpoint()],
+                                       recording_mode='packet_metadata',coverage=dict(window_seconds=60,truncated=True,notes=['Retained observations.']))
+    note = operations.investigate('8.8.8.8')
+    assert note['capture_state'] == 'failed' and note['traffic']['packets'] == 3
+    assert note['observation_context']['recording_mode'] == 'packet_metadata'
+    assert note['observation_context']['truncated'] is True
     assert operations.investigate('1.1.1.1') is None
     with pytest.raises(ValueError, match='Monitoring must be running'):
         operations.endpoint('8.8.8.8')
@@ -87,6 +117,7 @@ def test_http_investigation_is_local_explicit_and_read_only(investigation_http):
     status,headers,body=request(path)
     assert status==200 and headers['Cache-Control']=='no-store'
     assert json.loads(body)['original_address'] is None
+    assert json.loads(body)['traffic']['packets'] == 3 and len(body) <= 16384
     assert request('/api/address-investigation?ip=1.1.1.1')[0]==404
     calls=operations.investigate.call_count
     assert request(path,method='POST')[0] not in range(200,300)

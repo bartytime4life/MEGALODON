@@ -130,8 +130,14 @@ made-up location. DB-IP locations remain approximate internet locations.
 ## Investigating an observed address
 
 Select a peer in the connection roster, then choose **Investigate selected
-address**. The local note collects observation times, recorded names/ports and
-possible relay port associations. A WireGuard/OpenVPN/proxy-associated port is
+address**. Even when the origin and location are unknown, the local note collects
+retained times, connection/packet/byte counts, sent/received direction relative
+to that address, protocols, TCP flags, names and ports. Missing measurements show
+as unavailable. Recording sources, byte units and capture coverage accompany the
+counts; a failed or stopped capture is shown explicitly. Save the note to preserve
+this snapshot beyond the bounded live window.
+
+The note also includes possible relay port associations. A WireGuard/OpenVPN/proxy-associated port is
 a clue to review, not proof of installed software, a relay or a malicious actor.
 The original address and person behind the connection remain unestablished.
 

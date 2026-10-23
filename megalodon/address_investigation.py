@@ -4,6 +4,8 @@ from ipaddress import ip_address
 
 SCHEMA = 'megalodon-address-investigation-v1'
 REGISTRY_SEARCH = 'https://search.arin.net/rdap/'
+MAX_COUNT = 2**53 - 1  # Exact in both JSON consumers and Python.
+TCP_FLAGS = frozenset({'FIN', 'SYN', 'RST', 'PSH', 'ACK', 'URG', 'ECE', 'CWR'})
 PORT_CLUES = {
     ('TCP', 1080): 'SOCKS-associated port',
     ('TCP', 3128): 'HTTP proxy-associated port',
@@ -32,10 +34,17 @@ def _stamp(value):
         return None
 
 
-def investigate(endpoint):
+def _count(value):
+    return value if type(value) is int and 0 <= value <= MAX_COUNT else None
+
+
+def investigate(endpoint, *, recording_mode=None, coverage=None):
     """Keep observation, relay clues, network registration and identity separate."""
     address = ip_address(endpoint['ip'])
-    public = address.is_global and not address.is_multicast and not address.is_reserved
+    # Python maintenance releases differ on mapped IPv6 is_reserved. Keep this
+    # lookup policy explicit instead of inheriting that version-dependent flag.
+    public = (address.is_global and not address.is_multicast and not address.is_reserved
+              and getattr(address, 'ipv4_mapped', None) is None)
     ports, clues, seen = [], [], set()
     for row in endpoint.get('ports', [])[:32]:
         protocol, port = row.get('protocol'), row.get('port')
@@ -51,12 +60,33 @@ def investigate(endpoint):
         name, source = _text(row.get('name'), 253), _text(row.get('source'), 128)
         if name and source:
             names.append(dict(name=name, source=source, observed_at=_stamp(row.get('observed_at'))))
+    traffic = {key: _count(endpoint.get(key)) for key in
+               ('connections', 'active_connections', 'packets', 'bytes', 'sent_bytes', 'received_bytes')}
+    traffic['direction_basis'] = 'relative_to_observed_address'
+    traffic['tcp_flags'] = sorted({flag for flag in endpoint.get('flags', [])[:8] if flag in TCP_FLAGS})
+    traffic['protocols'] = list(dict.fromkeys(p for p in endpoint.get('protocols', [])[:16] if _text(p, 32)))
+    sources = []
+    for row in endpoint.get('measurement_sources', [])[:8]:
+        source = _text(row.get('source'), 128)
+        basis = row.get('byte_basis')
+        if source and basis in {'reported_bytes', 'ip_bytes', 'payload_bytes', 'unknown'}:
+            sources.append(dict(source=source, byte_basis=basis))
+    traffic['measurement_sources'] = sources
+    coverage = coverage or {}
+    context = dict(
+        recording_mode=recording_mode if recording_mode in {'packet_metadata', 'connection_summaries'} else 'not_recorded',
+        window_seconds=_count(coverage.get('window_seconds')),
+        truncated=coverage.get('truncated') if type(coverage.get('truncated')) is bool else None,
+        capture_gaps='unknown',
+        notes=[note for note in coverage.get('notes', [])[:8] if _text(note, 512)],
+    )
     return dict(
         schema=SCHEMA, observed_address=str(address), public_address=public,
         first_seen=_stamp(endpoint.get('first_seen')), last_seen=_stamp(endpoint.get('last_seen')),
         source='retained_connection_metadata', origin_status='not_established',
         original_address=None, person_identity=None, relay_status='not_established',
         relay_clues=clues, observed_ports=ports, observed_names=names,
+        traffic=traffic, observation_context=context,
         network_holder_status='not_recorded', network_holder=None,
         registry_search_url=REGISTRY_SEARCH if public else None,
         network_access_performed=False, action_authority='none',
