@@ -21,6 +21,12 @@ from .security_patterns import CONTEXT, analyze_hour, inventory_hour, candidate,
 MAX_HISTORY = 24000
 MAX_REVIEWS = 1024
 
+# Bump either version whenever the instruction template or accepted response
+# contract changes. Saved explanations are reusable only under this exact contract.
+EXPLANATION_PROMPT_VERSION = 'pattern-explanation-prompt-v1'
+EXPLANATION_RESPONSE_VERSION = 'pattern-explanation-response-v1'
+EXPLANATION_CONTRACT_ID = stable([EXPLANATION_PROMPT_VERSION, EXPLANATION_RESPONSE_VERSION])
+
 
 def explain(item, references, settings, *, model=None, owner=None, automatic=False):
     """Strict small explanation contract. The result is never a tool invocation."""
@@ -107,6 +113,19 @@ class IntelligenceService(RetainedEvidenceReader):
         self.scanned+=scanned
         return rows,gaps
 
+    def _knowledge_identity(self):
+        try:
+            value = self.knowledge.snapshot().get('generation')
+        except (AttributeError, OSError, ValueError, sqlite3.Error):
+            return 'unavailable'
+        return value if type(value) is str and 1 <= len(value) <= 128 else 'unavailable'
+
+    def _cache_identity(self, settings=None):
+        current = settings or self.configuration.settings.ai
+        return stable(dict(settings=asdict(current),
+                           explanation_contract=EXPLANATION_CONTRACT_ID,
+                           knowledge_generation=self._knowledge_identity()))
+
     def _source_ids(self):
         with self.evidence.lock:
             entries=[e for e in self.evidence._catalog['entries'] if e['state'] in {'open','closed'}]
@@ -116,7 +135,7 @@ class IntelligenceService(RetainedEvidenceReader):
         if value.get('endpoint_context'):
             if not context_available(self.evidence,value['facts'],self.clock()):return False
             analysis=value.get('analysis',{})
-            if analysis.get('state')=='ready' and analysis.get('settings_identity')!=stable(asdict(self.configuration.settings.ai)):
+            if analysis.get('state')=='ready' and analysis.get('cache_identity')!=self._cache_identity():
                 return False
         source_start=epoch(value['source_start']) if 'source_start' in value else value['start']
         return (self.clock()-self.evidence.retention_days*86400 <= source_start <= self.clock()+60
@@ -283,7 +302,7 @@ class IntelligenceService(RetainedEvidenceReader):
             item=deepcopy(self.reviews.get(identifier))
             if not item or not self._valid(item):raise ValueError('Review evidence expired')
             if (item.get('analysis',{}).get('state')=='ready'
-                    and item['analysis'].get('settings_identity')==stable(asdict(self.configuration.settings.ai))):
+                    and item['analysis'].get('cache_identity')==self._cache_identity()):
                 return self.snapshot()
             if automatic:
                 budget=self.evidence.checkpoint('patterns_ai_budget') or {}
@@ -301,13 +320,19 @@ class IntelligenceService(RetainedEvidenceReader):
 
     def _explain(self,item,owner,automatic):
         try:
-            references=[] if item.get('endpoint_context') else self.knowledge.for_pattern(item['rule'])
             settings=self.configuration.settings.ai
+            cache_identity=self._cache_identity(settings)
+            references=[] if item.get('endpoint_context') else self.knowledge.for_pattern(item['rule'])
+            if cache_identity!=self._cache_identity(settings):raise ValueError('Reference library changed')
             if self.cancel_event.is_set() or not self._valid(item):raise ValueError('Cancelled or expired')
             result=explain(item,references,settings,model=self.model,owner=owner,automatic=automatic)
             if self.cancel_event.is_set() or not self._valid(item):raise ValueError('Cancelled or expired')
-            if settings!=self.configuration.settings.ai:raise ValueError('Model selection changed')
-            result['settings_identity']=stable(asdict(settings))
+            if cache_identity!=self._cache_identity(self.configuration.settings.ai):
+                raise ValueError('Explanation provenance changed')
+            result.update(settings_identity=stable(asdict(settings)),
+                          explanation_contract=EXPLANATION_CONTRACT_ID,
+                          knowledge_generation=self._knowledge_identity(),
+                          cache_identity=cache_identity)
             item['analysis']=result
             item['analysis']['created_at']=utc(self.clock())
             state='ready';message='Explanation ready. No device changes were made.'
@@ -352,7 +377,7 @@ class IntelligenceService(RetainedEvidenceReader):
                 and result.get('analysis_state')==item.get('analysis',{}).get('state')
                 and result.get('model_identity')==item.get('analysis',{}).get('settings_identity')
                 and (result.get('analysis_state')!='ready'
-                     or item['analysis'].get('settings_identity')==stable(asdict(self.configuration.settings.ai))))
+                     or item['analysis'].get('cache_identity')==self._cache_identity()))
 
     def context_for_device(self, address, *, reference_ids=None):
         """Read a candidate context without inference, review writes, or HUD use."""
