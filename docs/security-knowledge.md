@@ -154,3 +154,17 @@ failure, provenance, retention and request-boundary checks. Measured acceptance
 results are recorded in [the acceptance record](security-knowledge-acceptance.md).
 
 The local HUD remains supported. The GPT Site remains retired.
+
+### Comparing saved explanations
+
+Review cards keep their short observation and advice visible. Expand **Advanced ·
+explanations, measurements and sources** to compare a completed model's
+interpretation with its alternative explanation, suggested distinguishing
+information, citation references and the reviewed next workflow. Suggestions are
+not verified causes; both explanations may remain unresolved. Missing values
+are labeled, and failed or unfinished analyses do not display a comparison.
+
+The comparison uses the existing saved review and refresh path. It does not
+invoke a model when expanded, add confidence scores, or introduce automatic
+reanalysis of changed evidence. Source-retention checks and existing opt-in
+analysis scheduling still govern which reviews are available.
