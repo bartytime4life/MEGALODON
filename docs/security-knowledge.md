@@ -139,6 +139,13 @@ citation and checks every knowledge identifier against the supplied references.
 Valid citations do not prove a
 model's reasoning; explanations remain advice.
 
+A ready explanation is reused only when its selected AI settings, versioned
+prompt/response contract and immutable knowledge-library generation all match.
+Legacy explanations without this complete identity regenerate on request. A
+model-setting or library-generation change during inference rejects the result
+instead of saving it under the wrong provenance. This cache identity is an
+auditability boundary, not proof that the model's interpretation is correct.
+
 Reports include up to 128 reviews from the recent 1,024 candidates and at most
 256 derived source dependencies, with coverage limits stated. Downloading a
 report runs no inference. Reports containing expired source-derived explanations
