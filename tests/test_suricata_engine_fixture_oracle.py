@@ -59,6 +59,8 @@ def _synthetic_pass_receipt(role: str) -> dict:
     receipt["execution"].update(
         {
             "native": True,
+            "runmode": "single",
+            "packet_processing_threads": 1,
             "exit_code": 0,
             "output_bytes": 4096,
             "wall_ns": 1_000_000,
@@ -241,6 +243,28 @@ def test_pcaps_use_only_documentation_addresses_and_declared_bounds() -> None:
         assert {address for src, dst, _ in decoded for address in (src, dst)} == allowed
 
 
+def test_pcre_payload_stays_within_server_advertised_tcp_window() -> None:
+    for count in (32, 64, 128):
+        frames = _pcap_frames((ROOT / "fixtures" / f"pcre-stream-{count}.pcap").read_bytes())
+        next_window = None
+        server_ack_count = 0
+        for frame in frames:
+            ip_offset = 14
+            tcp_offset = ip_offset + 20
+            src = str(ipaddress.IPv4Address(frame[ip_offset + 12 : ip_offset + 16]))
+            seq, ack = struct.unpack_from("!II", frame, tcp_offset + 4)
+            window = struct.unpack_from("!H", frame, tcp_offset + 14)[0]
+            flags = frame[tcp_offset + 13]
+            payload = _tcp_payload(frame)[2]
+            if src == "192.0.2.20" and flags & 0x10:
+                next_window = ack + window
+                server_ack_count += 1
+            if src == "192.0.2.10" and payload:
+                assert next_window is not None
+                assert seq + len(payload) <= next_window
+        assert server_ack_count == 3
+
+
 def test_tls_fixture_splits_header_across_records_and_carries_synthetic_sni() -> None:
     raw = (ROOT / "fixtures" / "fragmented-tls-handshake-header.pcap").read_bytes()
     payloads = [payload for frame in _pcap_frames(raw) for _, _, payload in [_tcp_payload(frame)] if payload]
@@ -271,6 +295,7 @@ def test_pcre_fixtures_double_completed_stream_without_content_prefilter() -> No
 def test_candidate_configuration_is_alert_only_and_has_no_external_sink() -> None:
     config = yaml.safe_load((ROOT / "suricata.yaml").read_text(encoding="utf-8"))
     assert config["suricata-version"] == "8.0"
+    assert config["runmode"] == "single"
     assert config["vars"]["address-groups"]["HOME_NET"] == "[192.0.2.0/24]"
     assert config["stats"]["enabled"] is False
     assert config["outputs"] == [
@@ -375,7 +400,7 @@ def test_pass_receipt_binds_tls_oracle_and_recomputes_pcre_ratios() -> None:
     semantic_validator = _load_receipt_validator()
     valid = _synthetic_pass_receipt("candidate")
     assert list(schema_validator.iter_errors(valid)) == []
-    assert semantic_validator.validate_receipt(valid, RECEIPT_SCHEMA) == []
+    assert semantic_validator.validate_receipt(valid) == []
 
     wrong_tls_sid = deepcopy(valid)
     wrong_tls_sid["oracle"]["tls_alert"]["signature_id"] = 42
@@ -389,9 +414,21 @@ def test_pass_receipt_binds_tls_oracle_and_recomputes_pcre_ratios() -> None:
     for run in understated_ratio["oracle"]["pcre_runs"]:
         if run["stream_segments"] == 64:
             run["process_cpu_ns"] *= 100
-    errors = semantic_validator.validate_receipt(understated_ratio, RECEIPT_SCHEMA)
+    errors = semantic_validator.validate_receipt(understated_ratio)
     assert any("does not match recorded medians" in error for error in errors)
     assert any("exceeds 3.0 bound" in error for error in errors)
+
+
+def test_receipt_validator_binds_schema_and_manifest_digests() -> None:
+    semantic_validator = _load_receipt_validator()
+    schema_digest = hashlib.sha256((ROOT / "receipt.schema.json").read_bytes()).hexdigest()
+    assert semantic_validator.SCHEMA_SHA256 == schema_digest
+
+    wrong_packet = _synthetic_pass_receipt("candidate")
+    wrong_packet["packet_sha256"] = "0" * 64
+    assert "packet_sha256:does not match manifest.json" in semantic_validator.validate_receipt(
+        wrong_packet
+    )
 
 
 def test_packet_has_zero_operational_effects_and_generator_has_no_network_or_process_capability() -> None:

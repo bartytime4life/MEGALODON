@@ -1,6 +1,6 @@
 {
   "schema_version": "suricata-engine-native-receipt-v1",
-  "packet_sha256": "54954ad77372b9b4b3a65f8082db2d611d725937775e7fe4ee8210cde4b4814d",
+  "packet_sha256": "8d1a559e127033165f66c50d1b5eec6aa5c63a0c79b6da7a6faf8cc61199a498",
   "status": "not_run",
   "canonicalization": "utf8-json-sort-keys-compact-v1",
   "receipt_id": null,
@@ -17,6 +17,8 @@
   },
   "execution": {
     "native": false,
+    "runmode": null,
+    "packet_processing_threads": null,
     "exit_code": null,
     "timed_out": false,
     "output_truncated": false,

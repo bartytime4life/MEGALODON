@@ -63,7 +63,7 @@
   ],
   "properties": {
     "schema_version": {"const": "suricata-engine-native-receipt-v1"},
-    "packet_sha256": {"const": "54954ad77372b9b4b3a65f8082db2d611d725937775e7fe4ee8210cde4b4814d"},
+    "packet_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "status": {
       "enum": [
         "not_run",
@@ -119,6 +119,8 @@
       "additionalProperties": false,
       "required": [
         "native",
+        "runmode",
+        "packet_processing_threads",
         "exit_code",
         "timed_out",
         "output_truncated",
@@ -129,6 +131,8 @@
       ],
       "properties": {
         "native": {"type": "boolean"},
+        "runmode": {"type": ["string", "null"], "maxLength": 32},
+        "packet_processing_threads": {"type": ["integer", "null"], "minimum": 0},
         "exit_code": {"type": ["integer", "null"], "minimum": 0, "maximum": 255},
         "timed_out": {"type": "boolean"},
         "output_truncated": {"type": "boolean"},
@@ -261,6 +265,8 @@
           "execution": {
             "properties": {
               "native": {"const": false},
+              "runmode": {"const": null},
+              "packet_processing_threads": {"const": null},
               "exit_code": {"const": null},
               "timed_out": {"const": false},
               "output_truncated": {"const": false},
@@ -305,6 +311,8 @@
           "execution": {
             "properties": {
               "native": {"const": true},
+              "runmode": {"const": "single"},
+              "packet_processing_threads": {"const": 1},
               "exit_code": {"const": 0},
               "timed_out": {"const": false},
               "output_truncated": {"const": false},

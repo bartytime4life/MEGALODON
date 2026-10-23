@@ -103,19 +103,19 @@
             {
               "path": "fixtures/pcre-stream-32.pcap",
               "stream_segments": 32,
-              "packet_count": 36,
+              "packet_count": 37,
               "payload_bytes": 16384
             },
             {
               "path": "fixtures/pcre-stream-64.pcap",
               "stream_segments": 64,
-              "packet_count": 68,
+              "packet_count": 69,
               "payload_bytes": 32768
             },
             {
               "path": "fixtures/pcre-stream-128.pcap",
               "stream_segments": 128,
-              "packet_count": 132,
+              "packet_count": 133,
               "payload_bytes": 65536
             }
           ],

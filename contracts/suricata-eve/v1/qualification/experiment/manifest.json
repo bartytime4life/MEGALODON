@@ -21,8 +21,8 @@
       "path": "fixture_source.py",
       "role": "generator_source",
       "media_type": "text/x-python",
-      "bytes": 6400,
-      "sha256": "4aeca5cf19ba429c5f3f080509f656803898106ed0e069a94c3eb02941972457"
+      "bytes": 6810,
+      "sha256": "8c54a93de7f9280b89bdf721864b19c4ba771ac488d19c1dee3b66d9bab08eff"
     },
     {
       "path": "fixtures/fragmented-tls-handshake-header.pcap",
@@ -35,29 +35,29 @@
       "path": "fixtures/pcre-stream-32.pcap",
       "role": "synthetic_capture",
       "media_type": "application/vnd.tcpdump.pcap",
-      "bytes": 18928,
-      "sha256": "eceef6528328e04f28acea9bfd4f021a952b04bb3154d169da067a9ae26c72a8"
+      "bytes": 18998,
+      "sha256": "e7f8adf7c5b75183ba56a70a0562172fb596f01e8832ee2c1fdf84c23367a9a2"
     },
     {
       "path": "fixtures/pcre-stream-64.pcap",
       "role": "synthetic_capture",
       "media_type": "application/vnd.tcpdump.pcap",
-      "bytes": 37552,
-      "sha256": "9162417763835f3c7b0882bfa478195db2c0854bc7bcce20682de6dab0dcb096"
+      "bytes": 37622,
+      "sha256": "2a5e2af12a664d77b2b813cd7d44371c68af1325cbf78a6020848aa8a37d4a1d"
     },
     {
       "path": "fixtures/pcre-stream-128.pcap",
       "role": "synthetic_capture",
       "media_type": "application/vnd.tcpdump.pcap",
-      "bytes": 74800,
-      "sha256": "fbff07a78705a47bc84055d68f570b495b05f3dced56a1b7a3a04583f9de26be"
+      "bytes": 74870,
+      "sha256": "0c788c12aa8f49cb72cca5c32d3bb5b1aff0eba26fd8582da9d231ee0087aa50"
     },
     {
       "path": "receipt_validator.py",
       "role": "receipt_validator_source",
       "media_type": "text/x-python",
-      "bytes": 2693,
-      "sha256": "d15773993b2e1443713a425d434c8ef14b5d06680dd69177c8549a68d6004c93"
+      "bytes": 3067,
+      "sha256": "60c06b0b7cc5faa5ae5fafb3e9341193d1c4207e1d896acf4664a79ec8140e63"
     },
     {
       "path": "rules/local.rules",
@@ -70,8 +70,8 @@
       "path": "suricata.yaml",
       "role": "candidate_configuration",
       "media_type": "application/yaml",
-      "bytes": 1024,
-      "sha256": "da2eb831b5cc7d0fd875f22f29d473d6e80a5864cf71dc3c7d5071aa768fe1e9"
+      "bytes": 1040,
+      "sha256": "d3c73203c2b1dabd814cf049effb5e1e35eb80db62fa42d5a0f728df2d37f834"
     }
   ],
   "cases": [
@@ -95,19 +95,19 @@
         {
           "path": "fixtures/pcre-stream-32.pcap",
           "stream_segments": 32,
-          "packet_count": 36,
+          "packet_count": 37,
           "payload_bytes": 16384
         },
         {
           "path": "fixtures/pcre-stream-64.pcap",
           "stream_segments": 64,
-          "packet_count": 68,
+          "packet_count": 69,
           "payload_bytes": 32768
         },
         {
           "path": "fixtures/pcre-stream-128.pcap",
           "stream_segments": 128,
-          "packet_count": 132,
+          "packet_count": 133,
           "payload_bytes": 65536
         }
       ],

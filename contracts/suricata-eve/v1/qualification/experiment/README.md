@@ -17,15 +17,18 @@ interface name, private address, model input, or host-control path.
 - The TLS capture divides the four-byte ClientHello handshake header across
   two TLS records and carries the synthetic SNI `fragmented.example`.
 - The PCRE captures contain 32, 64, and 128 completed 512-byte to-server
-  segments. The dedicated rule uses the PCRE-only expression recorded in the
-  upstream ticket 8684 fix description; it has no content prefilter.
+  segments. A deterministic midpoint ACK advances the advertised receive
+  window before the second half, including the final `mc` suffix. The
+  dedicated rule uses the PCRE-only expression recorded in the upstream ticket
+  8684 fix description; it has no content prefilter.
 - `manifest.json` binds the generator, captures, rules, and configuration by
   SHA-256 and fixes all packet counts, byte counts, resource ceilings, and
   oracles.
 - `receipt_validator.py` is bound by the manifest. It validates the closed
-  schema, recomputes the three process-CPU medians, checks the two recorded
-  integer ratios against those medians, and enforces each 3.0 bound. It has no
-  network, process, or host-control capability.
+  schema after verifying its embedded SHA-256, verifies the receipt's packet
+  digest against the actual manifest, recomputes the three process-CPU medians,
+  checks the two recorded integer ratios against those medians, and enforces
+  each 3.0 bound. It has no network, process, or host-control capability.
 - `receipt-template.json` validates only as `not_run`. Changing it to `pass`
   is rejected unless an exact producer digest, the baseline version or exact
   candidate ancestry declared by the manifest, verified input hashes, nine
@@ -64,7 +67,9 @@ binary identity is available. A later owner-authorized runner must bind both
 binaries by SHA-256, independently verify every artifact digest, create a new
 private output directory, and invoke a fixed direct argument vector without a
 shell. It must process only one completed local PCAP at a time with one thread,
-no interface, no network, no rule update, no service, and no watcher.
+the configuration-bound `single` runmode, no interface, no network, no rule
+update, no service, and no watcher. A passing receipt must attest `single` and
+exactly one packet-processing thread.
 
 Timeout, output limit, unavailable prerequisite, identity mismatch, nonzero
 exit, and oracle failure are explicit non-pass receipt states. Even a valid

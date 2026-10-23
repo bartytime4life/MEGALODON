@@ -8,6 +8,7 @@ two claimed median ratios. It has no network, process, or host-control path.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import hashlib
 import json
 from pathlib import Path
 from statistics import median
@@ -17,6 +18,15 @@ from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).resolve().parent
+SCHEMA_SHA256 = "d12f999bc67a654b0950131aa89ee3ef119ff8ac12bb55eeba79edc99e4efa1f"
+
+
+def _bound_schema() -> Mapping[str, Any]:
+    raw = (ROOT / "receipt.schema.json").read_bytes()
+    observed = hashlib.sha256(raw).hexdigest()
+    if observed != SCHEMA_SHA256:
+        raise ValueError(f"schema:digest mismatch:{observed}")
+    return json.loads(raw)
 
 
 def _schema_errors(receipt: Mapping[str, Any], schema: Mapping[str, Any]) -> list[str]:
@@ -27,15 +37,13 @@ def _schema_errors(receipt: Mapping[str, Any], schema: Mapping[str, Any]) -> lis
     ]
 
 
-def validate_receipt(
-    receipt: Mapping[str, Any], schema: Mapping[str, Any] | None = None
-) -> list[str]:
+def validate_receipt(receipt: Mapping[str, Any]) -> list[str]:
     """Return deterministic validation errors; an empty list means valid."""
 
-    if schema is None:
-        schema = json.loads((ROOT / "receipt.schema.json").read_text(encoding="utf-8"))
-
-    errors = _schema_errors(receipt, schema)
+    errors = _schema_errors(receipt, _bound_schema())
+    manifest_sha256 = hashlib.sha256((ROOT / "manifest.json").read_bytes()).hexdigest()
+    if receipt.get("packet_sha256") != manifest_sha256:
+        errors.append("packet_sha256:does not match manifest.json")
     if errors or receipt.get("status") != "pass":
         return errors
 
@@ -67,11 +75,9 @@ def validate_receipt(
     return errors
 
 
-def require_valid_receipt(
-    receipt: Mapping[str, Any], schema: Mapping[str, Any] | None = None
-) -> None:
+def require_valid_receipt(receipt: Mapping[str, Any]) -> None:
     """Raise ValueError when structural or semantic receipt checks fail."""
 
-    errors = validate_receipt(receipt, schema)
+    errors = validate_receipt(receipt)
     if errors:
         raise ValueError("; ".join(errors))

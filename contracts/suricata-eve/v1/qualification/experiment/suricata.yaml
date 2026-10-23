@@ -1,6 +1,7 @@
 %YAML 1.1
 ---
 suricata-version: "8.0"
+runmode: single
 
 vars:
   address-groups:

@@ -195,6 +195,7 @@ def build_pcre_stream(segment_count: int) -> bytes:
         raise ValueError("segment_count must be one of 32, 64, or 128")
     frames = _handshake()
     client_seq = CLIENT_ISN + 1
+    identification = 4
     for index in range(segment_count):
         payload = b"A" * PCRE_CHUNK_BYTES
         if index == segment_count - 1:
@@ -206,17 +207,29 @@ def build_pcre_stream(segment_count: int) -> bytes:
                 ack=SERVER_ISN + 1,
                 flags=0x18,
                 payload=payload,
-                identification=4 + index,
+                identification=identification,
             )
         )
+        identification += 1
         client_seq += len(payload)
+        if index + 1 == segment_count // 2:
+            frames.append(
+                _frame(
+                    from_client=False,
+                    seq=SERVER_ISN + 1,
+                    ack=client_seq,
+                    flags=0x10,
+                    identification=identification,
+                )
+            )
+            identification += 1
     frames.append(
         _frame(
             from_client=False,
             seq=SERVER_ISN + 1,
             ack=client_seq,
             flags=0x10,
-            identification=4 + segment_count,
+            identification=identification,
         )
     )
     return _pcap(frames)
