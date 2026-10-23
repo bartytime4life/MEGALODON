@@ -215,3 +215,41 @@ server endpoint, write through the MEGALODON process, upload data, send
 telemetry or grant package/process/firewall/model authority. Browser acceptance
 confirms that the downloaded bytes match the preview and that preview/download
 make no page request; it is not OS-level egress containment or release approval.
+
+
+## Automatic address case overview
+
+The local Findings workspace assembles a case overview from the already validated
+traffic projection and its shared time range. It initially selects the source
+address of the first linked finding, or the first event source when no finding
+is present. Advanced exposes the address selector. An address is not a verified
+host identity, and shared-address grouping does not establish a single incident.
+
+The summary and observation-ordered timeline update with the returned snapshot.
+Finding buttons open the existing finding/event/run inspector. The view makes
+no additional requests or writes and does not infer a learned baseline. It
+shows at most 100 matching event rows and labels that display limit separately
+from projection truncation and page-wide excluded candidates. Counts describe
+only the admitted returned set; sensor liveness, loss and completeness remain
+unknown. A missing selected address stays selected and is reported absent,
+never silently replaced. Stale snapshots retain a visible stale label. Managed
+history uses different references and clears this case view rather than mixing
+records between projections.
+
+This first integration does not persist case notes, export a case package, run
+an AI model, or operate the host. Flight Lab remains a separate synthetic
+prototype; its session notebook is not an installed-dashboard capability.
+
+The automatic address case precedes the all-findings table. When linked findings exist,
+a review button opens the first finding in observation-time order in the existing
+evidence inspector. The button clears when the selected address or qualified
+records are absent. Address tuning remains in the collapsed Advanced disclosure.
+
+The automatic “What changed?” briefing compares the selected address's returned
+records against its previous fresh in-memory snapshot. It counts newly visible
+events, findings and addresses, links up to 20 added findings to the inspector,
+and flags changes to truncation/exclusion indicators. Newly visible does not mean
+newly occurred, and disappearing records do not establish resolution. Changing
+address or filter resets the baseline. Stale snapshots do not replace a fresh
+baseline; unavailable records and managed-history transitions clear it. This
+comparison does not persist across reloads or request additional data.
