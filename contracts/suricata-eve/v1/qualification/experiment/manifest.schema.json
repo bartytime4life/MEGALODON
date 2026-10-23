@@ -40,8 +40,8 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 8,
+      "maxItems": 8,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -54,6 +54,7 @@
               "fixtures/pcre-stream-32.pcap",
               "fixtures/pcre-stream-64.pcap",
               "fixtures/pcre-stream-128.pcap",
+              "receipt_validator.py",
               "rules/local.rules",
               "suricata.yaml"
             ]
@@ -62,6 +63,7 @@
             "enum": [
               "generator_source",
               "synthetic_capture",
+              "receipt_validator_source",
               "dedicated_rules",
               "candidate_configuration"
             ]

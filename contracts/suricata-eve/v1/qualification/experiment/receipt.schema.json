@@ -5,6 +5,17 @@
   "type": "object",
   "additionalProperties": false,
   "$defs": {
+    "pcre_ratio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_segments", "to_segments", "numerator_ns", "denominator_ns"],
+      "properties": {
+        "from_segments": {"enum": [32, 64]},
+        "to_segments": {"enum": [64, 128]},
+        "numerator_ns": {"type": "integer", "minimum": 1},
+        "denominator_ns": {"type": "integer", "minimum": 1}
+      }
+    },
     "pcre_run": {
       "type": "object",
       "additionalProperties": false,
@@ -52,7 +63,7 @@
   ],
   "properties": {
     "schema_version": {"const": "suricata-engine-native-receipt-v1"},
-    "packet_sha256": {"const": "961a11d3a006a8aa271d3a9eb095f741dab834805ebaaf04867cbddc6efc9f11"},
+    "packet_sha256": {"const": "54954ad77372b9b4b3a65f8082db2d611d725937775e7fe4ee8210cde4b4814d"},
     "status": {
       "enum": [
         "not_run",
@@ -130,10 +141,24 @@
     "oracle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["state", "tls_alert_count", "pcre_runs", "pcre_32_to_64_ratio", "pcre_64_to_128_ratio"],
+      "required": ["state", "tls_alert", "pcre_runs", "pcre_ratios"],
       "properties": {
         "state": {"enum": ["not_evaluated", "passed", "failed"]},
-        "tls_alert_count": {"type": ["integer", "null"], "minimum": 0},
+        "tls_alert": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["signature_id", "app_proto", "alert_count"],
+              "properties": {
+                "signature_id": {"const": 9900001},
+                "app_proto": {"const": "tls"},
+                "alert_count": {"const": 1}
+              }
+            }
+          ]
+        },
         "pcre_runs": {
           "anyOf": [
             {"type": "null"},
@@ -156,8 +181,21 @@
             }
           ]
         },
-        "pcre_32_to_64_ratio": {"type": ["number", "null"], "minimum": 0},
-        "pcre_64_to_128_ratio": {"type": ["number", "null"], "minimum": 0}
+        "pcre_ratios": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": false,
+              "prefixItems": [
+                {"allOf": [{"$ref": "#/$defs/pcre_ratio"}, {"properties": {"from_segments": {"const": 32}, "to_segments": {"const": 64}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_ratio"}, {"properties": {"from_segments": {"const": 64}, "to_segments": {"const": 128}}}]}
+              ]
+            }
+          ]
+        }
       }
     },
     "effects": {
@@ -235,10 +273,9 @@
           "oracle": {
             "properties": {
               "state": {"const": "not_evaluated"},
-              "tls_alert_count": {"const": null},
+              "tls_alert": {"const": null},
               "pcre_runs": {"const": null},
-              "pcre_32_to_64_ratio": {"const": null},
-              "pcre_64_to_128_ratio": {"const": null}
+              "pcre_ratios": {"const": null}
             }
           },
           "effects": {"properties": {"suricata_executed": {"const": false}}},
@@ -280,10 +317,9 @@
           "oracle": {
             "properties": {
               "state": {"const": "passed"},
-              "tls_alert_count": {"const": 1},
+              "tls_alert": {"type": "object"},
               "pcre_runs": {"type": "array", "minItems": 9, "maxItems": 9},
-              "pcre_32_to_64_ratio": {"type": "number", "minimum": 0, "maximum": 3.0},
-              "pcre_64_to_128_ratio": {"type": "number", "minimum": 0, "maximum": 3.0}
+              "pcre_ratios": {"type": "array", "minItems": 2, "maxItems": 2}
             }
           },
           "effects": {"properties": {"suricata_executed": {"const": true}}},

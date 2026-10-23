@@ -86,10 +86,26 @@ def _synthetic_pass_receipt(role: str) -> dict:
             )
     receipt["oracle"] = {
         "state": "passed",
-        "tls_alert_count": 1,
+        "tls_alert": {
+            "signature_id": 9900001,
+            "app_proto": "tls",
+            "alert_count": 1,
+        },
         "pcre_runs": pcre_runs,
-        "pcre_32_to_64_ratio": 2.0,
-        "pcre_64_to_128_ratio": 2.0,
+        "pcre_ratios": [
+            {
+                "from_segments": 32,
+                "to_segments": 64,
+                "numerator_ns": 64 * 8_000,
+                "denominator_ns": 32 * 8_000,
+            },
+            {
+                "from_segments": 64,
+                "to_segments": 128,
+                "numerator_ns": 128 * 8_000,
+                "denominator_ns": 64 * 8_000,
+            },
+        ],
     }
     receipt["effects"]["suricata_executed"] = True
     return receipt
@@ -107,6 +123,15 @@ def _checksum(data: bytes) -> int:
 def _load_generator():
     path = ROOT / "fixture_source.py"
     spec = importlib.util.spec_from_file_location("suricata_fixture_source", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_receipt_validator():
+    path = ROOT / "receipt_validator.py"
+    spec = importlib.util.spec_from_file_location("suricata_receipt_validator", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -171,6 +196,7 @@ def test_manifest_validates_and_binds_every_input_artifact() -> None:
         "fixtures/pcre-stream-32.pcap",
         "fixtures/pcre-stream-64.pcap",
         "fixtures/pcre-stream-128.pcap",
+        "receipt_validator.py",
         "rules/local.rules",
         "suricata.yaml",
     }
@@ -342,6 +368,30 @@ def test_pass_receipt_requires_complete_alerting_bounded_pcre_runs() -> None:
     zero_output = deepcopy(valid)
     zero_output["execution"]["output_bytes"] = 0
     assert list(validator.iter_errors(zero_output))
+
+
+def test_pass_receipt_binds_tls_oracle_and_recomputes_pcre_ratios() -> None:
+    schema_validator = Draft202012Validator(RECEIPT_SCHEMA)
+    semantic_validator = _load_receipt_validator()
+    valid = _synthetic_pass_receipt("candidate")
+    assert list(schema_validator.iter_errors(valid)) == []
+    assert semantic_validator.validate_receipt(valid, RECEIPT_SCHEMA) == []
+
+    wrong_tls_sid = deepcopy(valid)
+    wrong_tls_sid["oracle"]["tls_alert"]["signature_id"] = 42
+    assert list(schema_validator.iter_errors(wrong_tls_sid))
+
+    wrong_tls_protocol = deepcopy(valid)
+    wrong_tls_protocol["oracle"]["tls_alert"]["app_proto"] = "http"
+    assert list(schema_validator.iter_errors(wrong_tls_protocol))
+
+    understated_ratio = deepcopy(valid)
+    for run in understated_ratio["oracle"]["pcre_runs"]:
+        if run["stream_segments"] == 64:
+            run["process_cpu_ns"] *= 100
+    errors = semantic_validator.validate_receipt(understated_ratio, RECEIPT_SCHEMA)
+    assert any("does not match recorded medians" in error for error in errors)
+    assert any("exceeds 3.0 bound" in error for error in errors)
 
 
 def test_packet_has_zero_operational_effects_and_generator_has_no_network_or_process_capability() -> None:

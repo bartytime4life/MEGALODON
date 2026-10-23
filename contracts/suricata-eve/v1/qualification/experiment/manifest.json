@@ -53,6 +53,13 @@
       "sha256": "fbff07a78705a47bc84055d68f570b495b05f3dced56a1b7a3a04583f9de26be"
     },
     {
+      "path": "receipt_validator.py",
+      "role": "receipt_validator_source",
+      "media_type": "text/x-python",
+      "bytes": 2693,
+      "sha256": "d15773993b2e1443713a425d434c8ef14b5d06680dd69177c8549a68d6004c93"
+    },
+    {
       "path": "rules/local.rules",
       "role": "dedicated_rules",
       "media_type": "text/plain",

@@ -5,9 +5,9 @@ Status: **fixtures and oracles supplied; native experiment not run**.
 This directory advances two research candidates without launching Suricata. It
 contains four independently generated synthetic PCAPs, two dedicated rules, a
 candidate minimal configuration, exact artifact hashes, fixed result oracles,
-and a fail-closed receipt schema. It contains no Suricata binary, engine output,
-launcher, downloader, live capture, interface name, private address, model
-input, or host-control path.
+and a fail-closed receipt schema plus deterministic semantic validator. It
+contains no Suricata binary, engine output, launcher, downloader, live capture,
+interface name, private address, model input, or host-control path.
 
 ## Verified facts
 
@@ -22,6 +22,10 @@ input, or host-control path.
 - `manifest.json` binds the generator, captures, rules, and configuration by
   SHA-256 and fixes all packet counts, byte counts, resource ceilings, and
   oracles.
+- `receipt_validator.py` is bound by the manifest. It validates the closed
+  schema, recomputes the three process-CPU medians, checks the two recorded
+  integer ratios against those medians, and enforces each 3.0 bound. It has no
+  network, process, or host-control capability.
 - `receipt-template.json` validates only as `not_run`. Changing it to `pass`
   is rejected unless an exact producer digest, the baseline version or exact
   candidate ancestry declared by the manifest, verified input hashes, nine
@@ -36,19 +40,21 @@ itself is a separately licensed external program and is not redistributed.
 
 ## Predeclared oracles
 
-The TLS oracle requires exactly one alert with SID 9900001 and application
-protocol `tls`. Its interpretation is narrow: the complete synthetic SNI was
-available after the split header. It does not prove general TLS correctness.
+The TLS oracle requires a receipt record for exactly one alert with SID
+9900001 and application protocol `tls`. Its interpretation is narrow: the
+complete synthetic SNI was available after the split header. It does not prove
+general TLS correctness.
 
 The PCRE oracle uses the median process CPU time of three repetitions at each
 stream size. Each doubling must remain at or below a 3.0 ratio, each run must
 produce at least one SID 9900002 alert and finish within ten seconds, and the
 packet/output/address-space ceilings must hold. All nine constituent run
 measurements are required in a passing receipt so the claimed medians and
-ratios can be independently recomputed. The ratio is a deliberately generous
-discriminator below the approximately four-times growth expected from
-quadratic rescanning. It is an engineering threshold, not a verified claim
-about either producer.
+ratios can be independently recomputed. Schema validation alone is not
+sufficient for a `pass`; `receipt_validator.py` must also return no errors. The
+ratio is a deliberately generous discriminator below the approximately
+four-times growth expected from quadratic rescanning. It is an engineering
+threshold, not a verified claim about either producer.
 
 ## Remaining native hold
 

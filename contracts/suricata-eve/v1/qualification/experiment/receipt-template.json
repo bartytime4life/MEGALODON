@@ -1,6 +1,6 @@
 {
   "schema_version": "suricata-engine-native-receipt-v1",
-  "packet_sha256": "961a11d3a006a8aa271d3a9eb095f741dab834805ebaaf04867cbddc6efc9f11",
+  "packet_sha256": "54954ad77372b9b4b3a65f8082db2d611d725937775e7fe4ee8210cde4b4814d",
   "status": "not_run",
   "canonicalization": "utf8-json-sort-keys-compact-v1",
   "receipt_id": null,
@@ -27,10 +27,9 @@
   },
   "oracle": {
     "state": "not_evaluated",
-    "tls_alert_count": null,
+    "tls_alert": null,
     "pcre_runs": null,
-    "pcre_32_to_64_ratio": null,
-    "pcre_64_to_128_ratio": null
+    "pcre_ratios": null
   },
   "effects": {
     "suricata_executed": false,
