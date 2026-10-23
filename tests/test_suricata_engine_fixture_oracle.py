@@ -29,6 +29,72 @@ RECEIPT = json.loads((ROOT / "receipt-template.json").read_text(encoding="utf-8"
 RECEIPT_SCHEMA = json.loads((ROOT / "receipt.schema.json").read_text(encoding="utf-8"))
 
 
+def _synthetic_pass_receipt(role: str) -> dict:
+    receipt = deepcopy(RECEIPT)
+    receipt.update(
+        {
+            "status": "pass",
+            "receipt_id": "1" * 64,
+            "error": None,
+        }
+    )
+    receipt["producer"].update(
+        {
+            "role": role,
+            "version": "8.0.7" if role == "baseline" else "8.0.7-candidate",
+            "sha256": "2" * 64,
+            "verified_ancestry": []
+            if role == "baseline"
+            else [
+                "bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+                "f87b8e64a5fb80788897f7a9073c5407a2f5bc96",
+            ],
+            "exact_identity_verified": True,
+        }
+    )
+    receipt["artifact_verification"] = {
+        "manifest_sha256_verified": True,
+        "all_artifact_sha256_verified": True,
+    }
+    receipt["execution"].update(
+        {
+            "native": True,
+            "exit_code": 0,
+            "output_bytes": 4096,
+            "wall_ns": 1_000_000,
+            "process_cpu_ns": 900_000,
+            "max_address_space_bytes": 64 * 1024 * 1024,
+        }
+    )
+    pcre_runs = []
+    for segments in (32, 64, 128):
+        for repetition in (1, 2, 3):
+            pcre_runs.append(
+                {
+                    "stream_segments": segments,
+                    "repetition": repetition,
+                    "signature_id": 9900002,
+                    "alert_count": 1,
+                    "exit_code": 0,
+                    "timed_out": False,
+                    "output_truncated": False,
+                    "output_bytes": 512,
+                    "wall_ns": segments * 10_000,
+                    "process_cpu_ns": segments * 8_000,
+                    "max_address_space_bytes": 64 * 1024 * 1024,
+                }
+            )
+    receipt["oracle"] = {
+        "state": "passed",
+        "tls_alert_count": 1,
+        "pcre_runs": pcre_runs,
+        "pcre_32_to_64_ratio": 2.0,
+        "pcre_64_to_128_ratio": 2.0,
+    }
+    receipt["effects"]["suricata_executed"] = True
+    return receipt
+
+
 def _checksum(data: bytes) -> int:
     if len(data) % 2:
         data += b"\x00"
@@ -235,6 +301,47 @@ def test_not_run_receipt_validates_and_cannot_be_promoted_by_status_change() -> 
         }
     )
     assert list(validator.iter_errors(partially_forged))
+
+
+def test_pass_receipt_binds_role_specific_identity() -> None:
+    validator = Draft202012Validator(RECEIPT_SCHEMA)
+    baseline = _synthetic_pass_receipt("baseline")
+    candidate = _synthetic_pass_receipt("candidate")
+    assert list(validator.iter_errors(baseline)) == []
+    assert list(validator.iter_errors(candidate)) == []
+
+    wrong_baseline_version = deepcopy(baseline)
+    wrong_baseline_version["producer"]["version"] = "8.0.6"
+    assert list(validator.iter_errors(wrong_baseline_version))
+
+    missing_candidate_ancestry = deepcopy(candidate)
+    missing_candidate_ancestry["producer"]["verified_ancestry"].pop()
+    assert list(validator.iter_errors(missing_candidate_ancestry))
+
+    wrong_candidate_ancestry = deepcopy(candidate)
+    wrong_candidate_ancestry["producer"]["verified_ancestry"][0] = "0" * 40
+    assert list(validator.iter_errors(wrong_candidate_ancestry))
+
+
+def test_pass_receipt_requires_complete_alerting_bounded_pcre_runs() -> None:
+    validator = Draft202012Validator(RECEIPT_SCHEMA)
+    valid = _synthetic_pass_receipt("candidate")
+
+    no_pcre_alert = deepcopy(valid)
+    no_pcre_alert["oracle"]["pcre_runs"][4]["alert_count"] = 0
+    assert list(validator.iter_errors(no_pcre_alert))
+
+    missing_run = deepcopy(valid)
+    missing_run["oracle"]["pcre_runs"].pop()
+    assert list(validator.iter_errors(missing_run))
+
+    timed_out_run = deepcopy(valid)
+    timed_out_run["oracle"]["pcre_runs"][8]["timed_out"] = True
+    assert list(validator.iter_errors(timed_out_run))
+
+    zero_output = deepcopy(valid)
+    zero_output["execution"]["output_bytes"] = 0
+    assert list(validator.iter_errors(zero_output))
 
 
 def test_packet_has_zero_operational_effects_and_generator_has_no_network_or_process_capability() -> None:

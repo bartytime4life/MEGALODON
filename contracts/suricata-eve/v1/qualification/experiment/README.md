@@ -23,9 +23,10 @@ input, or host-control path.
   SHA-256 and fixes all packet counts, byte counts, resource ceilings, and
   oracles.
 - `receipt-template.json` validates only as `not_run`. Changing it to `pass`
-  is rejected unless an exact producer digest, verified input hashes, bounded
-  native measurements, zero exit, complete output, and both passing oracles
-  are present.
+  is rejected unless an exact producer digest, the baseline version or exact
+  candidate ancestry declared by the manifest, verified input hashes, nine
+  individually bounded and alert-producing PCRE runs, zero exit, nonempty
+  complete output, and both passing oracles are present.
 
 The TLS sticky-buffer syntax is grounded in the upstream Suricata rule guide.
 The two upstream engine commits and documentation are linked in the manifest.
@@ -41,10 +42,13 @@ available after the split header. It does not prove general TLS correctness.
 
 The PCRE oracle uses the median process CPU time of three repetitions at each
 stream size. Each doubling must remain at or below a 3.0 ratio, each run must
-finish within ten seconds and the packet/output/address-space ceilings must
-hold. The ratio is a deliberately generous discriminator below the
-approximately four-times growth expected from quadratic rescanning. It is an
-engineering threshold, not a verified claim about either producer.
+produce at least one SID 9900002 alert and finish within ten seconds, and the
+packet/output/address-space ceilings must hold. All nine constituent run
+measurements are required in a passing receipt so the claimed medians and
+ratios can be independently recomputed. The ratio is a deliberately generous
+discriminator below the approximately four-times growth expected from
+quadratic rescanning. It is an engineering threshold, not a verified claim
+about either producer.
 
 ## Remaining native hold
 

@@ -4,6 +4,38 @@
   "title": "MEGALODON bounded Suricata native experiment receipt",
   "type": "object",
   "additionalProperties": false,
+  "$defs": {
+    "pcre_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stream_segments",
+        "repetition",
+        "signature_id",
+        "alert_count",
+        "exit_code",
+        "timed_out",
+        "output_truncated",
+        "output_bytes",
+        "wall_ns",
+        "process_cpu_ns",
+        "max_address_space_bytes"
+      ],
+      "properties": {
+        "stream_segments": {"enum": [32, 64, 128]},
+        "repetition": {"type": "integer", "minimum": 1, "maximum": 3},
+        "signature_id": {"const": 9900002},
+        "alert_count": {"type": "integer", "minimum": 1},
+        "exit_code": {"const": 0},
+        "timed_out": {"const": false},
+        "output_truncated": {"const": false},
+        "output_bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "wall_ns": {"type": "integer", "minimum": 1, "maximum": 10000000000},
+        "process_cpu_ns": {"type": "integer", "minimum": 1},
+        "max_address_space_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912}
+      }
+    }
+  },
   "required": [
     "schema_version",
     "packet_sha256",
@@ -43,7 +75,7 @@
     "producer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "version", "sha256", "exact_identity_verified"],
+      "required": ["role", "version", "sha256", "verified_ancestry", "exact_identity_verified"],
       "properties": {
         "role": {"enum": ["none", "baseline", "candidate"]},
         "version": {"type": ["string", "null"], "maxLength": 128},
@@ -52,6 +84,12 @@
             {"type": "null"},
             {"type": "string", "pattern": "^[0-9a-f]{64}$"}
           ]
+        },
+        "verified_ancestry": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "uniqueItems": true,
+          "maxItems": 2
         },
         "exact_identity_verified": {"type": "boolean"}
       }
@@ -92,10 +130,32 @@
     "oracle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["state", "tls_alert_count", "pcre_32_to_64_ratio", "pcre_64_to_128_ratio"],
+      "required": ["state", "tls_alert_count", "pcre_runs", "pcre_32_to_64_ratio", "pcre_64_to_128_ratio"],
       "properties": {
         "state": {"enum": ["not_evaluated", "passed", "failed"]},
         "tls_alert_count": {"type": ["integer", "null"], "minimum": 0},
+        "pcre_runs": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "array",
+              "minItems": 9,
+              "maxItems": 9,
+              "items": false,
+              "prefixItems": [
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 32}, "repetition": {"const": 1}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 32}, "repetition": {"const": 2}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 32}, "repetition": {"const": 3}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 64}, "repetition": {"const": 1}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 64}, "repetition": {"const": 2}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 64}, "repetition": {"const": 3}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 128}, "repetition": {"const": 1}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 128}, "repetition": {"const": 2}}}]},
+                {"allOf": [{"$ref": "#/$defs/pcre_run"}, {"properties": {"stream_segments": {"const": 128}, "repetition": {"const": 3}}}]}
+              ]
+            }
+          ]
+        },
         "pcre_32_to_64_ratio": {"type": ["number", "null"], "minimum": 0},
         "pcre_64_to_128_ratio": {"type": ["number", "null"], "minimum": 0}
       }
@@ -150,6 +210,7 @@
               "role": {"const": "none"},
               "version": {"const": null},
               "sha256": {"const": null},
+              "verified_ancestry": {"maxItems": 0},
               "exact_identity_verified": {"const": false}
             }
           },
@@ -175,6 +236,7 @@
             "properties": {
               "state": {"const": "not_evaluated"},
               "tls_alert_count": {"const": null},
+              "pcre_runs": {"const": null},
               "pcre_32_to_64_ratio": {"const": null},
               "pcre_64_to_128_ratio": {"const": null}
             }
@@ -209,6 +271,7 @@
               "exit_code": {"const": 0},
               "timed_out": {"const": false},
               "output_truncated": {"const": false},
+              "output_bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
               "wall_ns": {"type": "integer", "minimum": 1},
               "process_cpu_ns": {"type": "integer", "minimum": 1},
               "max_address_space_bytes": {"type": "integer", "minimum": 1}
@@ -218,12 +281,58 @@
             "properties": {
               "state": {"const": "passed"},
               "tls_alert_count": {"const": 1},
+              "pcre_runs": {"type": "array", "minItems": 9, "maxItems": 9},
               "pcre_32_to_64_ratio": {"type": "number", "minimum": 0, "maximum": 3.0},
               "pcre_64_to_128_ratio": {"type": "number", "minimum": 0, "maximum": 3.0}
             }
           },
           "effects": {"properties": {"suricata_executed": {"const": true}}},
           "error": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "pass"},
+          "producer": {"properties": {"role": {"const": "baseline"}}, "required": ["role"]}
+        },
+        "required": ["status", "producer"]
+      },
+      "then": {
+        "properties": {
+          "producer": {
+            "properties": {
+              "version": {"const": "8.0.7"},
+              "verified_ancestry": {"maxItems": 0}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "pass"},
+          "producer": {"properties": {"role": {"const": "candidate"}}, "required": ["role"]}
+        },
+        "required": ["status", "producer"]
+      },
+      "then": {
+        "properties": {
+          "producer": {
+            "properties": {
+              "verified_ancestry": {
+                "minItems": 2,
+                "maxItems": 2,
+                "items": false,
+                "prefixItems": [
+                  {"const": "bea218e7b1dd8ffb09f250e62c096c6b3da749b4"},
+                  {"const": "f87b8e64a5fb80788897f7a9073c5407a2f5bc96"}
+                ]
+              }
+            }
+          }
         }
       }
     },

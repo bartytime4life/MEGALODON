@@ -8,6 +8,7 @@
     "role": "none",
     "version": null,
     "sha256": null,
+    "verified_ancestry": [],
     "exact_identity_verified": false
   },
   "artifact_verification": {
@@ -27,6 +28,7 @@
   "oracle": {
     "state": "not_evaluated",
     "tls_alert_count": null,
+    "pcre_runs": null,
     "pcre_32_to_64_ratio": null,
     "pcre_64_to_128_ratio": null
   },
