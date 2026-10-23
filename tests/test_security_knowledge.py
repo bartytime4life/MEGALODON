@@ -214,3 +214,27 @@ def test_vanished_journal_does_not_break_usage(library,monkeypatch):
         return real(path,*args,**kwargs)
     monkeypatch.setattr(Path,'lstat',lstat)
     assert library.usage()['used_bytes']>0 and library.snapshot()['used_bytes']>0
+
+
+def test_attack_platform_context_survives_sql_search(library):
+    technique = dict(type='attack-pattern', id='attack-pattern--example',
+                     modified='2026-10-23T00:00:00Z', name='Synthetic reference',
+                     description='Synthetic technique description.',
+                     external_references=[dict(source_name='mitre-attack', external_id='T1046')],
+                     x_mitre_platforms=['Windows', 'Linux', 'macOS', 'Linux'])
+    rows, _ = parse('attack', json.dumps(dict(type='bundle', objects=[technique])).encode())
+    generation = library._build(rows, library.seed['sources'], {})
+    library._activate(generation)
+    for platform in ('Windows', 'Linux', 'macOS'):
+        hits = library.search(platform)
+        assert len(hits) == 1
+        assert hits[0]['context_only']
+        assert 'not an observed host operating system' in hits[0]['excerpt']
+    assert rows[0]['text'].count('Linux') == 1
+    technique.pop('x_mitre_platforms')
+    rows, _ = parse('attack', json.dumps(dict(type='bundle', objects=[technique])).encode())
+    assert 'Source-listed platforms' not in rows[0]['text']
+    for invalid in ('Linux', [None], ['x' * 65], ['Linux'] * 33):
+        technique['x_mitre_platforms'] = invalid
+        with pytest.raises(ValueError):
+            parse('attack', json.dumps(dict(type='bundle', objects=[technique])).encode())
