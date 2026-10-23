@@ -655,6 +655,13 @@ boundary.
 
 ### 2. External producer packages remain operator-managed
 
+**Installing Suricata:** use the [offline configuration guide](docs/installing-suricata.md)
+and its [configuration script](scripts/configure-suricata-offline.py). The script
+previews by default; `--write` creates a new private configuration/rules/receipt
+bundle only. It never installs packages, changes `/etc`, starts a service, or
+executes Suricata. Empty rules mean no detection coverage. Native validation
+and producer acceptance remain separate.
+
 Suricata and osquery remain **unmanaged** companion tools. This repository
 does not approve adding third-party APT repositories, signing keys, package
 sources, services, rule updaters, schedules, or configuration files for either

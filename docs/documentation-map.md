@@ -5,6 +5,9 @@
 catalog includes root documents, all `docs/` and versioned-contract guides, Wiki
 source, Site scope, templates, fixture notes, and visual provenance.
 
+October 23 addition: the [Suricata installation/configuration guide](installing-suricata.md)
+is listed below separately from the historical inventory count above.
+
 Every document was read programmatically for inventory and local-link checks.
 That is not a manual audit of every technical claim. Maintained entry pages
 were reconciled against named source paths; dated records retain their pins,
@@ -38,6 +41,7 @@ capability is accepted. Schema and code files are linked by their owning guides.
 
 | Document | Repository path |
 | --- | --- |
+| [Installing Suricata: offline configuration](installing-suricata.md) | `docs/installing-suricata.md` |
 | [Qwen completion and result integrity](advisory-result-integrity.md) | `docs/advisory-result-integrity.md` |
 | [Alert lifecycle and delivery outbox contract](alert-lifecycle-contract.md) | `docs/alert-lifecycle-contract.md` |
 | [Alert lifecycle wiring survey](alert-lifecycle-wiring-survey.md) | `docs/alert-lifecycle-wiring-survey.md` |

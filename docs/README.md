@@ -12,6 +12,7 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | --- | --- | --- |
 | Manage background startup | [Installed service and login startup](local-pc-setup.md#optional-start-the-installed-hud-at-login) | [Collector scope and saved preferences](background-tools.md) |
 | Open MEGALODON on Linux | [Visual quick start](gui-quick-start.md) | [Install, update, troubleshoot](local-pc-setup.md) |
+| Prepare Suricata offline configuration | [Installing Suricata and configuration script](installing-suricata.md) | [Pinned alert-only producer boundary](../contracts/suricata-eve/v1/producer/README.md) |
 | Understand the interface | [Visual tour](wiki/visual-tour.md) | [Operator guide](wiki/operator-guide.md) |
 | Trace a finding to its evidence | [Findings and inspector](control-room-contract.md#qualified-finding-evidence-inspector) | [Control room contract](control-room-contract.md) |
 | Assess host recovery preparation | [Recovery readiness and external receipts](host-backup-evidence.md) | [Host-security limits](host-security.md#recovery-readiness-in-setup) |
