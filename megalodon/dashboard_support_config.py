@@ -131,6 +131,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
       || !object(v.job) || !['idle','running','finished','failed'].includes(v.job.state) || !(v.job.action===null || Object.hasOwn(actionNames,v.job.action))
       || !text(v.job.message) || !stamp(v.job.started_at) || !stamp(v.job.finished_at)
       || !object(v.capture) || !['idle','starting','running','stopped','failed'].includes(v.capture.state) || !['received','accepted','skipped'].every(k=>count(v.capture[k]))
+      || !(v.capture.failure_reason===undefined || v.capture.failure_reason===null || (v.capture.state==='failed' && v.capture.failure_reason==='permission_required'))
       || !stamp(v.capture.started_at) || !stamp(v.capture.finished_at) || !text(v.capture.message) || !(v.capture.interface===undefined || text(v.capture.interface,64))
       || !Array.isArray(v.tools) || v.tools.length>16 || !v.tools.every(t=>object(t)&&text(t.id,64)&&text(t.name,80)&&text(t.state,40)&&text(t.message)&& (t.checked_at===undefined||stamp(t.checked_at)))
       || (v.background!==undefined&&(!object(v.background)||typeof v.background.enabled!=='boolean'||!['stopped','starting','running','waiting','failed'].includes(v.background.state)||!text(v.background.message)||!count(v.background.session_count)))
@@ -210,7 +211,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface · '+(v.settings.interface||'not selected');
     el('support-config-interface-note').textContent=chosen ? `${chosen.name}${chosen.up?' is up.':' is down; capture may fail.'} Used by HUD capture, background sensors and optional desktop inspection.` : 'Choose an available interface before configuring or starting capture.';
     const names={idle:'Not capturing',starting:'Starting',running:'HUD capture running',stopped:'Capture stopped',failed:'Capture failed'};
-    el('support-capture-state').textContent=names[v.capture.state];el('support-capture-state').dataset.state=v.capture.state;
+    el('support-capture-state').textContent=v.capture.failure_reason==='permission_required'?'Capture permission required':names[v.capture.state];el('support-capture-state').dataset.state=v.capture.state;
     el('support-capture-message').textContent=v.capture.message+(v.capture.state==='running'&&v.capture.accepted===0?' Awaiting usable metadata; no records have reached the HUD yet.':'');
     for(const field of ['received','accepted','skipped'])el('support-capture-'+field).textContent=String(v.capture[field]);
     el('support-capture-time').textContent=`TShark / dumpcap metadata${v.capture.interface?' · '+v.capture.interface:''}${v.capture.started_at?' · Started '+time(v.capture.started_at):''}${v.capture.finished_at?' · Finished '+time(v.capture.finished_at):''}`;

@@ -126,3 +126,27 @@ the globe's projection and animation clock, disappear with stale or stopped feed
 and become static when motion is paused or reduced. They are traffic markers,
 not attack verdicts or active network pings. Unmapped sources do not acquire a
 made-up location. DB-IP locations remain approximate internet locations.
+
+## Investigating an observed address
+
+Select a peer in the connection roster, then choose **Investigate selected
+address**. Even when the origin and location are unknown, the local note collects
+retained times, connection/packet/byte counts, sent/received direction relative
+to that address, protocols, TCP flags, names and ports. Missing measurements show
+as unavailable. Recording sources, byte units and capture coverage accompany the
+counts; a failed or stopped capture is shown explicitly. Save the note to preserve
+this snapshot beyond the bounded live window.
+
+The note also includes possible relay port associations. A WireGuard/OpenVPN/proxy-associated port is
+a clue to review, not proof of installed software, a relay or a malicious actor.
+The original address and person behind the connection remain unestablished.
+
+**Save investigation note** downloads a JSON copy. For a public IP, the optional
+registry link opens ARIN's search page; you enter the public IP there yourself.
+The app sends no selected address to a lookup provider. Private/reserved IPs
+have no public registry link. Registry allocation and approximate IP location
+cannot establish a person's identity or a physical street address.
+
+The note can help correlate separately obtained, trustworthy proxy/provider
+records, but MEGALODON does not obtain those records or reconstruct hidden hops.
+See the [HTTP and evidence boundaries](dashboard-http-contract.md#address-investigation-and-capture-diagnostics).

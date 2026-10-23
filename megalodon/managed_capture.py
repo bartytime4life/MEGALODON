@@ -24,6 +24,21 @@ from .validation import ValidationError
 
 MAX_PACKETS = 50000
 MAX_SECONDS = 900
+MAX_DIAGNOSTIC_BYTES = 8192
+PERMISSION_MESSAGE = (
+    'Capture permission required. In Setup → Configure local tools, choose '
+    'Configure capture access and complete the administrator prompt on this '
+    'computer, then retry capture. Accepted records remain available.'
+)
+
+
+def _permission_denied(raw):
+    """Recognize fixed helper errors without publishing its untrusted stderr."""
+    value = bytes(raw).lower()
+    return any(marker in value for marker in (
+        b'permission denied', b'operation not permitted',
+        b"you don't have permission to capture", b'insufficient permissions',
+    ))
 
 
 def now():
@@ -50,7 +65,8 @@ class ManagedCapture:
         self._lock, self._stop = Lock(), Event()
         self._thread = None
         self._state = dict(state='idle', interface='', received=0, accepted=0, skipped=0,
-                           timestamp_rejected=0,started_at=None, finished_at=None, message='No HUD capture started.')
+                           timestamp_rejected=0,started_at=None, finished_at=None,
+                           failure_reason=None, message='No HUD capture started.')
 
     def snapshot(self):
         with self._lock:
@@ -64,7 +80,7 @@ class ManagedCapture:
                 raise ConfigBusy('A HUD capture is already running.')
             self._stop.clear()
             self._state.update(state='starting', interface=interface, received=0, accepted=0, skipped=0,timestamp_rejected=0,
-                               started_at=now(), finished_at=None, message='Opening the selected interface…')
+                               started_at=now(), finished_at=None, failure_reason=None, message='Opening the selected interface…')
             self._thread = Thread(target=self._run, args=(interface,), daemon=True, name='megalodon-managed-capture')
             self._thread.start()
 
@@ -84,6 +100,9 @@ class ManagedCapture:
         run_id = None
         store = None
         service = None
+        cap = None
+        helper_error = bytearray()
+        helper_denied = helper_failed = False
         reason, failure = 'source_exhausted', None
         try:
             if self.connections is not None:
@@ -107,8 +126,12 @@ class ManagedCapture:
             if self.on_ready:
                 self.on_ready()
             cap_argv, decode_argv = capture_commands(interface)
-            cap = self.popen(cap_argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+            try:
+                cap = self.popen(cap_argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, env=env, start_new_session=True)
+            except PermissionError:
+                helper_denied = True
+                raise
             processes.append(cap)
             decoder = self.popen(decode_argv, stdin=cap.stdout, stdout=subprocess.PIPE,
                                  stderr=subprocess.DEVNULL, env=env, start_new_session=True)
@@ -118,17 +141,27 @@ class ManagedCapture:
             deadline = time.monotonic() + MAX_SECONDS + 5
             with selectors.DefaultSelector() as selector:
                 os.set_blocking(decoder.stdout.fileno(), False)
+                os.set_blocking(cap.stderr.fileno(), False)
                 selector.register(decoder.stdout, selectors.EVENT_READ)
+                selector.register(cap.stderr, selectors.EVENT_READ)
+                decoder_open = True
                 with self._lock:
                     self._state.update(state='running', message='Capture active; waiting for usable packet metadata. Drops are unknown.')
-                while selector.get_map() and not self._stop.is_set():
+                while decoder_open and not self._stop.is_set():
                     service.flush_due()
                     if time.monotonic() > deadline:
                         raise ValueError('capture deadline')
                     for key, _ in selector.select(.2):
                         chunk = os.read(key.fd, 4096)
+                        if key.fileobj is cap.stderr:
+                            if not chunk:
+                                selector.unregister(key.fileobj)
+                            else:
+                                helper_error.extend(chunk[:max(0, MAX_DIAGNOSTIC_BYTES-len(helper_error))])
+                            continue
                         if not chunk:
                             selector.unregister(key.fileobj)
+                            decoder_open = False
                             continue
                         buffer.extend(chunk)
                         while b'\n' in buffer:
@@ -167,10 +200,16 @@ class ManagedCapture:
                             raise ValueError('metadata row bound')
             if self._stop.is_set():
                 reason = 'interrupted'
-            elif buffer or decoder.wait(timeout=3) != 0 or cap.wait(timeout=3) != 0:
-                raise ValueError('capture tool failed')
-            elif self._state['received'] >= MAX_PACKETS:
-                reason = 'event_limit_reached'
+            elif buffer:
+                raise ValueError('incomplete capture metadata')
+            else:
+                decoder_result = decoder.wait(timeout=3)
+                helper_result = cap.wait(timeout=3)
+                helper_failed = helper_result != 0
+                if decoder_result != 0 or helper_failed:
+                    raise ValueError('capture tool failed')
+                if self._state['received'] >= MAX_PACKETS:
+                    reason = 'event_limit_reached'
             service.flush()
         except StorageCapacityError as exc:
             reason, failure = 'failed', 'CAPTURE_ERROR'
@@ -195,6 +234,25 @@ class ManagedCapture:
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait(timeout=2)
+            if cap is not None and cap.stderr is not None:
+                # The helper is now stopped. Drain a bounded tail without waiting
+                # on inherited descriptors or retaining arbitrary error output.
+                os.set_blocking(cap.stderr.fileno(), False)
+                for _ in range(MAX_DIAGNOSTIC_BYTES // 4096):
+                    try:
+                        chunk = os.read(cap.stderr.fileno(), 4096)
+                    except BlockingIOError:
+                        break
+                    if not chunk:
+                        break
+                    helper_error.extend(chunk[:max(0, MAX_DIAGNOSTIC_BYTES-len(helper_error))])
+                helper_denied = helper_denied or (
+                    helper_failed and _permission_denied(helper_error)
+                )
+            if helper_denied:
+                with self._lock:
+                    self._state.update(state='failed', failure_reason='permission_required', message=PERMISSION_MESSAGE)
+            for process in reversed(processes):
                 for stream in (process.stdout, process.stderr):
                     if stream and not stream.closed:
                         stream.close()

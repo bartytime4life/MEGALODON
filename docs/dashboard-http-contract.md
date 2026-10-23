@@ -159,6 +159,7 @@ production service.
 | `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state, the cached read-only hardening review, the cached bounded persistence summary, the passive local gateway review, this account's programs holding network sockets, read-only recovery readiness from the same saved host-security snapshot, separately pinned external backup-evidence summary and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
 | `/api/support-workflows` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Passive, bounded status and aggregate metrics for twelve background tools; never starts services, scans or model inference. See [background tools](background-tools.md). |
 | `/api/operations` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Bounded live traffic pulse, IP details, passive sensor context, review-only hostname naming and TLS handshake signals and storage counters; no network lookups or model call |
+| `/api/address-investigation` | Required canonical numeric `ip`; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Explicit read over an address in the retained endpoint window; at most 16 KiB. Records observations and non-authoritative relay port clues, never an original address or person identity. No external lookup. |
 | `/api/defense` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed workflow state, private audit summary, active/uncertain containment and separate POST nonce; [defense contract](visual-operations-defense.md) |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
 
@@ -670,3 +671,52 @@ is a field-free protected support action that interrupts this process’s active
 inference, including while another support job is running. Provider metadata stays
 bounded to three seconds per request. Model telemetry adds the configured budget,
 `running`, and `started_at`. Cancellation does not grant host-action authority.
+
+## Address investigation and capture diagnostics
+
+The endpoint inspector's **Investigate selected address** control performs an
+explicit local GET. Selection alone sends no request. Unknown endpoints return
+404; host/session and explicit-read checks still apply. Missing, repeated,
+unknown, scoped, hostname and noncanonical address queries are refused. The
+projection admits only the bounded retained endpoint set; it does not scan,
+resolve DNS, query a registry or contact a model.
+
+An unknown origin or missing geolocation does not suppress retained traffic.
+The note includes connection/active counts, packets, bytes, endpoint-relative
+sent/received bytes, protocols, TCP flags, ports/names and observation times.
+Unavailable counters stay null rather than becoming zero. Measurement sources
+and byte bases distinguish reported packet metadata from sensor IP/payload byte
+summaries; no wire-speed or packet-arrival claim is inferred. The recording mode,
+bounded window, projection truncation and coverage notes accompany the evidence;
+capture gaps/drops remain unknown. A stopped or failed capture can still expose
+retained observations; its state and snapshot time stay visible. The note is a
+bounded snapshot, not an archive of every historical packet.
+
+Traffic observations remain separate from relay clues. Known port associations can guide review but do not
+establish VPN/proxy use. Original source, person identity and network holder
+remain explicitly unestablished or unrecorded. Saved JSON notes are personal
+exports outside managed cleanup. Selection changes discard previous notes and
+ignore late responses. Display uses text nodes; no observation becomes HTML.
+
+For a public address, the manual registry-search link opens the fixed ARIN search
+page without an address parameter or referrer. MEGALODON sends no selected IP to
+that service. Private, shared and reserved addresses get no public lookup link.
+A network registration describes an allocation, not a person's identity. The
+[RDAP query standard](https://www.rfc-editor.org/rfc/rfc9082.html) defines registry
+queries. [Forwarded-header security considerations](https://www.rfc-editor.org/rfc/rfc7239.html#section-8.1)
+explain why a claimed upstream address is not itself reliable origin evidence.
+
+Capture snapshots may include `failure_reason: "permission_required"` only for a
+failed capture with a recognized helper denial or refused helper execution.
+The HUD then shows **Capture permission required** and links to the existing
+capture-access setup. Fresh-start snapshots clear the reason. Unknown failures,
+no observed packets, storage failures and decoder failures do not imply a
+permission diagnosis. An unavailable/stale operations response hides the current
+permission notice. Existing ingestion receipts retain `CAPTURE_ERROR`; this adds
+no database status, permission grant or automatic capture action.
+
+Helper stderr is drained while decoding to prevent pipe blockage; only its
+first 8 KiB can be retained for fixed-message classification. It is never shown
+in the browser or included in the snapshot. Decoder EOF ends intake even if the
+helper's diagnostic descriptor is still open. Process cleanup and finite packet,
+time, metadata and storage bounds remain in force.

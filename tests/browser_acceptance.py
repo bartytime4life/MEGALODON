@@ -667,8 +667,13 @@ async def exercise_endpoint_facts(browser, port: int, password: str) -> None:
         for width in (1440,390):
             await page.set_viewport_size({'width':width,'height':1000})
             await page.locator('#ops-facts-read').scroll_into_view_if_needed()
-            fits=await page.locator('.ops-retained-facts').evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
-            passed('native endpoint facts reflow '+str(width),fits)
+            for title, label in (('ops-facts-title', 'endpoint facts'),
+                                 ('address-investigation-title', 'address investigation')):
+                section=page.locator(f'section[aria-labelledby="{title}"]')
+                await expect(section).to_have_count(1)
+                await expect(section).to_be_visible()
+                fits=await section.evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
+                passed('native '+label+' reflow '+str(width),fits)
         mode[0]='hold';await page.locator('#ops-facts-read').click();await asyncio.wait_for(seen.wait(),timeout=5)
         await page.locator('#ops-endpoint-list .ops-endpoint').nth(0).click()
         await page.locator('#ops-endpoint-list .ops-endpoint').nth(1).click()

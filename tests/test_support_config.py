@@ -363,6 +363,59 @@ def test_failed_capture_marks_receipt_and_cleans_up(manager):
     assert reader.ingestion_runs()[0]['failure_code']=='CAPTURE_ERROR'
 
 
+@pytest.mark.parametrize('message', [
+    "dumpcap: You don't have permission to capture on that device (Operation not permitted)",
+    'dumpcap: Permission denied',
+])
+def test_capture_permission_failure_is_actionable_without_exposing_stderr(manager, message):
+    def spawn(argv, **kwargs):
+        code = ('import sys;sys.stderr.write('+repr(message+' private-helper-detail')+');raise SystemExit(1)'
+                if argv[0].endswith('dumpcap') else 'pass')
+        return subprocess.Popen([sys.executable, '-c', code], **kwargs)
+    capture = ManagedCapture(manager.settings, manager.home, popen=spawn)
+    capture.start('eth0'); capture._thread.join(5)
+    state = capture.snapshot()
+    assert state['state'] == 'failed'
+    assert state['failure_reason'] == 'permission_required'
+    assert 'Configure capture access' in state['message']
+    assert 'administrator prompt on this computer' in state['message']
+    assert 'private-helper-detail' not in str(state)
+    reader = dashboard.UnconfiguredDashboardReader(manager.settings.db_path)
+    assert reader.ingestion_runs()[0]['failure_code'] == 'CAPTURE_ERROR'
+
+
+def test_helper_execution_permission_failure_is_distinct_from_storage_denial(manager):
+    def deny_helper(argv, **kwargs):
+        raise PermissionError('private-helper-path')
+    capture = ManagedCapture(manager.settings, manager.home, popen=deny_helper)
+    capture.start('eth0'); capture._thread.join(5)
+    assert capture.snapshot()['failure_reason'] == 'permission_required'
+    assert 'private-helper-path' not in str(capture.snapshot())
+
+
+def test_unrelated_capture_tool_failure_never_claims_permission_denial(manager):
+    def spawn(argv, **kwargs):
+        # A successful helper's diagnostic text cannot blame permissions for
+        # the decoder's separate failure.
+        code = "import sys;sys.stderr.write('permission denied in an unrelated note')" if argv[0].endswith('dumpcap') else 'raise SystemExit(1)'
+        return subprocess.Popen([sys.executable, '-c', code], **kwargs)
+    capture = ManagedCapture(manager.settings, manager.home, popen=spawn)
+    capture.start('eth0'); capture._thread.join(5)
+    assert capture.snapshot()['state'] == 'failed'
+    assert capture.snapshot()['failure_reason'] is None
+
+
+def test_large_helper_stderr_does_not_block_capture_shutdown(manager):
+    def spawn(argv, **kwargs):
+        code = "import sys;sys.stderr.write('x'*131072);raise SystemExit(1)" if argv[0].endswith('dumpcap') else 'import sys;sys.stdin.buffer.read()'
+        return subprocess.Popen([sys.executable, '-c', code], **kwargs)
+    capture = ManagedCapture(manager.settings, manager.home, popen=spawn)
+    capture.start('eth0'); capture._thread.join(5)
+    assert not capture._thread.is_alive()
+    assert capture.snapshot()['state'] == 'failed'
+    assert capture.snapshot()['failure_reason'] is None
+
+
 def test_capture_storage_limit_is_actionable_and_preserves_failure_receipt(manager,monkeypatch):
     from megalodon import managed_capture
     from megalodon.storage import StorageCapacityError

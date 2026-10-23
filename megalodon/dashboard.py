@@ -642,6 +642,30 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 except (OSError, ValueError):
                     self._send_json({"error": "local operations unavailable"}, status=503)
             return
+        if route.path == '/api/address-investigation':
+            if self.headers.get_all('X-Megalodon-Check', []) != ['1'] or self.operations is None or not _tool_management_user():
+                self._send_json({'error': 'explicit local investigation check required'}, status=403)
+                return
+            try:
+                from ipaddress import ip_address
+                query = _bounded_query(route.query, max_fields=1)
+                if set(query) != {'ip'} or len(query['ip']) != 1:
+                    raise ValueError('Invalid address query')
+                address = query['ip'][0]
+                if len(address) > 45 or '%' in address or str(ip_address(address)) != address:
+                    raise ValueError('Invalid address')
+                value = self.operations.investigate(address)
+                if value is None:
+                    self._send_json({'error': 'address is outside the retained endpoint window'}, status=404)
+                elif len(json.dumps(value, ensure_ascii=True).encode()) > 16384:
+                    self._send_json({'error': 'address investigation unavailable'}, status=503)
+                else:
+                    self._send_json(value)
+            except ValueError:
+                self._send_json({'error': 'invalid address investigation query'}, status=422)
+            except OSError:
+                self._send_json({'error': 'address investigation unavailable'}, status=503)
+            return
         if route.path == "/api/support-workflows":
             if route.query:
                 self._send_json({"error": "unsupported query parameter"}, status=400)

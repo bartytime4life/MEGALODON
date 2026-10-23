@@ -15,7 +15,7 @@ def test_observed_endpoint_directions_flags_timeline_and_storage(tmp_path):
     cache._local={'10.0.0.2'}
     for src,dst,sport,dport,size in [('10.0.0.2','1.1.1.1',54321,443,100),('1.1.1.1','10.0.0.2',443,54321,250)]:
         cache.observe(PacketEvent(datetime.now(timezone.utc),src,dst,'TCP',sport,dport,byte_count=size,tcp_flags=frozenset({'ACK'})))
-    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:cache.snapshot({'state':'running'},{}))
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:dict(cache.snapshot({'state':'running'},{}),recording_mode='packet_metadata'))
     operations=Operations(config,context_reader=lambda:{})
     result=operations.snapshot()
     assert result['summary']['sent_bytes']==100 and result['summary']['received_bytes']==250
@@ -26,6 +26,12 @@ def test_observed_endpoint_directions_flags_timeline_and_storage(tmp_path):
     assert remote['flags']==['ACK'] and remote['ports']==[dict(protocol='TCP',port=443,hint='HTTPS')]
     assert remote['location'] is None
     assert result['coverage']['unmapped']==1
+    note=operations.investigate('1.1.1.1')
+    assert note['traffic']['packets']==2 and note['traffic']['sent_bytes']==250
+    assert note['traffic']['protocols']==['TCP'] and note['traffic']['tcp_flags']==['ACK']
+    assert note['traffic']['measurement_sources']==[dict(source='Accepted packet metadata',byte_basis='reported_bytes')]
+    assert note['observation_context']['recording_mode']=='packet_metadata'
+    assert note['original_address'] is None
 
 
 def test_dns_questions_do_not_attribute_names_to_dns_server(tmp_path):
@@ -55,14 +61,20 @@ def test_source_qualified_summary_protocol_reaches_endpoint_without_inventing_ap
     cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda ip:None))
     cache._local={'10.0.0.3'}
     cache.observe_summary(normalize_zeek(row)[1])
-    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:cache.snapshot({'state':'running'},{}))
-    result=Operations(config,context_reader=lambda:{}).snapshot()
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),live_snapshot=lambda:dict(cache.snapshot({'state':'failed'},{}),recording_mode='connection_summaries'))
+    operations=Operations(config,context_reader=lambda:{})
+    result=operations.snapshot()
     assert result['summary']['bytes']==350
     for endpoint in result['endpoints']:
         assert endpoint['services'][0]['name']=='ssl'
         assert 'zeek' in endpoint['services'][0]['source']
         assert endpoint['services'][0]['role']=='observed endpoint'
         assert not endpoint['names']
+        assert endpoint['measurement_sources']==[dict(source='zeek-conn',byte_basis='payload_bytes')]
+        note=operations.investigate(endpoint['ip'])
+        assert note['traffic']['bytes']==350 and note['traffic']['measurement_sources']==endpoint['measurement_sources']
+        assert note['capture_state']=='failed' and note['observation_context']['recording_mode']=='connection_summaries'
+        assert 'flow-summary updates' in note['observation_context']['notes'][1]
 
 
 
