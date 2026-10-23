@@ -127,10 +127,13 @@ def service(tmp_path):
     stamp=[START+3*3600]
     evidence=EvidenceStorage(Settings(db_path=tmp_path/'old.db'),home=tmp_path,clock=lambda:stamp[0],monotonic=lambda:stamp[0])
     evidence.apply(evidence.preview(dict(profile='home',retention_days=14,cap_bytes=20*GIB))['preview_id'])
-    knowledge=SimpleNamespace(search=lambda q,n:[],for_pattern=lambda rule:[])
+    knowledge_state={'generation':'test-generation-a'}
+    knowledge=SimpleNamespace(search=lambda q,n:[],for_pattern=lambda rule:[],
+                              snapshot=lambda:dict(generation=knowledge_state['generation']))
     config=SimpleNamespace(settings=Settings())
     s=IntelligenceService(evidence,knowledge,config,model=lambda *a,**k:json.dumps(dict(explanation='Observed traffic.',alternative='Scheduled task.',missing='Complete coverage.',citations=['E1'],workflow='evidence_summary')))
     s.test_clock=stamp
+    s.test_knowledge=knowledge_state
     yield s
     s.close();evidence.close()
 
@@ -327,6 +330,46 @@ def test_pattern_rejects_model_change_during_inference(service):
     def changed(*args,**kwargs):
         service.configuration.settings=replace(service.configuration.settings,
             ai=replace(service.configuration.settings.ai,model='synthetic-other-model'))
+        return original(*args,**kwargs)
+    service.model=changed
+    service.analyze(identifier);service.worker.join(2)
+    assert service.reviews[identifier]['analysis']['state']=='failed'
+    assert service.reviews[identifier]['rule']=='REGULAR_INTERVAL'
+
+
+
+def test_pattern_cache_tracks_prompt_contract_and_knowledge_generation(service):
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
+    service.process_hour(START)
+    identifier=next(iter(service.reviews))
+    original=service.model
+    with patch.object(service,'model',side_effect=original) as model:
+        service.analyze(identifier);service.worker.join(2)
+        first=service.reviews[identifier]['analysis']
+        assert first['knowledge_generation']=='test-generation-a'
+        assert first['explanation_contract']
+        service.analyze(identifier)
+        assert model.call_count==1
+
+        service.test_knowledge['generation']='test-generation-b'
+        service.analyze(identifier);service.worker.join(2)
+        second=service.reviews[identifier]['analysis']
+        assert model.call_count==2
+        assert second['cache_identity']!=first['cache_identity']
+        assert second['knowledge_generation']=='test-generation-b'
+
+        with patch('megalodon.intelligence.EXPLANATION_CONTRACT_ID','changed-contract'):
+            service.analyze(identifier);service.worker.join(2)
+            assert model.call_count==3
+            assert service.reviews[identifier]['analysis']['explanation_contract']=='changed-contract'
+
+
+def test_pattern_rejects_knowledge_change_during_inference(service):
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
+    service.process_hour(START);identifier=next(iter(service.reviews))
+    original=service.model
+    def changed(*args,**kwargs):
+        service.test_knowledge['generation']='test-generation-b'
         return original(*args,**kwargs)
     service.model=changed
     service.analyze(identifier);service.worker.join(2)
