@@ -74,3 +74,10 @@ dashboard refresh, SIEM delivery, alert acknowledgement, firewall action, or
 automatic response. Passing fixtures proves parser behavior only; it does not
 prove installed Suricata compatibility, capture completeness, rule quality,
 packet-loss behavior, operational privacy, or host acceptance.
+
+The adjacent
+[`qualification/research-packet.json`](../qualification/research-packet.json)
+records two 2026-10-22 upstream engine changes concerning fragmented TLS
+handshake headers and PCRE-only stream progress. It is explicitly `not_run`,
+contains no PCAP/rule/configuration artifact, and grants no producer-execution
+or upgrade authority.

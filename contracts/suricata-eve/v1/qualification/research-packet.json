@@ -1,0 +1,63 @@
+{
+  "schema_version": "suricata-engine-regression-research-v1",
+  "producer": {
+    "profile": "suricata-8.0.7-alert-json-v1",
+    "version": "8.0.7",
+    "acceptance": "not_established"
+  },
+  "cases": [
+    {
+      "id": "fragmented_tls_handshake_header",
+      "upstream_commit": "bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+      "upstream_url": "https://github.com/OISF/suricata/commit/bea218e7b1dd8ffb09f250e62c096c6b3da749b4",
+      "upstream_date": "2026-10-22",
+      "ticket": 9167,
+      "verified_observation": "Upstream reports that a TLS handshake header shorter than four bytes could make the parser error and disable further protocol inspection; the candidate commit buffers the header across records.",
+      "fixture_status": "not_supplied",
+      "execution_status": "not_run",
+      "evidence_status": "research_only"
+    },
+    {
+      "id": "pcre_only_stream_progress",
+      "upstream_commit": "f87b8e64a5fb80788897f7a9073c5407a2f5bc96",
+      "upstream_url": "https://github.com/OISF/suricata/commit/f87b8e64a5fb80788897f7a9073c5407a2f5bc96",
+      "upstream_date": "2026-10-22",
+      "ticket": 8684,
+      "verified_observation": "Upstream reports that a PCRE-only TCP stream rule group could re-evaluate the whole growing stream for each packet, producing quadratic work when no multipattern prefilter advanced raw-stream progress.",
+      "fixture_status": "not_supplied",
+      "execution_status": "not_run",
+      "evidence_status": "research_only"
+    }
+  ],
+  "proposed_limits": {
+    "max_fixture_bytes": 262144,
+    "max_packets": 512,
+    "max_output_bytes": 1048576,
+    "max_wall_seconds_per_case": 10,
+    "max_address_space_bytes": 536870912,
+    "threads": 1
+  },
+  "effects": {
+    "fixture_downloaded": false,
+    "suricata_executed": false,
+    "network_used": false,
+    "live_capture_used": false,
+    "rules_updated": false,
+    "service_changed": false,
+    "host_changed": false,
+    "firewall_changed": false,
+    "shell_action_used": false,
+    "model_invoked": false
+  },
+  "disposition": "not_run_research_candidate",
+  "remaining_holds": [
+    "OWNER_AUTHORIZATION",
+    "SYNTHETIC_FIXTURE_PROVENANCE",
+    "EXACT_BINARY_IDENTITY",
+    "NATIVE_RESOURCE_CONTAINMENT",
+    "EXPECTED_OUTPUT_ORACLE",
+    "INDEPENDENT_REVIEW",
+    "INSTALLED_PRODUCER_ACCEPTANCE",
+    "OPERATIONAL_PRIVACY"
+  ]
+}
