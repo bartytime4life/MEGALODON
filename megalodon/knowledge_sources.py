@@ -188,6 +188,22 @@ def entry(source, edition, identifier, title, body, url, *, links=()):
                 links=list(links)[:128])
 
 
+def attack_description(row):
+    """Keep source platform applicability searchable, never infer host identity."""
+    description = row['description']
+    platforms = row.get('x_mitre_platforms')
+    if platforms is None:
+        return description
+    if (not isinstance(platforms, list) or len(platforms) > 32
+            or any(not isinstance(p, str) or not p.strip() or len(p) > 64 for p in platforms)):
+        raise ValueError('Invalid ATT&CK platform metadata')
+    labels = sorted({clean(p, 64) for p in platforms})
+    if not labels:
+        return description
+    return ('Source-listed platforms: ' + ', '.join(labels)
+            + '. Reference applicability only; not an observed host operating system.\n' + description)
+
+
 def parse(source, raw):
     """Return bounded normalized documents and their source edition; no dynamic adapters."""
     if source not in SOURCES or len(raw) > SOURCES[source]['limit']:
@@ -238,7 +254,7 @@ def parse(source, raw):
             for r in objects:
                 if r.get('type') == 'relationship' and ids.get(r.get('target_ref')) and ids.get(r.get('source_ref')):
                     relations.setdefault(r['source_ref'], []).append((r['relationship_type'], ids[r['target_ref']]))
-            result = [entry(source, edition, ids[r['id']], r['name'], r['description'],
+            result = [entry(source, edition, ids[r['id']], r['name'], attack_description(r),
                             'https://attack.mitre.org/'+('techniques/' if r['type']=='attack-pattern' else 'mitigations/')+
                             ids[r['id']].replace('.', '/')+'/', links=relations.get(r['id'], []))
                       for r in rows if ids[r['id']]]
