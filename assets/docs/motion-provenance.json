@@ -1,0 +1,41 @@
+{
+  "kind": "public-documentation-explainers",
+  "schema": 1,
+  "source_basis": "2cb706039724d9ea0bda09cbd3c17698b15ba55c",
+  "capture_provenance": "assets/docs/capture-provenance.json",
+  "motion": "Two 2.4-second plays, no flashes; labels stay visible.",
+  "assets": {
+    "evidence-flow.gif": {
+      "bytes": 49494,
+      "sha256": "9f7bdeaee2e162a360c24bd09f5437c11ce880b6206ea848b5e99d5032a4a305"
+    },
+    "evidence-flow.png": {
+      "bytes": 52144,
+      "sha256": "a06183e55cdb7cbb70abdc8b1a105d1618de1aa4e5742e5ecb2155bd2f251d02"
+    },
+    "finding-walkthrough.gif": {
+      "bytes": 911674,
+      "sha256": "b8f9cdd527f7ba3efbddff57a81c00e0b84ba46ffabb724f0ddb789aad257969"
+    },
+    "finding-walkthrough.png": {
+      "bytes": 407765,
+      "sha256": "400c92c77dca6174dae8a89802819cbe17e799e0f8d31308986fc332811b8a50"
+    },
+    "model-authority.gif": {
+      "bytes": 54522,
+      "sha256": "f9853bbf5bd33fb47b0696ce68a22f93b2530093e7daafb88b0c538fa6fec3f7"
+    },
+    "model-authority.png": {
+      "bytes": 61072,
+      "sha256": "bf3a28ef12339996696fb629610fa3d4d00d180c07a3e30fb5591dc6f0ef8175"
+    },
+    "recovery-evidence.gif": {
+      "bytes": 51787,
+      "sha256": "c99d2fcc2816a6704d439dd5840ca2cdc493481489b3997669289be3909f2f18"
+    },
+    "recovery-evidence.png": {
+      "bytes": 59950,
+      "sha256": "587d5b26996ab255965680e326063ca2ac1c8166df602f417b0f85d66463c6db"
+    }
+  }
+}
