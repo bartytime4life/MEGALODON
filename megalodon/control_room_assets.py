@@ -419,9 +419,17 @@ function validateTraffic(value) {
   });
   const findings = new Set();
   value.findings.forEach(f=>{
-    if(!referenceExactKeys(f,['id','event_id','detected_at','rule_id','severity','detector_version']) || !roomId(f.id) || findings.has(f.id) || !ids.has(f.event_id)
+    if(!referenceExactKeys(f,['id','event_id','detected_at','rule_id','severity','detector_version',...(Object.hasOwn(f,'measurement')?['measurement']:[])]) || !roomId(f.id) || findings.has(f.id) || !ids.has(f.event_id)
       || !roomStamp(f.detected_at) || !roomRules.includes(f.rule_id) || !knownSeverities.has(f.severity)
       || f.detector_version!=='unknown; not stored on historical finding') throw new Error('Invalid finding');
+    if(f.measurement!=null) {
+      const m=f.measurement, units={SYN_FLOOD:'SYN events',PORT_SCAN:'distinct destination ports',DNS_TUNNELING:'DNS query length'};
+      if(!referenceExactKeys(m,['value','threshold','window_seconds','unit']) || m.unit!==units[f.rule_id]
+        || !Number.isInteger(m.value) || m.value<1 || m.value>65536
+        || !(m.threshold===null || (Number.isInteger(m.threshold)&&m.threshold>=1&&m.threshold<=m.value))
+        || !(m.window_seconds===null || (Number.isInteger(m.window_seconds)&&m.window_seconds>=1&&m.window_seconds<=3600))
+        || (f.rule_id==='DNS_TUNNELING'&&m.window_seconds!==null)) throw new Error('Invalid finding measurement');
+    }
     findings.add(f.id);
   });
   const times=value.events.map(e=>e.observed_at).sort();

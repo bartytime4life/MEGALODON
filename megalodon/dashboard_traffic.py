@@ -1,6 +1,6 @@
 """Closed, bounded metadata projection for the local control room.
 
-This reader deliberately does not expose raw JSON, messages, interfaces, paths,
+This reader reads bounded finding evidence internally but does not expose raw JSON, messages, interfaces, paths,
 or model output. Stored JSONL provenance is an operator declaration, not proof
 of capture authenticity. Sample and unlinked records never become traffic.
 """
@@ -44,7 +44,7 @@ def _text(column: str, limit: int) -> str:
 
 
 EVENT_COLUMNS = ("id", "observed_at", "src_ip", "dst_ip", "protocol", "src_port", "dst_port", "tcp_flags", "byte_count")
-FINDING_COLUMNS = ("id", "event_id", "detected_at", "rule_id", "severity")
+FINDING_COLUMNS = ("id", "event_id", "detected_at", "rule_id", "severity", "evidence_json")
 # One statement gives events, findings and their run receipts one SQLite snapshot.
 QUERY = f"""
 WITH newest_events AS (
@@ -63,7 +63,7 @@ SELECT 'event' AS kind, e.id AS record_id, e.id AS event_id,
  e.byte_count, NULL AS rule_id, NULL AS severity,
  r.id AS run_id, {_text('r.source', 12)} AS source,
  {_text('r.status', 24)} AS run_status, r.receipt_version,
- {_text('r.termination_reason', 28)} AS termination_reason
+ {_text('r.termination_reason', 28)} AS termination_reason, NULL AS evidence_json
 FROM newest_events e LEFT JOIN ingestion_run_events l ON l.event_id=e.id
 LEFT JOIN ingestion_runs r ON r.id=l.run_id
 UNION ALL
@@ -71,7 +71,7 @@ SELECT 'finding', d.id, d.event_id, {_text('d.detected_at', 40)},
  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
  {_text('d.rule_id', 32)}, {_text('d.severity', 8)},
  r.id, {_text('r.source', 12)}, {_text('r.status', 24)},
- r.receipt_version, {_text('r.termination_reason', 28)}
+ r.receipt_version, {_text('r.termination_reason', 28)}, {_text('d.evidence_json', 2048)}
 FROM newest_findings d LEFT JOIN ingestion_run_events l ON l.event_id=d.event_id
 LEFT JOIN ingestion_runs r ON r.id=l.run_id
 ORDER BY record_id DESC
@@ -112,6 +112,32 @@ def _integer(value: object, *, minimum: int = 0, maximum: int = MAX_SAFE_INTEGER
     if type(value) is not int or not minimum <= value <= maximum:
         raise ValueError("invalid integer")
     return value
+
+
+def _measurement(rule: str, raw: object) -> dict | None:
+    """Project only bounded numeric evidence recorded with this finding."""
+    if not isinstance(raw, str) or len(raw.encode('utf-8')) > 2048:
+        return None
+    from .ai_provider import _strict_pairs
+    try:
+        evidence = json.loads(raw, object_pairs_hook=_strict_pairs)
+        if type(evidence) is not dict:
+            return None
+        key, unit = {'SYN_FLOOD': ('count', 'SYN events'),
+                     'PORT_SCAN': ('distinct_ports', 'distinct destination ports'),
+                     'DNS_TUNNELING': ('dns_query_length', 'DNS query length')}[rule]
+        value = _integer(evidence.get(key), minimum=1, maximum=65536)
+        threshold = evidence.get('threshold')
+        if threshold is not None:
+            threshold = _integer(threshold, minimum=1, maximum=65536)
+            if value < threshold:
+                return None
+        window = evidence.get('window_seconds') if rule != 'DNS_TUNNELING' else None
+        if window is not None:
+            window = _integer(window, minimum=1, maximum=3600)
+        return dict(value=value, threshold=threshold, window_seconds=window, unit=unit)
+    except (ValueError, TypeError, KeyError, RecursionError):
+        return None
 
 
 def _time(value: object) -> str:
@@ -242,7 +268,8 @@ class TrafficDashboardStore(DashboardStore):
             findings.append({"id": str(_integer(row["record_id"], minimum=1)),
                              "event_id": str(row["event_id"]), "detected_at": _time(row["timestamp"]),
                              "rule_id": row["rule_id"], "severity": row["severity"],
-                             "detector_version": "unknown; not stored on historical finding"})
+                             "detector_version": "unknown; not stored on historical finding",
+                             "measurement": _measurement(row["rule_id"], row["evidence_json"] if "evidence_json" in row.keys() else None)})
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         degraded = truncated or any(e["run_status"] != "completed" for e in events)
         result = {

@@ -34,9 +34,9 @@ AUDIT_AT = datetime(2026, 1, 2, tzinfo=timezone.utc)
 EXPIRES_AT = AUDIT_AT + timedelta(seconds=900)
 # Independent fixture expectations, not derived from detector settings/results.
 RULES = (
-    ("SYN_FLOOD", "HIGH", 100, {"count": 100, "window_seconds": 10},
+    ("SYN_FLOOD", "HIGH", 100, {"count": 100, "threshold": 100, "window_seconds": 10},
      "100 TCP SYN packets from one source in 10s"),
-    ("PORT_SCAN", "MEDIUM", 20, {"distinct_ports": 20, "window_seconds": 5},
+    ("PORT_SCAN", "MEDIUM", 20, {"distinct_ports": 20, "threshold": 20, "window_seconds": 5},
      "20 destination ports targeted in 5s"),
     ("DNS_TUNNELING", "CRITICAL", 1, {"dns_query_length": 50, "threshold": 50},
      "DNS query metadata length 50 exceeds the configured threshold"),

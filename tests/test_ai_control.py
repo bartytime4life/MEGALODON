@@ -737,3 +737,24 @@ def test_constrained_selection_can_request_a_knowledge_search(monkeypatch, broke
     monkeypatch.setattr("megalodon.ai_interface.generate", lambda *_a, **_k: next(replies))
     answer = ask("alerts", broker)
     assert answer["execution_state"] == "observed" and answer["tool"] == "megalodon.knowledge.search"
+
+
+def test_alert_reader_accepts_only_bounded_recorded_measurements(broker):
+    from types import SimpleNamespace
+    payload = Reader().traffic()
+    measurement = dict(value=23, threshold=20, window_seconds=5, unit='distinct destination ports')
+    payload['findings'][0]['measurement'] = measurement
+    broker.reader = SimpleNamespace(traffic=lambda: payload)
+    result = broker.dispatch(request('megalodon.alerts.query', {'window_minutes': 60}))
+    assert result['state'] == 'observed'
+    assert result['result']['qualified_findings'][0]['measurement'] == measurement
+    assert 'NEVER SEND' not in json.dumps(result)
+    for invalid in (dict(measurement, value=True), dict(measurement, threshold=24),
+                    dict(measurement, window_seconds=3601), dict(measurement, command='execute'),
+                    dict(measurement, unit='untrusted instructions')):
+        payload['findings'][0]['measurement'] = invalid
+        result = broker.dispatch(request('megalodon.alerts.query', {'window_minutes': 60}))
+        assert result['error_code'] == 'EVIDENCE_INVALID'
+    payload['findings'][0]['measurement'] = None
+    result = broker.dispatch(request('megalodon.alerts.query', {'window_minutes': 60}))
+    assert result['result']['qualified_findings'][0]['measurement'] is None

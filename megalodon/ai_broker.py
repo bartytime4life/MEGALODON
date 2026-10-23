@@ -339,6 +339,24 @@ class ReceiptStore:
                 "event_hash": row[3], **json.loads(row[1])}
 
 
+def _recorded_measurement(rule: str, value: object) -> dict | None:
+    if value is None:
+        return None
+    units = {'PORT_SCAN': 'distinct destination ports', 'SYN_FLOOD': 'SYN events',
+             'DNS_TUNNELING': 'DNS query length'}
+    if (type(value) is not dict or set(value) != {'value', 'threshold', 'window_seconds', 'unit'}
+            or value.get('unit') != units.get(rule)):
+        raise BrokerError('EVIDENCE_INVALID')
+    count = value['value']
+    threshold, window = value['threshold'], value['window_seconds']
+    if (type(count) is not int or not 1 <= count <= 65536
+            or threshold is not None and (type(threshold) is not int or not 1 <= threshold <= count)
+            or window is not None and (type(window) is not int or not 1 <= window <= 3600)
+            or rule == 'DNS_TUNNELING' and window is not None):
+        raise BrokerError('EVIDENCE_INVALID')
+    return dict(value)
+
+
 def _qualified(reader: AIReader, window_minutes: int, limit: int) -> dict[str, object]:
     traffic = reader.traffic()
     if type(traffic) is not dict or traffic.get("schema") != "dashboard-traffic-v1":
@@ -351,10 +369,11 @@ def _qualified(reader: AIReader, window_minutes: int, limit: int) -> dict[str, o
     cutoff = now - timedelta(minutes=window_minutes)
     findings = []
     for item in traffic.get("findings", [])[:200]:
-        if type(item) is not dict or set(item) - {"id", "event_id", "detected_at", "rule_id", "severity", "detector_version"}:
+        if type(item) is not dict or set(item) - {"id", "event_id", "detected_at", "rule_id", "severity", "detector_version", "measurement"}:
             raise BrokerError("EVIDENCE_INVALID")
         if item.get("rule_id") not in {"SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING"} or item.get("severity") not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             raise BrokerError("EVIDENCE_INVALID")
+        measurement = _recorded_measurement(item["rule_id"], item.get("measurement"))
         try:
             when = parse_timestamp(item["detected_at"])
         except (KeyError, ValueError, TypeError):
@@ -366,7 +385,7 @@ def _qualified(reader: AIReader, window_minutes: int, limit: int) -> dict[str, o
             if re.fullmatch(r"[1-9][0-9]{0,15}", identifier) is None:
                 raise BrokerError("EVIDENCE_INVALID")
             findings.append({"id": identifier, "detected_at": item["detected_at"],
-                             "rule_id": item["rule_id"], "severity": item["severity"]})
+                             "rule_id": item["rule_id"], "severity": item["severity"], "measurement": measurement})
     return {"window_minutes": window_minutes, "qualified_findings": findings[:limit],
             "returned_count": len(findings[:limit]), "truncated": bool(traffic.get("truncated")) or len(findings) > limit,
             "source_quality": traffic.get("quality"),

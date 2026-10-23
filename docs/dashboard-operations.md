@@ -387,3 +387,25 @@ absent-port claims, unsupported counts, duplicate identities and impossible
 host ranks. See [candidate support and remaining proof limits](offline-candidate-consistency.md).
 Regenerate a rejected report from source evidence; no automatic repair or partial
 successful snapshot is performed.
+
+
+### Recorded finding measurements
+
+The finding inspector shows the stored measured value, threshold and evaluation
+window when present. New SYN and port-scan findings persist their configured
+threshold alongside their existing counts and window durations. DNS findings
+already record query length and threshold and use a single event, not a sliding
+window. Counts describe the detector's retained metadata, not verified attacks.
+
+Older findings may have counts and windows without a threshold. Missing or
+invalid measurements display **Not recorded**; current settings never fill a
+historical gap. The read-only traffic projection reads at most 2,048 bytes of
+stored evidence per candidate and emits only validated numeric fields and fixed
+unit labels. Raw evidence, messages and additional private fields are not sent
+to the browser. This extends the internal reader's column permission to
+`evidence_json`; it does not expose a raw-evidence endpoint or migrate the store.
+
+A measurement change clears the active inspection and requires reselection.
+Malformed measurement data does not erase the linked finding. This view does
+not reconstruct the full evaluated event set, establish sensor completeness,
+change detector thresholds, or authorize any response.
