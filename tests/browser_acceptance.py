@@ -588,6 +588,34 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
                    metrics["root_scroll_width"] <= metrics["width"] + 1 and
                    metrics["workspace_scroll"] == "visible" and metrics["page_scroll"] == "auto")
         await page.set_viewport_size({"width": 1440, "height": 1000})
+        if nonempty:
+            # Shared polish must preserve every workspace, including keyboard
+            # navigation and long evidence in the narrow-screen layout.
+            REPORT["stage"] = "all-workspace-reflow"
+            for width, height in ((1440, 1000), (375, 812)):
+                await page.set_viewport_size({"width": width, "height": height})
+                for workspace in ("live", "findings", "interfaces", "setup", "reports", "analysis", "help"):
+                    tab = page.locator(f"#workspace-tab-{workspace}")
+                    await tab.focus()
+                    await page.keyboard.press("Enter")
+                    await expect(tab).to_have_attribute("aria-selected", "true")
+                    await expect(page.locator(f"#workspace-{workspace}")).to_be_visible()
+                    passed(f"{workspace} workspace fits {width}px and opens from the keyboard",
+                           await page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+                # Focusing the final app must reveal it within the scroll rail;
+                # keyboard users must not lose it behind clipping or a mask.
+                app = page.locator(".app-rail-items .app-dot-chip").last
+                await app.focus()
+                passed(f"last app remains visible with keyboard focus at {width}px", await app.evaluate("""el => {
+                    const rail = el.closest('.app-rail-items');
+                    const r = rail.getBoundingClientRect(), e = el.getBoundingClientRect();
+                    const style = getComputedStyle(el), mask = getComputedStyle(rail).maskImage;
+                    return document.activeElement === el && style.outlineStyle !== 'none'
+                        && parseFloat(style.outlineWidth) > 0 && mask === 'none'
+                        && e.left >= r.left - 1 && e.right <= r.right + 1;
+                }"""))
+            await page.set_viewport_size({"width": 1440, "height": 1000})
+            await page.locator("#workspace-tab-live").click()
         passed("no page script errors or nonlocal page requests", not errors and not violations)
     finally:
         await context.close()

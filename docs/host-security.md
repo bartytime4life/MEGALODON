@@ -217,6 +217,18 @@ and explicitly reports omitted entries. Unknown versions, duplicate version
 fields, invalid/control text, excessive observations and unsupported finding
 formats refuse the run before replacing its previous result.
 
+Lynis 3.1.6 can finish successfully with exit status **78** when its local profile
+sets `error-on-warnings=yes`. MEGALODON accepts that status only after the same
+bounded report parser validates its observations, at least one warning exists,
+and the report has exactly one `finish=true` completion marker. The saved message
+identifies the warning status; it does not turn those warnings into a clean audit.
+Other nonzero statuses and incomplete or contradictory warning reports retain the
+previous result. Failure messages include the exit status without exposing the
+tool's private output. This compatibility handling follows the
+[Lynis 3.1.6 completion path](https://github.com/CISOfy/lynis/blob/06153321ea50d53a27446084e646d9f43fe46e0e/lynis#L1123-L1176);
+it does not establish that an installed workstation audit has run or identify the
+cause of an earlier failed attempt.
+
 Reports are written before their summaries. Each read revalidates the private
 report identity; Lynis findings/counts are recomputed against the same report.
 Partial replacement, malformed summaries or a later report mismatch makes that

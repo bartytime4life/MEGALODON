@@ -1,5 +1,9 @@
 from datetime import datetime, timezone
+from contextlib import contextmanager
 from pathlib import Path
+from threading import RLock
+from types import SimpleNamespace
+from unittest.mock import Mock
 import json
 import os
 import sqlite3
@@ -11,6 +15,64 @@ pytestmark=pytest.mark.skipif(os.name != "posix",reason="Local Linux managed evi
 from megalodon.config import Settings
 from megalodon.evidence_storage import EvidenceStorage, policy_value, GIB, utc
 from megalodon.models import PacketEvent
+
+
+def test_managed_source_status_and_summary_choose_the_same_segment(tmp_path, monkeypatch):
+    from megalodon.evidence_storage import ManagedDashboardReader
+    from megalodon import dashboard_traffic
+    legacy = tmp_path / "absent-legacy.db"
+    selected = tmp_path / "current-segment.db"
+    selected.touch()
+    entries = [
+        dict(kind="core", state="closed", records=1, created_at="2026-10-22T00:00:00Z", path=tmp_path / "older.db"),
+        dict(kind="core", state="open", records=1, created_at="2026-10-23T00:00:00Z", path=selected),
+        dict(kind="generic", state="open", records=1, created_at="2026-10-23T01:00:00Z", path=tmp_path / "other.db"),
+        dict(kind="core", state="open", records=0, created_at="2026-10-23T02:00:00Z", path=tmp_path / "empty.db"),
+    ]
+    manager = SimpleNamespace(lock=RLock(), _catalog={"entries": entries},
+                              _path=lambda entry: entry["path"], settings=Settings(db_path=legacy))
+    projection = SimpleNamespace(summary=Mock(return_value={"events": 1}))
+    opened = []
+
+    @contextmanager
+    def admitted_reader(path):
+        opened.append(path)
+        yield projection
+
+    monkeypatch.setattr(dashboard_traffic, "TrafficDashboardStore", admitted_reader)
+    reader = ManagedDashboardReader(manager)
+    assert not legacy.exists()
+    assert reader.source_status() == "available"
+    assert projection.summary.call_count == 1
+    assert reader.summary() == {"events": 1}
+    assert opened == [selected, selected]
+    assert projection.summary.call_count == 2
+
+
+@pytest.mark.parametrize("managed", [False, True])
+@pytest.mark.parametrize("code", ["NO_DATABASE", "NO_DIRECTORY", "UNSAFE_DATABASE", "SCHEMA_MISMATCH"])
+def test_managed_source_absence_is_distinct_from_admission_refusal(tmp_path, monkeypatch, managed, code):
+    from megalodon.evidence_storage import ManagedDashboardReader
+    from megalodon.storage import StorageSchemaError
+    from megalodon import dashboard_traffic
+    entry = dict(kind="core", state="closed", records=1, created_at="2026-10-23T00:00:00Z")
+    manager = SimpleNamespace(lock=RLock(), _catalog={"entries": [entry] if managed else []},
+                              _path=lambda _: tmp_path / "missing-segment.db",
+                              settings=Settings(db_path=tmp_path / "missing-legacy.db"))
+    opened = []
+
+    def refused_reader(path):
+        opened.append(path)
+        raise StorageSchemaError("DASHBOARD_STORE:" + code)
+
+    monkeypatch.setattr(dashboard_traffic, "TrafficDashboardStore", refused_reader)
+    reader = ManagedDashboardReader(manager)
+    if not managed and code in {"NO_DATABASE", "NO_DIRECTORY"}:
+        assert reader.source_status() == "not_configured"
+    else:
+        with pytest.raises(StorageSchemaError, match=code):
+            reader.source_status()
+    assert len(opened) == 1
 
 
 @pytest.fixture

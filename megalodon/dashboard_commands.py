@@ -84,8 +84,10 @@ def local_hud_launch() -> dict[str, str]:
     """Return one closed relaunch context for the currently serving HUD.
 
     The desktop installer supplies only a validated absolute launcher path. A
-    source or ordinary package launch uses the exact Python interpreter that is
-    already serving this dashboard. Nothing here executes a command.
+    source launch uses its reviewed checkout launcher and the exact Python
+    interpreter already serving this dashboard, so it also works from a new
+    terminal outside that checkout. Ordinary package launches use the serving
+    interpreter. Nothing here executes a command.
     """
     launcher = os.environ.get("MEGALODON_LAUNCHER_PATH", "")
     if os.environ.get("MEGALODON_INSTALL_MODE") == "desktop" and _absolute_command_path(launcher):
@@ -98,6 +100,26 @@ def local_hud_launch() -> dict[str, str]:
             return {"mode": "desktop", "command": shlex.join([launcher])}
     if not _absolute_command_path(sys.executable):
         return {"mode": "source", "command": ""}
+    checkout = _source_checkout() if sys.platform == "linux" else None
+    if checkout is not None:
+        source_launcher = checkout / "scripts" / "start-local.sh"
+        try:
+            valid_launcher = (
+                _absolute_command_path(str(source_launcher))
+                and source_launcher.is_file()
+                and not source_launcher.is_symlink()
+                and os.access(source_launcher, os.X_OK)
+            )
+        except OSError:
+            valid_launcher = False
+        if not valid_launcher:
+            return {"mode": "source", "command": ""}
+        return {
+            "mode": "source",
+            "command": shlex.join([
+                "env", f"MEGALODON_PYTHON={sys.executable}", str(source_launcher),
+            ]),
+        }
     return {
         "mode": "source",
         "command": shlex.join([sys.executable, "-m", "megalodon", "hud"]),

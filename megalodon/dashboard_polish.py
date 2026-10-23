@@ -94,13 +94,14 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 .topbar { gap:10px 14px; flex-wrap:wrap; }
 .app-rail { order:3; display:flex; align-items:center; gap:.55rem; min-width:0; flex:1 1 100%; padding:.25rem .4rem .25rem .8rem; border:1px solid rgba(148,188,202,.18); border-radius:999px; background:linear-gradient(180deg,rgba(9,28,38,.78),rgba(4,14,20,.7)); box-shadow: inset 0 1px rgba(255,255,255,.05), 0 8px 26px -14px rgba(0,0,0,.7); }
 .app-rail-label { color:var(--muted); font-size:.62rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
-.app-rail-items { display:flex; flex:1 1 auto; flex-wrap:nowrap; gap:.15rem; margin:0; padding:0; list-style:none; overflow-x:auto; scrollbar-width:none; min-width:0; }
-.app-rail-items::-webkit-scrollbar { display:none; }
+.app-rail-items { display:flex; flex:1 1 auto; flex-wrap:nowrap; gap:.15rem; margin:0; padding:4px; list-style:none; overflow-x:auto; scrollbar-width:thin; scrollbar-color:#416675 transparent; scroll-padding-inline:4px; min-width:0; }
+.app-rail-items::-webkit-scrollbar { height:4px; }
+.app-rail-items::-webkit-scrollbar-thumb { background:#416675; border-radius:4px; }
 .app-dot-chip { position:relative; display:inline-flex; align-items:center; gap:.35rem; min-height:30px; padding:.2rem .5rem; border-radius:999px; color:#c9dde5; font-size:.72rem; font-weight:700; text-decoration:none; white-space:nowrap; border:1px solid transparent; transition: background-color .2s, border-color .2s, color .2s, transform .15s var(--ease-out); }
 .app-dot-chip:hover { background:rgba(81,230,207,.08); border-color:rgba(81,230,207,.28); color:#effffb; transform:translateY(-1px); }
 .app-dot-chip:focus-visible { outline:2px solid #a6f4df; outline-offset:2px; }
-.app-rail-summary { color:#b9cdd6; font-size:.7rem; font-weight:700; white-space:nowrap; }
-.app-rail-recheck { display:inline-grid; place-items:center; width:30px; height:30px; min-height:30px; padding:0; border-radius:50%; border:1px solid rgba(148,188,202,.28); background:rgba(81,230,207,.06); color:#bff7ee; font:inherit; font-size:1rem; cursor:pointer; transition: transform .5s var(--ease-out), background-color .2s, border-color .2s; }
+.app-rail-summary { flex:0 1 26rem; color:#b9cdd6; font-size:.75rem; font-weight:650; line-height:1.5; white-space:normal; overflow-wrap:anywhere; }
+.app-rail-recheck { display:inline-grid; flex:none; place-items:center; width:30px; height:30px; min-height:30px; padding:0; border-radius:50%; border:1px solid rgba(148,188,202,.28); background:rgba(81,230,207,.06); color:#bff7ee; font:inherit; font-size:1rem; cursor:pointer; transition: transform .5s var(--ease-out), background-color .2s, border-color .2s; }
 .app-rail-recheck:hover { background:rgba(81,230,207,.16); border-color:rgba(81,230,207,.5); }
 .app-rail-recheck:focus-visible { outline:2px solid #a6f4df; outline-offset:2px; }
 .app-rail-recheck[aria-busy="true"] span { display:inline-block; animation: polish-spin .9s linear infinite; }
@@ -222,13 +223,14 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 @media (max-width: 900px) {
   .app-rail-items { scroll-snap-type:x proximity; scroll-padding-inline:.4rem; overscroll-behavior-x:contain;
     -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 2rem),transparent); mask-image:linear-gradient(90deg,#000 calc(100% - 2rem),transparent); padding-right:1.6rem; }
+  .app-rail-items:focus-within { -webkit-mask-image:none; mask-image:none; }
   .app-dot-chip { scroll-snap-align:start; padding:.2rem .45rem; font-size:.7rem; }
 }
 @media (max-width: 560px) {
   .app-rail { flex-wrap:wrap; border-radius:16px; row-gap:.15rem; padding:.3rem .35rem .3rem .55rem; }
   .app-rail-label { display:none; } .app-rail-items { flex:1 1 100%; }
   .app-dot-chip { min-height:36px; }
-  .app-rail-summary { flex:1 1 auto; font-size:.66rem; white-space:normal; }
+  .app-rail-summary { flex:1 1 auto; font-size:.75rem; white-space:normal; }
   /* The header pill gets its own row instead of wrapping beside the wordmark. */
   .topbar > .connection-state { flex:1 1 100%; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 8px; }
   .topbar > .connection-state .connection { flex:1 1 15rem; min-width:0; }
@@ -270,6 +272,30 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
   #room-findings-table tbody tr > td:first-child { box-shadow:none !important; }
   #room-findings-table tbody tr:has(.severity.CRITICAL) { box-shadow:inset 3px 0 0 var(--rose); }
   #room-findings-table tbody tr:has(.severity.HIGH) { box-shadow:inset 3px 0 0 var(--orange); }
+}
+/* ---- Shared workspace reading and focus rhythm. Component state colours stay authoritative. ---- */
+.workspace-scroll { scrollbar-gutter:stable; scroll-padding-block:16px; }
+.workspace-view :where(section,article,details,fieldset,dl,dd,.field) { min-width:0; }
+.workspace-view :where(h2,h3,h4,h5,h6,[tabindex="-1"]) { scroll-margin-block:16px; }
+.workspace-view :where(p,li,dd) { overflow-wrap:anywhere; }
+.workspace-view :where(code) { overflow-wrap:anywhere; }
+/* Preserve command whitespace; a long command scrolls within its own block. */
+.workspace-view :where(pre) { max-width:100%; overflow:auto; }
+.workspace-view :where(pre code) { overflow-wrap:normal; }
+.workspace-view :where(table) { font-variant-numeric:tabular-nums; }
+.workspace-view :where(input,select,textarea) { max-width:100%; }
+.shell :where(button,summary,a,input,select,textarea):focus-visible { outline:3px solid #a6f4df; outline-offset:3px; }
+.section-nav button { line-height:1.35; }
+.panel-head > :where(div,time) { min-width:0; }
+.panel-head :where(time) { overflow-wrap:anywhere; line-height:1.5; }
+@media (max-width:640px) {
+  .panel-head { flex-wrap:wrap; gap:10px; padding:16px; }
+  .panel-head > :where(div,time) { flex-basis:100%; }
+  .workspace-view :where(pre) { font-size:.8rem; line-height:1.6; }
+}
+@media (pointer:coarse) {
+  .app-dot-chip,.shell .polish-chip,.shell .polish-presets .polish-chip { min-height:44px; }
+  .app-rail-recheck { width:44px; height:44px; min-height:44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   body::after, .mark, .mark::after, .app-dot, .app-dot::after, .app-rail-recheck span, .workspace-view > *, .ops-desk > *, .support-apps::before, .shell details[open] > * { animation:none !important; }

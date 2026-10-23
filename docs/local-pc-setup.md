@@ -232,6 +232,15 @@ the HUD cleanly. Run the launcher again whenever you want to use it; it does not
 add a login item or background service. From another directory, use the full
 path to `scripts/start-local.sh`.
 
+The HUD's copied reopen, protected-session, and tool-management restart commands
+use this checkout's absolute launcher path and preserve the Python interpreter
+serving the current session. They work from another terminal directory without
+an editable package installation. If the checkout launcher is missing, replaced
+by a symlink, or not executable, the HUD leaves its copied launch command
+unavailable; review the checkout before launching it again. Installed desktop
+HUDs continue to copy their own installed launcher. A launcher path copied from
+another user's account or another computer is not portable to this computer.
+
 The launcher tries the checkout's `.venv312`, then `.venv`, then compatible
 Python commands on PATH. It skips incompatible interpreters, anchors the working
 directory to this checkout, and runs its source directly. This prevents an old
