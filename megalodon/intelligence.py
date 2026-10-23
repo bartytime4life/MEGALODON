@@ -282,7 +282,9 @@ class IntelligenceService(RetainedEvidenceReader):
                 raise ValueError('An explanation is finishing; retry shortly')
             item=deepcopy(self.reviews.get(identifier))
             if not item or not self._valid(item):raise ValueError('Review evidence expired')
-            if item.get('analysis',{}).get('state')=='ready':return self.snapshot()
+            if (item.get('analysis',{}).get('state')=='ready'
+                    and item['analysis'].get('settings_identity')==stable(asdict(self.configuration.settings.ai))):
+                return self.snapshot()
             if automatic:
                 budget=self.evidence.checkpoint('patterns_ai_budget') or {}
                 # Sliding one-hour budget persists before invocation, so failed
@@ -304,9 +306,8 @@ class IntelligenceService(RetainedEvidenceReader):
             if self.cancel_event.is_set() or not self._valid(item):raise ValueError('Cancelled or expired')
             result=explain(item,references,settings,model=self.model,owner=owner,automatic=automatic)
             if self.cancel_event.is_set() or not self._valid(item):raise ValueError('Cancelled or expired')
-            if item.get('endpoint_context'):
-                if settings!=self.configuration.settings.ai:raise ValueError('Model selection changed')
-                result['settings_identity']=stable(asdict(settings))
+            if settings!=self.configuration.settings.ai:raise ValueError('Model selection changed')
+            result['settings_identity']=stable(asdict(settings))
             item['analysis']=result
             item['analysis']['created_at']=utc(self.clock())
             state='ready';message='Explanation ready. No device changes were made.'
