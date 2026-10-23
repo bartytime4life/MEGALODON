@@ -164,7 +164,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
   function render(v){
     const h=v.host_security;
     renderHostFindings(el('host-findings'),h);
-    renderRecoveryReadiness(el('recovery-readiness'),v.recovery_readiness);
+    renderRecoveryReadiness(el('recovery-readiness'),v.recovery_readiness,v.backup_evidence);
     renderHardening(el('hardening-review'),v.hardening);
     renderPersistence(el('persistence-review'),v.persistence);
     renderGateway(el('gateway-review'),v.gateway);

@@ -1,0 +1,11 @@
+{
+  "approved_at": "2026-10-22T10:15:00Z",
+  "backup_id": "synthetic-backup-001",
+  "backup_receipt_sha256": "74516e495292a8793615e20d7e1e2338c5e8a3a964da3b4abbd866966895e3a3",
+  "expires_at": "2026-10-23T10:15:00Z",
+  "producer_id": "synthetic-producer-A",
+  "restore_test_receipt_sha256": "247ef69b8128d6f1771a69640017b09754878bb0cafd2cea7278aaf79fcf1885",
+  "schema": "megalodon-backup-trust-v1",
+  "source_id": "synthetic-host-A-system-files",
+  "verifier_id": "synthetic-independent-verifier-B"
+}

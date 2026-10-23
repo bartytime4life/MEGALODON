@@ -719,6 +719,29 @@ def test_recovery_readiness_uses_the_same_host_snapshot_once(manager, monkeypatc
             manager.start({'action': action})
 
 
+def test_external_backup_evidence_is_read_only_and_never_changes_recovery_authority(manager, private_tmp_path, monkeypatch):
+    from test_backup_evidence import NOW, install_evidence
+    from megalodon import backup_evidence
+    install_evidence(private_tmp_path)
+    manager.home = private_tmp_path
+    original = backup_evidence.snapshot
+    monkeypatch.setattr(backup_evidence, 'snapshot', lambda home: original(home, now=NOW))
+    monkeypatch.setattr(manager, '_execute', lambda *_: pytest.fail('GET executed a workflow'))
+    value = manager.snapshot()
+    assert value['backup_evidence']['state'] == 'verified_external_evidence'
+    assert value['recovery_readiness']['restore_eligible'] is False
+    assert value['recovery_readiness']['conflict_state'] == 'not_assessed'
+    assert value['recovery_readiness']['causality_state'] == 'unavailable'
+    for action in ('recovery_restore', 'backup_import', 'restore_test', 'backup_trust'):
+        with pytest.raises(ValueError):
+            manager.start({'action': action})
+    trust = private_tmp_path / '.config/megalodon/recovery-trust.json'
+    trust.unlink()
+    value = manager.snapshot()
+    assert value['backup_evidence'] == backup_evidence.unavailable()
+    assert value['recovery_readiness']['restore_eligible'] is False
+
+
 def test_concurrent_snapshots_share_one_hardening_review(manager, monkeypatch):
     import time
     from megalodon import hardening_review

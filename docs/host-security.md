@@ -98,6 +98,15 @@ also clears the previously displayed recovery state.
 This is separate from MEGALODON audit-database recovery and knowledge-library
 generation rollback. Neither restores operating-system or user-file changes.
 
+Setup also admits [separately pinned external backup and isolated restore-test
+receipts](host-backup-evidence.md) through a read-only `backup_evidence` summary.
+It checks identities, raw-byte digests, independent verifier pins and dated
+evidence without opening a backup or running a test. Untrusted, conflicting,
+incomplete or expired records remain unavailable. Even admitted external evidence
+cannot establish clean files, current-host applicability, malicious causality or
+safe restoration; the existing recovery projection and all action boundaries
+remain unchanged.
+
 ## Hardening posture review
 
 `python -m megalodon.hardening_review` reads a fixed set of live settings and
