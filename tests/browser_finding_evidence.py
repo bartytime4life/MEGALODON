@@ -50,6 +50,9 @@ async def exercise_finding_evidence(browser, port, password, passed):
             value["generated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             if mode == "stale":
                 value["generated_at"] = (datetime.now(timezone.utc) - timedelta(minutes=6)).isoformat().replace("+00:00", "Z")
+            elif mode == "measured":
+                value["findings"][0]["measurement"] = dict(value=23, threshold=20,
+                    window_seconds=5, unit="distinct destination ports")
             elif mode == "partial":
                 value.update(truncated=True, quality="degraded", excluded_event_candidates=1)
             elif mode == "malicious":
@@ -182,6 +185,14 @@ async def exercise_finding_evidence(browser, port, password, passed):
         passed("native identical metadata refresh preserves selection disclosure keyboard focus text selection and scroll", stable)
         await page.evaluate("getSelection().removeAllRanges()")
 
+        await refresh("measured")
+        await expect(content).to_be_hidden()
+        await first.click()
+        await expect(page.locator("#room-evidence-measured")).to_have_text("23 distinct destination ports")
+        await expect(page.locator("#room-evidence-threshold")).to_have_text("20 (at least)")
+        await expect(page.locator("#room-evidence-window")).to_have_text("5 seconds; inclusive cutoff")
+        passed("native changed measurements require reselection and display recorded count threshold and window")
+
         for width in (1440, 390, 320):
             await page.set_viewport_size(dict(width=width, height=1000))
             await panel.scroll_into_view_if_needed()
@@ -193,6 +204,12 @@ async def exercise_finding_evidence(browser, port, password, passed):
         passed("native finding inspector respects the reduced motion preference",
             await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches"))
         await page.set_viewport_size(dict(width=1440, height=1000))
+        await refresh("available")
+        await expect(content).to_be_hidden()
+        await first.click()
+        for field in ("measured", "threshold", "window"):
+            await expect(page.locator("#room-evidence-" + field)).to_have_text("Not recorded")
+        passed("native historical measurement absence clears previously displayed values")
         for mode in ("stale", "failed", "oversized", "malicious"):
             await refresh(mode)
             await expect(status).to_contain_text("Stale evidence")
