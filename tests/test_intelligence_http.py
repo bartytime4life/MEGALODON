@@ -37,6 +37,47 @@ def test_protected_status_search_and_action(local_api):
     assert local_api.calls==['network',{'action':'update'}]
 
 
+@pytest.mark.parametrize('target', ['knowledge', 'intelligence', 'defense'])
+def test_action_tokens_are_service_bound_and_replaced_tokens_are_rejected(local_api, target):
+    # The ordinary fixture shares one provider. Use distinct services here so
+    # accidentally checking a different service's token cannot pass unnoticed.
+    calls=[]
+    providers={}
+    for name, character in [('knowledge','a'), ('intelligence','b'), ('defense','c')]:
+        def record(body, service=name):
+            calls.append((service, body))
+            return {'state':'ready'}
+        providers[name]=SimpleNamespace(token=character*32, action=record, start=record)
+        setattr(local_api.handler, name, providers[name])
+    body={'action': {'knowledge':'update', 'intelligence':'cancel', 'defense':'scan_files'}[target]}
+    header='X-Megalodon-Defense-Token' if target=='defense' else 'X-Megalodon-Intelligence-Token'
+
+    def send(token, token_header=header):
+        return local_api.request('POST', '/api/'+target, body,
+            omit=['X-Megalodon-Intelligence-Token'], extra=[(token_header, token)])[0]
+
+    # Every request uses the actual loopback HTTP router and otherwise-valid
+    # origin, host, content type and length. Providers only record calls.
+    for name, provider in providers.items():
+        if name != target:
+            assert send(provider.token)==403
+            assert calls==[]
+    other_header='X-Megalodon-Intelligence-Token' if target=='defense' else 'X-Megalodon-Defense-Token'
+    assert send(providers[target].token, other_header)==403
+    assert calls==[]
+    expected=202 if target=='defense' else 200
+    assert send(providers[target].token)==expected
+    assert calls==[(target, body)]
+
+    previous=providers[target].token
+    providers[target].token='d'*32
+    calls.clear()
+    assert send(previous)==403
+    assert calls==[]
+    assert send(providers[target].token)==expected
+    assert calls==[(target, body)]
+
+
 @pytest.mark.parametrize('header',['Host','Origin','Content-Type','X-Megalodon-Intelligence-Token'])
 def test_missing_authorization(local_api,header):
     assert local_api.request('POST','/api/intelligence',{'action':'cancel'},omit=[header])[0] in {400,403}
