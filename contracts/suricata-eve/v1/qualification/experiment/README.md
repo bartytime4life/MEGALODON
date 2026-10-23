@@ -2,11 +2,17 @@
 
 Status: **fixtures and oracles supplied; native experiment not run**.
 
+The follow-up [`harness`](harness/README.md) adds deterministic controls and a
+standalone opt-in Linux offline runner. It is separate from MEGALODON's EVE
+consumer and does not establish native execution or installed acceptance. Its
+whole-process PCRE timing observations remain explicitly inconclusive about
+algorithmic complexity.
+
 This directory advances two research candidates without launching Suricata. It
 contains four independently generated synthetic PCAPs, two dedicated rules, a
 candidate minimal configuration, exact artifact hashes, fixed result oracles,
 and a fail-closed receipt schema plus deterministic semantic validator. It
-contains no Suricata binary, engine output, launcher, downloader, live capture,
+original packet contains no Suricata binary, engine output, launcher, downloader, live capture,
 interface name, private address, model input, or host-control path.
 
 ## Verified facts
@@ -63,10 +69,10 @@ threshold, not a verified claim about either producer.
 
 The candidate configuration is structurally parsed in repository tests but
 has not been accepted by a native Suricata parser. No installed or candidate
-binary identity is available. A later owner-authorized runner must bind both
-binaries by SHA-256, independently verify every artifact digest, create a new
-private output directory, and invoke a fixed direct argument vector without a
-shell. It must process only one completed local PCAP at a time with one thread,
+binary identity is available. The separate opt-in harness still requires both
+binaries bound by SHA-256, independently verified artifact digests, a new
+private output directory, and a fixed direct argument vector without a
+shell. It must process only one completed local PCAP at a time with one packet-processing thread,
 the configuration-bound `single` runmode, no interface, no network, no rule
 update, no service, and no watcher. A passing receipt must attest `single` and
 exactly one packet-processing thread.

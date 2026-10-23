@@ -28,6 +28,10 @@ Start with **Setup** to inspect data/tool configuration and **Sensors** for obse
 
 ## Learn with synthetic data
 
+For Suricata, use [Installing Suricata: offline configuration](https://github.com/bartytime4life/MEGALODON/blob/main/docs/installing-suricata.md)
+and the linked script. It prepares private files only; it does not install or
+run the sensor, and its default empty rules provide no detection coverage.
+
 Use the repository’s [synthetic installation recipes](https://github.com/bartytime4life/MEGALODON/blob/main/README.md#installation-and-first-run) in a fresh private environment. Sample metadata illustrates the fixed rules and is excluded from qualified network conclusions. Do not reuse real captures as a demo or replace an existing environment just to open the app.
 
 Native Windows remains a separate evaluation target. [Platform baseline](../platform-baseline.md) and [software downloads](../software-downloads.md) describe prerequisites and optional tools.

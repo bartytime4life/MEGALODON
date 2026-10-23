@@ -18,6 +18,9 @@ remaining acceptance hold. That original packet contains no packet capture,
 rule, configuration, executable, generated EVE output or pass result. The
 adjacent [`experiment`](experiment/README.md) directory now supplies a separate
 synthetic fixture-and-oracle candidate; it remains explicitly unexecuted.
+The subsequent [`offline laboratory harness`](experiment/harness/README.md)
+supplies deterministic controls and a separate opt-in runner. It does not
+integrate engine operation into MEGALODON or claim native qualification.
 
 ## Why this does not run Suricata
 

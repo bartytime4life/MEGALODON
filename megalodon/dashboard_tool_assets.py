@@ -151,14 +151,14 @@ const toolAcquisition = {
     note: "The reviewed path requires a pinned release digest and a private non-service prefix. Use Setup to prepare the background Zeek sampler and inspect its source status."
   },
   suricata: {
-    source: "Open Information Security Foundation",
-    url: "https://suricata.io/download/",
-    linkLabel: "Open Suricata downloads",
+    source: "MEGALODON repository + OISF",
+    url: "https://github.com/bartytime4life/MEGALODON/blob/main/docs/installing-suricata.md",
+    linkLabel: "Installing Suricata: offline configuration",
     platforms: ["Linux", "Windows", "macOS / source", "BSD"],
     commandLabel: null,
     command: null,
     verificationLabel: "Linux verification",
-    note: "Suricata is operator-managed. Review repository, signing key, package, service state, and rollback before installation."
+    note: "Use the offline configuration script to prepare private files only. Package installation, background sensor setup and native execution are separate; no producer acceptance is implied."
   },
   scapy: {
     source: "Scapy Project",
@@ -224,6 +224,7 @@ const toolAcquisition = {
 
 // Publisher pages are separate from repository-specific integration recipes.
 const toolPublisherDownloads = {
+  suricata: {url: 'https://suricata.io/download/', label: 'Suricata publisher downloads'},
   tshark: {url: 'https://www.wireshark.org/download.html', label: 'Wireshark / TShark downloads'},
   zeek: {url: 'https://zeek.org/get-zeek/', label: 'Zeek downloads'},
   nftables: {url: 'https://netfilter.org/projects/nftables/index.html', label: 'nftables install guide'}
@@ -232,6 +233,34 @@ const toolPublisherDownloads = {
 // Fixed copy-only setup recipes. These are not installation observations.
 const companionSetupGuide = "https://github.com/bartytime4life/MEGALODON/blob/708886d5a8aff36f075290e82e9d4b470a176995/docs/companion-setup.md";
 const companionSetupGuides = {
+  "suricata": {
+    "url": "https://github.com/bartytime4life/MEGALODON/blob/main/docs/installing-suricata.md",
+    "note": "Stage 0 offline configuration only. Run from a reviewed checkout on Linux as your ordinary user, without sudo. The documentation network below is for synthetic captures. No engine, service or model starts. Default rules are empty: no detection coverage.",
+    "steps": [
+      {
+        "title": "Review configuration script",
+        "kind": "Source review",
+        "context": "Download or use the script from your reviewed repository revision.",
+        "url": "https://github.com/bartytime4life/MEGALODON/blob/main/scripts/configure-suricata-offline.py",
+        "linkLabel": "Open configuration script",
+        "expected": "Script source, not an executed installer. Review before use."
+      },
+      {
+        "title": "Preview offline configuration",
+        "kind": "Read-only preview",
+        "context": "Repository root; Python 3.11+. Replace HOME_NET only for an approved saved capture.",
+        "command": "python3 scripts/configure-suricata-offline.py --output \"$HOME/megalodon-suricata-offline\" --home-net 192.0.2.0/24",
+        "expected": "A planned receipt prints; no files are written and the destination is not checked."
+      },
+      {
+        "title": "Write private configuration",
+        "kind": "Explicit new local files",
+        "context": "Run only after reviewing the preview. The destination must not exist.",
+        "command": "python3 scripts/configure-suricata-offline.py --output \"$HOME/megalodon-suricata-offline\" --home-net 192.0.2.0/24 --write",
+        "expected": "Private YAML, empty rules and a hash receipt. Nothing is installed or run; native validation remains not_run."
+      }
+    ]
+  },
   "scapy": {
     "note": "Optional Python package, not required to open MEGALODON. Linux is supported. The PATH-only check intentionally leaves Scapy not checked. Choose the environment before installing; a standalone environment is not the HUD environment. Commands below run only when you paste them into a terminal.",
     "steps": [
@@ -407,7 +436,7 @@ const MegalodonControls = (() => {
       easy.append(node('summary', 'Easy setup and verification'));
       easy.append(node('p', setup.note, 'companion-help'));
       const walkthrough = node('a', 'Open complete setup and troubleshooting ↗', 'companion-button');
-      walkthrough.href = companionSetupGuide; walkthrough.target = '_blank';
+      walkthrough.href = setup.url || companionSetupGuide; walkthrough.target = '_blank';
       walkthrough.rel = 'noopener noreferrer'; walkthrough.referrerPolicy = 'no-referrer';
       easy.append(walkthrough);
       setup.steps.forEach((step, index) => {
