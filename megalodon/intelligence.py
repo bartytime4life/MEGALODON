@@ -424,14 +424,15 @@ class IntelligenceService(RetainedEvidenceReader):
             self.reviews[item['id']]=deepcopy(item)
         settings=self.configuration.settings.ai
         identity=stable(asdict(settings))
+        cache_identity=self._cache_identity(settings)
         try:
             # Generic observation context makes no reference-library claim. Its
             # E1 citation is the exact retained packet displayed in the facts view.
             if not any(set(g.get('protocol_counts',{}))-{'UNKNOWN','OTHER'} or g['findings'] for g in context['groups']):
                 raise ValueError('Insufficient endpoint context')
             analysis=explain(item,[],settings,model=self.model,owner='manual-'+secrets.token_hex(16))
-            if self.configuration.settings.ai != settings:
-                raise ValueError('Model selection changed during analysis')
+            if cache_identity!=self._cache_identity(self.configuration.settings.ai):
+                raise ValueError('Explanation provenance changed during analysis')
         except (ValueError,OSError,RuntimeError,sqlite3.Error) as exc:
             code=getattr(exc,'code',None)
             state=('insufficient_context' if type(exc) is ValueError and str(exc)=='Insufficient endpoint context' else
@@ -441,7 +442,10 @@ class IntelligenceService(RetainedEvidenceReader):
             analysis=dict(state=state,explanation=result['explanation'],alternative=result['alternative'],missing=result['missing'],
                           workflow='evidence_summary',citations=[],references=[],model=settings.model,model_digest=settings.model_digest,
                           action_status='not_attempted',approval_required=True)
-        analysis.update(created_at=utc(self.clock()),settings_identity=identity)
+        analysis.update(created_at=utc(self.clock()),settings_identity=identity,
+                        explanation_contract=EXPLANATION_CONTRACT_ID,
+                        knowledge_generation=self._knowledge_identity(),
+                        cache_identity=cache_identity)
         item['analysis']=analysis
         with self.lock:
             if not self._valid(item):raise ValueError('Evidence expired during analysis')
