@@ -453,14 +453,24 @@ class HostSecurity:
                     argv = [str(binary), 'audit', 'system', '--quick', '--no-colors', '--no-plugins',
                             '--log-file', str(work/'lynis.log'), '--report-file', str(work/'lynis.dat')]
                     raw, code = self.runner(argv, work)
-                    if code:
-                        raise ValueError('Lynis did not complete; prior audit summary is retained.')
+                    if code not in (0, 78):
+                        raise ValueError(f'Lynis did not complete (exit {code}); prior audit summary is retained.')
                     from .companion_automation import _read_bounded
                     report = _read_bounded(work/'lynis.dat', MAX_FILE)
                     if not 0 < len(report) <= MAX_FILE:
                         raise ValueError('Lynis report exceeded its bound.')
                     metrics, review = lynis_review(report)
-                    message = 'Unprivileged host audit completed; unreadable/root-only checks are outside coverage. Suggestions are not confirmed threats.'
+                    # Lynis 3.1.6 can deliberately return 78 after a completed
+                    # audit when its profile enables error-on-warnings. Keep
+                    # warnings as reviewable evidence, but never admit a partial
+                    # or contradictory report merely because it returned 78.
+                    if code == 78:
+                        finish = [line for line in report.decode('utf-8').split('\n')
+                                  if line.startswith('finish=')]
+                        if metrics['warnings'] == 0 or finish != ['finish=true']:
+                            raise ValueError('Lynis warning exit 78 lacks a completed warning report; prior audit summary is retained.')
+                    outcome = ' with configuration warnings (Lynis exit 78)' if code == 78 else ''
+                    message = f'Unprivileged host audit completed{outcome}; unreadable/root-only checks are outside coverage. Suggestions are not confirmed threats.'
                     write(self.root/'lynis-report.dat', report)
                     self._save('audit.json', dict(checked_at=stamp(self.now()), message=message, metrics=metrics, review=review))
                     return message

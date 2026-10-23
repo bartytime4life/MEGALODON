@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
+import sqlite3
 from threading import Event, Thread
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -83,6 +84,42 @@ def test_missing_and_unreadable_sources_are_distinct(probes):
     failed = checks.LocalChecks(store, source_available=True).snapshot()
     assert json.loads(failed)["source"]["status"] == "unavailable"
     assert b"PRIVATE_PATH" not in failed
+
+
+def test_managed_source_check_overrides_startup_flag_and_refreshes_after_cache(probes, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(checks, "monotonic", lambda: clock[0])
+    source_check = Mock(return_value="available")
+    store = SimpleNamespace(summary=Mock(side_effect=AssertionError("duplicate read")))
+    collector = checks.LocalChecks(store, source_available=False, source_check=source_check)
+    source_check.assert_not_called()
+    first = collector.snapshot()
+    assert json.loads(first)["source"] == {"status": "available"}
+    source_check.return_value = "not_configured"
+    assert collector.snapshot() == first
+    assert source_check.call_count == 1
+    clock[0] += checks.CHECK_CACHE_SECONDS + 1
+    assert json.loads(collector.snapshot())["source"] == {"status": "not_configured"}
+    assert source_check.call_count == 2
+    store.summary.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [None, True, 1, {}, [], "connected", "AVAILABLE", "available\n"])
+def test_malformed_managed_source_status_fails_closed(probes, status):
+    receipt = checks.LocalChecks(
+        object(), source_available=True, source_check=lambda: status,
+    ).snapshot()
+    assert json.loads(receipt)["source"] == {"status": "unavailable"}
+
+
+@pytest.mark.parametrize("error", [StorageSchemaError("PRIVATE_PATH"), OSError("PRIVATE_PATH"),
+                                  sqlite3.DatabaseError("PRIVATE_PATH")])
+def test_managed_source_read_refusal_is_unavailable_without_private_detail(probes, error):
+    receipt = checks.LocalChecks(
+        object(), source_available=False, source_check=Mock(side_effect=error),
+    ).snapshot()
+    assert json.loads(receipt)["source"] == {"status": "unavailable"}
+    assert b"PRIVATE_PATH" not in receipt
 
 
 def test_only_one_probe_runs_and_busy_http_has_retry_after(probes):

@@ -216,6 +216,68 @@ def test_support_actions_are_closed_and_use_existing_job_lane():
         with pytest.raises(ValueError):validate_action({'action':action,'url':'https://example.com'})
 
 
+@pytest.mark.parametrize('code, ending, warning, accepted', [
+    (0, b'finish=true\n', True, True),
+    (78, b'finish=true\n', True, True),
+    (78, b'', True, False),
+    (78, b'finish=false\n', True, False),
+    (78, b'finish=true\nfinish=true\n', True, False),
+    (78, b'finish=true\n', False, False),
+    (1, b'finish=true\n', True, False),
+    (64, b'finish=true\n', True, False),
+    (-9, b'finish=true\n', True, False),
+])
+def test_lynis_warning_exit_requires_completed_valid_warning_evidence(
+        tmp_path, monkeypatch, code, ending, warning, accepted):
+    """Exercise the execution adapter with synthetic files, never native Lynis."""
+    from contextlib import nullcontext
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from megalodon import host_security as module
+    from megalodon.host_findings import validate_summary
+
+    audit = HostSecurity(now=lambda: NOW)
+    audit.root = tmp_path
+    monkeypatch.setattr(audit, 'locked', nullcontext)
+    real_file, real_stat = Path.is_file, Path.stat
+    monkeypatch.setattr(Path, 'is_file', lambda p: True if str(p) == '/usr/sbin/lynis' else real_file(p))
+    monkeypatch.setattr(Path, 'stat', lambda p, *a, **k:
+                        SimpleNamespace(st_uid=0, st_mode=0o100755)
+                        if str(p) == '/usr/sbin/lynis' else real_stat(p, *a, **k))
+    report = b'report_version_major=1\nreport_version_minor=0\nlynis_version=3.1.6\n'
+    if warning:
+        report += b'warning[]=AUTH-0001|Review this synthetic setting|-|-\n'
+    report += ending
+    saved = {'audit.json': {'previous': 'summary'}, 'lynis-report.dat': b'previous report'}
+    before = deepcopy(saved)
+    writes = []
+    def write(path, body):
+        writes.append(path.name)
+        saved[path.name] = deepcopy(body)
+    monkeypatch.setattr(module, 'write', write)
+    monkeypatch.setattr(audit, '_save', lambda name, body: write(tmp_path / name, body))
+    def run(argv, work):
+        assert argv[:3] == ['/usr/sbin/lynis', 'audit', 'system']
+        assert '--no-plugins' in argv and '--upload' not in argv
+        (work / 'lynis.dat').write_bytes(report)
+        return b'private output must not appear in the result', code
+    audit.runner = run
+    if accepted:
+        message = audit.execute('audit')
+        assert writes == ['lynis-report.dat', 'audit.json']
+        assert saved['lynis-report.dat'] == report
+        summary = saved['audit.json']
+        validate_summary('audit', summary, NOW)
+        assert summary['metrics'] == {'warnings': 1, 'suggestions': 0}
+        assert summary['review']['report_sha256'] == hashlib.sha256(report).hexdigest()
+        assert ('exit 78' in message) == (code == 78)
+        assert 'private output' not in message
+    else:
+        with pytest.raises(ValueError, match='prior audit summary is retained'):
+            audit.execute('audit')
+        assert writes == [] and saved == before
+
+
 def test_drop_preserves_multiple_sbl_references_for_one_range():
     rows=[dict(cidr='8.8.8.0/24',sblid='SBL1'),dict(cidr='8.8.8.0/24',sblid='SBL2'),
           dict(type='metadata',timestamp=int(NOW.timestamp()),records=2)]

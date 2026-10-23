@@ -12,6 +12,7 @@ import platform
 import sqlite3
 from threading import Lock
 from time import monotonic
+from typing import Callable
 
 from .capabilities import runtime_platform
 from .readiness import local_readiness_report as readiness_report
@@ -30,9 +31,13 @@ class LocalCheckBusy(Exception):
 class LocalChecks:
     """One collector per server, with a short cache and no overlapping probes."""
 
-    def __init__(self, store: object, *, source_available: bool) -> None:
+    def __init__(
+        self, store: object, *, source_available: bool,
+        source_check: Callable[[], str] | None = None,
+    ) -> None:
         self._store = store
         self._source_available = source_available
+        self._source_check = source_check
         self._lock = Lock()
         self._cached: bytes | None = None
         self._expires = 0.0
@@ -44,7 +49,14 @@ class LocalChecks:
             if self._cached is not None and monotonic() < self._expires:
                 return self._cached
             source = "not_configured"
-            if self._source_available:
+            if self._source_check is not None:
+                try:
+                    source = self._source_check()
+                    if type(source) is not str or source not in {"available", "not_configured", "unavailable"}:
+                        source = "unavailable"
+                except (StorageSchemaError, sqlite3.Error, OSError):
+                    source = "unavailable"
+            elif self._source_available:
                 try:
                     # Use the already admitted reader and its bounded query.
                     # Discard counters: readability is not qualified telemetry.

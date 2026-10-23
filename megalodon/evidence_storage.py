@@ -1242,15 +1242,37 @@ class ManagedDashboardReader:
     """Legacy bounded projections track the newest packet segment; full history has its own API."""
     def __init__(self,manager):self.manager=manager
 
+    def _selected_path(self):
+        """Select the legacy projection while the caller holds the manager lock."""
+        entries=[e for e in self.manager._catalog['entries'] if e['kind']=='core' and e['state'] in {'open','closed'} and e['records']]
+        if entries:
+            return self.manager._path(max(entries,key=lambda e:e['created_at'])), True
+        return Path(self.manager.settings.db_path), False
+
     def _read(self,method,*args,**kwargs):
         from .dashboard_traffic import TrafficDashboardStore
         with self.manager.lock:
-            entries=[e for e in self.manager._catalog['entries'] if e['kind']=='core' and e['state'] in {'open','closed'} and e['records']]
-            path=self.manager._path(max(entries,key=lambda e:e['created_at'])) if entries else Path(self.manager.settings.db_path)
+            path,_ = self._selected_path()
             if not path.exists():
                 from .dashboard import UnconfiguredDashboardReader
                 return getattr(UnconfiguredDashboardReader(path),method)(*args,**kwargs)
             with TrafficDashboardStore(path) as reader:return getattr(reader,method)(*args,**kwargs)
+
+    def source_status(self):
+        """Check the current selected source without creating or changing it."""
+        from .dashboard_traffic import TrafficDashboardStore
+        with self.manager.lock:
+            path,managed = self._selected_path()
+            try:
+                with TrafficDashboardStore(path) as reader:reader.summary()
+            except StorageSchemaError as exc:
+                # A genuinely absent legacy source is normal on first launch.
+                # A missing managed segment or any admission/read refusal is
+                # unavailable, never an empty or healthy source.
+                if not managed and str(exc) in {'DASHBOARD_STORE:NO_DIRECTORY','DASHBOARD_STORE:NO_DATABASE'}:
+                    return 'not_configured'
+                raise
+            return 'available'
 
     def summary(self):return self._read('summary')
     def recent(self,limit=50):return self._read('recent',limit)

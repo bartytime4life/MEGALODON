@@ -2055,7 +2055,11 @@ def serve(
                 evidence = json.loads(handler.setup_evidence)
                 evidence["source_status"] = "connected"
                 handler.setup_evidence = json.dumps(evidence).encode()
-                handler.local_checks = LocalChecks(handler.store, source_available=True)
+                from .evidence_storage import ManagedDashboardReader
+                handler.local_checks = LocalChecks(
+                    handler.store, source_available=True,
+                    source_check=handler.store.source_status if isinstance(handler.store, ManagedDashboardReader) else None,
+                )
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
             if installer is not None:
@@ -2101,7 +2105,10 @@ def serve(
             handler.evidence.reference_library=handler.knowledge
             handler.reports.intelligence=handler.intelligence
             handler.store=ManagedDashboardReader(handler.evidence)
-            handler.local_checks=LocalChecks(handler.store,source_available=source_available)
+            handler.local_checks=LocalChecks(
+                handler.store,source_available=source_available,
+                source_check=handler.store.source_status,
+            )
             if hasattr(store,'close'):store.close()
             if companion_automation is not None:companion_automation.evidence=handler.evidence
             if support_startup is not None:

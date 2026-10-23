@@ -5,6 +5,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import sys
 from unittest.mock import Mock
 
 import pytest
@@ -91,9 +92,69 @@ def test_hud_relaunch_uses_serving_interpreter_and_shell_quotes_it(monkeypatch):
     monkeypatch.setattr(commands.sys, "executable", executable)
     monkeypatch.delenv("MEGALODON_INSTALL_MODE", raising=False)
     monkeypatch.delenv("MEGALODON_LAUNCHER_PATH", raising=False)
+    monkeypatch.setattr(commands, "_source_checkout", lambda: None)
     launch = commands.local_hud_launch()
     assert launch["mode"] == "source"
     assert shlex.split(launch["command"]) == [executable, "-m", "megalodon", "hud"]
+
+
+def test_source_relaunch_runs_reviewed_checkout_from_another_directory(tmp_path, monkeypatch):
+    checkout = tmp_path / "reviewed checkout ' $(touch NEVER)"
+    launcher = checkout / "scripts/start-local.sh"
+    launcher.parent.mkdir(parents=True)
+    shutil.copyfile(Path(__file__).parents[1] / "scripts/start-local.sh", launcher)
+    launcher.chmod(0o700)
+    package = checkout / "megalodon"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    # Exercise only the launcher's inert --check route, never a running HUD.
+    (package / "local_setup.py").write_text(
+        "from pathlib import Path\nimport json, sys\n"
+        "print(json.dumps({'cwd': str(Path.cwd()), 'python': sys.executable}))\n"
+    )
+    executable = tmp_path / "operator's env $(touch NEVER)" / "bin/python"
+    executable.parent.mkdir(parents=True)
+    executable.symlink_to(sys.executable)
+    monkeypatch.setattr(commands.sys, "platform", "linux")
+    monkeypatch.setattr(commands.sys, "executable", str(executable))
+    monkeypatch.setattr(commands, "_source_checkout", lambda: checkout)
+    monkeypatch.delenv("MEGALODON_INSTALL_MODE", raising=False)
+    other = tmp_path / "new terminal"
+    other.mkdir()
+    monkeypatch.chdir(other)
+    launch = commands.local_hud_launch()
+    assert launch["mode"] == "source"
+    assert shlex.split(launch["command"]) == [
+        "env", f"MEGALODON_PYTHON={executable}", str(launcher),
+    ]
+    result = subprocess.run(
+        [*shlex.split(launch["command"]), "--check"], cwd=other,
+        capture_output=True, text=True, timeout=10, check=True,
+    )
+    assert json.loads(result.stdout) == {"cwd": str(checkout), "python": str(executable)}
+    assert not (checkout / "NEVER").exists()
+    assert not (other / "NEVER").exists()
+
+
+@pytest.mark.parametrize("kind", ["missing", "directory", "symlink", "not_executable"])
+def test_source_relaunch_refuses_missing_or_unsafe_checkout_launcher(tmp_path, monkeypatch, kind):
+    checkout = tmp_path / "checkout"
+    launcher = checkout / "scripts/start-local.sh"
+    launcher.parent.mkdir(parents=True)
+    if kind == "directory":
+        launcher.mkdir()
+    elif kind == "symlink":
+        target = tmp_path / "different-launcher"
+        target.write_text("#!/bin/sh\n")
+        target.chmod(0o700)
+        launcher.symlink_to(target)
+    elif kind == "not_executable":
+        launcher.write_text("#!/bin/sh\n")
+        launcher.chmod(0o600)
+    monkeypatch.setattr(commands.sys, "platform", "linux")
+    monkeypatch.setattr(commands, "_source_checkout", lambda: checkout)
+    monkeypatch.delenv("MEGALODON_INSTALL_MODE", raising=False)
+    assert commands.local_hud_launch() == {"mode": "source", "command": ""}
 
 
 def test_desktop_hud_relaunch_accepts_only_a_real_absolute_launcher(tmp_path, monkeypatch):
