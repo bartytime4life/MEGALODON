@@ -158,9 +158,11 @@ containment and evaluation gates.
 [Still image](assets/docs/recovery-evidence.png). Brief motion repeats twice and stops; all labels remain visible.
 
 The read-only Setup view distinguishes baseline/comparison observations from
-backup evidence. The external validator admits three private, separately pinned
-records only when identities, raw-byte hashes, chronology and expiry agree. It
-opens no backup and runs no restore test. Host recovery stays unavailable;
+backup evidence. The external validator checks two receipts whose raw-byte hashes
+are pinned by a separate operator-controlled trust record, with identity,
+chronology and expiry checks across all three private files. The trust record is
+not itself hash-pinned; an owner who can rewrite it and both receipts can forge
+the evidence. The validator opens no backup and runs no restore test. Host recovery stays unavailable;
 causality and conflicts remain unresolved. The separate
 [audit-database recovery](docs/sqlite-recovery-contract.md) and
 [reference-library rollback](docs/reference-library-recovery.md) have their own scopes.

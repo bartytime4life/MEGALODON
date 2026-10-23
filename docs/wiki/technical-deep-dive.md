@@ -99,7 +99,9 @@ The separate `megalodon-backup-evidence-v1` reader admits exactly three fixed
 private JSON files: operator trust, producer receipt and independent isolated
 restore-test receipt. Each is capped at 16 KiB. Closed keys/types, raw-byte
 SHA-256 pins, source/artifact/snapshot identity and chronological ordering must
-agree. Producer and verifier IDs must differ; meaningful independence is an
+agree. The backup and test receipts are hash-pinned by the separate
+operator-controlled trust record; that trust root is not itself hash-pinned.
+Producer and verifier IDs must differ; meaningful independence is an
 operator trust decision, not proof supplied by different strings. Each validity
 interval is at most seven days; the earliest expiry governs and equality is
 expired. No positive evidence cache survives a failed read or removed trust.

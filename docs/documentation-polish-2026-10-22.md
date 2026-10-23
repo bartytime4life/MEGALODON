@@ -37,7 +37,7 @@ content is kept out of public Markdown and visual examples.
 | macOS fixture | Merged #662 qualifies safe temporary ancestry/writer readback without relaxing production checks; native platform parity remains separate |
 | Local AI | Merged #663 admits listener posture before model inventory; no new model execution authority or canonical Airlock acceptance |
 | Recovery readiness | Merged #664 projects AIDE evidence gaps with restore eligibility always false |
-| External backup evidence | Merged #665 checks separately pinned private records only; it opens no backup, performs no test and enables no host restoration |
+| External backup evidence | Merged #665 checks two private receipts pinned by a separate operator-controlled trust record; the trust root is not hash-pinned. It opens no backup, performs no test and enables no host restoration |
 | Public queue | #445/#446 remain open; no open PR existed before this candidate. Queue state is not acceptance |
 | Hosted viewer | Sites metadata re-read: existing PC Snapshot Console v67 with owner-private audience. No source, audience or publication change; no fresh visual or parity claim |
 
@@ -102,9 +102,23 @@ External links were not globally crawled. No new Codex Security scan was run.
 
 ## Lifecycle and rollback
 
-Changes live on an `agent/*` branch with a draft PR. Human GitHub review and
-exact-head lifecycle gates precede a merge. The existing post-merge workflow
+The candidate was created as draft PR #666 on an `agent/*` branch. GitHub's
+timeline subsequently records `ready_for_review` under the owner account at
+`2026-10-23T01:57:32Z` (October 22 in America/Chicago); that transition was not
+performed by this documentation task. Preserve both lifecycle facts. The
+owner-lifecycle job at `8a58d1dca8ae1504dc99a2fad4df6460b9b47b93` then reported
+no matching exact-head owner authorization. Human GitHub review and exact-head
+lifecycle gates precede a merge. The existing post-merge workflow
 publishes Wiki source; this task does not manually push the native Wiki or
 publish a Site. Rollback reverts documentation/tooling/assets only, with no
 runtime migration or host change. No branch protection or approval setting was
-changed. The safest next gate is review of the exact draft head.
+changed. The safest next gate is review of the exact candidate head.
+
+## Automated review correction
+
+The automated review of `8a58d1dca8ae1504dc99a2fad4df6460b9b47b93` identified
+one P2 wording overstatement: the README described all three recovery files as
+separately pinned. The corrected README and technical chapter distinguish the
+two hash-pinned receipts from the separate, unpinned operator trust root. An
+owner who can rewrite the trust record and both receipts can forge the evidence.
+This is a documentation correction; validator behavior is unchanged.
