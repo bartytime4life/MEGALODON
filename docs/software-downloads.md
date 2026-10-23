@@ -37,7 +37,7 @@ instead of replacing an existing working environment.
 | --- | --- | --- |
 | Wireshark / TShark | Inspect saved packet captures; MEGALODON's TShark adapter is Linux-only and uses its fixed reviewed system path | [Download Wireshark / TShark](https://www.wireshark.org/download.html) |
 | Zeek | Produce connection logs separately, then use the Linux offline importer | [Get Zeek](https://zeek.org/get-zeek/) |
-| Suricata | Produce sensor alerts separately; only the documented completed-file readers and publication contracts are admitted | [Download Suricata](https://suricata.io/download/) |
+| Suricata | Produce sensor alerts separately; use [Installing Suricata](installing-suricata.md) and its [offline configuration script](../scripts/configure-suricata-offline.py). Completed-file admission remains separate. | [Download Suricata](https://suricata.io/download/) |
 | Scapy | Optional Python capture extra for an explicitly selected Linux interface | [Install Scapy](https://scapy.readthedocs.io/en/latest/installation.html) |
 
 Opening a browser view or clicking a presence check starts no sensor. A running
