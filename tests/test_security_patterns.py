@@ -292,3 +292,43 @@ def test_source_retirement_hides_and_reclaims_derived_history_and_case(service):
     assert not e.history(category='cases')['records']
     e._ensure_space()
     assert not [v for v in e._catalog['entries'] if v['category'] in {'intelligence','cases'}]
+
+
+def test_pattern_cache_tracks_model_settings_and_survives_restart(service):
+    from dataclasses import replace
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
+    service.process_hour(START)
+    identifier=next(iter(service.reviews))
+    original=service.model
+    with patch.object(service,'model',side_effect=original) as model:
+        service.analyze(identifier);service.worker.join(2)
+        first=service.reviews[identifier]['analysis']['settings_identity']
+        service.analyze(identifier)
+        assert model.call_count==1
+        service.configuration.settings=replace(service.configuration.settings,
+            ai=replace(service.configuration.settings.ai,model='synthetic-other-model'))
+        service.analyze(identifier);service.worker.join(2)
+        assert model.call_count==2
+        assert service.reviews[identifier]['analysis']['settings_identity']!=first
+    restarted=IntelligenceService(service.evidence,service.knowledge,service.configuration,
+                                 model=lambda *a,**k:pytest.fail('Cached answer should survive restart'))
+    try:
+        restarted.analyze(identifier)
+        assert restarted.job['state']=='idle'
+    finally:
+        restarted.close()
+
+
+def test_pattern_rejects_model_change_during_inference(service):
+    from dataclasses import replace
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
+    service.process_hour(START);identifier=next(iter(service.reviews))
+    original=service.model
+    def changed(*args,**kwargs):
+        service.configuration.settings=replace(service.configuration.settings,
+            ai=replace(service.configuration.settings.ai,model='synthetic-other-model'))
+        return original(*args,**kwargs)
+    service.model=changed
+    service.analyze(identifier);service.worker.join(2)
+    assert service.reviews[identifier]['analysis']['state']=='failed'
+    assert service.reviews[identifier]['rule']=='REGULAR_INTERVAL'
