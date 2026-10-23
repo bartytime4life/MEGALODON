@@ -80,8 +80,9 @@ def test_proposed_experiment_is_small_and_single_threaded() -> None:
 
 
 def test_research_packet_contains_no_executable_experiment_artifacts() -> None:
-    allowed = {"README.md", "research-packet.json", "schema.json"}
+    allowed = {"README.md", "experiment", "research-packet.json", "schema.json"}
     assert {path.name for path in ROOT.iterdir()} == allowed
+    assert (ROOT / "experiment").is_dir()
     serialized = json.dumps(PACKET, sort_keys=True).lower()
     for forbidden in (
         '"status": "passed"',

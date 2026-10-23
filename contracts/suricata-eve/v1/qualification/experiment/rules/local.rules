@@ -1,0 +1,2 @@
+alert tls any any -> any any (msg:"MEGALODON fragmented TLS continuity oracle"; flow:established,to_server; tls.sni; content:"fragmented.example"; nocase; isdataat:!1,relative; sid:9900001; rev:1;)
+alert tcp any any -> any any (msg:"MEGALODON PCRE stream progress oracle"; flow:established,to_server; pcre:"/.*mc|\H+$/"; sid:9900002; rev:1;)

@@ -14,8 +14,10 @@ are relevant to the bounded offline producer profile:
 
 The machine-readable [`research-packet.json`](research-packet.json) pins those
 commit identities, the upstream claims, proposed experiment ceilings and every
-remaining acceptance hold. It deliberately contains no packet capture, rule,
-configuration, executable, generated EVE output or pass result.
+remaining acceptance hold. That original packet contains no packet capture,
+rule, configuration, executable, generated EVE output or pass result. The
+adjacent [`experiment`](experiment/README.md) directory now supplies a separate
+synthetic fixture-and-oracle candidate; it remains explicitly unexecuted.
 
 ## Why this does not run Suricata
 
@@ -30,11 +32,11 @@ the repository has no accepted installed-producer identity. Treating a static
 review or synthetic EVE line as a native engine pass would erase that evidence
 gap.
 
-## Separately authorized next experiment
+## Separately authorized native experiment
 
-A later owner-authorized packet may add independently authored, non-sensitive
-synthetic PCAPs and a minimal dedicated rule/configuration set. That experiment
-must:
+The candidate packet now adds independently authored, non-sensitive synthetic
+PCAPs and a minimal dedicated rule/configuration set. A later native experiment
+still requires separate owner authorization and must:
 
 1. bind the fixture, rule, configuration and both producer binaries by SHA-256;
 2. run only a fixed direct argument vector against completed local PCAP files,

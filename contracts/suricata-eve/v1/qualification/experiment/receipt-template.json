@@ -1,0 +1,46 @@
+{
+  "schema_version": "suricata-engine-native-receipt-v1",
+  "packet_sha256": "961a11d3a006a8aa271d3a9eb095f741dab834805ebaaf04867cbddc6efc9f11",
+  "status": "not_run",
+  "canonicalization": "utf8-json-sort-keys-compact-v1",
+  "receipt_id": null,
+  "producer": {
+    "role": "none",
+    "version": null,
+    "sha256": null,
+    "exact_identity_verified": false
+  },
+  "artifact_verification": {
+    "manifest_sha256_verified": false,
+    "all_artifact_sha256_verified": false
+  },
+  "execution": {
+    "native": false,
+    "exit_code": null,
+    "timed_out": false,
+    "output_truncated": false,
+    "output_bytes": 0,
+    "wall_ns": null,
+    "process_cpu_ns": null,
+    "max_address_space_bytes": null
+  },
+  "oracle": {
+    "state": "not_evaluated",
+    "tls_alert_count": null,
+    "pcre_32_to_64_ratio": null,
+    "pcre_64_to_128_ratio": null
+  },
+  "effects": {
+    "suricata_executed": false,
+    "network_used": false,
+    "live_capture_used": false,
+    "rules_updated": false,
+    "service_changed": false,
+    "host_changed": false,
+    "firewall_changed": false,
+    "shell_action_used": false,
+    "model_invoked": false
+  },
+  "acceptance_authority": false,
+  "error": null
+}

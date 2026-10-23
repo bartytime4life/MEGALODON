@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megalodon.local/contracts/suricata-eve/v1/qualification/experiment/receipt.schema.json",
+  "title": "MEGALODON bounded Suricata native experiment receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "packet_sha256",
+    "status",
+    "canonicalization",
+    "receipt_id",
+    "producer",
+    "artifact_verification",
+    "execution",
+    "oracle",
+    "effects",
+    "acceptance_authority",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {"const": "suricata-engine-native-receipt-v1"},
+    "packet_sha256": {"const": "961a11d3a006a8aa271d3a9eb095f741dab834805ebaaf04867cbddc6efc9f11"},
+    "status": {
+      "enum": [
+        "not_run",
+        "unavailable_prerequisite",
+        "identity_mismatch",
+        "timeout",
+        "output_limit",
+        "nonzero_exit",
+        "oracle_failed",
+        "pass"
+      ]
+    },
+    "canonicalization": {"const": "utf8-json-sort-keys-compact-v1"},
+    "receipt_id": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      ]
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "version", "sha256", "exact_identity_verified"],
+      "properties": {
+        "role": {"enum": ["none", "baseline", "candidate"]},
+        "version": {"type": ["string", "null"], "maxLength": 128},
+        "sha256": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          ]
+        },
+        "exact_identity_verified": {"type": "boolean"}
+      }
+    },
+    "artifact_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_sha256_verified", "all_artifact_sha256_verified"],
+      "properties": {
+        "manifest_sha256_verified": {"type": "boolean"},
+        "all_artifact_sha256_verified": {"type": "boolean"}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "native",
+        "exit_code",
+        "timed_out",
+        "output_truncated",
+        "output_bytes",
+        "wall_ns",
+        "process_cpu_ns",
+        "max_address_space_bytes"
+      ],
+      "properties": {
+        "native": {"type": "boolean"},
+        "exit_code": {"type": ["integer", "null"], "minimum": 0, "maximum": 255},
+        "timed_out": {"type": "boolean"},
+        "output_truncated": {"type": "boolean"},
+        "output_bytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+        "wall_ns": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000000000},
+        "process_cpu_ns": {"type": ["integer", "null"], "minimum": 0},
+        "max_address_space_bytes": {"type": ["integer", "null"], "minimum": 0, "maximum": 536870912}
+      }
+    },
+    "oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "tls_alert_count", "pcre_32_to_64_ratio", "pcre_64_to_128_ratio"],
+      "properties": {
+        "state": {"enum": ["not_evaluated", "passed", "failed"]},
+        "tls_alert_count": {"type": ["integer", "null"], "minimum": 0},
+        "pcre_32_to_64_ratio": {"type": ["number", "null"], "minimum": 0},
+        "pcre_64_to_128_ratio": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suricata_executed",
+        "network_used",
+        "live_capture_used",
+        "rules_updated",
+        "service_changed",
+        "host_changed",
+        "firewall_changed",
+        "shell_action_used",
+        "model_invoked"
+      ],
+      "properties": {
+        "suricata_executed": {"type": "boolean"},
+        "network_used": {"const": false},
+        "live_capture_used": {"const": false},
+        "rules_updated": {"const": false},
+        "service_changed": {"const": false},
+        "host_changed": {"const": false},
+        "firewall_changed": {"const": false},
+        "shell_action_used": {"const": false},
+        "model_invoked": {"const": false}
+      }
+    },
+    "acceptance_authority": {"const": false},
+    "error": {
+      "enum": [
+        null,
+        "UNAVAILABLE_PREREQUISITE",
+        "IDENTITY_MISMATCH",
+        "TIMEOUT",
+        "OUTPUT_LIMIT",
+        "NONZERO_EXIT",
+        "ORACLE_FAILED"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "not_run"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "receipt_id": {"const": null},
+          "producer": {
+            "properties": {
+              "role": {"const": "none"},
+              "version": {"const": null},
+              "sha256": {"const": null},
+              "exact_identity_verified": {"const": false}
+            }
+          },
+          "artifact_verification": {
+            "properties": {
+              "manifest_sha256_verified": {"const": false},
+              "all_artifact_sha256_verified": {"const": false}
+            }
+          },
+          "execution": {
+            "properties": {
+              "native": {"const": false},
+              "exit_code": {"const": null},
+              "timed_out": {"const": false},
+              "output_truncated": {"const": false},
+              "output_bytes": {"const": 0},
+              "wall_ns": {"const": null},
+              "process_cpu_ns": {"const": null},
+              "max_address_space_bytes": {"const": null}
+            }
+          },
+          "oracle": {
+            "properties": {
+              "state": {"const": "not_evaluated"},
+              "tls_alert_count": {"const": null},
+              "pcre_32_to_64_ratio": {"const": null},
+              "pcre_64_to_128_ratio": {"const": null}
+            }
+          },
+          "effects": {"properties": {"suricata_executed": {"const": false}}},
+          "error": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "pass"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "receipt_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "producer": {
+            "properties": {
+              "role": {"enum": ["baseline", "candidate"]},
+              "version": {"type": "string", "minLength": 1},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "exact_identity_verified": {"const": true}
+            }
+          },
+          "artifact_verification": {
+            "properties": {
+              "manifest_sha256_verified": {"const": true},
+              "all_artifact_sha256_verified": {"const": true}
+            }
+          },
+          "execution": {
+            "properties": {
+              "native": {"const": true},
+              "exit_code": {"const": 0},
+              "timed_out": {"const": false},
+              "output_truncated": {"const": false},
+              "wall_ns": {"type": "integer", "minimum": 1},
+              "process_cpu_ns": {"type": "integer", "minimum": 1},
+              "max_address_space_bytes": {"type": "integer", "minimum": 1}
+            }
+          },
+          "oracle": {
+            "properties": {
+              "state": {"const": "passed"},
+              "tls_alert_count": {"const": 1},
+              "pcre_32_to_64_ratio": {"type": "number", "minimum": 0, "maximum": 3.0},
+              "pcre_64_to_128_ratio": {"type": "number", "minimum": 0, "maximum": 3.0}
+            }
+          },
+          "effects": {"properties": {"suricata_executed": {"const": true}}},
+          "error": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "unavailable_prerequisite"}}, "required": ["status"]},
+      "then": {"properties": {"error": {"const": "UNAVAILABLE_PREREQUISITE"}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "identity_mismatch"}}, "required": ["status"]},
+      "then": {"properties": {"error": {"const": "IDENTITY_MISMATCH"}, "producer": {"properties": {"exact_identity_verified": {"const": false}}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "timeout"}}, "required": ["status"]},
+      "then": {"properties": {"error": {"const": "TIMEOUT"}, "execution": {"properties": {"timed_out": {"const": true}}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "output_limit"}}, "required": ["status"]},
+      "then": {"properties": {"error": {"const": "OUTPUT_LIMIT"}, "execution": {"properties": {"output_truncated": {"const": true}}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "nonzero_exit"}}, "required": ["status"]},
+      "then": {"properties": {"error": {"const": "NONZERO_EXIT"}, "execution": {"properties": {"exit_code": {"type": "integer", "minimum": 1}}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "oracle_failed"}}, "required": ["status"]},
+      "then": {"properties": {"error": {"const": "ORACLE_FAILED"}, "oracle": {"properties": {"state": {"const": "failed"}}}}}
+    }
+  ]
+}
